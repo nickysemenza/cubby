@@ -498,6 +498,9 @@ const detailSectionJSON = (entity: string, section: DetailSection) => {
 
 type ListView = CompiledEntity["inspector"]["list"]["views"][number];
 
+const isWebOnlyView = (view: Exclude<ListView, string>) =>
+  view.kind === "board" && view.webOnly === true;
+
 const listViewJSON = (
   entity: string,
   view: ListView,
@@ -680,7 +683,9 @@ const presentationJSON = (
       target: view.target,
       evidence: view.evidence ?? false,
     })),
-    listViews: list.views.map((view) => listViewJSON(entity, view)),
+    listViews: list.views
+      .filter((view) => typeof view === "string" || !isWebOnlyView(view))
+      .map((view) => listViewJSON(entity, view)),
     listTotals: list.totals.map((total) => ({
       id: total.id,
       label: total.label,

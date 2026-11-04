@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useCommandState } from "cmdk";
 import * as React from "react";
+import { z } from "zod";
 
 import {
   EntityIcon,
@@ -26,6 +27,7 @@ import {
 } from "~/entity/presentation/search-facts";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useDebug } from "~/ui/hooks/use-debug";
+import { useLocalStorage } from "~/ui/hooks/use-local-storage";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import {
@@ -85,6 +87,9 @@ const quickActionPaths = new Set(quickActions.map((action) => action.path));
 type RoutedNavItem = NavItem & { to: string };
 const hasRoutedPath = (leaf: NavItem): leaf is RoutedNavItem =>
   typeof leaf.to === "string";
+const RECENT_PAGE_LIMIT = 5;
+const recentPagesSchema = z.array(z.string());
+const noRecentPages: string[] = [];
 const goToLeaves = completeNavLeaves.filter(
   (leaf): leaf is RoutedNavItem =>
     hasRoutedPath(leaf) &&
@@ -239,7 +244,18 @@ export function GlobalCommandMenu({
   // `search` carries an action's deep-link params (e.g. the tracker quick
   // captures' `{ create: true }`) — a query string on `path` would be treated
   // as part of the pathname.
+  const [recentPages, setRecentPages] = useLocalStorage(
+    "command-menu:recent-pages",
+    recentPagesSchema,
+    noRecentPages,
+  );
   const goToPage: GoToPage = (path, searchParams) => {
+    setRecentPages((recent) =>
+      [path, ...recent.filter((item) => item !== path)].slice(
+        0,
+        RECENT_PAGE_LIMIT,
+      ),
+    );
     navigate({
       to: path,
       search: searchParams ? { ...searchParams } : undefined,
@@ -389,6 +405,7 @@ export function GlobalCommandMenu({
               />
 
               <DefaultCommandMenu
+                recentPages={recentPages}
                 filteredActions={filteredActions}
                 hasSearch={hasSearch}
                 isLoading={isLoading}
@@ -789,6 +806,7 @@ function DefaultCommandMenu({
   navigate,
   onClose,
   onGoToPage,
+  recentPages,
   searchScope,
 }: {
   filteredActions: QuickAction[];
@@ -797,12 +815,34 @@ function DefaultCommandMenu({
   navigate: CommandMenuNavigate;
   onClose: () => void;
   onGoToPage: GoToPage;
+  recentPages: readonly string[];
   searchScope: SearchableEntity | null;
 }) {
   if (hasSearch || searchScope || isLoading) return null;
+  const recentLeaves = recentPages.flatMap((path) => {
+    const leaf = goToLeaves.find((item) => item.to === path);
+    return leaf ? [leaf] : [];
+  });
 
   return (
     <>
+      {recentLeaves.length > 0 && (
+        <>
+          <CommandGroup heading="Recent">
+            {recentLeaves.map((leaf) => (
+              <CommandItem
+                key={leaf.to}
+                value={`recent ${leaf.label}`}
+                onSelect={() => onGoToPage(leaf.to)}
+              >
+                <leaf.icon className="size-4" />
+                <span>{leaf.label}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+          <CommandSeparator />
+        </>
+      )}
       <QuickActionItems actions={filteredActions} onGoToPage={onGoToPage} />
       <CommandSeparator />
       <CommandGroup heading="Go to">
@@ -840,7 +880,7 @@ function QuickActionItems({
   onGoToPage: GoToPage;
 }) {
   return (
-    <CommandGroup heading="Quick Actions">
+    <CommandGroup heading="Quick actions">
       {actions.map((action) => (
         <CommandItem
           key={action.id}

@@ -9,9 +9,11 @@ import {
   useDroppable,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { ArrowsVerticalIcon } from "@phosphor-icons/react/dist/csr/ArrowsVertical";
+import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
+import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { renderCompactFieldValue } from "~/entity/display/entity-display";
@@ -31,9 +33,13 @@ import {
   entityListParamsFromParsed,
 } from "~/entity/generated/entity-lists.gen";
 import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
+import { useEntityFieldSave } from "~/entity/hooks/use-update-mutation";
 import { useEntityMetadata } from "~/entity/metadata";
+import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { useTableState } from "~/entity/table/use-table-state";
+import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
+import { DenseCellContext } from "~/ui/common/stacked-value";
 import { FilterBar } from "~/ui/data-table/filter-bar";
 import {
   filterStateToBarFilters,
@@ -45,7 +51,17 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { ListLoadingSkeleton } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
+import { Panel } from "~/ui/layout/panel";
 import { Button } from "~/ui/primitives/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/ui/primitives/dropdown-menu";
 
 import { listGroupBy } from "../list-grouping";
 import type { ListSlotProps } from "../list-slot-types";
@@ -181,8 +197,26 @@ export function EntityBoard({
   );
   const spec = specs.find((spec) => spec.columnId === choice.filter?.columnId);
   const field = spec?.field ?? choice.filter.columnId;
+  // A view without a reorder operation moves a card by writing the grouped field
+  // through the entity's ordinary update: no manual order, no second write path.
+  const saveField = useEntityFieldSave(entity);
+  const [saving, setSaving] = useState(false);
+  const pending = commands.pending || saving;
+  const canMove = Boolean(view.reorder || saveField);
   const move = (id: string, destination: Destination) => {
-    if (!view.reorder || commands.pending) return;
+    if (pending) return;
+    if (!view.reorder) {
+      if (!saveField) return;
+      setSaving(true);
+      void saveField(
+        { id },
+        field,
+        destination.key === FILTER_NONE ? null : destination.key,
+      )
+        .catch(showErrorToast)
+        .finally(() => setSaving(false));
+      return;
+    }
     commands.run({
       kind: "operation",
       operation: view.reorder.operation,
@@ -198,6 +232,10 @@ export function EntityBoard({
   const moveToGroup = async (id: string, key: string) => {
     const targetGroup = groups.find((group) => group.key === key);
     if (!targetGroup) return;
+    if (!view.reorder) {
+      move(id, { key, rows: [] });
+      return;
+    }
     try {
       const scoped = buildFiltersFromManifest(specs, (column) =>
         column === choice.filter?.columnId ? [key] : undefined,
@@ -228,6 +266,12 @@ export function EntityBoard({
     if (typeof active.id !== "string" || target?.board !== view.id) return;
     const destination: Destination = target.destination;
     if (destination.before === active.id) return;
+    if (!view.reorder) {
+      // Only a change of group writes; this board has no order within one.
+      if (active.data.current?.groupKey !== destination.key)
+        move(active.id, destination);
+      return;
+    }
     const rect = active.rect.current.translated;
     if (destination.before && rect && over) {
       const side =
@@ -240,17 +284,18 @@ export function EntityBoard({
       });
     } else move(active.id, destination);
   };
-  return (
-    <div className="min-w-0 space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <FilterBar
-          filters={draftFilters}
-          fields={fields}
-          onChange={handleChange}
-          searchKey={primarySearch?.key}
-          searchPlaceholder={primarySearch?.placeholder}
-          className="min-w-0 flex-1"
-        />
+  const utilitiesTarget = usePageWorkbenchTarget();
+  const tools = (
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+      <FilterBar
+        filters={draftFilters}
+        fields={fields}
+        onChange={handleChange}
+        searchKey={primarySearch?.key}
+        searchPlaceholder={primarySearch?.placeholder}
+        className="min-w-0 flex-1"
+      />
+      {options.length > 1 && (
         <Picker
           label="Board grouping"
           options={options}
@@ -260,7 +305,13 @@ export function EntityBoard({
             navigate({ groupBy: groupBy ? [{ key: groupBy }] : undefined });
           }}
         />
-      </div>
+      )}
+    </div>
+  );
+  return (
+    <div className="min-w-0 space-y-2">
+      {/* The same band every list keeps its query tools in. */}
+      {utilitiesTarget ? createPortal(tools, utilitiesTarget) : tools}
       {query.error && (
         <ErrorDisplay
           error={query.error}
@@ -294,7 +345,7 @@ export function EntityBoard({
           onDragEnd={onDragEnd}
           collisionDetection={rectIntersection}
         >
-          <div className="flex max-w-full items-start gap-3 overflow-x-auto pb-2">
+          <div className="flex max-w-full items-start gap-2 overflow-x-auto pb-2">
             {groups.slice(groupPage * 12, (groupPage + 1) * 12).map((group) => (
               <BoardGroup
                 key={`${JSON.stringify(queryInput.filters)}:${choice.key}:${group.key}`}
@@ -308,7 +359,8 @@ export function EntityBoard({
                 groups={groups}
                 move={move}
                 moveToGroup={moveToGroup}
-                pending={commands.pending}
+                pending={pending}
+                canMove={canMove}
                 acceptsNoValue={choice.filter.noValue}
               />
             ))}
@@ -349,6 +401,7 @@ function BoardGroup({
   move,
   moveToGroup,
   pending,
+  canMove,
   acceptsNoValue,
 }: {
   entity: BoardEntity;
@@ -362,6 +415,7 @@ function BoardGroup({
   move: (id: string, destination: Destination) => void;
   moveToGroup: (id: string, key: string) => Promise<void>;
   pending: boolean;
+  canMove: boolean;
   acceptsNoValue: boolean;
 }) {
   const queryClient = useQueryClient();
@@ -395,7 +449,7 @@ function BoardGroup({
   const drop = useDroppable({
     id: `group:${group.key}`,
     data: { board: view.id, destination },
-    disabled: pending || !view.reorder || !acceptsPlacement,
+    disabled: pending || !canMove || !acceptsPlacement,
   });
   const capped = view.caps.some(
     (cap) => cap.field === groupBy && cap.value === group.key,
@@ -404,11 +458,13 @@ function BoardGroup({
     <section
       ref={drop.setNodeRef}
       aria-label={group.label}
-      className="w-64 shrink-0 space-y-2"
+      className="w-60 shrink-0 rounded-[var(--brand-web-radius-panel)] bg-muted/50 p-1"
     >
-      <h2 className="flex justify-between px-2 py-1 text-sm font-semibold">
-        <span>{group.label}</span>
-        <span className="font-normal tabular-nums">{group.count}</span>
+      <h2 className="flex h-(--table-row-height) items-center justify-between gap-2 px-1 text-xs font-medium">
+        <span className="truncate">{group.label}</span>
+        <span className="font-normal text-muted-foreground tabular-nums">
+          {group.count}
+        </span>
       </h2>
       {query.error && (
         <ErrorDisplay
@@ -427,94 +483,116 @@ function BoardGroup({
             view={view}
             row={row}
             destination={{ ...destination, before: row.id }}
+            groupKey={group.key}
+            groupField={filterField}
             disabled={pending}
-            manualOrder={!capped && acceptsPlacement}
-          >
-            {view.reorder && (
-              <div className="flex flex-wrap gap-1">
-                {!capped && acceptsPlacement && index > 0 && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={pending}
-                    onClick={() =>
-                      move(row.id, {
-                        ...destination,
-                        before: rows[index - 1]?.id,
-                      })
+            canMove={canMove}
+            manualOrder={Boolean(view.reorder) && !capped && acceptsPlacement}
+            menu={
+              canMove ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        disabled={pending}
+                        aria-label={`Move ${String(row[metadata.summary.titleField] ?? row.id)}`}
+                        className="shrink-0 opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100 data-[popup-open]:opacity-100 pointer-coarse:opacity-100"
+                      />
                     }
                   >
-                    Earlier
-                  </Button>
-                )}
-                {!capped && acceptsPlacement && index < rows.length - 1 && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={pending}
-                    onClick={() =>
-                      move(row.id, {
-                        ...destination,
-                        before: rows[index + 2]?.id,
-                      })
-                    }
-                  >
-                    Later
-                  </Button>
-                )}
-                <Picker
-                  label={`Move ${String(row[metadata.summary.titleField] ?? row.id)}`}
-                  options={groups
-                    .filter(
-                      (group) => group.key !== FILTER_NONE || acceptsNoValue,
-                    )
-                    .map((group) => ({
-                      value: group.key,
-                      label: group.label,
-                    }))}
-                  value={group.key}
-                  onValueChange={(key) => {
-                    if (key && key !== group.key) void moveToGroup(row.id, key);
-                  }}
-                  disabled={pending}
-                />
-              </div>
-            )}
-          </BoardCard>
+                    <DotsThreeIcon className="size-3.5" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-auto min-w-40">
+                    {view.reorder && !capped && acceptsPlacement && (
+                      <>
+                        <DropdownMenuItem
+                          disabled={index === 0}
+                          onClick={() =>
+                            move(row.id, {
+                              ...destination,
+                              before: rows[index - 1]?.id,
+                            })
+                          }
+                        >
+                          Earlier
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={index === rows.length - 1}
+                          onClick={() =>
+                            move(row.id, {
+                              ...destination,
+                              before: rows[index + 2]?.id,
+                            })
+                          }
+                        >
+                          Later
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    )}
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>Move to</DropdownMenuLabel>
+                      {groups
+                        .filter(
+                          (candidate) =>
+                            candidate.key !== group.key &&
+                            (candidate.key !== FILTER_NONE || acceptsNoValue),
+                        )
+                        .map((candidate) => (
+                          <DropdownMenuItem
+                            key={candidate.key}
+                            onClick={() =>
+                              void moveToGroup(row.id, candidate.key)
+                            }
+                          >
+                            {candidate.label}
+                          </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null
+            }
+          />
         ))
       )}
       {!query.isLoading && rows.length === 0 && !query.error && (
-        <p className="p-2 text-sm text-muted-foreground">No records</p>
+        <p className="px-1 py-0.5 text-xs text-muted-foreground">No records</p>
       )}
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>
-          {capped
-            ? `${rows.length} of ${group.count} shown`
-            : `Page ${page + 1}`}
-        </span>
-        {!capped && (
-          <div>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={page === 0 || query.isFetching}
-              onClick={() => setPage(page - 1)}
-            >
-              Previous
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={
-                (page + 1) * view.pageSize >= group.count || query.isFetching
-              }
-              onClick={() => setPage(page + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        )}
-      </div>
+      {/* One page needs no pager; a capped group says how much it shows. */}
+      {(capped ? group.count > rows.length : group.count > view.pageSize) && (
+        <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
+          <span>
+            {capped
+              ? `${rows.length} of ${group.count} shown`
+              : `Page ${page + 1}`}
+          </span>
+          {!capped && (
+            <div>
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={page === 0 || query.isFetching}
+                onClick={() => setPage(page - 1)}
+              >
+                Previous
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={
+                  (page + 1) * view.pageSize >= group.count || query.isFetching
+                }
+                onClick={() => setPage(page + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -524,23 +602,31 @@ function BoardCard({
   view,
   row,
   destination,
+  groupKey,
+  groupField,
   disabled,
+  canMove,
   manualOrder,
-  children,
+  menu,
 }: {
   entity: BoardEntity;
   view: EntityBoardListView;
   row: BoardRow;
   destination: Destination;
+  groupKey: string;
+  /** The field the column already states; a card does not repeat it. */
+  groupField: string;
   disabled: boolean;
+  canMove: boolean;
   manualOrder: boolean;
-  children: ReactNode;
+  menu: ReactNode;
 }) {
   const queryClient = useQueryClient();
   const metadata = useEntityMetadata(entity);
   const drag = useDraggable({
     id: row.id,
-    disabled: disabled || !view.reorder,
+    data: { groupKey },
+    disabled: disabled || !canMove,
   });
   const drop = useDroppable({
     id: `card:${row.id}`,
@@ -548,15 +634,31 @@ function BoardCard({
     disabled: disabled || !manualOrder,
   });
   return (
-    <article
-      ref={(node) => {
-        drop.setNodeRef(node);
-        drag.setNodeRef(node);
-      }}
-      className="space-y-2 border-b p-2 text-sm"
+    <Panel
+      tone="default"
+      flush
+      render={
+        <article
+          ref={(node) => {
+            drop.setNodeRef(node);
+            drag.setNodeRef(node);
+          }}
+        />
+      }
+      style={
+        drag.transform
+          ? {
+              transform: `translate3d(${drag.transform.x}px, ${drag.transform.y}px, 0)`,
+            }
+          : undefined
+      }
+      className={cn(
+        "group/card mb-1 px-1.5 py-1 text-sm",
+        drag.isDragging && "relative z-10 opacity-80",
+      )}
     >
-      <div className="flex items-start gap-2">
-        {view.reorder && (
+      <div className="flex min-h-(--control-height-xs) items-center gap-1">
+        {canMove && (
           <button
             type="button"
             ref={drag.setActivatorNodeRef}
@@ -565,33 +667,40 @@ function BoardCard({
             tabIndex={-1}
             aria-hidden="true"
             aria-label={`Drag ${String(row[metadata.summary.titleField] ?? row.id)}`}
-            className="min-h-11 px-2 text-muted-foreground md:min-h-7"
+            className="-ml-0.5 flex min-h-11 shrink-0 cursor-grab touch-none items-center text-muted-foreground opacity-40 group-hover/card:opacity-100 active:cursor-grabbing md:min-h-(--control-height-xs)"
           >
-            <ArrowsVerticalIcon aria-hidden="true" />
+            <DotsSixVerticalIcon aria-hidden="true" className="size-3" />
           </button>
         )}
-        <EntityRefLink
-          entity={entity}
-          id={row.id}
-          name={String(row[metadata.summary.titleField] ?? row.id)}
-        />
+        <span className="min-w-0 flex-1 truncate">
+          {/* The dense form holds a long name to the card's one line. */}
+          <DenseCellContext value={{ linksTo: null }}>
+            <EntityRefLink
+              entity={entity}
+              id={row.id}
+              name={String(row[metadata.summary.titleField] ?? row.id)}
+            />
+          </DenseCellContext>
+        </span>
+        {menu}
       </div>
-      <dl className="space-y-1">
-        {view.cardFields.map((key) => {
-          const field = metadata.fields.fields.find(
-            (field) => field.key === key,
-          );
-          return field ? (
-            <div key={key} className="flex flex-wrap justify-between gap-1">
-              <dt className="text-xs text-muted-foreground">{field.label}</dt>
-              <dd>
-                {renderCompactFieldValue(queryClient, entity, row, field)}
-              </dd>
-            </div>
-          ) : null;
-        })}
+      <dl className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-3.5 text-xs">
+        {view.cardFields
+          .filter((key) => key !== groupField)
+          .map((key) => {
+            const field = metadata.fields.fields.find(
+              (field) => field.key === key,
+            );
+            return field ? (
+              <div key={key} className="flex min-w-0 items-center">
+                <dt className="sr-only">{field.label}</dt>
+                <dd className="min-w-0 truncate">
+                  {renderCompactFieldValue(queryClient, entity, row, field)}
+                </dd>
+              </div>
+            ) : null;
+          })}
       </dl>
-      {children}
-    </article>
+    </Panel>
   );
 }

@@ -98,6 +98,7 @@ describe("EntityReportSlot records", () => {
   it("renders summaries that declare no report slots", () => {
     const record = fromPartial<DetailRecordOf<"task">>({
       id: shortcode("TSK-4K7M"),
+      status: "not_started",
     });
     render(<DetailSummary entity="task" record={record} />, {
       wrapper: harness.wrapper,

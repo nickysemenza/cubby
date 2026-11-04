@@ -9,7 +9,7 @@ import { cn } from "~/lib/utils";
 const ruled = "border-[var(--border)] active:opacity-90";
 
 const buttonVariants = cva(
-  "focus-visible:border-ring focus-visible:ring-ring/35 aria-invalid:ring-destructive/20 aria-invalid:border-destructive rounded-sm border border-transparent bg-clip-padding text-xs/relaxed font-medium focus-visible:ring-[2px] aria-invalid:ring-[2px] [&_svg:not([class*='size-'])]:size-3.5 inline-flex items-center justify-center whitespace-nowrap transition-colors duration-150 ease-cozy disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none shrink-0 [&_svg]:shrink-0 outline-none group/button select-none",
+  "focus-visible:border-ring focus-visible:ring-ring/35 aria-invalid:ring-destructive/20 aria-invalid:border-destructive rounded-sm border border-transparent bg-clip-padding text-control font-medium focus-visible:ring-[2px] aria-invalid:ring-[2px] [&_svg:not([class*='size-'])]:size-3.5 inline-flex items-center justify-center whitespace-nowrap transition-colors duration-150 ease-cozy disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none shrink-0 [&_svg]:shrink-0 outline-none group/button select-none",
   {
     variants: {
       variant: {
@@ -32,13 +32,13 @@ const buttonVariants = cva(
         // `cubic-bezier(0.2, 0, 0, 1)`. Compact table controls (`sm`, `xs`,
         // `icon-*`) keep the immediate opacity-only feedback untouched.
         default:
-          "h-8 gap-1.5 px-2.5 text-xs/relaxed has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3.5 transition-[color,background-color,border-color,transform,opacity] duration-[160ms] ease-cozy active:scale-[0.96] active:opacity-100 motion-reduce:active:scale-100 motion-reduce:active:opacity-90",
-        xs: "h-6 gap-1 px-1.5 text-2xs has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&_svg:not([class*='size-'])]:size-2.5",
-        sm: "h-7 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
+          "h-(--control-height) gap-1.5 px-2.5 text-control has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3.5 transition-[color,background-color,border-color,transform,opacity] duration-[160ms] ease-cozy active:scale-[0.96] active:opacity-100 motion-reduce:active:scale-100 motion-reduce:active:opacity-90",
+        xs: "h-(--control-height-xs) gap-1 px-1.5 text-2xs has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&_svg:not([class*='size-'])]:size-2.5",
+        sm: "h-(--control-height-sm) gap-1 px-2 text-control has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
         lg: "h-10 gap-2 px-3.5 text-sm [&_svg:not([class*='size-'])]:size-4 transition-[color,background-color,border-color,transform,opacity] duration-[160ms] ease-cozy active:scale-[0.96] active:opacity-100 motion-reduce:active:scale-100 motion-reduce:active:opacity-90",
-        icon: "size-8 [&_svg:not([class*='size-'])]:size-3.5",
-        "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-2.5",
-        "icon-sm": "size-7 [&_svg:not([class*='size-'])]:size-3",
+        icon: "size-(--control-height) [&_svg:not([class*='size-'])]:size-3.5",
+        "icon-xs": "size-(--control-height-xs) [&_svg:not([class*='size-'])]:size-2.5",
+        "icon-sm": "size-(--control-height-sm) [&_svg:not([class*='size-'])]:size-3",
         "icon-lg": "size-10 [&_svg:not([class*='size-'])]:size-4",
       },
       /**

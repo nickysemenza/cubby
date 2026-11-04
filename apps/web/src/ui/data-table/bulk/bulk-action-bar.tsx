@@ -1,9 +1,16 @@
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { RowData } from "@tanstack/react-table";
 
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { Row as LayoutRow } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/ui/primitives/dropdown-menu";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import {
@@ -43,9 +50,13 @@ export interface BulkActionBarProps<TData extends RowData> {
   selectionIncomplete?: boolean;
 }
 
+/** The most verbs the bar shows; the rest, and always Delete, sit under More. */
+const PRIMARY_ACTIONS = 3;
+
 /**
  * Toolbar component that appears when rows are selected.
- * Shows selection count, available actions, and a clear button.
+ * Shows selection count, its first actions, More, and a clear button. A horizontal
+ * rail hid Delete under Clear at 1440px, so the bar now always fits.
  */
 export function BulkActionBar<TData extends RowData>({
   selectedCount,
@@ -95,6 +106,10 @@ export function BulkActionBar<TData extends RowData>({
         Number(a.action.tone === "destructive") -
         Number(b.action.tone === "destructive"),
     );
+  const primary = orderedActions
+    .filter(({ action }) => action.tone !== "destructive")
+    .slice(0, PRIMARY_ACTIONS);
+  const overflow = orderedActions.filter((entry) => !primary.includes(entry));
 
   return (
     <LayoutRow
@@ -109,7 +124,7 @@ export function BulkActionBar<TData extends RowData>({
           ? "Actions load complete records and check the whole selection before running."
           : undefined
       }
-      className="fixed bottom-[calc(var(--app-chrome-bottom,0px)+1rem)] left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 [scrollbar-width:none] flex-nowrap overflow-x-auto overscroll-x-contain rounded-lg bg-foreground py-1.5 pr-2 pl-3 text-background [&::-webkit-scrollbar]:hidden"
+      className="fixed bottom-[calc(var(--app-chrome-bottom,0px)+1rem)] left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-nowrap rounded-lg bg-foreground py-1.5 pr-2 pl-3 whitespace-nowrap text-background transition-[opacity,translate] duration-(--brand-motion-standard) ease-cozy starting:translate-y-2 starting:opacity-0"
     >
       <span className="shrink-0 text-sm tabular-nums">
         {selectedCount} selected
@@ -130,7 +145,7 @@ export function BulkActionBar<TData extends RowData>({
         <Button
           variant="ghost"
           size="sm"
-          className="h-7.5 border-background/15 bg-background/10 text-sm text-background hover:bg-background/20 hover:text-background"
+          className="h-(--input-height) border-background/15 bg-background/10 text-sm text-background hover:bg-background/20 hover:text-background"
           onClick={() => void selectAllMatching.onSelectAll()}
           disabled={disabled || isExecuting || selectAllMatching.isSelectingAll}
         >
@@ -141,9 +156,8 @@ export function BulkActionBar<TData extends RowData>({
         </Button>
       )}
 
-      {/* The horizontal rail accommodates each list's declared actions. */}
-      <LayoutRow align="center" gap="md" className="flex-nowrap">
-        {orderedActions.map(({ action, availability }) => {
+      <LayoutRow align="center" gap="sm" className="flex-nowrap">
+        {primary.map(({ action, availability }) => {
           const disabledReason =
             availability.status === "disabled"
               ? availability.reason
@@ -152,7 +166,7 @@ export function BulkActionBar<TData extends RowData>({
             <Button
               key={action.id}
               variant="outline"
-              className="h-7.5 border-background/15 bg-background/10 text-sm text-background hover:bg-background/20 hover:text-background"
+              className="h-(--input-height) border-background/15 bg-background/10 text-sm text-background hover:bg-background/20 hover:text-background"
               size="sm"
               onClick={() => handleActionClick(action)}
               disabled={disabled || isExecuting || disabledReason != null}
@@ -172,6 +186,54 @@ export function BulkActionBar<TData extends RowData>({
             </Button>
           );
         })}
+        {overflow.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={disabled || isExecuting}
+                  className="h-(--input-height) border-background/15 bg-background/10 text-sm text-background hover:bg-background/20 hover:text-background"
+                />
+              }
+            >
+              {isExecuting &&
+                currentAction &&
+                !primary.some(
+                  (entry) => entry.action.id === currentAction.id,
+                ) && <Spinner className="mr-1 size-3" aria-hidden="true" />}
+              More
+              <CaretDownIcon />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="top"
+              align="end"
+              className="w-auto min-w-44"
+            >
+              {overflow.map(({ action, availability }) => {
+                const disabledReason =
+                  availability.status === "disabled"
+                    ? availability.reason
+                    : undefined;
+                return (
+                  <DropdownMenuItem
+                    key={action.id}
+                    variant={
+                      action.tone === "destructive" ? "destructive" : undefined
+                    }
+                    disabled={disabledReason != null}
+                    title={disabledReason}
+                    onClick={() => handleActionClick(action)}
+                  >
+                    {action.icon}
+                    {action.label}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </LayoutRow>
 
       <Button
@@ -179,7 +241,7 @@ export function BulkActionBar<TData extends RowData>({
         size="sm"
         onClick={onClearSelection}
         disabled={disabled || isExecuting}
-        className="sticky right-0 ml-auto size-7.5 shrink-0 bg-foreground p-0 text-background hover:bg-background/20 hover:text-background"
+        className="ml-auto size-(--input-height) shrink-0 bg-foreground p-0 text-background hover:bg-background/20 hover:text-background"
       >
         <XIcon className="size-3" />
         <span className="sr-only">Clear selection</span>

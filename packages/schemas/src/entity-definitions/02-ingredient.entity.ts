@@ -89,6 +89,7 @@ export const { definition, readSchemas } = defineEntityModel(
           eaters:
             "Who ate it is per-portion meal data; the Meals table on this page shows each meal and its eaters.",
         },
+        lead: ["overview"],
         sections: [
           {
             kind: "fields",

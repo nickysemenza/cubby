@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
@@ -11,6 +12,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { z } from "zod";
 
 import {
   entityDetailLink,
@@ -21,6 +23,7 @@ import {
   entityPreviewQueryOptions,
   prefetchEntityPreview,
 } from "~/entity/entity-query";
+import { readRecordField } from "~/entity/entity-references";
 import { Button } from "~/ui/primitives/button";
 import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
 
@@ -30,6 +33,8 @@ export interface PreviewState {
   entityKind: Entity;
   id: string;
   rowKey: string;
+  /** The row's copy of the record's name, shown until the record loads. */
+  name?: string;
 }
 
 export interface EntityPreviewRendererProps {
@@ -165,10 +170,13 @@ function renderDefaultInspector({
   onClose,
 }: EntityPreviewRendererProps) {
   return (
+    // Keyed so stepping to another record never shows the previous name.
     <EntityWorkbenchInspector
+      key={`${preview.entityKind}:${preview.id}`}
       entity={preview.entityKind}
       id={preview.id}
       onClose={onClose}
+      seedName={preview.name}
     />
   );
 }
@@ -260,7 +268,17 @@ export function useEntityPreview(
       if (targetId === undefined || targetId === null) return null;
       const id = String(targetId);
       const rowKey = String(row.id ?? rowData.id ?? id);
-      return { entityKind, id, rowKey };
+      const name = readRecordField(
+        rowData,
+        entityRoster[entityKind].titleField,
+        z.string().catch(""),
+      );
+      return {
+        entityKind,
+        id,
+        rowKey,
+        ...(name ? { name } : {}),
+      };
     },
     [fixedEntity, idField],
   );

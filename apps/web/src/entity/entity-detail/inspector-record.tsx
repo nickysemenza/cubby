@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { z } from "zod";
 
 import type { EntityActionRow } from "~/entity/actions/entity-actions";
@@ -31,7 +32,7 @@ import { Button } from "~/ui/primitives/button";
 
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
-import { DetailSummary } from "./detail-summary";
+import { DetailSummary, detailSectionFields } from "./detail-summary";
 import { EntityRecordFields } from "./entity-record-fields";
 import {
   QualitySectionChecks,
@@ -119,11 +120,13 @@ function InspectorCheckSections({
 function ResolvedInspectorRecord<E extends GenericDetailEntity>({
   entity,
   record,
+  editSlot,
   onRecordResolved,
   onNameResolved,
 }: {
   entity: E;
   record: DetailRecordOf<E>;
+  editSlot: HTMLElement | null;
   onRecordResolved: (record: EntityActionRow | undefined) => void;
   onNameResolved: (name: string) => void;
 }) {
@@ -154,27 +157,36 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
     onRecordResolved(record);
     onNameResolved(typeof name === "string" ? name : record.id);
   }, [record, name, onRecordResolved, onNameResolved]);
-  const fieldSections = presentation.detail.sections.filter(
-    (section) => section.kind === "fields",
-  );
+  // The summary and the title above already show these; a section left with
+  // no facts disappears rather than printing a bare heading.
+  const fieldSections = presentation.detail.sections.flatMap((section) => {
+    if (section.kind !== "fields") return [];
+    const shown = detailSectionFields(
+      queryClient,
+      entity,
+      record,
+      section.fields,
+      { omitTitle: true },
+    );
+    return shown.length > 0 ? [{ ...section, fields: shown }] : [];
+  });
   const fields = metadata.fields.fields
     .filter((field) => field.display.detail)
     .map((field) => field.key);
   return (
     <>
-      {/* Identity facts and the record's one edit verb share the first row. */}
-      <div className="mb-3 flex min-w-0 items-start gap-2 empty:hidden">
-        {editable ? (
-          <Button
-            variant="outline"
-            size="xs"
-            className="ms-auto shrink-0"
-            onClick={() => setEditing(true)}
-          >
-            Edit record
-          </Button>
-        ) : null}
-      </div>
+      {editable && editSlot
+        ? createPortal(
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => setEditing(true)}
+            >
+              Edit record
+            </Button>,
+            editSlot,
+          )
+        : null}
       <DetailSummary entity={entity} record={record} compact />
       <RecordSuggestionsProvider
         entity={entity}
@@ -184,7 +196,7 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
         <RecordQualityProvider
           entity={entity}
           id={record.id}
-          visibleFields={fields}
+          visibleFields={fieldSections.flatMap((section) => section.fields)}
         >
           <FactsDensityProvider density="compact">
             <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
@@ -232,11 +244,19 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
 export function InspectorRecord<E extends GenericDetailEntity>(props: {
   entity: E;
   id: string;
+  editSlot: HTMLElement | null;
+  /** The read finished, so the header stops claiming the record is loading. */
+  onSettled: () => void;
   onRecordResolved: (record: EntityActionRow | undefined) => void;
   onNameResolved: (name: string) => void;
 }) {
   const metadata = useEntityMetadata(props.entity);
   const query = useQuery(entityDetailFor(props.entity).queryOptions(props.id));
+  const { onSettled } = props;
+  const settled = !query.isLoading;
+  useEffect(() => {
+    if (settled) onSettled();
+  }, [settled, onSettled]);
   return (
     <PreviewQuery
       query={query}

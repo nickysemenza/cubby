@@ -336,6 +336,13 @@ export const { definition, readSchemas } = defineEntityModel({
 
         extraActions: ["setStatus"],
       },
+      lead: ["overview", "notes"],
+      pairs: [
+        ["overview", "notes"],
+        ["schedule", "schedule-dates"],
+        ["budget", "budget-estimate"],
+        ["dependencies", "defaults"],
+      ],
       sections: [
         {
           kind: "relation",
@@ -444,6 +451,17 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
       views: [
         "table",
+        {
+          kind: "board",
+          id: "board",
+          label: "Board",
+          webOnly: true,
+          groupBy: "status",
+          groupings: ["status"],
+          cardFields: ["dates", "taskProgress"],
+          pageSize: 50,
+          sort: [{ orderBy: "updatedAt", direction: "desc" }],
+        },
         {
           kind: "slot",
           id: "calendar",
@@ -1250,7 +1268,7 @@ Rules:
         "updatedAt",
       ],
     },
-    grouping: ["completionYear"],
+    grouping: ["completionYear", "status"],
     intents: {
       fields: {
         capture: [

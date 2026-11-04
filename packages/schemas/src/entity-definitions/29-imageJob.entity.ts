@@ -133,6 +133,7 @@ export const { definition, readSchemas } = defineEntityModel({
       hero: {
         chip: "state",
       },
+      lead: ["overview"],
       sections: [
         {
           kind: "fields",

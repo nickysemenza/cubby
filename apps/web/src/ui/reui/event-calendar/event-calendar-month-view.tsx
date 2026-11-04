@@ -61,6 +61,9 @@ const useIsoLayoutEffect =
 
 interface EventCalendarMonthViewProps extends useRender.ComponentProps<"div"> {}
 
+/** A bar crossing at least this many days in one row counts as ongoing. */
+const LONG_BAR_DAYS = 5;
+
 function EventCalendarMonthView({
   className,
   render,
@@ -260,7 +263,7 @@ function EventCalendarMonthWeek({
 }) {
   const settings = useEventCalendarSettings();
   const firstDay = week[0]!;
-  const { bars, rowStart } = useEventCalendarWeek(firstDay);
+  const { bars: weekBars, rowStart } = useEventCalendarWeek(firstDay);
   const colOffset = 0;
   const dayMs = 86400000;
   const rowStartMs = zonedStartOfDay(
@@ -285,6 +288,33 @@ function EventCalendarMonthWeek({
     }
     return start === -1 ? null : { col: start, span: end - start + 1 };
   };
+  // Household projects run for weeks, so several long bars can bury the days
+  // they cross. Two or more fold into one "N ongoing" lane across their combined
+  // extent; its popover lists them, and the remaining bars close up beneath it.
+  const longBar = (bar: EventCalendarSegment) =>
+    (gridPos(bar.colStart ?? 0, bar.colSpan ?? 1)?.span ?? 0) >= LONG_BAR_DAYS;
+  const spanning = weekBars.filter(longBar);
+  const ongoing = spanning.length >= 2 ? spanning : [];
+  const ongoingColumns = ongoing.flatMap((bar) => {
+    const pos = gridPos(bar.colStart ?? 0, bar.colSpan ?? 1);
+    return pos ? [pos.col, pos.col + pos.span] : [];
+  });
+  const remainingLanes = [
+    ...new Set(
+      weekBars
+        .filter((bar) => !ongoing.includes(bar))
+        .map((bar) => bar.lane ?? 0),
+    ),
+  ].sort((a, b) => a - b);
+  const bars =
+    ongoing.length === 0
+      ? weekBars
+      : weekBars
+          .filter((bar) => !ongoing.includes(bar))
+          .map((bar) => ({
+            ...bar,
+            lane: remainingLanes.indexOf(bar.lane ?? 0) + 1,
+          }));
   // bars fit within the cap; deeper lanes fall into each day's "+N more"
   const visibleBars = bars.filter((b) => (b.lane ?? 0) < cap);
   const covers = (b: EventCalendarSegment, dayOffset: number) =>
@@ -296,7 +326,12 @@ function EventCalendarMonthWeek({
   // fortnight sets to half its chip height - sizing every lane to the tallest
   // possible chip left week-long project bars swimming in empty space.
   const laneHeights = Array.from(
-    { length: visibleBars.reduce((max, b) => Math.max(max, (b.lane ?? 0) + 1), 0) },
+    {
+      length: visibleBars.reduce(
+        (max, b) => Math.max(max, (b.lane ?? 0) + 1),
+        ongoing.length > 0 ? 1 : 0,
+      ),
+    },
     (_, lane) => {
       const inLane = visibleBars.filter((b) => (b.lane ?? 0) === lane);
       return inLane.length > 0 && inLane.every((b) => (b.colSpan ?? 1) > 1)
@@ -312,7 +347,11 @@ function EventCalendarMonthWeek({
   const reservedLanesFor = (col: number) =>
     visibleBars.reduce(
       (max, b) => (covers(b, offsets[col]!) ? Math.max(max, (b.lane ?? 0) + 1) : max),
-      0,
+      ongoingColumns.length > 0 &&
+        col >= Math.min(...ongoingColumns) &&
+        col < Math.max(...ongoingColumns)
+        ? 1
+        : 0,
     );
   const reservedHeight = (lanes: number) =>
     lanes === 0
@@ -410,7 +449,7 @@ function EventCalendarMonthWeek({
     : null;
   const ghostLane = dragGhost
     ? (bars.find((b) => b.occurrence.key === dragGhost.occurrence.key)?.lane ??
-      0)
+      (ongoing.length > 0 ? 1 : 0))
     : 0;
   // A single-day timed MOVE is indicated INLINE in the target cell (a
   // placeholder at the time-sorted position, rendered by EventCalendarMonthCell)
@@ -450,11 +489,13 @@ function EventCalendarMonthWeek({
           a cross-day span is a single unbroken block. pointer-events pass
           through the gaps to the cells below. NOT aria-hidden - these are the
           real interactive bars. */}
-      {(visibleBars.length > 0 || (dragGhost && ghostPos && ghostIsBar)) && (
+      {(visibleBars.length > 0 ||
+        ongoing.length > 0 ||
+        (dragGhost && ghostPos && ghostIsBar)) && (
         <div
           data-slot="event-calendar-month-bar-overlay"
           className={cn(
-            "pointer-events-none absolute inset-x-0 top-0 z-10 grid pt-1.5",
+            "pointer-events-none absolute inset-x-0 top-6 z-10 grid",
           )}
           style={{
             gridTemplateColumns,
@@ -462,6 +503,23 @@ function EventCalendarMonthWeek({
             gridAutoRows: "var(--ec-month-bar-h, 1.75rem)",
           }}
         >
+          {ongoing.length > 0 && (
+            <div
+              className="pointer-events-auto z-10 min-w-0 px-1"
+              style={{
+                gridColumnStart: Math.min(...ongoingColumns) + 1,
+                gridColumnEnd: Math.max(...ongoingColumns) + 1,
+                gridRow: 1,
+              }}
+            >
+              <EventCalendarMoreIndicator
+                day={firstDay}
+                count={ongoing.length}
+                segments={ongoing}
+                label={`${ongoing.length} ongoing`}
+              />
+            </div>
+          )}
           {visibleBars.map((bar) => {
             const pos = gridPos(bar.colStart ?? 0, bar.colSpan ?? 1);
             if (!pos) return null;
@@ -734,6 +792,47 @@ function EventCalendarMonthCell({
 
   const defaultContent = (
     <>
+      {/* Day number first, so lanes and "+N more" never hide the date. */}
+      <div
+        className={cn(
+          "flex h-6 shrink-0 flex-row-reverse items-center justify-between gap-1 px-1.5",
+        )}
+      >
+        <button
+            type="button"
+            data-slot="event-calendar-day-add"
+            aria-label={settings.i18n.labels.addEvent}
+            className="flex size-5 cursor-pointer items-center justify-center rounded-sm bg-primary text-primary-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover/ec-cell:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              settings.onSlotClick?.(
+                { date: day, allDay: true, period },
+                e,
+              );
+            }}
+          >
+            <PlusIcon className="size-3.5" aria-hidden="true" />
+          </button>
+        <span
+          data-slot="event-calendar-month-day-number"
+          className={cn(
+            "flex size-5 items-center justify-center rounded-full",
+            isOutside && "text-muted-foreground",
+            // the filled circle already marks today; keep the number the same
+            // weight/size as the other days so it does not read as larger
+            // Same font-size as every other day; a lighter weight cancels the
+            // way white digits on the filled circle read bolder/larger than the
+            // dark-on-light numbers around them.
+            isToday && "bg-primary font-light text-primary-foreground",
+          )}
+        >
+          {format(
+            toZoned(day, settings.timeZone),
+            settings.i18n.formats.monthCellDay,
+            { locale: settings.locale },
+          )}
+        </span>
+      </div>
       <div
         ref={contentRef}
         data-slot="event-calendar-month-cell-content"
@@ -742,7 +841,7 @@ function EventCalendarMonthCell({
           // below; changing the gap requires renderMonthCell
           // px-1 matches the all-day bar wrapper inset so single-day chips and
           // multi-day bars line up on the same left/right edge in a cell
-          "flex min-h-24 min-h-0 flex-1 flex-col gap-0.5 overflow-hidden px-1 pt-1.5 sm:min-h-28",
+          "flex min-h-16 flex-1 flex-col gap-0.5 overflow-hidden px-1 sm:min-h-20",
         )}
       >
         {reservedLanes > 0 && (
@@ -794,47 +893,6 @@ function EventCalendarMonthCell({
             }
           />
         )}
-      </div>
-      {/* Day number + add affordance, bottom-right (Notion-style) */}
-      <div
-        className={cn(
-          "flex items-center justify-end gap-1 px-2 pb-1.5",
-        )}
-      >
-        <button
-            type="button"
-            data-slot="event-calendar-day-add"
-            aria-label={settings.i18n.labels.addEvent}
-            className="flex size-5 cursor-pointer items-center justify-center rounded-sm bg-primary text-primary-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover/ec-cell:opacity-100"
-            onClick={(e) => {
-              e.stopPropagation();
-              settings.onSlotClick?.(
-                { date: day, allDay: true, period },
-                e,
-              );
-            }}
-          >
-            <PlusIcon className="size-3.5" aria-hidden="true" />
-          </button>
-        <span
-          data-slot="event-calendar-month-day-number"
-          className={cn(
-            "flex size-5 items-center justify-center rounded-full",
-            isOutside && "text-muted-foreground",
-            // the filled circle already marks today; keep the number the same
-            // weight/size as the other days so it does not read as larger
-            // Same font-size as every other day; a lighter weight cancels the
-            // way white digits on the filled circle read bolder/larger than the
-            // dark-on-light numbers around them.
-            isToday && "bg-primary font-light text-primary-foreground",
-          )}
-        >
-          {format(
-            toZoned(day, settings.timeZone),
-            settings.i18n.formats.monthCellDay,
-            { locale: settings.locale },
-          )}
-        </span>
       </div>
     </>
   );
@@ -895,6 +953,8 @@ interface EventCalendarMoreIndicatorProps {
    *  the indicator itself becomes the drop placeholder (dashed, event-tinted) so
    *  it reads as "the chip joins the +N more list". */
   dropInto?: { color?: string; valid: boolean };
+  /** Renders as one lane-tall bar with this label instead of "+N more". */
+  label?: string;
 }
 
 function EventCalendarMoreIndicator({
@@ -902,6 +962,7 @@ function EventCalendarMoreIndicator({
   count,
   segments,
   dropInto,
+  label,
 }: EventCalendarMoreIndicatorProps) {
   const settings = useEventCalendarSettings();
   const [open, setOpen] = useState(false);
@@ -924,6 +985,8 @@ function EventCalendarMoreIndicator({
         data-drop-invalid={dropInto && !dropInto.valid ? "" : undefined}
         className={cn(
           "cursor-pointer truncate rounded-sm px-1.5 text-start text-muted-foreground hover:text-foreground",
+          label &&
+            "block h-[calc(var(--ec-month-bar-h,1.75rem)-0.125rem)] w-full bg-muted leading-[calc(var(--ec-month-bar-h,1.75rem)-0.125rem)] text-foreground",
           // While a dragged chip will land in this overflow bucket, the "+N more"
           // link itself becomes the drop placeholder: dashed, event-tinted, one
           // chip tall, so the drop target is unmistakable.
@@ -956,7 +1019,7 @@ function EventCalendarMoreIndicator({
           }
         }}
       >
-        {settings.i18n.labels.more(count)}
+        {label ?? settings.i18n.labels.more(count)}
       </PopoverTrigger>
       <PopoverContent
         data-slot="event-calendar-more-popover"

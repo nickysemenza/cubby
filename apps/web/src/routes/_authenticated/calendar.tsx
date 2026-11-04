@@ -30,6 +30,7 @@ const CalendarRoute = listChromePage({
   title: "Calendar",
   layout: "full",
   actions: () => <CalendarConnectDialog />,
+  bodyGutter: () => "standard",
   page: CalendarBody,
 });
 

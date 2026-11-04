@@ -47,6 +47,8 @@ interface UseCellSelectionArgs<TItem extends RowData> {
   scrollToFlatRow: (rowIndex: number) => void;
   /** Cmd/Ctrl+Enter — the old "Enter opens the row" behavior. */
   onOpenRow?: (row: Row<TItem>) => void;
+  /** Visible columns the grid does not paint; movement skips them. */
+  unpaintedColumns?: ReadonlySet<string>;
 }
 
 interface ContainerProps {
@@ -230,6 +232,7 @@ export function useCellSelection<TItem extends RowData>({
   table,
   scrollToFlatRow,
   onOpenRow,
+  unpaintedColumns,
 }: UseCellSelectionArgs<TItem>): UseCellSelectionResult {
   const displayColumns = [
     ...table.getStartVisibleLeafColumns(),
@@ -239,7 +242,7 @@ export function useCellSelection<TItem extends RowData>({
   const columnsSignature = displayColumns
     .map(
       (column) =>
-        `${column.id}:${column.columnDef.enableCellSelection !== false}`,
+        `${column.id}:${column.columnDef.enableCellSelection !== false}:${unpaintedColumns?.has(column.id) === true}`,
     )
     .join(",")
     .concat(`:${table.options.enableCellSelection !== false}`);
@@ -256,7 +259,9 @@ export function useCellSelection<TItem extends RowData>({
           (column) =>
             table.options.enableCellSelection !== false &&
             column.columnDef.enableCellSelection !== false &&
-            !NON_SELECTABLE_COLUMN_IDS.has(column.id),
+            !NON_SELECTABLE_COLUMN_IDS.has(column.id) &&
+            // Keyboard and range movement must not land in a column with no cell.
+            !unpaintedColumns?.has(column.id),
         )
         .map((column) => column.id),
     // oxlint-disable-next-line react/exhaustive-deps -- signature stands in for the column list

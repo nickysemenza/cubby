@@ -180,6 +180,8 @@ export const { definition, readSchemas } = defineEntityModel(
           products:
             "Reached through the Purchases table on this page; the product path is three joins deep.",
         },
+        lead: ["overview"],
+        pairs: [["schedule", "identity"]],
         sections: [
           {
             kind: "fields",

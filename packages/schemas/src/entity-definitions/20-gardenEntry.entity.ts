@@ -82,6 +82,7 @@ export const { definition, readSchemas } = defineEntityModel({
         { relation: "plantings", dateField: "sowedOn" },
         { relation: "images", dateField: "capturedAt" },
       ],
+      lead: ["overview"],
       sections: [
         {
           kind: "fields",

@@ -6,6 +6,10 @@ import {
 import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-roster";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
+import {
+  workQueueRecordInput,
+  type WorkQueueRow,
+} from "@cubby/schemas/work-queue";
 import { countLabel } from "@cubby/shared/pluralize";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { MinusCircleIcon } from "@phosphor-icons/react/dist/csr/MinusCircle";
@@ -17,6 +21,7 @@ import { createPortal } from "react-dom";
 
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
+import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { cn } from "~/lib/utils";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { WhyValue } from "~/ui/derived/why-value";
@@ -30,6 +35,7 @@ import { useNeedsYouTarget } from "./needs-you";
 type Breakdown = NonNullable<FieldExplanationOutput["qualityBreakdown"]>;
 export type RecordQualityCheck = Breakdown["checks"][number];
 const EMPTY_CHECKS: readonly RecordQualityCheck[] = [];
+const EMPTY_WORK_ROWS: readonly WorkQueueRow[] = [];
 const QualityContext = createContext<{
   entity: Entity;
   id: string;
@@ -51,14 +57,14 @@ export function QualityResult({ check }: { check: RecordQualityCheck }) {
       : check.state === "excepted"
         ? MinusCircleIcon
         : WarningCircleIcon;
+  // A satisfied check stays visible without asking for attention; an unscored
+  // gap only caps the score, so it reads no louder.
   const tone =
-    check.state === "satisfied"
-      ? "text-positive"
-      : check.state === "excepted"
-        ? "text-muted-foreground"
-        : check.kind === "defect"
-          ? "text-destructive"
-          : "text-warning-ink";
+    check.state !== "gap" || (check.kind === "missing" && check.weight === 0)
+      ? "text-muted-foreground"
+      : check.kind === "defect"
+        ? "text-destructive"
+        : "text-warning-ink";
   return (
     <span
       className={`inline-flex min-w-0 items-start gap-1 text-xs ${tone}`}
@@ -100,25 +106,50 @@ function QualityCheckRows({
 }) {
   const context = useContext(QualityContext);
   if (!context || checks.length === 0) return null;
+  // Satisfied checks stay visible, as one quiet line; open ones keep a row.
+  const open = checks.filter((check) => check.state !== "satisfied");
+  const satisfied = checks.filter((check) => check.state === "satisfied");
   return (
-    <Ledger>
-      {checks.map((check) => (
-        <LedgerRow key={check.check} id={`${context.prefix}-${check.check}`}>
-          <LedgerCell slot="group">
-            <div className="flex items-center justify-between gap-2">
-              <QualityResult check={check} />
-              <WhyValue
-                entity={context.entity}
-                id={context.id}
-                field="dataQuality"
-                label={check.label}
-                resolution={context.resolution}
-              />
-            </div>
-          </LedgerCell>
-        </LedgerRow>
-      ))}
-    </Ledger>
+    <div className="min-w-0">
+      {open.length > 0 ? (
+        <Ledger>
+          {open.map((check) => (
+            <LedgerRow
+              key={check.check}
+              id={`${context.prefix}-${check.check}`}
+            >
+              <LedgerCell slot="group">
+                <div className="flex items-center justify-between gap-2">
+                  <QualityResult check={check} />
+                  <WhyValue
+                    entity={context.entity}
+                    id={context.id}
+                    field="dataQuality"
+                    label={check.label}
+                    resolution={context.resolution}
+                  />
+                </div>
+              </LedgerCell>
+            </LedgerRow>
+          ))}
+        </Ledger>
+      ) : null}
+      {satisfied.length > 0 ? (
+        <p className="flex flex-wrap gap-x-3 text-xs/4.5 text-muted-foreground">
+          {satisfied.map((check) => (
+            <span
+              key={check.check}
+              id={`${context.prefix}-${check.check}`}
+              className="inline-flex items-center gap-1"
+            >
+              <CheckIcon aria-hidden className="size-3 shrink-0" />
+              {check.label}
+              <span className="sr-only"> · {check.stateLabel}</span>
+            </span>
+          ))}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -227,7 +258,7 @@ function AssessedRecordQuality({
   });
   const breakdown = result.data?.qualityBreakdown;
   // The score covers every check, so the counts and issue links do too; a
-  // check this surface does not place falls to the Record quality list.
+  // check this surface does not place keeps its result in a fallback list.
   const allChecks = breakdown?.checks ?? EMPTY_CHECKS;
   const placed = (check: RecordQualityCheck) => {
     const placement = placementOf(check);
@@ -241,8 +272,30 @@ function AssessedRecordQuality({
   };
   const checks = allChecks.filter(placed);
   const orphaned = allChecks.filter((check) => !placed(check));
-  const attention = allChecks.filter((check) => check.state === "gap");
   const target = useNeedsYouTarget("quality");
+  // Work-queue rows in the same block already name their gaps. An unscored
+  // check only caps a record just short of 100, so it stays beside its evidence
+  // rather than asking the member for anything here.
+  const queued = useQuery({
+    ...workQueue.forRecord.queryOptions(
+      workQueueRecordInput.safeParse({ id }).data ?? { id },
+    ),
+    enabled:
+      hydrated &&
+      target != null &&
+      workQueueRecordInput.safeParse({ id }).success,
+  });
+  const queuedChecks = new Set<string>(
+    (queued.data?.items ?? EMPTY_WORK_ROWS).flatMap((row) =>
+      row.gaps.map((gap) => gap.check),
+    ),
+  );
+  const unresolved = allChecks.filter((check) => check.state === "gap");
+  const attention = unresolved.filter(
+    (check) =>
+      !queuedChecks.has(check.check) &&
+      (check.weight > 0 || check.kind === "defect"),
+  );
   // Loading holds the block open; a clean record does not.
   const needsYou = result.isPending || result.isError || attention.length > 0;
   const anchor = (check: RecordQualityCheck) => {
@@ -277,14 +330,21 @@ function AssessedRecordQuality({
               Quality{" "}
               {breakdown.score === null
                 ? "not assessed"
-                : `${breakdown.score}/100`}
+                : `${Math.round(breakdown.score)}/100`}
             </strong>
             <span className="text-muted-foreground">
               {allChecks.filter((check) => check.state === "satisfied").length}{" "}
-              satisfied · {attention.length} unresolved ·{" "}
+              satisfied · {unresolved.length} unresolved ·{" "}
               {allChecks.filter((check) => check.state === "excepted").length}{" "}
               accepted exceptions
             </span>
+            <WhyValue
+              entity={entity}
+              id={id}
+              field="dataQuality"
+              label="Score calculation"
+              resolution={result.data?.envelope}
+            />
           </div>
           {attention.length > 0 ? (
             <nav
@@ -320,13 +380,6 @@ function AssessedRecordQuality({
               />
             </div>
           ) : null}
-          <WhyValue
-            entity={entity}
-            id={id}
-            field="dataQuality"
-            label="Score calculation"
-            resolution={result.data?.envelope}
-          />
         </div>
       ) : null}
     </>
@@ -340,16 +393,26 @@ function AssessedRecordQuality({
           ? summary
           : target
             ? createPortal(
-                <div data-needs-row={needsYou || undefined}>{summary}</div>,
+                <div
+                  data-needs-row={needsYou || undefined}
+                  data-needs-count={attention.length > 0 || undefined}
+                >
+                  {summary}
+                </div>,
                 target,
               )
             : null}
-        {orphaned.length > 0 ? (
+        {/* Outside the Needs-you page only hosted Run evidence lands here, and
+            it keeps its heading; a record page never grows one for this. */}
+        {orphaned.length > 0 && target === undefined ? (
           <Section title="Record quality" headingAs="h2">
             <QualityCheckRows checks={orphaned} />
           </Section>
         ) : null}
         {children}
+        {orphaned.length > 0 && target !== undefined ? (
+          <QualityCheckRows checks={orphaned} />
+        ) : null}
       </Stack>
     </QualityContext>
   );

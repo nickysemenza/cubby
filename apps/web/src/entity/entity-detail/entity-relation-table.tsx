@@ -224,7 +224,10 @@ function SkeletonBody({
   return (
     <tbody>
       {Array.from({ length: rows }, (_, rowIndex) => (
-        <tr key={rowIndex} className="h-7 border-b border-border/60">
+        <tr
+          key={rowIndex}
+          className="h-(--table-row-height) border-b border-border/60"
+        >
           {columnKeys.map((key, cellIndex) => (
             <td key={key} className="px-2">
               {cellIndex === 0 && rowIndex === 0 ? (
@@ -272,7 +275,7 @@ function RelationLoadingSkeleton<TItem extends RowData>({
             {headerGroup.headers.map((header) => (
               <th
                 key={header.id}
-                className="h-8 border-b border-border px-2 text-left text-xs font-medium text-muted-foreground"
+                className="h-(--table-header-height) border-b border-border px-2 text-left text-xs font-medium text-muted-foreground"
               >
                 {header.isPlaceholder
                   ? null
@@ -328,17 +331,26 @@ type EntityRelationTableProps = {
   emptyLabel?: string;
   /** Injectable transport seam for tests; production keeps the real one. */
   operations?: EntityRelationTableOperations;
+  /** Known row count from the page's batched read, for an exact skeleton. */
+  expectedRows?: number;
 };
 
-/** Rows a loading relation shows: its limit when small, else three. */
-const skeletonRowsFor = (plan: RelationSectionPlan) =>
-  plan.limit != null ? Math.min(plan.limit, 3) : 3;
+/** Rows a loading relation shows: its known page of rows, else at most three. */
+export const relationSkeletonRows = (
+  plan: Pick<RelationSectionPlan, "limit" | "pageSize">,
+  expected?: number,
+) =>
+  expected === undefined
+    ? plan.limit != null
+      ? Math.min(plan.limit, 3)
+      : 3
+    : Math.min(expected, plan.limit ?? plan.pageSize);
 
 /**
  * The streamed relation's pending state avoids constructing a table until its
  * first complete page is available.
  */
-function RelationStaticSkeleton({ rows }: { rows: number }) {
+export function RelationStaticSkeleton({ rows }: { rows: number }) {
   const columns = 4;
   return (
     <table
@@ -349,7 +361,10 @@ function RelationStaticSkeleton({ rows }: { rows: number }) {
       <thead>
         <tr>
           {Array.from({ length: columns }, (_, index) => (
-            <th key={index} className="h-8 border-b border-border px-2">
+            <th
+              key={index}
+              className="h-(--table-header-height) border-b border-border px-2"
+            >
               <span className="sr-only">Loading column</span>
               <div aria-hidden className="h-2.5 w-16 rounded-sm bg-muted" />
             </th>
@@ -382,7 +397,11 @@ export function EntityRelationTable(props: EntityRelationTableProps) {
       <QuerySection
         title={props.title}
         resetKey={`${props.recordId}:${props.plan.relation}`}
-        fallback={<RelationStaticSkeleton rows={skeletonRowsFor(props.plan)} />}
+        fallback={
+          <RelationStaticSkeleton
+            rows={relationSkeletonRows(props.plan, props.expectedRows)}
+          />
+        }
       >
         <StreamedEntityRelationTable {...props} />
       </QuerySection>
@@ -429,6 +448,7 @@ function LiveEntityRelationTable({
   recordId,
   title,
   emptyLabel,
+  expectedRows,
   operations = productionOperations,
 }: EntityRelationTableProps) {
   const { target } = plan;
@@ -601,7 +621,7 @@ function LiveEntityRelationTable({
     return (
       <RelationLoadingSkeleton
         table={list.workbench.table}
-        rows={skeletonRowsFor(plan)}
+        rows={relationSkeletonRows(plan, expectedRows)}
       />
     );
   }

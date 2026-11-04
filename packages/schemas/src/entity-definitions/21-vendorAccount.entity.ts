@@ -77,6 +77,7 @@ export const { definition, readSchemas } = defineEntityModel({
 
       activityRelations: [{ relation: "purchases", dateField: "date" }],
 
+      lead: ["overview"],
       sections: [
         {
           kind: "fields",

@@ -1,7 +1,7 @@
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";
 import type { EnumIcon } from "@cubby/shared/enum-palette";
-import type { ReactElement, ReactNode } from "react";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 import { OptionGlyph } from "~/ui/common/option-glyph";
@@ -74,17 +74,35 @@ function Lead({
   );
 }
 
+/**
+ * Tones the declared `status` role marks as an exception. Only these keep a
+ * filled pill in a table; every other value paints as a dot and text
+ * (`table.css`). The decision reads the declared role and tone, never the
+ * value's spelling.
+ */
+const EXCEPTION_TONES: ReadonlySet<string> = new Set([
+  "var(--warning)",
+  "var(--destructive)",
+]);
+
 /** Render supplied presentation; raw unrecognized values stay neutral and readable. */
 export function EnumPill({
   optionRole = "category", value: _value,
   color = "var(--neutral-status)", glyph, icon, description, children, className,
 }: ValueProps & {optionRole?: string | null; value?: string}) {
   const tone = optionRole === "status" ? STATUS_TONES[color] : undefined;
+  const exception = optionRole === "status" && EXCEPTION_TONES.has(color);
   return withDescription(
     <Pill data-enum-role={optionRole ?? "category"}
+      data-enum-tone={exception ? "exception" : "quiet"}
       className={cn(CHIP, tone ?? "text-foreground", className)}
-      style={tone ? undefined : {backgroundColor: optionTint(color)}}>
-      <Lead glyph={glyph} icon={icon} color={color} />
+      style={{
+        "--enum-color": color,
+        ...(tone ? {} : {backgroundColor: optionTint(color)}),
+      } as CSSProperties}>
+      <span data-enum-lead="" className="contents">
+        <Lead glyph={glyph} icon={icon} color={color} />
+      </span>
       <span className="min-w-0 truncate">{children}</span>
     </Pill>, description,
   );

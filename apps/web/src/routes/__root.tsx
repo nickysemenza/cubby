@@ -327,7 +327,7 @@ function NavigationProgress() {
       className="absolute inset-x-0 bottom-0 h-0.5 overflow-hidden"
     >
       {visible && (
-        <div className="h-full w-2/5 animate-pulse bg-primary motion-reduce:animate-none" />
+        <div className="h-full w-2/5 animate-[progress-travel_1.5s_linear_infinite] bg-primary motion-reduce:animate-none" />
       )}
     </div>
   );
@@ -348,8 +348,12 @@ function DevtoolsWrapper() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  // Hosted Apple workspaces keep their shipped look and density (styles.css).
+  const nativeWorkspace = Route.useSearch({
+    select: (search) => search.nativeWorkspace,
+  });
   return (
-    <html lang="en">
+    <html lang="en" data-hosted-workspace={nativeWorkspace}>
       <head>
         <HeadContent />
       </head>

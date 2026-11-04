@@ -104,9 +104,18 @@ describe("desktop surplus allocation", () => {
       columns: [name, parent, status, code, actions],
       available: 2000,
       userSized: [],
-      measured: { name: 900, parent: 400, status: 300, orderId: 190 },
-      widths: { name: 240, parent: 160, status: 120, orderId: 96, actions: 40 },
-      spacer: 2000 - (240 + 160 + 120 + 96 + 40),
+      measured: { name: 900, parent: 400, orderId: 190 },
+      widths: { name: 240, parent: 160, status: 104, orderId: 96, actions: 40 },
+      spacer: 2000 - (240 + 160 + 104 + 96 + 40),
+    },
+    {
+      case: "never clips an enum label: it keeps its natural width",
+      columns: [status],
+      available: 2000,
+      userSized: [],
+      measured: { status: 172 },
+      widths: { status: 172 },
+      spacer: 2000 - 172,
     },
     {
       case: "lets a quantity keep its natural width",
@@ -140,14 +149,14 @@ describe("desktop surplus allocation", () => {
       spacer: 0,
     },
     {
-      case: "paints an empty column as a glyph strip over its fit",
+      case: "paints an empty column at no width over its fit",
       columns: [name, parent, actions],
       available: 600,
       userSized: [],
       measured: { parent: 140 },
       collapsed: ["parent"],
-      widths: { name: 240, parent: 40, actions: 40 },
-      spacer: 600 - (240 + 40 + 40),
+      widths: { name: 240, parent: 0, actions: 40 },
+      spacer: 600 - (240 + 40),
     },
     {
       case: "gives a pinned measurement column nothing",
@@ -190,8 +199,8 @@ describe("column sizing defaults", () => {
   it.each<{ meta: CubbyColumnMeta; size: number }>([
     { meta: {}, size: 160 },
     { meta: { numeric: true }, size: 72 },
-    { meta: { cellData: dateCellData(() => null) }, size: 72 },
-    { meta: { cellData: timestampCellData(() => null) }, size: 72 },
+    { meta: { cellData: dateCellData(() => null) }, size: 88 },
+    { meta: { cellData: timestampCellData(() => null) }, size: 88 },
     {
       meta: {
         numeric: true,

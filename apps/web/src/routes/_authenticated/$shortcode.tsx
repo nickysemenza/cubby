@@ -48,7 +48,7 @@ export const Route = createFileRoute("/_authenticated/$shortcode")({
     <Page variant="list" title="Not found">
       <EmptyState
         size="page"
-        description="This QR label doesn't match anything in Cubby."
+        description="This address doesn't match anything in Cubby."
         action={
           <>
             <Button

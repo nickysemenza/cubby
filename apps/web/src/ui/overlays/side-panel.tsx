@@ -276,6 +276,7 @@ export function SidePanel({
   title,
   code,
   actions,
+  headerRow,
   onClose,
   closeLabel = "Close panel",
   onPrev,
@@ -294,6 +295,8 @@ export function SidePanel({
   code?: string;
   /** Header actions before close, e.g. Open ↗. */
   actions?: ReactNode;
+  /** The record's own verbs, on a row under its identity. */
+  headerRow?: ReactNode;
   onClose?: () => void;
   closeLabel?: string;
   onPrev?: () => void;
@@ -317,7 +320,7 @@ export function SidePanel({
     >
       {resizable ? <SidePanelResizeHandle /> : null}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <header className="sticky top-0 z-20 border-b border-border bg-background px-4 py-3">
+        <header className="sticky top-0 z-20 border-b border-border bg-background px-4 py-2">
           <div className="flex items-start gap-2.5">
             {icon ? <div className="shrink-0">{icon}</div> : null}
             <div className="min-w-0 flex-1">
@@ -353,6 +356,7 @@ export function SidePanel({
               ) : null}
             </div>
           </div>
+          {headerRow}
         </header>
         {children}
       </div>
@@ -482,7 +486,7 @@ export function SidePanelLayout({
       >
         <div className="min-w-0">{children}</div>
         {panel ? (
-          <div className="sticky top-0 h-[min(100dvh,100%)] max-h-dvh min-w-0 self-start border-l border-border">
+          <div className="sticky top-0 h-[min(100dvh,100%)] max-h-dvh min-w-0 self-start border-l border-border transition-[opacity,translate] duration-(--brand-motion-standard) ease-cozy starting:translate-x-4 starting:opacity-0">
             {panel}
           </div>
         ) : null}

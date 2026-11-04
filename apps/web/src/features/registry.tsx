@@ -122,8 +122,9 @@ const slot = <E extends GenericDetailEntity>(
   load: () => SlotModule<DetailSlotComponent<E>>,
   applies?: (record: DetailRecordOf<E>) => boolean,
   collapsed = false,
+  indexTitle?: string,
 ): PresentationCoverage<DetailSlot<E>> =>
-  implemented({ component: lazy(load), applies, collapsed });
+  implemented({ component: lazy(load), applies, collapsed, indexTitle });
 
 /** Reports share one renderer on every entity; only the declared slot changes. */
 const reportSlot = <E extends GenericDetailEntity>(report: ReportSlot) =>
@@ -179,8 +180,11 @@ const detailSlots = {
     ),
   },
   recipe: {
-    workflow: slot(() =>
-      named(import("~/features/recipe/slots"), "RecipeWorkflow"),
+    workflow: slot(
+      () => named(import("~/features/recipe/slots"), "RecipeWorkflow"),
+      undefined,
+      false,
+      "Ingredients & method",
     ),
   },
   ingredient: {

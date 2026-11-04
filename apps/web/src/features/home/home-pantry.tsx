@@ -6,6 +6,7 @@ import { location } from "~/integrations/tanstack-query/generated/domains/locati
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
 
 import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";
@@ -22,6 +23,9 @@ export function usePantryValue() {
 export function HomePantry() {
   const valuation = usePantryValue();
   const locations = valuation.data?.locations ?? [];
+  // A prefetch can resolve before hydration; the first client render must match
+  // the server's loading rows.
+  const hydrated = useHydrated();
   return (
     <Section
       title="Pantry by location"
@@ -36,7 +40,7 @@ export function HomePantry() {
           onRetry={() => void valuation.refetch()}
           className="mt-2"
         />
-      ) : valuation.data === undefined ? (
+      ) : !hydrated || valuation.data === undefined ? (
         <HomeRowsLoading label="Loading pantry value" />
       ) : locations.length === 0 ? (
         <EmptyState size="inline" className="mt-2">

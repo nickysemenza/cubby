@@ -443,9 +443,11 @@ test("Suggestions lists every family with named records and category pills, and 
     exact: true,
   });
   await expect(selected).toBeVisible();
+  await selected.getByRole("button", { name: "More", exact: true }).click();
   await expect(
-    selected.getByRole("button", { name: /^Never suggest/ }),
+    page.getByRole("menuitem", { name: /^Never suggest/ }),
   ).toBeDisabled();
+  await page.keyboard.press("Escape");
   await page.getByRole("combobox", { name: "Sort", exact: true }).click();
   await page.getByRole("option", { name: "Most impact", exact: true }).click();
   await expect(selected).toHaveCount(0);
@@ -1004,8 +1006,8 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
     page,
     `/products?searchQuery=${encodeURIComponent(name)}`,
   );
-  await page.getByRole("button", { name: "Actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Columns…", exact: true }).click();
+  await page.getByRole("button", { name: "Display", exact: true }).click();
+  await page.getByRole("button", { name: "Columns…", exact: true }).click();
   await page.getByRole("button", { name: "Show Tags", exact: true }).click();
   await page.keyboard.press("Escape");
   const row = page

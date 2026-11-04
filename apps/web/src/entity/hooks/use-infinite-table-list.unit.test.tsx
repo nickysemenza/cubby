@@ -275,7 +275,8 @@ describe("useInfiniteTableList", () => {
       expect(result.current.infiniteScroll.isTransitioning).toBe(true),
     );
     expect(result.current.data).toEqual([{ id: "old-0" }]);
-    expect(result.current.sums).toBeUndefined();
+    // The prior totals stay, dimmed by the footer, until the new ones arrive.
+    expect(result.current.sums).toEqual({ cost: 999 });
     expect(result.current.infiniteScroll.hasNextPage).toBe(false);
     act(() => result.current.infiniteScroll.fetchNextPage());
     expect(requested).not.toContain("new:1");

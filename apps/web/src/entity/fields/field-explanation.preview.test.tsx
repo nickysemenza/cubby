@@ -129,7 +129,10 @@ it("loads on demand, retries a failed read and expands bounded evidence without 
   );
   expect(screen.queryByText("Synthetic evidence 8")).not.toBeInTheDocument();
   await userEvent.click(screen.getByText("Show 2 more evidence entries"));
-  expect(await screen.findByText("Synthetic evidence 8")).toBeVisible();
+  // The body fades in, so visibility settles a frame after it mounts.
+  await waitFor(() =>
+    expect(screen.getByText("Synthetic evidence 8")).toBeVisible(),
+  );
   const panel = screen.getByRole("dialog");
   expect(panel).toHaveTextContent("not an exhaustive list");
   expect(panel).toHaveTextContent("-$159.84");

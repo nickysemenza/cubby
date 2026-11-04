@@ -9,6 +9,7 @@ import {
   gotoAuthenticatedPage,
   readExpense,
   uniqueName,
+  clickBulkAction,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { buildEntity } from "tooling/factories/build";
@@ -43,10 +44,7 @@ export async function clearExpenseDatesInBrowser(page: Page, baseURL: string) {
     .getByRole("checkbox", { name: "Select row" })
     .click();
   await recordProgrammaticFocus(page);
-  await page
-    .locator("[data-bulk-action-bar]")
-    .getByRole("button", { name: "Bulk edit...", exact: true })
-    .click();
+  await clickBulkAction(page, "Bulk edit...");
   const dialog = page.getByRole("dialog");
   const unknown = dialog.getByRole("button", {
     name: "Date unknown",

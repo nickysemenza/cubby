@@ -186,27 +186,34 @@ export function DetailPageHeader({
     ? entityHeroWhen(queryClient, entity, parsedRawData.data)
     : null;
   const cover = heroImages?.[0];
-  const facts = [
-    heroNo && (
-      <span key="code" className="md:hidden">
-        <CopyableShortcode
-          code={heroNo}
-          className="min-h-11 font-mono text-foreground md:min-h-0"
-        />
-      </span>
-    ),
-    when && (
-      <span key="when">
-        {when.label} <strong>{when.value}</strong>
-      </span>
-    ),
-    validCreatedAt && (
-      <span key="added">
-        {when ? "added " : "Added "}
-        <DateDisplay timestamp={createdAt} />
-      </span>
-    ),
-  ].filter(Boolean);
+  // One line with the trail: the code leads below `md`, where the trail hides
+  // it, and every later fact carries its own separator, so none can orphan one.
+  const crumbFacts = (
+    <>
+      {heroNo && (
+        <span className="md:hidden">
+          <CopyableShortcode
+            code={heroNo}
+            className="min-h-11 font-mono text-foreground md:min-h-0"
+          />
+        </span>
+      )}
+      {when && (
+        <span className="min-w-0 truncate md:before:me-1 md:before:content-['·']">
+          {when.label}{" "}
+          <strong className="font-semibold text-foreground">
+            {when.value}
+          </strong>
+        </span>
+      )}
+      {validCreatedAt && (
+        <span className="min-w-0 truncate md:before:me-1 md:before:content-['·']">
+          {when ? "added " : "Added "}
+          <DateDisplay timestamp={createdAt} />
+        </span>
+      )}
+    </>
+  );
   const actions =
     heroActions?.primary || heroActions?.secondary ? (
       <>
@@ -215,56 +222,65 @@ export function DetailPageHeader({
       </>
     ) : undefined;
   return (
-    <PageHeader
-      layout="stacked"
-      data-testid="detail-spec-plate"
-      className={cn(!summary && "border-b border-border pb-3")}
-      breadcrumb={
-        wayfinding !== false ? (
-          <DetailBreadcrumb
-            entity={entity}
-            heroNo={heroNo}
-            wayfinding={wayfinding}
-            crumbs={
-              (parsedRawData.success && parsedRawData.data.breadcrumb) || []
-            }
-          />
-        ) : undefined
-      }
-      media={
-        heroNo && (cover || heroDisplayImage) ? (
-          <ImageChainPopover entity={entity} id={heroNo}>
-            <EntityCover
-              images={
-                heroImages?.length
-                  ? heroImages
-                  : heroDisplayImage
-                    ? [heroDisplayImage]
-                    : []
-              }
-              entity={entity}
-              alt="Record cover"
-              size={48}
-            />
-          </ImageChainPopover>
-        ) : undefined
-      }
-      title={title}
-      status={
-        heroStamp ? (
-          <Badge variant={heroStampVariant[heroStamp.tone ?? "ink"]}>
-            {heroStamp.label}
-          </Badge>
-        ) : undefined
-      }
-      facts={facts}
-      actions={actions}
-      below={
-        summary ? (
-          <div className="-mx-2 mt-3 md:-mx-4">{summary}</div>
-        ) : undefined
-      }
-    />
+    <>
+      <PageHeader
+        layout="stacked"
+        data-testid="detail-spec-plate"
+        // The title row stays in view as a 40px band: the header sticks at minus
+        // its crumb row, which scrolls away. Portaled editors sit above z-20.
+        className={cn(
+          "-mx-2 bg-card px-2 pb-1.5 md:sticky md:top-[calc(var(--app-chrome-top)-var(--record-crumb-height))] md:z-20 md:-mx-4 md:px-4",
+          "border-b border-border",
+        )}
+        breadcrumb={
+          wayfinding !== false ? (
+            <span className="flex min-w-0 flex-wrap items-center gap-x-1 md:mb-1 md:h-(--record-crumb-height) md:flex-nowrap md:overflow-hidden md:whitespace-nowrap">
+              <DetailBreadcrumb
+                entity={entity}
+                heroNo={heroNo}
+                wayfinding={wayfinding}
+                crumbs={
+                  (parsedRawData.success && parsedRawData.data.breadcrumb) || []
+                }
+              />
+              {crumbFacts}
+            </span>
+          ) : (
+            <span className="flex min-w-0 flex-wrap items-center gap-x-1 md:mb-1 md:h-(--record-crumb-height)">
+              {crumbFacts}
+            </span>
+          )
+        }
+        media={
+          heroNo && (cover || heroDisplayImage) ? (
+            <ImageChainPopover entity={entity} id={heroNo}>
+              <EntityCover
+                images={
+                  heroImages?.length
+                    ? heroImages
+                    : heroDisplayImage
+                      ? [heroDisplayImage]
+                      : []
+                }
+                entity={entity}
+                alt="Record cover"
+                size={28}
+              />
+            </ImageChainPopover>
+          ) : undefined
+        }
+        title={title}
+        status={
+          heroStamp ? (
+            <Badge variant={heroStampVariant[heroStamp.tone ?? "ink"]}>
+              {heroStamp.label}
+            </Badge>
+          ) : undefined
+        }
+        actions={actions}
+      />
+      {summary ? <div className="-mx-2 md:-mx-4">{summary}</div> : null}
+    </>
   );
 }
 
@@ -285,6 +301,8 @@ interface ListPageHeaderProps {
    * mounted while the body swaps renderers.
    */
   chrome: "hero" | "workbench";
+  /** A hero title on a full-bleed page shares the body's standard gutter. */
+  gutter?: boolean;
   /** View/mode control beside the workbench query tools. */
   controls?: ReactNode;
   /** Phone route titles live in the contextual bar unless the page opts in. */
@@ -293,6 +311,7 @@ interface ListPageHeaderProps {
 
 /** A list or tool page's identity: title with its count, tools and actions. */
 export function ListPageHeader({
+  gutter = false,
   title,
   eyebrow,
   entity,
@@ -363,6 +382,7 @@ export function ListPageHeader({
       actions={actions}
       className={cn(
         "mb-3",
+        gutter && "px-2 pt-2 md:px-4",
         !mobileTitleVisible && !actions && "max-md:hidden",
         !mobileTitleVisible &&
           "max-md:[&_[data-slot=page-header-identity]]:sr-only",

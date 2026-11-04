@@ -40,6 +40,8 @@ export interface Fact {
   anchor?: string;
   /** List: prose takes the full width instead of the value column. */
   fullWidth?: boolean;
+  /** List: the heading above already names this fact; assistive tech keeps it. */
+  labelHidden?: boolean;
   hide?: boolean;
 }
 
@@ -96,6 +98,11 @@ export function useFactsAdd() {
   return useContext(FactsAddContext);
 }
 
+/** The one spelling of a value nobody recorded. */
+export function NotRecordedValue() {
+  return <span className="text-muted-foreground">Not recorded</span>;
+}
+
 /** The quiet value an empty editable fact shows. */
 export function AddFactValue({
   label,
@@ -109,9 +116,13 @@ export function AddFactValue({
       type="button"
       aria-label={`Add ${label}`}
       onClick={onAdd}
-      className="rounded-sm text-muted-foreground outline-none hover:text-foreground-strong hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+      className="group/add inline-flex items-center gap-1.5 rounded-sm text-muted-foreground outline-none hover:text-foreground-strong focus-visible:ring-2 focus-visible:ring-ring"
     >
-      Not recorded · Add…
+      Not recorded
+      {/* Add is one hover away; touch and keyboard have no hover to wait for. */}
+      <span className="underline opacity-0 group-hover/add:opacity-100 group-focus-visible/add:opacity-100 pointer-coarse:opacity-100">
+        Add
+      </span>
     </button>
   );
 }
@@ -199,7 +210,7 @@ function FactRow({ fact }: { fact: Fact }) {
         as="dt"
         slot="primary"
         data-slot="fact-label"
-        className="text-muted-foreground"
+        className={fact.labelHidden ? "sr-only" : "text-muted-foreground"}
       >
         {fact.label}
       </LedgerCell>
@@ -217,8 +228,8 @@ function FactRow({ fact }: { fact: Fact }) {
               {fact.caption}
             </span>
           )}
+          {fact.quality}
         </div>
-        {fact.quality ? <div className="mt-0.5">{fact.quality}</div> : null}
       </LedgerCell>
       {(fact.filterAction || fact.explanation) && (
         <LedgerCell as="dd" slot="actions">

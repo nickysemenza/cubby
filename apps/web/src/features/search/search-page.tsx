@@ -31,7 +31,15 @@ import { MobileCardSkeletonList } from "~/ui/feedback/mobile-card-skeleton";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/ui/primitives/dropdown-menu";
 import { Input } from "~/ui/primitives/input";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 import {
   type EntityPreviewRowData,
@@ -65,6 +73,7 @@ interface SearchPreviewRow {
 
 type SearchPreviewHandler = (row: SearchPreviewRow) => void;
 
+const VISIBLE_FILTER_COUNT = 8;
 const filterOptions: Array<{ value: SearchType; label: string }> = [
   { value: "all", label: "All" },
   ...searchableEntities.map((entityKind) => ({
@@ -273,9 +282,17 @@ function SearchFilter({
   value: SearchType;
   onChange: (value: SearchType) => void;
 }) {
+  // Every type stays reachable; the row itself never overflows the page.
+  const lead = filterOptions.slice(0, VISIBLE_FILTER_COUNT);
+  const selectedOption = filterOptions.find((option) => option.value === value);
+  const visible =
+    selectedOption && !lead.includes(selectedOption)
+      ? [...lead.slice(0, -1), selectedOption]
+      : lead;
+  const overflow = filterOptions.filter((option) => !visible.includes(option));
   return (
-    <Row gap="sm" className="-mx-1 overflow-x-auto px-1 pb-1">
-      {filterOptions.map((option) => (
+    <Row gap="sm" className="-mx-1 flex-wrap px-1 pb-1">
+      {visible.map((option) => (
         <Badge
           key={option.value}
           variant={option.value === value ? "default" : "outline"}
@@ -291,6 +308,27 @@ function SearchFilter({
           {option.label}
         </Badge>
       ))}
+      {overflow.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="outline" size="xs">
+                More
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="start">
+            {overflow.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => onChange(option.value)}
+              >
+                {option.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </Row>
   );
 }
@@ -646,9 +684,11 @@ export function SearchResultsFeedback({
 }) {
   if (state === "loading") {
     return (
-      <div className="py-8 text-center text-sm text-muted-foreground">
-        Searching…
-      </div>
+      <output aria-label="Searching" className="block space-y-1 py-2">
+        {Array.from({ length: 8 }, (_, index) => (
+          <Skeleton key={index} className="h-(--table-row-height) w-full" />
+        ))}
+      </output>
     );
   }
   if (state === "error") {

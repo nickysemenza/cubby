@@ -207,6 +207,7 @@ function ListPageShell(props: PageListProps) {
           entity={entity}
           actions={props.actions}
           chrome={listChrome}
+          gutter={bodyGutter === "standard"}
           controls={props.workbenchControls}
           mobileTitleVisible={props.mobileTitleVisible}
           count={count}
@@ -246,7 +247,7 @@ function ListPageBody({
           <div
             className={cn(
               workbench ? "space-y-0" : "space-y-3",
-              bodyGutter === "standard" && "px-2 md:px-6",
+              bodyGutter === "standard" && "px-2 md:px-4",
             )}
           >
             {children}
@@ -263,7 +264,11 @@ function DetailPageShell(props: PageDetailProps) {
     : "Loading records…";
   return (
     <PageWrapper layout={props.layout}>
-      <div className="space-y-4">
+      <div
+        data-record-page
+        // The crumb row scrolls away; the 40px title band stays (`DetailPageHeader`).
+        className="space-y-2 [--record-crumb-height:1rem] md:[--record-title-height:2.5rem]"
+      >
         <DetailPageHeader
           entity={props.entity}
           wayfinding={props.wayfinding}

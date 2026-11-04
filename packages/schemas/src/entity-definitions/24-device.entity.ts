@@ -69,6 +69,7 @@ export const { definition, readSchemas } = defineEntityModel({
           fields: ["updateRequired", "inactive", "appleIntelligenceAvailable"],
         },
       ],
+      lead: ["overview"],
       sections: [
         {
           kind: "fields",

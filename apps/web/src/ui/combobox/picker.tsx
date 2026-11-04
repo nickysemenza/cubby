@@ -363,8 +363,8 @@ const fieldFrameClass = (compact: boolean | undefined) =>
     "focus-within:border-ring focus-within:ring-[2px] focus-within:ring-ring/30",
     "has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 data-[hydrating]:has-[:disabled]:opacity-100",
     compact
-      ? "min-h-7.5 text-xs/relaxed max-sm:min-h-11 max-sm:text-base"
-      : "min-h-7.5 text-sm max-sm:min-h-11 max-sm:text-base",
+      ? "min-h-(--input-height) text-control max-sm:min-h-11 max-sm:text-base"
+      : "min-h-(--input-height) text-sm max-sm:min-h-11 max-sm:text-base",
   );
 
 /**
@@ -405,13 +405,13 @@ const listClass =
 
 const rowClass = (meta: boolean, custom: boolean) =>
   cn(
-    "relative flex min-h-7.5 cursor-default items-center gap-2 rounded-sm px-1.5 py-0.5 text-left text-sm outline-none select-none max-sm:min-h-11",
+    "relative flex min-h-(--control-height-sm) cursor-default items-center gap-2 rounded-sm px-1.5 py-0.5 text-left text-sm outline-none select-none max-sm:min-h-11",
     // Highlight (pointer or arrow keys) owns the fill; selection is the check
     // and a heavier name, so the two never read alike on the same row.
     "data-highlighted:bg-accent data-highlighted:text-accent-foreground [&[data-selected]_[data-picker-name]]:font-medium",
     "data-disabled:cursor-not-allowed data-disabled:text-muted-foreground",
     meta &&
-      "min-h-7.5 text-xs font-medium text-muted-foreground max-sm:min-h-11",
+      "min-h-(--control-height-sm) text-xs font-medium text-muted-foreground max-sm:min-h-11",
     custom && "items-start py-1 whitespace-normal",
   );
 
@@ -1428,7 +1428,7 @@ function ChoosePicker<TId extends string>({
             ref={inputRef}
             aria-label={ariaLabel}
             aria-describedby={ariaDescribedBy}
-            className="flex h-full min-w-0 flex-1 items-center gap-1.5 self-stretch text-left outline-none"
+            className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left outline-none"
           >
             <SelectedLead value={value} />
             <span

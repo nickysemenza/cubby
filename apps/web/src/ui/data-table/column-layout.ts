@@ -462,6 +462,8 @@ type TableWidthColumn = {
     maxSize?: number;
     meta?: {
       entityColumnRole?: EntityColumnRole;
+      /** A sentence column: fits its text beyond the short-text cap. */
+      prose?: boolean;
       numeric?: boolean;
       code?: boolean;
       linksTo?: string;
@@ -483,32 +485,33 @@ const FIXED_WIDTH_KINDS = new Set([
 
 /**
  * Only the record identity uses pane slack, up to its 240px fit. Widening a
- * fact column only moves it away from its neighbours.
+ * fact column only moves it away from its neighbours. The identity is pinned by
+ * default, so being pinned does not disqualify it.
  */
 function isFlexibleColumn(column: TableWidthColumn) {
-  if (isLockedColumn(column) || column.getIsPinned?.()) return false;
+  if (isLockedColumn(column)) return false;
   return column.columnDef.meta?.entityColumnRole === "identity";
 }
 
 /**
  * The widest a fitted column paints, by what it holds: a record title stops
- * at 240px, free text at 160px, a status pill or a column of links to one
- * entity (whose names wrap to two lines) at 120px and a code at 96px;
- * clipped values spill over on hover (`useCellSpill`).
- * Quantities, money and dates keep their natural width. A person's resize
- * still reaches `maxSize`.
+ * at 240px, free text at 160px, a column of links to one entity at 120px and a
+ * code at 96px; clipped values spill over on hover (`useCellSpill`).
+ * Quantities, money, dates and enum labels keep their natural width, so an enum
+ * label is never clipped. A person's resize still reaches `maxSize`.
  */
 const IDENTITY_FIT_MAX = 240;
 const TEXT_FIT_MAX = 160;
-const SELECT_FIT_MAX = 120;
 const LINK_FIT_MAX = 120;
 const CODE_FIT_MAX = 96;
+const PROSE_FIT_MAX = 480;
 
 function kindFitMax(meta: TableWidthColumn["columnDef"]["meta"]) {
   if (meta?.entityColumnRole === "identity") return IDENTITY_FIT_MAX;
+  if (meta?.prose) return PROSE_FIT_MAX;
   const kind = meta?.cellData?.kind;
   if (meta?.numeric || (kind !== undefined && FIXED_WIDTH_KINDS.has(kind)))
-    return kind === "select" ? SELECT_FIT_MAX : Number.POSITIVE_INFINITY;
+    return Number.POSITIVE_INFINITY;
   if (meta?.code) return CODE_FIT_MAX;
   if (meta?.linksTo) return LINK_FIT_MAX;
   return TEXT_FIT_MAX;
@@ -568,10 +571,10 @@ function isEmptyValue(value: unknown) {
 }
 
 /**
- * Columns with no value in any loaded row. They collapse to a glyph strip so
- * a sparse roster stops spending width on blank cells. A column the person
- * sized, sorted, filtered or pinned stays as they set it, and one still
- * loading its values stays open.
+ * Columns with no value in any loaded row. They leave the painted grid so a
+ * sparse roster stops spending width on blank cells, and the footer's "+N empty"
+ * names them. A column the person sized, sorted, filtered or pinned stays as they
+ * set it, and one still loading its values stays open.
  */
 export function emptyColumnIds<TData extends RowData>(
   table: CubbyTable<TData>,
@@ -591,6 +594,8 @@ export function emptyColumnIds<TData extends RowData>(
       sized[column.id] !== undefined
     )
       continue;
+    // A column can hold no values and still carry a proposal to accept.
+    if (column.columnDef.meta?.suggest) continue;
     // A deferred value is unknown, not empty; its accessor may not even run.
     const unavailable = column.columnDef.meta?.valueUnavailable;
     if (unavailable && rows.some((row) => unavailable(row.original))) continue;
@@ -605,8 +610,33 @@ export function emptyColumnIds<TData extends RowData>(
   return empty;
 }
 
-/** An empty column's glyph strip (`emptyColumnIds`). */
-const COLLAPSED_COLUMN_WIDTH = 40;
+/** Below this pane share the pinned identity yields width to the facts beside it. */
+const PINNED_IDENTITY_PANE_SHARE = 0.45;
+const PINNED_IDENTITY_MIN = 120;
+
+/**
+ * Pinned columns never scroll, so on a narrow pane (an open inspector, a small
+ * window) the identity must leave the facts room to scroll past it.
+ */
+function pinnedIdentityCap(
+  column: TableWidthColumn,
+  columns: readonly TableWidthColumn[],
+  availableWidth: number,
+) {
+  if (
+    availableWidth <= 0 ||
+    column.columnDef.meta?.entityColumnRole !== "identity" ||
+    !column.getIsPinned?.()
+  )
+    return Number.POSITIVE_INFINITY;
+  const lockedWidth = columns
+    .filter((candidate) => isLockedColumn(candidate))
+    .reduce((total, candidate) => total + candidate.getSize(), 0);
+  return Math.max(
+    PINNED_IDENTITY_MIN,
+    Math.floor(availableWidth * PINNED_IDENTITY_PANE_SHARE) - lockedWidth,
+  );
+}
 
 /**
  * Resolves the widths the browser should paint without mutating TanStack's own
@@ -632,13 +662,15 @@ export function resolvedTableColumnWidths(
   const widths: Record<string, number> = {};
   for (const column of columns) {
     const fit = measured[column.id];
-    widths[column.id] = collapsed.has(column.id)
-      ? COLLAPSED_COLUMN_WIDTH
-      : !isLockedColumn(column) &&
-          !userSized.has(column.id) &&
-          fit !== undefined
+    const width =
+      !isLockedColumn(column) && !userSized.has(column.id) && fit !== undefined
         ? Math.min(fit, columnFitMax(column))
         : column.getSize();
+    widths[column.id] = collapsed.has(column.id)
+      ? 0
+      : userSized.has(column.id)
+        ? width
+        : Math.min(width, pinnedIdentityCap(column, columns, availableWidth));
   }
   const configuredWidth = Object.values(widths).reduce(
     (total, width) => total + width,
@@ -648,7 +680,9 @@ export function resolvedTableColumnWidths(
     (column) =>
       isFlexibleColumn(column) &&
       !userSized.has(column.id) &&
-      !collapsed.has(column.id),
+      !collapsed.has(column.id) &&
+      pinnedIdentityCap(column, columns, availableWidth) >=
+        columnFitMax(column),
   );
   const remaining = distributeSlack(
     widths,
@@ -731,7 +765,7 @@ function tailwindWidth(className: string, prefix: "w" | "min-w" | "max-w") {
 }
 
 /** Every plain-date column that declares no width of its own. */
-const DATE_COLUMN_WIDTH = 72;
+const DATE_COLUMN_WIDTH = 88;
 
 /** Above this, a long header clamps rather than widening its column. */
 const HEADER_FIT_MAX = 160;
@@ -746,9 +780,9 @@ function defaultColumnSize(meta: CubbyColumnMeta | undefined) {
   if (meta?.entityColumnRole === "identity") return IDENTITY_FIT_MAX;
   const kind = meta?.cellData?.kind;
   if (kind === "boolean") return 56;
-  // Dates and instants stack the day over its compact distance; the longest
-  // line, "’24 · 11mo ago", paints about 64px.
-  if (kind === "timestamp") return 72;
+  // Dates and instants hold the day and its compact distance on one line;
+  // "Oct 13 · ’24 · 11mo ago" paints about 112px, a typical row about 88px.
+  if (kind === "timestamp") return DATE_COLUMN_WIDTH;
   if (kind === "date") return DATE_COLUMN_WIDTH;
   if (meta?.numeric || kind === "number" || kind === "currency") return 72;
   if (kind === "amount") return 72;
@@ -807,7 +841,7 @@ function normalizedColumnSize<TData extends RowData>(
     definition.minSize ??
     tailwindWidth(className, "min-w") ??
     Math.min(size, MIN_COLUMN_WIDTH + rail);
-  // At least the identity fit, so a narrow default (a 72px stacked date)
+  // At least the identity fit, so a narrow default (an 88px date)
   // never clips the one-line form it paints outside a desktop row; each
   // kind's fit cap still bounds what measurement may claim.
   const maxSize =
@@ -872,6 +906,9 @@ function computeDefaultLayout(
       .map((descriptor) => descriptor.id);
   const lockedStart = LOCKED_START_COLUMN_ROLES.flatMap(idsForRole);
   const lockedEnd = LOCKED_END_COLUMN_ROLES.flatMap(idsForRole);
+  // The record's name stays on screen however far the facts scroll. It is an
+  // ordinary pin: a person can unpin it, unlike the locked structural columns.
+  const pinnedIdentity = idsForRole("identity").slice(0, 1);
   const lockedIds = new Set([...lockedStart, ...lockedEnd]);
   const columnIds = descriptors.map(({ id }) => id);
   const rest = columnIds.filter((id) => !lockedIds.has(id));
@@ -902,7 +939,10 @@ function computeDefaultLayout(
       ),
       ...lockedEnd,
     ],
-    columnPinning: { start: lockedStart, end: lockedEnd },
+    columnPinning: {
+      start: [...lockedStart, ...pinnedIdentity],
+      end: lockedEnd,
+    },
     columnVisibility,
     // Nothing here is persisted anymore; a resize simply becomes TanStack's own
     // uncontrolled `columnSizing` state after mount, seeded by each column's

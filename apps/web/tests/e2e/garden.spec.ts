@@ -57,6 +57,10 @@ test("location relation sections create a planting and list both plantings", asy
 
   await gotoAuthenticatedPage(page, `/locations/${growingBed.id}#work`);
   await expect(plantingsSection).toBeVisible();
+  // A relation known to be empty folds into the "Nothing recorded" line.
+  await page
+    .getByRole("button", { name: "Show Garden entries, nothing recorded" })
+    .click();
   await expect(gardenEntriesSection).toBeVisible();
   await expect(
     gardenEntriesSection.getByText("0", { exact: true }),
@@ -141,8 +145,8 @@ test("a planting journal entry persists and appears in its location relation", a
   // The Journal relation section's create button opens the generic garden
   // entry dialog seeded with this planting's id.
   await page
-    .getByRole("heading", { level: 2, name: "Work", exact: true })
-    .scrollIntoViewIfNeeded();
+    .getByRole("button", { name: "Show Journal, nothing recorded" })
+    .click();
   await page.getByRole("button", { name: "Log entry...", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("New Garden Entry")).toBeVisible();

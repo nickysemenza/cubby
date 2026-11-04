@@ -1012,7 +1012,10 @@ it("shows exact-identifier evidence without hiding a conflicting size", async ()
   expect(screen.getByText("Exact identifier")).toBeVisible();
   expect(screen.getByText("Titles conflict — check evidence")).toBeVisible();
   await userEvent.click(screen.getByText("Original comparison text"));
-  expect(screen.getByText(`Photo: ${observedName}`)).toBeVisible();
+  // The disclosure fades in, so visibility settles a frame after it opens.
+  await waitFor(() =>
+    expect(screen.getByText(`Photo: ${observedName}`)).toBeVisible(),
+  );
   expect(
     screen.getByText("Product: Synthetic work boots size 9"),
   ).toBeVisible();
@@ -1355,7 +1358,11 @@ it("reviews evidence-matched brands in the workbench without replacing explicit 
   await userEvent.click(
     screen.getByRole("button", { name: "Read from 1 photo" }),
   );
-  expect(screen.getByRole("region", { name: "Photo evidence" })).toBeVisible();
+  await waitFor(() =>
+    expect(
+      screen.getByRole("region", { name: "Photo evidence" }),
+    ).toBeVisible(),
+  );
   await userEvent.click(
     screen.getByText("Use Fixture Apparel for 2 matching items", {
       exact: true,

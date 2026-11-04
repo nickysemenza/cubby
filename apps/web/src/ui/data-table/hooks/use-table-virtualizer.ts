@@ -14,7 +14,8 @@ import {
   type ReactNode,
 } from "react";
 
-import { SECTION_HEADER_HEIGHT } from "../section-header";
+import { sectionHeaderHeight } from "../section-header";
+import type { GroupColumnTotal } from "../use-grouped-list";
 
 /**
  * Interleaved header/row item produced by `useDesktopGroupedRows`. Duplicated
@@ -34,6 +35,7 @@ export type GroupedItem =
       onHide?: () => void;
       aside?: ReactNode;
       actions?: ReactNode;
+      columnTotals?: readonly GroupColumnTotal[];
     }
   | {
       kind: "row";
@@ -70,6 +72,7 @@ type ResolvedVirtualIndex =
       onHide?: () => void;
       aside?: ReactNode;
       actions?: ReactNode;
+      columnTotals?: readonly GroupColumnTotal[];
     }
   /** groupRowIndex present only in grouped mode (position within the group). */
   | {
@@ -324,7 +327,7 @@ export function useTableVirtualizer({
         return rowHeight;
       }
       const kind = groupedItems?.[index]?.kind;
-      if (kind === "header") return SECTION_HEADER_HEIGHT;
+      if (kind === "header") return sectionHeaderHeight();
       if (kind === "detail") return ROW_DETAIL_ESTIMATE;
       return rowHeight;
     },

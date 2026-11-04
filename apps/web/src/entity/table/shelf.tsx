@@ -176,7 +176,7 @@ export function ShelfCard({
       flush
       data-entity-card
       className={cn(
-        "relative flex min-w-0 flex-col transition-colors duration-150 hover:bg-muted/50",
+        "group/shelf-card relative flex min-w-0 flex-col transition-colors duration-150 hover:bg-muted/50",
         selected && "border-primary ring-2 ring-[var(--brand-signal)]",
       )}
       onMouseEnter={onRowHover}
@@ -259,7 +259,7 @@ export function ShelfCard({
           params={params}
           aria-label={`Open detail page for ${title}`}
           title={`Open ${title}`}
-          className="absolute top-2 right-2 flex size-11 items-center justify-center rounded-full border border-[var(--border)] bg-card/95 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:size-8"
+          className="absolute top-2 right-2 flex size-11 items-center justify-center rounded-full border border-[var(--border)] bg-card/95 text-muted-foreground group-hover/shelf-card:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring md:size-8 md:opacity-0 pointer-coarse:opacity-100"
         >
           <ArrowUpRightIcon className="size-4" />
         </Link>
@@ -365,6 +365,7 @@ export function ShelfGrid<T>({
                   onFilter={section.onFilter}
                   onHide={section.onHide}
                   aside={section.aside}
+                  labelledTotals={section.columnTotals}
                   actions={section.actions}
                   className="sticky top-[var(--app-chrome-top)] z-10 mb-3"
                 />

@@ -256,7 +256,7 @@ function WorkspaceSidebar({
           <img src={LOGO_SRC} alt="" className="size-5 shrink-0" />
           {expanded && (
             <span className="hidden truncate font-heading text-base font-semibold tracking-tight lg:block">
-              cubby
+              Cubby
             </span>
           )}
         </Link>
@@ -308,11 +308,18 @@ function WorkspaceSidebar({
             group={group}
             expanded={expanded}
             activeTo={activeTo}
-            folded={foldedGroups[group.id] ?? group.defaultFolded}
+            folded={isGroupFolded(group, activeTo, foldedGroups)}
+            toolsOpen={foldedGroups[`${group.id}:tools`] === false}
+            onToggleTools={() =>
+              setFoldedGroups((overrides) => ({
+                ...overrides,
+                [`${group.id}:tools`]: overrides[`${group.id}:tools`] === false,
+              }))
+            }
             onToggleFolded={() =>
               setFoldedGroups((overrides) => ({
                 ...overrides,
-                [group.id]: !(overrides[group.id] ?? group.defaultFolded),
+                [group.id]: !isGroupFolded(group, activeTo, overrides),
               }))
             }
           />
@@ -400,12 +407,16 @@ function SidebarGroup({
   expanded,
   activeTo,
   folded,
+  toolsOpen,
+  onToggleTools,
   onToggleFolded,
 }: {
   group: NavGroup;
   expanded: boolean;
   activeTo: string | undefined;
   folded: boolean;
+  toolsOpen: boolean;
+  onToggleTools: () => void;
   onToggleFolded: () => void;
 }) {
   return (
@@ -421,12 +432,44 @@ function SidebarGroup({
             group={group}
             activeTo={activeTo}
             folded={folded}
+            toolsOpen={toolsOpen}
+            onToggleTools={onToggleTools}
             onToggleFolded={onToggleFolded}
           />
         </div>
       )}
     </>
   );
+}
+
+/**
+ * A section stays open when it holds the current route or the member pinned it
+ * open; an explicit fold or unfold is remembered and wins.
+ */
+function isGroupFolded(
+  group: NavGroup,
+  activeTo: string | undefined,
+  overrides: Readonly<Record<string, boolean>>,
+) {
+  return (
+    overrides[group.id] ?? !group.children.some((item) => item.to === activeTo)
+  );
+}
+
+/**
+ * Records stay visible; specialist tools after the section's first record fold
+ * under one row. Views leading the section (Calendar) are its front door.
+ */
+function splitGroupRoutes(group: NavGroup) {
+  const firstRecord = group.children.findIndex((item) => item.entity);
+  const primary: NavItem[] = [];
+  const tools: NavItem[] = [];
+  group.children.forEach((item, index) => {
+    if (item.entity || firstRecord === -1 || index < firstRecord)
+      primary.push(item);
+    else tools.push(item);
+  });
+  return { primary, tools };
 }
 
 /**
@@ -437,14 +480,19 @@ function SidebarExpandedDomainGroup({
   group,
   activeTo,
   folded,
+  toolsOpen,
+  onToggleTools,
   onToggleFolded,
 }: {
   group: NavGroup;
   activeTo: string | undefined;
   folded: boolean;
+  toolsOpen: boolean;
+  onToggleTools: () => void;
   onToggleFolded: () => void;
 }) {
   const routesId = useId();
+  const { primary, tools } = splitGroupRoutes(group);
 
   return (
     <section className="mt-2.5" aria-label={group.label}>
@@ -476,8 +524,35 @@ function SidebarExpandedDomainGroup({
       {/* A folded section still shows its current route, so the rail never
           loses the you-are-here cue. */}
       <div id={routesId}>
-        {group.children
+        {primary
           .filter((item) => !folded || item.to === activeTo)
+          .map((item) => (
+            <SidebarFullLeaf
+              key={item.to}
+              item={item}
+              active={activeTo === item.to}
+            />
+          ))}
+        {!folded && tools.length > 0 && (
+          <button
+            type="button"
+            onClick={onToggleTools}
+            aria-expanded={toolsOpen}
+            className="flex h-(--nav-row-height) w-full items-center gap-2 rounded-lg px-2 text-sm text-muted-foreground transition-colors hover:bg-black/[0.04] hover:text-foreground-strong"
+          >
+            <CaretDownIcon
+              className={cn(
+                "size-2.5 shrink-0 transition-transform",
+                !toolsOpen && "-rotate-90",
+              )}
+              aria-hidden="true"
+            />
+            Tools
+            <span className="ml-auto font-mono text-xs">{tools.length}</span>
+          </button>
+        )}
+        {tools
+          .filter((item) => (toolsOpen && !folded) || item.to === activeTo)
           .map((item) => (
             <SidebarFullLeaf
               key={item.to}
@@ -511,7 +586,7 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
     <Link
       {...navItemLinkProps(item, active)}
       className={cn(
-        "flex h-7 min-w-0 items-center gap-2 rounded-lg px-2 text-sm transition-colors hover:bg-black/[0.04] hover:text-foreground-strong",
+        "flex h-(--nav-row-height) min-w-0 items-center gap-2 rounded-lg px-2 text-sm transition-colors hover:bg-black/[0.04] hover:text-foreground-strong",
         active && ["font-medium text-foreground-strong", navActiveClass(item)],
       )}
     >

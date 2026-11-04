@@ -7,7 +7,7 @@ type TableProps = React.ComponentProps<"table"> & {
   containerClassName?: string;
 };
 
-// Header and cell geometry match RTable's 32px rows, so a read-only table
+// Header and cell geometry match RTable's rows, so a read-only table
 // reads as the same family as the interactive ones.
 // `table-fixed` makes columns share the available width and truncate, so the
 // table always fits its container instead of growing and forcing horizontal
@@ -87,7 +87,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
       // `scope={undefined}` rather than claiming to head a column.
       scope="col"
       className={cn(
-        "h-8 px-2 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0",
+        "h-(--table-header-height) px-2 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0",
         className,
       )}
       {...props}

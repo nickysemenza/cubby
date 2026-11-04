@@ -57,9 +57,10 @@ export function useNeedsYouTarget(slot: Slot): HTMLElement | null | undefined {
 
 /**
  * One bordered list of what the record is waiting on: work-queue rows,
- * pending suggestions, and quality. Rows that need attention (or are still
- * loading, which holds the space) carry `data-needs-row`; with none, the
- * block collapses.
+ * pending suggestions, and quality. Anything that holds the block open carries
+ * `data-needs-row`, including loading rows and diagnostic status lines; with
+ * none, the block collapses. Only `data-needs-count` rows are things a member
+ * can act on, so only they count.
  */
 export function NeedsYou({ children }: { children?: ReactNode }) {
   const context = useContext(NeedsYouContext);
@@ -69,16 +70,14 @@ export function NeedsYou({ children }: { children?: ReactNode }) {
     const section = sectionRef.current;
     if (!section) return;
     const updateCount = () => {
-      const next = Array.from(
-        section.querySelectorAll("[data-needs-row]"),
-      ).filter((row) => !row.closest('[aria-busy="true"]')).length;
+      const next = section.querySelectorAll("[data-needs-count]").length;
       setCount((current) => (current === next ? current : next));
     };
     updateCount();
     const observer = new MutationObserver(updateCount);
     observer.observe(section, {
       attributes: true,
-      attributeFilter: ["aria-busy", "data-needs-row"],
+      attributeFilter: ["data-needs-count"],
       childList: true,
       subtree: true,
     });
@@ -100,8 +99,8 @@ export function NeedsYou({ children }: { children?: ReactNode }) {
         className="divide-y divide-hairline-soft [&>*:empty]:hidden"
       >
         {children}
-        <div ref={context?.refs.suggestions} className="px-3 py-2" />
-        <div ref={context?.refs.quality} className="px-3 py-2" />
+        <div ref={context?.refs.suggestions} className="px-3 py-1.5" />
+        <div ref={context?.refs.quality} className="px-3 py-1.5" />
       </Panel>
     </Section>
   );

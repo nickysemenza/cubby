@@ -19,8 +19,8 @@
   --font-sans: var(--brand-font-sans);
   --font-mono: var(--brand-font-mono);
 
-  /* Workspace density: 13px body (text-sm) and 15px section titles
-     (text-base); captions stay 12px. */
+  /* Base scale for phones, coarse pointers and hosted native workspaces. The
+     desktop density block below rebinds these roles. */
   --text-sm: 0.8125rem; /* 13px */
   --text-sm--line-height: 1.25rem;
   --text-base: 0.9375rem; /* 15px */
@@ -32,8 +32,17 @@
   --text-3xs: 0.5rem; /* 8px */
   --text-3xs--line-height: 0.75rem;
 
-  /* Mirrored from @cubby/design-tokens so `ease-cozy` exists as a utility. */
+  /* Pill labels and control labels have fixed sizes in every density. */
+  --text-11: 0.6875rem; /* 11px */
+  --text-11--line-height: 0.875rem;
+  --text-control: 0.75rem; /* 12px */
+  --text-control--line-height: 1.625;
+
+  /* Mirrored from @cubby/design-tokens so motion tokens exist as utilities. */
   --ease-cozy: var(--brand-ease-cozy);
+  --ease-move: var(--brand-ease-move);
+  --default-transition-duration: var(--brand-motion-fast);
+  --default-transition-timing-function: var(--brand-ease-cozy);
 }
 
 /*
@@ -94,7 +103,7 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  input:focus,
+  input:focus:not([cmdk-input]),
   textarea:focus,
   [data-slot="combobox-trigger"]:focus {
     /* Crisp ink focus without glow or layout shift. */
@@ -113,6 +122,11 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
+    }
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation: none !important;
     }
   }
 }
@@ -164,14 +178,14 @@
      runs flat: a white working surface, a #FAFAFA sidebar, 1px dividers, ink
      controls, blue only for links and focus, and tinted status pills whose
      ink clears 4.5:1 on its own surface. */
-  --brand-foreground: #333333;
+  --brand-foreground: #262626;
   --brand-graphite-secondary: #737373;
   --brand-canvas: #ffffff;
   --brand-surface: #ffffff;
   --brand-inset: #f5f5f5;
-  --brand-hairline: #ebebeb;
-  --brand-interaction: #202020;
-  --brand-interaction-hover: #3a3a3a;
+  --brand-hairline: #e5e5e5;
+  --brand-interaction: #111111;
+  --brand-interaction-hover: #2e2e2e;
   --brand-slate: #737373;
   --brand-neutral-status: #737373;
   --brand-positive: #12733a;
@@ -190,12 +204,31 @@
   --brand-elevation-popover:
     0 12px 32px -8px rgb(0 0 0 / 0.18), 0 2px 6px rgb(0 0 0 / 0.06);
   --brand-focus-ring: 0 0 0 2px var(--brand-surface), 0 0 0 4px var(--link);
-  --foreground-strong: #202020;
+  --foreground-strong: #111111;
   --link: #0077e6;
   --hairline-soft: #f2f2f2;
   /* Dashed empty-state slots: one step stronger than a hairline. */
   --hairline-strong: #d4d4d4;
   --row-current: #ededed;
+
+  /* Geometry for phones, coarse pointers and hosted native workspaces. */
+  --table-row-height: 32px;
+  --table-header-height: 32px;
+  --table-cell-leading: 1.25rem;
+  --table-checkbox-size: 1rem;
+  --table-checkbox-glyph: 0.875rem;
+  --table-section-surface: var(--card);
+  --nav-row-height: 28px;
+  --pill-height: 20px;
+  --pill-font-size: var(--text-2xs);
+  --record-pill-height: 22px;
+  --record-pill-mark: 18px;
+  --fact-row-height: 2rem;
+  --control-height: 32px;
+  --control-height-sm: 28px;
+  --control-height-xs: 24px;
+  --input-height: 30px;
+  --section-gap: 1.25rem;
 
   /* The docked side panel's width; the panel's resize handle overrides it. */
   --side-panel-width: 25rem;
@@ -565,19 +598,6 @@
     font-size: 0.75rem;
   }
 
-  /* Pinned boundaries are functional depth cues, not table dividers: a single
-     neutral hairline plus a soft edge shadow keeps the parked columns readable
-     without making them look like a second table. */
-  .table-pinned-boundary-start {
-    border-inline-end: 1px solid var(--brand-hairline);
-    box-shadow: 4px 0 8px -8px rgb(23 26 33 / 0.32);
-  }
-
-  .table-pinned-boundary-end {
-    border-inline-start: 1px solid var(--brand-hairline);
-    box-shadow: -4px 0 8px -8px rgb(23 26 33 / 0.32);
-  }
-
   /* Active nav gets a crisp cobalt route line. */
   .nav-link-animated {
     @apply relative;
@@ -634,21 +654,6 @@
   display: none;
 }
 
-/* A list's filter chips, totals, Sweep, contextual and suggestion status
-   may each render nothing (Recipes declares no totals or decision fields);
-   an empty status strip must not leave a bordered blank band. Unlayered so
-   it overrides the strip's `flex` utility. */
-[data-list-status-strip]:not(
-  :has(
-    > :not([data-list-status-group], [data-workbench-filters]),
-    [data-workbench-filters] > *,
-    [data-list-status-group] > :not([data-workbench-status]),
-    [data-workbench-status] > *
-  )
-) {
-  display: none;
-}
-
 @media (pointer: coarse) {
   :where(
     [data-slot="button"],
@@ -683,4 +688,55 @@
   ) {
     min-height: 2.75rem;
   }
+}
+
+/*
+  Desktop density. Vertical space is the scarce resource on a fine-pointer
+  desktop, so body type and row geometry tighten here. Phones, coarse-pointer
+  tablets (iOS zooms inputs under 16px) and hosted native workspaces keep the
+  base scale. ROW_DENSITY reads --table-row-height, so the virtualizer always
+  agrees with the painted rows.
+*/
+@media (min-width: 48rem) and (hover: hover) and (pointer: fine) {
+  :root:not([data-hosted-workspace]) {
+    --text-xs: 0.6875rem;
+    --text-xs--line-height: 0.875rem;
+    --text-sm: 0.75rem;
+    --text-sm--line-height: 1rem;
+    --text-base: 0.8125rem;
+    --text-base--line-height: 1.125rem;
+    --text-lg: 0.875rem;
+    --text-lg--line-height: 1.25rem;
+    --text-xl: 1rem;
+    --text-xl--line-height: 1.25rem;
+    --table-row-height: 24px;
+    --table-header-height: 24px;
+    --table-cell-leading: 1rem;
+    --table-checkbox-size: 0.875rem;
+    --table-checkbox-glyph: 0.75rem;
+    --table-section-surface: var(--muted);
+    --nav-row-height: 22px;
+    --pill-height: 18px;
+    --pill-font-size: var(--text-11);
+    --record-pill-height: 18px;
+    --record-pill-mark: 14px;
+    --fact-row-height: 1.375rem;
+    --control-height: 26px;
+    --control-height-sm: 24px;
+    --control-height-xs: 20px;
+    --input-height: 26px;
+    --section-gap: 0.75rem;
+  }
+}
+
+/* Hosted native workspaces keep the look the Apple apps shipped with. */
+:root[data-hosted-workspace] {
+  --brand-foreground: #333333;
+  --brand-hairline: #ebebeb;
+  --brand-interaction: #202020;
+  --brand-interaction-hover: #3a3a3a;
+  --foreground-strong: #202020;
+  --brand-web-radius-control: 8px;
+  --brand-web-radius-panel: 12px;
+  --brand-web-radius-chip: 6px;
 }

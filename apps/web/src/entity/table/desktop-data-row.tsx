@@ -266,6 +266,8 @@ export interface DesktopDataRowProps<TItem extends RowData> {
   rowClassName: string;
   cellClassName: string;
   columnsKey: string;
+  /** Visible columns the grid leaves out; `columnsKey` covers them for memo. */
+  unpaintedColumns?: ReadonlySet<string>;
   /** External cell-render state snapshot; see useTableConfig. */
   rowContentVersion?: unknown;
   /** Per-row native cell-selection projection from table.Subscribe. */
@@ -312,6 +314,7 @@ function DesktopDataRowInner<TItem extends RowData>({
   cellClassName,
   height,
   suppressCellRowClick,
+  unpaintedColumns,
 }: DesktopDataRowProps<TItem>) {
   const activity = useRowActivity(row.id);
   const coarsePointer = useCoarsePointer();
@@ -355,6 +358,8 @@ function DesktopDataRowInner<TItem extends RowData>({
       className={cn(
         rowClassName,
         "table-record-row",
+        // The keyboard outruns motion: J/K never retargets a color transition.
+        "transition-none",
         onRowClick && "cursor-pointer",
         isFocused && "ring-2 ring-primary/30 ring-inset",
       )}
@@ -411,15 +416,15 @@ function DesktopDataRowInner<TItem extends RowData>({
       style={height ? { height } : undefined}
     >
       <RowActiveProvider value={active}>
-        {[...row.getStartVisibleCells(), ...row.getCenterVisibleCells()].map(
-          (cell) => (
+        {[...row.getStartVisibleCells(), ...row.getCenterVisibleCells()]
+          .filter((cell) => !unpaintedColumns?.has(cell.column.id))
+          .map((cell) => (
             <DesktopDataCell
               key={cell.id}
               cell={cell}
               cellClassName={cellClassName}
             />
-          ),
-        )}
+          ))}
         <TableCell data-spacer aria-hidden className={cellClassName} />
         {row.getEndVisibleCells().map((cell) => (
           <DesktopDataCell

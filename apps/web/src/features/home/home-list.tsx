@@ -33,7 +33,7 @@ export function HomeRow({
   return (
     <li
       className={cn(
-        "flex min-h-8 min-w-0 items-center gap-2 border-b border-border text-sm max-md:min-h-11",
+        "flex min-h-(--table-row-height) min-w-0 items-center gap-2 border-b border-border text-sm max-md:min-h-11",
         className,
       )}
     >

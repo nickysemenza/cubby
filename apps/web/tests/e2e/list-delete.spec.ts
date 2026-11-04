@@ -5,7 +5,7 @@ import { z } from "zod";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { dispatchesOperation } from "./support/dispatch-wire";
 import { createFixtureGraph } from "./fixtures/core";
-import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { gotoAuthenticatedPage, clickBulkAction } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 /**
@@ -40,10 +40,7 @@ test("task list selection delete shows the impact preview, then removes the rows
       .click();
   }
 
-  await page
-    .locator("[data-bulk-action-bar]")
-    .getByRole("button", { name: "Delete", exact: true })
-    .click();
+  await clickBulkAction(page, "Delete");
 
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("Delete 2 Tasks?")).toBeVisible();

@@ -202,7 +202,7 @@ export function LocationBrowser({ data }: { data: LocationTreeNode[] }) {
         onStatusChange={setStatus}
         onClear={clear}
       />
-      <div className="flex min-w-0 flex-col md:h-[min(70vh,48rem)] md:min-h-80 md:flex-row">
+      <div className="flex min-w-0 flex-col md:h-[calc(var(--app-viewport-height,100dvh)-10rem)] md:min-h-80 md:flex-row">
         <GallerySidebar
           locations={filtered.locations}
           query={query}
@@ -310,7 +310,13 @@ const LocationOverview = memo(function LocationOverview({
             tabIndex={-1}
             className="text-sm font-semibold [overflow-wrap:anywhere]"
           >
-            {location.name}
+            <Link
+              to="/locations/$shortcode"
+              params={{ shortcode: location.id }}
+              className="inline-flex min-h-11 items-center hover:underline sm:min-h-0"
+            >
+              {location.name}
+            </Link>
           </h2>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span>
@@ -331,13 +337,6 @@ const LocationOverview = memo(function LocationOverview({
             />
           </div>
         </div>
-        <Link
-          to="/locations/$shortcode"
-          params={{ shortcode: location.id }}
-          className="flex min-h-11 shrink-0 items-center text-xs underline underline-offset-2 sm:min-h-7"
-        >
-          Open record
-        </Link>
       </div>
       {(fieldValueOf(location.fields.images) ?? []).length > 1 && (
         <div className="mt-2 flex gap-2 overflow-x-auto">

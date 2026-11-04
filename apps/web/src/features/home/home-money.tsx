@@ -10,6 +10,7 @@ import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
 
 import { getHomeAsOfWindow, type HomeAsOfWindow } from "./home-as-of-window";
@@ -74,6 +75,9 @@ export function HomeMoney({ asOf }: { asOf: HomeAsOfWindow }) {
   const summaryId = useId();
   const { query, monthly } = useRecordedSpend(asOf);
   const current = monthly?.at(-1);
+  // A prefetch can resolve before hydration; the first client render must match
+  // the server's loading rows.
+  const hydrated = useHydrated();
   return (
     <Section
       title="Money"
@@ -88,7 +92,7 @@ export function HomeMoney({ asOf }: { asOf: HomeAsOfWindow }) {
           onRetry={() => void query.refetch()}
           className="mt-2"
         />
-      ) : monthly === undefined ? (
+      ) : !hydrated || monthly === undefined ? (
         <HomeRowsLoading label="Loading recorded spend" />
       ) : query.data?.length === 0 ? (
         <EmptyState size="inline" className="mt-2">

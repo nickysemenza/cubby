@@ -55,7 +55,7 @@ export function DisclosureTrigger({
     >
       <CaretRightIcon
         aria-hidden
-        className="size-3 shrink-0 text-muted-foreground group-data-[panel-open]/disclosure:rotate-90"
+        className="size-3 shrink-0 text-muted-foreground transition-transform duration-(--brand-motion-fast) ease-cozy group-data-[panel-open]/disclosure:rotate-90"
       />
       <span className="min-w-0 break-words">{children}</span>
     </Collapsible.Trigger>
@@ -72,7 +72,13 @@ export function DisclosureBody({
   children: ReactNode;
 }) {
   return (
-    <Collapsible.Panel keepMounted={keepMounted} className={className}>
+    <Collapsible.Panel
+      keepMounted={keepMounted}
+      className={cn(
+        "transition-opacity duration-(--brand-motion-fast) ease-cozy data-ending-style:opacity-0 data-ending-style:duration-(--brand-motion-exit) data-starting-style:opacity-0",
+        className,
+      )}
+    >
       {children}
     </Collapsible.Panel>
   );

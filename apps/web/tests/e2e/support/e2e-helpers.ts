@@ -28,7 +28,20 @@ import {
 } from "./navigation-timing";
 import { dispatchesOperation, operationResult } from "./dispatch-wire";
 
+/** A bulk verb: on the selection bar, or under its More menu past the first three. */
+export async function clickBulkAction(page: Page, name: string) {
+  const bar = page.locator("[data-bulk-action-bar]");
+  const direct = bar.getByRole("button", { name, exact: true });
+  if (await direct.isVisible()) {
+    await direct.click();
+    return;
+  }
+  await bar.getByRole("button", { name: "More", exact: true }).click();
+  await page.getByRole("menuitem", { name, exact: true }).click();
+}
+
 export async function chooseListView(page: Page, label: string) {
+  await page.getByRole("button", { name: "Display", exact: true }).click();
   await page.getByRole("button", { name: / view: / }).click();
   await page
     .getByRole("menuitem", { name: `${label} view`, exact: true })

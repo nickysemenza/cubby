@@ -21,6 +21,7 @@ import type {
   RecipeCosting,
 } from "~/lib/recipe-costing";
 import { cn } from "~/lib/utils";
+import { SectionPair } from "~/ui/data-table/indexed-sections";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
@@ -251,7 +252,10 @@ function IngredientLedger({
                       }
                     : null;
               return (
-                <li key={ing.id} className={cn(ingredientRowGrid, "py-2")}>
+                <li
+                  key={ing.id}
+                  className={cn(ingredientRowGrid, "py-2 md:py-0.5")}
+                >
                   <Button
                     variant="ghost"
                     size="sm"
@@ -330,7 +334,22 @@ export function RecipeMagazineView({
   const [showVitals, setShowVitals] = useState(true);
 
   return (
-    <Stack gap="lg">
+    <Stack gap="sm">
+      {/* Open-book spread: ingredients column + method column, no boxes */}
+      <SectionPair>
+        <Section
+          title="Ingredients"
+          headingAs="h2"
+          className="lg:sticky lg:top-[calc(var(--app-chrome-top)+var(--record-title-height,0px)+0.5rem)] lg:h-fit"
+        >
+          <IngredientLedger recipe={recipe} gramById={gramById} />
+        </Section>
+
+        <Section title="Method" headingAs="h2">
+          <RecipeInstructions recipe={recipe} />
+        </Section>
+      </SectionPair>
+
       <RecipeHero recipe={recipe} />
 
       {kicker && (
@@ -359,21 +378,6 @@ export function RecipeMagazineView({
           )}
         </div>
       )}
-
-      {/* Open-book spread: ingredients column + method column, no boxes */}
-      <div className="grid gap-6 lg:grid-cols-[300px_1fr] lg:gap-12">
-        <Section
-          title="Ingredients"
-          headingAs="h2"
-          className="lg:sticky lg:top-20 lg:h-fit"
-        >
-          <IngredientLedger recipe={recipe} gramById={gramById} />
-        </Section>
-
-        <Section title="Method" headingAs="h2">
-          <RecipeInstructions recipe={recipe} />
-        </Section>
-      </div>
     </Stack>
   );
 }

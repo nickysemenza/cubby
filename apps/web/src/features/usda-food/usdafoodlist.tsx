@@ -10,6 +10,7 @@ import {
   useEntityListCardDensity,
   useListSearch,
 } from "~/entity/entity-list/generic-entity-list";
+import { ListDisplaySections } from "~/entity/entity-list/list-display-sections";
 import { resolveListView } from "~/entity/entity-list/resolve-list-view";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import {
@@ -19,6 +20,7 @@ import {
 import { useEntityList } from "~/entity/hooks/use-entity-list";
 import { useEntityMetadata } from "~/entity/metadata";
 import { DataTableToolbar } from "~/entity/table/data-table-toolbar";
+import { ListDisplaySectionsContext } from "~/entity/table/display-menu";
 import { TableEmptyState } from "~/entity/table/entity-empty-states";
 import { ListWorkbench } from "~/entity/table/list-workbench";
 import { usdaFood } from "~/integrations/tanstack-query/generated/domains/usdaFood.gen";
@@ -351,7 +353,9 @@ export function USDAFoodList({
   }, [view, workbench.table]);
 
   return (
-    <>
+    <ListDisplaySectionsContext
+      value={<ListDisplaySections entity="usda-food" />}
+    >
       {view === "table" ? (
         <ListWorkbench
           model={workbench}
@@ -407,6 +411,6 @@ export function USDAFoodList({
         </Stack>
       )}
       <PreviewSheet />
-    </>
+    </ListDisplaySectionsContext>
   );
 }

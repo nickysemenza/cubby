@@ -60,18 +60,24 @@
   --brand-radius-panel: 12px;
   --brand-radius-chip: 7px;
   --brand-radius-pill: 999px;
-  --brand-web-radius-control: 8px;
-  --brand-web-radius-panel: 12px;
-  --brand-web-radius-chip: 6px;
+  --brand-web-radius-control: 6px;
+  --brand-web-radius-panel: 8px;
+  --brand-web-radius-chip: 4px;
   --brand-space-1: 4px;
   --brand-space-2: 8px;
   --brand-space-3: 12px;
   --brand-space-4: 12px;
   --brand-space-5: 16px;
   --brand-space-6: 16px;
+  --brand-motion-exit: 100ms;
   --brand-motion-fast: 120ms;
   --brand-motion-standard: 180ms;
+  --brand-motion-slow: 240ms;
+  --brand-motion-shift-sm: 4px;
+  --brand-motion-shift-md: 8px;
+  --brand-motion-shift-lg: 16px;
   --brand-ease-cozy: cubic-bezier(0.2, 0, 0, 1);
+  --brand-ease-move: cubic-bezier(0.4, 0, 0.2, 1);
   --brand-font-display:
     "Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont,
     sans-serif;

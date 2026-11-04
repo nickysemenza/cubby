@@ -58,7 +58,8 @@ export function RecordWorkQueue({
           <div
             key={row.key}
             data-needs-row
-            className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
+            data-needs-count
+            className="flex min-h-(--table-row-height) flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1"
           >
             <div className="flex min-w-0 flex-wrap items-center gap-1">
               {row.gaps.length > 0

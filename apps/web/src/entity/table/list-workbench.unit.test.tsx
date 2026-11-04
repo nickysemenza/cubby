@@ -108,13 +108,20 @@ describe("ListWorkbench", () => {
     // 9007199254740991 rows per page.
     expect(screen.queryByText("Rows per page")).not.toBeInTheDocument();
 
-    // Page mode folds Columns/Saved views into `Actions ▾` (L3) instead of
-    // standalone Display/Saved views triggers.
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    // Page mode folds Columns into `Display` and Saved views into `Actions ▾`.
+    fireEvent.click(screen.getByRole("button", { name: "Display" }));
     expect(
-      await screen.findByRole("menuitem", { name: /Columns/ }),
-    ).toBeVisible();
-    expect(screen.getByRole("menuitem", { name: /Saved views/ })).toBeVisible();
+      await screen.findByRole("button", { name: /Columns/ }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Display", hidden: true }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Actions", hidden: true }),
+    );
+    expect(
+      screen.getByRole("menuitem", { name: /Saved views/, hidden: true }),
+    ).toBeInTheDocument();
     // Bulk verbs are discoverable before any row is selected, but inert.
     expect(
       screen.getByRole("menuitem", { name: "Archive selected" }),

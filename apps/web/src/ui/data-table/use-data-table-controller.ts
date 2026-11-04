@@ -1,6 +1,6 @@
 import { useElementScrollRestoration } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "~/lib/utils";
 import { useDebug } from "~/ui/hooks/use-debug";
@@ -22,14 +22,51 @@ import {
   useRenderedColumnWidths,
 } from "./use-rendered-column-widths";
 
+/**
+ * Marks which edges of the pane have columns scrolled past them; `table.css`
+ * draws the pinned boundary and edge shadow from that. Written straight to the
+ * DOM so horizontal scrolling never re-renders the table.
+ */
+function useScrollEdges(
+  pane: React.RefObject<HTMLElement | null>,
+  enabled: boolean,
+) {
+  useEffect(() => {
+    const element = pane.current;
+    if (!enabled || !element) return;
+    const update = () => {
+      const start = element.scrollLeft > 0;
+      const end =
+        element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+      element.toggleAttribute("data-scroll-edge-start", start);
+      element.toggleAttribute("data-scroll-edge-end", end);
+    };
+    update();
+    element.addEventListener("scroll", update, { passive: true });
+    const observer = globalThis.ResizeObserver
+      ? new ResizeObserver(update)
+      : null;
+    observer?.observe(element);
+    const content = element.querySelector("table");
+    if (content) observer?.observe(content);
+    return () => {
+      element.removeEventListener("scroll", update);
+      observer?.disconnect();
+    };
+  }, [pane, enabled]);
+}
+
 export function useDataTableController<TItem extends RowData>({
   table,
+  foldColumns = true,
   infiniteScroll,
   groupConfig,
   detailRowIds,
   verticalAlign,
   onRowClick,
 }: {
+  /** Page lists fold all-empty and grouped columns away; a record's own tables keep them for reading and inline edits. */
+  foldColumns?: boolean;
   table: ITable<TItem>;
   infiniteScroll?: InfiniteScrollControls;
   groupConfig?: GroupConfig;
@@ -61,6 +98,57 @@ export function useDataTableController<TItem extends RowData>({
 
   const { rows } = table.getRowModel();
   const rowKeys = useMemo(() => rows.map((row) => row.id), [rows]);
+
+  const fitScope = renderedColumnFitScope(table);
+  const userSizedKey = Object.keys(table.state.columnSizing ?? {})
+    .sort()
+    .join(",");
+  const [revealedEmpty, setRevealedEmpty] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const measuredEmptyColumns = useMemo(
+    () => (foldColumns ? emptyColumnIds(table, rows) : new Set<string>()),
+    // oxlint-disable-next-line react/exhaustive-deps -- fitScope and the content version stand in for the table and row state emptiness reads
+    [
+      foldColumns,
+      table,
+      rows,
+      fitScope,
+      userSizedKey,
+      table.state.columnPinning,
+      table.options.meta?.rowContentVersion,
+    ],
+  );
+  // Stable through live filter edits: placeholder rows and a momentarily empty
+  // result say nothing new about a column, so the prior set stands and the grid
+  // does not reflow under the person typing.
+  const settledEmptyRef = useRef<ReadonlySet<string>>(measuredEmptyColumns);
+  if (!isTransitioning && rows.length > 0)
+    settledEmptyRef.current = measuredEmptyColumns;
+  const settledEmpty = settledEmptyRef.current;
+  const emptyKey = [...settledEmpty]
+    .filter((id) => !revealedEmpty.has(id))
+    .sort()
+    .join(",");
+  const groupedKey = (
+    table.options.meta?.grouping?.groupedColumnIds ?? []
+  ).join(",");
+  const emptyColumns = useMemo(
+    () => (emptyKey ? emptyKey.split(",") : []),
+    [emptyKey],
+  );
+  // Painted nowhere: the empty columns, and those section headers already state.
+  const unpaintedColumns = useMemo<ReadonlySet<string>>(
+    () =>
+      new Set([
+        ...emptyColumns,
+        ...(foldColumns && groupedKey ? groupedKey.split(",") : []),
+      ]),
+    [emptyColumns, foldColumns, groupedKey],
+  );
+  const revealEmptyColumns = useCallback((columnIds: readonly string[]) => {
+    setRevealedEmpty((previous) => new Set([...previous, ...columnIds]));
+  }, []);
 
   // Desktop group detection (server trusts ordering)
   const groupedItems = useDesktopGroupedRows(rows, groupConfig, detailRowIds);
@@ -143,12 +231,15 @@ export function useDataTableController<TItem extends RowData>({
     table,
     scrollToFlatRow,
     onOpenRow: onRowClick,
+    unpaintedColumns,
   });
 
   const styles = {
-    table: "border-separate border-spacing-0 text-sm leading-5 tabular-nums",
+    table:
+      "border-separate border-spacing-0 text-sm leading-(--table-cell-leading) tabular-nums",
     header:
-      "h-8 overflow-hidden border-hairline-strong border-b bg-card px-2 py-0 font-medium text-xs text-muted-foreground",
+      "h-(--table-header-height) overflow-hidden border-hairline-strong border-b bg-card px-2 py-0 font-medium text-xs text-muted-foreground",
+
     cell: cn(
       dConfig.cellClass,
       // text-ellipsis gives every plain-text cell a real "…" instead of a
@@ -164,18 +255,13 @@ export function useDataTableController<TItem extends RowData>({
   // user toggles or reorders columns (row.original alone wouldn't change).
   const columnsKey = table
     .getVisibleLeafColumns()
+    .filter((c) => !unpaintedColumns.has(c.id))
     .map((c) => c.id)
     .join(",");
   const columnSizesKey = table
     .getVisibleLeafColumns()
     .map((column) => `${column.id}:${column.getSize()}`)
     .join(",");
-  // Columns a person resized (or a saved view sized) keep exactly that width;
-  // pane slack only flows to the rest.
-  const userSizedKey = Object.keys(table.state.columnSizing ?? {})
-    .sort()
-    .join(",");
-  const fitScope = renderedColumnFitScope(table);
   const desktopLayout = !isMobile && hydrated;
   const renderedWidths = useRenderedColumnWidths(
     table,
@@ -184,35 +270,25 @@ export function useDataTableController<TItem extends RowData>({
     desktopLayout,
   );
   useCellSpill(tableContainerRef, desktopLayout);
-  const collapsedColumns = useMemo(
-    () => emptyColumnIds(table, rows),
-    // oxlint-disable-next-line react/exhaustive-deps -- fitScope and the content version stand in for the table and row state emptiness reads
-    [
-      table,
-      rows,
-      fitScope,
-      userSizedKey,
-      table.state.columnPinning,
-      table.options.meta?.rowContentVersion,
-    ],
-  );
-  const collapsedKey = [...collapsedColumns].join(",");
+  useScrollEdges(tableContainerRef, desktopLayout);
   const columnSizeVars = useMemo(
     () =>
+      // Columns a person resized (or a saved view sized) keep exactly that
+      // width; pane slack only flows to the rest.
       columnWidthVariables(
         table.getVisibleLeafColumns(),
         tableContainerWidth,
         new Set(userSizedKey ? userSizedKey.split(",") : []),
         renderedWidths,
-        collapsedColumns,
+        unpaintedColumns,
       ),
-    // oxlint-disable-next-line react/exhaustive-deps -- scalar signatures stand in for TanStack's fresh column array and the collapsed set
+    // oxlint-disable-next-line react/exhaustive-deps -- scalar signatures stand in for TanStack's fresh column array
     [
       columnSizesKey,
       tableContainerWidth,
       userSizedKey,
       renderedWidths,
-      collapsedKey,
+      unpaintedColumns,
     ],
   );
 
@@ -222,7 +298,11 @@ export function useDataTableController<TItem extends RowData>({
   // table width — the "empty right half" bug under table-fixed. Shared by the
   // status rows and the virtualizer spacer rows below. +1 for the spacer.
   const colSpan =
-    table.getVisibleLeafColumns().length + 1 + (isDebugEnabled ? 1 : 0);
+    table
+      .getVisibleLeafColumns()
+      .filter((column) => !unpaintedColumns.has(column.id)).length +
+    1 +
+    (isDebugEnabled ? 1 : 0);
   // Cell renderers may intentionally read ref-backed async state outside the
   // row object. Keep that dependency explicit for memoized render surfaces.
   const rowContentVersion = table.options.meta?.rowContentVersion;
@@ -230,7 +310,9 @@ export function useDataTableController<TItem extends RowData>({
   return {
     scrollToFlatRow,
     cellSelectionContainerProps,
-    collapsedColumns,
+    emptyColumns,
+    revealEmptyColumns,
+    unpaintedColumns,
     colSpan,
     columnsKey,
     columnSizeVars,

@@ -26,6 +26,10 @@ export function reconcileRowSelection(
   return changed ? next : current;
 }
 
+/** Tracks the row density; the primitive's `after:` inset keeps the hit target. */
+const TABLE_CHECKBOX_CLASS =
+  "size-(--table-checkbox-size) [&_svg]:size-(--table-checkbox-glyph)!";
+
 function SelectColumnHeader<T extends RowData>({
   table,
 }: Pick<CubbyCellContext<T>, "table">) {
@@ -39,6 +43,7 @@ function SelectColumnHeader<T extends RowData>({
         }
         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
         aria-label="Select all"
+        className={TABLE_CHECKBOX_CLASS}
       />
     </div>
   );
@@ -63,6 +68,7 @@ function SelectColumnCell<T extends RowData>({
             })
           }
           aria-label="Select row"
+          className={TABLE_CHECKBOX_CLASS}
         />
       </div>
     )
