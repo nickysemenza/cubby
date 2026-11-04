@@ -13,6 +13,8 @@ import { z } from "zod";
 import type { DatabaseChanges } from "~/lib/doorbell";
 import type { Database } from "~/server/db";
 import {
+  isFanoutInput,
+  type InternalStoredDerivedDeclaration,
   type DerivedInput,
   type DerivedPathStep,
   dependentsOf,
@@ -565,6 +567,10 @@ function fanoutRows(
   refs: SQL,
   select: DerivedFanoutSelection | undefined,
 ): SQL {
+  if (input.selection && !select)
+    throw new Error(
+      `No fanout selection ${declaration.target}.${input.selection.key}`,
+    );
   return select
     ? selectedTargetRows(declaration, input, refs, select)
     : input.targetWhere
@@ -577,6 +583,52 @@ function fanoutRows(
         : input.path
           ? pathSql(input.path, refs)
           : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
+}
+
+/** A sink's expansion and source fence share current-and-retained selectors. */
+export function derivedFanoutSourceScope({
+  declaration,
+  selections,
+  dependentIds,
+  sourceRefs,
+}: {
+  declaration: InternalStoredDerivedDeclaration;
+  selections: Readonly<Record<string, DerivedFanoutSelection>>;
+  dependentIds: readonly string[];
+  /** Snapshot input identities survive a move that changes the live selector. */
+  sourceRefs: ReadonlyMap<string, readonly string[]>;
+}): (source: { target: SQL; ref: SQL }) => SQL {
+  const inputs = declaration.inputs.flatMap((input, index) => {
+    if (!isFanoutInput(input)) return [];
+    const select = input.selection
+      ? selections[input.selection.key]
+      : undefined;
+    const target = `${declaration.target}@${index}`;
+    return [
+      { target, input, select, refs: [...(sourceRefs.get(target) ?? [])] },
+    ];
+  });
+  const members = [...dependentIds];
+  return ({ target, ref }) =>
+    inputs.length === 0
+      ? sql`true`
+      : sql`CASE ${target}
+    ${sql.join(
+      inputs.map(
+        (source) => sql`WHEN ${source.target} THEN (
+      ${ref} = ANY(${uuidArrayParam(source.refs)}) OR EXISTS (
+      SELECT 1 FROM (${fanoutRows(
+        declaration,
+        source.input,
+        sql`SELECT ${ref}::uuid AS id`,
+        source.select,
+      )}) affected(id)
+      WHERE affected.id = ANY(${uuidArrayParam(members)})
+    ))`,
+      ),
+      sql` `,
+    )}
+    ELSE true END`;
 }
 
 /**

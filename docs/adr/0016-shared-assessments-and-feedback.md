@@ -272,6 +272,14 @@ revisions establish coverage. Until source expansion resolves new memberships,
 coverage is conservative across record scopes and reports no fabricated missing
 count. Consumers must not turn an empty incomplete relation into a complete zero.
 
+Assessment source scoping reuses the derived drain's fanout resolver, including
+its declared paths and the sink's current-and-retained selection. The producer
+also supplies snapshot input identities by fanout target; these remain relevant
+when a relationship moves out of the live selector after preparation. The component
+intersects those identities and exact targets at observation and at both publication fences.
+An unknown retained fanout remains conservative rather than being silently
+excluded. A missing declared selector fails preparation instead of weakening the
+fence. Selector completeness, including newly reachable peers, remains required.
 The internal target and foreground cutover require complete invalidation and
 publication coverage before these tables become the read authority. The storage
 and canonical preparation seam alone establish neither coverage nor latency.

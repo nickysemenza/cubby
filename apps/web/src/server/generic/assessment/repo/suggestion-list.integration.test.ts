@@ -60,7 +60,10 @@ import {
 } from "~/server/generic/assessment/repo/review-families";
 import { suggestionFamilies } from "~/server/generic/assessment/repo/suggestion-families";
 import { prepareAssessmentReadPublication } from "~/server/generic/assessment/service/read-publication";
-import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
+import {
+  DERIVED_DRAIN,
+  derivedFanoutSourceScope,
+} from "~/server/generic/derived/repo/drain";
 import {
   readWorkItems,
   deleteWorkItems,
@@ -1032,9 +1035,42 @@ describe("cross-family Suggestion list", () => {
       ),
     ).toBe(true);
     const relevantSource = crypto.randomUUID();
-    const sourceScope: NonNullable<AssessmentReadStageWrite["sourceScope"]> = (
-      source,
-    ) => eq(source.ref, relevantSource);
+    const newlyRelatedSource = crypto.randomUUID();
+    const sourceScope = derivedFanoutSourceScope({
+      dependentIds: ids,
+      sourceRefs: new Map([[`${ASSESSMENT_READ_TARGET}@0`, [relevantSource]]]),
+      declaration: {
+        kind: "internalRecord",
+        target: ASSESSMENT_READ_TARGET,
+        table: "Assessment",
+        compute: ASSESSMENT_READ_TARGET,
+        label: "Synthetic Assessment reviews",
+        publishes: "ownTable",
+        notifications: "sinkOwned",
+        reconcile: null,
+        dependsOn: [],
+        inputs: [
+          {
+            table: "Product",
+            tableColumn: "id",
+            entityColumn: "id",
+            columns: null,
+            where: null,
+            except: [],
+            path: null,
+            targetWhere: null,
+            json: null,
+            selection: { key: "syntheticCurrentAndRetained" },
+          },
+        ],
+      },
+      selections: {
+        syntheticCurrentAndRetained: (
+          refs,
+        ) => sql`SELECT ${confident}::uuid AS id
+          FROM (${refs}) source WHERE source.id = ${newlyRelatedSource}::uuid`,
+      },
+    });
     const scoped = {
       ...empty,
       id: crypto.randomUUID(),
@@ -1055,6 +1091,18 @@ describe("cross-family Suggestion list", () => {
     };
     await markWork(ctx.db, DERIVED_DRAIN, [
       { target: `${ASSESSMENT_READ_TARGET}@0`, ref: relevantSource },
+    ]);
+    expect(await write(blocked, results, [scoped.id], sourceScope)).toEqual({
+      kind: "retained",
+      changed: [],
+    });
+    expect(await headers()).toEqual(beforeSourceEdit);
+    await deleteWorkItems(ctx.db, {
+      target: `${ASSESSMENT_READ_TARGET}@0`,
+      refs: [relevantSource],
+    });
+    await markWork(ctx.db, DERIVED_DRAIN, [
+      { target: `${ASSESSMENT_READ_TARGET}@0`, ref: newlyRelatedSource },
     ]);
     expect(await write(blocked, results, [scoped.id], sourceScope)).toEqual({
       kind: "retained",
