@@ -380,11 +380,15 @@ function QueryTierFieldset<TData extends RowData>({
       )}
     </DisplayMenu>
   );
+  // Phones keep Actions only for list commands such as a scoped Find suggestions;
+  // saved views and column tools live in their Filter sheet.
   const menu =
-    isPage && !isMobileFilterTier ? (
+    isPage && (!isMobileFilterTier || listQuery?.actionsMenuItems) ? (
       <fieldset
         disabled={isTransitioning}
-        className={actionsTarget ? "hidden md:block" : undefined}
+        className={
+          actionsTarget && !isMobileFilterTier ? "hidden md:block" : undefined
+        }
       >
         <ActionsMenu
           table={table}
