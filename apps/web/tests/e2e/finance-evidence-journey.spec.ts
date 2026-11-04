@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "~/server/db/helpers";
 import * as schema from "~/server/db/schema";
 import { createEvidenceHarnessContext } from "./fixtures/core";
+import { dispatchesOperation } from "./support/dispatch-wire";
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { operationCall } from "./support/operation";
 
@@ -76,9 +77,14 @@ test("source evidence uses generic records while provider facts remain immutable
   await dialog
     .getByRole("textbox", { name: "Notes", exact: true })
     .fill("Synthetic judgment reviewed against source");
-  await dialog
-    .getByRole("button", { name: "Save changes", exact: true })
-    .click();
+  // The dialog closes while the save is in flight. A reload before the commit
+  // server-renders the old value, and the client does not refetch it.
+  await Promise.all([
+    page.waitForResponse((response) =>
+      dispatchesOperation(response.request(), "entity.mutate"),
+    ),
+    dialog.getByRole("button", { name: "Save changes", exact: true }).click(),
+  ]);
   await expect(dialog).toBeHidden();
   await page.reload();
   await expect(
