@@ -10,7 +10,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { shipment } from "~/server/db/schema";
-import { applyMemberShipmentCarrier } from "~/server/domains/shipment/repo/evidence";
+import { editShipmentCarrier } from "~/server/domains/shipment/repo/evidence";
 import { shipmentSearch } from "~/server/domains/shipment/repo/search-read-shipment";
 import {
   createEntityCrud,
@@ -77,14 +77,9 @@ const updateShipment = defineMutationWriter({
   ) =>
     withTransactionDatabase(db, async (tx) => {
       const { carrierId, ...otherFields } = data;
-      // Submitted null/same-value carrier edits are member intent; omission is not.
-      // Take the correction gate before ordinary CRUD can lock the Shipment.
+      // Use the Shipment identity writer before ordinary CRUD locks the record.
       if (carrierId !== undefined)
-        await applyMemberShipmentCarrier(
-          tx,
-          { shipmentId: code, carrierId },
-          actor,
-        );
+        await editShipmentCarrier(tx, { shipmentId: code, carrierId }, actor);
       return update.withOutput(readOutput, tx, code, otherFields, actor);
     }),
 });

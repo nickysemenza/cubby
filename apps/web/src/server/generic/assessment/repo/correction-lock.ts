@@ -10,12 +10,3 @@ export async function lockCorrectionKey(db: Database, key: string) {
     .values({ key })
     .onConflictDoUpdate({ target: assessmentCorrectionLock.key, set: { key } });
 }
-
-/** The field gate stabilizes alias discovery, including proof committed on another record. */
-export async function lockFieldCorrectionScope(
-  db: Database,
-  entity: string,
-  field: string,
-) {
-  await lockCorrectionKey(db, `field-correction-scope:${entity}:${field}`);
-}

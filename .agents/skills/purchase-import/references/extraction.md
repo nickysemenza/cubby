@@ -96,8 +96,8 @@ package. Give each source its supported observations with
 
 Retain the primary `carrierName` and `trackingNumber` verbatim, and explicit
 handoff pairs in `extraTrackingNumbers`. Carrier IDs, when supplied by verified
-lookups, are Vendor `VEN-` codes; otherwise leave `carrierId` null. Supply
-`carrierClaims` for each package-specific carrier statement/label: its exact
+lookups, are Vendor `VEN-` codes; otherwise leave `carrierId` null. Optional
+`carrierClaims` add package-specific carrier statements/labels: its exact
 tracking reference, literal name, service wording, carrier/intermediary role,
 and a short exact quote positively attributing the package to that carrier
 (direct carrier/tracking pair, carrier field, or shipped-via statement with a
@@ -106,7 +106,9 @@ A `link` claim copies the exact original Email hyperlink; intake verifies its
 host, supported tracking route and exact reference against the retained original.
 Keep unsupported routes as evidence. Mark number-shape or constructed-URL
 guesses as inference. Intake resolves existing unambiguous
-Vendor names/aliases from retained proof; unsupported claims stay unknown.
+Vendor names/aliases for ordinary assignments and uses clear retained source attribution
+to correct contradictions. Missing or ambiguous identity stays unknown. Manual edits
+are ordinary values; there is no separate assignment-ownership or receipt layer.
 Merchant, broker and label-service names belong to intermediary claims unless
 the source identifies them as the actual carrier. Preserve explicit handoffs.
 UPS supports 12-digit numbers; shape alone never establishes or excludes a
