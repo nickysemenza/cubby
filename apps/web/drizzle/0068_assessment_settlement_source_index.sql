@@ -1,0 +1,1 @@
+CREATE INDEX "Assessment_served_source_ref_idx" ON "Assessment" USING btree (md5("judgment" #>> '{create,sourceRef,source}'),md5("judgment" #>> '{create,sourceRef,externalId}')) WHERE "Assessment"."served" AND ("Assessment"."judgment" #>> '{create,sourceRef,source}') IS NOT NULL AND ("Assessment"."judgment" #>> '{create,sourceRef,externalId}') IS NOT NULL;

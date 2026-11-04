@@ -59,6 +59,15 @@ export const assessmentChildren = [
       },
       { name: "Assessment_family_idx", on: ["family", "createdAt"] },
       {
+        name: "Assessment_served_source_ref_idx",
+        on: [
+          { sql: "md5({judgment} #>> '{create,sourceRef,source}')" },
+          { sql: "md5({judgment} #>> '{create,sourceRef,externalId}')" },
+        ],
+        where:
+          "{served} AND ({judgment} #>> '{create,sourceRef,source}') IS NOT NULL AND ({judgment} #>> '{create,sourceRef,externalId}') IS NOT NULL",
+      },
+      {
         name: "Assessment_reference_records_idx",
         using: "gin",
         on: [{ sql: "({evidence}->'records')" }],

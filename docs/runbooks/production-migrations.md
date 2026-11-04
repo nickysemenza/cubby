@@ -111,6 +111,29 @@ their database I/O and transaction-start, backlog and session-lookup behavior
 with Worker/Hyperdrive evidence. Quiet Sentry groups alone do not establish
 recovery. Preserve the independent native and retained-work acceptance checks.
 
+## Assessment settlement source index (0068)
+
+`0068_assessment_settlement_source_index` adds
+`Assessment_served_source_ref_idx`, a partial B-tree over hashes of the two
+immutable Statement source-reference text paths. Only served rows with both
+extracted values present enter the index. There is no immutable-family filter;
+current State family still owns admission. Readers recheck both exact text
+values, so hash equality never replaces source identity. Bounded index keys also
+allow unrestricted historical text without dropping or truncating stored values.
+
+The ordinary migration-before-deploy sequence builds this index in one
+transaction. It reads retained judgments and can wait for writers, then block
+Assessment writes until commit. Keep exclusive migration ownership; do not run
+manual DDL alongside Actions. A failure must roll back and stop deployment.
+The migration rewrites no household rows, Feedback, publications or durable work.
+
+After deployment, verify the index is ready and valid, and that scoped settlement
+discovery uses both hash keys in index conditions with exact-text rechecks.
+Compare complete identities and both family values, verify ordinary counts and
+history, and read back retained work and paused Jobs. Measure full request
+latency separately from the database plan; index-build success alone does not
+establish the badge target or lower-compute suitability.
+
 ## Source-order fanout capture
 
 Migration `0061_source_order_purchase_fanout` stops new

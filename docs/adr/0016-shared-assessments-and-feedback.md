@@ -143,6 +143,14 @@ by the combined containment OR. Entity-only matching retains its existing path.
 Statement reference discovery first admits State identities, then loads served
 immutable judgment through a fenced primary-key lookup. Settlement matching keeps
 immutable source-reference authority and cannot become a global Assessment scan.
+For record scopes with no direct Statement references, current settlement keys
+instead drive indexed immutable source-reference lookups followed by State
+admission. The served-source index stores bounded hashes of both extracted text
+values; exact text comparisons remain mandatory rechecks. This supports long
+historical values without truncation or a uniqueness assumption. Mixed scopes
+with direct Statement references and entity-only reads retain the State-first
+path. The settlement graph, deletion rules, and both family authorities remain
+unchanged.
 
 Scoped recommendation hydration retains the selected connection edges and every
 competing proposal on those edges, rather than hydrating unrelated connections

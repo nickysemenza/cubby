@@ -43,7 +43,11 @@ import type { Database } from "~/server/db";
 import { hasTextSql } from "~/server/db/computed/text-whitespace";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { outer, related } from "~/server/db/helpers/related";
+import {
+  outer,
+  related,
+  type RelatedColumns,
+} from "~/server/db/helpers/related";
 import { assessment, assessmentState, feedback, run } from "~/server/db/schema";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
@@ -261,13 +265,15 @@ const recommendationScopes = {
   tagPropagation: sql`a.subject->>'scope' = 'product.tag-propagation'`,
 };
 
-const statementSettlementFrom = sql`FROM "EntityExternalId" evidence
+const statementSettlementRelation = sql`"EntityExternalId" evidence
   JOIN "FinancialTransaction" settled ON settled.id=evidence."entityId" AND ${notDeleted("settled")}
   JOIN "FinancialAccount" account ON account.id=settled."accountId"
   LEFT JOIN "FinancialTransactionAllocation" allocation ON allocation."transactionId"=settled.id AND ${notDeleted("allocation")}
   LEFT JOIN "Purchase" booked ON booked.id=allocation."purchaseId" AND ${notDeleted("booked")}
   LEFT JOIN "Expense" line ON line."purchaseId"=booked.id AND ${notDeleted("line")}`;
-const statementSettlementScope = sql`evidence.kind=${entityExternalIdKind.enum.settlement_ref} AND ${notDeleted("evidence")}
+const statementSettlementFrom = sql`FROM ${statementSettlementRelation}`;
+const statementSettlementEligibility = sql`evidence.kind=${entityExternalIdKind.enum.settlement_ref} AND ${notDeleted("evidence")}`;
+const statementSettlementScope = sql`${statementSettlementEligibility}
   AND evidence.source=a.judgment #>> '{create,sourceRef,source}'
   AND evidence."externalId"=a.judgment #>> '{create,sourceRef,externalId}'`;
 const statementSettlementRefs = [
@@ -351,11 +357,7 @@ function recordRefsMatch(scope: AssessmentRecordScope, refs: SQL) {
     WHERE ${relatedRecordMatch(scope, sql`r->>'entity'`, sql<string>`r->>'id'`)})`;
 }
 
-function statementReferenceMatch(scope: AssessmentRecordScope) {
-  const requested = scope.entity
-    ? [scope.entity]
-    : scope.records?.map((r) => r.entity);
-  const direct = statementRecordParts(requested, false);
+function statementSettlementMatch(scope: AssessmentRecordScope) {
   const settled = statementSettlementRefs.flatMap(({ entity, id }) => {
     if (scope.entity && scope.entity !== entity) return [];
     const records = scope.records?.filter((record) => record.entity === entity);
@@ -368,13 +370,22 @@ function statementReferenceMatch(scope: AssessmentRecordScope) {
         : isNotNull(id),
     ];
   });
+  return or(...settled);
+}
+
+function statementReferenceMatch(scope: AssessmentRecordScope) {
+  const requested = scope.entity
+    ? [scope.entity]
+    : scope.records?.map((r) => r.entity);
+  const direct = statementRecordParts(requested, false);
+  const settled = statementSettlementMatch(scope);
   return or(
     direct.length
       ? recordRefsMatch(scope, sql.join(direct, sql` || `))
       : undefined,
-    settled.length
+    settled
       ? sql`EXISTS (SELECT 1 ${statementSettlementFrom}
-          WHERE ${statementSettlementScope} AND ${or(...settled)})`
+          WHERE ${statementSettlementScope} AND ${settled})`
       : undefined,
   );
 }
@@ -755,8 +766,16 @@ export type AssessmentRecordScope = {
 function assessmentStateAdmission(
   db: Database,
   eligibility: AssessmentEligibility,
+  s: Pick<
+    RelatedColumns<typeof assessmentState>,
+    "family" | "status" | "active" | "runId"
+  > = {
+    family: outer(reviewState.family),
+    status: outer(reviewState.status),
+    active: outer(reviewState.active),
+    runId: outer(reviewState.runId),
+  },
 ) {
-  const s = reviewState;
   if (eligibility.kind === "automatic")
     return and(
       inArray(
@@ -891,6 +910,82 @@ function assessmentRecordMatches(
   ];
 }
 
+/** Settlement-only scopes can discover immutable identities from the graph first. */
+function settlementAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
+  if (!scope.records?.length) return undefined;
+  const requested = scope.entity
+    ? [scope.entity]
+    : scope.records.map((r) => r.entity);
+  if (statementRecordParts(requested, false).length) return undefined;
+  const match = statementSettlementMatch(scope);
+  if (!match) return undefined;
+  const keys = reviewQueryBuilder
+    .selectDistinct({
+      source: sql<string>`evidence.source`.as("source"),
+      externalId: sql<string>`evidence."externalId"`.as("externalId"),
+    })
+    .from(statementSettlementRelation)
+    .where(and(statementSettlementEligibility, match));
+  const keyName = sql.identifier("settlement_keys");
+  const keySource = sql<string>`${keyName}.${sql.identifier("source")}`;
+  const keyExternalId = sql<string>`${keyName}.${sql.identifier("externalId")}`;
+  const indexed = alias(assessment, "settlement_indexed");
+  const source = sql<string>`${indexed.judgment} #>> '{create,sourceRef,source}'`;
+  const externalId = sql<string>`${indexed.judgment} #>> '{create,sourceRef,externalId}'`;
+  // Bounded hashes support unrestricted historical text. Exact comparisons
+  // retain identity authority even if two extracted values hash alike.
+  const publications = reviewQueryBuilder
+    .select({ id: indexed.id, family: indexed.family })
+    .from(indexed)
+    .where(
+      and(
+        indexed.served,
+        isNotNull(source),
+        isNotNull(externalId),
+        eq(sql`md5(${source})`, sql`md5(${keySource})`),
+        eq(sql`md5(${externalId})`, sql`md5(${keyExternalId})`),
+        eq(source, keySource),
+        eq(externalId, keyExternalId),
+      ),
+    );
+  const admitted = related(assessmentState, (state) =>
+    eq(state.id, outer(reviewAssessment.id)),
+  )
+    .where((state) =>
+      and(
+        eq(state.family, assessmentFamily.enum.statement_transaction),
+        assessmentStateAdmission(db, scope.eligibility, state),
+      ),
+    )
+    .aggregate(
+      (state) =>
+        sql`${state.family} AS ${sql.identifier("family")}, ${state.status} AS ${sql.identifier("status")}`,
+    );
+  return unwrapDb(db)
+    .select({
+      id: outer(reviewAssessment.id),
+      family:
+        scope.eligibility.kind === "suggestions"
+          ? outer(reviewState.family)
+          : outer(reviewAssessment.family),
+      immutableFamily:
+        sql<AssessmentFamily>`${outer(reviewAssessment.family)}`.as(
+          "immutableFamily",
+        ),
+      status: outer(reviewState.status),
+    })
+    .from(sql`(${keys.getSQL()}) AS ${keyName}`)
+    .innerJoinLateral(
+      sql`(${publications.getSQL()} OFFSET 0) AS ${sql.identifier("a")}`,
+      sql`true`,
+    )
+    .innerJoinLateral(
+      sql`(${admitted} OFFSET 0) AS ${sql.identifier("s")}`,
+      sql`true`,
+    )
+    .getSQL();
+}
+
 /** Scope identities before expensive automatic receipts; retain a statement-local barrier. */
 function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   const client = unwrapDb(db);
@@ -910,6 +1005,8 @@ function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
         status: s.status,
       };
       if (stateFirst) {
+        const settlement = settlementAssessmentQuery(db, scope);
+        if (settlement) return settlement;
         // Settlement membership reads immutable judgment. Fence that lookup
         // behind State identity rather than scanning every served Assessment.
         const publication = related(assessment, (immutable) =>
