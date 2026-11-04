@@ -67,7 +67,10 @@ import {
 } from "~/server/generic/jobs/jobs.fixtures";
 import { markWork } from "~/server/generic/jobs/repo/work-items";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { readWorkQueueWith } from "~/server/generic/work-queue/repo/work-queue";
+import {
+  readWorkQueueWith,
+  readRecordWorkQueueWith,
+} from "~/server/generic/work-queue/repo/work-queue";
 import {
   createProductFixture,
   makeProductInput,
@@ -732,11 +735,17 @@ describe("cross-family Suggestion list", () => {
       assessmentReadCoverage.parse(
         (await getDb(ctx.db).execute(publishedAssessmentCoverageSql())).rows[0],
       );
-    const readPublishedWork = () =>
+    const readPublishedWork = (
+      input: Parameters<typeof readWorkQueueWith>[2]["input"] = {},
+    ) =>
       readWorkQueueWith(
         ctx.db,
         { sources: [pendingSuggestionsWorkSource], deferrals: [] },
-        { input: { pageSize: 100 }, memberPartyId: null, memberOnly: false },
+        {
+          input: { pageSize: 100, ...input },
+          memberPartyId: null,
+          memberOnly: false,
+        },
       );
     const missingWork = await readPublishedWork();
     expect(missingWork.meta.totalCount).toBe(0);
@@ -744,6 +753,13 @@ describe("cross-family Suggestion list", () => {
     expect(missingWork.meta.incompleteSources?.[0]?.message).toContain(
       "Global Assessment coverage",
     );
+    expect(
+      (await readPublishedWork({ view: "agent" })).meta.incompleteSources,
+    ).toEqual([]);
+    expect(
+      (await readPublishedWork({ view: "human" })).meta.incompleteSources?.[0]
+        ?.count,
+    ).toBeNull();
     expect(await publishedFacts()).toEqual([]);
     expect(await coverage()).toEqual({
       missing: true,
@@ -908,6 +924,27 @@ describe("cross-family Suggestion list", () => {
     });
     const active = await headers();
     expect((await readPublishedWork()).meta.totalCount).toBeGreaterThan(0);
+    const recordWork = await readRecordWorkQueueWith(
+      ctx.db,
+      { sources: [pendingSuggestionsWorkSource], deferrals: [] },
+      { id: product.id, memberPartyId: null, memberOnly: false },
+    );
+    expect(recordWork.items).toHaveLength(1);
+    expect(recordWork.items[0]).toMatchObject({
+      entity: "product",
+      id: product.id,
+      reasonKeys: ["suggestions:field"],
+    });
+    expect(
+      (
+        await readPublishedWork({ reasonExclude: "suggestions:field" })
+      ).items.map((row) => row.id),
+    ).not.toContain(product.id);
+    expect(
+      (await readPublishedWork({ reason: "suggestions:field" })).items.map(
+        (row) => row.id,
+      ),
+    ).toContain(product.id);
     expect(
       new Map(
         (await publishedFacts()).map((fact) => [
@@ -966,6 +1003,7 @@ describe("cross-family Suggestion list", () => {
       ),
     ).toMatchObject({ kind: "activated" });
     const emptyPublications = await headers();
+    expect((await readPublishedWork()).meta.totalCount).toBe(0);
     expect(await publishedFacts()).toEqual([]);
     expect((await coverage()).missing).toBe(false);
     expect(emptyPublications).toHaveLength(ids.length);
@@ -1014,6 +1052,9 @@ describe("cross-family Suggestion list", () => {
       { lastError: "Synthetic publication failure", attempts: 1 },
     );
     expect((await coverage()).failed).toBe(true);
+    expect(
+      (await readPublishedWork()).meta.incompleteSources?.[0]?.message,
+    ).toContain("refresh work has failed");
     await deleteWorkItems(ctx.db, { target: `${ASSESSMENT_READ_TARGET}@0` });
     await deleteWorkItems(ctx.db, { target: ASSESSMENT_READ_TARGET });
     expect(await coverage()).toEqual({
@@ -1022,6 +1063,7 @@ describe("cross-family Suggestion list", () => {
       unresolved: false,
       failed: false,
     });
+    expect((await readPublishedWork()).meta.incompleteSources).toEqual([]);
     expect(ids.indexOf(confident)).toBeLessThan(ids.indexOf(unsure));
     const connectionRow = page.items.find(
       (row) => row.id === proposal.review.assessmentId,
