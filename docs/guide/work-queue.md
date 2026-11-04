@@ -36,6 +36,14 @@ age is not an execution-event rate. Missing execution observations stay unknown.
 Assessment source observations remain pending the separately owned producer
 cutover; this UI contract does not imply that registration has shipped.
 
+Suggestion candidates consume the shared indexed
+Assessment publication references and current authority gates. Their coverage
+flags are conservative and global: incomplete coverage has no record count.
+References and coverage share the queue statement's snapshot. Work does not
+capture suggestion evidence, enroll refreshes or reconstruct eligibility on read.
+This consumer switch requires the matching producer registration and publication
+cutover; it must not deploy independently of that integration.
+
 The Work queue derives work from records, gaps, findings, execution, review
 state and Problems detectors. Each domain declares its Work sources (reasons,
 Work family, Executor, link, actions and a candidate query); the queue composes

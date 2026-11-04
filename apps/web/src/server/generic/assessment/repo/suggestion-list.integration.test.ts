@@ -42,6 +42,7 @@ import { recordSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
+import { pendingSuggestionsWorkSource } from "~/server/domains/work/repo/work-suggestions";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   writeAssessmentReadStage,
@@ -66,6 +67,7 @@ import {
 } from "~/server/generic/jobs/jobs.fixtures";
 import { markWork } from "~/server/generic/jobs/repo/work-items";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { readWorkQueueWith } from "~/server/generic/work-queue/repo/work-queue";
 import {
   createProductFixture,
   makeProductInput,
@@ -730,6 +732,18 @@ describe("cross-family Suggestion list", () => {
       assessmentReadCoverage.parse(
         (await getDb(ctx.db).execute(publishedAssessmentCoverageSql())).rows[0],
       );
+    const readPublishedWork = () =>
+      readWorkQueueWith(
+        ctx.db,
+        { sources: [pendingSuggestionsWorkSource], deferrals: [] },
+        { input: { pageSize: 100 }, memberPartyId: null, memberOnly: false },
+      );
+    const missingWork = await readPublishedWork();
+    expect(missingWork.meta.totalCount).toBe(0);
+    expect(missingWork.meta.incompleteSources?.[0]?.count).toBeNull();
+    expect(missingWork.meta.incompleteSources?.[0]?.message).toContain(
+      "Global Assessment coverage",
+    );
     expect(await publishedFacts()).toEqual([]);
     expect(await coverage()).toEqual({
       missing: true,
@@ -893,6 +907,7 @@ describe("cross-family Suggestion list", () => {
       kind: "activated",
     });
     const active = await headers();
+    expect((await readPublishedWork()).meta.totalCount).toBeGreaterThan(0);
     expect(
       new Map(
         (await publishedFacts()).map((fact) => [

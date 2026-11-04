@@ -170,7 +170,10 @@ async function queryWorkQueue(
     admits(source, input, scope),
   );
   const prepared = (
-    await boundedAll(admitted, async (source) => source.candidates(db, scope))
+    await boundedAll(admitted, async (source) => {
+      const candidates = await source.candidates(db, scope);
+      return candidates ? { ...candidates, declaration: source } : null;
+    })
   ).filter((candidates) => candidates !== null);
   const ctes = new Map<string, WorkCte>();
   for (const candidates of prepared)
@@ -254,6 +257,22 @@ async function queryWorkQueue(
     ]),
   );
   const selectedView = input.view ? viewPredicates[input.view] : undefined;
+  const coverage = prepared.flatMap((candidate) =>
+    candidate.inputCoverage
+      ? [
+          sql`
+    SELECT source, NULL::int AS count, message FROM (
+      SELECT ${candidate.declaration.id}::text AS source,
+        ${candidate.declaration.family}::text AS family,
+        ${candidate.declaration.executor}::text AS executor, observed.message
+      FROM (${candidate.inputCoverage}) observed
+    ) work ${selectedView ? sql`WHERE ${selectedView}` : sql``}`,
+        ]
+      : [],
+  );
+  const coverageUnion = coverage.length
+    ? sql.join(coverage, sql` UNION ALL `)
+    : sql`SELECT NULL::text AS source, NULL::int AS count, NULL::text AS message WHERE false`;
 
   const sortExpressions = {
     executor: sql`array_position(ARRAY[${sql.join(
@@ -368,7 +387,8 @@ async function queryWorkQueue(
     SELECT
       (SELECT count(*)::int FROM eligible) AS total,
       coalesce((SELECT jsonb_agg(to_jsonb(missing) ORDER BY source) FROM (
-        SELECT source, count(DISTINCT key)::int AS count FROM incomplete GROUP BY source
+        SELECT source, count(DISTINCT key)::int AS count, NULL::text AS message FROM incomplete GROUP BY source
+        UNION ALL ${coverageUnion}
       ) missing), '[]'::jsonb) AS "incompleteSources",
       (SELECT jsonb_build_object('all', count(*)::int, ${sql.join(
         Object.entries(viewPredicates).flatMap(([view, predicate]) => [
@@ -416,6 +436,7 @@ async function queryWorkQueue(
       incompleteSources: workQueueOutSchema.shape.meta.shape.incompleteSources
         .unwrap()
         .element.omit({ label: true })
+        .extend({ message: z.string().nullable() })
         .array(),
       viewCounts: z.record(z.string(), z.number()),
       groups: z
@@ -462,7 +483,9 @@ async function queryWorkQueue(
       incompleteDiagnosticSources:
         await composition.incompleteDiagnosticSources?.(),
       incompleteSources: row.incompleteSources.map((input) => ({
-        ...input,
+        source: input.source,
+        count: input.count,
+        ...(input.message ? { message: input.message } : {}),
         label: sourceById.get(input.source)?.inputLabel ?? input.source,
       })),
       totalCount: row.total,

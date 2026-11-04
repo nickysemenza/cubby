@@ -15,7 +15,7 @@ import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { StatusText } from "~/ui/primitives/status-text";
 
-import { refreshStateSummary } from "./backlog";
+import { refreshStateSummary } from "./backlog-summary";
 import { DecisionResult, DerivedFreshness } from "./decision-chain";
 import { ExplanationEntityLink } from "./why-value";
 

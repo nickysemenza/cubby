@@ -295,13 +295,14 @@ export const workQueueOutSchema = z.object({
       .array(incompleteWorkDiagnosticSource)
       .max(64)
       .optional(),
-    /** Potential records excluded because their source inputs are not published. */
+    /** Incomplete inputs; null count means a global warning of unknown extent. */
     incompleteSources: z
       .array(
         z.object({
           source: z.string().min(1),
           label: z.string().min(1),
-          count,
+          count: count.nullable(),
+          message: z.string().optional(),
         }),
       )
       .optional(),
