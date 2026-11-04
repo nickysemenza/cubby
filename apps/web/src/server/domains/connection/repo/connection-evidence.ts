@@ -5,7 +5,11 @@ import {
   type ConnectionCandidate,
 } from "@cubby/schemas/entity-connections";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  parseShortcodeFor,
+  type ExpenseShortcode,
+} from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
 import { and, eq, getTableColumns, inArray, sql, type SQL } from "drizzle-orm";
 import { uniqBy } from "es-toolkit";
@@ -24,6 +28,7 @@ import {
   expenseProjectRecommendationContext,
   expenseProjectRecommendationContexts,
   prepareExpenseProjectRecommendationContexts,
+  type RecommendationHistoryRow,
 } from "~/server/domains/expense/repo/project-recommendations";
 import { suggestFinancialTransferPairs } from "~/server/domains/financial-transaction/repo/financial-transfer-pairing";
 import { getProductStockRows } from "~/server/domains/inventory/repo/scan";
@@ -169,6 +174,9 @@ function freezeSnapshot(value: ConnectionJson): ConnectionJson {
   return value;
 }
 
+const relevantSnapshot = (value: unknown) =>
+  relevantDependencyEvidence(snapshotJson(value));
+
 export const connectionReadEvidence = connectionAssessmentEvidence.omit({
   basis: true,
 });
@@ -226,17 +234,28 @@ export async function forEachConnectionBasis<
   // Keep one snapshot across construction batches until the source's last visit,
   // never across capture passes.
   const expenseProjectEvidence = new Map<string, ConnectionJson>();
+  // Sources including one history row share its evidence for this traversal only.
+  // The key is the prepared row object; roster and date windows stay per source.
+  const historyRowEvidence = new WeakMap<object, ConnectionJson>();
+  const sharedHistoryRow = (row: Readonly<RecommendationHistoryRow>) => {
+    let evidence = historyRowEvidence.get(row);
+    if (evidence === undefined) {
+      evidence = freezeSnapshot(relevantSnapshot(row));
+      historyRowEvidence.set(row, evidence);
+    }
+    return evidence;
+  };
   const visitsLeft = new Map<string, number>();
   for (const id of expenseIds)
     visitsLeft.set(id, (visitsLeft.get(id) ?? 0) + 1);
   const batchSize = 16;
   for (let offset = 0; offset < entries.length; offset += batchSize) {
     const batch = entries.slice(offset, offset + batchSize);
-    const prepared = await prepareConnectionBases(
+    const prepared = await readConnectionBases(
       db,
       batch.map((entry) => entry.candidate),
       // Keep shared record reads batched, but expand one large source context at a time.
-      preparedExpenseProjects && (() => preparedExpenseProjects([])),
+      () => new Map(),
     );
     prepared.expenseProjectEvidence = expenseProjectEvidence;
     for (const entry of batch) {
@@ -244,18 +263,34 @@ export async function forEachConnectionBasis<
         entry.candidate.relation === "expense-project"
           ? parseShortcodeFor("expense", entry.candidate.source.entityId)
           : null;
-      if (id && !expenseProjectEvidence.has(id))
-        prepared.expenseProject.set(
+      if (id && !expenseProjectEvidence.has(id)) {
+        const context = preparedExpenseProjects?.([id], sharedHistoryRow).get(
           id,
-          preparedExpenseProjects?.([id]).get(id) ?? null,
         );
+        let evidence: ConnectionJson = null;
+        if (context) {
+          // Keep every context field on the canonical snapshot/filter path;
+          // only history's already validated, immutable rows bypass repetition.
+          const shell = relevantSnapshot({ ...context, history: [] });
+          if (
+            shell === null ||
+            typeof shell !== "object" ||
+            Array.isArray(shell)
+          )
+            throw new Error(
+              "Expense-project dependency snapshot must be an object",
+            );
+          // Overriding an existing key preserves the generic capture's key order.
+          evidence = freezeSnapshot({ ...shell, history: context.history });
+        }
+        expenseProjectEvidence.set(id, evidence);
+      }
       const basis = await captureConnectionBasis(
         db,
         entry.candidate,
         false,
         prepared,
       );
-      if (id) prepared.expenseProject.delete(id);
       await visit(entry, basis);
       if (!id) continue;
       const left = visitsLeft.get(id)! - 1;
@@ -380,6 +415,27 @@ export async function prepareConnectionBases(
   >,
   lock = false,
 ): Promise<PreparedConnectionBases> {
+  return readConnectionBases(
+    db,
+    raws,
+    (expenses) =>
+      expenseProjects
+        ? expenseProjects(expenses)
+        : expenseProjectRecommendationContexts(db, expenses),
+    lock,
+  );
+}
+
+async function readConnectionBases(
+  db: Database,
+  raws: readonly ConnectionCandidate[],
+  readExpenseProjects: (
+    expenses: readonly ExpenseShortcode[],
+  ) =>
+    | PreparedConnectionBases["expenseProject"]
+    | Promise<PreparedConnectionBases["expenseProject"]>,
+  lock = false,
+): Promise<PreparedConnectionBases> {
   const candidates = raws.map((raw) => connectionCandidate.parse(raw));
   const records = await connectionRecords(
     db,
@@ -491,9 +547,7 @@ export async function prepareConnectionBases(
     records,
     allocations,
     purchaseProducts,
-    expenseProject: expenseProjects
-      ? expenseProjects(expenses)
-      : await expenseProjectRecommendationContexts(db, expenses),
+    expenseProject: await readExpenseProjects(expenses),
     expenseProjectEvidence: new Map(),
     settlementCandidates: await listPurchasesSettlementCandidates(
       db,

@@ -169,7 +169,16 @@ The ID-only CTE and both family hydration branches share one statement snapshot,
 including callers using READ COMMITTED; discovery cannot miss a concurrently
 published replacement between statements. Both branches consume the same
 materialized identity set through UUID-array point probes. Field targets join their
-shortcode; pair targets use a guarded native UUID lookup that admits only the
+shortcode. Secondary identity discovery probes bounded hashes of the State's
+suggested text and the publication's other-ID text, then rechecks the original
+text equality. The active-State index includes status as an index key rather
+than a partial pending predicate, so bound statuses remain indexable in generic
+plans. Literal active and served gates establish the partial-index conditions.
+Matched field States load immutable family authority through a fenced
+primary-key lookup instead of joining the full publication population.
+Other-ID membership uses a lateral, fenced point probe per requested endpoint,
+so a larger roster cannot flatten it into a population-wide hash read.
+Pair targets use a guarded native UUID lookup that admits only the
 canonical text spelling previously matched by the text join. Eligibility,
 suppression, cross-family precedence and historical malformed-value handling
 remain shared.
@@ -178,7 +187,13 @@ Connection basis preparation normalizes included history identifiers once per
 capture and gives each context its own row objects. It releases a source's
 expanded immutable evidence after that source's last candidate visit. Record
 reads remain batched, while only the currently visited source's large raw
-history context is expanded. Connection
+history context is expanded. During an unlocked traversal, included history rows
+are snapshotted, filtered and frozen once per normalized row object, then shared
+only for that traversal. Default context callers still receive independent
+mutable row copies. Each source's remaining context, including its project/date
+windows, retains the canonical snapshot/filter path. Locked capture remains on
+the full generic path and must compare byte-identically before publication.
+Connection
 digests stream the existing canonical JSON tokens into SHA-256; they preserve
 persisted fingerprint bytes without retaining a complete token array or encoded
 buffer. Product identity fences likewise use native UUID lineage probes while

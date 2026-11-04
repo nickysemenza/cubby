@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
@@ -193,25 +194,106 @@ describe("prepared connection bases", () => {
         canonicalJson(await captureConnectionBasis(ctx.db, raw, false, ready)),
       ).toBe(canonicalJson(await captureConnectionBasis(ctx.db, raw)));
     // One source's proposals can span capture batches and interleave with another's.
+    // Sources share included history rows but keep their own exclusions.
+    const sharedProduct = await insertWithShortcode(ctx.db, "product", {
+      name: "Synthetic shared history fitting",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
+    });
+    const sharedHistory = await createRepoEntity(ctx, "expense", {
+      name: 'Synthetic "shared" café 🔧',
+      date: "2026-09-10",
+      trade: "electrical",
+      costType: "materials",
+      cost: 10,
+      productId: sharedProduct.shortcode,
+      projectId: project.output.id,
+    });
+    const productOnlyHistory = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic product-only history",
+      date: "2026-09-10",
+      trade: "plumbing",
+      costType: "materials",
+      cost: 10,
+      productId: sharedProduct.shortcode,
+      projectId: project.output.id,
+    });
+    // Matches the shared row by both trade and Product.
+    const overlapSource = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic overlap source",
+      date: "2026-09-10",
+      trade: "electrical",
+      costType: "materials",
+      cost: 10,
+      productId: sharedProduct.shortcode,
+    });
+    const interleavedSources = [line, history, overlapSource];
     const interleaved = Array.from({ length: 34 }, (_, index) =>
       candidate(
         "expense-project",
-        ref("expense", (index % 2 ? history : line).output.id),
+        ref(
+          "expense",
+          interleavedSources[index % interleavedSources.length]!.output.id,
+        ),
         ref("project", project.output.id),
       ),
     );
-    const visited: ConnectionCandidate[] = [];
+    const visited: { entry: ConnectionCandidate; batched: unknown }[] = [];
     await forEachConnectionBasis(
       ctx.db,
       interleaved.map((entry) => ({ candidate: entry })),
       async ({ candidate: entry }, batched) => {
-        visited.push(entry);
-        expect(canonicalJson(batched)).toBe(
-          canonicalJson(await captureConnectionBasis(ctx.db, entry)),
+        visited.push({ entry, batched });
+        // Unsorted bytes: a shared-row basis also keeps the generic key order.
+        expect(JSON.stringify(batched)).toBe(
+          JSON.stringify(await captureConnectionBasis(ctx.db, entry)),
         );
       },
     );
-    expect(visited).toEqual(interleaved);
+    expect(visited.map(({ entry }) => entry)).toEqual(interleaved);
+    await withTransactionDatabase(ctx.db, async (tx) => {
+      const locked = await prepareConnectionBases(
+        tx,
+        interleaved,
+        undefined,
+        true,
+      );
+      for (const { entry, batched } of visited)
+        expect(
+          JSON.stringify(await captureConnectionBasis(tx, entry, true, locked)),
+        ).toBe(JSON.stringify(batched));
+    });
+    const historyEvidence = z.object({
+      dependencies: z.object({
+        history: z.array(z.unknown()),
+      }),
+    });
+    const historyRow = z.object({ id: z.string() });
+    const includedRows = (sourceId: string) =>
+      historyEvidence.parse(
+        visited.find(({ entry }) => entry.source.entityId === sourceId)
+          ?.batched,
+      ).dependencies.history;
+    const includedIds = (sourceId: string) =>
+      includedRows(sourceId)
+        .map((row) => historyRow.parse(row).id)
+        .sort();
+    const sortedIds = (...rows: (typeof line)[]) =>
+      rows.map((row) => row.output.id).sort();
+    expect(includedIds(line.output.id)).toEqual(
+      sortedIds(history, sharedHistory),
+    );
+    expect(includedIds(history.output.id)).toEqual(sortedIds(sharedHistory));
+    expect(includedIds(overlapSource.output.id)).toEqual(
+      sortedIds(history, sharedHistory, productOnlyHistory),
+    );
+    const sharedEvidence = (sourceId: string) =>
+      includedRows(sourceId).find(
+        (row) => historyRow.parse(row).id === sharedHistory.output.id,
+      );
+    expect(sharedEvidence(overlapSource.output.id)).toBe(
+      sharedEvidence(line.output.id),
+    );
+    expect(Object.isFrozen(sharedEvidence(line.output.id))).toBe(true);
     const [captured] = await prepareEntityConnectionEvidence(
       ctx.db,
       candidates.filter((entry) => entry.relation === "expense-project"),

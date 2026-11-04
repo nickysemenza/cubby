@@ -59,6 +59,11 @@ export const assessmentChildren = [
       },
       { name: "Assessment_family_idx", on: ["family", "createdAt"] },
       {
+        name: "Assessment_served_other_id_idx",
+        on: [{ sql: "md5({subject}->>'otherId')" }],
+        where: "{served} AND ({subject}->>'otherId') IS NOT NULL",
+      },
+      {
         name: "Assessment_served_source_ref_idx",
         on: [
           { sql: "md5({judgment} #>> '{create,sourceRef,source}')" },
@@ -278,6 +283,11 @@ export const assessmentChildren = [
       {
         name: "AssessmentState_entity_record_status_idx",
         on: ["entity", "recordId", "status"],
+      },
+      {
+        name: "AssessmentState_active_value_status_idx",
+        on: ["status", { sql: "md5({suggestedValue} #>> '{}')" }],
+        where: "{active}",
       },
     ],
     checks: [

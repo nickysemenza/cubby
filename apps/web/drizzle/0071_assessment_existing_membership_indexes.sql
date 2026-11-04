@@ -1,0 +1,2 @@
+CREATE INDEX "Assessment_served_other_id_idx" ON "Assessment" USING btree (md5("subject"->>'otherId')) WHERE "Assessment"."served" AND ("Assessment"."subject"->>'otherId') IS NOT NULL;--> statement-breakpoint
+CREATE INDEX "AssessmentState_active_value_status_idx" ON "AssessmentState" USING btree ("status",md5("suggestedValue" #>> '{}')) WHERE "AssessmentState"."active";
