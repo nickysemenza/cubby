@@ -594,6 +594,8 @@ export function emptyColumnIds<TData extends RowData>(
       sized[column.id] !== undefined
     )
       continue;
+    // A column can hold no values and still carry a proposal to accept.
+    if (column.columnDef.meta?.suggest) continue;
     // A deferred value is unknown, not empty; its accessor may not even run.
     const unavailable = column.columnDef.meta?.valueUnavailable;
     if (unavailable && rows.some((row) => unavailable(row.original))) continue;

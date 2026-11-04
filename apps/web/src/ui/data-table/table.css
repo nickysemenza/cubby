@@ -58,7 +58,7 @@
   workspaces) and phone cards keep their shipped geometry.
 */
 @media (min-width: 48rem) and (hover: hover) and (pointer: fine) {
-  :root:not([data-native-workspace]) {
+  :root:not([data-hosted-workspace]) {
     /* One line: "Oct 13 · 3mo ago". The fit measures this same form. */
     [data-stacked-value] {
       display: flex;
@@ -83,7 +83,7 @@
   render outside this rule and keep their chips.
 */
 @media (min-width: 48rem) {
-  :root:not([data-native-workspace]) {
+  :root:not([data-hosted-workspace]) {
     [data-slot="table"] [data-enum-tone="quiet"] {
       height: auto;
       gap: 0.3125rem;

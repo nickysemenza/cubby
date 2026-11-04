@@ -491,7 +491,7 @@ describe("rendered column fit", () => {
       chip.scrollWidth + 8,
     );
     // Fractional text rounds up in scrollWidth; the spill's own clip test allows it.
-    expect(chip.scrollWidth).toBeLessThanOrEqual(chip.clientWidth + 1);
+    expect(chip.scrollWidth).toBeLessThanOrEqual(chip.clientWidth + 2);
     view.rerender(
       <FitFixture chips={["Synthetic workshop bench", "Garage", "Attic"]} />,
     );

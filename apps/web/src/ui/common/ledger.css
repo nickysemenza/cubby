@@ -5,7 +5,7 @@
   --section-body-gap: 0.5rem;
 }
 @media (min-width: 48rem) and (hover: hover) and (pointer: fine) {
-  :root:not([data-native-workspace]) {
+  :root:not([data-hosted-workspace]) {
     --section-heading-pad: 0.25rem;
     --section-body-gap: 0.25rem;
     --compact-fact-pad: 0.1875rem;

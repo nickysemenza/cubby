@@ -12,7 +12,7 @@ Cubby is a very dense, light desktop utility, because vertical space is the scar
 **Key Characteristics:**
 
 - Dense desktop workspaces with visible information and actions: 12px body, 22px navigation items, 24px table rows.
-- Density belongs to fine-pointer desktops. Below 768px, on coarse pointers and in hosted native workspaces (`:root[data-native-workspace]`), the base scale stays: 13px body, 28px navigation, 32px rows, 44px phone targets, and those hosted workspaces keep their shipped colors and radii. One block in `src/styles.css` owns the switch; components consume `--table-row-height`, `--table-header-height`, `--nav-row-height`, `--pill-height`, `--record-pill-height`, `--fact-row-height`, `--control-height*`, `--input-height` and `--section-gap` rather than fixed heights. `ROW_DENSITY.rowHeight` reads the same variable.
+- Density belongs to fine-pointer desktops. Below 768px, on coarse pointers and in hosted native workspaces (`:root[data-hosted-workspace]`), the base scale stays: 13px body, 28px navigation, 32px rows, 44px phone targets, and those hosted workspaces keep their shipped colors and radii. One block in `src/styles.css` owns the switch; components consume `--table-row-height`, `--table-header-height`, `--nav-row-height`, `--pill-height`, `--record-pill-height`, `--fact-row-height`, `--control-height*`, `--input-height` and `--section-gap` rather than fixed heights. `ROW_DENSITY.rowHeight` reads the same variable.
 - Lists open records in a side inspector; the full record page leads with key numbers, what needs attention, and a merged activity timeline.
 - Restrained color, Inter with Geist Mono figures, and flat 1px separators instead of floating cards.
 

@@ -4,7 +4,7 @@
   padding-block: var(--record-row-pad, 0.1875rem);
 }
 @media (min-width: 48rem) and (hover: hover) and (pointer: fine) {
-  :root:not([data-native-workspace]) {
+  :root:not([data-hosted-workspace]) {
     --record-row-height: var(--table-row-height);
     --record-row-pad: 0.125rem;
   }

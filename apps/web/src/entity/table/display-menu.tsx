@@ -1,6 +1,6 @@
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
 import { SlidersHorizontalIcon } from "@phosphor-icons/react/dist/csr/SlidersHorizontal";
-import { useState, type ReactNode } from "react";
+import { createContext, useState, type ReactNode } from "react";
 
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
@@ -32,6 +32,12 @@ export function DisplayRow({
  * sorting and layout). Header menus still sort and group directly. A dot marks a
  * non-default arrangement, so nothing is hidden in here silently.
  */
+/**
+ * Layout controls for a routed list that does not run through GenericEntityList,
+ * whose sections otherwise reach the toolbar's Display through ListQueryState.
+ */
+export const ListDisplaySectionsContext = createContext<ReactNode>(null);
+
 export function DisplayMenu({
   children,
   columns,

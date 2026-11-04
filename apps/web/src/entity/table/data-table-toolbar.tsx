@@ -9,7 +9,7 @@ import { SortAscendingIcon } from "@phosphor-icons/react/dist/csr/SortAscending"
 import { SortDescendingIcon } from "@phosphor-icons/react/dist/csr/SortDescending";
 import { useQueryClient } from "@tanstack/react-query";
 import type { RowData } from "@tanstack/react-table";
-import type { ReactNode } from "react";
+import { type ReactNode, useContext } from "react";
 import { createPortal } from "react-dom";
 
 import { viewsForEntity } from "~/entity/model/view-manifest";
@@ -40,7 +40,11 @@ import type { CubbyTable as Table } from "../../ui/data-table/table-features";
 import TableLayoutCustomizer from "../../ui/data-table/table-layout-customizer";
 import { mobileColumnLabel } from "../../ui/data-table/table-meta";
 import { SavedViewTabs, TableSavedViewsMenuItems } from "./data-table-views";
-import { DisplayMenu, DisplayRow } from "./display-menu";
+import {
+  DisplayMenu,
+  DisplayRow,
+  ListDisplaySectionsContext,
+} from "./display-menu";
 import { LedgerFilters } from "./ledger-filters";
 import { useListQuery } from "./list-query-context";
 import { ProblemWorklistStatus } from "./problem-worklist";
@@ -347,6 +351,7 @@ function QueryTierFieldset<TData extends RowData>({
   const tabsTarget = usePageWorkbenchTarget("tabs", isPage);
   const listQuery = useListQuery(entity);
   const queryClient = useQueryClient();
+  const ownSections = useContext(ListDisplaySectionsContext);
   const defaultSort = entity ? defaultSortFor(queryClient, entity) : undefined;
   const customized =
     isTableLayoutCustomized(table.state, table.options.meta?.defaultLayout) ||
@@ -355,9 +360,10 @@ function QueryTierFieldset<TData extends RowData>({
   const hasSort = sortableColumns(table).length > 0;
   // A phone's Filter sheet already carries sort and columns; Display keeps layout
   // and grouping there, and is absent when the list offers neither.
+  const displaySections = listQuery?.displaySections ?? ownSections;
   const display = !isPage ? null : isMobileFilterTier ? (
-    listQuery?.displaySections ? (
-      <DisplayMenu>{listQuery.displaySections}</DisplayMenu>
+    displaySections ? (
+      <DisplayMenu>{displaySections}</DisplayMenu>
     ) : null
   ) : (
     <DisplayMenu
@@ -366,7 +372,7 @@ function QueryTierFieldset<TData extends RowData>({
         showViewOptions ? <TableLayoutCustomizer table={table} /> : undefined
       }
     >
-      {listQuery?.displaySections}
+      {displaySections}
       {hasSort && (
         <DisplayRow label="Sort">
           <SortMenu table={table} />

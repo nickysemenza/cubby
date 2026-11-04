@@ -353,7 +353,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     select: (search) => search.nativeWorkspace,
   });
   return (
-    <html lang="en" data-native-workspace={nativeWorkspace}>
+    <html lang="en" data-hosted-workspace={nativeWorkspace}>
       <head>
         <HeadContent />
       </head>

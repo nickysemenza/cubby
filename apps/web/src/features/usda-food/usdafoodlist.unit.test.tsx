@@ -130,7 +130,10 @@ describe("USDAFoodList", () => {
       },
     });
     expect(grid.querySelector('a[href="/usda/12345"]')).not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /USDA Foods view:/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Display" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /USDA Foods view:/ }),
+    );
     fireEvent.click(
       await screen.findByRole("menuitem", { name: "Compact view" }),
     );
@@ -139,7 +142,10 @@ describe("USDAFoodList", () => {
       view: "shelf",
       description: "Example",
     });
-    fireEvent.click(screen.getByRole("button", { name: /USDA Foods view:/ }));
+    // Display stays open after a layout choice.
+    fireEvent.click(
+      await screen.findByRole("button", { name: /USDA Foods view:/ }),
+    );
     fireEvent.click(await screen.findByRole("menuitem", { name: "List view" }));
     expect(
       await screen.findByRole("table", { name: "USDA Foods Table" }),

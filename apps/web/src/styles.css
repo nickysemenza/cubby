@@ -698,7 +698,7 @@
   agrees with the painted rows.
 */
 @media (min-width: 48rem) and (hover: hover) and (pointer: fine) {
-  :root:not([data-native-workspace]) {
+  :root:not([data-hosted-workspace]) {
     --text-xs: 0.6875rem;
     --text-xs--line-height: 0.875rem;
     --text-sm: 0.75rem;
@@ -730,7 +730,7 @@
 }
 
 /* Hosted native workspaces keep the look the Apple apps shipped with. */
-:root[data-native-workspace] {
+:root[data-hosted-workspace] {
   --brand-foreground: #333333;
   --brand-hairline: #ebebeb;
   --brand-interaction: #202020;
