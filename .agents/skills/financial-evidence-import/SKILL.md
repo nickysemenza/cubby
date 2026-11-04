@@ -216,6 +216,10 @@ classification corrections, read
 [Statement review receipts and classification](../../../docs/import-evidence-convergence.md#statement-review-receipts-and-classification).
 Exact command replay and fresh spending convergence have separate contracts.
 
+Before resuming a retained case, follow
+[Retained review holds and preservation](../../../docs/import-evidence-convergence.md#retained-review-holds-and-preservation):
+carry prior objections into review and identify target overlap in protected snapshots.
+
 For an authorized explicit booking, check existing Purchases, Expenses and
 settlement allocations before creating aggregate spending. Refresh that check
 when resuming a retained proposal; a fresh booking preview checks the selected
