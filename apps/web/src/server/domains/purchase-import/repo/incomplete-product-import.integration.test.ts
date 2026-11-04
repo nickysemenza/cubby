@@ -11,6 +11,8 @@ import { describe, expect, it } from "vitest";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   expense,
+  financialTransaction,
+  financialTransactionAllocation,
   entityLink,
   importSourceOrder,
   importSourceProduct,
@@ -195,6 +197,35 @@ describe("incomplete itemized purchase identity", () => {
         }),
         ctx.actor,
       );
+      const account = await insertWithShortcode(ctx.db, "financialAccount", {
+        name: "Synthetic USD card",
+        identity: { kind: "credit_card", network: "visa" },
+        ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
+      });
+      const charge = await insertWithShortcode(ctx.db, "financialTransaction", {
+        accountId: account.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 61,
+        postedDate: "2032-02-28",
+        merchant: "Example variant maker",
+      });
+      await getDb(ctx.db).insert(financialTransactionAllocation).values({
+        transactionId: charge.id,
+        purchaseId,
+        amount: 61,
+        confirmsMerchant: true,
+      });
+      await getDb(ctx.db)
+        .update(expense)
+        .set({ bookingTransactionCode: charge.shortcode })
+        .where(eq(expense.id, aggregate.entityId));
+      const statementBefore = await getDb(ctx.db)
+        .select()
+        .from(financialTransaction);
+      const settlementBefore = await getDb(ctx.db)
+        .select()
+        .from(financialTransactionAllocation);
       expect(await coverage()).toMatchObject({
         booking: "recorded",
         itemization: "present",
@@ -362,6 +393,12 @@ describe("incomplete itemized purchase identity", () => {
         (await lines()).find((row) => row.id === original[0]!.id)
           ?.productQuantity,
       ).toBeNull();
+      expect(await coverage()).toMatchObject({
+        booking: "recorded",
+        itemization: "present",
+      });
+      expect((await coverage())?.products).not.toBe("present");
+      expect((await coverage())?.products).not.toBe("not_expected");
       const usd = structuredClone(input);
       usd.source = {
         kind: "vendor_export",
@@ -450,6 +487,17 @@ describe("incomplete itemized purchase identity", () => {
         .from(importSourceOrder)
         .where(eq(importSourceOrder.id, accepted.id));
       expect(originalSource?.originalOrder).toEqual(accepted.originalOrder);
+      expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual(
+        statementBefore,
+      );
+      expect(
+        await getDb(ctx.db).select().from(financialTransactionAllocation),
+      ).toEqual(settlementBefore);
+      const [preservedOrder] = await getDb(ctx.db)
+        .select()
+        .from(purchase)
+        .where(eq(purchase.id, purchaseId));
+      expect(preservedOrder?.date).toBe("2032-02-29");
       const priced = await lines();
       expect(priced.map((row) => row.id).sort()).toEqual(
         original.map((row) => row.id).sort(),
