@@ -379,6 +379,17 @@ describe("Shipment retained evidence", () => {
           .where(eq(shipment.shortcode, code))
       )[0],
     ).toMatchObject({ carrierId: alphaId, purpose: "incoming" });
+    const fieldQuote =
+      "Carrier: Synthetic Alpha Carrier tracking EXAMPLE-FIELD";
+    expect(
+      (
+        await assessCarrierPacket(
+          ctx.db,
+          { trackingNumber: "EXAMPLE-FIELD", extraTrackingNumbers: [] },
+          { texts: [fieldQuote], links: [] },
+        )
+      ).primary.carrier?.code,
+    ).toBe(alpha.output.id);
     const conflictQuote = "Synthetic Alpha Carrier tracking EXAMPLE-CONFLICT";
     const conflicting = capture(
       "conflicting-explicit",
@@ -397,19 +408,30 @@ describe("Shipment retained evidence", () => {
               trackingNumber: "EXAMPLE-CONFLICT",
               evidence: {
                 kind: "statement",
-                quote: "Synthetic Beta Carrier tracking EXAMPLE-CONFLICT",
+                quote:
+                  "Carrier: Synthetic Beta Carrier tracking EXAMPLE-CONFLICT",
               },
             },
           ],
         },
+        {
+          ...packet("EXAMPLE-OLDER-PACKAGE"),
+          observations: packet("EXAMPLE-OLDER-PACKAGE").observations.map(
+            (event) => ({
+              ...event,
+              time: { kind: "instant", value: "2025-06-03T09:00:00Z" },
+            }),
+          ),
+        },
       ],
       "2026-06-07T09:00:00Z",
-      conflictQuote + "\nSynthetic Beta Carrier tracking EXAMPLE-CONFLICT",
+      conflictQuote +
+        "\nCarrier: Synthetic Beta Carrier tracking EXAMPLE-CONFLICT",
     );
     const held = await recordShipmentEvidence(ctx.db, conflicting, ctx.actor);
-    expect(held.shipmentIds).toEqual([]);
+    expect(held.shipmentIds).toHaveLength(1);
     expect(held.unresolvedPackages).toHaveLength(1);
-    expect(await getDb(ctx.db).select().from(shipment)).toHaveLength(2);
+    expect(await getDb(ctx.db).select().from(shipment)).toHaveLength(3);
     const laterSingleClaim = await recordShipmentEvidence(
       ctx.db,
       capture(
@@ -427,7 +449,7 @@ describe("Shipment retained evidence", () => {
     );
     expect(laterSingleClaim.shipmentIds).toEqual([]);
     expect(laterSingleClaim.unresolvedPackages).toHaveLength(1);
-    expect(await getDb(ctx.db).select().from(shipment)).toHaveLength(2);
+    expect(await getDb(ctx.db).select().from(shipment)).toHaveLength(3);
     const constructed = capture(
       "constructed",
       [packet("EXAMPLE-URL")],
@@ -744,6 +766,50 @@ describe("Shipment retained evidence", () => {
         )
       ).primary.carrier?.code,
     ).toBe(fedex.output.id);
+    const heldNumber = "EXAMPLE-HTML-HELD";
+    const heldFedex = `https://www.fedex.com/fedextrack/?trknbr=${heldNumber}`;
+    const heldUps = `https://www.ups.com/track?tracknum=${heldNumber}`;
+    await retainedMailFixture(ctx.db, {
+      ledgerPartyId: world.party.id,
+      messageId: "synthetic-held-html-links",
+      checksum: "e".repeat(64),
+      content: {
+        snippet: null,
+        bodyText: null,
+        bodyHtml: `<a href="${heldFedex}">Track parcel</a><a href="${heldUps}">Track parcel</a>`,
+      },
+    });
+    const [heldMessage] = await getDb(ctx.db)
+      .select()
+      .from(email)
+      .where(eq(email.messageId, "synthetic-held-html-links"));
+    const held = await recordShipmentEvidence(
+      ctx.db,
+      {
+        source: {
+          kind: "email",
+          emailId: parseShortcodeFor("email", heldMessage!.shortcode),
+          checksum: "e".repeat(64),
+        },
+        purchaseId: null,
+        shipments: [packet(heldNumber)],
+      },
+      ctx.actor,
+    );
+    expect(held.shipmentIds).toEqual([]);
+    expect(held.unresolvedPackages).toHaveLength(1);
+    const followup = await recordShipmentEvidence(
+      ctx.db,
+      capture(
+        "html-conflict-followup",
+        [packet(heldNumber)],
+        "2026-06-07T09:00:00Z",
+        `FedEx tracking ${heldNumber}`,
+      ),
+      ctx.actor,
+    );
+    expect(followup.shipmentIds).toEqual([]);
+    expect(followup.unresolvedPackages).toHaveLength(1);
     const fabricatedPage = capture("constructed-link", [parcel]);
     expect(
       (

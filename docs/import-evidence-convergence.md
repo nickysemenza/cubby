@@ -254,8 +254,10 @@ without retained text remain available for review.
 Conflicting explicit source claims remain generic Problems because they may
 represent a handoff. Read existing captures for primary and additional references,
 including held/unbound captures, before first creation and later association.
-Compare complete source-event periods within the existing inclusive 60-day rule;
-undated evidence is conservative. Corrections keep the existing Shipment lock,
+Compare complete source-event periods within the existing inclusive 60-day rule.
+History dates use current events naming the relevant reference, never another
+package in the capture; claims without associated event dates remain conservative.
+HTML link references participate in source discovery before exact-link validation. Corrections keep the existing Shipment lock,
 revision fence and deferred identity constraints, and never merge collisions.
 
 Source-package bindings, occurrence identities and original fingerprints stay

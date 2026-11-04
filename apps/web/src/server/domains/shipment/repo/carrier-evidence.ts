@@ -6,7 +6,7 @@ import type {
   ShipmentCarrierClaim,
 } from "@cubby/schemas/shipment-evidence";
 import { SHIPMENT_IDENTITY_PERIOD_DAYS } from "@cubby/schemas/shipment-fields";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
@@ -14,7 +14,6 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   vendor,
-  email,
   shipmentSourceCapture,
   shipmentSourcePackage,
   shipmentObservation,
@@ -363,16 +362,12 @@ function sourceCarrierClaims(
             !new RegExp(referencePattern(number), "i").test(quote)
           )
             continue;
-          const name =
-            quote.match(
-              /^\s*(?:shipping\s+)?carrier\s*:\s*([^\n;,.]+)/i,
-            )?.[1] ??
-            quote.match(
-              new RegExp(
-                `^\\s*(?:(?:shipped|shipping|delivered|delivery|sent|dispatched)\\s+(?:via|with|by)\\s+)?(.+?)\\s*(?:[·:—-]\\s*)?(?:tracking(?:\\s*(?:number|no\\.?|id))?\\s*[:#]?|trk\\s*#)\\s*${referencePattern(number)}`,
-                "i",
-              ),
-            )?.[1];
+          const name = quote.match(
+            new RegExp(
+              `^\\s*(?:(?:shipping\\s+)?carrier\\s*:\\s*|(?:shipped|shipping|delivered|delivery|sent|dispatched)\\s+(?:via|with|by)\\s+)?(.+?)[\\s;,.·:—-]+(?:tracking(?:\\s*(?:number|no\\.?|id))?\\s*[:#]?|trk\\s*#)\\s*${referencePattern(number)}`,
+              "i",
+            ),
+          )?.[1];
           if (
             !name ||
             /^(?:broker|merchant|seller|label provider)\s*:/i.test(name) ||
@@ -423,20 +418,18 @@ export async function loadCarrierHistory(
   const window = carrierHistoryWindow
     .omit({ id: true })
     .parse("window" in scope ? scope.window : current?.rows[0]);
-  const bound = sql<boolean>`EXISTS (SELECT 1 FROM ${shipmentSourcePackage} p WHERE p."sourceKey" = ${shipmentSourceCapture.sourceKey} AND p."shipmentId" = ${shipmentId}::uuid)`;
+  const bound = sql<boolean>`EXISTS (SELECT 1 FROM ${shipmentSourcePackage} p WHERE p."sourceKey" = ${shipmentSourceCapture}."sourceKey" AND p."shipmentId" = ${shipmentId}::uuid)`;
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- content is a retained source JSON key.
-  const text = sql`upper(regexp_replace(regexp_replace(concat_ws(' ', ${shipmentSourceCapture.originalContent}->>'bodyText', ${shipmentSourceCapture.originalContent}->>'bodyHtml', ${shipmentSourceCapture.source}->>'content', ${shipmentSourceCapture.source}->>'url'), '<[^>]*>', '', 'g'), '[[:space:]]', '', 'g'))`;
+  const text = sql`upper(regexp_replace(concat_ws(' ', ${shipmentSourceCapture.originalContent}->>'bodyText', ${shipmentSourceCapture.originalContent}->>'bodyHtml', ${shipmentSourceCapture.source}->>'content', ${shipmentSourceCapture.source}->>'url'), '[[:space:]]', '', 'g'))`;
   const rows = await database
     .select({
       id: shipmentSourceCapture.id,
       source: shipmentSourceCapture.source,
       originalContent: shipmentSourceCapture.originalContent,
-      receivedAt: email.receivedAt,
       bound,
-      events: sql<unknown>`coalesce((SELECT jsonb_agg(o.event) FROM ${shipmentObservationCapture} oc JOIN ${shipmentObservation} o ON o.id = oc."observationId" WHERE oc."captureId" = ${shipmentSourceCapture.id}), '[]'::jsonb)`,
+      events: sql<unknown>`coalesce((SELECT jsonb_agg(o.event) FROM ${shipmentObservationCapture} oc JOIN ${shipmentObservation} o ON o.id = oc."observationId" WHERE oc."captureId" = ${shipmentSourceCapture}."id" AND o."supersededById" IS NULL), '[]'::jsonb)`,
     })
     .from(shipmentSourceCapture)
-    .leftJoin(email, eq(email.id, shipmentSourceCapture.emailId))
     .where(
       or(
         bound,
@@ -448,61 +441,65 @@ export async function loadCarrierHistory(
     )
     .limit(2001);
   const selected = rows.slice(0, 2000);
-  // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- time, fallback and events are source-event JSON keys.
-  const windows = await database.execute(sql`SELECT p->>'id' AS id,
-    coalesce(min(shipment_event_day(event)), shipment_event_day(jsonb_build_object('time', p->'fallback')))::text AS first,
-    coalesce(max(shipment_event_day(event)), shipment_event_day(jsonb_build_object('time', p->'fallback')))::text AS last
+  // A capture can contain an admitted package and another held package. Only
+  // current events naming this reference can date its claims; otherwise keep them conservatively.
+  // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- events and trackingNumber are retained JSON keys.
+  const windows =
+    await database.execute(sql`SELECT p->>'id' AS id, p->>'reference' AS reference,
+    CASE WHEN count(event) = 0 OR count(*) FILTER (WHERE shipment_event_day(event) IS NULL) > 0 THEN NULL ELSE min(shipment_event_day(event))::text END AS first,
+    CASE WHEN count(event) = 0 OR count(*) FILTER (WHERE shipment_event_day(event) IS NULL) > 0 THEN NULL ELSE max(shipment_event_day(event))::text END AS last
     FROM jsonb_array_elements(${JSON.stringify(
-      selected.map((row) => ({
-        id: row.id,
-        events: row.events,
-        fallback:
-          row.source.kind === "email" && row.receivedAt
-            ? { kind: "instant", value: row.receivedAt.toISOString() }
-            : row.source.kind === "sms_export"
-              ? row.source.sentAt
-              : { kind: "unknown" },
-      })),
-    )}::jsonb) p LEFT JOIN LATERAL jsonb_array_elements(p->'events') event ON true GROUP BY p`);
-  const periods = z.array(carrierHistoryWindow).parse(windows.rows);
+      selected.flatMap((row) =>
+        scope.references.map((reference) => ({
+          id: row.id,
+          reference: normalizeCarrierReference(reference),
+          events: row.events,
+        })),
+      ),
+    )}::jsonb) p LEFT JOIN LATERAL jsonb_array_elements(p->'events') event
+    ON upper(regexp_replace(event->>'trackingNumber', '[[:space:]]', '', 'g')) = p->>'reference'
+    GROUP BY p`);
+  const periods = z
+    .array(carrierHistoryWindow.extend({ reference: z.string() }))
+    .parse(windows.rows);
   const claims: Awaited<ReturnType<typeof assessCarrierPacket>>["explicit"] =
     [];
   for (const row of selected) {
-    const period = periods.find((period) => period.id === row.id);
-    if (
-      !row.bound &&
-      period?.first &&
-      period.last &&
-      window.first &&
-      window.last
-    ) {
-      const days = [period.first, period.last, window.first, window.last].map(
-        (day) => Date.parse(day),
+    for (const reference of scope.references) {
+      const period = periods.find(
+        (period) =>
+          period.id === row.id &&
+          period.reference === normalizeCarrierReference(reference),
       );
       if (
-        Math.max(...days) - Math.min(...days) >
-        SHIPMENT_IDENTITY_PERIOD_DAYS * 86400000
-      )
-        continue;
-    }
-    claims.push(
-      ...(
-        await assessCarrierPacket(
-          db,
-          {
-            trackingNumber: scope.references[0] ?? null,
-            extraTrackingNumbers: scope.references
-              .slice(1)
-              .map((number) => ({
-                trackingNumber: number,
-                carrierId: null,
-                carrierName: null,
-              })),
-          },
-          carrierCaptureEvidence(row),
+        !row.bound &&
+        period?.first &&
+        period.last &&
+        window.first &&
+        window.last
+      ) {
+        const days = [period.first, period.last, window.first, window.last].map(
+          (day) => Date.parse(day),
+        );
+        if (
+          Math.max(...days) - Math.min(...days) >
+          SHIPMENT_IDENTITY_PERIOD_DAYS * 86400000
         )
-      ).explicit,
-    );
+          continue;
+      }
+      claims.push(
+        ...(
+          await assessCarrierPacket(
+            db,
+            {
+              trackingNumber: reference,
+              extraTrackingNumbers: [],
+            },
+            carrierCaptureEvidence(row),
+          )
+        ).explicit,
+      );
+    }
   }
   return { claims, truncated: rows.length > 2000, window };
 }
