@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 
 import { EntityIcon, entities } from "~/entity/entities";
 import { cn } from "~/lib/utils";
+import { domainForEntity } from "~/ui/navigation/domain-wayfinding";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -19,8 +20,25 @@ import {
 } from "~/ui/primitives/tooltip";
 
 import { actionsForSurface } from "../actions/action-items";
+import { navGroups } from "./nav-items";
 
 const createActions = actionsForSurface("navbar-create");
+const domainGroups = navGroups.map((group) => ({
+  label: group.label,
+  actions: createActions.filter(
+    (action) =>
+      action.entity && domainForEntity(action.entity) === group.domain,
+  ),
+}));
+const groupedActions = new Set(domainGroups.flatMap((group) => group.actions));
+/** Create follows the sidebar's domains; anything without one leads as Create. */
+const createGroups = [
+  {
+    label: "Create",
+    actions: createActions.filter((action) => !groupedActions.has(action)),
+  },
+  ...domainGroups,
+].filter((group) => group.actions.length > 0);
 
 export const QuickActionsMenu = ({ expanded }: { expanded?: boolean }) => {
   return (
@@ -52,27 +70,29 @@ export const QuickActionsMenu = ({ expanded }: { expanded?: boolean }) => {
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Create</DropdownMenuLabel>
-          {createActions.map((action) => (
-            <DropdownMenuItem
-              key={action.id}
-              render={<Link to={action.path} search={action.search} />}
-            >
-              {action.entity ? (
-                <>
-                  <EntityIcon entity={action.entity} />
-                  <span>New {entities[action.entity].label}</span>
-                </>
-              ) : (
-                <>
-                  <action.icon />
-                  <span>{action.name}</span>
-                </>
-              )}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
+        {createGroups.map((group) => (
+          <DropdownMenuGroup key={group.label}>
+            <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+            {group.actions.map((action) => (
+              <DropdownMenuItem
+                key={action.id}
+                render={<Link to={action.path} search={action.search} />}
+              >
+                {action.entity ? (
+                  <>
+                    <EntityIcon entity={action.entity} />
+                    <span>New {entities[action.entity].label}</span>
+                  </>
+                ) : (
+                  <>
+                    <action.icon />
+                    <span>{action.name}</span>
+                  </>
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuGroup>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
