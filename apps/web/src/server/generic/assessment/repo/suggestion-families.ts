@@ -737,6 +737,7 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         entityGraphRootSchema
           .array()
           .parse(sources.slice(start, start + READ_BATCH)),
+        keys.map((key) => key.assessmentId),
       );
       for (const proposal of groups.flat()) {
         const key = byId.get(proposal.review.assessmentId);

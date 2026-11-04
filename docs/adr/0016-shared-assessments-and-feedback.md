@@ -135,6 +135,11 @@ retain that SQL stage. Count-only automatic reads omit ordering-only correction
 lookups. Existing identity/family/status and Feedback assessment indexes serve
 these reads; no second eligibility cache is introduced.
 
+Scoped recommendation hydration retains the selected connection edges and every
+competing proposal on those edges, rather than hydrating unrelated connections
+on the same sources. The existing freshness and cross-family deduplication still
+decide visibility; selecting only requested review IDs would change that result.
+
 Connection endpoints use separate source and target branches with partial
 expression indexes on the immutable candidate references. Literal JSON paths and
 scope predicates preserve index eligibility under generic plans. Current primary

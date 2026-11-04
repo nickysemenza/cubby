@@ -38,6 +38,7 @@ import {
   prepareEntityConnectionEvidence,
   publishPreparedEntityConnections,
   readEntityConnections,
+  readEntityConnectionsBatch,
   applyEntityConnection,
 } from "./entity-connections";
 import { assertConnectionFieldFresh } from "./field-connections";
@@ -125,6 +126,16 @@ describe("stored connection evidence", () => {
         (entry) => entry.review.assessmentId,
       ),
     ).toEqual([last?.review.assessmentId]);
+    // Selecting an older review still loads the edge's current competitor;
+    // narrowing to the old ID alone would change the reader's winner.
+    const bounded = await readEntityConnectionsBatch(
+      ctx.db,
+      [candidate.source],
+      [proposal.review.assessmentId],
+    );
+    expect(bounded[0]?.map((entry) => entry.review.assessmentId)).toEqual([
+      last?.review.assessmentId,
+    ]);
   });
 
   // Stored basis snapshots can dwarf the candidate. Transferring them before
