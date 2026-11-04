@@ -45,6 +45,7 @@ export function DerivedBacklogStatus({
   return (
     <Link
       to="/activity"
+      search={{ tab: "now" }}
       hash="derived-values"
       aria-label={compact ? label : undefined}
       className="grid w-full min-w-0 gap-1 text-xs text-muted-foreground hover:text-foreground"
