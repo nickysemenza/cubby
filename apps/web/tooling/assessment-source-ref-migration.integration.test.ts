@@ -109,5 +109,32 @@ it("indexes long retained source references without changing evidence or unfinis
     ).toEqual([
       { waitCause: null, waitStartedAt: null, attempts: 0, lastError: null },
     ]);
+    await client.query(
+      `SELECT derived_mark('product.searchDocument@6', ARRAY[$1::uuid], 'Synthetic retained image dependency')`,
+      [id],
+    );
+    await client.query(
+      `UPDATE "WorkItem" SET attempts=2,"lastError"='Synthetic retained failure',
+       "readyAt"=now()+interval '1 day',"waitCause"='search_coverage',"waitStartedAt"=now()
+       WHERE target='product.searchDocument@6' AND ref=$1`,
+      [id],
+    );
+    const beforeCapture = await retained();
+    const durableWork = async () => ({
+      work: (
+        await client.query(
+          `SELECT to_jsonb(w) value FROM "WorkItem" w ORDER BY target,ref`,
+        )
+      ).rows,
+      jobs: (
+        await client.query(`SELECT to_jsonb(j) value FROM "Job" j ORDER BY id`)
+      ).rows,
+    });
+    const beforeDurableWork = await durableWork();
+    await migrateDatabase(db, {
+      through: "0070_image_description_capture_scope",
+    });
+    expect(await retained()).toEqual(beforeCapture);
+    expect(await durableWork()).toEqual(beforeDurableWork);
   });
 }, 90000);

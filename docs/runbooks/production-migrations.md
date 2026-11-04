@@ -150,6 +150,23 @@ waiting rather than as an active failure even when an earlier error is retained.
 Fixed candidate-budget failures remain bounded failures. Historical failed
 evaluations are not reopened by this migration.
 
+## Image-description capture scope (0070)
+
+`0070_image_description_capture_scope` replaces only the Feedback and
+AssessmentState capture functions. Image search depends on image-description
+State and automatic system correction-history receipts; unrelated writes no
+longer enqueue those image-description dependencies. OLD and NEW row filters
+retain capture when a relevant row enters or leaves that scope.
+
+Apply through the normal serialized migration-before-deploy workflow. Function
+replacement can briefly block writers. Input positions, paths, target names,
+and stored rows do not change. Retain existing fanout and direct tickets,
+including backoff and explicit waits, and let the existing drain settle them.
+Do not delete or re-ticket the backlog. After deployment, verify the two
+function definitions, continued image-correction search refreshes, retained
+unfinished work, and convergence of the pre-existing backlog separately from
+new-mark production.
+
 ## Source-order fanout capture
 
 Migration `0061_source_order_purchase_fanout` stops new
