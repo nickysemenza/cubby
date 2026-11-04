@@ -124,7 +124,7 @@ export function BulkActionBar<TData extends RowData>({
           ? "Actions load complete records and check the whole selection before running."
           : undefined
       }
-      className="fixed bottom-[calc(var(--app-chrome-bottom,0px)+1rem)] left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-nowrap rounded-lg bg-foreground py-1.5 pr-2 pl-3 whitespace-nowrap text-background"
+      className="fixed bottom-[calc(var(--app-chrome-bottom,0px)+1rem)] left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-nowrap rounded-lg bg-foreground py-1.5 pr-2 pl-3 whitespace-nowrap text-background transition-[opacity,translate] duration-(--brand-motion-standard) ease-cozy starting:translate-y-2 starting:opacity-0"
     >
       <span className="shrink-0 text-sm tabular-nums">
         {selectedCount} selected

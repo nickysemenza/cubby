@@ -22,6 +22,7 @@ import {
 import { useViewCounts } from "~/entity/table/list-query-context";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
+import { useSlidingIndicator } from "~/ui/hooks/use-sliding-indicator";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -203,13 +204,17 @@ export function ViewTabs({
   label?: string;
   onRequestCounts?: () => void;
 }) {
+  const { containerRef, indicatorRef } = useSlidingIndicator<HTMLElement>(
+    tabs.find((tab) => tab.active)?.key,
+  );
   return (
     <nav
       aria-label={label}
       onPointerEnter={onRequestCounts}
       onPointerDown={onRequestCounts}
       onFocusCapture={onRequestCounts}
-      className="flex min-w-0 [scrollbar-width:none] items-end gap-0.5 overflow-x-auto overscroll-x-contain"
+      ref={containerRef}
+      className="relative flex min-w-0 [scrollbar-width:none] items-end gap-0.5 overflow-x-auto overscroll-x-contain"
     >
       {tabs.map((tab) => (
         <button
@@ -221,11 +226,12 @@ export function ViewTabs({
               ? `${tab.description ? `${tab.description}. ` : ""}Count incomplete: ${countLabel(tab.count ?? 0, "known match")}; ${countLabel(tab.unresolvedCount ?? 0, "unresolved record")}.`
               : tab.description
           }
+          data-indicator-active={tab.active ? "" : undefined}
           onClick={tab.onSelect}
           className={cn(
             "-mb-px flex h-8 shrink-0 items-center gap-1.5 border-b-2 px-2.5 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring",
             tab.active
-              ? "border-foreground text-foreground"
+              ? "border-transparent text-foreground"
               : "border-transparent text-muted-foreground hover:text-foreground",
           )}
         >
@@ -252,6 +258,11 @@ export function ViewTabs({
           )}
         </button>
       ))}
+      <span
+        ref={indicatorRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 left-0 h-0.5 w-(--indicator-w) translate-x-(--indicator-x) bg-foreground data-armed:transition-[translate,width] data-armed:duration-(--brand-motion-standard) data-armed:ease-move"
+      />
     </nav>
   );
 }

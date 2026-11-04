@@ -1601,6 +1601,8 @@ const buildMetadataSchemas = () => {
       kind: z.literal("board"),
       id: sectionId,
       label: nonEmptyString(),
+      /** Web-only board: generated Swift omits it. */
+      webOnly: z.boolean().optional(),
       groupBy: nonEmptyString(),
       groupings: z.array(nonEmptyString()).min(1),
       cardFields: z.array(fieldKey),

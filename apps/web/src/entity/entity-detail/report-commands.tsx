@@ -232,7 +232,7 @@ export function CommandButton({
       <Button
         type="button"
         size="sm"
-        variant={command.prominent ? "default" : quiet ? "ghost" : "outline"}
+        variant={quiet ? "ghost" : command.prominent ? "default" : "outline"}
         className={quiet ? "h-6" : undefined}
         disabled={commands.pending || !complete || !validBody}
         onClick={() => {

@@ -486,7 +486,7 @@ export function SidePanelLayout({
       >
         <div className="min-w-0">{children}</div>
         {panel ? (
-          <div className="sticky top-0 h-[min(100dvh,100%)] max-h-dvh min-w-0 self-start border-l border-border">
+          <div className="sticky top-0 h-[min(100dvh,100%)] max-h-dvh min-w-0 self-start border-l border-border transition-[opacity,translate] duration-(--brand-motion-standard) ease-cozy starting:translate-x-4 starting:opacity-0">
             {panel}
           </div>
         ) : null}

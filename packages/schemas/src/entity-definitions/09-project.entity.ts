@@ -455,6 +455,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "board",
           id: "board",
           label: "Board",
+          webOnly: true,
           groupBy: "status",
           groupings: ["status"],
           cardFields: ["dates", "taskProgress"],

@@ -110,7 +110,7 @@ export function SectionHeader({
               <CaretRightIcon
                 aria-hidden
                 className={cn(
-                  "size-3 shrink-0 text-muted-foreground",
+                  "size-3 shrink-0 text-muted-foreground transition-transform duration-(--brand-motion-fast) ease-cozy",
                   !collapsed && "rotate-90",
                 )}
               />

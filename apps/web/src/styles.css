@@ -569,6 +569,10 @@
     background: var(--table-row-surface);
     box-shadow: none;
   }
+  /* The keyboard outruns motion: J/K must never retarget a color transition. */
+  .table-record-row {
+    transition: none;
+  }
   .table-record-row[data-current="true"] {
     --table-row-surface: var(--row-current);
     background: var(--table-row-surface);

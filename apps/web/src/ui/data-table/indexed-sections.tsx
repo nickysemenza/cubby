@@ -15,6 +15,7 @@ import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
+import { useSlidingIndicator } from "~/ui/hooks/use-sliding-indicator";
 import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -283,8 +284,7 @@ function hashForDetailTarget(id: string, groups: IndexedSectionGroup[]) {
     : alias;
 }
 
-const currentDetailAnchorClass =
-  "bg-row-current font-medium text-foreground-strong hover:bg-row-current";
+const currentDetailAnchorClass = "font-medium text-foreground-strong";
 
 /** A list section shows its row count, 0 included; an empty non-list section
  * is marked only for assistive tech, since its muted title already says so. */
@@ -326,7 +326,8 @@ function SectionIndex({
   onSelect: (id: string) => void;
   onFocusTarget: (id: string) => void;
 }) {
-  const navigationRef = useRef<HTMLElement>(null);
+  const { containerRef: navigationRef, indicatorRef } =
+    useSlidingIndicator<HTMLElement>(activeId);
   const menuTargetRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const nav = navigationRef.current;
@@ -340,7 +341,7 @@ function SectionIndex({
     if (item.top < viewport.top) nav.scrollTop += item.top - viewport.top;
     else if (item.bottom > viewport.bottom)
       nav.scrollTop += item.bottom - viewport.bottom;
-  }, [activeId]);
+  }, [activeId, navigationRef]);
   const selectMenuTarget = (id: string) => {
     menuTargetRef.current = document.getElementById(id);
     onSelect(id);
@@ -363,13 +364,19 @@ function SectionIndex({
       <nav
         ref={navigationRef}
         aria-label="Section index"
-        className="hidden max-h-[calc(100dvh-var(--app-chrome-top)-var(--record-title-height,0px)-1rem)] overflow-y-auto overscroll-contain py-1 @min-[800px]/record:block"
+        className="relative hidden max-h-[calc(100dvh-var(--app-chrome-top)-var(--record-title-height,0px)-1rem)] overflow-y-auto overscroll-contain py-1 @min-[800px]/record:block"
       >
+        <span
+          ref={indicatorRef}
+          aria-hidden="true"
+          className="pointer-events-none absolute top-0 left-0 h-(--indicator-h) w-(--indicator-w) translate-x-(--indicator-x) translate-y-(--indicator-y) rounded-lg bg-row-current data-armed:transition-[translate,width,height] data-armed:duration-(--brand-motion-standard) data-armed:ease-move"
+        />
         {groups.map((group) => (
           <div key={group.id} className="mb-1.5 last:mb-0">
             <a
               href={`#${hashForDetailTarget(group.id, groups)}`}
               {...entryState(group.id)}
+              data-indicator-active={activeId === group.id ? "" : undefined}
               className={cn(
                 "relative flex h-(--nav-row-height) items-center rounded-lg px-2 text-xs font-semibold text-foreground-strong hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
                 activeId === group.id && currentDetailAnchorClass,
@@ -392,6 +399,9 @@ function SectionIndex({
                       <a
                         href={`#${section.id}`}
                         {...entryState(section.id)}
+                        data-indicator-active={
+                          activeId === section.id ? "" : undefined
+                        }
                         aria-label={section.title}
                         aria-describedby={describedBy(section.id)}
                         title={section.title}
@@ -657,6 +667,15 @@ export function IndexedSections({
       }
       target.scrollIntoView({ behavior: "instant", block: "start" });
       target.focus({ preventScroll: true });
+      // The instant jump needs a landmark: its destination fades from the info tint.
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+        target.animate(
+          [
+            { backgroundColor: "var(--brand-info-surface)" },
+            { backgroundColor: "transparent" },
+          ],
+          { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+        );
       const positions = new Map<Element, number>();
       for (
         let ancestor: HTMLElement | null = target;

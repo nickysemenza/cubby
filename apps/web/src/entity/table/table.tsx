@@ -1103,6 +1103,11 @@ function DesktopTableView<TItem extends RowData>({
               <TableBody
                 inert={isTransitioning ? true : undefined}
                 aria-disabled={isTransitioning || undefined}
+                className={cn(
+                  "transition-opacity duration-(--brand-motion-fast) ease-cozy",
+                  // Delayed so a fast sort or filter never flickers.
+                  isTransitioning && "opacity-60 delay-120",
+                )}
               >
                 {tableBody}
               </TableBody>
