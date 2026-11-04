@@ -4,7 +4,8 @@ import { type RefObject, useEffect, useEffectEvent, useState } from "react";
 import { isLockedColumn, MIN_COLUMN_WIDTH } from "./column-layout";
 import type { CubbyTable } from "./table-features";
 
-const SAMPLE_ROWS = 12;
+// Roughly a screen of 24px rows: a value below a shorter sample clipped on sight.
+const SAMPLE_ROWS = 36;
 const HEADER_CAP = 160;
 const INHERITED_TYPOGRAPHY = [
   "font-family",
@@ -110,7 +111,7 @@ export function renderedColumnFitScope<TData extends RowData>(
 
 /**
  * In-session content widths are separate from deliberate TanStack resizing.
- * One inert, offscreen batch samples headers and at most twelve rendered rows;
+ * One inert, offscreen batch samples headers and at most a screen of rendered rows;
  * widths only grow within the current data/query scope, including enrichment.
  */
 export function useRenderedColumnWidths<TData extends RowData>(
@@ -158,6 +159,9 @@ export function useRenderedColumnWidths<TData extends RowData>(
           ...row.querySelectorAll<HTMLElement>("td[data-column-id]"),
         ]),
       ];
+      // A skeleton has only headers: fitting to them collapsed the identity to
+      // its label until the rows arrived, and the columns jumped on load.
+      if (rows.length === 0) return;
       const pending: Array<{ id: string; cell: HTMLElement }> = [];
       for (const cell of cells) {
         const id = cell.dataset.columnId;
@@ -178,6 +182,8 @@ export function useRenderedColumnWidths<TData extends RowData>(
       const host = document.createElement("div");
       host.className = sourceTable.className;
       host.setAttribute("aria-hidden", "true");
+      // Dense value styles key off the table; the clones must measure that form.
+      host.dataset.slot = "table";
       host.inert = true;
       host.style.cssText =
         "position:fixed;left:-100000px;top:0;width:max-content;visibility:hidden;pointer-events:none;";
@@ -256,5 +262,7 @@ export function useRenderedColumnWidths<TData extends RowData>(
     };
   }, [container, scope, enabled, columnsKey]);
 
-  return fit.scope === scope ? fit.widths : {};
+  // A new scope keeps the prior fit until its own first measure replaces it, so
+  // a transition holds its columns instead of snapping them to their defaults.
+  return fit.widths;
 }

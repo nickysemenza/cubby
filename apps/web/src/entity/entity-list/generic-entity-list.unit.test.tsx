@@ -97,6 +97,13 @@ async function renderListPage(
   return render(<div />, { wrapper: harness.routerWrapper });
 }
 
+/** A layout, group or sort control, behind the toolbar's Display popover. */
+async function displayControl(name: string | RegExp) {
+  if (!screen.queryByRole("button", { name }))
+    fireEvent.click(await screen.findByRole("button", { name: "Display" }));
+  return screen.findByRole("button", { name });
+}
+
 describe("listPage", () => {
   it("discloses incomplete counts and switches between known and unresolved records", async () => {
     const party = mock(ledgerPartyListItem, {
@@ -131,17 +138,15 @@ describe("listPage", () => {
       [],
       operation,
     );
-    expect(
-      await screen.findByText("Count incomplete · 1 unresolved"),
-    ).toBeVisible();
+    expect(await screen.findByText("1 unresolved")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Show unresolved" }));
     expect(await screen.findByText("Synthetic unresolved party")).toBeVisible();
-    expect(screen.getByText("Showing unresolved records")).toBeVisible();
+    expect(screen.getByText("Showing unresolved")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Show known matches" }));
     await waitFor(() =>
       expect(screen.queryByText("Synthetic unresolved party")).toBeNull(),
     );
-    expect(screen.getByText("Count incomplete · 1 unresolved")).toBeVisible();
+    expect(screen.getByText("1 unresolved")).toBeVisible();
   });
 
   it("renders the manifest's header links, universal List/Cards/Compact choices, and Group by", async () => {
@@ -152,7 +157,7 @@ describe("listPage", () => {
         link.path,
       );
     }
-    fireEvent.click(screen.getByRole("button", { name: /Recipes view:/ }));
+    fireEvent.click(await displayControl(/Recipes view:/));
     const switcher = await screen.findByRole("menu");
     expect(
       within(switcher)
@@ -160,8 +165,8 @@ describe("listPage", () => {
         .map((option) => option.getAttribute("aria-label")),
     ).toEqual(["List view", "Cards view", "Compact view"]);
     fireEvent.keyDown(switcher, { key: "Escape" });
-    // Group by is its own menu beside the view menu.
-    fireEvent.click(screen.getByRole("button", { name: "Group by" }));
+    // Group by is its own row beside the view menu.
+    fireEvent.click(await displayControl("Group by"));
     const grouping = await screen.findByRole("menu");
     expect(
       within(grouping)
@@ -180,14 +185,17 @@ describe("listPage", () => {
     expect(tags).not.toHaveAttribute("aria-disabled", "true");
     fireEvent.click(tags);
     expect(
-      await screen.findByRole("button", { name: /Grouped by Tags/ }),
-    ).toBeVisible();
+      await screen.findByRole("button", {
+        name: /Grouped by Tags/,
+        hidden: true,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("offers every declared view and marks the `?view=` one selected", async () => {
     // The built-in timeline view: a slot view would mount its own route API.
     await renderListPage("task", "/tasks?view=timeline", []);
-    fireEvent.click(screen.getByRole("button", { name: /Tasks view:/ }));
+    fireEvent.click(await displayControl(/Tasks view:/));
     const switcher = await screen.findByRole("menu");
     const options = within(switcher).getAllByRole("menuitem");
     expect(options.map((option) => option.getAttribute("aria-label"))).toEqual(
@@ -243,17 +251,13 @@ describe("listPage", () => {
     expect(rowSelection).toBeChecked();
     expect(screen.getByText("1 selected")).toBeVisible();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /Ledger parties view:/i }),
-    );
+    fireEvent.click(await displayControl(/Ledger parties view:/i));
     fireEvent.click(
       await screen.findByRole("menuitem", { name: "Cards view" }),
     );
     expect(await screen.findByTestId("entity-card-grid")).toBeVisible();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /Ledger parties view:/i }),
-    );
+    fireEvent.click(await displayControl(/Ledger parties view:/i));
     fireEvent.click(await screen.findByRole("menuitem", { name: "List view" }));
     const restoredRowSelection = await screen.findByRole("checkbox", {
       name: "Select row",

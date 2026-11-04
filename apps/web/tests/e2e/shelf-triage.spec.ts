@@ -17,6 +17,7 @@ import {
   gotoDetailActions,
   selectComboboxItem,
   uniqueName,
+  clickBulkAction,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
@@ -130,10 +131,7 @@ test("bulk stocking previews each selected product at the chosen location", asyn
       .getByRole("checkbox", { name: "Select row" })
       .click();
   }
-  await page
-    .locator("[data-bulk-action-bar]")
-    .getByRole("button", { name: "Add to inventory", exact: true })
-    .click();
+  await clickBulkAction(page, "Add to inventory");
   const dialog = page.getByRole("dialog", {
     name: "Add to inventory",
     exact: true,

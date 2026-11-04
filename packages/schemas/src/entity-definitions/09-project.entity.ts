@@ -445,6 +445,16 @@ export const { definition, readSchemas } = defineEntityModel({
       views: [
         "table",
         {
+          kind: "board",
+          id: "board",
+          label: "Board",
+          groupBy: "status",
+          groupings: ["status"],
+          cardFields: ["dates", "taskProgress"],
+          pageSize: 50,
+          sort: [{ orderBy: "updatedAt", direction: "desc" }],
+        },
+        {
           kind: "slot",
           id: "calendar",
           label: "Calendar",
@@ -1250,7 +1260,7 @@ Rules:
         "updatedAt",
       ],
     },
-    grouping: ["completionYear"],
+    grouping: ["completionYear", "status"],
     intents: {
       fields: {
         capture: [

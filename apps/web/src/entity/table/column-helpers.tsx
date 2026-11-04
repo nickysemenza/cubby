@@ -562,7 +562,7 @@ export function createImageColumn<T extends object>(
     enableCellSelection: false,
     // h-px trick: setting height:1px on td makes h-full work on children
     // overflow-hidden prevents image from expanding the row. The cover fills
-    // the 32px row; layout normalization adds any explanation rail beside it.
+    // the row; layout normalization adds any explanation rail beside it.
     meta: attachCubbyColumnMeta<T>({
       provenance: options.provenance,
       explanation: options.explanation,
@@ -810,6 +810,23 @@ export function createActionsColumnBase<T extends RowData>(
   getLinkProps: RowLinkResolver<T>,
   extraActions?: (row: T) => ReactNode,
 ) {
+  // One roster: the row's actions menu and its desktop right-click menu.
+  const rowMenu = (row: T) => {
+    const linkProps = getLinkProps(row);
+    return (
+      <>
+        {linkProps && (
+          <DropdownMenuItem
+            render={<Link to={linkProps.to} params={linkProps.params} />}
+          >
+            <EyeIcon />
+            View details
+          </DropdownMenuItem>
+        )}
+        {extraActions?.(row)}
+      </>
+    );
+  };
   return columnHelper.display({
     id: "actions",
     header: "",
@@ -819,17 +836,17 @@ export function createActionsColumnBase<T extends RowData>(
     size: 40,
     minSize: 40,
     maxSize: 72,
-    meta: {
+    meta: attachCubbyColumnMeta<T>({
       entityColumnRole: "action",
       mobile: { slot: "actions", priority: 100 },
-    },
+      rowMenu,
+    }),
     cell: (info) => {
       const row = info.row.original;
-      const linkProps = getLinkProps(row);
       return (
         <DropdownMenu>
           <DropdownMenuTrigger
-            // icon-sm (28px) fits inside the 32px row; anything larger
+            // icon-sm fits inside the row at every density; anything larger
             // stretches every row and the virtualizer's fixed row height.
             render={<Button variant="ghost" size="icon-sm" />}
             onClick={(e) => e.stopPropagation()}
@@ -843,15 +860,7 @@ export function createActionsColumnBase<T extends RowData>(
               falls through to the row's onClick and navigates away instead
               of running the action. */}
           <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-            {linkProps && (
-              <DropdownMenuItem
-                render={<Link to={linkProps.to} params={linkProps.params} />}
-              >
-                <EyeIcon />
-                View details
-              </DropdownMenuItem>
-            )}
-            {extraActions?.(row)}
+            {rowMenu(row)}
           </DropdownMenuContent>
         </DropdownMenu>
       );

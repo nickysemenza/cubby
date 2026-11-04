@@ -5,17 +5,8 @@ import { shortcodeEntities } from "@cubby/schemas/entity-roster";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
-import {
-  createContext,
-  lazy,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -62,7 +53,7 @@ import {
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { usePageCount } from "~/entity/page/page";
-import { FindSuggestionsAction } from "~/entity/suggestions/find-suggestions-dialog";
+import { useFindSuggestionsAction } from "~/entity/suggestions/find-suggestions-dialog";
 import { declaredColumnExplanation } from "~/entity/table/column-explanation";
 import {
   createImageColumn,
@@ -79,6 +70,7 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -87,12 +79,18 @@ import { EntityShelf } from "./entity-shelf";
 import { listGroupBy } from "./list-grouping";
 import { listNested, nestSearchValue } from "./list-nesting";
 export { listGroupBy } from "./list-grouping";
+import { ListDisplaySections } from "./list-display-sections";
 import {
-  type ListNavigate,
-  type ListSearch,
-  listSearchSchema,
-  type ListSlotProps,
-} from "./list-slot-types";
+  EntityListCardDensityProvider,
+  useEntityListCardDensity,
+  useListSearch,
+} from "./list-search";
+export {
+  EntityListCardDensityProvider,
+  useEntityListCardDensity,
+  useListSearch,
+};
+import type { ListSearch } from "./list-slot-types";
 import { listSlotFor } from "./list-slots";
 import { resolveListView } from "./resolve-list-view";
 const EntityBoard = lazy(() =>
@@ -106,67 +104,6 @@ const EntityTimeline = lazy(() =>
     default: module.EntityTimeline,
   })),
 );
-
-type CardDensity = "cards" | "compact";
-type CardDensityState = {
-  density: CardDensity;
-  setDensity: (density: CardDensity) => void;
-};
-const CardDensityContext = createContext<CardDensityState | null>(null);
-
-/**
- * Compactness belongs to the mounted list screen, not the URL or persistence.
- * The provider is shared with the route chrome so its segmented control and
- * the card renderer change together.
- */
-export function EntityListCardDensityProvider({
-  children,
-  value,
-}: {
-  children: ReactNode;
-  /** Carries the same screen state into chrome rendered outside the route. */
-  value?: CardDensityState;
-}) {
-  const [density, setDensity] = useState<CardDensity>("cards");
-  return (
-    <CardDensityContext value={value ?? { density, setDensity }}>
-      {children}
-    </CardDensityContext>
-  );
-}
-
-export function useEntityListCardDensity() {
-  const context = useContext(CardDensityContext);
-  if (!context)
-    throw new Error("EntityListCardDensityProvider is required for card lists");
-  return context;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Search + view                                                               */
-/* -------------------------------------------------------------------------- */
-
-/**
- * The route's search as a bag plus a merge-navigate over it. Route-agnostic
- * on purpose: this component renders on every generated index route, each
- * with its own generated schema, so a typed `useNavigate` can't fit them all.
- */
-export function useListSearch(): ListSlotProps {
-  const search = listSearchSchema.parse(useSearch({ strict: false }));
-  const routeNavigate = useNavigate();
-  const navigate = useCallback<ListNavigate>(
-    (patch, options) => {
-      // SAFETY: route-specific search keys are intentionally erased here;
-      // every generated index route validates the keys a view writes.
-      routeNavigate({
-        search: (previous: ListSearch) => ({ ...previous, ...patch }),
-        replace: options?.replace,
-      } as never);
-    },
-    [routeNavigate],
-  );
-  return { search, navigate };
-}
 
 /* -------------------------------------------------------------------------- */
 /* Overrides                                                                   */
@@ -279,9 +216,11 @@ function useListInitialColumnVisibility(
   return useMemo(
     () => ({
       ...entityListHiddenColumns(queryClient, entity),
+      // Audit dates stay off the default roster; `useEntityList` brings one back
+      // while it is the sort.
+      createdAt: false,
+      updatedAt: false,
       ...overrides,
-      createdAt: true,
-      updatedAt: true,
     }),
     [entity, overrides, queryClient],
   );
@@ -644,86 +583,53 @@ function ServerListBody({
       list.workbench.table.resetRowSelection();
   }, [list.workbench.table, renderedView]);
   const sweepEntity = z.enum(shortcodeEntities).safeParse(entity);
-  const sweepAction = sweepEntity.success ? (
-    <FindSuggestionsAction
-      inline
-      entity={sweepEntity.data}
-      filters={list.currentFilters}
-    />
-  ) : null;
+  const sweep = useFindSuggestionsAction({
+    entity: sweepEntity.success ? sweepEntity.data : null,
+    filters: list.currentFilters,
+  });
   const { contextualStatus } = workbenchProps;
+  const isMobile = useIsMobile();
+  const [statusTarget, setStatusTarget] = useState<HTMLDivElement | null>(null);
+  const footerContent = (
+    <ListFooterContent
+      list={list}
+      totals={entityMetadata(queryClient, entity).summary.list.totals}
+      contextualStatus={contextualStatus}
+      setStatusTarget={setStatusTarget}
+      totalsOverride={parts.footerTotals?.(list)}
+    />
+  );
+  const footerRow = (
+    <div
+      data-list-footer=""
+      className="sticky bottom-0 z-10 flex min-h-(--table-row-height) flex-wrap items-center gap-x-3 border-t border-[var(--border)] bg-background px-2 text-xs text-muted-foreground tabular-nums md:px-4"
+    >
+      {footerContent}
+    </div>
+  );
 
   const body = (
     <>
       {parts.above?.(list)}
       <div className="min-w-0">
-        {/* One strip directly above the records: the active-filter chips
-            (portaled in by the table's query tools), then totals and the
-            suggestion sweep/review status. */}
+        {/* Active-filter chips, portaled in by the table's query tools; the row
+            collapses when no filter is active. */}
         <div
-          data-list-status-strip=""
-          className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-border px-2 py-2 text-xs md:px-4"
-        >
-          <div
-            ref={setChipsTarget}
-            data-workbench-filters=""
-            className="flex min-w-0 flex-1 empty:hidden"
-          />
-          <div
-            data-list-status-group=""
-            className="ml-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"
-          >
-            {(list.resultMembership === "unresolved" ||
-              list.unresolvedCount === undefined ||
-              list.unresolvedCount > 0) && (
-              <div className="flex flex-wrap items-center gap-1">
-                <output className="text-muted-foreground">
-                  {list.resultMembership === "unresolved"
-                    ? "Showing unresolved records"
-                    : list.unresolvedCount === undefined
-                      ? "Unresolved count deferred"
-                      : `Count incomplete · ${formatCount(list.unresolvedCount)} unresolved`}
-                </output>
-                <Button
-                  variant="link"
-                  size="xs"
-                  onClick={() =>
-                    list.setResultMembership(
-                      list.resultMembership === "unresolved"
-                        ? "known"
-                        : "unresolved",
-                    )
-                  }
-                >
-                  {list.resultMembership === "unresolved"
-                    ? "Show known matches"
-                    : "Show unresolved"}
-                </Button>
-              </div>
-            )}
-            <ListTotalSummary
-              totals={entityMetadata(queryClient, entity).summary.list.totals}
-              labels={list.totalLabels}
-              scopeLabel={
-                list.resultMembership === "unresolved"
-                  ? "Unresolved records"
-                  : list.unresolvedCount === undefined ||
-                      list.unresolvedCount > 0
-                    ? "Known matches"
-                    : undefined
-              }
-            />
-            {sweepAction}
-            <div data-workbench-status className="min-w-0" />
-            {contextualStatus}
-          </div>
-        </div>
+          ref={setChipsTarget}
+          data-workbench-filters=""
+          className="flex min-w-0 border-b border-border px-2 py-1 empty:hidden md:px-4"
+        />
+        {/* A phone has no pane footer: the same line sits above its cards. */}
+        {isMobile && renderedView === "table" ? footerRow : null}
         <Stack gap="sm">
           {renderedView !== "table" && (
             <DataTableToolbar
               table={list.workbench.table}
               entity={entity}
               portalWorkbenchUtilities
+              additionalContent={
+                renderedView === "shelf" ? inspectorToggle : undefined
+              }
             />
           )}
           {renderedView === "table" && (
@@ -738,11 +644,11 @@ function ServerListBody({
               inspectorToggle={inspectorToggle}
               {...workbenchProps}
               contextualStatus={null}
+              footerContent={isMobile ? undefined : footerContent}
             />
           )}
           {renderedView === "shelf" && (
             <>
-              {inspectorToggle}
               <div
                 className={
                   dockedInspector
@@ -824,8 +730,10 @@ function ServerListBody({
               context={context}
             />
           )}
+          {renderedView !== "table" ? footerRow : null}
         </Stack>
       </div>
+      {sweep.dialog}
       <PreviewSheet />
       {renderedView !== "table" && list.workbench.deleteDialog}
       {parts.below?.(list)}
@@ -837,6 +745,17 @@ function ServerListBody({
         filters: list.currentFilters,
         matching: list.totalCount,
         chipsTarget,
+        statusTarget,
+        declaresTotals:
+          Boolean(parts.footerTotals) ||
+          entityMetadata(queryClient, entity).summary.list.totals.length > 0,
+        displaySections:
+          resolveListView(queryClient, entity, context.search).views.length >
+            1 ||
+          entityMetadata(queryClient, entity).listFields.grouping.length > 0 ? (
+            <ListDisplaySections entity={entity} />
+          ) : undefined,
+        actionsMenuItems: sweep.menuItem,
       }
     : null;
   const provided = listQuery ? (
@@ -851,6 +770,83 @@ function ServerListBody({
             data: list.data,
           })
         : provided}
+    </>
+  );
+}
+
+/**
+ * What a list adds to the footer line: its declared totals, its unresolved
+ * membership, and domain and suggestion status. Membership follows the server: a
+ * counted page reports a number only under a result filter, so an absent count
+ * means no record here is unresolved and nothing is said.
+ */
+function ListFooterContent({
+  list,
+  totals,
+  contextualStatus,
+  setStatusTarget,
+  totalsOverride,
+}: {
+  list: UseEntityListReturn<BaseListRow>;
+  totals: Parameters<typeof ListTotalSummary>[0]["totals"];
+  contextualStatus: ReactNode;
+  setStatusTarget: (element: HTMLDivElement | null) => void;
+  totalsOverride?: ReactNode;
+}) {
+  const showingUnresolved = list.resultMembership === "unresolved";
+  const unresolved = list.unresolvedCount ?? 0;
+  // A query with no answer yet keeps the last labels it had, dimmed.
+  const labelsRef = useRef(list.totalLabels);
+  if (list.totalLabels) labelsRef.current = list.totalLabels;
+  const pending =
+    list.workbench.infiniteScroll.isTransitioning || list.workbench.isLoading;
+  return (
+    <>
+      <div
+        data-table-pending={pending ? "" : undefined}
+        className="flex min-w-0 items-center"
+      >
+        {totalsOverride ?? (
+          <ListTotalSummary
+            totals={totals}
+            labels={labelsRef.current}
+            failed={list.workbench.error !== null && !list.totalLabels}
+            scopeLabel={
+              showingUnresolved
+                ? "Unresolved records"
+                : unresolved > 0
+                  ? "Known matches"
+                  : undefined
+            }
+          />
+        )}
+      </div>
+      {(showingUnresolved || unresolved > 0) && (
+        <div className="flex shrink-0 items-center gap-1">
+          <output>
+            {showingUnresolved
+              ? "Showing unresolved"
+              : `${formatCount(unresolved)} unresolved`}
+          </output>
+          <Button
+            variant="link"
+            size="xs"
+            onClick={() =>
+              list.setResultMembership(
+                showingUnresolved ? "known" : "unresolved",
+              )
+            }
+          >
+            {showingUnresolved ? "Show known matches" : "Show unresolved"}
+          </Button>
+        </div>
+      )}
+      {contextualStatus}
+      <div
+        ref={setStatusTarget}
+        data-workbench-status=""
+        className="min-w-0 empty:hidden"
+      />
     </>
   );
 }

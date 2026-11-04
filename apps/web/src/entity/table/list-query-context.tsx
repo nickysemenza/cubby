@@ -14,14 +14,22 @@ import type { FilterBarField } from "~/ui/data-table/filter-bar-core";
 /**
  * The page list's server query, published by `GenericEntityList` to its
  * workbench: the filters the list request sends (facets count under them),
- * the filtered total, and the strip above the records the active-filter
- * chips render into.
+ * the filtered total, the row above the records the active-filter chips render
+ * into, the footer slot suggestion status renders into, and what the list adds
+ * to the toolbar's Display and Actions menus.
  */
 export interface ListQueryState {
   entity: ListEntity;
   filters: object;
   matching: number | undefined;
   chipsTarget: HTMLElement | null;
+  statusTarget?: HTMLElement | null;
+  /** The list prints its own totals in the footer. */
+  declaresTotals?: boolean;
+  /** Layout and grouping controls for the Display popover. */
+  displaySections?: ReactNode;
+  /** List-level commands for the `Actions` menu (Find suggestions). */
+  actionsMenuItems?: ReactNode;
 }
 
 const ListQueryContext = createContext<ListQueryState | null>(null);

@@ -594,19 +594,6 @@
     font-size: 0.75rem;
   }
 
-  /* Pinned boundaries are functional depth cues, not table dividers: a single
-     neutral hairline plus a soft edge shadow keeps the parked columns readable
-     without making them look like a second table. */
-  .table-pinned-boundary-start {
-    border-inline-end: 1px solid var(--brand-hairline);
-    box-shadow: 4px 0 8px -8px rgb(23 26 33 / 0.32);
-  }
-
-  .table-pinned-boundary-end {
-    border-inline-start: 1px solid var(--brand-hairline);
-    box-shadow: -4px 0 8px -8px rgb(23 26 33 / 0.32);
-  }
-
   /* Active nav gets a crisp cobalt route line. */
   .nav-link-animated {
     @apply relative;
@@ -660,21 +647,6 @@
 .data-table-query-tier:has([data-bulk-action-bar]) [data-query-rest],
 [data-workbench-band]:has([data-bulk-action-bar])
   [data-workbench-table-actions] {
-  display: none;
-}
-
-/* A list's filter chips, totals, Sweep, contextual and suggestion status
-   may each render nothing (Recipes declares no totals or decision fields);
-   an empty status strip must not leave a bordered blank band. Unlayered so
-   it overrides the strip's `flex` utility. */
-[data-list-status-strip]:not(
-  :has(
-    > :not([data-list-status-group], [data-workbench-filters]),
-    [data-workbench-filters] > *,
-    [data-list-status-group] > :not([data-workbench-status]),
-    [data-workbench-status] > *
-  )
-) {
   display: none;
 }
 

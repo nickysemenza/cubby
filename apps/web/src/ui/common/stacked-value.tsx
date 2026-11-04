@@ -4,9 +4,11 @@ import { createContext, useContext, type ReactNode } from "react";
 import { cn } from "~/lib/utils";
 
 /**
- * Set inside a desktop table cell, where values take their dense form: dates,
- * timestamps stack in two lines and a quality score drops
- * its "/100". Identity cells always retain a single name line. Phone cards, ledgers and prose keep their one-line forms;
+ * Set inside a desktop table cell, where values take their dense form: dates
+ * take their compact parts and a quality score drops its "/100". `table.css`
+ * lays a stacked value on one line at 24px rows; 32px surfaces (coarse pointers,
+ * hosted native workspaces) keep its two lines. Identity cells always retain a
+ * single name line. Phone cards, ledgers and prose keep their one-line forms;
  * another surface opts in with the component's `stacked` prop. `linksTo` is
  * the entity whose icon the column header already paints.
  */
@@ -25,13 +27,14 @@ export function useDenseCell(stacked?: boolean) {
   return cell?.identity ? false : (stacked ?? cell !== null);
 }
 
-/** A stacked value's muted second line: 12px on 13px. */
+/** A stacked value's muted second line. */
 const STACKED_SECONDARY_CLASS =
   "block truncate text-xs leading-[13px] font-normal text-muted-foreground no-underline";
 
 /**
  * A value over a muted secondary line, both fitting one 32px table row
  * (15px + 13px). Secondary context reads as type hierarchy, not parentheses.
+ * Inside a dense cell at 24px rows the two share one line ("Oct 13 · 3mo ago").
  */
 export function StackedValue({
   primary,
@@ -56,8 +59,13 @@ export function StackedValue({
   suppressSecondaryHydrationWarning?: boolean;
 }) {
   const identity = useIdentityCell();
+  const cell = useContext(DenseCellContext);
   return (
-    <span className={cn("block min-w-0", className)} title={title}>
+    <span
+      data-stacked-value={cell ? "" : undefined}
+      className={cn("block min-w-0", className)}
+      title={title}
+    >
       <span
         data-stacked-line=""
         data-cell-spill-text={primarySpillText}

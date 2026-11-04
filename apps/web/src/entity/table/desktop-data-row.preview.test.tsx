@@ -74,7 +74,7 @@ it("keeps stock context available without adding a third dense row line", () => 
     expect(screen.getByTitle(context)).toBeInTheDocument();
     expect(
       screen.getByTestId("stock-cell").getBoundingClientRect().height,
-    ).toBeLessThanOrEqual(32);
+    ).toBeLessThanOrEqual(24);
   } finally {
     harness.dispose();
   }

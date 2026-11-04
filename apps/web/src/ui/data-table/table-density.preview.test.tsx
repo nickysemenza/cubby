@@ -114,9 +114,9 @@ describe("table density", () => {
     const spill = overlay();
     if (!spill) throw new Error("missing spill overlay");
     expect(rect(spill).width).toBeGreaterThan(rect(clipped).width);
-    expect(Math.round(rect(spill).height)).toBe(32);
+    expect(Math.round(rect(spill).height)).toBe(24);
     expect(Math.round(rect(spill).top)).toBe(Math.round(rect(clipped).top));
-    expect(Math.round(rect(clipped).height)).toBe(32);
+    expect(Math.round(rect(clipped).height)).toBe(24);
 
     await userEvent.hover(view.getByTestId("cell-1"));
     await waitFor(() => expect(overlay()).toBeNull());
@@ -407,7 +407,7 @@ describe("table density", () => {
     const shown = [...cell.querySelectorAll<HTMLElement>("[data-chip]")];
     const tops = new Set(shown.map((chip) => Math.round(rect(chip).top)));
     expect(tops.size).toBe(1);
-    expect(Math.round(rect(cell).height)).toBe(32);
+    expect(Math.round(rect(cell).height)).toBe(24);
   });
 
   it("keeps a code's first and last four characters when it truncates", async () => {
@@ -505,19 +505,8 @@ describe("table density", () => {
             id: "c16",
             width: 200,
             content: (
-              <span className="flex flex-col">
-                <span
-                  data-stacked-line=""
-                  className="block truncate leading-[15px]"
-                >
-                  Shelf
-                </span>
-                <span
-                  data-stacked-line=""
-                  className="block truncate text-xs leading-[13px]"
-                >
-                  <span className="sr-only"> · </span>1 each
-                </span>
+              <span data-stacked-line="" className="block truncate">
+                Shelf<span className="sr-only"> · </span>1 each
               </span>
             ),
           },
@@ -579,7 +568,7 @@ describe("table density", () => {
       expect(overflow?.textContent ?? null).toBe(
         count === 1 ? null : `+${count - 1}`,
       );
-      expect(Math.round(rect(view.getByTestId("cell-0")).height)).toBe(32);
+      expect(Math.round(rect(view.getByTestId("cell-0")).height)).toBe(24);
     },
   );
 });

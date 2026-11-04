@@ -72,6 +72,7 @@ type CallerOwnedProps<TItem extends RowData> = Pick<
   | "rowDetail"
   | "ariaLabel"
   | "emptyState"
+  | "footerContent"
   | "filterOptionHints"
   | "getRowClassName"
   | "getMobileDetailsHref"

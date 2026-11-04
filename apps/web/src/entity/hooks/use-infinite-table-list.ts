@@ -412,9 +412,12 @@ export function useInfiniteTableList<
     pages: infiniteData?.pages,
     data: flatData,
     totalCount,
-    sums: isPlaceholderData ? undefined : lastMeta?.sums,
-    totalLabels: isPlaceholderData ? undefined : lastMeta?.totalLabels,
-    unresolvedCount: isPlaceholderData ? undefined : lastMeta?.unresolvedCount,
+    // Placeholder pages belong to the previous query. Their aggregates stay
+    // visible, dimmed through `infiniteScroll.isTransitioning`, until the new
+    // ones arrive: blanking them read as a failure on every filter edit.
+    sums: lastMeta?.sums,
+    totalLabels: lastMeta?.totalLabels,
+    unresolvedCount: lastMeta?.unresolvedCount,
     groups,
     memberships,
     isLoading,

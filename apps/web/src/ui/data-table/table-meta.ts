@@ -99,6 +99,8 @@ export type RowColumnExplanation<TData> = {
 export interface CubbyColumnMeta<TData = CellData> {
   /** Stable table role; layout and styling must not infer this from an id. */
   entityColumnRole?: EntityColumnRole;
+  /** An actions column's menu items, shared with the desktop right-click menu. */
+  rowMenu?: (row: TData) => ReactNode;
   /** The declaration's thematic band; columns in a band move and pin together. */
   columnGroup?: string;
   /** Generated origin metadata for relation-backed or computed values. */
@@ -219,6 +221,8 @@ export interface CubbyTableMeta {
   grouping?: {
     choices: readonly TableGroupChoice[];
     active: string | null;
+    /** Columns every section header already states; the grid does not repeat them. */
+    groupedColumnIds?: readonly string[];
     onChange: (key: string | null) => void;
   };
 }

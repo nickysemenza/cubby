@@ -112,7 +112,7 @@ describe("bulk action selection availability", () => {
     expect(screen.queryByRole("button", { name: "Hidden" })).toBeNull();
     expect(
       screen.getAllByRole("button").map((button) => button.textContent?.trim()),
-    ).toEqual(["Move", "Delete", "Clear selection"]);
+    ).toEqual(["Move", "More", "Clear selection"]);
 
     fireEvent.click(move);
     expect(onExecute).not.toHaveBeenCalled();

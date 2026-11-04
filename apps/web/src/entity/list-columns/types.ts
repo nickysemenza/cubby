@@ -97,6 +97,10 @@ export interface EntityListOverrideResult<
   useWorkbench?: (
     list: UseEntityListReturn<TData, TFilters, TRow>,
   ) => ListOverrideWorkbenchProps<TData>;
+  /** Replaces the footer's declared totals with the list's own summary line. */
+  footerTotals?: (
+    list: UseEntityListReturn<TData, TFilters, TRow>,
+  ) => ReactNode;
   /** Chrome rendered above the table, given the mounted list model. */
   above?: (list: UseEntityListReturn<TData, TFilters, TRow>) => ReactNode;
   /** Dialogs and other chrome rendered under the table. */

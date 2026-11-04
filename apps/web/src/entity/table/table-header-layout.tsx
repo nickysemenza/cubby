@@ -11,22 +11,16 @@ import { CSS } from "@dnd-kit/utilities";
 import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
 import { ArrowsDownUpIcon } from "@phosphor-icons/react/dist/csr/ArrowsDownUp";
 import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
-import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
-import { CurrencyDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { FunnelSimpleIcon } from "@phosphor-icons/react/dist/csr/FunnelSimple";
-import { HashIcon } from "@phosphor-icons/react/dist/csr/Hash";
-import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { PushPinIcon } from "@phosphor-icons/react/dist/csr/PushPin";
 import { PushPinSlashIcon } from "@phosphor-icons/react/dist/csr/PushPinSlash";
 import { RowsIcon } from "@phosphor-icons/react/dist/csr/Rows";
 import { SortAscendingIcon } from "@phosphor-icons/react/dist/csr/SortAscending";
 import { SortDescendingIcon } from "@phosphor-icons/react/dist/csr/SortDescending";
-import { ToggleLeftIcon } from "@phosphor-icons/react/dist/csr/ToggleLeft";
-import { UserIcon } from "@phosphor-icons/react/dist/csr/User";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { Header, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
@@ -51,7 +45,6 @@ import {
   columnWidthValue,
   columnOffsetValue,
   isLockedColumn,
-  columnBands,
   moveColumn,
   spacerWidthValue,
   useColumnLayoutDndProps,
@@ -62,8 +55,6 @@ import type {
   CubbyTable as Table,
 } from "../../ui/data-table/table-features";
 import {
-  type ColumnValueKind,
-  type CubbyColumnMeta,
   hasColumnFilterEditor,
   requestColumnFilterEdit,
 } from "../../ui/data-table/table-meta";
@@ -143,21 +134,7 @@ function headerContent<TData extends RowData>(
   const label =
     meta?.shortHeader ??
     flexRender(header.column.columnDef.header, header.getContext());
-  if (!meta?.linksTo || columnValueKind(meta) === "person") {
-    const Glyph = valueKindGlyph(columnValueKind(meta));
-    if (Glyph === null) return label;
-    return (
-      <>
-        <span
-          data-header-kind=""
-          className="mr-1 inline-flex align-[-2px] text-muted-foreground/70"
-        >
-          <Glyph aria-hidden="true" className="size-3" />
-        </span>
-        {label}
-      </>
-    );
-  }
+  if (!meta?.linksTo) return label;
   return (
     <>
       <span data-header-entity="" className="mr-1 inline-flex align-[-2px]">
@@ -170,78 +147,6 @@ function headerContent<TData extends RowData>(
       {label}
     </>
   );
-}
-
-/**
- * An empty column's header: its kind glyph, else its initial, with the full
- * label kept for assistive tech and the tooltip.
- */
-function CollapsedHeaderLabel<TData extends RowData>({
-  header,
-  label,
-}: {
-  header: Header<typeof cubbyTableFeatures, TData, unknown>;
-  label: string;
-}) {
-  const meta = header.column.columnDef.meta;
-  const Glyph = valueKindGlyph(columnValueKind(meta));
-  return (
-    <span
-      data-header-label=""
-      className="inline-flex min-w-0 items-center text-muted-foreground/70"
-      title={`${label} · empty in these rows`}
-    >
-      {meta?.linksTo && columnValueKind(meta) !== "person" ? (
-        <EntityIcon
-          entity={meta.linksTo}
-          aria-hidden="true"
-          className="size-3.5"
-        />
-      ) : Glyph ? (
-        <Glyph aria-hidden="true" className="size-3" />
-      ) : (
-        <span aria-hidden="true">{label.charAt(0)}</span>
-      )}
-      <span className="sr-only">{label}</span>
-    </span>
-  );
-}
-
-type ColumnMeta = CubbyColumnMeta | undefined;
-
-/** A declared kind, else one derived from the column's numeric and filter metadata. */
-function columnValueKind(meta: ColumnMeta): ColumnValueKind | null {
-  if (meta?.valueKind) return meta.valueKind;
-  const filter = meta?.filterConfig;
-  if (filter?.dateRange) return "date";
-  if (meta?.cellData?.kind === "currency") return "money";
-  if (meta?.linksTo === "ledgerParty") return "person";
-  if (filter?.valueType === "boolean" || filter?.valueType === "presence")
-    return "boolean";
-  if (meta?.numeric) return "number";
-  if (filter?.filterType === "multiselect" || filter?.filterType === "select")
-    return "enum";
-  return null;
-}
-
-/** Text carries no glyph: it is the default a reader assumes. */
-function valueKindGlyph(kind: ColumnValueKind | null) {
-  switch (kind) {
-    case "date":
-      return CalendarBlankIcon;
-    case "money":
-      return CurrencyDollarIcon;
-    case "number":
-      return HashIcon;
-    case "enum":
-      return ListChecksIcon;
-    case "person":
-      return UserIcon;
-    case "boolean":
-      return ToggleLeftIcon;
-    default:
-      return null;
-  }
 }
 
 /**
@@ -488,18 +393,17 @@ function HeaderHoverChrome({
 function SortableHeader<TData extends RowData>({
   header,
   table,
-  collapsed,
   styles,
 }: {
   header: Header<typeof cubbyTableFeatures, TData, unknown>;
   table: Table<TData>;
-  collapsed: boolean;
   styles: HeaderStyles;
 }) {
   const locked = isLockedColumn(header.column);
   const {
     attributes,
     listeners,
+    setActivatorNodeRef,
     setNodeRef,
     transform,
     transition,
@@ -513,11 +417,10 @@ function SortableHeader<TData extends RowData>({
   const provenance = header.column.columnDef.meta?.provenance;
   const headerLabel = sortableHeaderLabel(header);
 
-  // The label wraps to at most two 14px lines inside the 32px header, so a
-  // long label no longer sets its column's width. Only a sorted column's
-  // arrow takes width; the hover arrow and the source icon overlay the
-  // header's free edge while it is hovered or focused, so the column is as
-  // narrow as its label or values.
+  // The label holds one line and truncates, so a long label no longer sets its
+  // column's width. Only a sorted column's arrow takes width; the hover arrow
+  // and the source icon overlay the header's free edge while it is hovered or
+  // focused, so the column is as narrow as its label or values.
   const title = (
     <span
       className={cn(
@@ -527,11 +430,7 @@ function SortableHeader<TData extends RowData>({
         numeric && "flex-row-reverse",
       )}
     >
-      {collapsed ? (
-        <CollapsedHeaderLabel header={header} label={headerLabel} />
-      ) : (
-        <HeaderLabel label={headerLabel}>{headerContent(header)}</HeaderLabel>
-      )}
+      <HeaderLabel label={headerLabel}>{headerContent(header)}</HeaderLabel>
       {header.column.getIsFiltered() && (
         <FunnelSimpleIcon
           data-header-filtered=""
@@ -561,7 +460,6 @@ function SortableHeader<TData extends RowData>({
       ref={setNodeRef}
       key={header.id}
       data-column-id={header.column.id}
-      data-column-collapsed={collapsed ? "" : undefined}
       colSpan={header.colSpan}
       aria-sort={ariaSort(sortDirection)}
       className={cn(
@@ -576,6 +474,8 @@ function SortableHeader<TData extends RowData>({
         sortDirection && "bg-muted/50",
         pinned && "sticky z-40 bg-card",
         pinBoundaryClass(header),
+        !locked &&
+          "cursor-grab active:cursor-grabbing pointer-coarse:cursor-auto",
         isDragging && "z-50 opacity-70",
       )}
       style={{
@@ -603,12 +503,21 @@ function SortableHeader<TData extends RowData>({
             : {}),
       }}
     >
-      <div className="flex min-w-0 items-center">
+      {/* The whole header drags; the sensors' pointer distance keeps a click a
+          sort. Keyboard and touch dragging stay on the grip, the activator. */}
+      {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- A pointer-only drag surface; the grip below is the keyboard activator. */}
+      <div
+        className="flex min-w-0 items-center"
+        onMouseDown={(event) => {
+          if (!locked) listeners?.onMouseDown?.(event);
+        }}
+      >
         {!locked && (
           // Overlays the leading padding instead of taking layout width, so
           // header labels start on the same x as their cells' values. Above
           // a numeric header's leading menu caret, which shares that edge.
           <Button
+            ref={setActivatorNodeRef}
             variant="ghost"
             size="icon-sm"
             aria-label={`Reorder ${header.column.id} column`}
@@ -626,7 +535,7 @@ function SortableHeader<TData extends RowData>({
             size="sm"
             aria-label={`Sort by ${headerLabel}`}
             className={cn(
-              "group -mx-1 h-6 min-w-0 flex-1 gap-1 px-1 py-0 font-[inherit] text-[length:inherit] tracking-[inherit] select-none hover:bg-muted/60 hover:text-foreground",
+              "group -mx-1 h-(--control-height-xs) min-w-0 flex-1 cursor-[inherit] gap-1 px-1 py-0 font-[inherit] text-[length:inherit] tracking-[inherit] select-none hover:bg-muted/60 hover:text-foreground",
               numeric ? "justify-end" : "justify-start",
             )}
             onClick={header.column.getToggleSortingHandler()}
@@ -673,25 +582,31 @@ function SortableHeader<TData extends RowData>({
 
 export default function TableHeaderLayout<TData extends RowData>({
   table,
-  collapsedColumns,
+  unpaintedColumns,
   styles,
   isDebugEnabled,
 }: {
   table: Table<TData>;
-  /** Empty columns painted as a glyph strip; see `emptyColumnIds`. */
-  collapsedColumns?: ReadonlySet<string>;
+  /** Visible columns the grid leaves out: empty, or stated by section headers. */
+  unpaintedColumns?: ReadonlySet<string>;
   styles: HeaderStyles;
   isDebugEnabled: boolean;
 }) {
   const dndProps = useColumnLayoutDndProps("column position");
   // Header drags stay inside their pin region; the customizer moves columns
-  // between regions.
+  // between regions. Declared groups stay whole: with no band painted, a drag
+  // across a group's edge carries the group rather than silently doing nothing.
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over) return;
+    const id = String(active.id);
+    const target = String(over.id);
+    const sameGroup =
+      table.getColumn(id)?.columnDef.meta?.columnGroup ===
+      table.getColumn(target)?.columnDef.meta?.columnGroup;
     moveColumn(table, {
-      kind: "reorder",
-      id: String(active.id),
-      over: String(over.id),
+      kind: sameGroup ? "reorder" : "reorder-group",
+      id,
+      over: target,
     });
   };
 
@@ -699,14 +614,7 @@ export default function TableHeaderLayout<TData extends RowData>({
   const center = table.getCenterHeaderGroups();
   const end = table.getEndHeaderGroups();
   const depth = Math.max(start.length, center.length, end.length);
-  const regions = [
-    table.getStartVisibleLeafColumns(),
-    table.getCenterVisibleLeafColumns(),
-    table.getEndVisibleLeafColumns(),
-  ];
-  const hasBands = regions.some((columns) =>
-    columns.some((column) => column.columnDef.meta?.columnGroup),
-  );
+  const painted = (column: { id: string }) => !unpaintedColumns?.has(column.id);
 
   return (
     <DndContext
@@ -715,75 +623,12 @@ export default function TableHeaderLayout<TData extends RowData>({
       onDragEnd={onDragEnd}
     >
       <SortableContext
-        items={table.getVisibleLeafColumns().map((column) => column.id)}
+        items={table
+          .getVisibleLeafColumns()
+          .filter(painted)
+          .map((column) => column.id)}
         strategy={horizontalListSortingStrategy}
       >
-        {hasBands && (
-          <TableRow data-column-bands="" className="border-b border-border/50">
-            {regions.flatMap((columns, regionIndex) => [
-              ...(regionIndex === 2
-                ? [
-                    <TableHead
-                      key="band-spacer"
-                      aria-hidden
-                      scope={undefined}
-                      className="h-6 px-0"
-                      style={{ width: spacerWidthValue }}
-                    />,
-                  ]
-                : []),
-              ...columnBands(columns).map((band) => {
-                const first = band.columns[0];
-                if (!first) return null;
-                const pinned = first.getIsPinned();
-                const width = `calc(${band.columns.map((column) => columnWidthValue(column.id)).join(" + ")})`;
-                return (
-                  <TableHead
-                    key={`band-${first.id}`}
-                    scope={band.label ? "colgroup" : undefined}
-                    aria-hidden={band.label ? undefined : true}
-                    colSpan={band.columns.length}
-                    data-column-band={band.label}
-                    className={cn(
-                      "h-6 overflow-hidden px-1 text-2xs font-medium",
-                      band.label && "border-b border-l border-border/60",
-                      pinned && "sticky z-40",
-                    )}
-                    style={{
-                      width,
-                      minWidth: width,
-                      maxWidth: width,
-                      ...(pinned === "start"
-                        ? {
-                            insetInlineStart: columnOffsetValue(
-                              columns,
-                              first.id,
-                              "start",
-                            ),
-                          }
-                        : pinned === "end"
-                          ? {
-                              insetInlineEnd: columnOffsetValue(
-                                columns,
-                                band.columns.at(-1)?.id ?? first.id,
-                                "end",
-                              ),
-                            }
-                          : {}),
-                    }}
-                  >
-                    <span className="block truncate" title={band.label}>
-                      {band.label}
-                    </span>
-                  </TableHead>
-                );
-              }),
-            ])}
-            {isDebugEnabled && (
-              <TableHead className="h-6" aria-hidden scope={undefined} />
-            )}
-          </TableRow>
-        )}
         {Array.from({ length: depth }, (_, index) => {
           const leading = [
             ...(start[index]?.headers ?? []),
@@ -795,7 +640,6 @@ export default function TableHeaderLayout<TData extends RowData>({
               key={header.id}
               header={header}
               table={table}
-              collapsed={collapsedColumns?.has(header.column.id) ?? false}
               styles={styles}
             />
           );
@@ -805,7 +649,9 @@ export default function TableHeaderLayout<TData extends RowData>({
               key={`header-level-${index}`}
               className="border-b border-border/50"
             >
-              {leading.map(renderHeader)}
+              {leading
+                .filter((header) => painted(header.column))
+                .map(renderHeader)}
               {/* The spacer sits before the end-pinned columns so row actions
                   stay at the table's right edge instead of floating mid-row
                   ahead of an empty gutter. */}
@@ -816,7 +662,9 @@ export default function TableHeaderLayout<TData extends RowData>({
                 className={cn(styles.header, "px-0")}
                 style={{ width: spacerWidthValue }}
               />
-              {trailing.map(renderHeader)}
+              {trailing
+                .filter((header) => painted(header.column))
+                .map(renderHeader)}
               {isDebugEnabled && (
                 <TableHead className={styles.header}>Debug</TableHead>
               )}
