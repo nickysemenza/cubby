@@ -462,6 +462,8 @@ type TableWidthColumn = {
     maxSize?: number;
     meta?: {
       entityColumnRole?: EntityColumnRole;
+      /** A sentence column: fits its text beyond the short-text cap. */
+      prose?: boolean;
       numeric?: boolean;
       code?: boolean;
       linksTo?: string;
@@ -502,9 +504,11 @@ const IDENTITY_FIT_MAX = 240;
 const TEXT_FIT_MAX = 160;
 const LINK_FIT_MAX = 120;
 const CODE_FIT_MAX = 96;
+const PROSE_FIT_MAX = 480;
 
 function kindFitMax(meta: TableWidthColumn["columnDef"]["meta"]) {
   if (meta?.entityColumnRole === "identity") return IDENTITY_FIT_MAX;
+  if (meta?.prose) return PROSE_FIT_MAX;
   const kind = meta?.cellData?.kind;
   if (meta?.numeric || (kind !== undefined && FIXED_WIDTH_KINDS.has(kind)))
     return Number.POSITIVE_INFINITY;

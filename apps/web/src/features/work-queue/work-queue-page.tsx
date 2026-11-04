@@ -358,6 +358,7 @@ function queueColumns(
           </span>
         ),
         meta: attachCubbyColumnMeta<QueueTableRow>({
+          prose: true,
           mobile: { slot: "meta", priority: 0 },
           cellData: textCellData<QueueTableRow>("text", (row) => row.reason),
           filterConfig: {
@@ -733,7 +734,7 @@ export function WorkQueue({
     <>
       <AttentionInputStatus count={incompleteCount} />
       {!!incompleteDiagnostics?.length && (
-        <p className="text-sm text-muted-foreground">
+        <p className="px-2 text-sm text-muted-foreground md:px-4">
           Diagnostic counts are unavailable or out of date for{" "}
           {countLabel(incompleteDiagnostics.length, "check")}. Counts include
           known findings only.

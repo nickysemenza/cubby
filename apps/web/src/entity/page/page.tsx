@@ -207,6 +207,7 @@ function ListPageShell(props: PageListProps) {
           entity={entity}
           actions={props.actions}
           chrome={listChrome}
+          gutter={bodyGutter === "standard"}
           controls={props.workbenchControls}
           mobileTitleVisible={props.mobileTitleVisible}
           count={count}
@@ -246,7 +247,7 @@ function ListPageBody({
           <div
             className={cn(
               workbench ? "space-y-0" : "space-y-3",
-              bodyGutter === "standard" && "px-2 md:px-6",
+              bodyGutter === "standard" && "px-2 md:px-4",
             )}
           >
             {children}

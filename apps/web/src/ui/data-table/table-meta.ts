@@ -99,6 +99,8 @@ export type RowColumnExplanation<TData> = {
 export interface CubbyColumnMeta<TData = CellData> {
   /** Stable table role; layout and styling must not infer this from an id. */
   entityColumnRole?: EntityColumnRole;
+  /** A sentence column: fits its text beyond the short-text cap. */
+  prose?: boolean;
   /** An actions column's menu items, shared with the desktop right-click menu. */
   rowMenu?: (row: TData) => ReactNode;
   /** The declaration's thematic band; columns in a band move and pin together. */

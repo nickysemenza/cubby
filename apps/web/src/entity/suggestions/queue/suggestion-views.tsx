@@ -278,6 +278,7 @@ function allColumns() {
         header: "What changes",
         size: 320,
         meta: attachCubbyColumnMeta<Row>({
+          prose: true,
           mobile: { slot: "subtitle", priority: 0, label: "What changes" },
         }),
         cell: ({ row }) => <WhatChanges row={row.original} />,
@@ -340,6 +341,7 @@ function transferPairColumns(rosters: RuntimeFilterOptions) {
         id: "whatChanges",
         header: "What changes",
         size: 320,
+        meta: attachCubbyColumnMeta<Row>({ prose: true }),
         cell: ({ row }) => <WhatChanges row={row.original} />,
       }),
     );

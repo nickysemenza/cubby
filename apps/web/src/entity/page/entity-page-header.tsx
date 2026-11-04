@@ -301,6 +301,8 @@ interface ListPageHeaderProps {
    * mounted while the body swaps renderers.
    */
   chrome: "hero" | "workbench";
+  /** A hero title on a full-bleed page shares the body's standard gutter. */
+  gutter?: boolean;
   /** View/mode control beside the workbench query tools. */
   controls?: ReactNode;
   /** Phone route titles live in the contextual bar unless the page opts in. */
@@ -309,6 +311,7 @@ interface ListPageHeaderProps {
 
 /** A list or tool page's identity: title with its count, tools and actions. */
 export function ListPageHeader({
+  gutter = false,
   title,
   eyebrow,
   entity,
@@ -379,6 +382,7 @@ export function ListPageHeader({
       actions={actions}
       className={cn(
         "mb-3",
+        gutter && "px-2 pt-2 md:px-4",
         !mobileTitleVisible && !actions && "max-md:hidden",
         !mobileTitleVisible &&
           "max-md:[&_[data-slot=page-header-identity]]:sr-only",
