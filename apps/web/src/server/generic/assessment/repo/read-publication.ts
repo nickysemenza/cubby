@@ -4,14 +4,15 @@ import {
   type AssessmentReadResult,
 } from "@cubby/schemas/assessment-read-publication";
 import type { Entity } from "@cubby/schemas/entity";
-import { and, eq, not, or, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { and, arrayOverlaps, eq, inArray, not, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import type { Database } from "~/server/db/database";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { outer, related } from "~/server/db/helpers/related";
 import {
   repositoryQueries,
+  repositoryTransactionDatabase,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
 import {
@@ -21,6 +22,7 @@ import {
   assessmentReadPublication,
   assessmentReadStage,
   assessmentReadStageResult,
+  assessmentState,
   entityIdentity,
 } from "~/server/db/retained-tables";
 import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
@@ -33,10 +35,21 @@ export type AssessmentReadStagePlan = Omit<
 >;
 export type AssessmentReadStageWrite = {
   stage: AssessmentReadStagePlan;
-  /** The stage read before preparation; prevents replacing a different continuation. */
-  previousStageId: string | null;
+  /** Exact continuations observed before preparation, including components that merged. */
+  previousStageIds: readonly string[];
   results: readonly AssessmentReadResult[];
 };
+
+/** Canonical reads and ticket observations must describe one committed snapshot. */
+export function withAssessmentReadSnapshot<T>(
+  db: Database,
+  read: (snapshot: Database) => Promise<T>,
+): Promise<T> {
+  return repositoryTransactionDatabase(db, read, {
+    isolationLevel: "repeatable read",
+    accessMode: "read only",
+  });
+}
 
 export async function readAssessmentReadStage(
   db: RepositoryQueryInput,
@@ -47,6 +60,80 @@ export async function readAssessmentReadStage(
     .from(assessmentReadStage)
     .where(eq(assessmentReadStage.componentKey, componentKey));
   return stage;
+}
+
+export type AssessmentReadFrame = {
+  headers: { id: string; groupKey: string }[];
+  stages: (typeof assessmentReadStage.$inferSelect)[];
+};
+
+/** Historical inactive peers cannot enter a new pending publication component. */
+export async function readOpenAssessmentReadIds(
+  db: RepositoryQueryInput,
+  ids: readonly string[],
+): Promise<string[]> {
+  if (!ids.length) return [];
+  const rows = await repositoryQueries(db)
+    .select({ id: assessmentState.id })
+    .from(assessmentState)
+    .where(
+      and(
+        assessmentState.active,
+        eq(assessmentState.status, "pending"),
+        sql`${assessmentState.id} = ANY(${uuidArrayParam(ids)})`,
+      ),
+    );
+  return rows.map((row) => row.id);
+}
+
+/** Retained winners and unfinished components connect the old and new edge scopes. */
+export async function readAssessmentReadFrame(
+  db: RepositoryQueryInput,
+  ids: readonly string[],
+  groups: readonly string[],
+): Promise<AssessmentReadFrame> {
+  const headers = await repositoryQueries(db)
+    .select({
+      id: assessmentReadPublication.assessmentId,
+      groupKey: assessmentReadPublication.groupKey,
+    })
+    .from(assessmentReadPublication)
+    .leftJoin(
+      assessmentState,
+      eq(assessmentState.id, assessmentReadPublication.assessmentId),
+    )
+    .where(
+      and(
+        or(
+          sql`${assessmentReadPublication.assessmentId} = ANY(${uuidArrayParam(ids)})`,
+          inArray(assessmentReadPublication.groupKey, [...groups]),
+        ),
+        or(
+          assessmentReadPublication.admitted,
+          and(assessmentState.active, eq(assessmentState.status, "pending")),
+          sql`${assessmentReadPublication.assessmentId} = ANY(${uuidArrayParam(ids)})`,
+        ),
+      ),
+    );
+  const groupOverlap = groups.length
+    ? sql`${assessmentReadStage.groups} ?| ARRAY[${sql.join(
+        groups.map((group) => sql`${group}`),
+        sql`, `,
+      )}]::text[]`
+    : sql`false`;
+  const stages = await repositoryQueries(db)
+    .select()
+    .from(assessmentReadStage)
+    .where(
+      and(
+        sql`${assessmentReadStage.nextIndex} < cardinality(${assessmentReadStage.assessmentIds})`,
+        or(
+          arrayOverlaps(assessmentReadStage.assessmentIds, [...ids]),
+          groupOverlap,
+        ),
+      ),
+    );
+  return { headers, stages };
 }
 
 /** Abandoned staging never removes a revision that is still the read authority. */
@@ -126,19 +213,61 @@ export async function writeAssessmentReadStage(
   )
     throw new Error("Assessment component hash matched different groups");
   if (existing && existing.id !== stage.id) {
-    if (existing.id !== prepared.previousStageId)
+    if (!prepared.previousStageIds.includes(existing.id))
       return { kind: "retained", changed: [] };
-    await tx
-      .delete(assessmentReadStage)
-      .where(eq(assessmentReadStage.id, existing.id));
-    await removeInactiveRevisions(db, existing.assessmentIds, [
-      existing.revision,
-    ]);
   } else if (existing && existing.nextIndex !== stage.nextIndex) {
     return { kind: "retained", changed: [] };
+  } else if (
+    existing &&
+    (existing.revision !== stage.revision ||
+      existing.rulesVersion !== stage.rulesVersion ||
+      JSON.stringify(existing.assessmentIds) !==
+        JSON.stringify(stage.assessmentIds) ||
+      existing.tickets.length !== stage.tickets.length ||
+      !existing.tickets.every((ticket, index) => {
+        const other = stage.tickets[index];
+        // jsonb can reorder object keys; the observed tuple is the invariant.
+        return (
+          other !== undefined &&
+          ticket.target === other.target &&
+          ticket.ref === other.ref &&
+          ticket.ticket === other.ticket
+        );
+      }))
+  ) {
+    throw new Error("Assessment continuation metadata is immutable");
   }
   if (await stageInvalidated(db, stage))
     return { kind: "retained", changed: [] };
+  if (prepared.previousStageIds.length) {
+    const previous = await tx
+      .select()
+      .from(assessmentReadStage)
+      .where(
+        sql`${assessmentReadStage.id} = ANY(${uuidArrayParam(prepared.previousStageIds)})`,
+      );
+    const members = new Set(stage.assessmentIds);
+    const groups = new Set(stage.groups);
+    for (const old of previous) {
+      if (old.id === stage.id) continue;
+      if (
+        !old.assessmentIds.some((id) => members.has(id)) &&
+        !old.groups.some((group) => groups.has(group))
+      )
+        throw new Error("Cannot retire an unrelated Assessment stage");
+      if (
+        old.nextIndex < old.assessmentIds.length &&
+        old.assessmentIds.some((id) => !members.has(id))
+      )
+        throw new Error(
+          "A merged Assessment stage must retain every unfinished member",
+        );
+      await tx
+        .delete(assessmentReadStage)
+        .where(eq(assessmentReadStage.id, old.id));
+      await removeInactiveRevisions(db, old.assessmentIds, [old.revision]);
+    }
+  }
   await tx.insert(assessmentReadStage).values(stage).onConflictDoNothing();
   if (stage.nextIndex === stage.assessmentIds.length)
     return { kind: "activated", changed: [] };
@@ -176,6 +305,20 @@ export async function writeAssessmentReadStage(
     })),
   );
   await tx.insert(assessmentReadStageResult).values(staged);
+  // Source fanouts share this drain's lease, so they cannot expand until this
+  // transaction commits. Enroll newly read references now: a later fanout must
+  // find them even while this component's active revision is still unchanged.
+  const dependencies = results.flatMap((result) =>
+    result.dependencies.map((dependency) => ({
+      assessmentId: result.assessmentId,
+      ...dependency,
+    })),
+  );
+  if (dependencies.length)
+    await tx
+      .insert(assessmentReadDependency)
+      .values(dependencies)
+      .onConflictDoNothing();
   const nextIndex = stage.nextIndex + results.length;
   await tx
     .update(assessmentReadStage)
@@ -230,52 +373,45 @@ export async function writeAssessmentReadStage(
     })
     .returning({ id: assessmentReadPublication.assessmentId });
   const changedIds = changed.map((row) => row.id);
-  if (changedIds.length) {
-    const dependencyRecords = () =>
-      tx
-        .selectDistinct({ entity: entityIdentity.kind, id: entityIdentity.id })
-        .from(assessmentReadDependency)
-        .innerJoin(
-          entityIdentity,
-          and(
-            eq(entityIdentity.id, assessmentReadDependency.sourceId),
-            eq(entityIdentity.kind, assessmentReadDependency.sourceKind),
-          ),
-        )
-        .where(
-          sql`${assessmentReadDependency.assessmentId} = ANY(${uuidArrayParam(changedIds)})`,
-        );
-    const oldDependencyRecords = await dependencyRecords();
-    // Ineligible open proposals retain dependencies too. A dependency change is
-    // part of the content hash; unchanged results perform no dependency writes.
-    await tx
-      .delete(assessmentReadDependency)
+  const dependencyRecords = () =>
+    tx
+      .selectDistinct({ entity: entityIdentity.kind, id: entityIdentity.id })
+      .from(assessmentReadDependency)
+      .innerJoin(
+        entityIdentity,
+        and(
+          eq(entityIdentity.id, assessmentReadDependency.sourceId),
+          eq(entityIdentity.kind, assessmentReadDependency.sourceKind),
+        ),
+      )
       .where(
         sql`${assessmentReadDependency.assessmentId} = ANY(${uuidArrayParam(changedIds)})`,
       );
-    const stagedDependencies = alias(
-      assessmentReadStageResult,
-      "staged_dependencies",
-    );
-    await tx.insert(assessmentReadDependency).select(
-      tx
-        .selectDistinct({
-          assessmentId: stagedDependencies.assessmentId,
-          sourceKind: sql<string>`d."sourceKind"`.as("sourceKind"),
-          sourceId: sql<string>`d."sourceId"`.as("sourceId"),
-        })
-        .from(stagedDependencies)
-        .innerJoinLateral(
-          sql`jsonb_to_recordset(${stagedDependencies.dependencies}) AS d("sourceKind" text, "sourceId" uuid)`,
-          sql`true`,
-        )
-        .where(
+  const oldDependencyRecords = changedIds.length
+    ? await dependencyRecords()
+    : [];
+  // Keep old/provisional refs until the complete replacement is ready. Prune
+  // only obsolete edges; unchanged dependencies need no rewrite, including when
+  // a restarted stage leaves the active content hash unchanged.
+  await tx.delete(assessmentReadDependency).where(
+    and(
+      sql`${assessmentReadDependency.assessmentId} = ANY(${uuidArrayParam(stage.assessmentIds)})`,
+      not(
+        related(assessmentReadStageResult, (result) =>
           and(
-            eq(stagedDependencies.stageId, stage.id),
-            sql`${stagedDependencies.assessmentId} = ANY(${uuidArrayParam(changedIds)})`,
-          ),
-        ),
-    );
+            eq(result.stageId, stage.id),
+            eq(
+              result.assessmentId,
+              outer(assessmentReadDependency.assessmentId),
+            ),
+            sql`${result.dependencies} @> jsonb_build_array(jsonb_build_object(
+        'sourceKind', ${outer(assessmentReadDependency.sourceKind)}, 'sourceId', ${outer(assessmentReadDependency.sourceId)}::text))`,
+          )!,
+        ).exists(),
+      ),
+    ),
+  );
+  if (changedIds.length) {
     // The current and prior revisions coexist until notifications are captured.
     const inChangedRevision = and(
       sql`${assessmentReadMembership.assessmentId} = ANY(${uuidArrayParam(changedIds)})`,

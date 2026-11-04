@@ -226,6 +226,7 @@ function mergeSuggestionRow(
 
 const RecordSuggestionsContext = createContext<{
   entity: StandardEntity;
+  publishedOnly: boolean;
   runKey: string;
   rows: ReadonlyMap<string, SuggestionRow>;
   save: (
@@ -733,6 +734,7 @@ export function RecordSuggestionsProvider({
   entity,
   records,
   viewportOnly,
+  publishedOnly = false,
   fieldKeys,
   children,
   statusTarget,
@@ -744,6 +746,8 @@ export function RecordSuggestionsProvider({
   entity: Entity | undefined;
   records: readonly unknown[];
   viewportOnly?: boolean;
+  /** Passive lists read publications; missing or failed reads never request evaluation. */
+  publishedOnly?: boolean;
   fieldKeys: readonly string[];
   children: ReactNode;
   statusTarget?: HTMLElement | null;
@@ -766,6 +770,7 @@ export function RecordSuggestionsProvider({
         entity={crud}
         records={records}
         viewportOnly={viewportOnly}
+        publishedOnly={publishedOnly}
         fieldKeys={fieldKeys}
         operations={operations}
         mutationPort={mutationPort}
@@ -785,7 +790,9 @@ function firstBasisFieldLabel(
   queryClient: QueryClient,
   entity: StandardEntity,
   targets: SuggestTargets,
+  evaluationEnabled: boolean,
 ): string | null {
+  if (!evaluationEnabled) return null;
   for (const key of targets.basisKeys) {
     if (key.startsWith("__")) continue;
     const field = entityMetadata(queryClient, entity).fields.fields.find(
@@ -802,8 +809,9 @@ function requestsForRecords(
   records: readonly unknown[],
   targets: SuggestTargets,
   runKey: string,
+  evaluationEnabled: boolean,
 ) {
-  if (targets.targets.length === 0) return [];
+  if (!evaluationEnabled || targets.targets.length === 0) return [];
   const plans = suggestionTargetPlans(queryClient, entity, targets);
   return records.flatMap((raw) => {
     const parsed = recordSchema.safeParse(raw);
@@ -1264,6 +1272,7 @@ function BoundRecordSuggestions({
   entity,
   records: allRecords,
   viewportOnly,
+  publishedOnly,
   fieldKeys,
   children,
   statusTarget,
@@ -1276,6 +1285,7 @@ function BoundRecordSuggestions({
   entity: StandardEntity;
   records: readonly unknown[];
   viewportOnly?: boolean;
+  publishedOnly: boolean;
   fieldKeys: readonly string[];
   children: ReactNode;
   statusTarget?: HTMLElement | null;
@@ -1479,6 +1489,7 @@ function BoundRecordSuggestions({
     records,
     targets,
     runKey,
+    !publishedOnly,
   );
   const recordReady = (id: string) =>
     pageFields.length === 0 || knownRecordIds.has(id);
@@ -1604,6 +1615,7 @@ function BoundRecordSuggestions({
   );
   const context = {
     entity,
+    publishedOnly,
     runKey,
     rows,
     stored,
@@ -1861,7 +1873,7 @@ function BoundRecordSuggestions({
     stored.size === 0 &&
     accepted.size === 0 &&
     !storedQuery?.isFetching
-      ? firstBasisFieldLabel(queryClient, entity, targets)
+      ? firstBasisFieldLabel(queryClient, entity, targets, !publishedOnly)
       : null;
   const status = (
     <>
@@ -2297,6 +2309,8 @@ function BoundRecordFieldSuggestion({
     );
   const source = row?.sourceByField.get(field);
   if (!row || !source) {
+    // Missing publication coverage cannot establish a model outcome or start work.
+    if (context.publishedOnly) return children;
     if (
       !fieldModel?.control?.suggest ||
       !parsed.success ||

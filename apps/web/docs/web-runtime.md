@@ -463,10 +463,11 @@ and seeded contexts remain local; the scope ends with the count operation.
 Proposal-count badges subscribe to shared counts only for eligible title cells
 and fieldless mobile titles. Other cells return their existing content before
 joining that context.
-For automatic suggestion recomputation, prioritize visible rows plus a bounded
-prefetch buffer, reuse current saved answers, and batch only missing or
-invalidated decisions after checking their individual caches. Virtualized
-rendering alone does not bound the records passed to a data provider. Verify
+Passive lists consume published suggestions and indicators, prioritizing visible
+rows plus a bounded prefetch buffer and retaining successful reads during refresh.
+A missing publication or failed read never calls `ai.suggestFields` or its batch
+operation. Explicit evaluation and editor flows keep their existing decision
+path. Virtualized rendering alone does not bound the records passed to a data provider. Verify
 server operation and SQL counts as well as HTTP request counts when changing
 list loading; increasing concurrency is not a substitute for shared work.
 
@@ -483,9 +484,11 @@ pricing, use and evidence summaries; standalone summary reads still resolve thei
 own subject.
 
 `RecordSuggestionsProvider` keeps stored review/bulk-action scope over loaded
-records while mounted `RecordSuggestionBoundary` rows admit automatic work
-from desktop and mobile virtualizers, including their overscan. Its AI
-enrichment stage uses `ai.suggestFieldsBatch`: shared policy, Run and roster
+records. Tables select its `publishedOnly` policy: mounted rows cannot enter
+settled-answer, saved-preview or live-evaluation fallbacks, and missing rows do
+not invent a local decision outcome. The stored read retains proposals and raw
+retryable diagnostics on failure. Other evaluation surfaces retain their AI
+stage using `ai.suggestFieldsBatch`: shared policy, Run and roster
 preparation, then individually cached decision waves and existing assessment
 publication. Ordinary `entity.listEnrichment` reads remain provider-free.
 Queued batches discard cancelled members after shared admission; started work

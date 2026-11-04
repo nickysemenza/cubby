@@ -25,6 +25,7 @@ import {
   assessmentState,
   assessmentReadPublication,
   assessmentReadFact,
+  assessmentReadDependency,
   financialTransactionAllocation,
   sourceTransactionRecord,
   transactionImport,
@@ -47,6 +48,7 @@ import {
   touchingAssessmentIds,
 } from "~/server/generic/assessment/repo/review-families";
 import { suggestionFamilies } from "~/server/generic/assessment/repo/suggestion-families";
+import { prepareAssessmentReadPublication } from "~/server/generic/assessment/service/read-publication";
 import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import {
   readWorkItems,
@@ -620,6 +622,20 @@ describe("cross-family Suggestion list", () => {
         ({ target, ref, ticket }) => ({ target, ref, ticket }),
       );
     const observed = await observe();
+    const isolated = await prepareAssessmentReadPublication(
+      ctx.db,
+      [confident, unsure],
+      async (snapshot, plan) => {
+        if (plan.stage.assessmentIds.includes(confident))
+          throw new Error("Synthetic malformed publication input");
+        return prepareSuggestionAdmission(snapshot, plan.idsToPrepare);
+      },
+    );
+    expect([...isolated.failures.keys()]).toEqual([confident]);
+    expect(
+      isolated.components.map(({ plan }) => plan.stage.assessmentIds),
+    ).toEqual([[unsure]]);
+    expect(isolated.components[0]?.prepared.rows.has(unsure)).toBe(true);
     const memberships = await readAssessmentReadMemberships(ctx.db, ids);
     const references = await readAssessmentRecordRefs(ctx.db, ids);
     for (const id of ids) {
@@ -681,27 +697,62 @@ describe("cross-family Suggestion list", () => {
     const write = (
       plan: AssessmentReadStagePlan,
       prefix: AssessmentReadResult[],
-      previousStageId: string | null = null,
+      previousStageIds: readonly string[] = [],
     ) =>
       getDb(ctx.db).transaction((tx) =>
         writeAssessmentReadStage(
           tx,
-          { stage: plan, previousStageId, results: prefix },
+          { stage: plan, previousStageIds, results: prefix },
           publication,
         ),
       );
     const headers = () =>
       getDb(ctx.db).select().from(assessmentReadPublication);
-    expect(await write(stage, results.slice(0, 1))).toMatchObject({
+    const middle = Math.ceil(ids.length / 2);
+    const left = {
+      ...stage,
+      componentKey: "synthetic-admission-left",
+      assessmentIds: ids.slice(0, middle),
+      groups: stage.groups.slice(0, middle),
+    };
+    const right = {
+      ...stage,
+      id: crypto.randomUUID(),
+      revision: crypto.randomUUID(),
+      componentKey: "synthetic-admission-right",
+      assessmentIds: ids.slice(middle),
+      groups: stage.groups.slice(middle),
+    };
+    const firstResult = results[0];
+    if (!firstResult) throw new Error("Synthetic admission result missing");
+    expect(
+      await write(left, [
+        {
+          ...firstResult,
+          dependencies: [
+            {
+              sourceKind: "synthetic.provisional",
+              sourceId: crypto.randomUUID(),
+            },
+          ],
+        },
+      ]),
+    ).toMatchObject({
       kind: "retained",
     });
+    expect(
+      await getDb(ctx.db).select().from(assessmentReadDependency),
+    ).toHaveLength(1);
+    expect(await write(right, results.slice(middle, middle + 1))).toMatchObject(
+      { kind: "retained" },
+    );
     expect(await headers()).toEqual([]);
     // New source work cannot activate an older complete staged snapshot.
     await markWork(ctx.db, DERIVED_DRAIN, [
       { target: ASSESSMENT_READ_TARGET, ref: ids[0]! },
     ]);
     expect(
-      await write({ ...stage, nextIndex: 1 }, results.slice(1)),
+      await write({ ...left, nextIndex: 1 }, results.slice(1, middle)),
     ).toMatchObject({ kind: "retained" });
     expect(await headers()).toEqual([]);
     const restarted = {
@@ -710,12 +761,15 @@ describe("cross-family Suggestion list", () => {
       revision: crypto.randomUUID(),
       tickets: await observe(),
     };
-    expect(await write(restarted, results, stage.id)).toMatchObject({
+    expect(await write(restarted, results, [left.id, right.id])).toMatchObject({
       kind: "activated",
     });
     const active = await headers();
     expect(active.map((row) => row.assessmentId).sort()).toEqual(
       [...ids].sort(),
+    );
+    expect(await getDb(ctx.db).select().from(assessmentReadDependency)).toEqual(
+      [],
     );
     expect(await getDb(ctx.db).select().from(assessmentReadFact)).toHaveLength(
       together.keys.length,
@@ -730,7 +784,7 @@ describe("cross-family Suggestion list", () => {
       id: crypto.randomUUID(),
       revision: crypto.randomUUID(),
     };
-    expect(await write(unchanged, results, restarted.id)).toEqual({
+    expect(await write(unchanged, results, [restarted.id])).toEqual({
       kind: "activated",
       changed: [],
     });

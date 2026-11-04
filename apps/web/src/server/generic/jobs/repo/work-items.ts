@@ -72,6 +72,34 @@ export async function observeReadyWork(
     .limit(limit);
 }
 
+/** Exact pending generations, including retry deadlines; this does not claim or reschedule them. */
+export async function observePendingWork(
+  db: RepositoryQueryInput,
+  {
+    drain,
+    eligible,
+    scope,
+  }: {
+    drain: string;
+    eligible: (target: SQL) => SQL;
+    scope?: { target: string; refs: readonly string[] };
+  },
+): Promise<WorkItem[]> {
+  return repositoryQueries(db)
+    .select(itemColumns)
+    .from(workItem)
+    .where(
+      and(
+        eq(workItem.drain, drain),
+        eligible(sql`${workItem.target}`),
+        scope
+          ? sql`(${workItem.target} <> ${scope.target} OR ${workItem.ref} = ANY(${uuidArrayParam(scope.refs)}))`
+          : undefined,
+      ),
+    )
+    .orderBy(workItem.target, workItem.ref);
+}
+
 /** Pending items include future retries; callers may narrow to their owned targets. */
 export async function hasPendingWork(
   db: RepositoryQueryInput,

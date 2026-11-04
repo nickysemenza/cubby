@@ -27,8 +27,10 @@ import { z } from "zod";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { MobileCardView } from "~/entity/table/mobile-card-view";
+import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -638,20 +640,25 @@ describe("stored suggestions in generic list cells", () => {
 
   it("loads a shortcode-only list row, renders its stored ghost, and bulk accepts it", async () => {
     const publicId = record.id;
+    const missing = { ...record, id: testShortcode("product", "unpublished") };
     const harness = createBrowserTestHarness();
     const operations = validatedStoredOperations([
       shortcodeSuggestion(publicId),
     ]);
+    const evaluate = vi.fn(async () => ({ suggestions: {}, outcomes: {} }));
+    const evaluateBatch = vi.fn(async () => ({ results: [] }));
+    const settled = vi.fn(operations.settled);
+    operations.settled = settled;
     render(
       <RecordSuggestionsProvider
+        publishedOnly
         entity="product"
-        records={[record]}
+        records={[record, missing]}
         fieldKeys={["categoryId"]}
         operations={{
-          suggestFields: ai.suggestFields.withTransport(async () => ({
-            suggestions: {},
-            outcomes: {},
-          })),
+          suggestFields: ai.suggestFields.withTransport(evaluate),
+          suggestFieldsBatch:
+            ai.suggestFieldsBatch.withTransport(evaluateBatch),
         }}
         storedSuggestionOperations={operations}
       >
@@ -665,6 +672,13 @@ describe("stored suggestions in generic list cells", () => {
         >
           <span>Current category</span>
         </RecordFieldSuggestion>
+        <RecordFieldSuggestion
+          record={missing}
+          field="categoryId"
+          surface="cell"
+        >
+          <span>Unpublished category</span>
+        </RecordFieldSuggestion>
         <RecordSuggestionsBulkAction records={[record]} />
       </RecordSuggestionsProvider>,
       { wrapper: harness.wrapper },
@@ -674,11 +688,28 @@ describe("stored suggestions in generic list cells", () => {
     expect(operations.list).toHaveBeenCalledWith(
       {
         entity: "product",
-        recordIds: [publicId],
+        recordIds: [publicId, missing.id],
         fields: expect.any(Array),
       },
       { consistency: undefined, signal: expect.any(AbortSignal) },
     );
+    operations.list.mockRejectedValueOnce(
+      new Error("Synthetic publication read failure"),
+    );
+    await act(async () =>
+      invalidateOperationTags(
+        harness.queryClient,
+        exactRippleTags([["product"]]),
+      ),
+    );
+    expect(
+      await screen.findByText("Synthetic publication read failure"),
+    ).toBeVisible();
+    expect(screen.getByText("Food")).toBeVisible();
+    expect(screen.getByText("Unpublished category")).toBeVisible();
+    expect(evaluate).not.toHaveBeenCalled();
+    expect(evaluateBatch).not.toHaveBeenCalled();
+    expect(settled).not.toHaveBeenCalled();
     fireEvent.click(
       await screen.findByRole("button", { name: "Accept suggestions (1)" }),
     );
@@ -694,6 +725,8 @@ describe("stored suggestions in generic list cells", () => {
         ],
       }),
     );
+    expect(evaluate).not.toHaveBeenCalled();
+    expect(evaluateBatch).not.toHaveBeenCalled();
     harness.dispose();
   });
 

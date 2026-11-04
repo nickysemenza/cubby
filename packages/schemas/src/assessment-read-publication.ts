@@ -78,6 +78,16 @@ export const assessmentReadDependency = z.object({
 });
 export type AssessmentReadDependency = z.infer<typeof assessmentReadDependency>;
 
+/**
+ * `sourceKind` for an input no single Entity row represents; `sourceId` is the
+ * subject record. Dotted values cannot equal an Entity name, so publication's
+ * Entity join skips them. Each one's capture selector is its own obligation.
+ */
+export const assessmentReadScopedSourceKind = z.enum({
+  fieldWrite: "assessment.fieldWrite",
+  productClassification: "assessment.productClassification",
+});
+
 /** An exact observed ticket, not a sequence-number watermark or an authority. */
 export const assessmentReadObservedTicket = z.object({
   target: z.string().min(1),

@@ -117,13 +117,11 @@ export const connectionEvidence = z.object({
 });
 
 /** Direction is canonical regardless of which endpoint requests discovery. */
-export const connectionCandidate = z
+export const connectionEdge = z
   .object({
     relation: connectionRelation,
     source: entityGraphRootSchema,
     target: entityGraphRootSchema,
-    label: z.string().min(1),
-    evidence: connectionEvidence,
   })
   .refine(({ relation, source, target }) => {
     const [from, to] = connectionEndpoints[relation];
@@ -136,6 +134,29 @@ export const connectionCandidate = z
       )
     );
   }, "Connection relation requires its canonical distinct endpoints");
+export type ConnectionEdge = z.infer<typeof connectionEdge>;
+export const connectionEdgeKey = (edge: ConnectionEdge): string =>
+  `${edge.relation}:${edge.source.entityKind}:${edge.source.entityId}:${edge.target.entityKind}:${edge.target.entityId}`;
+
+/** Live published endpoints are canonical codes; retain opaque legacy keys without guessing. */
+export function connectionEdgeFromKey(key: string): ConnectionEdge | undefined {
+  const parts = key.split(":");
+  if (parts.length !== 5) return undefined;
+  const [relation, sourceKind, sourceId, targetKind, targetId] = parts;
+  const parsed = connectionEdge.safeParse({
+    relation,
+    source: { entityKind: sourceKind, entityId: sourceId },
+    target: { entityKind: targetKind, entityId: targetId },
+  });
+  return parsed.success && connectionEdgeKey(parsed.data) === key
+    ? parsed.data
+    : undefined;
+}
+
+export const connectionCandidate = connectionEdge.safeExtend({
+  label: z.string().min(1),
+  evidence: connectionEvidence,
+});
 export type ConnectionCandidate = z.infer<typeof connectionCandidate>;
 
 export const connectionProposal = connectionCandidate.safeExtend({
