@@ -164,7 +164,11 @@ outside those probes so a shared target's history cannot replace the narrow
 source access path. The resulting distinct competitor IDs drive the existing
 eligibility and evidence read by primary key; no result cap is applied.
 Existing field and Product-pair connections use separate relational branches,
-after a union of matched identities, then one database ordering by publication time and ID. Field targets join their
+after a union of matched identities, then one database ordering by publication time and ID.
+The ID-only CTE and both family hydration branches share one statement snapshot,
+including callers using READ COMMITTED; discovery cannot miss a concurrently
+published replacement between statements. Both branches consume the same
+materialized identity set through UUID-array point probes. Field targets join their
 shortcode; pair targets use a guarded native UUID lookup that admits only the
 canonical text spelling previously matched by the text join. Eligibility,
 suppression, cross-family precedence and historical malformed-value handling

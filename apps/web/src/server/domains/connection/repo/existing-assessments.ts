@@ -16,7 +16,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   assessment,
   assessmentState,
@@ -123,26 +123,30 @@ export async function readExistingConnectionAssessments(
           match,
         ),
       );
-  // Union only identities: wide evidence and endpoint joins follow this barrier.
-  const matched = await idsFor(
-    "all",
-    sql`
+  // Share discovery and hydration in one statement, including READ COMMITTED callers.
+  // Both family reads reference this ID-only CTE, so PostgreSQL materializes it once.
+  const matched = getDb(db)
+    .$with("matched_existing_assessments")
+    .as(
+      idsFor(
+        "all",
+        sql`
     ${inArray(assessmentState.entity, [...new Set(sources.map((source) => source.entityKind))])}
     AND ${assessmentState.recordId} IN (${sourceIds})`,
-  )
-    .union(
-      idsFor(
-        "field",
-        sql`${assessmentState.suggestedValue} #>> '{}' IN (${codes})`,
-      ),
-    )
-    .union(
-      idsFor(
-        "pair",
-        sql`${assessment.subject}->>'otherId' IN (SELECT source_id::text FROM (${sourceIds}) source_ids(source_id))`,
-      ),
+      )
+        .union(
+          idsFor(
+            "field",
+            sql`${assessmentState.suggestedValue} #>> '{}' IN (${codes})`,
+          ),
+        )
+        .union(
+          idsFor(
+            "pair",
+            sql`${assessment.subject}->>'otherId' IN (SELECT source_id::text FROM (${sourceIds}) source_ids(source_id))`,
+          ),
+        ),
     );
-  if (!matched.length) return sources.map(() => []);
   // The old text equality admitted only canonical lower-case UUID spellings.
   // Guard the native lookup so malformed or differently spelled history stays unmatched.
   const otherId = sql`${assessment.subject}->>'otherId'`;
@@ -158,16 +162,21 @@ export async function readExistingConnectionAssessments(
           judgment: assessment.judgment,
           producer: assessment.producer,
           fingerprint: assessment.fingerprint,
-          evidence: sql<unknown>`CASE WHEN ${assessment.family} = ${"product_pair"} THEN ${assessment.evidence} ELSE NULL END`,
+          evidence:
+            sql<unknown>`CASE WHEN ${assessment.family} = ${"product_pair"} THEN ${assessment.evidence} ELSE NULL END`.as(
+              "evidence",
+            ),
         },
         state: { entity: assessmentState.entity, field: assessmentState.field },
         connectionEvidence: connectionReadEvidenceSql(
           sql`${assessmentState.data}->'connectionEvidence'`,
-        ),
-        sourceKind: from.kind,
-        sourceCode: from.shortcode,
-        targetKind: to.kind,
-        targetCode: to.shortcode,
+        ).as("connectionEvidence"),
+        sourceKind: sql`${from.kind}`.mapWith(from.kind).as("sourceKind"),
+        sourceCode: sql`${from.shortcode}`
+          .mapWith(from.shortcode)
+          .as("sourceCode"),
+        targetKind: sql`${to.kind}`.mapWith(to.kind).as("targetKind"),
+        targetCode: sql`${to.shortcode}`.mapWith(to.shortcode).as("targetCode"),
         connectionOrderCreatedAt: sql`${assessment.createdAt}`.as(
           "connectionOrderCreatedAt",
         ),
@@ -201,7 +210,7 @@ export async function readExistingConnectionAssessments(
           family === "field"
             ? eq(assessment.family, "field")
             : inArray(assessment.family, entityPairAssessmentFamilies),
-          sql`${assessment.id} = ANY(${uuidArrayParam(matched.map((row) => row.id))})`,
+          sql`${assessment.id} = ANY(ARRAY(${getDb(db).select({ id: matched.id }).from(matched)}))`,
           sql`(${inArray(sql`${from.kind} || ':' || ${from.shortcode}`, keys)} OR ${inArray(sql`${to.kind} || ':' || ${to.shortcode}`, keys)})`,
           notExists(
             getDb(db)
@@ -218,8 +227,13 @@ export async function readExistingConnectionAssessments(
           sql`NOT EXISTS (SELECT 1 FROM "AssessmentState" suppressed WHERE suppressed.active AND suppressed.entity=${assessmentState.entity} AND suppressed."recordId"=${assessmentState.recordId} AND suppressed.suppression IS NOT NULL AND suppressed.suppression->>'candidateKey'=CASE WHEN ${assessment.family} IN (${pairFamilyList}) THEN (${assessment.subject}->>'recordId') || '|' || (${assessment.subject}->>'otherId') ELSE '' END)`,
         ),
       );
-  const rows = await rowsFor("field")
+  const candidates = rowsFor("field")
     .unionAll(rowsFor("pair"))
+    .as("existing_connections");
+  const rows = await getDb(db)
+    .with(matched)
+    .select()
+    .from(candidates)
     .orderBy(
       sql`${sql.identifier("connectionOrderCreatedAt")}`,
       sql`${sql.identifier("id")}`,
