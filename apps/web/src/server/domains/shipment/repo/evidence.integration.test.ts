@@ -2074,6 +2074,244 @@ describe("Shipment retained evidence", () => {
     expect(report.timeline).toHaveLength(2);
   });
 
+  it("revises a re-read keyless occurrence without inventing or collapsing same-day events", async () => {
+    await createRepoIdentity(ctx, "vendor", { name: "ZQX" });
+    const event = (
+      rawStatus: string,
+      overrides: Partial<ShipmentEvidence["observations"][number]> = {},
+    ): ShipmentEvidence["observations"][number] => ({
+      ...packet().observations[0]!,
+      sourceEventKey: null,
+      time: { kind: "date", value: "2026-06-03" },
+      timeBasis: "stated_event",
+      carrierName: null,
+      rawStatus,
+      ...overrides,
+    });
+    const reRead = (
+      number: string,
+      observations: ShipmentEvidence["observations"],
+      hint: string | null = null,
+    ): ShipmentEvidence => ({
+      ...packet(number),
+      sourceShipmentKey: null,
+      carrierName: hint,
+      observations,
+    });
+    const current = async (code: string) =>
+      (await readShipmentTimeline(ctx.db, code)).observations.filter(
+        (row) => !row.superseded,
+      );
+
+    // An extraction drops a false hint from the same source: one occurrence, two versions.
+    const hinted = "EXAMPLE-REREAD-HINT";
+    const text = `Tracking ID: ${hinted}\nDelivery: ZQX\nSynthetic item`;
+    const original = event("Synthetic pickup", { carrierName: "ZQX" });
+    const first = await recordShipmentEvidence(
+      ctx.db,
+      capture("reread", [reRead(hinted, [original], "ZQX")], undefined, text),
+      ctx.actor,
+    );
+    const code = first.shipmentIds[0]!;
+    const [stored] = await getDb(ctx.db)
+      .select()
+      .from(shipmentObservation)
+      .where(
+        eq(shipmentObservation.id, (await current(code))[0]!.observationId),
+      );
+    const corrected = capture(
+      "reread",
+      [reRead(hinted, [event("Synthetic pickup")])],
+      "2026-06-06T10:00:00Z",
+      text,
+    );
+    const revision = await recordShipmentEvidence(ctx.db, corrected, ctx.actor);
+    expect(revision).toMatchObject({
+      shipmentIds: [code],
+      insertedObservations: 1,
+      repeatedObservations: 0,
+    });
+    const [row] = await current(code);
+    expect(await current(code)).toHaveLength(1);
+    expect(row?.carrierName).toBeNull();
+    expect((await readShipmentTimeline(ctx.db, code)).timeline).toHaveLength(1);
+    // The original identity and fingerprint stay retained under the same occurrence.
+    const versions = await getDb(ctx.db)
+      .select()
+      .from(shipmentObservation)
+      .where(eq(shipmentObservation.sourcePackageId, stored!.sourcePackageId));
+    expect(versions).toHaveLength(2);
+    expect(new Set(versions.map((v) => v.occurrenceKey))).toEqual(
+      new Set([stored!.occurrenceKey]),
+    );
+    expect(versions.find((v) => v.id === stored!.id)).toMatchObject({
+      fingerprint: stored!.fingerprint,
+      supersededById: row?.observationId,
+    });
+    // Replaying the corrected extraction repeats it.
+    expect(
+      await recordShipmentEvidence(ctx.db, corrected, ctx.actor),
+    ).toMatchObject({ insertedObservations: 0, repeatedObservations: 1 });
+    expect(await current(code)).toHaveLength(1);
+
+    // Changed wording re-read from one source, including at the same capture time.
+    const worded = "EXAMPLE-REREAD-WORDING";
+    const wordedInput = (rawStatus: string) =>
+      capture("reread-wording", [reRead(worded, [event(rawStatus)])]);
+    const wordedCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        wordedInput("Picked up by carrier"),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    await recordShipmentEvidence(
+      ctx.db,
+      wordedInput("Carrier picked up the parcel"),
+      ctx.actor,
+    );
+    expect(await current(wordedCode)).toMatchObject([
+      { rawStatus: "Carrier picked up the parcel" },
+    ]);
+
+    // A later snapshot is new source content: its wording cannot prove the same event.
+    const snapshot = "EXAMPLE-REREAD-SNAPSHOT";
+    const snapshotCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture("reread-snapshot", [reRead(snapshot, [event("Arrived")])]),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    await recordShipmentEvidence(
+      ctx.db,
+      capture(
+        "reread-snapshot",
+        [reRead(snapshot, [event("Departed")])],
+        "2026-06-06T10:00:00Z",
+        "Synthetic later snapshot",
+      ),
+      ctx.actor,
+    );
+    expect(await current(snapshotCode)).toHaveLength(2);
+
+    // A newly read second event stays distinct; its sibling repeats unchanged.
+    const added = "EXAMPLE-REREAD-ADDED";
+    const addedCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture("reread-added", [reRead(added, [event("Arrived")])]),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    await recordShipmentEvidence(
+      ctx.db,
+      capture("reread-added", [
+        reRead(added, [event("Arrived"), event("Departed")]),
+      ]),
+      ctx.actor,
+    );
+    expect(await current(addedCode)).toHaveLength(2);
+
+    // Carrier-only changes pair each event; rewording two same-day events is ambiguous.
+    const pair = "EXAMPLE-REREAD-PAIR";
+    const pairCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture("reread-pair", [
+          reRead(pair, [
+            event("Arrived", { carrierName: "ZQX" }),
+            event("Departed", { carrierName: "ZQX" }),
+          ]),
+        ]),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    await recordShipmentEvidence(
+      ctx.db,
+      capture("reread-pair", [
+        reRead(pair, [event("Arrived"), event("Departed")]),
+      ]),
+      ctx.actor,
+    );
+    expect(await current(pairCode)).toHaveLength(2);
+    await recordShipmentEvidence(
+      ctx.db,
+      capture("reread-pair", [
+        reRead(pair, [event("Reached hub"), event("Left hub")]),
+      ]),
+      ctx.actor,
+    );
+    expect(await current(pairCode)).toHaveLength(4);
+
+    // Different places or a forecast are not this event, whatever their day and kind.
+    for (const [suffix, changed] of [
+      ["PLACE", { location: "Synthetic other depot" }],
+      ["FORECAST", { timeBasis: "estimate" }],
+    ] as const) {
+      const number = `EXAMPLE-REREAD-${suffix}`;
+      // A stated event keeps the packet admissible beside a forecast.
+      const stated = event("Label created", {
+        time: { kind: "date", value: "2026-06-02" },
+      });
+      const distinct = (
+        await recordShipmentEvidence(
+          ctx.db,
+          capture(`reread-${suffix}`, [
+            reRead(number, [
+              stated,
+              event("Arrived", { location: "Synthetic depot" }),
+            ]),
+          ]),
+          ctx.actor,
+        )
+      ).shipmentIds[0]!;
+      await recordShipmentEvidence(
+        ctx.db,
+        capture(`reread-${suffix}`, [
+          reRead(number, [
+            stated,
+            event("Arrived soon", { location: "Synthetic depot", ...changed }),
+          ]),
+        ]),
+        ctx.actor,
+      );
+      expect(await current(distinct)).toHaveLength(3);
+    }
+
+    // A member's reviewed revision stays current; the re-read is retained behind it.
+    const reviewed = "EXAMPLE-REREAD-REVIEWED";
+    const reviewedCode = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture("reread-reviewed", [reRead(reviewed, [event("Arrived")])]),
+        ctx.actor,
+      )
+    ).shipmentIds[0]!;
+    const [source] = await current(reviewedCode);
+    await editShipmentObservation(
+      ctx.db,
+      {
+        shipmentId: reviewedCode,
+        observationId: source!.observationId,
+        patch: { rawStatus: "Reviewed synthetic arrival" },
+      },
+      ctx.actor,
+    );
+    const behindReview = capture(
+      "reread-reviewed",
+      [reRead(reviewed, [event("Arrival scanned")])],
+      "2026-06-07T09:00:00Z",
+    );
+    await recordShipmentEvidence(ctx.db, behindReview, ctx.actor);
+    expect(
+      await recordShipmentEvidence(ctx.db, behindReview, ctx.actor),
+    ).toMatchObject({ insertedObservations: 0, repeatedObservations: 1 });
+    expect(await current(reviewedCode)).toMatchObject([
+      { rawStatus: "Reviewed synthetic arrival", memberReviewed: true },
+    ]);
+  });
+
   it("links repeated observations to every supporting literal capture", async () => {
     const first = await recordShipmentEvidence(
       ctx.db,
@@ -2252,7 +2490,7 @@ describe("Shipment retained evidence", () => {
       ...overrides,
     });
     let messages = 0;
-    const mail = async (hrefs: readonly string[]) => {
+    const mail = async (hrefs: readonly string[], bodyText: string | null) => {
       const messageId = `synthetic-lifecycle-${++messages}`;
       const checksum = await sha256Hex(messageId);
       await retainedMailFixture(ctx.db, {
@@ -2261,7 +2499,7 @@ describe("Shipment retained evidence", () => {
         checksum,
         content: {
           snippet: null,
-          bodyText: null,
+          bodyText,
           bodyHtml: `<p>Synthetic parcel notice</p>${hrefs
             .map(
               (href) =>
@@ -2290,18 +2528,22 @@ describe("Shipment retained evidence", () => {
       hrefs: readonly string[],
       parcel: ShipmentEvidence,
       siblings: ShipmentEvidence[] = [],
+      bodyText: string | null = null,
     ) =>
       recordShipmentEvidence(
         ctx.db,
         {
-          source: (await mail(hrefs)).source,
+          source: (await mail(hrefs, bodyText)).source,
           purchaseId: null,
           shipments: [parcel, ...siblings],
         },
         ctx.actor,
       );
-    const notice = async (hrefs: readonly string[], parcel: ShipmentEvidence) =>
-      (await record(hrefs, parcel)).shipmentIds[0];
+    const notice = async (
+      hrefs: readonly string[],
+      parcel: ShipmentEvidence,
+      bodyText: string | null = null,
+    ) => (await record(hrefs, parcel, [], bodyText)).shipmentIds[0];
 
     const id = "Ab3dEf7Gh";
     const shipped = await notice(
@@ -2415,15 +2657,17 @@ describe("Shipment retained evidence", () => {
     expect(held.unresolvedPackages).toEqual([
       {
         sourceShipmentKey: key("Rt6vBn3Cx"),
-        reason: expect.stringContaining("Multiple nearby Shipments"),
+        reason: expect.stringContaining("cannot prove which nearby Shipment"),
       },
     ]);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(assessmentState)
-        .where(eq(assessmentState.family, "run_finding")),
-    ).toHaveLength(1);
+    const heldFindings = async () =>
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.family, "run_finding"))
+      ).length;
+    expect(await heldFindings()).toBe(1);
 
     // Another member's package is not a candidate, and never refuses the tracked sibling.
     const seller = await createRepoIdentity(ctx, "vendor", {
@@ -2475,7 +2719,7 @@ describe("Shipment retained evidence", () => {
       recordShipmentEvidence(
         ctx.db,
         {
-          source: (await mail([tracker("Un8cMw4Dy")])).source,
+          source: (await mail([tracker("Un8cMw4Dy")], null)).source,
           purchaseId: otherOrder.output.id,
           shipments: [trackingless(key("Un8cMw4Dy"))],
         },
@@ -2511,7 +2755,7 @@ describe("Shipment retained evidence", () => {
       notice([tracker("Fg7xVb5Ez")], trackingless(key("Fg7xVb5Ez"))),
     ).resolves.toBe(withSibling.shipmentIds[0]);
 
-    const foreignSource = await mail([tracker("Hj2yNq6Gw")]);
+    const foreignSource = await mail([tracker("Hj2yNq6Gw")], null);
     const foreignSourced = (
       await recordShipmentEvidence(
         ctx.db,
@@ -2534,6 +2778,159 @@ describe("Shipment retained evidence", () => {
     await expect(
       notice([tracker("Hj2yNq6Gw")], trackingless(key("Hj2yNq6Gw"))),
     ).resolves.not.toBe(foreignSourced);
+
+    // Identical item lists cannot tell a renumbered parcel from a second box: hold the
+    // packet for review, commit its tracked sibling, and neither join nor duplicate.
+    const itemList = (...lines: readonly string[]) =>
+      lines.map((line) => `* ${line}\r\n  Quantity: 1`).join("\r\n\r\n");
+    const groceries = itemList("Synthetic lemons", "Synthetic onion");
+    const reordered = itemList("Synthetic onion", "Synthetic lemons");
+    const shipmentCount = async () =>
+      (await getDb(ctx.db).select({ id: shipment.id }).from(shipment)).length;
+    const expectHeld = async (
+      hrefs: readonly string[],
+      parcelKey: string,
+      unjoined: string,
+      siblingNumber: string,
+      list: string,
+    ) => {
+      const [findings, count] = [await heldFindings(), await shipmentCount()];
+      const result = await record(
+        hrefs,
+        trackingless(parcelKey),
+        [packet(siblingNumber)],
+        list,
+      );
+      expect(result.unresolvedPackages).toEqual([
+        {
+          sourceShipmentKey: parcelKey,
+          reason: expect.stringContaining("cannot prove which nearby Shipment"),
+        },
+      ]);
+      expect(result.shipmentIds).toHaveLength(1);
+      expect(result.shipmentIds).not.toContain(unjoined);
+      expect(await heldFindings()).toBe(findings + 1);
+      // Only the tracked sibling became a Shipment.
+      expect(await shipmentCount()).toBe(count + 1);
+    };
+    const renumbered = "Mp4tYh9Bq";
+    const dispatched = (await notice(
+      [tracker(renumbered, 2)],
+      trackingless(key(renumbered, 2)),
+      groceries,
+    ))!;
+    // One compatible candidate is enough: a real renumbering and a second box look alike.
+    await expectHeld(
+      [tracker(renumbered, 0)],
+      `amazon:order=000-0000001-0000001:shipmentId=${renumbered}:packageIndex=0`,
+      dispatched,
+      "EXAMPLE-RENUMBERED-SIBLING",
+      reordered,
+    );
+    await expectHeld(
+      [tracker(renumbered, 6)],
+      key(renumbered, 6),
+      dispatched,
+      "EXAMPLE-SECOND-BOX-SIBLING",
+      groceries,
+    );
+    // The retained parcel number and key still join their one Shipment normally.
+    await expect(
+      notice(
+        [tracker(renumbered, 2)],
+        trackingless(key(renumbered, 2)),
+        groceries,
+      ),
+    ).resolves.toBe(dispatched);
+
+    // No compatible candidate creates a separate Shipment as before.
+    const separate = async (
+      hrefs: readonly string[],
+      parcelKey: string,
+      list: string,
+      overrides: Partial<ShipmentEvidence> = {},
+      value = "2026-06-03",
+    ) => {
+      const result = await record(
+        hrefs,
+        trackingless(parcelKey, overrides, value),
+        [],
+        list,
+      );
+      expect(result.unresolvedPackages).toEqual([]);
+      expect(result.shipmentIds).not.toContain(dispatched);
+      return result.shipmentIds[0]!;
+    };
+    await separate(
+      [tracker(renumbered, 1)],
+      key(renumbered, 1),
+      itemList("Synthetic lemons", "Synthetic limes"),
+    );
+    await separate(
+      [tracker(renumbered, 3), tracker(renumbered, 4)],
+      key(renumbered, 3),
+      groceries,
+    );
+    await separate(
+      [tracker(renumbered, 5, "000-0000002-0000002")],
+      key(renumbered, 5),
+      groceries,
+    );
+    const singleLine = itemList("Synthetic rice");
+    await separate([tracker("Vc8dRs3Lk", 0)], key("Vc8dRs3Lk", 0), singleLine);
+    await separate([tracker("Vc8dRs3Lk", 1)], key("Vc8dRs3Lk", 1), singleLine);
+    // Period and direction filter a candidate before it can hold the packet.
+    await separate(
+      [tracker(renumbered, 7)],
+      key(renumbered, 7),
+      groceries,
+      {},
+      "2026-10-03",
+    );
+    await separate([tracker(renumbered, 8)], key(renumbered, 8), groceries, {
+      purpose: "outgoing",
+    });
+    // So does another Purchase.
+    const listedOrder = "Lt6wZc9Ks";
+    const underOrder = async (index: number, purchaseId: string) =>
+      recordShipmentEvidence(
+        ctx.db,
+        {
+          source: (await mail([tracker(listedOrder, index)], groceries)).source,
+          purchaseId: parseShortcodeFor("purchase", purchaseId),
+          shipments: [trackingless(key(listedOrder, index))],
+        },
+        ctx.actor,
+      );
+    const firstOrderBox = await underOrder(0, householdOrder.output.id);
+    const secondOrderBox = await underOrder(1, otherOrder.output.id);
+    expect(secondOrderBox.unresolvedPackages).toEqual([]);
+    expect(secondOrderBox.shipmentIds).not.toEqual(firstOrderBox.shipmentIds);
+
+    // An exact match beside an alternative with the same items is still no proof.
+    const contested = "Bz5nGf2Wx";
+    const altered = itemList("Synthetic lemons", "Synthetic basil");
+    const elsewhere = (await notice(
+      [tracker(contested, 2)],
+      trackingless(key(contested, 2)),
+      groceries,
+    ))!;
+    const exact = await separate(
+      [tracker(contested, 0)],
+      key(contested, 0),
+      altered,
+    );
+    await expect(
+      notice([tracker(contested, 0)], trackingless(key(contested, 0)), altered),
+    ).resolves.toBe(exact);
+    await expectHeld(
+      [tracker(contested, 0)],
+      key(contested, 0),
+      exact,
+      "EXAMPLE-CONTESTED-SIBLING",
+      groceries,
+    );
+    expect(elsewhere).not.toBe(exact);
   });
 
   it("keeps a member carrier correction through replay without an extra handoff", async () => {

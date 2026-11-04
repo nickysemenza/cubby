@@ -1,5 +1,5 @@
 import { previewOperationSchema } from "@cubby/schemas/entity-integrity";
-import { productShortcode } from "@cubby/schemas/identifiers";
+import { productShortcode, vendorShortcode } from "@cubby/schemas/identifiers";
 import {
   ingredientResolvableNamesInput,
   ingredientResolveOrCreateResultOut,
@@ -29,6 +29,7 @@ import {
 import { resolveWithProductCandidatesWorkflow } from "~/server/domains/ingredient/operations.server";
 import { resolveOrCreatePlants } from "~/server/domains/plant/repo/plant";
 import { resolveProductNames } from "~/server/domains/product/repo/resolve-names";
+import { resolveVendorNames } from "~/server/domains/vendor/repo/vendor";
 import {
   type EntityCommand,
   type EntityKernelContext,
@@ -304,9 +305,26 @@ const commandsInput = batchInputSchema({
   itemInput: batchCommandItemInput,
 });
 
-const productResolveInput = productResolveNamesInput.extend({
-  entity: z.literal("product"),
-});
+const readResolveInput = z.discriminatedUnion("entity", [
+  productResolveNamesInput.extend({ entity: z.literal("product") }),
+  z.object({
+    entity: z.literal("vendor"),
+    names: z.array(z.string().min(1)).max(200),
+  }),
+]);
+const vendorResolveOut = z.array(
+  z.object({
+    name: z.string(),
+    status: z.enum(["matched", "ambiguous", "missing"]),
+    id: vendorShortcode.nullable(),
+    vendorName: z.string().nullable(),
+    candidates: z
+      .array(z.object({ id: vendorShortcode, name: z.string() }))
+      .describe(
+        "Every Vendor sharing an ambiguous name; choose one by id or merge them.",
+      ),
+  }),
+);
 const resolveOrCreateInput = z.discriminatedUnion("entity", [
   ingredientResolvableNamesInput.extend({
     entity: z.literal("ingredient"),
@@ -490,16 +508,23 @@ export const createKernelMcpActions = (
     },
     /**
      * Name or external-id → id lookup that never creates: a Product is
-     * identity plus cost basis, not just a name, so its create stays a
-     * deliberate `entity` call.
+     * identity plus cost basis and a Vendor needs sender or distinctness
+     * proof, so each create stays a deliberate write.
      */
     resolve: {
-      input: productResolveInput,
-      output: mcpResultsEnvelope(productResolveNamesOut),
+      input: readResolveInput,
+      output: z.union([
+        mcpResultsEnvelope(productResolveNamesOut),
+        mcpResultsEnvelope(vendorResolveOut),
+      ]),
       run: async (raw, principal) => {
-        const input = productResolveInput.parse(raw);
+        const input = readResolveInput.parse(raw);
+        const { db } = principal.context;
         return {
-          results: await resolveProductNames(principal.context.db, input),
+          results:
+            input.entity === "vendor"
+              ? await resolveVendorNames(db, input.names)
+              : await resolveProductNames(db, input),
         };
       },
     },
