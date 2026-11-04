@@ -9,6 +9,7 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { GridFourIcon } from "@phosphor-icons/react/dist/csr/GridFour";
 import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
+import { IntersectSquareIcon } from "@phosphor-icons/react/dist/csr/IntersectSquare";
 import { RowsIcon } from "@phosphor-icons/react/dist/csr/Rows";
 import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import type { Icon } from "@phosphor-icons/react/lib";
@@ -17,6 +18,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { entities } from "~/entity/entities";
 import { useEntityMetadata } from "~/entity/metadata";
 import { DisplayRow } from "~/entity/table/display-menu";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -31,7 +33,7 @@ import {
   DropdownMenuSubmenuContent,
 } from "~/ui/primitives/dropdown-menu";
 
-import { listGroupBy } from "./list-grouping";
+import { listGroupBy, PIVOT_VIEW_ID, pivotAvailable } from "./list-grouping";
 import { useEntityListCardDensity, useListSearch } from "./list-search";
 import { resolveListView } from "./resolve-list-view";
 
@@ -55,8 +57,17 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
   const { search, navigate } = useListSearch();
   const { density, setDensity } = useEntityListCardDensity();
   const { views, view } = resolveListView(useQueryClient(), entity, search);
-  if (views.length < 2) return null;
-  const options = views.flatMap((candidate) => {
+  const grouping = useEntityMetadata(entity).listFields.grouping;
+  const isMobile = useIsMobile();
+  // Pivot is built in on desktop wherever two choices can group.
+  const pivot = !isMobile && pivotAvailable(grouping);
+  if (views.length < 2 && !pivot) return null;
+  const dimensions = listGroupBy(search) ?? [];
+  const pivotReason =
+    dimensions.length < 2
+      ? "Group by two fields first: rows, then columns."
+      : null;
+  const declared = views.flatMap((candidate) => {
     const id = listViewId(candidate);
     const choice = {
       value: id,
@@ -77,9 +88,31 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
         ]
       : [choice];
   });
+  const options: {
+    value: string;
+    label: string;
+    icon?: Icon;
+    reason?: string | null;
+  }[] = [
+    ...declared,
+    ...(pivot
+      ? [
+          {
+            value: PIVOT_VIEW_ID,
+            label: "Pivot",
+            icon: IntersectSquareIcon,
+            reason: pivotReason,
+          },
+        ]
+      : []),
+  ];
   const defaultView = listViewId(views[0] ?? "table");
   const selected =
-    view === "shelf" && density === "compact" ? "compact" : listViewId(view);
+    pivot && search.view === PIVOT_VIEW_ID
+      ? PIVOT_VIEW_ID
+      : view === "shelf" && density === "compact"
+        ? "compact"
+        : listViewId(view);
   const selectedOption = options.find((option) => option.value === selected);
   const onValueChange = (next: string) => {
     if (next === "compact") {
@@ -115,10 +148,15 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
               key={option.value}
               aria-label={`${option.label} view`}
               aria-current={option.value === selected ? "true" : undefined}
+              disabled={Boolean(option.reason)}
+              title={option.reason ?? undefined}
               onClick={() => onValueChange(option.value)}
             >
               {option.icon && <option.icon className="size-3.5" />}
               {option.label}
+              {option.reason && (
+                <span className="sr-only">: {option.reason}</span>
+              )}
               {option.value === selected && (
                 <CheckIcon className="ml-auto size-3.5" />
               )}

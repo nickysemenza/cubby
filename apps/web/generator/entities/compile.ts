@@ -2060,7 +2060,12 @@ const validateSavedViews = (
     if (ids.has(view.id))
       throw new EntityDeclarationError(`${context} repeats the id ${view.id}.`);
     ids.add(view.id);
-    if (view.view !== null && !listViewIds.has(view.view))
+    // The built-in Pivot is checked once grouping compiles (below).
+    if (
+      view.view !== null &&
+      view.view !== "pivot" &&
+      !listViewIds.has(view.view)
+    )
       throw new EntityDeclarationError(
         `${where} opens in ${view.view}, which this list does not offer.`,
       );
@@ -3411,6 +3416,18 @@ export const compileEntityDeclarations = (
     }
   }
   for (const entity of entities) {
+    for (const view of entity.inspector.list.savedViews) {
+      if (view.view !== "pivot") continue;
+      const usable = view.groupBy.filter(({ key }) =>
+        entity.listFields.grouping.some(
+          (choice) => choice.key === key && choice.reason === null,
+        ),
+      );
+      if (usable.length < 2 || usable.length !== view.groupBy.length)
+        throw new EntityDeclarationError(
+          `${entity.key}.${view.id}: a Pivot view groups by at least two usable choices.`,
+        );
+    }
     for (const view of entity.inspector.list.views) {
       if (typeof view !== "object" || view.kind !== "board") continue;
       if (!view.groupings.includes(view.groupBy))

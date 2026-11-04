@@ -45,7 +45,19 @@ export const { definition, readSchemas } = defineEntityModel({
       description: "Record packages through the shipping evidence workflow.",
     },
     icons: { phosphor: "Package", sfSymbol: "shippingbox", emoji: "📦" },
-    list: {},
+    list: {
+      savedViews: [
+        {
+          id: "carrier-by-vendor",
+          label: "Carrier by vendor",
+          description:
+            "Which carriers each vendor ships incoming packages with",
+          filters: [{ id: "purpose", value: ["incoming"] }],
+          view: "pivot",
+          groupBy: [{ key: "vendorId" }, { key: "carrierId" }],
+        },
+      ],
+    },
     detail: {
       omitRelations: {
         "tracking-emails": "Shown with witnessed paths in Connected records.",

@@ -89,9 +89,12 @@ const listFields = {
       pageSize: z
         .number()
         .int()
-        .min(1)
+        .min(0)
         .max(MAX_PAGE_SIZE)
-        .default(DEFAULT_PAGE_SIZE),
+        .default(DEFAULT_PAGE_SIZE)
+        .describe(
+          "Rows per page; 0 with groupBy returns only counts and group summaries",
+        ),
     })
     .optional(),
   groupBy: listGroupByDimensionsSchema.optional(),

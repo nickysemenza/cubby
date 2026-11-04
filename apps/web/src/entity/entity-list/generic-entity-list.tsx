@@ -4,10 +4,10 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { shortcodeEntities } from "@cubby/schemas/entity-roster";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { z } from "zod";
 
 import {
@@ -76,7 +76,12 @@ import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import { EntityShelf } from "./entity-shelf";
-import { listGroupBy } from "./list-grouping";
+import {
+  listGroupBy,
+  PIVOT_VIEW_ID,
+  pivotAvailable,
+  pivotShare,
+} from "./list-grouping";
 import { listNested, nestSearchValue } from "./list-nesting";
 export { listGroupBy } from "./list-grouping";
 import { ListDisplaySections } from "./list-display-sections";
@@ -98,6 +103,18 @@ const EntityBoard = lazy(() =>
     default: module.EntityBoard,
   })),
 );
+
+const EntityPivot = lazy(() =>
+  import("./pivot/entity-pivot").then((module) => ({
+    default: module.EntityPivot,
+  })),
+);
+
+/** The `?view=` that opens the table: absent when it is the default view. */
+function tableViewParam(queryClient: QueryClient, entity: BrowserRoutedEntity) {
+  const views = entityMetadata(queryClient, entity).summary.list.views;
+  return views[0] === "table" || !views.includes("table") ? undefined : "table";
+}
 
 const EntityTimeline = lazy(() =>
   import("~/entity/timeline/entity-timeline").then((module) => ({
@@ -426,8 +443,33 @@ export function GenericEntityList({
   readProjection,
 }: GenericEntityListProps) {
   const { search, navigate } = useListSearch();
-  const { view } = resolveListView(useQueryClient(), entity, search);
+  const queryClient = useQueryClient();
+  const { view } = resolveListView(queryClient, entity, search);
+  const isMobile = useIsMobile();
+  // Pivot is desktop and tablet only; a phone keeps the grouped list.
+  const pivot =
+    search.view === PIVOT_VIEW_ID &&
+    !isMobile &&
+    isListEntity(entity) &&
+    pivotAvailable(entityMetadata(queryClient, entity).listFields.grouping);
 
+  const body = (bodyView: ComponentProps<typeof ServerListBody>["view"]) => (
+    <ServerListBody
+      entity={entity}
+      view={bodyView}
+      override={override}
+      readProjection={
+        readProjection === undefined
+          ? override === NO_OVERRIDE
+            ? declaredListReadProjection
+            : null
+          : readProjection
+      }
+      context={{ search, navigate }}
+      operations={operations}
+    />
+  );
+  if (pivot) return body(PIVOT_VIEW_ID);
   if (typeof view === "object" && view.kind === "board") {
     if (!isListEntity(entity))
       throw new Error(`${entity} has no board list read`);
@@ -444,22 +486,7 @@ export function GenericEntityList({
     const Slot = listSlotFor(entity, view.id);
     return Slot ? <Slot search={search} navigate={navigate} /> : null;
   }
-  return (
-    <ServerListBody
-      entity={entity}
-      view={view}
-      override={override}
-      readProjection={
-        readProjection === undefined
-          ? override === NO_OVERRIDE
-            ? declaredListReadProjection
-            : null
-          : readProjection
-      }
-      context={{ search, navigate }}
-      operations={operations}
-    />
-  );
+  return body(view);
 }
 
 function ServerListBody({
@@ -471,7 +498,7 @@ function ServerListBody({
   operations,
 }: {
   entity: BrowserRoutedEntity;
-  view: "table" | "shelf" | "timeline";
+  view: "table" | "shelf" | "timeline" | typeof PIVOT_VIEW_ID;
   override: AnyEntityListOverride;
   readProjection?: ListReadProjection | null;
   context: ListOverrideContext;
@@ -556,6 +583,7 @@ function ServerListBody({
     // Timeline is already arranged by date, so it reads the list flat.
     groupBy: view === "timeline" ? undefined : listGroupBy(context.search),
     onGroupByChange: view === "timeline" ? undefined : onGroupByChange,
+    summaryOnly: view === PIVOT_VIEW_ID,
   });
   usePageCount(list.totalCount);
   const [chipsTarget, setChipsTarget] = useState<HTMLDivElement | null>(null);
@@ -723,6 +751,35 @@ function ServerListBody({
               timing={list.workbench.timing}
             />
           )}
+          {renderedView === PIVOT_VIEW_ID && (
+            <EntityPivot
+              labels={(listGroupBy(context.search) ?? []).map(
+                (dimension) =>
+                  entityMetadata(queryClient, entity).listFields.grouping.find(
+                    (choice) => choice.key === dimension.key,
+                  )?.label ?? dimension.key,
+              )}
+              recordLabel={entities[entity].pluralLabel.toLowerCase()}
+              summary={list.groupSummary}
+              isLoading={list.workbench.isLoading}
+              isTransitioning={
+                list.workbench.infiniteScroll?.isTransitioning ?? false
+              }
+              error={list.workbench.error}
+              onRetry={() => void list.workbench.refreshControls.onRefresh()}
+              share={pivotShare(context.search)}
+              onShareChange={(share) =>
+                navigate(
+                  { share: share === "row" ? undefined : share },
+                  { replace: true },
+                )
+              }
+              onDrill={(path) => {
+                list.groupSummary?.drill(path);
+                navigate({ view: tableViewParam(queryClient, entity) });
+              }}
+            />
+          )}
           {renderedView === "timeline" && isTimelineEntity(entity) && (
             <ListTimeline
               entity={entity}
@@ -752,6 +809,9 @@ function ServerListBody({
         displaySections:
           resolveListView(queryClient, entity, context.search).views.length >
             1 ||
+          pivotAvailable(
+            entityMetadata(queryClient, entity).listFields.grouping,
+          ) ||
           entityMetadata(queryClient, entity).listFields.grouping.length > 0 ? (
             <ListDisplaySections entity={entity} />
           ) : undefined,

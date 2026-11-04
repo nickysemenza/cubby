@@ -1963,6 +1963,12 @@ const buildMetadataSchemas = () => {
                   view: nonEmptyString().nullable().optional().default(null),
                   /** The `model.grouping` field the view opens grouped by. */
                   groupBy: listGroupByDimensionsSchema.optional().default([]),
+                  /** The Pivot cell share (`?share=`) the view opens with. */
+                  share: z
+                    .enum(["count", "row", "column", "total"])
+                    .nullable()
+                    .optional()
+                    .default(null),
                   /**
                    * A shortcut on another surface. `home` lists the view in
                    * the home "Your views" row on web and Apple, by `order`.

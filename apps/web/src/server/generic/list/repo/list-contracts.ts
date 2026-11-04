@@ -1,4 +1,5 @@
 import type {
+  ListGroupMargin,
   ListGroupSummary,
   ListGroupMembership,
 } from "@cubby/schemas/pagination";
@@ -17,6 +18,7 @@ export interface ListReadPage<T = ListReadRow> {
   fieldReads?: PageFieldReadContexts;
   sums?: Record<string, number>;
   groups?: ListGroupSummary[];
+  margins?: ListGroupMargin[];
   memberships?: ListGroupMembership[];
   membershipCount?: number;
 }

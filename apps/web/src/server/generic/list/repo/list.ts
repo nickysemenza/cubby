@@ -26,6 +26,7 @@ import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import {
   buildTakeSkip,
   listGroupByDimensionsSchema,
+  type ListGroupMargin,
   type ListGroupMembership,
   type ListGroupSummary,
   type ListGroupBy,
@@ -2464,6 +2465,7 @@ export function listScaffold<
       unresolvedCount?: number;
       incompleteSums?: string[];
       groups?: ListGroupSummary[];
+      margins?: ListGroupMargin[];
       memberships?: ListGroupMembership[];
       membershipCount?: number;
     }> {
@@ -2668,7 +2670,9 @@ export function listScaffold<
           const result = groupedPage
             ? {
                 count: groupedPage.count,
-                hasNextPage: skip + take < groupedPage.membershipCount,
+                // A zero page size reads only the summaries; it has no next page.
+                hasNextPage:
+                  take > 0 && skip + take < groupedPage.membershipCount,
                 data:
                   groupedPage.ids.length === 0
                     ? []
@@ -2719,6 +2723,7 @@ export function listScaffold<
               ? {}
               : {
                   groups: groupedPage.groups,
+                  margins: groupedPage.margins,
                   memberships: groupedPage.memberships,
                   membershipCount: groupedPage.membershipCount,
                 };

@@ -1,5 +1,6 @@
 import type {
   ListGroupBy,
+  ListGroupMargin,
   ListGroupMembership,
   ListGroupSummary,
   ListNesting,
@@ -41,6 +42,8 @@ interface UseInfiniteTableListOptions<
   nesting?: ListNesting;
   resultMembership?: ListResultMembership;
   includeCount?: boolean;
+  /** Request page size 0: the counts and group summaries without rows (Pivot). */
+  summaryOnly?: boolean;
   /** Envelopes required by the currently visible columns. Undefined requests complete rows. */
   requiredFields?: readonly string[];
 }
@@ -76,6 +79,7 @@ interface UseInfiniteTableListReturn<
   /** The declared list totals as the server words them, by total id. */
   totalLabels?: Record<string, string>;
   groups?: ListGroupSummary[];
+  margins?: ListGroupMargin[];
   memberships?: ListGroupMembership[];
   isLoading: boolean;
   error: Error | null;
@@ -111,6 +115,7 @@ function useInfiniteTableListPlan<
   nesting,
   resultMembership,
   includeCount = false,
+  summaryOnly = false,
 }: UseInfiniteTableListOptions<TFilters, TData, TPage>) {
   const { filters, sortParams, pagination, queryParams } =
     usePaginatedTableCore<TFilters, TData, TPage>({
@@ -121,13 +126,14 @@ function useInfiniteTableListPlan<
       includeCount,
     });
 
+  const pageSize = summaryOnly ? 0 : pagination.pageSize;
   const pageInputFor = useCallback(
     (
       pageIndex: number,
     ): Parameters<ListQueryOptionsFn<TFilters, TData, TPage>>[0] => {
       const params: Parameters<ListQueryOptionsFn<TFilters, TData, TPage>>[0] =
         {
-          pagination: { pageIndex, pageSize: pagination.pageSize },
+          pagination: { pageIndex, pageSize },
           filters,
         };
       if (includeCount !== undefined) params.includeCount = includeCount;
@@ -144,7 +150,7 @@ function useInfiniteTableListPlan<
       groupBy,
       nesting,
       resultMembership,
-      pagination.pageSize,
+      pageSize,
       queryParams.sort,
       sortParams,
     ],
@@ -216,6 +222,7 @@ export function useInfiniteTableList<
   nesting,
   resultMembership,
   includeCount = false,
+  summaryOnly,
   requiredFields,
 }: UseInfiniteTableListOptions<
   TFilters,
@@ -232,6 +239,7 @@ export function useInfiniteTableList<
       nesting,
       resultMembership,
       includeCount,
+      summaryOnly,
     });
 
   // SAFETY: this adapter narrows TanStack's observer result to the exact
@@ -295,6 +303,7 @@ export function useInfiniteTableList<
   const totalCount = infiniteData?.pages[0]?.meta?.totalCount;
   const lastMeta = infiniteData?.pages.at(-1)?.meta;
   const groups = infiniteData?.pages[0]?.meta?.groups;
+  const margins = infiniteData?.pages[0]?.meta?.margins;
   const memberships = useMemo(() => {
     if (
       !infiniteData?.pages.some((page) => page.meta.memberships !== undefined)
@@ -419,6 +428,7 @@ export function useInfiniteTableList<
     totalLabels: lastMeta?.totalLabels,
     unresolvedCount: lastMeta?.unresolvedCount,
     groups,
+    margins,
     memberships,
     isLoading,
     error: error instanceof Error ? error : null,
