@@ -1154,7 +1154,7 @@ function DesktopTableView<TItem extends RowData>({
           {rowContextMenu.menu}
           {desktopInspector && !embedded ? (
             <div
-              className="absolute inset-y-0 right-0 hidden w-(--side-panel-width) overflow-y-auto border-l border-border bg-card xl:block"
+              className="absolute inset-y-0 right-0 hidden w-(--side-panel-width) overflow-y-auto border-l border-border bg-card transition-[opacity,translate] duration-(--brand-motion-standard) ease-cozy xl:block starting:translate-x-4 starting:opacity-0"
               data-desktop-inspector
             >
               {desktopInspector}

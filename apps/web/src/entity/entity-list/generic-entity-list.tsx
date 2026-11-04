@@ -710,7 +710,7 @@ function ServerListBody({
                   />
                 </div>
                 {dockedInspector && (
-                  <aside className="max-h-[calc(100vh-10rem)] overflow-y-auto border-l border-[var(--border)]">
+                  <aside className="max-h-[calc(100vh-10rem)] overflow-y-auto border-l border-[var(--border)] transition-[opacity,translate] duration-(--brand-motion-standard) ease-cozy starting:translate-x-4 starting:opacity-0">
                     {dockedInspector}
                   </aside>
                 )}
