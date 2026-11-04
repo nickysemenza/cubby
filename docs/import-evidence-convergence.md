@@ -345,10 +345,13 @@ joins an existing Shipment only when both retained Email originals link the same
 parcel on a bounded vendor route that names one (Amazon's package tracker, by order,
 shipment and package index), both keys name that parcel and respell each other, and
 exactly one live candidate fits one identity period with no direction, member or
-Purchase conflict. Anything else stays separate without refusing tracked siblings:
-counters, origin labels, box numbers, order numbers and other vendors' ids, however
-opaque, and tracking pages or SMS, which retain no independent link. Identical
-unkeyed source rows retain their multiplicity; replay updates the same
+Purchase conflict. Candidates that do not fit are no rivals: a parcel id reused in a
+separate period joins only that period's Shipment. Several that fit stay unresolved
+under the rule above. No proof or no fitting candidate stays separate. Neither outcome
+refuses tracked siblings. Proof never comes from counters, origin labels, box numbers,
+order numbers or other vendors' ids, however opaque, from tracking pages or SMS, which
+retain no independent link, or from an unverified wrapper such as Amazon's `/gp/f.html`.
+Identical unkeyed source rows retain their multiplicity; replay updates the same
 occurrences. Native event keys scope changed versions to their source package.
 A later A → B → A report retains a third version, while stale captures cannot
 replace a newer current version. Every supporting capture retains membership

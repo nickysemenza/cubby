@@ -261,8 +261,9 @@ const withinIdentityPeriod = (days: readonly (string | null)[]) => {
   );
 };
 
-/** The one nearby live Shipment another retained source links to the same parcel. Any
- * conflict leaves the packet a separate Shipment, so tracked siblings still commit.
+/** The live Shipment another retained source links to the same parcel. Each candidate
+ * must fit this packet before it counts: a parcel id reused in a separate period is no
+ * rival. None fits: a separate Shipment. Several fit: "ambiguous", never a guess.
  */
 async function retainedPackageShipment(
   db: Database,
@@ -300,7 +301,7 @@ async function retainedPackageShipment(
         sql`lower(regexp_replace(${shipmentSourcePackage.packageKey}, '[^[:alnum:]]', '', 'g')) = ${sourcePackageSpelling(input.packageKey)}`,
       ),
     );
-  const matches = new Map(
+  const proven = new Map(
     bound
       .filter((row) =>
         [...retainedPackages(row, row.packageKey)].some((linked) =>
@@ -309,44 +310,49 @@ async function retainedPackageShipment(
       )
       .map((row) => [row.id, row]),
   );
-  const [match] = matches.values();
-  if (
-    !match ||
-    matches.size > 1 ||
-    shipmentPurposesDisagree(input.purpose, match.purpose) ||
-    (input.purchaseId &&
-      match.purchaseId &&
-      match.purchaseId !== input.purchaseId)
-  )
-    return undefined;
-  const purchaseOwner = match.purchaseId
-    ? await purchaseSourceOwner(db, match.purchaseId)
-    : null;
-  if (
-    (match.purchaseId && !purchaseOwner) ||
-    (purchaseOwner?.ownerId && purchaseOwner.ownerId !== input.ownerId) ||
-    (await shipmentSourceOwners(db, match.id)).some(
-      (ownerId) => ownerId !== input.ownerId,
+  const fits = async (candidate: (typeof bound)[number]) => {
+    if (
+      shipmentPurposesDisagree(input.purpose, candidate.purpose) ||
+      (input.purchaseId &&
+        candidate.purchaseId &&
+        candidate.purchaseId !== input.purchaseId)
     )
-  )
-    return undefined;
-  const period = identityWindowSchema.parse(
-    (
-      await getDb(db).execute(
-        sql`SELECT first_day::text AS first, last_day::text AS last FROM shipment_identity_window(${match.id}::uuid)`,
+      return false;
+    const purchaseOwner = candidate.purchaseId
+      ? await purchaseSourceOwner(db, candidate.purchaseId)
+      : null;
+    if (
+      (candidate.purchaseId && !purchaseOwner) ||
+      (purchaseOwner?.ownerId && purchaseOwner.ownerId !== input.ownerId) ||
+      (await shipmentSourceOwners(db, candidate.id)).some(
+        (ownerId) => ownerId !== input.ownerId,
       )
-    ).rows[0],
-  );
-  return period.first &&
-    input.window.first &&
-    withinIdentityPeriod([
-      input.window.first,
-      input.window.last,
-      period.first,
-      period.last,
-    ])
-    ? canonicalShipment(db, match.shortcode)
-    : undefined;
+    )
+      return false;
+    const period = identityWindowSchema.parse(
+      (
+        await getDb(db).execute(
+          sql`SELECT first_day::text AS first, last_day::text AS last FROM shipment_identity_window(${candidate.id}::uuid)`,
+        )
+      ).rows[0],
+    );
+    return Boolean(
+      period.first &&
+      input.window.first &&
+      withinIdentityPeriod([
+        input.window.first,
+        input.window.last,
+        period.first,
+        period.last,
+      ]),
+    );
+  };
+  const fitting = [];
+  for (const candidate of proven.values())
+    if (await fits(candidate)) fitting.push(candidate);
+  const [match, rival] = fitting;
+  if (rival) return "ambiguous" as const;
+  return match ? canonicalShipment(db, match.shortcode) : undefined;
 }
 
 // Intake and explicit corrections share this transaction lock: replay cannot race a package merge.
@@ -1011,8 +1017,9 @@ async function writeShipmentEvidence(
         )
           row = proposed;
       }
-      if (!row && !number && packet.sourceShipmentKey)
-        row = await retainedPackageShipment(tdb, {
+      let retainedPackageAmbiguous = false;
+      if (!row && !number && packet.sourceShipmentKey) {
+        const retained = await retainedPackageShipment(tdb, {
           capture,
           ownerId,
           packageKey: packet.sourceShipmentKey,
@@ -1020,6 +1027,9 @@ async function writeShipmentEvidence(
           purchaseId,
           window: identity.window,
         });
+        retainedPackageAmbiguous = retained === "ambiguous";
+        if (retained !== "ambiguous") row = retained;
+      }
       const existingDates = row
         ? identityWindowSchema.parse(
             (
@@ -1121,7 +1131,11 @@ async function writeShipmentEvidence(
           candidate.id !== row?.id && (!row || !candidate.carrier_conflict),
       );
       const candidate = !row && possible.length === 1 ? possible[0] : undefined;
-      let ambiguity: string | null = carrierIssue;
+      let ambiguity: string | null =
+        carrierIssue ??
+        (retainedPackageAmbiguous
+          ? "Multiple nearby Shipments fit this linked parcel; review the retained sources before associating it."
+          : null);
       if (
         !row &&
         possible.length > 0 &&

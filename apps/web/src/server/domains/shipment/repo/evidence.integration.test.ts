@@ -2315,9 +2315,15 @@ describe("Shipment retained evidence", () => {
       ),
     ).resolves.toBe(shipped);
     // The same parcel after a separate shipping period is not this Shipment.
+    const reused = await notice(
+      [tracker(id)],
+      trackingless(key(id), {}, "2026-10-03"),
+    );
+    expect(reused).not.toBe(shipped);
+    // June's Shipment no longer fits, so it is no rival to October's.
     await expect(
-      notice([tracker(id)], trackingless(key(id), {}, "2026-10-03")),
-    ).resolves.not.toBe(shipped);
+      notice([tracker(id)], trackingless(key(id), {}, "2026-10-05")),
+    ).resolves.toBe(reused);
     // A split parcel, a key naming a parcel its source does not link, and another order.
     await expect(
       notice([tracker(id, 1)], trackingless(key(id, 1))),
@@ -2386,12 +2392,33 @@ describe("Shipment retained evidence", () => {
         trackingless(key("Rt6vBn3Cx"), { purpose: "unknown" }),
       ),
     ).resolves.toBe(inbound);
-    await expect(
-      notice(
-        [tracker("Rt6vBn3Cx")],
-        trackingless(key("Rt6vBn3Cx"), { purpose: "outgoing" }),
-      ),
-    ).resolves.not.toBe(inbound);
+    const outgoing = trackingless(key("Rt6vBn3Cx"), { purpose: "outgoing" });
+    const outbound = await notice([tracker("Rt6vBn3Cx")], outgoing);
+    expect(outbound).not.toBe(inbound);
+    await expect(notice([tracker("Rt6vBn3Cx")], outgoing)).resolves.toBe(
+      outbound,
+    );
+    // An unknown direction now fits both: hold it, and still apply the tracked sibling.
+    const held = await record(
+      [tracker("Rt6vBn3Cx")],
+      trackingless(key("Rt6vBn3Cx"), { purpose: "unknown" }),
+      [packet("EXAMPLE-UNKNOWN-DIRECTION-SIBLING")],
+    );
+    expect(held.shipmentIds).toHaveLength(1);
+    expect(held.shipmentIds).not.toContain(inbound);
+    expect(held.shipmentIds).not.toContain(outbound);
+    expect(held.unresolvedPackages).toEqual([
+      {
+        sourceShipmentKey: key("Rt6vBn3Cx"),
+        reason: expect.stringContaining("Multiple nearby Shipments"),
+      },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.family, "run_finding")),
+    ).toHaveLength(1);
 
     // Another member's package is not a candidate, and never refuses the tracked sibling.
     const seller = await createRepoIdentity(ctx, "vendor", {
@@ -2435,6 +2462,23 @@ describe("Shipment retained evidence", () => {
       notice([tracker("Un8cMw4Dy")], trackingless(key("Un8cMw4Dy"))),
     ).resolves.toBe(unownedPackage);
     await expect(purchaseRow(unownedPackage!)).resolves.toBe(householdPurchase);
+    // Another Purchase stays separate, and its Shipment then has no rival for that Purchase.
+    const otherOrder = await createRepoIdentity(ctx, "purchase", {
+      vendorId: seller.output.id,
+    });
+    const underOtherOrder = async () =>
+      recordShipmentEvidence(
+        ctx.db,
+        {
+          source: (await mail([tracker("Un8cMw4Dy")])).source,
+          purchaseId: otherOrder.output.id,
+          shipments: [trackingless(key("Un8cMw4Dy"))],
+        },
+        ctx.actor,
+      );
+    const separateOrder = (await underOtherOrder()).shipmentIds[0];
+    expect(separateOrder).not.toBe(unownedPackage);
+    expect((await underOtherOrder()).shipmentIds).toEqual([separateOrder]);
 
     const foreignShipment = await notice(
       [tracker("Fg7xVb5Ez")],
@@ -2457,6 +2501,10 @@ describe("Shipment retained evidence", () => {
     expect(withSibling.shipmentIds).toHaveLength(2);
     expect(withSibling.shipmentIds).not.toContain(foreignShipment);
     expect(withSibling.unresolvedPackages).toEqual([]);
+    // The foreign Shipment is no rival to the member's own package for this parcel.
+    await expect(
+      notice([tracker("Fg7xVb5Ez")], trackingless(key("Fg7xVb5Ez"))),
+    ).resolves.toBe(withSibling.shipmentIds[0]);
 
     const foreignSource = await mail([tracker("Hj2yNq6Gw")]);
     const foreignSourced = (
