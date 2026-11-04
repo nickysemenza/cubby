@@ -160,7 +160,7 @@ export function Image({
         }}
         className={cn(
           className,
-          "transition-opacity duration-500 ease-out",
+          "transition-opacity duration-(--brand-motion-fast) ease-cozy",
           isLoading ? "opacity-0" : "opacity-100",
         )}
         style={style}

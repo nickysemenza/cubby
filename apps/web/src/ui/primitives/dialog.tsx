@@ -27,7 +27,7 @@ function DialogOverlay({
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-foreground/25 fixed inset-0 isolate z-50 duration-150",
+        "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 bg-foreground/25 fixed inset-0 isolate z-50 duration-(--brand-motion-fast) ease-cozy data-closed:duration-(--brand-motion-exit)",
         className,
       )}
       {...props}
@@ -67,7 +67,7 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           popoverElevationClassName,
-          "bg-popover data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 border-[var(--border)] fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[90vh] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border p-4 text-sm/relaxed duration-150 outline-none",
+          "data-open:zoom-in-[0.98] data-closed:zoom-out-[0.98] duration-(--brand-motion-slow) ease-cozy data-closed:duration-(--brand-motion-exit) bg-popover data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 border-[var(--border)] fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[90vh] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border p-4 text-sm/relaxed outline-none",
           dialogSizes[size],
           className,
         )}
