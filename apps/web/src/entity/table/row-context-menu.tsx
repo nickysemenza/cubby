@@ -12,9 +12,12 @@ import type {
   CubbyTable as ITable,
 } from "../../ui/data-table/table-features";
 
-/** Native editing and selection menus win over the row's. */
+/**
+ * Native editing and selection menus win over the row's, and Shift asks for the
+ * browser's. Ctrl is not an escape hatch: on a Mac, Ctrl+click is the right-click.
+ */
 function keepsNativeMenu(event: MouseEvent<HTMLElement>) {
-  if (event.shiftKey || event.ctrlKey) return true;
+  if (event.shiftKey) return true;
   if (
     event.target instanceof Element &&
     event.target.closest("input, textarea, [contenteditable=true]")

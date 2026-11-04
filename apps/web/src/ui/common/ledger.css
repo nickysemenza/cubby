@@ -118,7 +118,7 @@
   }
   /* Width is plentiful and height is not: wide fact lists run three columns. */
   @container ledger (min-width: 60rem) {
-    .ledger[data-ledger="facts"] {
+    :root:not([data-hosted-workspace]) .ledger[data-ledger="facts"] {
       columns: 3;
     }
   }
