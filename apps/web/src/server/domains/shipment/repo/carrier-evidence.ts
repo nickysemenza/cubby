@@ -443,9 +443,9 @@ export async function loadCarrierHistory(
   const selected = rows.slice(0, 2000);
   // A capture can contain an admitted package and another held package. Only
   // current events naming this reference can date its claims; otherwise keep them conservatively.
-  // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- events and trackingNumber are retained JSON keys.
-  const windows =
-    await database.execute(sql`SELECT p->>'id' AS id, p->>'reference' AS reference,
+  const windows = await database.execute(
+    // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- reference, events and trackingNumber are JSON keys.
+    sql`SELECT p->>'id' AS id, p->>'reference' AS reference,
     CASE WHEN count(event) = 0 OR count(*) FILTER (WHERE shipment_event_day(event) IS NULL) > 0 THEN NULL ELSE min(shipment_event_day(event))::text END AS first,
     CASE WHEN count(event) = 0 OR count(*) FILTER (WHERE shipment_event_day(event) IS NULL) > 0 THEN NULL ELSE max(shipment_event_day(event))::text END AS last
     FROM jsonb_array_elements(${JSON.stringify(
@@ -458,7 +458,8 @@ export async function loadCarrierHistory(
       ),
     )}::jsonb) p LEFT JOIN LATERAL jsonb_array_elements(p->'events') event
     ON upper(regexp_replace(event->>'trackingNumber', '[[:space:]]', '', 'g')) = p->>'reference'
-    GROUP BY p`);
+    GROUP BY p`,
+  );
   const periods = z
     .array(carrierHistoryWindow.extend({ reference: z.string() }))
     .parse(windows.rows);
