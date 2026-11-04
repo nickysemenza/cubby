@@ -6,6 +6,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import type { Database } from "~/server/db";
 import {
   findSemanticEntityCandidates,
+  type SemanticCandidateScan,
   type SemanticCoverageGap,
 } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
@@ -15,7 +16,11 @@ import {
   semanticEmbeddingsConfigured,
 } from "~/server/generic/embedding/service/semantic/embeddings";
 import { productionVectorStore } from "~/server/generic/embedding/service/semantic/vector-store";
-import { hydrateSearchHitRefs } from "~/server/generic/search/service/search.service";
+import {
+  hydrateSearchHitRefs,
+  type InternalSearchCandidate,
+  readSearchHitRefs,
+} from "~/server/generic/search/service/search.service";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const log = createLogger("semantic-search");
@@ -26,13 +31,19 @@ export interface SemanticProductCandidate {
   reason: string;
 }
 
-export interface SemanticProductCandidateScan {
-  candidates: SemanticProductCandidate[];
-  complete: boolean;
+/** Ranked refs and their coverage, before any canonical row is read. */
+interface SemanticRefScan extends SemanticCandidateScan {
   error?: string;
-  /** Absent on an incomplete scan when a provider failed instead. */
-  gap?: SemanticCoverageGap;
 }
+
+type SemanticRef = SemanticRefScan["candidates"][number];
+
+type SemanticIdentityScan = Omit<SemanticRefScan, "candidates"> & {
+  candidates: {
+    item: Pick<InternalSearchCandidate, "id">;
+    similarity: number;
+  }[];
+};
 
 const COVERAGE_GAP_ERROR = {
   pending: "Semantic candidate coverage is pending",
@@ -40,13 +51,13 @@ const COVERAGE_GAP_ERROR = {
     "Semantic candidate coverage exceeded its fixed candidate budget",
 } satisfies Record<SemanticCoverageGap, string>;
 
-async function semanticSearchCandidates(
+async function scanSemanticRefs(
   db: Database,
   query: string,
   limit: number,
-  entityKinds: SearchableEntity[],
+  entityKind: SearchableEntity,
   runId?: RunId,
-): Promise<SemanticProductCandidateScan> {
+): Promise<SemanticRefScan> {
   if (query.trim().length < SEMANTIC_MIN_QUERY_LENGTH)
     return { candidates: [], complete: true };
   if (!semanticEmbeddingsConfigured())
@@ -72,51 +83,53 @@ async function semanticSearchCandidates(
     TraceNames.service("semanticSearch", "vectorLookup"),
     () =>
       findSemanticEntityCandidates(db, productionVectorStore, embedding, {
-        entityKinds,
+        entityKinds: [entityKind],
         limit,
         config,
       }),
   );
-  const refs = scan.candidates;
-  const hits = await hydrateSearchHitRefs(db, refs);
-  const hitByRef = new Map(
-    hits.map((hit) => [`${hit.entityKind}:${hit.entityId}`, hit] as const),
-  );
-  const candidates = refs.flatMap((ref) => {
-    const hit = hitByRef.get(`${ref.entityKind}:${ref.entityId}`);
-    return hit
-      ? [
-          {
-            item: { ...hit, name: hit.title },
-            similarity: ref.similarity,
-            reason: `Semantic ${config.provider}/${config.model}`,
-          },
-        ]
-      : [];
-  });
   return {
-    candidates,
+    candidates: scan.candidates,
     complete: scan.complete,
     ...(scan.gap ? { error: COVERAGE_GAP_ERROR[scan.gap], gap: scan.gap } : {}),
   };
 }
 
-/** Unconfirmed coverage withholds negatives; valid candidates remain usable. */
+/** Rejoins rows to ranked refs; a ref with no live row drops out. */
+function rankRowsByRef<Row extends { entityKind: string; entityId: string }>(
+  refs: readonly SemanticRef[],
+  rows: readonly Row[],
+): { row: Row; similarity: number }[] {
+  const rowByRef = new Map(
+    rows.map((row) => [`${row.entityKind}:${row.entityId}`, row] as const),
+  );
+  return refs.flatMap((ref) => {
+    const row = rowByRef.get(`${ref.entityKind}:${ref.entityId}`);
+    return row ? [{ row, similarity: ref.similarity }] : [];
+  });
+}
+
+/**
+ * Unconfirmed coverage withholds negatives; valid candidates remain usable.
+ * Candidate identity needs no display reads, so their failures cannot become a
+ * coverage error here.
+ */
 export async function semanticEntityCandidateScan(
   db: Database,
   query: string,
   limit: number,
   entityKind: SearchableEntity,
   runId?: RunId,
-): Promise<SemanticProductCandidateScan> {
+): Promise<SemanticIdentityScan> {
   try {
-    return await semanticSearchCandidates(
-      db,
-      query,
-      limit,
-      [entityKind],
-      runId,
-    );
+    const scan = await scanSemanticRefs(db, query, limit, entityKind, runId);
+    const rows = await readSearchHitRefs(db, scan.candidates);
+    return {
+      ...scan,
+      candidates: rankRowsByRef(scan.candidates, rows).map(
+        ({ row, similarity }) => ({ item: { id: row.id }, similarity }),
+      ),
+    };
   } catch (error) {
     return { candidates: [], complete: false, error: getErrorMessage(error) };
   }
@@ -131,14 +144,20 @@ export async function semanticEntityCandidates(
   runId?: RunId,
 ): Promise<SemanticProductCandidate[]> {
   try {
-    const scan = await semanticSearchCandidates(
+    const { candidates: refs } = await scanSemanticRefs(
       db,
       query,
       limit,
-      [entityKind],
+      entityKind,
       runId,
     );
-    return scan.candidates;
+    const hits = await hydrateSearchHitRefs(db, refs);
+    const { provider, model } = getSemanticEmbeddingConfig();
+    return rankRowsByRef(refs, hits).map(({ row: hit, similarity }) => ({
+      item: { ...hit, name: hit.title },
+      similarity,
+      reason: `Semantic ${provider}/${model}`,
+    }));
   } catch (error) {
     log.warn(`${entityKind}-candidates failed`, {
       query,

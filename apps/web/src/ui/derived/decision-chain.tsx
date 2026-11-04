@@ -357,6 +357,7 @@ function Freshness({
       {refreshOwed ? (
         <Link
           to="/activity"
+          search={{ tab: "now" }}
           hash="derived-values"
           className="underline underline-offset-2"
         >

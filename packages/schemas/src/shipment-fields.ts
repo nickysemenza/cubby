@@ -26,3 +26,26 @@ export const shipmentExtraTrackingNumbers = z.array(
 export type ShipmentExtraTrackingNumber = z.infer<
   typeof shipmentExtraTrackingNumber
 >;
+/**
+ * `extraTrackingNumbers` on `entity.update`. Source intake owns adding a reference;
+ * a member removes one by its key, so a stale client cannot drop one it never saw.
+ */
+export const shipmentExtraTrackingNumberRemovals = z
+  .array(
+    z
+      .strictObject({
+        op: z.literal("remove"),
+        key: z.strictObject({
+          trackingNumber: shipmentExtraTrackingNumber.shape.trackingNumber,
+          carrierId: shipmentExtraTrackingNumber.shape.carrierId,
+        }),
+      })
+      .meta({ id: "ShipmentExtraTrackingNumberRemoval" }),
+  )
+  .min(1)
+  .describe(
+    "References to remove by tracking number and carrier; every key must be present.",
+  );
+export type ShipmentExtraTrackingNumberRemovals = z.infer<
+  typeof shipmentExtraTrackingNumberRemovals
+>;

@@ -120,7 +120,9 @@ family-declared references. Admission uses a typed scope (families, status, Run)
 rather than caller-supplied SQL aliases. Primary-reference hits use typed UUID
 equality. Family branches narrow declared reference fields before inspecting
 current and proposed scalar, object or list values; UUID and shortcode matching
-remain supported. Dynamic statement and Email graphs retain their canonical
+remain supported. Reference matching and display expansion reuse one module-level
+entity schema rather than allocating one per declared field on each read.
+Dynamic statement and Email graphs retain their canonical
 expansion. Automatic history materializes matched identity, family and status
 before checking correction receipts, application and member Feedback. Suggestions
 retain both matched State and immutable family rosters from that same discovery

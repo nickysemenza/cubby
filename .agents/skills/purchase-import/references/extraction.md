@@ -77,7 +77,9 @@ reward-versus-tender or total evidence stays unresolved.
 Return `shipments` for explicit package evidence on an order confirmation or
 order page; use an empty array when none is shown. Each packet represents one
 package, with `shipmentId` null unless a verified existing `SHIP-` is supplied.
-Preserve `sourceShipmentKey` from a stable source package identifier. Set
+Preserve `sourceShipmentKey` from a stable source package identifier; when a
+vendor package-tracker link names the parcel, quote its shipment id followed by its
+package index, such as `shipmentId=X:packageIndex=0`. Set
 `distinctPackageEvidence` to null for ordinary tracked-package updates: a new
 Email, tracking number, item list, or changed shipping status does not establish
 a separate package. A non-null value records a separate-package claim for
@@ -85,8 +87,10 @@ review; it never bypasses tracking identity matching. Quote it only when the
 source establishes a distinct package, such as "package 2 of 2" under a shared
 master number. A new trackingless package requires both
 a stable source key and distinct-package evidence; an order number or generic
-order-wide status alone cannot distinguish packages. Keep ambiguous facts in
-the original rather than inventing a packet. Split packages stay separate even
+order-wide status alone cannot distinguish packages. An empty template row, such
+as a numbered box with no tracking, method or items, is not a package. An origin
+group is one only when the source establishes a single parcel. Keep ambiguous
+facts in the original rather than inventing a packet. Split packages stay separate even
 when they belong to the same order.
 
 For example, shipping, out-for-delivery and delivered Emails for the same
@@ -111,6 +115,9 @@ to correct contradictions. Missing or ambiguous identity stays unknown. Manual e
 are ordinary values; there is no separate assignment-ownership or receipt layer.
 Merchant, broker and label-service names belong to intermediary claims unless
 the source identifies them as the actual carrier. Preserve explicit handoffs.
+A short code in a merchant `Delivery:` field, such as `Delivery: XYZ` or
+`Delivery: XYZ Tracking ID: 123`, is delivery wording, not a carrier: leave
+`carrierName` and `carrierId` null unless the source separately names the carrier.
 UPS supports 12-digit numbers; shape alone never establishes or excludes a
 carrier. Supply
 an explicit carrier reference only when the literal name matches that Vendor or
