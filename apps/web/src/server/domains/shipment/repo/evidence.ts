@@ -22,6 +22,7 @@ import {
 import {
   shipmentPurpose,
   SHIPMENT_IDENTITY_PERIOD_DAYS,
+  type ShipmentPurpose,
 } from "@cubby/schemas/shipment-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
@@ -94,15 +95,69 @@ const normalizeNumber = (value: string) =>
 // generic labels such as an origin state recur across unrelated orders.
 const sourcePackageSpelling = (key: string) =>
   key.toLowerCase().replaceAll(/[^\p{L}\p{N}]/gu, "") || key;
-// A vendor's opaque package id names one parcel across lifecycle sources. Origin
-// states, box numbers and bare order numbers are shared, so they never qualify.
-const namesOpaquePackage = (key: string) =>
-  key
-    .split(/[^\p{L}\p{N}]+/u)
-    .some(
-      (token) =>
-        token.length >= 8 && /\p{L}/u.test(token) && /\p{N}/u.test(token),
-    );
+const shipmentPurposesDisagree = (
+  first: ShipmentPurpose,
+  second: ShipmentPurpose,
+) => first !== "unknown" && second !== "unknown" && first !== second;
+
+const amazonLink = (href: string) => {
+  const url = URL.canParse(href) ? new URL(href) : null;
+  return url?.protocol === "https:" &&
+    !url.username &&
+    !url.password &&
+    !url.port &&
+    /^(?:www\.)?amazon\.com$/.test(url.hostname)
+    ? url
+    : null;
+};
+
+/** The one bounded vendor route known to name a parcel: Amazon's package tracker
+ * identifies it by order, shipment and package index, directly or through its own
+ * redirect. An Amazon shipment can span parcels, so the index is required.
+ */
+function vendorPackageLink(href: string) {
+  const link = amazonLink(href);
+  const redirect =
+    link?.pathname === "/gp/r.html" ? link.searchParams.getAll("U") : [];
+  const url = redirect[0] && !redirect[1] ? amazonLink(redirect[0]) : link;
+  if (!url || !/^\/progress-tracker\/package(?:\/|$)/.test(url.pathname))
+    return null;
+  const [order, shipmentId, index] = [
+    "orderId",
+    "shipmentId",
+    "packageIndex",
+  ].map((name) => {
+    const values = url.searchParams.getAll(name);
+    return values.length === 1 ? values[0] : undefined;
+  });
+  return order && shipmentId && index && /^\d+$/.test(index)
+    ? { order, shipmentId, index }
+    : null;
+}
+
+/** Parcels the retained original links that this source key names. The key is extractor
+ * text and cannot prove anything alone: counters, labels and order ids can share its
+ * spelling. Without a retained link (tracking pages, SMS) a package stays source-local.
+ */
+function retainedPackages(
+  capture: Parameters<typeof carrierCaptureEvidence>[0],
+  packageKey: string,
+) {
+  const tokens = packageKey.toLowerCase().split(/[^\p{L}\p{N}]+/u);
+  const packages = new Set<string>();
+  for (const { href } of carrierCaptureEvidence(capture).links) {
+    const linked = vendorPackageLink(href);
+    if (!linked) continue;
+    const at = tokens.indexOf(linked.shipmentId.toLowerCase());
+    // Index follows the shipment id, with or without one label: `id=X:index=0`.
+    if (
+      at >= 0 &&
+      (tokens[at + 1] === linked.index || tokens[at + 2] === linked.index)
+    )
+      packages.add(canonical(linked));
+  }
+  return packages;
+}
 
 // Pending preparations retain their literal provenance. This private Email ingress
 // still requires dated observations and shares all source/identity/write enforcement.
@@ -206,39 +261,73 @@ const withinIdentityPeriod = (days: readonly (string | null)[]) => {
   );
 };
 
-/** The one nearby live Shipment another source bound to this opaque package id. */
-async function opaquePackageShipment(
+/** The one nearby live Shipment another retained source links to the same parcel. Any
+ * conflict leaves the packet a separate Shipment, so tracked siblings still commit.
+ */
+async function retainedPackageShipment(
   db: Database,
   input: {
-    sourceKey: string;
+    capture: typeof shipmentSourceCapture.$inferSelect;
+    ownerId: string | null;
     packageKey: string;
+    purpose: ShipmentPurpose;
     purchaseId: Awaited<ReturnType<typeof purchaseReference>>;
     window: z.infer<typeof identityWindowSchema>;
   },
 ) {
-  if (!namesOpaquePackage(input.packageKey)) return undefined;
-  const matches = await getDb(db)
-    .selectDistinct({
+  const packages = retainedPackages(input.capture, input.packageKey);
+  if (!packages.size) return undefined;
+  const bound = await getDb(db)
+    .select({
       id: shipment.id,
       shortcode: shipment.shortcode,
       purchaseId: shipment.purchaseId,
+      purpose: shipment.purpose,
+      packageKey: shipmentSourcePackage.packageKey,
+      source: shipmentSourceCapture.source,
+      originalContent: shipmentSourceCapture.originalContent,
     })
     .from(shipmentSourcePackage)
     .innerJoin(shipment, eq(shipment.id, shipmentSourcePackage.shipmentId))
+    .innerJoin(
+      shipmentSourceCapture,
+      eq(shipmentSourceCapture.sourceKey, shipmentSourcePackage.sourceKey),
+    )
     .where(
       and(
         notDeleted(shipment),
-        ne(shipmentSourcePackage.sourceKey, input.sourceKey),
+        ne(shipmentSourcePackage.sourceKey, input.capture.sourceKey),
         sql`lower(regexp_replace(${shipmentSourcePackage.packageKey}, '[^[:alnum:]]', '', 'g')) = ${sourcePackageSpelling(input.packageKey)}`,
       ),
     );
-  const [match] = matches;
+  const matches = new Map(
+    bound
+      .filter((row) =>
+        [...retainedPackages(row, row.packageKey)].some((linked) =>
+          packages.has(linked),
+        ),
+      )
+      .map((row) => [row.id, row]),
+  );
+  const [match] = matches.values();
   if (
     !match ||
-    matches.length > 1 ||
+    matches.size > 1 ||
+    shipmentPurposesDisagree(input.purpose, match.purpose) ||
     (input.purchaseId &&
       match.purchaseId &&
       match.purchaseId !== input.purchaseId)
+  )
+    return undefined;
+  const purchaseOwner = match.purchaseId
+    ? await purchaseSourceOwner(db, match.purchaseId)
+    : null;
+  if (
+    (match.purchaseId && !purchaseOwner) ||
+    (purchaseOwner?.ownerId && purchaseOwner.ownerId !== input.ownerId) ||
+    (await shipmentSourceOwners(db, match.id)).some(
+      (ownerId) => ownerId !== input.ownerId,
+    )
   )
     return undefined;
   const period = identityWindowSchema.parse(
@@ -537,30 +626,30 @@ async function sourceCapture(
   return { capture, sourceKey, ownerId, notificationDate };
 }
 
-async function assertPurchaseSourceOwner(
-  db: Database,
-  id: PurchaseId | null,
-  ownerId: string | null,
-) {
-  // Ownership is checked on the Purchase's purchasing account, never inferred from who paid.
-  if (!id || !ownerId) return;
+// Ownership is checked on the Purchase's purchasing account, never inferred from who paid.
+async function purchaseSourceOwner(db: Database, id: PurchaseId) {
   const [row] = await getDb(db)
     .select({ ownerId: vendorAccount.ledgerPartyId })
     .from(purchase)
     .leftJoin(vendorAccount, eq(vendorAccount.id, purchase.vendorAccountId))
     .where(and(eq(purchase.id, id), notDeleted(purchase)))
     .for("share", { of: purchase });
+  return row;
+}
+
+async function assertPurchaseSourceOwner(
+  db: Database,
+  id: PurchaseId | null,
+  ownerId: string | null,
+) {
+  if (!id || !ownerId) return;
+  const row = await purchaseSourceOwner(db, id);
   if (!row) return refuse("The Shipment's Purchase is no longer live.");
   if (row?.ownerId && row.ownerId !== ownerId)
     refuse("The shipment Email and Purchase belong to different members.");
 }
 
-async function assertShipmentAssociation(
-  db: Database,
-  shipmentId: string,
-  purchaseId: PurchaseId | null,
-) {
-  if (!purchaseId) return;
+async function shipmentSourceOwners(db: Database, shipmentId: string) {
   const sources = await getDb(db)
     .select({ ownerId: email.ledgerPartyId })
     .from(shipmentObservation)
@@ -572,7 +661,16 @@ async function assertShipmentAssociation(
     .where(
       eq(shipmentObservation.shipmentId, parseEntityId("shipment", shipmentId)),
     );
-  for (const ownerId of new Set(sources.map((source) => source.ownerId)))
+  return [...new Set(sources.map((source) => source.ownerId))];
+}
+
+async function assertShipmentAssociation(
+  db: Database,
+  shipmentId: string,
+  purchaseId: PurchaseId | null,
+) {
+  if (!purchaseId) return;
+  for (const ownerId of await shipmentSourceOwners(db, shipmentId))
     await assertPurchaseSourceOwner(db, purchaseId, ownerId);
 }
 
@@ -914,9 +1012,11 @@ async function writeShipmentEvidence(
           row = proposed;
       }
       if (!row && !number && packet.sourceShipmentKey)
-        row = await opaquePackageShipment(tdb, {
-          sourceKey,
+        row = await retainedPackageShipment(tdb, {
+          capture,
+          ownerId,
           packageKey: packet.sourceShipmentKey,
+          purpose: packet.purpose,
           purchaseId,
           window: identity.window,
         });
@@ -1525,11 +1625,7 @@ export async function mergeShipment(
     const target = await canonicalShipment(tdb, input.targetId);
     if (source.id === target.id)
       return { shipmentId: parseShortcodeFor("shipment", target.shortcode) };
-    if (
-      source.purpose !== "unknown" &&
-      target.purpose !== "unknown" &&
-      source.purpose !== target.purpose
-    )
+    if (shipmentPurposesDisagree(source.purpose, target.purpose))
       return refuse(
         "Shipment directions disagree; explicitly correct the direction before merging.",
       );

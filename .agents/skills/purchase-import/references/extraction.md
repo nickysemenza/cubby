@@ -77,7 +77,9 @@ reward-versus-tender or total evidence stays unresolved.
 Return `shipments` for explicit package evidence on an order confirmation or
 order page; use an empty array when none is shown. Each packet represents one
 package, with `shipmentId` null unless a verified existing `SHIP-` is supplied.
-Preserve `sourceShipmentKey` from a stable source package identifier. Set
+Preserve `sourceShipmentKey` from a stable source package identifier; when a
+vendor package-tracker link names the parcel, quote its shipment id followed by its
+package index, such as `shipmentId=X:packageIndex=0`. Set
 `distinctPackageEvidence` to null for ordinary tracked-package updates: a new
 Email, tracking number, item list, or changed shipping status does not establish
 a separate package. A non-null value records a separate-package claim for

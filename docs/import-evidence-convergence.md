@@ -339,11 +339,15 @@ returns `unresolvedPackages`, and publishes an Email review finding when the sou
 has an owned Email. It creates no speculative Shipment for that packet.
 `distinctPackageEvidence` never bypasses tracked identity matching. A new Email,
 item list or status change alone does not establish a separate package. Trackingless packages still need
-a stable source package key and distinct-package evidence. Across sources, one
-joins an existing Shipment only when its whole key respells another source's key
-naming a vendor's opaque package id, within one identity period, with exactly one
-live candidate and no Purchase conflict. Shared labels such as an origin state,
-box number or bare order number never match across sources. Identical
+a stable source package key and distinct-package evidence. A source key is
+extractor text, so across sources it never establishes identity alone. A packet
+joins an existing Shipment only when both retained Email originals link the same
+parcel on a bounded vendor route that names one (Amazon's package tracker, by order,
+shipment and package index), both keys name that parcel and respell each other, and
+exactly one live candidate fits one identity period with no direction, member or
+Purchase conflict. Anything else stays separate without refusing tracked siblings:
+counters, origin labels, box numbers, order numbers and other vendors' ids, however
+opaque, and tracking pages or SMS, which retain no independent link. Identical
 unkeyed source rows retain their multiplicity; replay updates the same
 occurrences. Native event keys scope changed versions to their source package.
 A later A → B → A report retains a third version, while stale captures cannot

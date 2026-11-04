@@ -22,6 +22,8 @@ import {
   expense,
   inventoryEntry,
   email,
+  ledgerParty,
+  purchase,
   user,
 } from "~/server/db/schema";
 import {
@@ -2168,6 +2170,17 @@ describe("Shipment retained evidence", () => {
       expect(replay.insertedObservations).toBe(0);
       expect(replay.unresolvedPackages).toHaveLength(1);
     }
+    // A tracked sibling first seen after the retirement still applies beside the hold.
+    const admitted = await recordShipmentEvidence(
+      ctx.db,
+      { ...source, shipments: [parcel, renamed, packet("EXAMPLE-BOX-2")] },
+      ctx.actor,
+    );
+    expect(admitted.shipmentIds).toHaveLength(2);
+    expect(admitted.shipmentIds).toContain(parcelCode);
+    expect(admitted.shipmentIds).not.toContain(templateCode);
+    expect(admitted.insertedObservations).toBe(1);
+    expect(admitted.unresolvedPackages).toHaveLength(1);
     const [retained] = await getDb(ctx.db)
       .select({ id: shipment.id, deletedAt: shipment.deletedAt })
       .from(shipment)
@@ -2198,10 +2211,22 @@ describe("Shipment retained evidence", () => {
     expect(other.shipmentIds).not.toContain(templateCode);
   });
 
-  it("joins lifecycle sources only through a nearby vendor package id", async () => {
+  it("joins lifecycle sources only when retained links name the same parcel", async () => {
+    const world = await memberImportWorld(ctx.db, ctx.actor);
+    const tracker = (
+      shipmentId: string,
+      index = 0,
+      order = "000-0000001-0000001",
+    ) =>
+      `https://www.amazon.com/progress-tracker/package?_encoding=UTF8&orderId=${order}&packageIndex=${index}&shipmentId=${shipmentId}`;
+    const redirected = (href: string) =>
+      `https://www.amazon.com/gp/r.html?C=SYNTHETIC&U=${encodeURIComponent(href)}&H=SYNTHETIC`;
+    const key = (shipmentId: string, index = 0) =>
+      `amazon:000-0000001-0000001:shipmentId=${shipmentId}:packageIndex=${index}`;
     const trackingless = (
       sourceShipmentKey: string,
-      value: string,
+      overrides: Partial<ShipmentEvidence> = {},
+      value = "2026-06-03",
     ): ShipmentEvidence => ({
       ...packet(),
       sourceShipmentKey,
@@ -2219,36 +2244,243 @@ describe("Shipment retained evidence", () => {
           rawStatus: "Synthetic delivered notice",
         },
       ],
+      ...overrides,
     });
+    let messages = 0;
+    const mail = async (hrefs: readonly string[]) => {
+      const messageId = `synthetic-lifecycle-${++messages}`;
+      const checksum = await sha256Hex(messageId);
+      await retainedMailFixture(ctx.db, {
+        ledgerPartyId: world.party.id,
+        messageId,
+        checksum,
+        content: {
+          snippet: null,
+          bodyText: null,
+          bodyHtml: `<p>Synthetic parcel notice</p>${hrefs
+            .map(
+              (href) =>
+                `<a href="${href.replaceAll("&", "&amp;")}">Track package</a>`,
+            )
+            .join("")}`,
+        },
+      });
+      const [message] = await getDb(ctx.db)
+        .select()
+        .from(email)
+        .where(eq(email.messageId, messageId));
+      return {
+        source: {
+          kind: "email",
+          emailId: parseShortcodeFor("email", message!.shortcode),
+          checksum,
+        },
+        message: message!,
+      } satisfies {
+        source: RecordShipmentEvidenceInput["source"];
+        message: typeof email.$inferSelect;
+      };
+    };
     const record = async (
-      key: string,
-      packageKey: string,
-      value = "2026-06-03",
+      hrefs: readonly string[],
+      parcel: ShipmentEvidence,
+      siblings: ShipmentEvidence[] = [],
     ) =>
-      (
-        await recordShipmentEvidence(
-          ctx.db,
-          capture(key, [trackingless(packageKey, value)]),
-          ctx.actor,
-        )
-      ).shipmentIds[0];
+      recordShipmentEvidence(
+        ctx.db,
+        {
+          source: (await mail(hrefs)).source,
+          purchaseId: null,
+          shipments: [parcel, ...siblings],
+        },
+        ctx.actor,
+      );
+    const notice = async (hrefs: readonly string[], parcel: ShipmentEvidence) =>
+      (await record(hrefs, parcel)).shipmentIds[0];
 
-    const shipped = await record(
-      "vendor-shipped",
-      "vendor:1-2:id=Ab3dEf7Gh:index=0",
+    const id = "Ab3dEf7Gh";
+    const shipped = await notice(
+      [redirected(tracker(id))],
+      trackingless(key(id)),
+    );
+    // A grouped notice names its other parcel too; the respelled key selects this one.
+    await expect(
+      notice(
+        [tracker(id), tracker(id, 1)],
+        trackingless(
+          `amazon:000-0000001-0000001:shipmentId:${id}:packageIndex:0`,
+          {},
+          "2026-06-05",
+        ),
+      ),
+    ).resolves.toBe(shipped);
+    // The same parcel after a separate shipping period is not this Shipment.
+    await expect(
+      notice([tracker(id)], trackingless(key(id), {}, "2026-10-03")),
+    ).resolves.not.toBe(shipped);
+    // A split parcel, a key naming a parcel its source does not link, and another order.
+    await expect(
+      notice([tracker(id, 1)], trackingless(key(id, 1))),
+    ).resolves.not.toBe(shipped);
+    await expect(
+      notice([tracker(id, 1)], trackingless(key(id))),
+    ).resolves.not.toBe(shipped);
+    const orderless = `shipmentId=Zz9yXw8Vu:packageIndex=0`;
+    const firstOrder = await notice(
+      [tracker("Zz9yXw8Vu")],
+      trackingless(orderless),
     );
     await expect(
-      record("vendor-delivered", "vendor:1-2:id:Ab3dEf7Gh:index:0"),
-    ).resolves.toBe(shipped);
-    // The same id after a separate shipping period is not the same parcel.
-    await expect(
-      record("vendor-later", "vendor:1-2:id=Ab3dEf7Gh:index=0", "2026-10-03"),
-    ).resolves.not.toBe(shipped);
-    // Generic labels and bare order numbers recur across real parcels.
-    for (const label of ["Shipment from Example", "10000001-Example"]) {
-      const first = await record(`${label}-a`, label);
-      await expect(record(`${label}-b`, label)).resolves.not.toBe(first);
+      notice(
+        [tracker("Zz9yXw8Vu", 0, "000-0000002-0000002")],
+        trackingless(orderless),
+      ),
+    ).resolves.not.toBe(firstOrder);
+
+    // Counters, labels and order ids stay separate however they are spelled, including
+    // when both sources retain the same tracker link the key does not name.
+    for (const [stored, incoming] of [
+      ["Shipment 1", "Shipment1"],
+      ["Package1", "Package 1"],
+      ["Delivery2", "delivery-2"],
+      ["Parcel12", "Parcel12"],
+      ["W123456789", "W123456789"],
+      ["ORD-ABC12345", "ORD-ABC12345"],
+      ["Order#A1B2C3D4", "order a1b2c3d4"],
+      ["Shipment from Example", "Shipment from Example"],
+      ["10000001-Example", "10000001-Example"],
+    ] as const) {
+      for (const hrefs of [[], [tracker("Kn4pQr7St")]]) {
+        const first = await notice(hrefs, trackingless(stored));
+        await expect(notice(hrefs, trackingless(incoming))).resolves.not.toBe(
+          first,
+        );
+      }
     }
+    // A tracking page retains no independent link in either direction.
+    const paged = (
+      await recordShipmentEvidence(
+        ctx.db,
+        capture("page-package", [trackingless(key("Pg5hJk2Lm"))]),
+        ctx.actor,
+      )
+    ).shipmentIds[0];
+    await expect(
+      notice([tracker("Pg5hJk2Lm")], trackingless(key("Pg5hJk2Lm"))),
+    ).resolves.not.toBe(paged);
+    const pageAfterMail = await recordShipmentEvidence(
+      ctx.db,
+      capture("mail-package", [trackingless(key(id))]),
+      ctx.actor,
+    );
+    expect(pageAfterMail.shipmentIds).not.toContain(shipped);
+
+    // An unknown direction can join; a disagreeing direction stays separate.
+    const inbound = await notice(
+      [tracker("Rt6vBn3Cx")],
+      trackingless(key("Rt6vBn3Cx")),
+    );
+    await expect(
+      notice(
+        [tracker("Rt6vBn3Cx")],
+        trackingless(key("Rt6vBn3Cx"), { purpose: "unknown" }),
+      ),
+    ).resolves.toBe(inbound);
+    await expect(
+      notice(
+        [tracker("Rt6vBn3Cx")],
+        trackingless(key("Rt6vBn3Cx"), { purpose: "outgoing" }),
+      ),
+    ).resolves.not.toBe(inbound);
+
+    // Another member's package is not a candidate, and never refuses the tracked sibling.
+    const seller = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Package Seller",
+    });
+    const otherMember = await createRepoIdentity(ctx, "ledgerParty", {
+      name: "Synthetic other member",
+      kind: "member",
+    });
+    const account = await createRepoIdentity(ctx, "vendorAccount", {
+      vendorId: seller.output.id,
+      ledgerPartyId: otherMember.output.id,
+    });
+    const foreignOrder = await createRepoIdentity(ctx, "purchase", {
+      vendorId: seller.output.id,
+      vendorAccountId: account.output.id,
+    });
+    const householdOrder = await createRepoIdentity(ctx, "purchase", {
+      vendorId: seller.output.id,
+    });
+    const purchaseRow = async (shortcode: string) => {
+      const [order] = await getDb(ctx.db)
+        .select({ purchaseId: shipment.purchaseId })
+        .from(shipment)
+        .where(
+          eq(shipment.shortcode, parseShortcodeFor("shipment", shortcode)),
+        );
+      return order!.purchaseId;
+    };
+    const unownedPackage = await notice(
+      [tracker("Un8cMw4Dy")],
+      trackingless(key("Un8cMw4Dy")),
+    );
+    await associateShipment(
+      ctx.db,
+      { shipmentId: unownedPackage, purchaseId: householdOrder.output.id },
+      ctx.actor,
+    );
+    const householdPurchase = await purchaseRow(unownedPackage!);
+    await expect(
+      notice([tracker("Un8cMw4Dy")], trackingless(key("Un8cMw4Dy"))),
+    ).resolves.toBe(unownedPackage);
+    await expect(purchaseRow(unownedPackage!)).resolves.toBe(householdPurchase);
+
+    const foreignShipment = await notice(
+      [tracker("Fg7xVb5Ez")],
+      trackingless(key("Fg7xVb5Ez")),
+    );
+    const [foreignPurchase] = await getDb(ctx.db)
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(eq(purchase.shortcode, foreignOrder.output.id));
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({ purchaseId: foreignPurchase!.id })
+      .where(eq(shipment.shortcode, foreignShipment!));
+    const sibling = packet("EXAMPLE-OWNERSHIP-SIBLING");
+    const withSibling = await record(
+      [tracker("Fg7xVb5Ez")],
+      trackingless(key("Fg7xVb5Ez")),
+      [sibling],
+    );
+    expect(withSibling.shipmentIds).toHaveLength(2);
+    expect(withSibling.shipmentIds).not.toContain(foreignShipment);
+    expect(withSibling.unresolvedPackages).toEqual([]);
+
+    const foreignSource = await mail([tracker("Hj2yNq6Gw")]);
+    const foreignSourced = (
+      await recordShipmentEvidence(
+        ctx.db,
+        {
+          source: foreignSource.source,
+          purchaseId: null,
+          shipments: [trackingless(key("Hj2yNq6Gw"))],
+        },
+        ctx.actor,
+      )
+    ).shipmentIds[0];
+    const [otherParty] = await getDb(ctx.db)
+      .select({ id: ledgerParty.id })
+      .from(ledgerParty)
+      .where(eq(ledgerParty.shortcode, otherMember.output.id));
+    await getDb(ctx.db)
+      .update(email)
+      .set({ ledgerPartyId: otherParty!.id })
+      .where(eq(email.id, foreignSource.message.id));
+    await expect(
+      notice([tracker("Hj2yNq6Gw")], trackingless(key("Hj2yNq6Gw"))),
+    ).resolves.not.toBe(foreignSourced);
   });
 
   it("keeps a member carrier correction through replay without an extra handoff", async () => {
