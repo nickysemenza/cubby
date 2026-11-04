@@ -308,7 +308,7 @@ function WorkspaceSidebar({
             group={group}
             expanded={expanded}
             activeTo={activeTo}
-            folded={isGroupFolded(group, activeTo, foldedGroups)}
+            folded={foldedGroups[group.id] ?? group.defaultFolded}
             toolsOpen={foldedGroups[`${group.id}:tools`] === false}
             onToggleTools={() =>
               setFoldedGroups((overrides) => ({
@@ -319,7 +319,7 @@ function WorkspaceSidebar({
             onToggleFolded={() =>
               setFoldedGroups((overrides) => ({
                 ...overrides,
-                [group.id]: !isGroupFolded(group, activeTo, overrides),
+                [group.id]: !(overrides[group.id] ?? group.defaultFolded),
               }))
             }
           />
@@ -439,20 +439,6 @@ function SidebarGroup({
         </div>
       )}
     </>
-  );
-}
-
-/**
- * A section stays open when it holds the current route or the member pinned it
- * open; an explicit fold or unfold is remembered and wins.
- */
-function isGroupFolded(
-  group: NavGroup,
-  activeTo: string | undefined,
-  overrides: Readonly<Record<string, boolean>>,
-) {
-  return (
-    overrides[group.id] ?? !group.children.some((item) => item.to === activeTo)
   );
 }
 
