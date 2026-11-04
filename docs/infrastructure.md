@@ -341,10 +341,11 @@ Keep them below database capacity and measure origin waits and query execution
 together before raising them. More connections cannot remove expensive query
 work. The background
 queue consumer settings (`packages/shared/src/background-queue-consumer.json`)
-and each drain's page concurrency (`JOB_DRAIN.concurrency`) bound concurrent
-Job pages; four drains of three pages bound delivery concurrency while pages
-wait on providers. It is not a measured optimum or an
-interactive connection reservation. Tune it against Activity's due counts, origin pool waits, and interactive latency together. Telemetry
+and each drain's page concurrency (`JOB_DRAIN.concurrency`) are ceilings on
+concurrent Job pages, not active consumer counts; a long active batch can block
+consumer scaling and delay accepted wakes
+([Selection and admission](jobs.md#selection-and-admission)). The ceiling is not
+a measured optimum or an interactive connection reservation. Tune it against Activity's due counts, origin pool waits, and interactive latency together. Telemetry
 concurrency remains 1. Purchase dispatch starts coordinator work outside Job delivery; the background
 queue cap does not bound active coordinator database work. That workload policy
 remains separate.

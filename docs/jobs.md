@@ -235,18 +235,25 @@ searched to find a wake. The latest claim per kind comes from the
 pass never erases its service history.
 
 `maxInFlight` caps one kind's live leases across every drain (AI evaluation:
-two, leaving the other lanes free). Claim-time admission takes a nonblocking
-transaction advisory lock per kind and counts `running` Jobs whose lease has
-not expired; an expired lease frees capacity and stays reclaimable. Run-owned
-work bypasses the cap.
+two). A cap limits that kind; it reserves no capacity for other kinds, and a
+capped page still occupies its drain's lane and queue delivery while it runs.
+Claim-time admission takes a nonblocking transaction advisory lock per kind and
+counts `running` Jobs whose lease has not expired; an expired lease frees
+capacity and stays reclaimable. Run-owned work bypasses the cap.
 
 Member-first ordering inside a drain is item priority: root transactions in
 Job execution mark derived inputs at priority 1, member transactions at 0, and
 savepoints inherit the outer transaction's priority.
 
-The drain runs up to `JOB_DRAIN.concurrency` Jobs at once, and the queue
-consumer (`packages/shared/src/background-queue-consumer.json`) runs several
-drains. Free lanes refill while siblings run. A refused claim of an uncapped
+The drain runs up to `JOB_DRAIN.concurrency` Jobs at once. The queue consumer's
+`maxConcurrency` (`packages/shared/src/background-queue-consumer.json`) is a
+ceiling, not the number of active consumers:
+[Cloudflare scales consumers only after a whole batch finishes](https://developers.cloudflare.com/queues/configuration/consumer-concurrency/),
+so one long active batch can hold accepted wakes undelivered. Smaller pages
+reduce that exposure, but one provider wave can still run for minutes; no wake
+has a hard delivery time.
+
+Free lanes refill while siblings run. A refused claim of an uncapped
 kind stays excluded until another page makes progress, then rejoins fair
 selection; progress during an in-flight refusal also permits reconsideration.
 Capped kinds remain excluded for the invocation. Refusals still consume the
@@ -682,13 +689,20 @@ Gateway admission throw `JobDeferredError`, which stops the page without
 spending attempts; anything else is the item's failure, and its third
 consecutive failure settles the evaluation `failed` with the raw error and
 settles its requesters. A Run cancel withdraws its requests and drops the items
-of evaluations no other requester still wants. `maxInFlight: 2` leaves the
-other drain lanes free for other kinds.
+of evaluations no other requester still wants. `maxInFlight: 2` caps this kind's
+leases without reserving capacity for other kinds
+([Selection and admission](#selection-and-admission)).
 
-Product identity and connection features observe up to 100 items, prepare
-consecutive waves of up to 8, and publish admitted evidence in fenced chunks;
-other features run up to 8 items, two
-at a time, each in its own guarded transactions under the drain lease.
+A governed target field whose current result is unavailable is that target's
+failure (`JobTargetError`), not an empty value or obsolete evidence. At
+publication its chunk rolls back and splits, so siblings commit without new
+inference; the target retains its ticket and spends item attempts as above.
+
+Each page observes up to 8 items; the rest stay owed and the drain rejoins fair
+selection after the page's checkpoint. Product identity and connection features
+prepare and evaluate those items as one wave and publish admitted evidence in
+fenced chunks; other features run them two at a time, each in its own guarded
+transactions under the drain lease.
 Paged evaluations annotate the existing Job heartbeat and completion logs with
 `evaluation.prepare`, `evaluation.stage` and `evaluation.infer` phase timing.
 These labels distinguish evidence preparation from decision work without logging
@@ -697,6 +711,10 @@ Connection stages add `connections.*` timings within inference, and drains add
 `drain.claim`, `drain.prepare` and `drain.publish`. Heartbeats list all active
 phases when work overlaps; completed durations sum per phase, so nested and
 concurrent phase totals are not additive wall time or allocation evidence.
+A drain publishes its chunks during prepare, so the Job `page` log's timing
+contains `drain.publish` and the `publish` log's `publicationDurationMs` mostly
+covers settling the outer Job. Both logs carry `pageResult`, limited to the
+numeric `processed`, `published`, `failed` and `covered` counts.
 
 `EvaluationPageAdapter` in `ai/evaluation/repo/evaluation-page.ts` owns finite feature
 preparation, decision evaluation and publication results. Every target carries
@@ -710,10 +728,9 @@ no target Job/entity id. Distinct Runs remain separate usage groups.
 up to 64 questions/32,000 text bytes, with four request chunks in flight.
 Routing, response-cache keys and per-question avoided usage stay unchanged.
 An oversized question fails visibly. Page evidence is limited to 4 MiB. Admission
-runs after each preparation wave and stops later canonical reads when the
-ordered evidence prefix fills. Failures and individually oversized evidence
-already prepared in that wave retain their own handling; the unknown suffix
-stays owed. Unadmitted items keep their original ticket, priority, attempts and
+runs after the page's preparation wave and keeps the ordered evidence prefix.
+Failures and individually oversized evidence retain their own handling.
+Unadmitted items keep their original ticket, priority, attempts and
 readiness rather than completing their enumeration receipts or being reticketed.
 Staging runs once after admission. Retained evaluation snapshots still load for
 the observed page before preparation; neither the serialized evidence bound nor

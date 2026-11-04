@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import {
@@ -32,12 +32,14 @@ import {
 import { publishProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
+import type { AiEvaluationPorts } from "~/server/domains/run/service/ai-evaluation-execution";
 import {
   kernelCtx,
   PRIMARY_MODEL,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
+import * as selectedRead from "~/server/entity-kernel/selected-read";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
@@ -81,7 +83,10 @@ describe("connection preparation and publication authority", () => {
   beforeEach(async () => {
     queue = captureBackgroundQueue();
   });
-  afterEach(() => queue.restore());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    queue.restore();
+  });
   async function fixture() {
     const name = "Synthetic publication fence wrench";
     const item = await createProductFixture(
@@ -201,6 +206,107 @@ describe("connection preparation and publication authority", () => {
       error: expect.stringContaining("coverage is unconfirmed"),
     });
     expect(await aiEvaluationItem(ctx.db, evaluation.id)).toBeUndefined();
+  });
+
+  it("retries an unavailable field target alone after its healthy sibling publishes", async () => {
+    const { source, task, name } = await fixture();
+    const siblingTask = await createRepoEntity(ctx, "task", {
+      name,
+      trade: "electrical",
+      subjectProductId: null,
+    });
+    const sibling = {
+      entityKind: "task" as const,
+      entityId: siblingTask.output.id,
+    };
+    await drainDerivedRefreshFrontier(ctx.db);
+    await activateAiRefresh(ctx.db, "synthetic-unavailable-field", {
+      enabled: true,
+    });
+    await scheduleConnectionRefresh(ctx.db, source);
+    await scheduleConnectionRefresh(ctx.db, sibling);
+    const evaluations = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.feature, "entity-connections"));
+    const evaluationFor = (recordId: string) => {
+      const found = evaluations.find((row) => row.target.recordId === recordId);
+      if (!found) throw new Error("Synthetic connection evaluation is missing");
+      return found.id;
+    };
+    const unavailableId = evaluationFor(task.entityId);
+    const siblingId = evaluationFor(siblingTask.entityId);
+    const settled = async (id: string) =>
+      (
+        await getDb(ctx.db)
+          .select({ state: aiEvaluation.state, error: aiEvaluation.error })
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, id))
+      )[0];
+    const fieldAssessments = (recordId: typeof task.entityId) =>
+      getDb(ctx.db)
+        .select({ id: assessmentState.id })
+        .from(assessmentState)
+        .where(
+          and(
+            eq(assessmentState.recordId, recordId),
+            eq(assessmentState.field, "subjectProductId"),
+          ),
+        );
+    const owedTicket = (await aiEvaluationItem(ctx.db, unavailableId))?.ticket;
+    const read = selectedRead.readSelectedEntityRecords;
+    vi.spyOn(selectedRead, "readSelectedEntityRecords").mockImplementation(
+      async (input) => {
+        const records = await read(input);
+        // Only the publication guard reads this target field by itself.
+        return input.ids[0] === source.entityId &&
+          input.fields.length === 1 &&
+          input.fields[0] === "subjectProductId"
+          ? records.map((record) => ({
+              ...record,
+              fields: { subjectProductId: { result: { kind: "missing" } } },
+            }))
+          : records;
+      },
+    );
+    const ports: AiEvaluationPorts = {
+      context: kernelCtx(ctx),
+      suggestPorts: {
+        decisionModel: PRIMARY_MODEL,
+        decisionPort: chooseFirst,
+      },
+    };
+
+    expect(
+      await drainAiEvaluations(ctx.db, [unavailableId, siblingId], ports, {
+        pages: 1,
+      }),
+    ).toEqual(["succeeded"]);
+
+    // The sibling's outcome committed and its item is gone, so no retry can buy
+    // its answer again. The unavailable target stays owed with its own attempt.
+    expect((await settled(siblingId))?.state).toBe("completed");
+    expect(await aiEvaluationItem(ctx.db, siblingId)).toBeUndefined();
+    expect(await fieldAssessments(siblingTask.entityId)).not.toEqual([]);
+    expect((await settled(unavailableId))?.state).toBe("queued");
+    expect(await aiEvaluationItem(ctx.db, unavailableId)).toMatchObject({
+      attempts: 1,
+      ticket: owedTicket,
+      lastError: expect.stringContaining(
+        "Suggestion target field result is unavailable",
+      ),
+    });
+    expect(await fieldAssessments(task.entityId)).toEqual([]);
+
+    await drainAiEvaluations(ctx.db, [unavailableId], ports, { pages: 2 });
+    expect(await settled(unavailableId)).toMatchObject({
+      state: "failed",
+      error: expect.stringContaining(
+        "Suggestion target field result is unavailable",
+      ),
+    });
+    expect(await aiEvaluationItem(ctx.db, unavailableId)).toBeUndefined();
+    expect(await fieldAssessments(task.entityId)).toEqual([]);
   });
 
   for (const change of ["cancel", "obsolete"] as const)

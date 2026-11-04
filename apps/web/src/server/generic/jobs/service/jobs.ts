@@ -1,6 +1,6 @@
 import { jobShortcode } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
-import type { z } from "zod";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
@@ -32,6 +32,16 @@ import type {
 } from "../types";
 
 const log = createLogger("jobs");
+
+/** Only drain counts reach logs; another page result may hold refs or evidence. */
+const loggedPageResult = z
+  .object({
+    processed: z.number(),
+    published: z.number(),
+    failed: z.number(),
+    covered: z.number(),
+  })
+  .partial();
 
 export type JobOutcome =
   | "skipped"
@@ -154,7 +164,14 @@ async function executeClaim(
       () => prepare(context),
       details,
     );
-    entry().info("page", { waitReason: prepared.page.waitReason ?? null });
+    const pageResult =
+      loggedPageResult.safeParse(prepared.page.result).data ?? null;
+    entry().info("page", {
+      waitReason: prepared.page.waitReason ?? null,
+      pageResult,
+    });
+    // A drain publishes its chunks during prepare (`drain.publish` in `phaseMs`),
+    // so this interval then covers little beyond settling the outer Job.
     publicationStartedAt = Date.now();
     const started = performance.now();
     const published = await withJobExecution(
@@ -178,6 +195,7 @@ async function executeClaim(
       waitReason: prepared.page.done
         ? null
         : (prepared.page.waitReason ?? null),
+      pageResult,
     });
     return published ? "succeeded" : "superseded";
   } catch (error) {
