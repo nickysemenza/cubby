@@ -135,6 +135,15 @@ retain that SQL stage. Count-only automatic reads omit ordering-only correction
 lookups. Existing identity/family/status and Feedback assessment indexes serve
 these reads; no second eligibility cache is introduced.
 
+Record-scoped retained recommendation references use one fenced GIN containment
+probe per requested UUID or shortcode, then intersect identities with unchanged
+admission. The many-row lateral membership relation uses explicitly qualified
+derived identifiers. This avoids broad pending-population evidence reads caused
+by the combined containment OR. Entity-only matching retains its existing path.
+Statement reference discovery first admits State identities, then loads served
+immutable judgment through a fenced primary-key lookup. Settlement matching keeps
+immutable source-reference authority and cannot become a global Assessment scan.
+
 Scoped recommendation hydration retains the selected connection edges and every
 competing proposal on those edges, rather than hydrating unrelated connections
 on the same sources. The existing freshness and cross-family deduplication still

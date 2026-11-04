@@ -43,6 +43,7 @@ import type { Database } from "~/server/db";
 import { hasTextSql } from "~/server/db/computed/text-whitespace";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { outer, related } from "~/server/db/helpers/related";
 import { assessment, assessmentState, feedback, run } from "~/server/db/schema";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
@@ -403,17 +404,45 @@ export const reviewFamilyDeclarations = {
       THEN jsonb_build_array(${endpoint("source")}, ${endpoint("target")})
       ELSE COALESCE(a.evidence->'records', '[]'::jsonb) END`,
     matchesRelatedRecords: (scope: AssessmentRecordScope) => {
-      const retained = scope.records
-        ? or(
-            ...scope.records.flatMap((record) =>
-              [record.id, record.code].map(
-                (id) =>
-                  sql`a.evidence->'records' @> ${JSON.stringify([{ entity: record.entity, id }])}::jsonb`,
-              ),
+      let retained: SQL | undefined;
+      if (scope.records?.length) {
+        const indexed = alias(assessment, "retained_indexed");
+        const requestedName = sql.identifier("retained_requested");
+        const valueName = sql.identifier("value");
+        const membershipName = sql.identifier("retained_membership");
+        const needles = scope.records.flatMap((record) =>
+          [record.id, record.code].map(
+            (id) =>
+              sql`${JSON.stringify([{ entity: record.entity, id }])}::jsonb`,
+          ),
+        );
+        const pointQuery = reviewQueryBuilder
+          .select({ id: indexed.id })
+          .from(indexed)
+          .where(
+            and(
+              indexed.served,
+              sql`${indexed.evidence}->'records' @> ${requestedName}.${valueName}`,
             ),
+          );
+        // One fenced GIN probe per reference avoids scanning every pending
+        // recommendation's evidence when the combined OR is estimated broadly.
+        const membershipIds = reviewQueryBuilder
+          .select({
+            id: sql<string>`${membershipName}.${sql.identifier("id")}`,
+          })
+          .from(
+            sql`unnest(ARRAY[${sql.join(needles, sql`, `)}]::jsonb[]) AS ${requestedName}(${valueName})`,
           )
-        : sql`EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(a.evidence->'records', '[]'::jsonb)) r
+          .innerJoinLateral(
+            sql`(${pointQuery.getSQL()} OFFSET 0) AS ${membershipName}`,
+            sql`true`,
+          );
+        retained = inArray(reviewAssessment.id, membershipIds);
+      } else if (!scope.records) {
+        retained = sql`EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(a.evidence->'records', '[]'::jsonb)) r
             WHERE ${relatedRecordMatch(scope, sql`r->>'entity'`, sql<string>`r->>'id'`)})`;
+      }
       return retained
         ? and(sql`(${recommendationScopes.connection}) IS NOT TRUE`, retained)
         : undefined;
@@ -723,14 +752,22 @@ export type AssessmentRecordScope = {
   eligibility: AssessmentEligibility;
 };
 
-function assessmentAdmission(
+function assessmentStateAdmission(
   db: Database,
-  eligibility: Extract<AssessmentEligibility, { kind: "suggestions" }>,
+  eligibility: AssessmentEligibility,
 ) {
-  const a = reviewAssessment;
   const s = reviewState;
+  if (eligibility.kind === "automatic")
+    return and(
+      inArray(
+        s.family,
+        Object.keys(reviewFamilyDeclarations).map((family) =>
+          assessmentFamily.parse(family),
+        ),
+      ),
+      eligibility.family ? eq(s.family, eligibility.family) : undefined,
+    );
   return and(
-    a.served,
     inArray(s.family, [...eligibility.families]),
     eq(s.status, eligibility.status),
     eligibility.status === suggestionStatus.enum.pending ? s.active : undefined,
@@ -790,7 +827,9 @@ export function pendingRecommendationEligibility() {
   );
 }
 
-function assessmentRecordMatches(scope: AssessmentRecordScope): SQL[] {
+function assessmentRecordMatches(
+  scope: AssessmentRecordScope,
+): { match: SQL; stateFirst: boolean }[] {
   const primaryFamilies = Object.entries(reviewFamilyDeclarations).flatMap(
     ([family]) =>
       family !== assessmentFamily.enum.email_link &&
@@ -843,11 +882,12 @@ function assessmentRecordMatches(scope: AssessmentRecordScope): SQL[] {
   // joining immutable evidence. One CASE across families scanned every served
   // Assessment and spilled the pending-state join during ordinary list reads.
   return [
-    sql`${primaryMatch}`,
-    ...connectionMatches,
-    ...secondary.map(
-      ({ family, match }) => sql`${and(eq(reviewState.family, family), match)}`,
-    ),
+    { match: sql`${primaryMatch}`, stateFirst: false },
+    ...connectionMatches.map((match) => ({ match, stateFirst: false })),
+    ...secondary.map(({ family, match }) => ({
+      match: sql`${and(eq(reviewState.family, family), match)}`,
+      stateFirst: family === assessmentFamily.enum.statement_transaction,
+    })),
   ];
 }
 
@@ -857,38 +897,54 @@ function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   const a = reviewAssessment;
   const s = reviewState;
   const branches = assessmentRecordMatches(scope);
-  const admission =
-    scope.eligibility.kind === "automatic"
-      ? and(
-          a.served,
-          inArray(
-            s.family,
-            Object.keys(reviewFamilyDeclarations).map((family) =>
-              assessmentFamily.parse(family),
-            ),
-          ),
-          scope.eligibility.family
-            ? eq(s.family, scope.eligibility.family)
-            : undefined,
-        )
-      : assessmentAdmission(db, scope.eligibility);
+  const stateAdmission = assessmentStateAdmission(db, scope.eligibility);
+  const admission = and(a.served, stateAdmission);
   const matched = sql.join(
-    branches.map((match) =>
-      client
-        .select({
-          id: a.id,
-          family:
-            scope.eligibility.kind === "suggestions" ? s.family : a.family,
-          immutableFamily: sql<AssessmentFamily>`${a.family}`.as(
-            "immutableFamily",
-          ),
-          status: s.status,
-        })
+    branches.map(({ match, stateFirst }) => {
+      const selection = {
+        id: a.id,
+        family: scope.eligibility.kind === "suggestions" ? s.family : a.family,
+        immutableFamily: sql<AssessmentFamily>`${a.family}`.as(
+          "immutableFamily",
+        ),
+        status: s.status,
+      };
+      if (stateFirst) {
+        // Settlement membership reads immutable judgment. Fence that lookup
+        // behind State identity rather than scanning every served Assessment.
+        const publication = related(assessment, (immutable) =>
+          eq(immutable.id, outer(s.id)),
+        )
+          .where((immutable) => immutable.served)
+          .aggregate(
+            (immutable) => sql`${immutable.id} AS ${sql.identifier("id")},
+            ${immutable.family} AS ${sql.identifier("family")},
+            ${immutable.judgment} AS ${sql.identifier("judgment")}`,
+          );
+        return client
+          .select({
+            ...selection,
+            id: outer(a.id),
+            family:
+              scope.eligibility.kind === "suggestions"
+                ? s.family
+                : outer(a.family),
+          })
+          .from(s)
+          .innerJoinLateral(
+            sql`(${publication} OFFSET 0) AS ${sql.identifier("a")}`,
+            sql`true`,
+          )
+          .where(and(stateAdmission, match))
+          .getSQL();
+      }
+      return client
+        .select(selection)
         .from(a)
         .innerJoin(s, eq(s.id, a.id))
         .where(and(admission, match))
-        .getSQL(),
-    ),
+        .getSQL();
+    }),
     sql` UNION ALL `,
   );
   if (scope.eligibility.kind === "suggestions") return matched;
