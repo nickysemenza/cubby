@@ -137,6 +137,12 @@ retain that SQL stage. Count-only automatic reads omit ordering-only correction
 lookups. Existing identity/family/status and Feedback assessment indexes serve
 these reads; no second eligibility cache is introduced.
 
+Pending recommendation suppression probes use the sparse active/non-null
+suppression index on `(entity, recordId)`. Scope, candidate key and fingerprint
+remain exact query predicates, including the null-fingerprint wildcard. The
+index excludes rows that cannot suppress a proposal without changing admission
+or imposing an identity-first query barrier.
+
 Record-scoped retained recommendation references use one fenced GIN containment
 probe per requested UUID or shortcode, then intersect identities with unchanged
 admission. The many-row lateral membership relation uses explicitly qualified

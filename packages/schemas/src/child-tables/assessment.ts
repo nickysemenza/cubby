@@ -272,6 +272,11 @@ export const assessmentChildren = [
       },
       { name: "AssessmentState_run_status_idx", on: ["runId", "status"] },
       {
+        name: "AssessmentState_active_suppression_idx",
+        on: ["entity", "recordId"],
+        where: "{active} AND {suppression} IS NOT NULL",
+      },
+      {
         name: "AssessmentState_ledger_party_idx",
         on: ["ledgerPartyId", "family", "status"],
       },
