@@ -81,7 +81,7 @@ export async function observePendingWork(
     scope,
   }: {
     drain: string;
-    eligible: (target: SQL) => SQL;
+    eligible: (target: SQL, ref: SQL) => SQL;
     scope?: { target: string; refs: readonly string[] };
   },
 ): Promise<WorkItem[]> {
@@ -91,7 +91,7 @@ export async function observePendingWork(
     .where(
       and(
         eq(workItem.drain, drain),
-        eligible(sql`${workItem.target}`),
+        eligible(sql`${workItem.target}`, sql`${workItem.ref}`),
         scope
           ? sql`(${workItem.target} <> ${scope.target} OR ${workItem.ref} = ANY(${uuidArrayParam(scope.refs)}))`
           : undefined,
@@ -539,13 +539,13 @@ export async function workTicketsWhere(
 
 /** Whether an item matching `target` exists whose ticket is not among `observed`. */
 export const unobservedWork = (
-  target: (column: SQL) => SQL,
+  target: (column: SQL, ref: SQL) => SQL,
   observed: readonly number[],
   /** Narrow one exact target's refs while retaining the other matched targets. */
   scope?: { target: string; refs: readonly string[] },
 ) =>
   // One jsonb parameter: a busy fanout can observe thousands of tickets.
-  sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${target(sql`${workItem.target}`)}
+  sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${target(sql`${workItem.target}`, sql`${workItem.ref}`)}
     ${scope ? sql`AND (${workItem.target} <> ${scope.target} OR ${workItem.ref} = ANY(${uuidArrayParam(scope.refs)}))` : sql``}
     AND ${workItem.ticket} NOT IN (
       SELECT jsonb_array_elements_text(${JSON.stringify(observed)}::jsonb)::bigint))`;

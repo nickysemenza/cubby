@@ -156,6 +156,8 @@ export interface DerivedSink<Prepared = unknown> {
    * empty output.
    */
   preparationFailures?(prepared: Prepared): ReadonlyMap<string, unknown>;
+  /** Reuse the sink's snapshot observations and complete source/peer relevance rule. */
+  publicationBlocked?(prepared: Prepared, ids: readonly string[]): SQL;
   /** `tx` is the publication transaction's repository handle. */
   publish(
     tx: Database,
@@ -170,19 +172,27 @@ export type DerivedAdapter = DerivedCompute | DerivedSink;
 /** A sink adapter with its prepared type erased for the registry. */
 export const derivedSink = <Prepared>(
   sink: Omit<DerivedSink<Prepared>, "kind">,
-): DerivedSink => ({
-  kind: "sink",
-  preparationBatchSize: sink.preparationBatchSize,
-  fanoutSelections: sink.fanoutSelections,
-  prepare: sink.prepare,
-  // SAFETY: the drain hands `preparationFailures` and `publish` exactly the
-  // value this sink's own `prepare` returned for the same page.
-  preparationFailures: (prepared) =>
-    sink.preparationFailures?.(prepared as Prepared) ?? new Map(),
-  // SAFETY: publish receives this sink's own preparation result for the same page.
-  publish: (tx, ids, prepared, publication) =>
-    sink.publish(tx, ids, prepared as Prepared, publication),
-});
+): DerivedSink => {
+  const blocked = sink.publicationBlocked;
+  return {
+    kind: "sink",
+    preparationBatchSize: sink.preparationBatchSize,
+    fanoutSelections: sink.fanoutSelections,
+    prepare: sink.prepare,
+    // SAFETY: the drain hands `preparationFailures` and `publish` exactly the
+    // value this sink's own `prepare` returned for the same page.
+    preparationFailures: (prepared) =>
+      sink.preparationFailures?.(prepared as Prepared) ?? new Map(),
+    publicationBlocked: blocked
+      ? (prepared, ids) =>
+          // SAFETY: the drain supplies this sink's own preparation result.
+          blocked(prepared as Prepared, ids)
+      : undefined,
+    // SAFETY: publish receives this sink's own preparation result for the same page.
+    publish: (tx, ids, prepared, publication) =>
+      sink.publish(tx, ids, prepared as Prepared, publication),
+  };
+};
 
 export const isDerivedSink = (
   adapter: DerivedAdapter,

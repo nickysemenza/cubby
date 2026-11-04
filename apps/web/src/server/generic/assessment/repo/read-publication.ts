@@ -4,7 +4,16 @@ import {
   type AssessmentReadResult,
 } from "@cubby/schemas/assessment-read-publication";
 import type { Entity } from "@cubby/schemas/entity";
-import { and, arrayOverlaps, eq, inArray, not, or, sql } from "drizzle-orm";
+import {
+  and,
+  arrayOverlaps,
+  eq,
+  inArray,
+  not,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
@@ -36,6 +45,7 @@ export type AssessmentReadStageWrite = {
   /** Exact continuations observed before preparation, including components that merged. */
   previousStageIds: readonly string[];
   results: readonly AssessmentReadResult[];
+  sourceScope?: (source: { target: SQL; ref: SQL }) => SQL;
 };
 
 /** Canonical reads and ticket observations must describe one committed snapshot. */
@@ -47,6 +57,26 @@ export function withAssessmentReadSnapshot<T>(
     isolationLevel: "repeatable read",
     accessMode: "read only",
   });
+}
+
+const publicationActivityBucket = z.object({
+  age: z.number().int(),
+  count: z.number().int(),
+});
+
+/** One successful revision counts once, including empty results and multiple family rows. */
+export async function readAssessmentPublicationActivity(
+  db: RepositoryQueryInput,
+  windowMinutes: number,
+): Promise<z.infer<typeof publicationActivityBucket>[]> {
+  const rows = await repositoryQueries(db).execute(sql`
+    SELECT floor(extract(epoch FROM now() - ${assessmentReadPublication.computedAt}) / 60)::int AS age,
+      count(DISTINCT (${assessmentReadPublication.assessmentId}, ${assessmentReadPublication.revision}))::int AS count
+    FROM ${assessmentReadPublication}
+    WHERE ${assessmentReadPublication.active}
+      AND ${assessmentReadPublication.computedAt} > now() - ${windowMinutes} * interval '1 minute'
+    GROUP BY 1`);
+  return publicationActivityBucket.array().parse(rows.rows);
 }
 
 export async function readAssessmentReadStage(
@@ -162,20 +192,31 @@ async function removeInactiveRevisions(
 }
 
 /** Exact peer and source generations, observed before canonical preparation. */
+export function assessmentReadStageBlocked(
+  stage: AssessmentReadStagePlan,
+  sourceScope: AssessmentReadStageWrite["sourceScope"],
+): SQL {
+  return unobservedWork(
+    (target, ref) =>
+      or(
+        eq(target, ASSESSMENT_READ_TARGET),
+        and(
+          fanoutTargetMatches(target, sql`${ASSESSMENT_READ_TARGET}::text`),
+          sourceScope?.({ target, ref }),
+        ),
+      )!,
+    stage.tickets.map((item) => item.ticket),
+    { target: ASSESSMENT_READ_TARGET, refs: stage.assessmentIds },
+  );
+}
+
 async function stageInvalidated(
   db: RepositoryQueryInput,
   stage: AssessmentReadStagePlan,
+  sourceScope: AssessmentReadStageWrite["sourceScope"],
 ) {
   const rows = await repositoryQueries(db).execute(
-    sql`SELECT ${unobservedWork(
-      (target) =>
-        or(
-          eq(target, ASSESSMENT_READ_TARGET),
-          fanoutTargetMatches(target, sql`${ASSESSMENT_READ_TARGET}::text`),
-        )!,
-      stage.tickets.map((item) => item.ticket),
-      { target: ASSESSMENT_READ_TARGET, refs: stage.assessmentIds },
-    )} AS invalidated`,
+    sql`SELECT ${assessmentReadStageBlocked(stage, sourceScope)} AS invalidated`,
   );
   return z.tuple([z.object({ invalidated: z.boolean() })]).parse(rows.rows)[0]
     .invalidated;
@@ -243,7 +284,7 @@ export async function writeAssessmentReadStage(
     if (existing.nextIndex !== stage.nextIndex)
       return { kind: "retained", changed: [] };
   }
-  if (await stageInvalidated(db, stage))
+  if (await stageInvalidated(db, stage, prepared.sourceScope))
     return { kind: "retained", changed: [] };
   if (prepared.previousStageIds.length) {
     const previous = await tx
@@ -345,7 +386,7 @@ export async function writeAssessmentReadStage(
     .where(eq(assessmentReadStage.id, stage.id));
   if (nextIndex !== stage.assessmentIds.length)
     return { kind: "retained", changed: [] };
-  if (await stageInvalidated(db, stage))
+  if (await stageInvalidated(db, stage, prepared.sourceScope))
     return { kind: "retained", changed: [] };
   const completed = await tx
     .selectDistinct({ id: assessmentReadPublication.assessmentId })

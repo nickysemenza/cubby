@@ -125,6 +125,7 @@ export interface EntityStoredDerivedDeclaration extends StoredDerivedWork {
  */
 export interface InternalStoredDerivedDeclaration extends StoredDerivedWork {
   readonly kind: "internalRecord";
+  readonly label: string;
   readonly publishes: "ownTable";
   readonly notifications: "sinkOwned";
   /** Rows the daily pass marks, sharing `table`'s UUID `id`; null marks every row. */
@@ -270,6 +271,7 @@ const internalInput = storedInput
  * to rows that can still be owed, for a source table with a closed history.
  */
 const internalRecordSpec = z.object({
+  label: z.string().min(1),
   target: z
     .string()
     .regex(/^[a-z][A-Za-z0-9]*\.[a-z][A-Za-z0-9]*$/)
@@ -403,6 +405,7 @@ const internalRecordDeclarations = (): InternalStoredDerivedDeclaration[] => {
     throw new Error("Internal derived record targets must be unique");
   return specs.map((spec): InternalStoredDerivedDeclaration => ({
     kind: "internalRecord",
+    label: spec.label,
     publishes: "ownTable",
     notifications: spec.notifications,
     reconcile: spec.reconcile ?? null,

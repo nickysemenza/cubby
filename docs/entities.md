@@ -3012,7 +3012,8 @@ imported by domain repositories and reads quality synchronously, so it cannot
 depend on the repository registry, which imports every repository.
 
 A publication about non-entity records registers in `internalRecordSpecs` in
-`server/db/derived-declarations.ts`, not in the manifest. A spec names a stable
+`server/db/derived-declarations.ts`, not in the manifest. A spec names a human-readable
+`label` for the existing backlog owner and a stable
 `<owner>.<key>` target whose owner is not an entity, a source table with a UUID
 `id`, a compute id and manifest-shaped `inputs` and `dependsOn`. It shares the
 existing registry, triggers, drain, source locking, fanout fences, retries and
@@ -3051,7 +3052,16 @@ slice still applies. A row outside the population converges only through its own
 marks, so its closing transition must mark it. Absent, every source row is marked.
 `entityStoredDerivedDeclarations()` and `storedDerived()` are the entity-only
 roster for reads, explanations, clock expiry and backlog `kinds`. Internal
-tickets count in the backlog `total` and oldest wait without a `kinds` row.
+tickets count in the same backlog `total`, oldest wait and state buckets. Its
+`internal` rows carry the stable target and label without pretending the work
+is an Entity field; unknown retained targets remain visible as Other refresh
+work. The existing `recent` history combines committed publication sources and
+exposes their separate labelled series. Assessment activity counts distinct
+active Assessment/revision pairs, including successful empty results; staged
+rows and extra family rows cannot inflate it or be attributed to DerivedValue.
+This history describes current successful results by publication age, not an
+execution event log. Replacements move their bucket and no-op completions retain
+publication age; committed page outcomes remain in the existing Job result.
 An internal record's refs are source IDs, not entity IDs, so
 `notifications: "sinkOwned"` skips the default ring for fanout expansion and
 publication. The sink calls
@@ -3075,6 +3085,14 @@ owner independently locks those generations; re-marked peers and items already
 claimed by a later chunk remain owed. A completed component keeps its exact
 observation acknowledgement so those later peers settle without re-running the
 canonical preparation. Coverage grants no authority to delete work in a sink.
+A sink with its own snapshot may supply `publicationBlocked(prepared, ids)` as
+SQL through the existing work-observation helpers. Its preparation, drain gate
+and staged writer must use the same exact observations and relevance rule;
+the earlier page-wide observations cannot stand in for its later snapshot.
+The rule must cover retained inputs
+and newly reachable dependencies and competitors, including captured OLD refs;
+matching only previously published reverse dependencies is insufficient.
+Without this port, the existing conservative target-wide fence applies.
 
 Product reads use the stored `readFacts` publication for pricing, quantity ledger,
 placement and ownership evidence, and `food` for food summaries. Their field

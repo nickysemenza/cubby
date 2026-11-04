@@ -876,16 +876,20 @@ export async function publishDerivedChunk(
     let changedIds: readonly string[];
     let publishedIds: ReadonlySet<string>;
     if (sink) {
+      const heldIds = group.map((item) => item.ref);
       const [row] = z
         .array(z.object({ blocked: z.boolean() }))
         .parse(
           (
             await tx.execute(
-              sql`SELECT ${blockedByFanout(target, plan)} AS blocked`,
+              sql`SELECT ${
+                sink.sink.publicationBlocked?.(sink.prepared, heldIds) ??
+                blockedByFanout(target, plan)
+              } AS blocked`,
             )
           ).rows,
         );
-      const ids = row?.blocked ? [] : group.map((item) => item.ref);
+      const ids = row?.blocked ? [] : heldIds;
       // Sinks reuse repository writers, which take the Database handle.
       const outcome = ids.length
         ? await sink.sink.publish(db, ids, sink.prepared, {
@@ -897,8 +901,8 @@ export async function publishDerivedChunk(
           })
         : [];
       const retainedIds = new Set("retain" in outcome ? outcome.retain : []);
-      const heldIds = new Set(ids);
-      if ([...retainedIds].some((id) => !heldIds.has(id)))
+      const held = new Set(ids);
+      if ([...retainedIds].some((id) => !held.has(id)))
         throw new Error("Derived sink retained an unclaimed source");
       const peers = "retain" in outcome ? (outcome.covered ?? []) : [];
       if (peers.some((item) => item.target !== target))

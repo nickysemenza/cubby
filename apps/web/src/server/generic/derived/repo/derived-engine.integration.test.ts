@@ -6,7 +6,7 @@ import type {
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { productReadFacts } from "@cubby/schemas/product-read-fields";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { seedEntity, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -62,8 +62,10 @@ import {
   dropWork,
   lockWork,
   markWorkFrom,
+  observePendingWork,
   postponeWorkRefs,
   workItemStates,
+  unobservedWork,
 } from "~/server/generic/jobs/repo/work-items";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -676,6 +678,66 @@ describe("stored derived values", () => {
       (await workItemStates(ctx.db, "recipe.totals", [recipeId, siblingId]))[0]
         ?.ticket,
     ).not.toBe(newer.observed.find((item) => item.ref === newer.peer)?.ticket);
+    const scopedPublication = async (
+      sourceRef: string,
+      beforeSnapshot = false,
+    ) => {
+      await drain();
+      await getDb(ctx.db).execute(
+        sql`SELECT derived_mark('recipe.totals', ARRAY[${recipeId}::uuid])`,
+      );
+      let published = false;
+      const relevant = (target: SQL, ref: SQL) =>
+        and(eq(target, "recipe.totals@4"), eq(ref, recipeId))!;
+      await drainDerivedPage(ctx.db, {
+        only: (mark) => mark.target === "recipe.totals",
+        computes: {
+          ...derivedComputes,
+          "recipe.totals": derivedSink({
+            prepare: async (db) => {
+              if (beforeSnapshot)
+                await getDb(db).execute(
+                  sql`SELECT derived_mark('recipe.totals@4', ARRAY[${sourceRef}::uuid])`,
+                );
+              return (
+                await observePendingWork(db, {
+                  drain: DERIVED_DRAIN.key,
+                  eligible: relevant,
+                })
+              ).map((item) => item.ticket);
+            },
+            publicationBlocked: (observed) =>
+              unobservedWork(relevant, observed),
+            publish: async () => {
+              published = true;
+              return [];
+            },
+          }),
+        },
+        // This exercises the generic source protocol, not Assessment dependency completeness.
+        during: async () => {
+          if (!beforeSnapshot)
+            await getDb(ctx.db).execute(
+              sql`SELECT derived_mark('recipe.totals@4', ARRAY[${sourceRef}::uuid])`,
+            );
+        },
+      });
+      return { published, owed: await marks("recipe.totals") };
+    };
+    expect(await scopedPublication(siblingId)).toEqual({
+      published: true,
+      owed: [],
+    });
+    expect(await scopedPublication(recipeId)).toEqual({
+      published: false,
+      owed: [recipeId],
+    });
+    // The component observed this edit after the generic page began. Its own
+    // later snapshot, not the page's earlier vector, fences this publication.
+    expect(await scopedPublication(recipeId, true)).toEqual({
+      published: true,
+      owed: [],
+    });
   });
 
   it("publishes available value marks and removals while a writer holds another mark", async () => {

@@ -7,7 +7,7 @@ import {
   connectionEdgeKey,
   type ConnectionEdge,
 } from "@cubby/schemas/entity-connections";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -21,6 +21,7 @@ import {
   readOpenAssessmentReadIds,
   withAssessmentReadSnapshot,
   type AssessmentReadStagePlan,
+  type AssessmentReadStageWrite,
 } from "~/server/generic/assessment/repo/read-publication";
 import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
@@ -32,6 +33,10 @@ import { stopsDrainPage } from "~/server/generic/jobs/service/drain";
 import { sha256CanonicalJson } from "~/server/lib/canonical-json";
 
 const PREPARATION_LIMIT = 20;
+type ReadSourceScope = (
+  snapshot: Database,
+  frame: Pick<AssessmentReadStagePlan, "assessmentIds" | "groups">,
+) => Promise<NonNullable<AssessmentReadStageWrite["sourceScope"]>>;
 
 export type AssessmentReadPreparationPlan = {
   stage: AssessmentReadStagePlan;
@@ -39,25 +44,21 @@ export type AssessmentReadPreparationPlan = {
   idsToPrepare: string[];
   currentGroups: ReadonlyMap<string, string>;
   work: readonly WorkItem[];
+  sourceScope: NonNullable<AssessmentReadStageWrite["sourceScope"]>;
 };
 
 /** One connected component shares a repeatable snapshot and exact work observations. */
 async function prepareAssessmentReadComponent<Prepared>(
   db: Database,
   seed: string,
+  limit: number,
   prepare: (
     snapshot: Database,
     plan: AssessmentReadPreparationPlan,
   ) => Promise<Prepared>,
+  readSourceScope: ReadSourceScope | undefined,
 ): Promise<{ plan: AssessmentReadPreparationPlan; prepared: Prepared }> {
   return withAssessmentReadSnapshot(db, async (snapshot) => {
-    // Observing fanouts fixes the snapshot before mutable identity discovery.
-    // Later writes remain owed and the publication barrier rejects their tickets.
-    const fanouts = await observePendingWork(snapshot, {
-      drain: DERIVED_DRAIN.key,
-      eligible: (target) =>
-        fanoutTargetMatches(target, sql`${ASSESSMENT_READ_TARGET}::text`),
-    });
     const members = new Set([seed]);
     const groups = new Set<string>();
     const currentGroups = new Map<string, string>();
@@ -128,6 +129,22 @@ async function prepareAssessmentReadComponent<Prepared>(
     const assessmentIds = [...members].sort();
     const orderedGroups = [...groups].sort();
     const componentKey = await sha256CanonicalJson(orderedGroups);
+    // The metadata reads already fixed this repeatable snapshot. Observe only
+    // relevant sources before canonical preparation, and reuse this predicate
+    // with the exact observations at both publication barriers.
+    const sourceScope =
+      (await readSourceScope?.(snapshot, {
+        assessmentIds,
+        groups: orderedGroups,
+      })) ?? (() => sql`true`);
+    const fanouts = await observePendingWork(snapshot, {
+      drain: DERIVED_DRAIN.key,
+      eligible: (target, ref) =>
+        and(
+          fanoutTargetMatches(target, sql`${ASSESSMENT_READ_TARGET}::text`),
+          sourceScope({ target, ref }),
+        )!,
+    });
     const direct = await observePendingWork(snapshot, {
       drain: DERIVED_DRAIN.key,
       eligible: (target) => eq(target, ASSESSMENT_READ_TARGET),
@@ -168,9 +185,10 @@ async function prepareAssessmentReadComponent<Prepared>(
       previousStageIds: [...previousStages],
       currentGroups,
       work: direct,
+      sourceScope,
       idsToPrepare: stage.assessmentIds.slice(
         stage.nextIndex,
-        stage.nextIndex + PREPARATION_LIMIT,
+        stage.nextIndex + limit,
       ),
     };
     return { plan, prepared: await prepare(snapshot, plan) };
@@ -185,9 +203,12 @@ export async function prepareAssessmentReadPublication<Prepared>(
     snapshot: Database,
     plan: AssessmentReadPreparationPlan,
   ) => Promise<Prepared>,
+  readSourceScope?: ReadSourceScope,
 ): Promise<{
   components: { plan: AssessmentReadPreparationPlan; prepared: Prepared }[];
   failures: ReadonlyMap<string, unknown>;
+  /** Claimed inputs left outside this page's shared preparation budget stay owed. */
+  retained: readonly string[];
 }> {
   const remaining = new Set(ids);
   const components: {
@@ -195,17 +216,24 @@ export async function prepareAssessmentReadPublication<Prepared>(
     prepared: Prepared;
   }[] = [];
   const failures = new Map<string, unknown>();
+  let budget = PREPARATION_LIMIT;
   for (const seed of remaining) {
+    if (budget === 0) break;
     let claimed = [seed];
     try {
       const component = await prepareAssessmentReadComponent(
         db,
         seed,
+        budget,
         async (snapshot, plan) => {
           claimed = plan.stage.assessmentIds.filter((id) => remaining.has(id));
           for (const id of claimed) remaining.delete(id);
+          // Failed preparation still spent work; independent components share
+          // one page budget rather than each opening another twenty-item wave.
+          budget -= plan.idsToPrepare.length;
           return prepare(snapshot, plan);
         },
+        readSourceScope,
       );
       components.push(component);
     } catch (error) {
@@ -218,5 +246,5 @@ export async function prepareAssessmentReadPublication<Prepared>(
       }
     }
   }
-  return { components, failures };
+  return { components, failures, retained: [...remaining] };
 }

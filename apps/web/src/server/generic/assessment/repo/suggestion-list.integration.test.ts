@@ -40,6 +40,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import {
   writeAssessmentReadStage,
   type AssessmentReadStagePlan,
+  type AssessmentReadStageWrite,
 } from "~/server/generic/assessment/repo/read-publication";
 import {
   readAssessmentRecordRefs,
@@ -246,6 +247,40 @@ describe("cross-family Suggestion list", () => {
     expect(
       (await readAssessmentRecordRefs(ctx.db, assessmentIds)).get(id),
     ).toEqual([{ entity: "product", id: item.id }]);
+    const claimed = [id];
+    for (let index = 0; index < 20; index++) {
+      const source = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: `Synthetic bounded publication ${index}` }),
+        ctx.actor,
+      );
+      claimed.push(
+        await fieldSuggestion(ctx, source, "model", 0.9, new Date()),
+      );
+    }
+    const bounded = await prepareAssessmentReadPublication(
+      ctx.db,
+      claimed,
+      (snapshot, plan) =>
+        prepareSuggestionAdmission(snapshot, plan.idsToPrepare),
+    );
+    expect(bounded.components.flatMap(({ plan }) => plan.idsToPrepare)).toEqual(
+      claimed.slice(0, 20),
+    );
+    expect(bounded.retained).toEqual(claimed.slice(20));
+    expect(bounded.failures.size).toBe(0);
+    const resumed = await prepareAssessmentReadPublication(
+      ctx.db,
+      bounded.retained,
+      (snapshot, plan) =>
+        prepareSuggestionAdmission(snapshot, plan.idsToPrepare),
+    );
+    expect(
+      resumed.components.flatMap(({ prepared }) =>
+        prepared.keys.map((key) => key.assessmentId),
+      ),
+    ).toEqual(claimed.slice(20));
+    expect(resumed.retained).toEqual([]);
   });
 
   // Reference proposals touch both the old and proposed records, even when
@@ -697,11 +732,12 @@ describe("cross-family Suggestion list", () => {
       plan: AssessmentReadStagePlan,
       prefix: AssessmentReadResult[],
       previousStageIds: readonly string[] = [],
+      sourceScope?: AssessmentReadStageWrite["sourceScope"],
     ) =>
       getDb(ctx.db).transaction((tx) =>
         writeAssessmentReadStage(
           tx,
-          { stage: plan, previousStageIds, results: prefix },
+          { stage: plan, previousStageIds, results: prefix, sourceScope },
           publication,
         ),
       );
@@ -821,6 +857,37 @@ describe("cross-family Suggestion list", () => {
           row.row === null,
       ),
     ).toBe(true);
+    const relevantSource = crypto.randomUUID();
+    const sourceScope: NonNullable<AssessmentReadStageWrite["sourceScope"]> = (
+      source,
+    ) => eq(source.ref, relevantSource);
+    const scoped = {
+      ...empty,
+      id: crypto.randomUUID(),
+      revision: crypto.randomUUID(),
+      tickets: await observe(),
+    };
+    await markWork(ctx.db, DERIVED_DRAIN, [
+      { target: `${ASSESSMENT_READ_TARGET}@0`, ref: crypto.randomUUID() },
+    ]);
+    expect(await write(scoped, results, [empty.id], sourceScope)).toMatchObject(
+      { kind: "activated" },
+    );
+    const beforeSourceEdit = await headers();
+    const blocked = {
+      ...scoped,
+      id: crypto.randomUUID(),
+      revision: crypto.randomUUID(),
+    };
+    await markWork(ctx.db, DERIVED_DRAIN, [
+      { target: `${ASSESSMENT_READ_TARGET}@0`, ref: relevantSource },
+    ]);
+    expect(await write(blocked, results, [scoped.id], sourceScope)).toEqual({
+      kind: "retained",
+      changed: [],
+    });
+    expect(await headers()).toEqual(beforeSourceEdit);
+    await deleteWorkItems(ctx.db, { target: `${ASSESSMENT_READ_TARGET}@0` });
     await deleteWorkItems(ctx.db, { target: ASSESSMENT_READ_TARGET });
     expect(ids.indexOf(confident)).toBeLessThan(ids.indexOf(unsure));
     const connectionRow = page.items.find(
