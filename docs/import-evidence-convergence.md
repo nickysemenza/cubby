@@ -1225,6 +1225,23 @@ not a Cubby spending-category assignment:
 retain each provider/category observation, joining other provider charges only
 through authoritative settlement references to the same transaction.
 
+### Retained review holds and preservation
+
+Before resuming a retained booking case, read the existing member review and
+saved case plans for the exact source, transaction and Purchase identities.
+Carry unresolved objections and explicit decisions into the next review brief.
+A new preview, approval or successful replay does not itself supersede a prior
+hold. Resolve the objection against current evidence and the owning policy
+before writing; retain the earlier finding and record why the case can proceed.
+Distinguish a reviewer's recommendation from a member's decision. A later
+review cannot override an explicit member decision.
+
+Identify intended targets inside protected cohort snapshots before writing.
+Preserve every unrelated row and allow only the exact reviewed target effects,
+including their specific booking timestamps and allocations. Do not exclude an
+entire set or broadly ignore timestamp changes because a target appears there.
+Receipt replay and independent preservation read-back establish separate facts.
+
 ### Statement review receipts and classification
 
 Statement `suggestions.review` application uses a Feedback-backed command receipt
