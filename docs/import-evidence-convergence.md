@@ -237,14 +237,17 @@ Clear package/reference-specific source attribution can correct a stored carrier
 regardless of who originally set it. Ordinary member edits use `entity.update` and
 its guarded bulk writer, commit alongside other submitted fields, and appear in
 normal audit history. They do not create a permanent automation lock; setting null
-leaves a missing carrier that later source evidence may fill. Carrier resolution
-has no machine/member ownership classification, assignment receipts or audit
-markers. Automated source correction still uses the owning Shipment writer rather
+leaves a missing carrier that later source evidence may fill. An edit also drops
+extra references the new primary covers, and the replaced carrier does not become
+a handoff. Carrier resolution has no machine/member ownership classification,
+assignment receipts or audit markers. Automated source correction still uses the owning Shipment writer rather
 than submitting unverified carrier edits through generic CRUD.
 
 A correction requires positive attribution for the exact reference: a complete
 carrier/tracking statement, carrier field or shipped-via statement with a labeled
-reference. Clipped, conditional, negated or unrelated branding is insufficient.
+reference. Clipped, conditional, negated or unrelated branding is insufficient, as
+are dates, greetings and links laid out above a tracking label, which are not
+carrier names and cannot create a conflict.
 Retained Email links must have an exact reference on a supported carrier route;
 constructed tracking-page URLs, lookalike hosts, unresolved redirects and
 multi-reference links do not establish an assignment. Current link coverage is
@@ -262,7 +265,9 @@ revision fence and deferred identity constraints, and never merge collisions.
 
 Source-package bindings, occurrence identities and original fingerprints stay
 unchanged. Replay recovers the existing binding from its reference when an alias
-changes a fallback key. It follows that package's current assignment unless the
+changes a fallback key, and from a source key respelled within that same source
+(case and punctuation). The same label from another source stays separate, because
+generic labels such as an origin state recur across unrelated orders. It follows that package's current assignment unless the
 source establishes a correction; an unsupported old guess cannot become an extra
 handoff reference. Distinct known-carrier handoffs and original captures remain.
 
@@ -334,7 +339,11 @@ returns `unresolvedPackages`, and publishes an Email review finding when the sou
 has an owned Email. It creates no speculative Shipment for that packet.
 `distinctPackageEvidence` never bypasses tracked identity matching. A new Email,
 item list or status change alone does not establish a separate package. Trackingless packages still need
-a stable source package key and distinct-package evidence. Identical
+a stable source package key and distinct-package evidence. Across sources, one
+joins an existing Shipment only when its whole key respells another source's key
+naming a vendor's opaque package id, within one identity period, with exactly one
+live candidate and no Purchase conflict. Shared labels such as an origin state,
+box number or bare order number never match across sources. Identical
 unkeyed source rows retain their multiplicity; replay updates the same
 occurrences. Native event keys scope changed versions to their source package.
 A later A → B → A report retains a third version, while stale captures cannot
@@ -365,6 +374,20 @@ Reassigning the last source package merges its empty former Shipment into the
 target and inherits the same Purchase-decision and direction preconditions.
 Old identities retain their merge destination; writes require the current
 reference and the specialist timeline can follow the saved destination.
+An interactive member can retire a source record that is not a physical parcel,
+such as an empty template row, with
+generic Shipment deletion. Never merge such a record into one real parcel. Its
+observations, capture memberships and source binding stay on the retired identity.
+Replaying that binding reports the package and restores nothing, while sibling
+packets in the source still apply. A trackingless packet under a key that source
+has never bound is reported the same way, because re-extraction can rename a
+retired template. A new source naming a retired tracking
+reference starts a Shipment, since only that source's binding records the decision.
+Explicitly naming a retired Shipment refuses the whole record call; it does not
+restore the row. Retain real multi-parcel groups when their observations cannot
+be assigned to individual parcels without losing the group-level meaning.
+Tracking pages cannot use notification-received dates: only retained Email or
+SMS notification timestamps can support that fallback.
 Tracking reports show the source Email's received timestamp when the event time
 is unknown, labeled as Email receipt rather than an observed event time. This
 display fallback does not replace retained event time or enter milestone duration

@@ -85,8 +85,10 @@ review; it never bypasses tracking identity matching. Quote it only when the
 source establishes a distinct package, such as "package 2 of 2" under a shared
 master number. A new trackingless package requires both
 a stable source key and distinct-package evidence; an order number or generic
-order-wide status alone cannot distinguish packages. Keep ambiguous facts in
-the original rather than inventing a packet. Split packages stay separate even
+order-wide status alone cannot distinguish packages. An empty template row, such
+as a numbered box with no tracking, method or items, is not a package. An origin
+group is one only when the source establishes a single parcel. Keep ambiguous
+facts in the original rather than inventing a packet. Split packages stay separate even
 when they belong to the same order.
 
 For example, shipping, out-for-delivery and delivered Emails for the same

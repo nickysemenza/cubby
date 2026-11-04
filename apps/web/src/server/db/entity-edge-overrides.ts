@@ -273,14 +273,22 @@ export const ENTITY_EDGE_OVERRIDES = {
       role: "history",
       label: "tracking observations",
       description: "Retained tracking evidence for this package.",
-      liveness: { kind: "must-target-live" },
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "A retired package keeps its source observations; merges move them to the survivor.",
+      },
     },
     "ShipmentSourcePackage.shipmentId": {
       column: shipmentSourcePackage.shipmentId,
       role: "history",
       label: "source package identities",
       description: "Stable source package associations for replay.",
-      liveness: { kind: "must-target-live" },
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "A retired package's binding stops replay recreating it; merges move it to the survivor.",
+      },
     },
   }),
   sourceTransactionRecord: edges({

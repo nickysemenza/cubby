@@ -510,6 +510,38 @@ describe("Shipment retained evidence", () => {
     ).toBe(true);
   });
 
+  it("review regression: source layout above a tracking label is not a carrier claim", async () => {
+    const number = "EXAMPLE-LAYOUT";
+    for (const line of [
+      "Sun, Jul 21",
+      "Hi Example, your order is being shipped!",
+      "Estimated delivery: Fri. Jul. 20 - Fri. Jul. 27",
+      "Tracking info should be available within 1-2 days",
+    ]) {
+      const { explicit } = await assessCarrierPacket(
+        ctx.db,
+        { trackingNumber: number, extraTrackingNumbers: [] },
+        { texts: [`${line}\nTracking ID:\n${number}`], links: [] },
+      );
+      expect(explicit).toEqual([]);
+    }
+    for (const name of [
+      "Synthetic Unknown Carrier",
+      "Synthetic Carrier (Ground)",
+      "Synthetic Alpha/Beta",
+      "Synthetic Carrier 2",
+    ]) {
+      const { explicit } = await assessCarrierPacket(
+        ctx.db,
+        { trackingNumber: number, extraTrackingNumbers: [] },
+        { texts: [`Carrier: ${name}\nTracking ID: ${number}`], links: [] },
+      );
+      expect(new Set(explicit.map(({ claim }) => claim.carrierName))).toEqual(
+        new Set([name]),
+      );
+    }
+  });
+
   it("resolves an additional-only identity from explicit source evidence", async () => {
     await createRepoIdentity(ctx, "vendor", { name: "Synthetic Beta Carrier" });
     const number = "EXAMPLE-LEGACY-EXTRA";
@@ -946,9 +978,23 @@ describe("Shipment retained evidence", () => {
         time: { kind: "date", value: "2026-06-07" },
       },
     ];
+    await expect(
+      recordShipmentEvidence(ctx.db, capture("forecast", [parcel]), ctx.actor),
+    ).rejects.toThrow(/source notification/);
     const result = await recordShipmentEvidence(
       ctx.db,
-      capture("forecast", [parcel]),
+      {
+        ...capture("forecast", [parcel]),
+        source: {
+          kind: "sms_export",
+          externalKey: "forecast",
+          fileName: "synthetic-messages.txt",
+          sender: "Synthetic Carrier",
+          sentAt: { kind: "instant", value: "2026-06-03T09:00:00Z" },
+          capturedAt: "2026-06-06T09:00:00Z",
+          content: "Synthetic pickup and delivery forecast",
+        },
+      },
       ctx.actor,
     );
     const code = result.shipmentIds[0]!;
@@ -2056,6 +2102,204 @@ describe("Shipment retained evidence", () => {
         row.source.kind === "tracking_page" ? row.source.content : null,
       ),
     ).toContain("  Synthetic snapshot\n");
+  });
+
+  it("retires a template package without blocking sibling replay or recreating it", async () => {
+    const parcel = packet("EXAMPLE-BOX-1");
+    const template: ShipmentEvidence = {
+      ...packet(),
+      sourceShipmentKey: "Box #3",
+      distinctPackageEvidence: "Synthetic notice lists an empty third box",
+      carrierName: null,
+      trackingNumber: null,
+      observations: [
+        {
+          ...packet().observations[0]!,
+          sourceEventKey: "box-3-shipped",
+          kind: "vendor_shipped",
+          carrierName: null,
+          trackingNumber: null,
+          rawStatus: "Box #3 has no shipping method or tracking number.",
+        },
+      ],
+    };
+    const source = capture("template-source", [parcel, template]);
+    const first = await recordShipmentEvidence(ctx.db, source, ctx.actor);
+    const [parcelCode, templateCode] = first.shipmentIds;
+    const original = await readShipmentTimeline(ctx.db, templateCode!);
+    const kernel = buildKernelContext(ctx.db, ctx.actor.userId);
+    await expect(
+      executeEntity(
+        {
+          ...kernel,
+          actorContext: {
+            ...kernel.actorContext,
+            runId: parseEntityId("run", crypto.randomUUID()),
+          },
+        },
+        { action: "delete", entity: "shipment", ids: [templateCode!] },
+      ),
+    ).rejects.toThrow(/interactive member/);
+    await executeEntity(kernel, {
+      action: "delete",
+      entity: "shipment",
+      ids: [templateCode!],
+    });
+
+    const respelled: ShipmentEvidence = {
+      ...template,
+      sourceShipmentKey: "box-3",
+    };
+    const renamed: ShipmentEvidence = {
+      ...template,
+      sourceShipmentKey: "third-parcel",
+    };
+    for (const shipments of [
+      [parcel, template],
+      [parcel, respelled],
+      [parcel, renamed],
+    ]) {
+      const replay = await recordShipmentEvidence(
+        ctx.db,
+        { ...source, shipments },
+        ctx.actor,
+      );
+      expect(replay.shipmentIds).toEqual([parcelCode]);
+      expect(replay.insertedObservations).toBe(0);
+      expect(replay.unresolvedPackages).toHaveLength(1);
+    }
+    const [retained] = await getDb(ctx.db)
+      .select({ id: shipment.id, deletedAt: shipment.deletedAt })
+      .from(shipment)
+      .where(eq(shipment.shortcode, templateCode!));
+    expect(retained?.deletedAt).not.toBeNull();
+    const evidence = await getDb(ctx.db)
+      .select({
+        id: shipmentObservation.id,
+        fingerprint: shipmentObservation.fingerprint,
+        sourcePackageId: shipmentObservation.sourcePackageId,
+      })
+      .from(shipmentObservation)
+      .where(eq(shipmentObservation.shipmentId, retained!.id));
+    expect(evidence).toEqual(
+      original.observations.map((observation) => ({
+        id: observation.observationId,
+        fingerprint: expect.any(String),
+        sourcePackageId: observation.sourcePackageId,
+      })),
+    );
+    // Only one source owns a respelling: the same label from another source stays distinct.
+    const other = await recordShipmentEvidence(
+      ctx.db,
+      capture("another-order", [template]),
+      ctx.actor,
+    );
+    expect(other.shipmentIds).toHaveLength(1);
+    expect(other.shipmentIds).not.toContain(templateCode);
+  });
+
+  it("joins lifecycle sources only through a nearby vendor package id", async () => {
+    const trackingless = (
+      sourceShipmentKey: string,
+      value: string,
+    ): ShipmentEvidence => ({
+      ...packet(),
+      sourceShipmentKey,
+      distinctPackageEvidence: "Synthetic vendor notice for one package",
+      carrierName: null,
+      trackingNumber: null,
+      observations: [
+        {
+          ...packet().observations[0]!,
+          sourceEventKey: `${value}-delivered`,
+          kind: "delivered",
+          time: { kind: "date", value },
+          carrierName: null,
+          trackingNumber: null,
+          rawStatus: "Synthetic delivered notice",
+        },
+      ],
+    });
+    const record = async (
+      key: string,
+      packageKey: string,
+      value = "2026-06-03",
+    ) =>
+      (
+        await recordShipmentEvidence(
+          ctx.db,
+          capture(key, [trackingless(packageKey, value)]),
+          ctx.actor,
+        )
+      ).shipmentIds[0];
+
+    const shipped = await record(
+      "vendor-shipped",
+      "vendor:1-2:id=Ab3dEf7Gh:index=0",
+    );
+    await expect(
+      record("vendor-delivered", "vendor:1-2:id:Ab3dEf7Gh:index:0"),
+    ).resolves.toBe(shipped);
+    // The same id after a separate shipping period is not the same parcel.
+    await expect(
+      record("vendor-later", "vendor:1-2:id=Ab3dEf7Gh:index=0", "2026-10-03"),
+    ).resolves.not.toBe(shipped);
+    // Generic labels and bare order numbers recur across real parcels.
+    for (const label of ["Shipment from Example", "10000001-Example"]) {
+      const first = await record(`${label}-a`, label);
+      await expect(record(`${label}-b`, label)).resolves.not.toBe(first);
+    }
+  });
+
+  it("keeps a member carrier correction through replay without an extra handoff", async () => {
+    await memberImportWorld(ctx.db, ctx.actor);
+    const number = "EXAMPLE-MEMBER-CARRIER";
+    const guess = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Delivery Code",
+    });
+    const actual = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Actual Carrier",
+    });
+    const notice = (name: string, key: string) =>
+      capture(key, [
+        { ...packet(number), sourceShipmentKey: null, carrierName: name },
+      ]);
+    const guessed = notice("Synthetic Delivery Code", "delivery-code");
+    const code = (await recordShipmentEvidence(ctx.db, guessed, ctx.actor))
+      .shipmentIds[0]!;
+    await getDb(ctx.db)
+      .update(shipment)
+      .set({
+        extraTrackingNumbers: [
+          {
+            carrierId: actual.output.id,
+            carrierName: "Synthetic Actual Carrier",
+            trackingNumber: number,
+          },
+        ],
+      })
+      .where(eq(shipment.shortcode, code));
+
+    await executeEntity(buildKernelContext(ctx.db, ctx.actor.userId), {
+      action: "update",
+      entity: "shipment",
+      id: code,
+      data: { carrierId: actual.output.id },
+    });
+    const replay = await recordShipmentEvidence(ctx.db, guessed, ctx.actor);
+
+    expect(replay.shipmentIds).toEqual([code]);
+    expect(replay.unresolvedPackages).toEqual([]);
+    const [row] = await getDb(ctx.db)
+      .select({
+        carrier: vendor.shortcode,
+        extras: shipment.extraTrackingNumbers,
+      })
+      .from(shipment)
+      .innerJoin(vendor, eq(vendor.id, shipment.carrierId))
+      .where(eq(shipment.shortcode, code));
+    expect(row).toEqual({ carrier: actual.output.id, extras: [] });
+    expect(guess.output.id).not.toBe(actual.output.id);
   });
 
   it("keeps explicit source package reassignment through subsequent replay", async () => {

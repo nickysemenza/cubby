@@ -526,7 +526,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
       ],
     },
-    delete: null,
+    delete: { mode: "soft", bulk: false },
     merge: false,
     lifecycle: "mutable",
     timeline: "default",

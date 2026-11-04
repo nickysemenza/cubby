@@ -46,6 +46,12 @@ export async function resolveCarrierName(db: Database, name: string | null) {
     : null;
 }
 
+// An unresolved literal name stays conflict evidence, but dates, greetings and links
+// laid out above a "Tracking" label are not a package attribution.
+const readsAsCarrierName = (name: string) =>
+  /^\p{L}[\p{L}&.'®\s-]*$/u.test(name.trim()) &&
+  name.trim().split(/\s+/).length <= 4;
+
 const escapePattern = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const referencePattern = (value: string) =>
@@ -362,14 +368,16 @@ function sourceCarrierClaims(
             !new RegExp(referencePattern(number), "i").test(quote)
           )
             continue;
-          const name = quote.match(
+          const attribution = quote.match(
             new RegExp(
-              `^\\s*(?:(?:shipping\\s+)?carrier\\s*:\\s*|(?:shipped|shipping|delivered|delivery|sent|dispatched)\\s+(?:via|with|by)\\s+)?(.+?)[\\s;,.·:—-]+(?:tracking(?:\\s*(?:number|no\\.?|id))?\\s*[:#]?|trk\\s*#)\\s*${referencePattern(number)}`,
+              `^\\s*((?:shipping\\s+)?carrier\\s*:\\s*|(?:shipped|shipping|delivered|delivery|sent|dispatched)\\s+(?:via|with|by)\\s+)?(.+?)[\\s;,.·:—-]+(?:tracking(?:\\s*(?:number|no\\.?|id))?\\s*[:#]?|trk\\s*#)\\s*${referencePattern(number)}`,
               "i",
             ),
-          )?.[1];
+          );
+          const name = attribution?.[2];
           if (
             !name ||
+            (!attribution?.[1] && !readsAsCarrierName(name)) ||
             /^(?:broker|merchant|seller|label provider)\s*:/i.test(name) ||
             intermediaryName.test(name)
           )
