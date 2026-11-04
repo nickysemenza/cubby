@@ -306,6 +306,13 @@ application, even when the page asks no model questions. Smaller pages commit
 completion and the remaining cursor before those repeated reads accumulate
 across 32 charges. This bounds work between checkpoints, not total invocation
 CPU: a drain can execute other pages within its existing wall-time budget.
+Cooperative label application also checks its existing 20-second deadline
+between charges while no financial rule has applied in that round. It settles at least one
+charge, then leaves the untouched suffix's receipts and inclusive cursor for
+the next page. Rounds with financial effects retain their existing ordered
+regeneration rounds. This avoids accumulating several expensive regenerations
+without a financial application before a checkpoint; it does not bound one charge's CPU or the
+whole invocation.
 Each charge still regenerates current evidence before serial automatic-rule
 application. The smaller shared page limit bounds retained preparation and
 repeated ledger reads between durable checkpoints; interrupted pages replay

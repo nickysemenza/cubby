@@ -527,6 +527,7 @@ async function applyPublishedStatementLabels(
     scope: StatementSuggestionScope | undefined;
     reconsidered: ReadonlySet<string>;
     fail: (charge: ChargeRef, error: unknown) => void;
+    deadline?: number;
   },
 ) {
   const {
@@ -569,6 +570,15 @@ async function applyPublishedStatementLabels(
       if (awaitsPublication(key)) applicationBlocked = true;
       continue;
     }
+    // Checkpoint completed charges before regenerating the remaining suffix.
+    // A round that applied a rule retains its moved-evidence rebuild work.
+    if (
+      input.deadline !== undefined &&
+      Date.now() >= input.deadline &&
+      settlementTargets.length > 0 &&
+      applied.size === 0
+    )
+      applicationBlocked = true;
     if (applicationBlocked) {
       unfinished.add(target.row.cursorId);
       continue;
@@ -1217,6 +1227,7 @@ async function runStatementLabelBatch(
             ready.map(({ current }) => chargeId(current.charge)),
           ),
           fail,
+          deadline: input.cooperative ? prepareDeadline : undefined,
         }),
     );
     for (const target of targets) {
