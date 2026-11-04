@@ -17,6 +17,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { outer, related } from "~/server/db/helpers/related";
 import {
   assessment,
   assessmentState,
@@ -99,30 +100,90 @@ export async function readExistingConnectionAssessments(
     ),
     sql`, `,
   );
+  const codeHashes = sql.join(
+    [...new Set(sources.map((source) => source.entityId))].map(
+      (code) => sql`md5(${code})`,
+    ),
+    sql`, `,
+  );
   const sourceIds = sql`SELECT source_entity."id" FROM "Entity" source_entity
     WHERE source_entity."shortcode" IN (${codes})
       AND ${inArray(sql`source_entity."kind" || ':' || source_entity."shortcode"`, keys)}`;
-  const idsFor = (families: "all" | "field" | "pair", match: SQL) =>
+  // Literal boolean gates let generic plans prove the partial-index predicates.
+  const pendingState = and(
+    assessmentState.active,
+    eq(assessmentState.status, "pending"),
+  );
+  const idsFor = (families: "all" | "pair", match: SQL) =>
     getDb(db)
       .select({ id: assessment.id })
       .from(assessment)
       .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
       .where(
         and(
-          eq(assessment.served, true),
-          eq(assessmentState.active, true),
-          eq(assessmentState.status, "pending"),
-          families === "all"
-            ? inArray(assessment.family, [
-                "field",
-                ...entityPairAssessmentFamilies,
-              ])
-            : families === "field"
-              ? eq(assessment.family, "field")
-              : inArray(assessment.family, entityPairAssessmentFamilies),
+          assessment.served,
+          pendingState,
+          inArray(
+            assessment.family,
+            families === "all"
+              ? ["field", ...entityPairAssessmentFamilies]
+              : entityPairAssessmentFamilies,
+          ),
           match,
         ),
       );
+  const fieldMembership = sql.identifier("existing_field_membership");
+  const fieldPublication = related(assessment, (publication) =>
+    eq(publication.id, outer(assessmentState.id)),
+  )
+    .where((publication) =>
+      and(publication.served, eq(publication.family, "field")),
+    )
+    .aggregate(
+      (publication) => sql`${publication.id} AS ${sql.identifier("id")}`,
+    );
+  // Match indexed State identities before loading immutable family authority.
+  const fieldIds = getDb(db)
+    .select({
+      id: sql<
+        typeof assessment.$inferSelect.id
+      >`${fieldMembership}.${sql.identifier("id")}`,
+    })
+    .from(assessmentState)
+    .innerJoinLateral(
+      sql`(${fieldPublication} OFFSET 0) AS ${fieldMembership}`,
+      sql`true`,
+    )
+    .where(
+      and(
+        pendingState,
+        // Exact equality remains authoritative for arbitrary historical text.
+        sql`md5(${assessmentState.suggestedValue} #>> '{}') IN (${codeHashes})
+          AND ${assessmentState.suggestedValue} #>> '{}' IN (${codes})`,
+      ),
+    );
+  const requestedPairs = sql.identifier("existing_pair_requested");
+  const pairMembership = sql.identifier("existing_pair_membership");
+  const requestedPairId = sql`${requestedPairs}.${sql.identifier("id")}`;
+  const pairPointQuery = idsFor(
+    "pair",
+    sql`${assessment.subject}->>'otherId' IS NOT NULL
+      AND md5(${assessment.subject}->>'otherId') = md5(${requestedPairId}::text)
+      AND ${assessment.subject}->>'otherId' = ${requestedPairId}::text`,
+  );
+  // Each endpoint can match many publications. Keep its indexed identity probe
+  // parameterized rather than hashing the pair population for a large roster.
+  const pairIds = getDb(db)
+    .select({
+      id: sql<
+        typeof assessment.$inferSelect.id
+      >`${pairMembership}.${sql.identifier("id")}`,
+    })
+    .from(sql`(${sourceIds}) AS ${requestedPairs}`)
+    .innerJoinLateral(
+      sql`(${pairPointQuery.getSQL()} OFFSET 0) AS ${pairMembership}`,
+      sql`true`,
+    );
   // Share discovery and hydration in one statement, including READ COMMITTED callers.
   // Both family reads reference this ID-only CTE, so PostgreSQL materializes it once.
   const matched = getDb(db)
@@ -134,18 +195,8 @@ export async function readExistingConnectionAssessments(
     ${inArray(assessmentState.entity, [...new Set(sources.map((source) => source.entityKind))])}
     AND ${assessmentState.recordId} IN (${sourceIds})`,
       )
-        .union(
-          idsFor(
-            "field",
-            sql`${assessmentState.suggestedValue} #>> '{}' IN (${codes})`,
-          ),
-        )
-        .union(
-          idsFor(
-            "pair",
-            sql`${assessment.subject}->>'otherId' IN (SELECT source_id::text FROM (${sourceIds}) source_ids(source_id))`,
-          ),
-        ),
+        .union(fieldIds)
+        .union(pairIds),
     );
   // The old text equality admitted only canonical lower-case UUID spellings.
   // Guard the native lookup so malformed or differently spelled history stays unmatched.

@@ -63,7 +63,7 @@ export async function prepareExpenseProjectRecommendationContexts(
   );
   const normalizedHistory = new Map<
     (typeof history)[number],
-    ReturnType<typeof historyRow>
+    RecommendationHistoryRow
   >();
   const projectIds = uniq(
     sources.flatMap(({ source }) =>
@@ -81,11 +81,27 @@ export async function prepareExpenseProjectRecommendationContexts(
         .where(and(inArray(project.id, projectIds), notDeleted(project)))
     : [];
   const byProject = new Map(currentProjects.map((row) => [row.id, row]));
-  return (requestedIds: readonly ExpenseShortcode[]) => {
+  /**
+   * Each context owns independent row copies unless a view is given. A view sees
+   * only rows this source includes, already normalized, as an object that stays
+   * the same across expansions, so it can memoize per row. It must not mutate it.
+   */
+  function expand(
+    requestedIds: readonly ExpenseShortcode[],
+  ): RecommendationContexts<RecommendationHistoryRow>;
+  function expand<Row>(
+    requestedIds: readonly ExpenseShortcode[],
+    historyView: (row: Readonly<RecommendationHistoryRow>) => Row,
+  ): RecommendationContexts<Row>;
+  function expand<Row>(
+    requestedIds: readonly ExpenseShortcode[],
+    historyView?: (row: Readonly<RecommendationHistoryRow>) => Row,
+  ) {
     const requested = new Set(requestedIds);
-    const contexts = new Map<ExpenseShortcode, RecommendationContext | null>(
-      requestedIds.map((id) => [id, null]),
-    );
+    const contexts = new Map<
+      ExpenseShortcode,
+      RecommendationContext<Row | RecommendationHistoryRow> | null
+    >(requestedIds.map((id) => [id, null]));
     for (const { id, source } of sources) {
       if (!requested.has(id)) continue;
       contexts.set(
@@ -107,7 +123,9 @@ export async function prepareExpenseProjectRecommendationContexts(
                 normalized = historyRow(row);
                 normalizedHistory.set(row, normalized);
               }
-              return normalized;
+              return historyView
+                ? historyView(normalized)
+                : copyHistoryRow(normalized);
             }),
           source.effectiveProjectId
             ? byProject.get(source.effectiveProjectId)
@@ -116,7 +134,8 @@ export async function prepareExpenseProjectRecommendationContexts(
       );
     }
     return contexts;
-  };
+  }
+  return expand;
 }
 
 /**
@@ -178,7 +197,17 @@ function historyRow({
   };
 }
 
-type RecommendationContext = Awaited<ReturnType<typeof sourceContext>>;
+/** Each default context owns its row objects; only their immutable primitives are shared. */
+const copyHistoryRow = (row: Readonly<RecommendationHistoryRow>) => ({
+  ...row,
+});
+
+export type RecommendationHistoryRow = ReturnType<typeof historyRow>;
+type RecommendationContext<Row> = ReturnType<typeof sourceContext<Row>>;
+type RecommendationContexts<Row> = Map<
+  ExpenseShortcode,
+  RecommendationContext<Row> | null
+>;
 type RecommendationSource = Awaited<ReturnType<typeof readSources>>[number];
 type EligibleSource = RecommendationSource & {
   effectiveTrade: NonNullable<RecommendationSource["effectiveTrade"]>;
@@ -196,10 +225,10 @@ const readSources = async (db: Database, ids: readonly ExpenseShortcode[]) =>
         with: { product: { columns: { kind: true } } },
       });
 
-function sourceContext(
+function sourceContext<Row>(
   source: EligibleSource,
   projects: ProjectOptionsOut[],
-  history: readonly ReturnType<typeof historyRow>[],
+  history: Row[],
   currentProject: { shortcode: string; name: string } | undefined,
 ) {
   return {
@@ -210,8 +239,7 @@ function sourceContext(
       productKind: source.product?.kind ?? null,
     },
     projects,
-    // Each context owns its row objects; only their immutable primitives are shared.
-    history: history.map((row) => ({ ...row })),
+    history,
     currentTarget: currentProject
       ? {
           id: parseShortcodeFor("project", currentProject.shortcode),

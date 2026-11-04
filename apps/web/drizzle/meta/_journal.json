@@ -498,6 +498,13 @@
       "when": 1793778583686,
       "tag": "0070_image_description_capture_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1793789921545,
+      "tag": "0071_assessment_existing_membership_indexes",
+      "breakpoints": true
     }
   ]
 }

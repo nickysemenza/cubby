@@ -136,5 +136,52 @@ it("indexes long retained source references without changing evidence or unfinis
     });
     expect(await retained()).toEqual(beforeCapture);
     expect(await durableWork()).toEqual(beforeDurableWork);
+    await client.query(
+      `UPDATE "Assessment" SET subject=jsonb_build_object('otherId',$2::text) WHERE id=$1`,
+      [id, longText],
+    );
+    await client.query(
+      `INSERT INTO "AssessmentState" (id,entity,"recordId","suggestedValue")
+       VALUES ($1,'product',$1,$2::jsonb)`,
+      [id, JSON.stringify(longText)],
+    );
+    const beforeMembership = await retained();
+    const beforeMembershipWork = await durableWork();
+    const states = async () =>
+      (
+        await client.query(
+          `SELECT to_jsonb(s) value FROM "AssessmentState" s ORDER BY id`,
+        )
+      ).rows;
+    const beforeStates = await states();
+    await migrateDatabase(db, {
+      through: "0071_assessment_existing_membership_indexes",
+    });
+    expect(await retained()).toEqual(beforeMembership);
+    expect(await durableWork()).toEqual(beforeMembershipWork);
+    expect(await states()).toEqual(beforeStates);
+    expect(
+      (
+        await client.query(`SELECT c.relname,i.indisready,i.indisvalid FROM pg_index i
+          JOIN pg_class c ON c.oid=i.indexrelid
+          WHERE c.relname IN ('Assessment_served_other_id_idx','AssessmentState_active_value_status_idx')
+          ORDER BY c.relname`)
+      ).rows,
+    ).toEqual([
+      {
+        relname: "AssessmentState_active_value_status_idx",
+        indisready: true,
+        indisvalid: true,
+      },
+      {
+        relname: "Assessment_served_other_id_idx",
+        indisready: true,
+        indisvalid: true,
+      },
+    ]);
+    await client.query(
+      `UPDATE "AssessmentState" SET "suggestedValue"=$2::jsonb WHERE id=$1`,
+      [id, JSON.stringify(`${longText} after index`)],
+    );
   });
 }, 90000);

@@ -167,6 +167,27 @@ function definitions, continued image-correction search refreshes, retained
 unfinished work, and convergence of the pre-existing backlog separately from
 new-mark production.
 
+## Existing connection membership indexes
+
+`AssessmentState_active_value_status_idx` indexes status and the hash of the
+suggested text on active States. `Assessment_served_other_id_idx` indexes the
+hash of present other-ID text on served publications. They narrow existing
+field and Product-pair discovery before the shared identity CTE hydrates
+evidence. Exact text remains an authoritative recheck; hashes never establish
+membership. Bounded keys preserve arbitrary long historical values.
+
+The ordinary migration-before-deploy workflow builds both indexes transactionally.
+It reads retained State values and publication subjects and can block writes to
+those tables until commit. Keep one migration owner and do not overlap manual
+DDL with Actions. No publications, Feedback, member decisions or durable work
+are rewritten or discarded.
+
+Verify both catalog entries are ready and valid, confirm custom and generic
+plans use the matching index conditions, and compare complete result identities,
+ordering and both family authorities. Read back paused Jobs and retained work.
+Measure the full request independently; removing these scans alone does not
+establish the 500 ms badge goal or lower-compute suitability.
+
 ## Source-order fanout capture
 
 Migration `0061_source_order_purchase_fanout` stops new
