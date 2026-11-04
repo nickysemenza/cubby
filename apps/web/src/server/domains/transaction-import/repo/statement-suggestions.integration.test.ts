@@ -2530,6 +2530,62 @@ describe("statement Transaction suggestions", () => {
       failed: [],
       labels: { reused: 2, generated: 1 },
     });
+
+    const retained = await record(
+      ctx,
+      [
+        rowInput({ providerTransactionId: "synthetic-deadline-receipt-a" }),
+        rowInput({ providerTransactionId: "synthetic-deadline-receipt-b" }),
+      ],
+      { fingerprint: "synthetic-application-deadline" },
+    );
+    await generate(ctx);
+    await statementSuggestionsRepo.publishCompleteStatementLabels(
+      ctx.db,
+      await completeLabelPublications(ctx),
+    );
+    const noMoreQuestions = async () => {
+      throw new Error("Retained application must reuse committed labels");
+    };
+    let application;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      application = await runStatementLabels(ctx.db, {
+        cooperative: true,
+        scope: { importId: retained.batchId },
+        port: noMoreQuestions,
+        work: {
+          add() {},
+          async time(phase, run) {
+            if (phase === "statement_application")
+              vi.setSystemTime(Date.now() + 21_000);
+            return run();
+          },
+        },
+      });
+      expect(application).toMatchObject({
+        completed: 1,
+        failed: [],
+        next: { inclusive: true },
+      });
+      expect(
+        await statementSuggestionsRepo.suggestionsNeedingLabels(
+          ctx.db,
+          10,
+          application.next,
+          { importId: retained.batchId },
+        ),
+      ).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(
+      await runStatementLabels(ctx.db, {
+        after: application.next,
+        scope: { importId: retained.batchId },
+        port: noMoreQuestions,
+      }),
+    ).toMatchObject({ completed: 1, failed: [], next: null });
   });
 
   it("durably defers cooperative spending finish after one gateway admission refusal", async () => {
