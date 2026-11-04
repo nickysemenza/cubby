@@ -823,6 +823,12 @@ export async function readAssessmentReadMemberships(
           THEN ${statementInputRefs()}
           WHEN ${reviewAssessment.family} = ${assessmentFamily.enum.image_description}
           THEN jsonb_build_array(${ref(sql`${entities.image}`, sql`s."recordId"::text`)})
+          WHEN ${reviewAssessment.family} = ${assessmentFamily.enum.product_pair}
+            OR ${reviewState.family} = ${assessmentFamily.enum.product_pair}
+          THEN jsonb_build_array(
+            ${ref(sql`${entities.product}`, sql`s."recordId"::text`)},
+            ${ref(sql`${entities.product}`, sql`s.data->>'otherId'`)},
+            ${ref(sql`${entities.product}`, sql`a.subject->>'otherId'`)})
           ELSE NULL::jsonb END`
         : sql`NULL::jsonb`
       ).as("inputRefs"),

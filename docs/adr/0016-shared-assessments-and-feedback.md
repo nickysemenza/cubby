@@ -301,6 +301,10 @@ Tag propagation retains hashed source and donor Product shortcodes before its
 freshness filter. Its capture must observe `updatedAt` as well as tags, deletion
 and shortcode changes, because the canonical donor revision includes that stamp.
 The normal updatedAt-only capture suppression cannot be used for this input.
+Product-pair observations retain the primary Product and both the mutable and
+immutable other endpoint. Related brand, category, photo, import, purchase and
+quality inputs must route through those Products in capture; endpoint observations
+alone do not establish complete invalidation.
 
 ## Cutover preservation
 
