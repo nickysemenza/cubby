@@ -1224,3 +1224,32 @@ Preview new transaction to review that alternative. Provider category is evidenc
 not a Cubby spending-category assignment:
 retain each provider/category observation, joining other provider charges only
 through authoritative settlement references to the same transaction.
+
+### Statement review receipts and classification
+
+Statement `suggestions.review` application uses a Feedback-backed command receipt
+with operation ID `command-application:<operationId>`, linked to the immutable
+Assessment identified by the review handle. Read that Assessment and its Feedback
+by the handle, not by `AssessmentState.evaluationId`. This family does not require
+`AssessmentState.acceptanceReceipt` to establish successful application.
+
+Replay the exact committed review request under the same actor and operation ID.
+The generic command returns its original applied outcome from the receipt before
+reapplying the family or checking current spending fingerprints. Compare the
+original Assessment ID, Feedback ID, status and applied result, then independently
+verify unchanged source, ledger and attribution graphs. This API does not return
+the `replayed: true` flag used by direct `finance.commit_booking`; that writer has
+its own replay and current-lineage checks.
+
+Source aggregate creation defaults ordinary purchases to `materials` and fees
+to `services`. Its application booking choices do not expose `costType`. For a
+separately authorized service classification correction, first independently
+verify the new booking graph, then update only that Expense's `costType` to
+`services` through the Expense writer. Preserve money, dates, category, Products,
+quantities, stock, attribution, source facts and both stored booking fingerprints.
+
+The correction changes the full Expense lineage. Subsequent fresh spending
+convergence requires review while the corrected Expense remains present; exact
+replay of the original generic command still returns its stored outcome. Preserve
+that distinction and leave the lineage review unresolved. Never reset fingerprints
+or undo a member classification to force convergence.
