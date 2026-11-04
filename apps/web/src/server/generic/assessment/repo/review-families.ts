@@ -8,6 +8,9 @@ import {
 } from "@cubby/schemas/assessment";
 import {
   assessmentReadMembership,
+  assessmentReadDependency,
+  assessmentReadScopedSourceKind,
+  type AssessmentReadDependency,
   type AssessmentReadMembership,
 } from "@cubby/schemas/assessment-read-publication";
 import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-family";
@@ -46,6 +49,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { hasTextSql } from "~/server/db/computed/text-whitespace";
+import { textHashRefSql } from "~/server/db/derived-source-ref";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import {
@@ -352,6 +356,33 @@ function statementRecordParts(
 function statementRecords(requested?: readonly string[]) {
   const parts = statementRecordParts(requested);
   return parts.length ? sql.join(parts, sql` || `) : sql`'[]'::jsonb`;
+}
+
+/** Reference expansion and settlement joins stay owned by the Statement reader. */
+function statementInputRefs() {
+  const { statementCharge, statementRef, referenceCode } =
+    assessmentReadScopedSourceKind.enum;
+  return sql`${statementRecords()}
+    || jsonb_build_array(${ref(sql`${entities.sourceTransactionRecord}`, sql`s."recordId"::text`)})
+    || COALESCE((SELECT jsonb_agg(${ref(sql`${entities.financialAccount}`, sql`account.id::text`)})
+      ${statementSettlementFrom} WHERE ${statementSettlementScope}), '[]'::jsonb)
+    || COALESCE((SELECT jsonb_agg(${ref(sql`${entities.ledgerParty}`, sql`owner_account."ledgerPartyId"::text`)})
+      FROM "FinancialAccount" owner_account WHERE owner_account.id = (s.data->>'accountId')::uuid), '[]'::jsonb)
+    || jsonb_build_array(${ref(sql`${statementCharge}`, sql`${textHashRefSql(sql`s.data->>'chargeKey'`)}::text`)})
+    || COALESCE((SELECT jsonb_agg(${ref(sql`${statementRef}`, sql`${textHashRefSql(sql`source_ref.value`)}::text`)})
+      FROM (
+        SELECT substr(value, strpos(value, ':') + 1) AS value
+        FROM jsonb_array_elements_text(COALESCE(s.data->'refs', '[]'::jsonb)) refs(value)
+        UNION SELECT s.data->>'headRef'
+        UNION SELECT a.judgment #>> '{create,sourceRef,externalId}'
+      ) source_ref WHERE source_ref.value IS NOT NULL), '[]'::jsonb)
+    || COALESCE((SELECT jsonb_agg(${ref(sql`${referenceCode}`, sql`${textHashRefSql(sql`lookup_code.value`)}::text`)})
+      FROM (
+        SELECT a.judgment #>> '{spending,vendorId}' AS value
+        UNION SELECT a.judgment #>> '{spending,spendingCategoryId}'
+        UNION SELECT candidate->>'purchaseId'
+          FROM jsonb_array_elements(COALESCE(a.judgment #> '{spending,candidates}', '[]'::jsonb)) candidate
+      ) lookup_code WHERE lookup_code.value IS NOT NULL), '[]'::jsonb)`;
 }
 
 function recordRefsMatch(scope: AssessmentRecordScope, refs: SQL) {
@@ -758,6 +789,10 @@ async function resolveStoredRecordRefs(
 export async function readAssessmentReadMemberships(
   db: Database,
   ids: readonly string[],
+  observeInputs?: (
+    id: string,
+    sources: readonly AssessmentReadDependency[],
+  ) => void,
 ): Promise<Map<string, AssessmentReadMembership[]>> {
   if (!ids.length) return new Map();
   const admitted = and(
@@ -783,6 +818,11 @@ export async function readAssessmentReadMemberships(
       AND (${recommendationScopes.connection}) IS NOT TRUE
       THEN COALESCE(${reviewAssessment.evidence}->'records', '[]'::jsonb)
       ELSE '[]'::jsonb END`.as("retainedRefs"),
+      inputRefs: (observeInputs
+        ? sql`CASE WHEN ${reviewState.family} = ${assessmentFamily.enum.statement_transaction}
+          THEN ${statementInputRefs()} ELSE NULL::jsonb END`
+        : sql`NULL::jsonb`
+      ).as("inputRefs"),
     })
     .from(reviewAssessment)
     .innerJoin(reviewState, eq(reviewState.id, reviewAssessment.id))
@@ -799,6 +839,7 @@ export async function readAssessmentReadMemberships(
         stateFamily: assessmentFamily,
         countRefs: z.unknown(),
         tokens: z.array(token),
+        inputRefs: z.unknown(),
       }),
     )
     .parse(
@@ -822,7 +863,7 @@ export async function readAssessmentReadMemberships(
         )})
       GROUP BY id
     )
-    SELECT p.id, p."stateFamily", COALESCE(p."otherRefs", p."scopeRefs") AS "countRefs",
+    SELECT p.id, p."stateFamily", p."inputRefs", COALESCE(p."otherRefs", p."scopeRefs") AS "countRefs",
       COALESCE(g.tokens, '[]'::jsonb) AS tokens
     FROM membership_sources p LEFT JOIN membership_groups g ON g.id=p.id
   `)
@@ -834,6 +875,38 @@ export async function readAssessmentReadMemberships(
       .filter((row) => row.tokens.length > 0)
       .map((row) => ({ id: row.id, refs: row.countRefs })),
   );
+  for (const row of rows) {
+    if (row.inputRefs === null) continue;
+    const sources = z
+      .array(z.unknown())
+      .parse(row.inputRefs)
+      .flatMap((value) => {
+        const parsed = z
+          .object({ entity: z.string(), id: z.guid() })
+          .safeParse(value);
+        return parsed.success
+          ? [
+              assessmentReadDependency.parse({
+                sourceKind: parsed.data.entity,
+                sourceId: parsed.data.id.toLowerCase(),
+              }),
+            ]
+          : [];
+      });
+    observeInputs?.(
+      row.id,
+      [
+        ...new Map(
+          sources.map((source) => [
+            JSON.stringify([source.sourceKind, source.sourceId]),
+            source,
+          ]),
+        ).entries(),
+      ]
+        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+        .map(([, source]) => source),
+    );
+  }
   return new Map(
     rows.map((row) => {
       const memberships = [

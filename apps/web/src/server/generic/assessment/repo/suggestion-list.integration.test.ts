@@ -4,6 +4,8 @@ import {
   ASSESSMENT_READ_TARGET,
   assessmentReadCoverage,
   assessmentReadFact,
+  assessmentReadScopedSourceKind,
+  type AssessmentReadDependency,
   type AssessmentReadResult,
 } from "@cubby/schemas/assessment-read-publication";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
@@ -21,6 +23,7 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { textHashRefSql } from "~/server/db/derived-source-ref";
 import { getDb } from "~/server/db/helpers";
 import {
   assessment,
@@ -28,6 +31,7 @@ import {
   assessmentReadPublication,
   assessmentReadDependency,
   financialTransactionAllocation,
+  financialTransaction,
   sourceTransactionRecord,
   transactionImport,
 } from "~/server/db/schema";
@@ -441,7 +445,7 @@ describe("cross-family Suggestion list", () => {
       costType: "materials",
       trade: "building",
     });
-    await createRepoEntity(ctx, "financialTransaction", {
+    const settled = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "purchase",
       status: "posted",
@@ -517,6 +521,56 @@ describe("cross-family Suggestion list", () => {
       .update(financialTransactionAllocation)
       .set({ deletedAt: null })
       .where(eq(financialTransactionAllocation.purchaseId, purchaseId));
+
+    const otherAccount = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic settlement account",
+      identity: { kind: "bank_account", accountType: "checking" },
+    });
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ accountId: otherAccount.entityId })
+      .where(eq(financialTransaction.id, settled.entityId));
+    const observedInputs = new Map<
+      string,
+      readonly AssessmentReadDependency[]
+    >();
+    const publishedMemberships = await readAssessmentReadMemberships(
+      ctx.db,
+      [proposal.assessmentId],
+      (id, inputs) => observedInputs.set(id, inputs),
+    );
+    const inputs = observedInputs.get(proposal.assessmentId) ?? [];
+    expect(inputs).toEqual(
+      expect.arrayContaining([
+        { sourceKind: "sourceTransactionRecord", sourceId: source.id },
+        { sourceKind: "financialTransaction", sourceId: settled.entityId },
+        { sourceKind: "financialAccount", sourceId: accountId },
+        { sourceKind: "financialAccount", sourceId: otherAccount.entityId },
+        { sourceKind: "purchase", sourceId: purchaseId },
+        { sourceKind: "expense", sourceId: expenseId },
+      ]),
+    );
+    expect(publishedMemberships.get(proposal.assessmentId)).not.toContainEqual(
+      expect.objectContaining({
+        entity: "financialAccount",
+        value: otherAccount.output.id,
+      }),
+    );
+    const hashes = await getDb(ctx.db).execute(sql`SELECT
+      ${textHashRefSql(sql`${source.chargeKey}::text`)}::text AS charge,
+      ${textHashRefSql(sql`${source.externalId}::text`)}::text AS ref`);
+    expect(inputs).toEqual(
+      expect.arrayContaining([
+        {
+          sourceKind: assessmentReadScopedSourceKind.enum.statementCharge,
+          sourceId: hashes.rows[0]?.charge,
+        },
+        {
+          sourceKind: assessmentReadScopedSourceKind.enum.statementRef,
+          sourceId: hashes.rows[0]?.ref,
+        },
+      ]),
+    );
 
     await getDb(ctx.db)
       .update(assessmentState)

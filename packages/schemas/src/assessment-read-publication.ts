@@ -96,6 +96,9 @@ export type AssessmentReadDependency = z.infer<typeof assessmentReadDependency>;
 export const assessmentReadScopedSourceKind = z.enum({
   fieldWrite: "assessment.fieldWrite",
   productClassification: "assessment.productClassification",
+  statementCharge: "assessment.statementCharge",
+  statementRef: "assessment.statementRef",
+  referenceCode: "assessment.referenceCode",
 });
 
 /** An exact observed ticket, not a sequence-number watermark or an authority. */

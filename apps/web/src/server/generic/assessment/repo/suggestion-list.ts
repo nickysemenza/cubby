@@ -381,7 +381,7 @@ export async function prepareSuggestionAdmission(
       dependencies.set(
         id,
         [...unique]
-          .sort(([left], [right]) => left.localeCompare(right))
+          .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
           .map(([, source]) => source),
       );
     },

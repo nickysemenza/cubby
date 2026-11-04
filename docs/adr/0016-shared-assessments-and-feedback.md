@@ -283,6 +283,14 @@ primary and related records before a first dependency publication commits;
 retained reverse dependencies must still cover the old association. Field-write
 and classification markers remain explicit source kinds, with their own capture
 obligations.
+The Statement reference owner also reports settlement inputs, including the
+settled transaction's Account even though that Account is not a browse membership.
+Charge keys, external references and unresolved lookup shortcodes retain hashed
+dependency markers through the same `textHashRefSql` helper as trigger capture.
+Those markers require OLD and NEW key capture; hash collisions or an omitted
+provider/kind discriminator may cause extra preparation but never change canonical
+identity or admission. A missing lookup therefore retains a route for a later
+source insertion instead of becoming a permanent complete zero.
 
 ## Cutover preservation
 
