@@ -377,4 +377,102 @@ export const assessmentChildren = [
       },
     ],
   }),
+  defineChildTable({
+    name: "AssessmentReadPublication",
+    exportName: "assessmentReadPublication",
+    columns: [
+      {
+        key: "assessmentId",
+        kind: "uuid",
+        primaryKey: true,
+        reference: { table: "assessment", column: "id" },
+      },
+      { key: "revision", kind: "uuid", notNull: true },
+      { key: "rulesVersion", kind: "integer", notNull: true },
+      { key: "contentHash", kind: "text", notNull: true },
+      { key: "groupKey", kind: "text", notNull: true },
+      { key: "admitted", kind: "boolean", notNull: true },
+      { key: "computedAt", kind: "timestamp", notNull: true },
+    ],
+    indexes: [
+      { name: "AssessmentReadPublication_group_idx", on: ["groupKey"] },
+      { name: "AssessmentReadPublication_rules_idx", on: ["rulesVersion"] },
+    ],
+  }),
+  defineChildTable({
+    name: "AssessmentReadFact",
+    exportName: "assessmentReadFact",
+    columns: [
+      {
+        key: "assessmentId",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "assessment", column: "id" },
+      },
+      { key: "revision", kind: "uuid", notNull: true },
+      {
+        key: "family",
+        kind: "text",
+        notNull: true,
+        type: "SuggestionListFamily",
+      },
+      { key: "key", kind: "jsonb", notNull: true, type: "AssessmentReadKey" },
+      {
+        key: "filters",
+        kind: "jsonb",
+        notNull: true,
+        type: "AssessmentReadFilterFacts",
+      },
+      { key: "row", kind: "jsonb", notNull: true, type: "SuggestionListRow" },
+    ],
+    types: [
+      {
+        module: "@cubby/schemas/assessment-read-publication",
+        exports: ["AssessmentReadKey", "AssessmentReadFilterFacts"],
+      },
+      {
+        module: "@cubby/schemas/suggestion-list",
+        exports: ["SuggestionListFamily", "SuggestionListRow"],
+      },
+    ],
+    indexes: [
+      {
+        name: "AssessmentReadFact_revision_family_key",
+        unique: true,
+        on: ["assessmentId", "revision", "family"],
+      },
+      {
+        name: "AssessmentReadFact_family_idx",
+        on: ["family", "assessmentId", "revision"],
+      },
+    ],
+  }),
+  defineChildTable({
+    name: "AssessmentReadMembership",
+    exportName: "assessmentReadMembership",
+    columns: [
+      {
+        key: "assessmentId",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "assessment", column: "id" },
+      },
+      { key: "revision", kind: "uuid", notNull: true },
+      { key: "entity", kind: "text", notNull: true, type: "Entity" },
+      { key: "recordId", kind: "uuid", notNull: true },
+      { key: "code", kind: "text", notNull: true },
+    ],
+    types: [{ module: "@cubby/schemas/entity-core", exports: ["Entity"] }],
+    indexes: [
+      {
+        name: "AssessmentReadMembership_revision_record_key",
+        unique: true,
+        on: ["assessmentId", "revision", "entity", "recordId"],
+      },
+      {
+        name: "AssessmentReadMembership_record_idx",
+        on: ["entity", "recordId", "assessmentId", "revision"],
+      },
+    ],
+  }),
 ];

@@ -18,9 +18,9 @@ import { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
 import {
+  entityStoredDerivedDeclarations,
+  type EntityStoredDerivedDeclaration,
   storedDerived,
-  storedDerivedDeclarations,
-  type StoredDerivedDeclaration,
 } from "~/server/db/derived-declarations";
 import { householdDaySql, uuidArrayParam } from "~/server/db/helpers/query";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
@@ -41,7 +41,7 @@ export type {
 const requireStored = (
   entity: Entity,
   key: string,
-): StoredDerivedDeclaration => {
+): EntityStoredDerivedDeclaration => {
   const declaration = storedDerived(entity, key);
   if (!declaration)
     throw new Error(`${entity}.model.derived.${key} is not stored`);
@@ -227,7 +227,7 @@ export function loadPageStoredMeta(
       ...(field.storedKey ? [field.storedKey] : []),
     ]),
   );
-  const keys = storedDerivedDeclarations()
+  const keys = entityStoredDerivedDeclarations()
     .filter(
       (declaration) =>
         declaration.entity === entity &&

@@ -3,6 +3,7 @@ import { PgTable, PgUUID } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import {
+  entityStoredDerivedDeclarations,
   storedDerivedDeclarations,
   type DerivedPathStep,
 } from "~/server/db/derived-declarations";
@@ -56,7 +57,7 @@ const missingPath = (path: readonly DerivedPathStep[]) =>
 describe("stored derived declarations", () => {
   it("keeps current automatic ownership out of the derived cache and trigger targets", () => {
     expect(
-      storedDerivedDeclarations().filter(
+      entityStoredDerivedDeclarations().filter(
         (entry) => entry.key === "automaticFields",
       ),
     ).toEqual([]);
@@ -65,6 +66,11 @@ describe("stored derived declarations", () => {
   it("name only real tables and columns", () => {
     const problems = storedDerivedDeclarations().flatMap((declaration) => [
       ...missing(declaration.table, ["id"]),
+      // Marks, locks and fanouts cast refs to UUID; a text id fails every save.
+      ...(declaration.kind === "internalRecord" &&
+      !is(columnsByTable.get(declaration.table)?.get("id"), PgUUID)
+        ? [`${declaration.table}.id (internal record UUID)`]
+        : []),
       ...declaration.inputs.flatMap((input) => [
         ...[
           ...(input.path ? [input.path] : []),
@@ -98,7 +104,7 @@ describe("stored derived declarations", () => {
                 ])
               : [
                   ...missing(declaration.table, [dependency.entityColumn]),
-                  ...(storedDerivedDeclarations()
+                  ...(entityStoredDerivedDeclarations()
                     .filter(
                       (source) =>
                         source.entity === dependency.entity &&

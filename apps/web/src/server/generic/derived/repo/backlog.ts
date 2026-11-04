@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
-import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
+import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
 import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { drainBacklog } from "~/server/generic/jobs/repo/work-items";
@@ -34,7 +34,8 @@ export async function readDerivedBacklog(
     oldestWaitingSeconds: oldestSeconds,
     recent: { windowMinutes: RECENT_MINUTES, perMinute },
     total: rows.reduce((sum, row) => sum + row.count, 0),
-    kinds: storedDerivedDeclarations().map((declaration) => {
+    // `total` counts every ticket; these rows name public entity fields only.
+    kinds: entityStoredDerivedDeclarations().map((declaration) => {
       const row = rows.find((row) => row.target === declaration.target);
       return {
         entity: declaration.entity,

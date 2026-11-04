@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { z } from "zod";
 
-import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
+import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { loadCurrentFieldOwnership } from "~/server/generic/assessment/repo/automatic-fields";
 import { loadCurrentAssignmentFacts } from "~/server/generic/derived/repo/assignment-read";
@@ -47,7 +47,7 @@ export async function withPageFields<Row>(
       : Promise.resolve(new Map<string, CurrentReadFacts>()),
   ]);
   let stored = storedRows;
-  const recordPublications = storedDerivedDeclarations().filter(
+  const recordPublications = entityStoredDerivedDeclarations().filter(
     (declaration) =>
       declaration.entity === entity && declaration.recordSource !== null,
   );

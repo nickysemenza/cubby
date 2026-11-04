@@ -5,6 +5,7 @@
  * changed values. A mark clears only while its ticket is unchanged since the
  * claim, so a save that lands during compute keeps the record dirty.
  */
+import type { Entity } from "@cubby/schemas/entity";
 import { humanize } from "@cubby/shared";
 import { inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -15,6 +16,8 @@ import {
   type DerivedInput,
   type DerivedPathStep,
   dependentsOf,
+  entityStoredDerivedDeclarations,
+  type EntityStoredDerivedDeclaration,
   parseTarget,
   storedDerivedDeclarations,
   type StoredDerivedDeclaration,
@@ -266,6 +269,8 @@ export async function prepareDerivedPage(
         });
         continue;
       }
+      if (parsed.declaration.kind !== "entity")
+        throw new Error(`${target} publishes through a derived sink`);
       const values = new Map<string, DerivedComputed>();
       for (let start = 0; start < ids.length; start += DERIVED_COMPUTE_BATCH)
         for (const [id, value] of compute.sharedPreparation &&
@@ -328,7 +333,7 @@ function selectedTargetRows(
   select: DerivedFanoutSelection,
 ): SQL {
   const selection = input.selection;
-  if (!selection || !input.targetWhere)
+  if (!selection || !input.targetWhere || declaration.kind !== "entity")
     throw new Error(`Invalid fanout selection for ${declaration.target}`);
   const sourceRefs = selection.path ? pathSql(selection.path, refs) : refs;
   const retainedArray = sql`v.value #> ARRAY[${sql.join(
@@ -351,7 +356,7 @@ function selectedTargetRows(
 /** Records whose stored inputs reach a changed record, per kind, bounded for the doorbell ring. */
 class Touched {
   private readonly affected = new Map<string, Set<string>>();
-  add(entity: string, ids: readonly string[]) {
+  add(entity: Entity, ids: readonly string[]) {
     const set = this.affected.get(entity) ?? new Set<string>();
     this.affected.set(entity, set);
     if (set.size > RING_RECORD_LIMIT) return;
@@ -396,6 +401,16 @@ class Touched {
     };
   }
 }
+
+/** A `sinkOwned` declaration's refs are not entity ids: its sink notifies instead. */
+const touchDeclaredRefs = (
+  touched: Touched,
+  declaration: StoredDerivedDeclaration,
+  ids: readonly string[],
+) => {
+  if (declaration.notifications === "entityRefs")
+    touched.add(declaration.entity, ids);
+};
 
 /**
  * Expand the chunk's fanout marks into their dependents' marks. Runs before
@@ -473,7 +488,7 @@ async function expandFanouts(
   )) {
     expanded += count;
     const parsed = parseTarget(target);
-    if (parsed) touched.add(parsed.declaration.entity, refs);
+    if (parsed) touchDeclaredRefs(touched, parsed.declaration, refs);
   }
   return { expanded, covered };
 }
@@ -543,7 +558,7 @@ export async function lockDerivedChunk(
 }
 
 const sortColumns = (
-  declaration: StoredDerivedDeclaration,
+  declaration: EntityStoredDerivedDeclaration,
   sort: number | string | null,
 ) => ({
   sortNumber:
@@ -560,7 +575,7 @@ const blockedByFanout = (target: string, plan: DerivedPagePlan) =>
   );
 
 type ValueGroup = {
-  declaration: StoredDerivedDeclaration;
+  declaration: EntityStoredDerivedDeclaration;
   items: readonly WorkItem[];
   values: ReadonlyMap<string, DerivedComputed>;
 };
@@ -674,7 +689,7 @@ async function publishValues(
 /** Mark records whose value reads a changed stored value; propagation is priority 1. */
 async function propagate(
   db: Database,
-  declaration: StoredDerivedDeclaration,
+  declaration: EntityStoredDerivedDeclaration,
   changedIds: readonly string[],
 ) {
   if (changedIds.length === 0) return;
@@ -736,7 +751,12 @@ export async function publishDerivedChunk(
   const valueGroups: ValueGroup[] = [];
   for (const [target, group] of groups) {
     const parsed = parseTarget(target);
-    if (parsed && !parsed.fanoutInput && !plan.sinks.has(target))
+    if (
+      parsed &&
+      !parsed.fanoutInput &&
+      !plan.sinks.has(target) &&
+      parsed.declaration.kind === "entity"
+    )
       valueGroups.push({
         declaration: parsed.declaration,
         items: group,
@@ -769,7 +789,12 @@ export async function publishDerivedChunk(
       const ids = row?.blocked ? [] : group.map((item) => item.ref);
       // Sinks reuse repository writers, which take the Database handle.
       changedIds = ids.length
-        ? await sink.sink.publish(db, ids, sink.prepared)
+        ? await sink.sink.publish(db, ids, sink.prepared, {
+            notify: (entity, refs) => {
+              // An empty set would still ring the entity's whole category.
+              if (refs.length) touched.add(entity, refs);
+            },
+          })
         : [];
       publishedIds = new Set(ids);
     } else {
@@ -788,11 +813,14 @@ export async function publishDerivedChunk(
     const drifted = changedIds.filter((id) => reconciled.has(id)).length;
     if (drifted > 0) drift.push({ target, count: drifted });
     // Every published record's freshness changed, whether or not its value did.
-    touched.add(
-      declaration.entity,
+    touchDeclaredRefs(
+      touched,
+      declaration,
       published.map((item) => item.ref),
     );
-    await propagate(db, declaration, changedIds);
+    // Dependencies name entity values only, so no value reads an internal record.
+    if (declaration.kind === "entity")
+      await propagate(db, declaration, changedIds);
   }
   return {
     changed,
@@ -830,7 +858,7 @@ export async function markAllStoredDerived(
 export async function markExpiredClockDerived(
   db: RepositoryQueryInput,
 ): Promise<number> {
-  const targets = storedDerivedDeclarations()
+  const targets = entityStoredDerivedDeclarations()
     .filter(
       (entry) =>
         entry.clock === "householdDay" && entry.publishes === "derivedValue",

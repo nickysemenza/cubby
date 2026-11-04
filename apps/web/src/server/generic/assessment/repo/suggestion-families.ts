@@ -3,6 +3,7 @@ import {
   assessmentFamily,
   type assessmentReviewInput,
 } from "@cubby/schemas/assessment";
+import type { AssessmentReadKey } from "@cubby/schemas/assessment-read-publication";
 import {
   type DataCheck,
   dataCheckKind,
@@ -28,7 +29,6 @@ import {
   statementSuggestionRow,
   transferPairSuggestionRow,
   type SuggestionCountsOut,
-  type SuggestionColumnValue,
   type SuggestionImpact,
   type SuggestionListFamily,
   type SuggestionListFilters,
@@ -76,26 +76,13 @@ import {
 import { tagSuggestionKeys, tagSuggestionRows } from "./tag-suggestions";
 
 type ShortcodeEntity = SuggestionRecordRef["entity"];
-type Columns = Record<string, SuggestionColumnValue | SuggestionColumnValue[]>;
 
 /**
  * One Suggestion's list facts, read for every row in scope before any row is
  * hydrated: Strength, clean, Impact and its family's declared relation columns.
  */
-export type SuggestionKey = {
-  family: SuggestionListFamily;
-  assessmentId: string;
-  status: SuggestionListFilters["status"];
-  fingerprint: string | null;
-  clean: boolean;
-  strength: SuggestionStrength;
-  impact: SuggestionImpact[];
+export type SuggestionKey = Omit<AssessmentReadKey, "createdAt"> & {
   createdAt: Date;
-  columns: Columns;
-  /** Rule stamps matched at publication. */
-  matchedRules: string[];
-  /** `<ruleKey>@<revision>` when an Automatic rule applied it. */
-  automaticRule: string | null;
 };
 
 const stamps = z.array(z.string()).catch([]);

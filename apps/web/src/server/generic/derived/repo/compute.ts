@@ -2,6 +2,7 @@ import {
   storedFieldDecision,
   type StoredFieldDecision,
 } from "@cubby/schemas/derived-value";
+import type { Entity } from "@cubby/schemas/entity";
 import { storedResultSchemas } from "@cubby/schemas/entity-stored-derived";
 import type { SQL } from "drizzle-orm";
 
@@ -112,6 +113,16 @@ export const sharedDerivedPreparation =
       },
     );
 
+/** One sink publication's reader notification, committed with its transaction. */
+export interface DerivedSinkPublication {
+  /**
+   * Ring these entity records through the drain's bounded publication. An
+   * internal record's refs are not entity ids, so its sink names the old and
+   * new entities each change affected.
+   */
+  notify(entity: Entity, ids: readonly string[]): void;
+}
+
 /**
  * An adapter whose output lives in its own table (search documents, recipe
  * totals, conversion coverage) rather than `DerivedValue`. `prepare` runs
@@ -127,6 +138,7 @@ export interface DerivedSink<Prepared = unknown> {
     tx: Database,
     ids: readonly string[],
     prepared: Prepared,
+    publication: DerivedSinkPublication,
   ): Promise<readonly string[]>;
 }
 
@@ -137,10 +149,12 @@ export const derivedSink = <Prepared>(
   sink: Omit<DerivedSink<Prepared>, "kind">,
 ): DerivedSink => ({
   kind: "sink",
+  preparationBatchSize: sink.preparationBatchSize,
   prepare: sink.prepare,
   // SAFETY: the drain hands `publish` exactly the value this sink's own
   // `prepare` returned for the same page.
-  publish: (tx, ids, prepared) => sink.publish(tx, ids, prepared as Prepared),
+  publish: (tx, ids, prepared, publication) =>
+    sink.publish(tx, ids, prepared as Prepared, publication),
 });
 
 export const isDerivedSink = (

@@ -1,3 +1,4 @@
+import type { AssessmentReadFilterFacts } from "@cubby/schemas/assessment-read-publication";
 import {
   suggestionRecordCountsInput,
   suggestionRecordCountsOut,
@@ -76,8 +77,10 @@ type SortTerm = { by: string; direction: "asc" | "desc" };
  * validated fact stream as a relation; the shared compiler is the only owner
  * of filter operators, and PostgreSQL owns ordering and paging.
  */
-function keyRelation(db: Database, keys: readonly SuggestionKey[]) {
-  const facts = keys.map((key) => ({
+export function suggestionKeyFacts(
+  key: SuggestionKey,
+): AssessmentReadFilterFacts {
+  return {
     id: key.assessmentId,
     family: key.family,
     strength: key.strength,
@@ -100,7 +103,11 @@ function keyRelation(db: Database, keys: readonly SuggestionKey[]) {
       typeof key.columns.confidence === "number"
         ? key.columns.confidence * 100
         : null,
-  }));
+  };
+}
+
+function keyRelation(db: Database, keys: readonly SuggestionKey[]) {
+  const facts = keys.map(suggestionKeyFacts);
   const names = new Set([
     "id",
     "family",
@@ -325,6 +332,28 @@ async function currentCandidates(
   const rows = await hydrate(db, keys);
   const current = keys.filter((key) => rows.has(key.assessmentId));
   return { families, keys: current, rows };
+}
+
+/** Background publication and live actions use the same family admission owner. */
+export async function prepareSuggestionAdmission(
+  db: Database,
+  assessmentIds: readonly string[],
+): Promise<{
+  keys: SuggestionKey[];
+  rows: Map<string, SuggestionListRow>;
+}> {
+  const filters = suggestionListFilters.parse({});
+  const identities = [...new Set(assessmentIds)];
+  const admitted = await currentCandidates(db, filters, {
+    families: familiesOf(filters),
+    touching: new Set(identities),
+    matchedFamilies: null,
+    familyScope: {
+      filters: { ...filters, recordEntity: undefined, recordIds: undefined },
+      assessmentIds: identities,
+    },
+  });
+  return { keys: admitted.keys, rows: admitted.rows };
 }
 
 async function scopedKeys(

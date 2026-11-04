@@ -15,7 +15,10 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { USDAClient } from "~/server/clients/usda";
-import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
+import {
+  entityStoredDerivedDeclarations,
+  storedDerivedDeclarations,
+} from "~/server/db/derived-declarations";
 import { getDb } from "~/server/db/helpers";
 import {
   entityAttachment,
@@ -402,7 +405,7 @@ describe("stored derived read sets", () => {
         .map((row) => row.entityKind),
     );
     expect(
-      storedDerivedDeclarations()
+      entityStoredDerivedDeclarations()
         .filter((declaration) => declaration.compute.startsWith("search."))
         .map((declaration) => declaration.entity)
         .filter((entity) => !searchKinds.has(entity)),
@@ -410,7 +413,7 @@ describe("stored derived read sets", () => {
     expect(
       [
         ...new Set(
-          storedDerivedDeclarations()
+          entityStoredDerivedDeclarations()
             .filter((declaration) => declaration.publishes === "ownTable")
             .map((declaration) => declaration.key),
         ),

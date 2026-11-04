@@ -1,8 +1,9 @@
 /**
  * Every stored derived value (ADR 0021), read once from the entity manifest
- * (`model.derived.<key>.stored`). The drain,
- * the generated triggers, list reads and explanations all resolve declarations
- * here, so a value has one declaration and no parallel scheduling list.
+ * (`model.derived.<key>.stored`), plus the internal records this module
+ * registers. The drain and the generated triggers resolve every declaration
+ * here, so a value has one declaration and no parallel scheduling list. List
+ * reads, explanations and other entity metadata read only the entity subset.
  */
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { storedDerivedManifest } from "@cubby/schemas/entity-stored-derived";
@@ -75,13 +76,23 @@ export type DerivedDependency = {
 
 type DerivedSortType = "number" | "date" | "text" | null;
 
-export interface StoredDerivedDeclaration {
-  readonly entity: Entity;
-  readonly key: string;
-  /** `<entity>.<key>`, the dirty-row target and explanation identifier. */
+/** What the drain and triggers need, whichever owner the target belongs to. */
+interface StoredDerivedWork {
+  /** The dirty-row target: a stable name pending tickets keep across deploys. */
   readonly target: string;
+  /** The source table: its UUID `id` is the mark's ref and sink lock. */
   readonly table: string;
   readonly compute: string;
+  readonly inputs: readonly DerivedInput[];
+  readonly dependsOn: readonly DerivedDependency[];
+}
+
+export interface EntityStoredDerivedDeclaration extends StoredDerivedWork {
+  readonly kind: "entity";
+  readonly entity: Entity;
+  readonly key: string;
+  /** Publication and freshness ring this declaration's own record refs. */
+  readonly notifications: "entityRefs";
   readonly clock: "householdDay" | null;
   /**
    * `derivedValue`: published as a `DerivedValue` row, with per-row meta in the
@@ -95,9 +106,25 @@ export interface StoredDerivedDeclaration {
     readonly freshAt?: string;
   } | null;
   readonly sort: DerivedSortType;
-  readonly inputs: readonly DerivedInput[];
-  readonly dependsOn: readonly DerivedDependency[];
 }
+
+/**
+ * A publication about non-entity records: no public Entity, DerivedValue
+ * envelope, field metadata or explanation. It must use a `derivedSink`, whose
+ * refs are `table` ids rather than entity ids, so the sink names the entities
+ * each publication affected through its publication context. Marks and fanout
+ * expansion ring nothing. Dependencies may read entity values; no stored value
+ * can depend on an internal record.
+ */
+export interface InternalStoredDerivedDeclaration extends StoredDerivedWork {
+  readonly kind: "internalRecord";
+  readonly publishes: "ownTable";
+  readonly notifications: "sinkOwned";
+}
+
+export type StoredDerivedDeclaration =
+  | EntityStoredDerivedDeclaration
+  | InternalStoredDerivedDeclaration;
 
 const pathStep = z.object({
   table: z.string(),
@@ -108,6 +135,61 @@ const pathStep = z.object({
   where: z.record(z.string(), z.string()).optional(),
   recursive: z.object({ maxDepth: z.number().int().positive() }).optional(),
 });
+
+const storedInput = z.object({
+  table: z.string(),
+  match: z.record(z.string(), z.string()),
+  capture: z.literal(false).optional(),
+  columns: z.array(z.string()).optional(),
+  where: z.record(z.string(), z.string()).optional(),
+  except: z.array(z.string()).optional(),
+  path: z.array(pathStep).optional(),
+  paths: z.array(z.array(pathStep).min(1)).min(1).optional(),
+  targetWhere: z.record(z.string(), z.string().nullable()).optional(),
+  selection: z
+    .object({
+      key: z.string(),
+      path: z.array(pathStep).optional(),
+      retained: z.object({
+        array: z.array(z.string()).min(1),
+        key: z.string(),
+      }),
+    })
+    .optional(),
+  json: z
+    .object({ array: z.array(z.string()).optional(), key: z.string() })
+    .optional(),
+});
+
+const storedDependency = z.union([
+  z.object({
+    entity: entitySchema,
+    key: z.string(),
+    targetWhere: z
+      .record(z.string(), z.string().nullable())
+      .refine((where) => Object.keys(where).length > 0),
+  }),
+  z.object({
+    entity: entitySchema,
+    key: z.string(),
+    match: z.record(z.string(), z.string()),
+  }),
+  z.object({
+    entity: entitySchema,
+    key: z.string(),
+    path: z.array(pathStep),
+  }),
+  z.object({
+    entity: entitySchema,
+    key: z.string(),
+    through: z.object({
+      table: z.string(),
+      source: z.string(),
+      dependent: z.string(),
+      where: z.record(z.string(), z.string()).optional(),
+    }),
+  }),
+]);
 
 /** The generated registry's entry, parsed at this boundary. */
 const storedEntry = z.object({
@@ -126,67 +208,37 @@ const storedEntry = z.object({
       })
       .optional(),
     clock: z.literal("householdDay").optional(),
-    inputs: z.array(
-      z.object({
-        table: z.string(),
-        match: z.record(z.string(), z.string()),
-        capture: z.literal(false).optional(),
-        columns: z.array(z.string()).optional(),
-        where: z.record(z.string(), z.string()).optional(),
-        except: z.array(z.string()).optional(),
-        path: z.array(pathStep).optional(),
-        paths: z.array(z.array(pathStep).min(1)).min(1).optional(),
-        targetWhere: z.record(z.string(), z.string().nullable()).optional(),
-        selection: z
-          .object({
-            key: z.string(),
-            path: z.array(pathStep).optional(),
-            retained: z.object({
-              array: z.array(z.string()).min(1),
-              key: z.string(),
-            }),
-          })
-          .optional(),
-        json: z
-          .object({ array: z.array(z.string()).optional(), key: z.string() })
-          .optional(),
-      }),
-    ),
-    dependsOn: z
-      .array(
-        z.union([
-          z.object({
-            entity: entitySchema,
-            key: z.string(),
-            targetWhere: z
-              .record(z.string(), z.string().nullable())
-              .refine((where) => Object.keys(where).length > 0),
-          }),
-          z.object({
-            entity: entitySchema,
-            key: z.string(),
-            match: z.record(z.string(), z.string()),
-          }),
-          z.object({
-            entity: entitySchema,
-            key: z.string(),
-            path: z.array(pathStep),
-          }),
-          z.object({
-            entity: entitySchema,
-            key: z.string(),
-            through: z.object({
-              table: z.string(),
-              source: z.string(),
-              dependent: z.string(),
-              where: z.record(z.string(), z.string()).optional(),
-            }),
-          }),
-        ]),
-      )
-      .optional(),
+    inputs: z.array(storedInput),
+    dependsOn: z.array(storedDependency).optional(),
   }),
 });
+
+/**
+ * One internal record publication. `target` is `<owner>.<key>`, where the owner
+ * is not an entity, so it cannot shadow a manifest target. Inputs and
+ * dependencies are the same authoring shapes a manifest declares; `selection`
+ * is omitted because it reads a retained `DerivedValue` result.
+ */
+const internalRecordSpec = z.object({
+  target: z
+    .string()
+    .regex(/^[a-z][A-Za-z0-9]*\.[a-z][A-Za-z0-9]*$/)
+    .refine((target) => !entitySchema.safeParse(target.split(".")[0]).success),
+  table: z.string(),
+  compute: z.string(),
+  notifications: z.literal("sinkOwned"),
+  inputs: z.array(storedInput.omit({ selection: true })),
+  dependsOn: z.array(storedDependency).optional(),
+});
+
+export type InternalRecordSpec = z.input<typeof internalRecordSpec>;
+
+/**
+ * Registered internal records. Append only: triggers and the drain read this
+ * list after the manifest, and pending fanouts name an input by position, so
+ * an entry's inputs also keep their order.
+ */
+const internalRecordSpecs: readonly InternalRecordSpec[] = [];
 
 const onePair = (match: Record<string, string>): [string, string] => {
   const entries = Object.entries(match);
@@ -205,7 +257,58 @@ const sortTypeOf = (type: string | undefined): DerivedSortType =>
         ? "text"
         : null;
 
-const manifestDeclarations = (): StoredDerivedDeclaration[] =>
+const declaredInput = (input: z.output<typeof storedInput>): DerivedInput => {
+  const [tableColumn, entityColumn] = onePair(input.match);
+  return {
+    table: input.table,
+    tableColumn,
+    entityColumn,
+    ...(input.capture === false ? { capture: false as const } : {}),
+    columns: input.columns ?? null,
+    where: input.where ?? null,
+    except: input.except ?? [],
+    path: input.path ?? null,
+    ...(input.paths ? { paths: input.paths } : {}),
+    targetWhere: input.targetWhere ?? null,
+    ...(input.selection ? { selection: input.selection } : {}),
+    json: input.json ?? null,
+  };
+};
+
+const declaredDependency = (
+  dependency: z.output<typeof storedDependency>,
+): DerivedDependency => {
+  if ("targetWhere" in dependency)
+    return {
+      entity: dependency.entity,
+      key: dependency.key,
+      targetWhere: dependency.targetWhere,
+    };
+  if ("path" in dependency)
+    return {
+      entity: dependency.entity,
+      key: dependency.key,
+      path: dependency.path,
+    };
+  if ("through" in dependency)
+    return {
+      entity: dependency.entity,
+      key: dependency.key,
+      through: {
+        ...dependency.through,
+        where: dependency.through.where ?? null,
+      },
+    };
+  const [sourceColumn, entityColumn] = onePair(dependency.match);
+  return {
+    entity: dependency.entity,
+    key: dependency.key,
+    sourceColumn,
+    entityColumn,
+  };
+};
+
+const manifestDeclarations = (): EntityStoredDerivedDeclaration[] =>
   z
     .array(storedEntry)
     .parse(storedDerivedManifest)
@@ -213,8 +316,10 @@ const manifestDeclarations = (): StoredDerivedDeclaration[] =>
       if (!entry.table) return [];
       return [
         {
+          kind: "entity",
           entity: entry.entity,
           key: entry.key,
+          notifications: "entityRefs",
           target: `${entry.entity}.${entry.key}`,
           table: entry.table,
           compute: entry.stored.compute,
@@ -222,72 +327,49 @@ const manifestDeclarations = (): StoredDerivedDeclaration[] =>
           publishes: entry.publishes,
           recordSource: entry.stored.recordSource ?? null,
           sort: sortTypeOf(entry.type),
-          inputs: entry.stored.inputs.map((input) => {
-            const [tableColumn, entityColumn] = onePair(input.match);
-            return {
-              table: input.table,
-              tableColumn,
-              entityColumn,
-              ...(input.capture === false ? { capture: false as const } : {}),
-              columns: input.columns ?? null,
-              where: input.where ?? null,
-              except: input.except ?? [],
-              path: input.path ?? null,
-              ...(input.paths ? { paths: input.paths } : {}),
-              targetWhere: input.targetWhere ?? null,
-              ...(input.selection ? { selection: input.selection } : {}),
-              json: input.json ?? null,
-            };
-          }),
-          dependsOn: (entry.stored.dependsOn ?? []).map(
-            (dependency): DerivedDependency => {
-              if ("targetWhere" in dependency)
-                return {
-                  entity: dependency.entity,
-                  key: dependency.key,
-                  targetWhere: dependency.targetWhere,
-                };
-              if ("path" in dependency)
-                return {
-                  entity: dependency.entity,
-                  key: dependency.key,
-                  path: dependency.path,
-                };
-              if ("through" in dependency)
-                return {
-                  entity: dependency.entity,
-                  key: dependency.key,
-                  through: {
-                    ...dependency.through,
-                    where: dependency.through.where ?? null,
-                  },
-                };
-              const [sourceColumn, entityColumn] = onePair(dependency.match);
-              return {
-                entity: dependency.entity,
-                key: dependency.key,
-                sourceColumn,
-                entityColumn,
-              };
-            },
-          ),
-        } satisfies StoredDerivedDeclaration,
+          inputs: entry.stored.inputs.map(declaredInput),
+          dependsOn: (entry.stored.dependsOn ?? []).map(declaredDependency),
+        } satisfies EntityStoredDerivedDeclaration,
       ];
     });
+
+const internalRecordDeclarations = (): InternalStoredDerivedDeclaration[] => {
+  const specs = z.array(internalRecordSpec).parse(internalRecordSpecs);
+  const targets = specs.map((spec) => spec.target);
+  if (new Set(targets).size !== targets.length)
+    throw new Error("Internal derived record targets must be unique");
+  return specs.map((spec): InternalStoredDerivedDeclaration => ({
+    kind: "internalRecord",
+    publishes: "ownTable",
+    notifications: spec.notifications,
+    target: spec.target,
+    table: spec.table,
+    compute: spec.compute,
+    inputs: spec.inputs.map(declaredInput),
+    dependsOn: (spec.dependsOn ?? []).map(declaredDependency),
+  }));
+};
 
 let cached: readonly StoredDerivedDeclaration[] | null = null;
 
 export function storedDerivedDeclarations(): readonly StoredDerivedDeclaration[] {
-  cached ??= manifestDeclarations();
+  cached ??= [...manifestDeclarations(), ...internalRecordDeclarations()];
   return cached;
+}
+
+/** The public metadata roster: internal records never appear in entity reads. */
+export function entityStoredDerivedDeclarations(): readonly EntityStoredDerivedDeclaration[] {
+  return storedDerivedDeclarations().filter(
+    (entry): entry is EntityStoredDerivedDeclaration => entry.kind === "entity",
+  );
 }
 
 export function storedDerived(
   entity: Entity,
   key: string,
-): StoredDerivedDeclaration | null {
+): EntityStoredDerivedDeclaration | null {
   return (
-    storedDerivedDeclarations().find(
+    entityStoredDerivedDeclarations().find(
       (entry) => entry.entity === entity && entry.key === key,
     ) ?? null
   );

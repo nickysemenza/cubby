@@ -88,6 +88,12 @@ and turned one Product save into a 115–147 second rollback; #2855 removed them
   is unchanged. Member edits go first; an hourly reconciliation of one 24th of
   the records (each record daily) and a CI read-set check cover undeclared
   inputs.
+- **Internal records share the drain.** A publication about records that are not
+  an Entity registers as a typed internal record with an explicit target and
+  source table. It reuses the triggers, drain, fences and reconciliation, and
+  publishes only through its own table. It adds no public Entity, field envelope
+  or explanation. Its sink names the entities each publication affected, because
+  its refs are not entity ids.
 - **AI work has one slot.** Each (record, feature) owns one slot, keyed by a
   hash of its declared input projection; reverts reuse the response cache.
   Descriptive fields stay hands-off through the existing Automatic rules,

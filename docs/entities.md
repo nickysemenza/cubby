@@ -3011,6 +3011,27 @@ kernel binding with a lazy import. Each scored entity's evaluator lives in
 imported by domain repositories and reads quality synchronously, so it cannot
 depend on the repository registry, which imports every repository.
 
+A publication about non-entity records registers in `internalRecordSpecs` in
+`server/db/derived-declarations.ts`, not in the manifest. A spec names a stable
+`<owner>.<key>` target whose owner is not an entity, a source table with a UUID
+`id`, a compute id and manifest-shaped `inputs` and `dependsOn`. It shares the
+existing registry, triggers, drain, source locking, fanout fences, retries and
+reconciliation, so `markAllStoredDerived` can seed its source IDs with a target
+filter. Append entries and keep input positions, because pending fanouts name an
+input by position. It has no `key`, `clock`, `recordSource`, `selection` or
+`DerivedValue` envelope; its adapter must be a `derivedSink`, and any other
+adapter fails its items visibly. A later rules change converges through the
+sink's own table and reconciliation. Its dependencies may read entity values;
+no stored value can depend on it, so it never propagates.
+`entityStoredDerivedDeclarations()` and `storedDerived()` are the entity-only
+roster for reads, explanations, clock expiry and backlog `kinds`. Internal
+tickets count in the backlog `total` and oldest wait without a `kinds` row.
+An internal record's refs are source IDs, not entity IDs, so
+`notifications: "sinkOwned"` skips the default ring for fanout expansion and
+publication. The sink calls
+`publication.notify(entity, ids)` for each old and new entity its publication
+changed. Those refs join the chunk's bounded ring and commit with its transaction.
+
 Product reads use the stored `readFacts` publication for pricing, quantity ledger,
 placement and ownership evidence, and `food` for food summaries. Their field
 metadata carries the publication's stale/work status. Reads never refresh these
