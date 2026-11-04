@@ -59,34 +59,38 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         </nav>
       ) : null}
 
-      <Row align="center" gap="sm" className="ml-auto">
-        {/* Search Button */}
-        {onSearchClick && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onSearchClick}
-            onPointerEnter={preloadCommandMenu}
-            onFocus={preloadCommandMenu}
-            onTouchStart={preloadCommandMenu}
-            className="hidden h-8 px-2 md:flex"
-            title="Search"
-          >
-            <MagnifyingGlassIcon className="size-3.5" />
-            <span className="sr-only">Search</span>
-          </Button>
-        )}
+      {/* Rendered only with content: an empty auto-margin row splits the free
+          space with the account controls and strands them mid-header. */}
+      {(onSearchClick || !authed) && (
+        <Row align="center" gap="sm" className="ml-auto">
+          {/* Search Button */}
+          {onSearchClick && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onSearchClick}
+              onPointerEnter={preloadCommandMenu}
+              onFocus={preloadCommandMenu}
+              onTouchStart={preloadCommandMenu}
+              className="hidden h-8 px-2 md:flex"
+              title="Search"
+            >
+              <MagnifyingGlassIcon className="size-3.5" />
+              <span className="sr-only">Search</span>
+            </Button>
+          )}
 
-        {!authed && (
-          <Link
-            to="/auth/$authView"
-            params={{ authView: "sign-in" }}
-            className="text-sm font-medium"
-          >
-            Sign In
-          </Link>
-        )}
-      </Row>
+          {!authed && (
+            <Link
+              to="/auth/$authView"
+              params={{ authView: "sign-in" }}
+              className="text-sm font-medium"
+            >
+              Sign In
+            </Link>
+          )}
+        </Row>
+      )}
     </div>
   );
 }
