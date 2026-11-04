@@ -149,6 +149,7 @@ function TodayAttentionContent() {
                       entity="task"
                       id={item.id}
                       name={item.title}
+                      bare
                       className="max-w-full"
                     />
                   ) : (
@@ -195,7 +196,9 @@ function BriefingProjectLine({
 }) {
   if (!line) return null;
   if (line.ref?.entity === "project")
-    return <EntityRefLink entity="project" id={line.ref.id} name={line.text} />;
+    return (
+      <EntityRefLink bare entity="project" id={line.ref.id} name={line.text} />
+    );
   return (
     <span className="min-w-0 truncate text-muted-foreground">{line.text}</span>
   );

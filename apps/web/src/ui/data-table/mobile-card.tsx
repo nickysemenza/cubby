@@ -85,7 +85,7 @@ function PrimaryTitle({
         />
       )}
       <span
-        className="line-clamp-2 min-w-0 flex-1 text-sm leading-snug font-medium break-words"
+        className="min-w-0 flex-1 truncate text-sm leading-snug font-medium"
         title={typeof title === "string" ? title : undefined}
       >
         {title}
