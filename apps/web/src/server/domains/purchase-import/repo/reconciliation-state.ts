@@ -8,6 +8,7 @@ import { and, asc, eq, inArray, or } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers";
+import { outer } from "~/server/db/helpers/related";
 import {
   entityAttachment,
   expense,
@@ -32,6 +33,7 @@ import {
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
+import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -356,7 +358,23 @@ export async function loadSourceReconciliationState(
     : sourceOrders[0]
       ? await acceptedSourceExtraction(tx, sourceOrders[0])
       : null;
+  const unpricedForeignExpenses = await tx
+    .select({ id: expense.id })
+    .from(expense)
+    .where(
+      and(
+        eq(expense.purchaseId, target.id),
+        notDeleted(expense),
+        unpricedForeignExpenseSql({
+          id: outer(expense.id),
+          purchaseId: outer(expense.purchaseId),
+          lineKind: outer(expense.lineKind),
+          cost: outer(expense.cost),
+        }),
+      ),
+    );
   return {
+    unpricedForeignExpenses,
     family,
     association,
     target,

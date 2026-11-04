@@ -2146,6 +2146,11 @@ export const { definition, readSchemas } = defineEntityModel({
 
         { table: "Expense", match: { purchaseId: "id" } },
         { table: "Vendor", match: { id: "vendorId" } },
+        {
+          table: "ImportSourceProduct",
+          match: { sourceOrderId: "id" },
+          path: [{ table: "ImportSourceOrder", from: "id", to: "purchaseId" }],
+        },
       ],
       exceptions: true,
       related: ["product"],

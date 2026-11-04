@@ -36,6 +36,7 @@ import {
   withTransaction,
   touchUpdatedAt,
 } from "~/server/db/helpers";
+import { outer } from "~/server/db/helpers/related";
 import { expense, product, purchase } from "~/server/db/schema";
 import { replaceExpenseAttributionRole } from "~/server/domains/expense/repo/expense-attribution";
 import {
@@ -51,6 +52,7 @@ import {
   syncChangedEffectivePrices,
 } from "~/server/domains/product/repo/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
+import { foreignExpenseOriginSql } from "~/server/domains/purchase-import/repo/writer-policy";
 import {
   findOrCreatePurchase,
   foldChargeInto,
@@ -505,6 +507,20 @@ export const updateExpense = defineMutationWriter({
       });
       const nextCost =
         data.cost === undefined ? (qualityBefore?.cost ?? null) : data.cost;
+      if (qualityBefore?.cost === null && nextCost !== null) {
+        const [original] = await tx
+          .select({ id: expense.id })
+          .from(expense)
+          .where(
+            and(eq(expense.id, id), foreignExpenseOriginSql(outer(expense.id))),
+          )
+          .limit(1);
+        if (original)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Use reviewed source reconciliation to price a foreign receipt line.",
+          );
+      }
       assertExpenseDate(
         nextCost,
         data.date === undefined ? (qualityBefore?.date ?? null) : data.date,

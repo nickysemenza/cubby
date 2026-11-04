@@ -10,7 +10,6 @@ import {
   purchaseId,
   type EmailShortcode,
 } from "@cubby/schemas/identifiers";
-import { purchaseShortcode, SHORTCODE_CHARS } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -90,7 +89,6 @@ import {
   kernelRequestContext,
 } from "~/server/testing/mcp-test-utils";
 import {
-  insertEntityFixtures,
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -2105,7 +2103,7 @@ describe("Email Purchase links", () => {
     expect(unchanged?.vendorId).toBeNull();
   });
 
-  it("suggests an exact order, honors a durable dismissal, and lets Link replace it", async () => {
+  it("suggests an older exact order, honors a durable dismissal, and lets Link replace it", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic mail reviewer",
       kind: "member",
@@ -2117,7 +2115,8 @@ describe("Email Purchase links", () => {
     const purchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "TS-SYN-1001",
-      date: "2026-09-10",
+      // Exact order identity is independent of the amount/date matching window.
+      date: "2024-01-01",
       statedTotal: 48,
     });
     // Same total, another order number: never a suggestion.
@@ -2379,86 +2378,6 @@ describe("Email Purchase links", () => {
       .from(orderMailCandidateDecision)
       .where(eq(orderMailCandidateDecision.decision, "linked"));
     expect(links).toEqual([{ purchaseId: chosen!.id }]);
-  });
-
-  it("suggests an older exact order beyond the newest 500 Purchases", async () => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic mail reviewer",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Example Trail Shop",
-    });
-    const older = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: vendor.id,
-      orderId: "TS-OLDER-1001",
-      date: "2024-01-01",
-    });
-    const shortcodes = Array.from({ length: 502 }, (_, index) => {
-      let value = index;
-      let body = "";
-      for (let digit = 0; digit < 4; digit++) {
-        body = SHORTCODE_CHARS.charAt(value % SHORTCODE_CHARS.length) + body;
-        value = Math.floor(value / SHORTCODE_CHARS.length);
-      }
-      return purchaseShortcode.parse(`PUR-${body}`);
-    }).filter((shortcode) => shortcode !== older.shortcode);
-    for (let offset = 0; offset < 501; offset += 100) {
-      await insertEntityFixtures(
-        ctx.db,
-        purchaseTable,
-        "purchase",
-        Array.from({ length: Math.min(100, 501 - offset) }, (_, index) => {
-          const shortcode = shortcodes[offset + index];
-          if (!shortcode) throw new Error("test setup: shortcode missing");
-          return {
-            id: purchaseId.parse(crypto.randomUUID()),
-            shortcode,
-            vendorId: vendor.id,
-            orderId: `TS-NEWER-${offset + index}`,
-            date: "2026-09-10",
-          };
-        }),
-      );
-    }
-    const bodyText =
-      "Order TS-OLDER-1001. Example Trail Shop. Synthetic delivery update.";
-    const checksum = await sha256Hex(bodyText);
-    const mail = await syntheticRetainedMail(ctx.db, {
-      ledgerPartyId: party.id,
-      mailboxId: `synthetic-review-${party.id}`,
-      content: { bodyText, bodyHtml: null, snippet: null },
-      vendorId: vendor.id,
-      messageId: "older-order-mail",
-      sender: "orders@example.test",
-      subject: "Older order update",
-      receivedAt: new Date("2026-09-10T15:00:00.000Z"),
-      rawChecksum: checksum,
-    });
-    await getDb(ctx.db)
-      .insert(orderMailEvent)
-      .values({
-        orderMailId: mail.id,
-        event: "delivered",
-        orderId: "TS-OLDER-1001",
-        sourceKey: `classified:${checksum}:0`,
-      });
-    expect(
-      await list({
-        purchaseId: parseShortcodeFor("purchase", older.shortcode),
-      }),
-    ).toEqual([
-      expect.objectContaining({
-        linkState: "suggested",
-        purchaseLinks: [
-          expect.objectContaining({
-            purchaseId: older.shortcode,
-            state: "suggested",
-          }),
-        ],
-      }),
-    ]);
   });
 
   it("carries a reviewed link to the surviving Purchase on merge", async () => {

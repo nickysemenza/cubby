@@ -49,6 +49,16 @@ uses the reconciliation writer and refreshes the automatic booking fingerprint.
    candidates. An absent charge is a coverage gap unless
    the source window proves otherwise; an email total alone cannot create one.
 
+## Foreign receipts
+
+Keep the actual USD aggregate and settlement once alongside unpriced source-backed
+item Expenses. Original-currency amounts are evidence, never USD payment amounts
+or a basis for inferred conversion. Unknown USD item valuation does not create
+another charge. Reviewed actual USD itemization must replace the aggregate and
+reuse existing acquisitions atomically; source-claimed money keeps its existing
+explicit correction workflow. Foreign refunds require reviewed reconciliation.
+See the [owning contract](../../../../docs/import-evidence-convergence.md#foreign-receipt-itemization-with-usd-accounting).
+
 ## Authority and signs
 
 Vendor documents establish Purchase identity, literal stated total, and

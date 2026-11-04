@@ -989,6 +989,48 @@ Historical descriptor spelling and reference strings remain retained. New
 normalization must preserve complete masks; a changed descriptor is not grounds
 to rewrite accepted transaction identity or an old observation.
 
+### Foreign receipt itemization with USD accounting
+
+A complete non-USD purchase retains its literal currency, descriptions, amounts,
+quantities and adjustments in accepted source evidence. Its ordinary item-line
+Expenses carry `cost: null`, supported quantities and editable Product bindings.
+`ImportSourceProduct.expenseId` gives each original line its canonical acquisition;
+no separate item entity is needed. Shipping and adjustments never acquire Products.
+An absent quantity stays unknown. Product history can show an acquisition with
+unknown USD item cost; neither its cost nor quantity enters USD pricing averages.
+
+A separately supported USD aggregate remains the only booked amount. Source amounts
+never enter `Expense.cost`, USD payment evidence or USD sums. Exact foreign source
+itemization is present independently of Product resolution; booking is recorded
+when the USD aggregate covers the purchase, while USD item valuation stays unknown.
+Unresolved ordinary USD costs still make booking partial. Original order and
+statement dates retain their respective owners. Import and reconciliation never
+receive inventory. Earned but unspent rewards are neither tender nor a discount.
+
+Replay reuses immutable source-line references. Equivalent sources reuse the whole
+unpriced roster only when their literal currency, total, ordered lines, amounts and
+quantities agree; repeated identical lines use existing Expense references. A new
+foreign source beside pre-existing priced item Expenses, an ambiguous roster or
+changed accepted facts requires review rather than another acquisition. Ordinary
+Expense Product edits and Product merges retain canonical Expense identity and
+original source history. Accepted-source Product-only attachment can bind an
+existing item Expense without comparing foreign amounts to USD; it cannot bind an
+aggregate or change money. Historical missing lines require a reviewed maintenance
+repair, not a replay that silently changes accepted data.
+
+Pricing a foreign item through ordinary Expense update is refused. This protection
+follows its retained source binding even if its Purchase or classification changes;
+coverage separately requires the current Purchase and item role to agree. Later actual
+USD itemization uses reviewed source reconciliation: review the complete unpriced
+roster together with its USD aggregate, reuse each acquisition once, preserve item
+identity and supported quantities, remove the aggregate, and conserve recorded
+USD spend and attribution in one transaction. Source-claimed aggregates retain
+their explicit financial correction requirements. Original foreign bindings remain
+on the reused Expenses, including when revised USD evidence uses the same source
+identity; changed monetary fingerprints cannot erase the reviewed correspondence; no exchange rate or per-item USD allocation is inferred.
+Foreign refunds and cancellations remain reviewed accounting work. Native foreign
+balances, optional USD allocations and automatic stock changes are unsupported.
+
 ### Correcting a purchased Product
 
 Correct an imported item's Product through the ordinary Expense entity update.

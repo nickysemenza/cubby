@@ -1,4 +1,7 @@
-import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
+import {
+  expenseLineBasisSchema,
+  expenseLineKindSchema,
+} from "@cubby/schemas/expense-line-kind";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { financialTransactionStatus } from "@cubby/schemas/financial-transaction-fields";
@@ -6,6 +9,7 @@ import { primaryPurchaseDocumentKinds } from "@cubby/schemas/purchase";
 import {
   itemizationExpectation,
   productExpectation,
+  purchaseEvidenceCoverage,
 } from "@cubby/schemas/purchase-evidence-policy";
 import type {
   FinancialTransactionCoverage,
@@ -16,10 +20,21 @@ import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
+import {
+  expense,
+  importSourceOrder,
+  importSourceProduct,
+} from "~/server/db/generated/entity-table-definitions.gen";
 import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
+import { related } from "~/server/db/helpers/related";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
+import {
+  foreignReceiptExpenseSql,
+  foreignReceiptSourceSql,
+  unpricedForeignExpenseSql,
+} from "~/server/domains/purchase-import/repo/writer-policy";
 export { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -177,11 +192,44 @@ const purchaseHasLinkedGoodsSql = (alias: string): SQL => sql`(
       AND ep_linked_goods.kind = 'purchaseProduct')
 )`;
 
+const purchaseHasForeignItemsSql = (purchaseId: SQL): SQL<boolean> => {
+  const completeSource = related(
+    importSourceOrder,
+    (order) => sql`${order.purchaseId} = ${purchaseId}`,
+  )
+    .where((order) => {
+      const principalCount = sql`jsonb_array_length(jsonb_path_query_array(${order.originalOrder}, ${'$.extraction.candidate.lines[*] ? (@.lineKind == "principal")'}::jsonpath))`;
+      const matchedCount = related(
+        importSourceProduct,
+        (binding) => sql`${binding.sourceOrderId} = ${order.id}
+      AND (${order.originalOrder} #> '{extraction,candidate,lines}') -> ${binding.lineIndex} ->> ${"lineKind"} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)}`,
+      )
+        .join(
+          expense,
+          (
+            item,
+            binding,
+          ) => sql`${item.id} = ${binding.expenseId} AND ${item.purchaseId} = ${purchaseId}
+      AND ${item.future} = false AND ${item.lineKind} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)} AND ${item.lineBasis} = ${sqlEnumConstant(expenseLineBasisSchema, expenseLineBasisSchema.enum.item_line)}`,
+        )
+        .countDistinct((item) => item.id);
+      return sql`${foreignReceiptSourceSql(order.originalOrder)} AND ${principalCount} > 0 AND ${matchedCount} = ${principalCount}`;
+    })
+    .exists();
+  const unmatched = related(
+    expense,
+    (item) => sql`${item.purchaseId} = ${purchaseId}
+    AND ${item.future} = false AND ${item.lineKind} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)} AND ${item.lineBasis} = ${sqlEnumConstant(expenseLineBasisSchema, expenseLineBasisSchema.enum.item_line)}
+    AND NOT ${foreignReceiptExpenseSql(item)}`,
+  ).exists();
+  return sql<boolean>`(${completeSource} AND NOT ${unmatched})`;
+};
+
 /** The order lists its goods, before per-line Product policy: its own item
  * lines, or allocation slices with linked Products. Transaction surfaces read
  * this alone for the planner-memory reason on `purchaseHasItemLinesSql`. */
 export const purchaseListsItemsSql = (alias: string): SQL => sql`(
-  ${purchaseHasItemLinesSql(alias)} OR ${purchaseHasLinkedGoodsSql(alias)}
+  ${purchaseHasItemLinesSql(alias)} OR ${purchaseHasLinkedGoodsSql(alias)} OR ${purchaseHasForeignItemsSql(column(alias, "id"))}
 )`;
 
 /** Each itemization line fact, stated once over an Expense line alias: the
@@ -194,21 +242,20 @@ const itemizationLineFacts = {
 } as const;
 type ItemizationLineFact = keyof typeof itemizationLineFacts;
 
-/** A Purchase is itemized when it lists its goods and every principal line
- * whose Product is expected links one, whichever shape lists them. A single
- * productless goods line is a lump, not an itemization. Totals stay with
- * `paperwork_mismatch` and `settlement_mismatch`; this axis is the line shape
- * only. */
+/** Exact foreign receipt lines establish source itemization independently of
+ * Product resolution and USD valuation. Other line shapes retain their existing
+ * Product policy. Totals belong to reconciliation, not this axis. */
 export const purchaseHasItemizationSql = (alias: string): SQL => {
   const fact = (name: ItemizationLineFact) =>
     sql`EXISTS (SELECT 1 FROM "Expense" ep_fact_line
     WHERE ep_fact_line."purchaseId" = ${column(alias, "id")}
       AND ${notDeleted("ep_fact_line")}
       AND ${itemizationLineFacts[name]("ep_fact_line")})`;
+
   return sql`(
-  ${purchaseListsItemsSql(alias)}
+    (${purchaseHasForeignItemsSql(column(alias, "id"))} AND NOT ${fact("hasUnclassified")}) OR (${purchaseListsItemsSql(alias)}
   AND NOT ${fact("hasUnclassified")}
-  AND NOT ${fact("hasUnlinkedRequired")}
+    AND NOT ${fact("hasUnlinkedRequired")})
 )`;
 };
 
@@ -234,7 +281,9 @@ const unlinkedRequiredLineSql = (alias: string): SQL =>
 
 const purchaseBookingSql = (alias: string): SQL => sql`(SELECT CASE
   WHEN count(*) = 0 THEN 'missing'
-  WHEN count(*) FILTER (WHERE ep_book.cost IS NULL) > 0 THEN 'partial'
+  WHEN count(*) FILTER (WHERE ep_book.cost IS NULL AND NOT ${unpricedForeignExpenseSql({ id: column("ep_book", "id"), purchaseId: column("ep_book", "purchaseId"), lineKind: column("ep_book", "lineKind"), cost: column("ep_book", "cost") })}) > 0 THEN 'partial'
+  WHEN count(*) FILTER (WHERE ep_book.cost IS NULL) > 0
+    AND count(*) FILTER (WHERE ep_book."lineBasis" = ${sqlEnumConstant(expenseLineBasisSchema, expenseLineBasisSchema.enum.allocation)} AND ep_book.cost IS NOT NULL) = 0 THEN ${sqlEnumConstant(purchaseEvidenceCoverage.shape.booking, purchaseEvidenceCoverage.shape.booking.enum.partial)}
   ELSE 'recorded' END
   FROM "Expense" ep_book WHERE ep_book."purchaseId" = ${column(alias, "id")}
     AND ${notDeleted("ep_book")} AND ${sql.raw(actualExpenseSql("ep_book"))}

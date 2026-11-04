@@ -3,9 +3,13 @@
 The GitHub production deployment applies pending committed migrations before
 deploying the already-built Worker. A migration failure stops deployment. The
 runner uses only `PRODUCTION_DIRECT_DATABASE_URL` for production; it never
-falls back to `DATABASE_URL`. Ordinary migrations must work with the currently
-deployed code. Verify preservation with synthetic predecessor data before merge,
-then read back production data and schema after release. See the
+falls back to `DATABASE_URL`. Default to one preserving migration followed by the
+matching Worker deploy. Old requests and Job attempts may fail; compatibility
+rollouts, timed retirement waits and feature-specific release procedures are not
+the default. Rebuildable derived caches use the existing daily consistency pass
+after deployment; temporary stale quality badges do not justify a staged cutover.
+Preserve source data, money and member decisions, verify with synthetic predecessor
+data before merge, then read back production data and schema after release. See the
 [domain rules](../agents/domain-rules.md#production-changes) for preservation
 requirements and [CI](../ci.md#deployment) for workflow execution and retries.
 Do not run production migrations by hand while a Deploy run is queued or

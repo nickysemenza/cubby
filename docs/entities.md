@@ -4112,6 +4112,11 @@ an unconfirmed explicit-only link is Linked and does not establish acquisition o
 ownership. Existing links remain unconfirmed. Explicit acquisition confirmation
 (`EntityLink.acquisitionConfirmed`, allowed only on `purchaseProduct`) establishes
 Acquired with unknown item cost and quantity; it creates no Expense or inventory.
+Foreign receipt items instead use ordinary Expense acquisitions with supported
+quantity and unknown USD cost, alongside the separately booked USD aggregate.
+Existing source-line references own replay identity; Product corrections and merges
+use the Expense. Unpriced acquisitions contribute neither cost nor quantity to USD
+pricing averages. See [foreign receipt itemization](import-evidence-convergence.md#foreign-receipt-itemization-with-usd-accounting).
 The purchase date locates its timeline marker as order context, never delivery;
 confirmation supplies no ledger date or ownership interval. Exact Expense binding
 remains separate, and itemized acquiring Expenses remain authoritative. The

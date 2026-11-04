@@ -1,15 +1,18 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   acceptedSourceOrder,
+  storedImportFix,
   type ImportWriterInput,
 } from "@cubby/schemas/purchase-import";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   expense,
+  financialTransaction,
+  financialTransactionAllocation,
   entityLink,
   importSourceOrder,
   importSourceProduct,
@@ -17,9 +20,16 @@ import {
   product,
   purchase,
 } from "~/server/db/schema";
+import {
+  createExpense,
+  updateExpense,
+} from "~/server/domains/expense/repo/crud";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
+import { getProductMovementTimeline } from "~/server/domains/product/repo/movement-timeline";
+import { loadProductPricing } from "~/server/domains/product/repo/pricing";
 import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
+import { purchaseCoverageSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import {
   listPurchaseProducts,
   listProductPurchases,
@@ -28,6 +38,11 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { findOrphanedProducts } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  createProductIdentityFixture,
+  makeProductInput,
+  makeExpenseInput,
+} from "~/server/testing/repo.fixtures";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import {
@@ -35,6 +50,11 @@ import {
   memberImportWorld,
   type MemberImportOrder,
 } from "../operations/order-import.fixtures";
+import { resolveRunFinding } from "./findings";
+import {
+  commitAcceptedSourceOrderReconciliation,
+  prepareSourceOrderReconciliation,
+} from "./reconciliation";
 import { importVendorOrder } from "./writer";
 
 // Missing money/date must not suppress supported Product identity or manufacture
@@ -94,6 +114,439 @@ describe("incomplete itemized purchase identity", () => {
     };
     return { party, vendor, input };
   }
+
+  it.each(["same source", "separate source"] as const)(
+    "retains foreign items as unpriced Expenses beside one USD aggregate through replay and equivalent evidence (%s)",
+    async (sourceIdentity) => {
+      const { input } = await scope();
+      const item = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic wine" }),
+        ctx.actor,
+      );
+      input.source = {
+        kind: "vendor_export",
+        externalKey: "synthetic:foreign-order",
+        checksum: "b".repeat(64),
+      };
+      const candidate = input.extraction.candidate!;
+      candidate.currency = "EUR";
+      candidate.orderedAt = "2032-02-29";
+      candidate.printedGrandTotal = 53;
+      candidate.lines = [
+        {
+          title: "Synthetic wine",
+          amount: 24,
+          quantity: 2,
+          lineKind: "principal",
+        },
+        {
+          title: "Synthetic wine",
+          amount: 24,
+          quantity: 2,
+          lineKind: "principal",
+        },
+        { title: "Synthetic sample", amount: 0, lineKind: "principal" },
+        { title: "Shipping", amount: 5, lineKind: "shipping" },
+      ];
+      input.productResolutions = [0, 1, 2].map((lineIndex) => ({
+        kind: "existing",
+        lineIndex,
+        productId: item.entityId,
+      }));
+      const first = await importVendorOrder(ctx.db, input, ctx.actor.userId);
+      if (!first.purchaseId) throw new Error("Foreign Purchase missing");
+      const purchaseId = parseEntityId("purchase", first.purchaseId);
+      const lines = () =>
+        getDb(ctx.db)
+          .select()
+          .from(expense)
+          .where(and(eq(expense.purchaseId, purchaseId), notDeleted(expense)));
+      const coverage = async () =>
+        (
+          await getDb(ctx.db)
+            .select({ value: purchaseCoverageSql("Purchase") })
+            .from(purchase)
+            .where(eq(purchase.id, purchaseId))
+        )[0]?.value;
+      expect(await coverage()).toMatchObject({
+        booking: "partial",
+        itemization: "present",
+      });
+      const original = await lines();
+      expect(original).toHaveLength(4);
+      expect(original.map((row) => row.cost)).toEqual([null, null, null, null]);
+      expect(
+        original
+          .filter((row) => row.productId === item.entityId)
+          .map((row) => row.productQuantity),
+      ).toEqual([2, 2, null]);
+      const [order] = await getDb(ctx.db)
+        .select()
+        .from(purchase)
+        .where(eq(purchase.id, purchaseId));
+      if (!order) throw new Error("Foreign Purchase row missing");
+      const aggregate = await createExpense(
+        ctx.db,
+        makeExpenseInput({
+          name: "Synthetic posted charge",
+          cost: 61,
+          lineBasis: "allocation",
+          purchaseId: parseShortcodeFor("purchase", order.shortcode),
+          date: "2032-02-28",
+        }),
+        ctx.actor,
+      );
+      const account = await insertWithShortcode(ctx.db, "financialAccount", {
+        name: "Synthetic USD card",
+        identity: { kind: "credit_card", network: "visa" },
+        ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
+      });
+      const charge = await insertWithShortcode(ctx.db, "financialTransaction", {
+        accountId: account.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 61,
+        postedDate: "2032-02-28",
+        merchant: "Example variant maker",
+      });
+      await getDb(ctx.db).insert(financialTransactionAllocation).values({
+        transactionId: charge.id,
+        purchaseId,
+        amount: 61,
+        confirmsMerchant: true,
+      });
+      await getDb(ctx.db)
+        .update(expense)
+        .set({ bookingTransactionCode: charge.shortcode })
+        .where(eq(expense.id, aggregate.entityId));
+      const statementBefore = await getDb(ctx.db)
+        .select()
+        .from(financialTransaction);
+      const settlementBefore = await getDb(ctx.db)
+        .select()
+        .from(financialTransactionAllocation);
+      expect(await coverage()).toMatchObject({
+        booking: "recorded",
+        itemization: "present",
+      });
+      await expect(
+        updateExpense(
+          ctx.db,
+          parseShortcodeFor("expense", original[0]!.shortcode),
+          { cost: 28 },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/reviewed source reconciliation/);
+      await updateExpense(
+        ctx.db,
+        parseShortcodeFor("expense", original[0]!.shortcode),
+        { lineKind: "fee", productId: null },
+        ctx.actor,
+      );
+      await expect(
+        updateExpense(
+          ctx.db,
+          parseShortcodeFor("expense", original[0]!.shortcode),
+          { cost: 10 },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/reviewed source reconciliation/);
+      const otherOrder = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId: order.vendorId,
+        date: "2032-03-01",
+      });
+      await updateExpense(
+        ctx.db,
+        parseShortcodeFor("expense", original[0]!.shortcode),
+        { purchaseId: parseShortcodeFor("purchase", otherOrder.shortcode) },
+        ctx.actor,
+      );
+      await expect(
+        updateExpense(
+          ctx.db,
+          parseShortcodeFor("expense", original[0]!.shortcode),
+          { cost: 10 },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/reviewed source reconciliation/);
+      await updateExpense(
+        ctx.db,
+        parseShortcodeFor("expense", original[0]!.shortcode),
+        {
+          purchaseId: parseShortcodeFor("purchase", order.shortcode),
+          lineKind: "principal",
+          productId: item.id,
+          productQuantity: 2,
+        },
+        ctx.actor,
+      );
+      const history = await getProductMovementTimeline(ctx.db, {
+        filters: {},
+        ids: [item.id],
+        order: "asc",
+        pagination: { pageIndex: 0, pageSize: 20 },
+      });
+      expect(history.groups.flatMap((group) => group.movements)).toHaveLength(
+        3,
+      );
+      expect(
+        history.groups
+          .flatMap((group) => group.movements)
+          .every((row) => row.cost === null && row.expenseId !== null),
+      ).toBe(true);
+      const beforeReplay = await lines();
+      expect(
+        await importVendorOrder(ctx.db, input, ctx.actor.userId),
+      ).toMatchObject({ outcome: "replayed" });
+      const equivalent = await importVendorOrder(
+        ctx.db,
+        {
+          ...input,
+          source: {
+            kind: "vendor_export",
+            externalKey: "synthetic:foreign-dispatch",
+            checksum: "c".repeat(64),
+          },
+        },
+        ctx.actor.userId,
+      );
+      expect(equivalent.purchaseId).toBe(first.purchaseId);
+      expect(await lines()).toEqual(beforeReplay);
+      expect(
+        (await lines()).reduce((sum, row) => sum + (row.cost ?? 0), 0),
+      ).toBe(61);
+      expect(
+        (
+          await loadProductPricing(ctx.db, [{ id: item.entityId, price: null }])
+        ).get(item.entityId),
+      ).toMatchObject({ knownUnitCount: 0, derivedPrice: null });
+      const [accepted] = await getDb(ctx.db)
+        .select()
+        .from(importSourceOrder)
+        .where(eq(importSourceOrder.purchaseId, purchaseId));
+      expect(accepted?.originalOrder?.extraction.candidate).toMatchObject({
+        currency: "EUR",
+        printedGrandTotal: 53,
+        lines: candidate.lines,
+      });
+      const corrected = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic corrected wine" }),
+        ctx.actor,
+      );
+      await updateExpense(
+        ctx.db,
+        parseShortcodeFor("expense", original[0]!.shortcode),
+        { productId: corrected.id },
+        ctx.actor,
+      );
+      await importVendorOrder(ctx.db, input, ctx.actor.userId);
+      expect(
+        (await lines()).find((row) => row.id === original[0]!.id)?.productId,
+      ).toBe(corrected.entityId);
+      expect(
+        (await lines()).find((row) => row.shortcode === aggregate.output.id)
+          ?.cost,
+      ).toBe(61);
+      if (!accepted) throw new Error("Foreign accepted source missing");
+      await updateExpense(
+        ctx.db,
+        parseShortcodeFor("expense", original[2]!.shortcode),
+        { productId: null },
+        ctx.actor,
+      );
+      const attachment = {
+        kind: "attach_only" as const,
+        lines: original.map((row, lineIndex) => ({
+          lineIndex,
+          expenseId: parseShortcodeFor("expense", row.shortcode),
+          productId:
+            lineIndex === 0 ? corrected.id : lineIndex < 3 ? item.id : null,
+        })),
+      };
+      const attached = await prepareSourceOrderReconciliation(
+        ctx.db,
+        { sourceOrderId: accepted.id, resolution: attachment },
+        ctx.actor,
+      );
+      expect(attached.spend).toEqual({ before: 61, after: 61, delta: 0 });
+      await commitAcceptedSourceOrderReconciliation(
+        ctx.db,
+        { sourceOrderId: accepted.id, resolution: attachment },
+        ctx.actor,
+      );
+      expect(
+        (await lines()).find((row) => row.id === original[2]!.id),
+      ).toMatchObject({
+        productId: item.entityId,
+        productQuantity: null,
+        cost: null,
+      });
+      await updateExpense(
+        ctx.db,
+        parseShortcodeFor("expense", original[0]!.shortcode),
+        { productId: null },
+        ctx.actor,
+      );
+      expect(
+        (await lines()).find((row) => row.id === original[0]!.id)
+          ?.productQuantity,
+      ).toBeNull();
+      expect(await coverage()).toMatchObject({
+        booking: "recorded",
+        itemization: "present",
+      });
+      expect((await coverage())?.products).not.toBe("present");
+      expect((await coverage())?.products).not.toBe("not_expected");
+      const usd = structuredClone(input);
+      usd.source = {
+        kind: "vendor_export",
+        externalKey:
+          sourceIdentity === "same source"
+            ? input.source.externalKey
+            : "synthetic:actual-usd-receipt",
+        checksum: "d".repeat(64),
+      };
+      usd.extraction.candidate!.currency = "USD";
+      usd.extraction.candidate!.printedGrandTotal = 61;
+      usd.extraction.candidate!.lines[0]!.amount = 28;
+      delete usd.extraction.candidate!.lines[0]!.quantity;
+      usd.extraction.candidate!.lines[1]!.amount = 28;
+      usd.extraction.candidate!.lines[2]!.quantity = 3;
+      await importVendorOrder(ctx.db, usd, ctx.actor.userId);
+      const findings = await getDb(ctx.db)
+        .select()
+        .from(runFinding)
+        .where(eq(runFinding.entityId, purchaseId));
+      const finding = findings.find(
+        (row) =>
+          storedImportFix.parse(row.proposedFix)?.kind ===
+          "reconcile_source_order",
+      );
+      if (!finding) throw new Error("USD itemization review missing");
+      const resolution = {
+        kind: "replace_lines" as const,
+        expenseIds: [
+          ...original.map((row) => parseShortcodeFor("expense", row.shortcode)),
+          aggregate.output.id,
+        ],
+        lines: candidate.lines.map((_, lineIndex) => {
+          const row = original[lineIndex]!;
+          return {
+            lineIndex,
+            expenseId: parseShortcodeFor("expense", row.shortcode),
+            productId:
+              lineIndex === 0 ? corrected.id : lineIndex < 3 ? item.id : null,
+          };
+        }),
+      };
+      await expect(
+        prepareSourceOrderReconciliation(
+          ctx.db,
+          {
+            id: finding.id,
+            resolution: {
+              ...resolution,
+              expenseIds: [],
+              lines: resolution.lines.map((line) => ({
+                ...line,
+                expenseId: null,
+              })),
+            },
+          },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/foreign item roster/);
+      const review = await prepareSourceOrderReconciliation(
+        ctx.db,
+        { id: finding.id, resolution },
+        ctx.actor,
+      );
+      expect(review.spend).toEqual({ before: 61, after: 61, delta: 0 });
+      await resolveRunFinding(
+        ctx.db,
+        {
+          id: finding.id,
+          action: "apply",
+          reviewedFingerprint: review.reviewedFingerprint,
+        },
+        ctx.actor,
+      );
+      const originalReferences = await getDb(ctx.db)
+        .select()
+        .from(importSourceProduct)
+        .where(eq(importSourceProduct.sourceOrderId, accepted.id));
+      expect(
+        originalReferences
+          .sort((a, b) => a.lineIndex - b.lineIndex)
+          .map((row) => row.expenseId),
+      ).toEqual(original.map((row) => row.id));
+      const [originalSource] = await getDb(ctx.db)
+        .select()
+        .from(importSourceOrder)
+        .where(eq(importSourceOrder.id, accepted.id));
+      expect(originalSource?.originalOrder).toEqual(accepted.originalOrder);
+      expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual(
+        statementBefore,
+      );
+      expect(
+        await getDb(ctx.db).select().from(financialTransactionAllocation),
+      ).toEqual(settlementBefore);
+      const [preservedOrder] = await getDb(ctx.db)
+        .select()
+        .from(purchase)
+        .where(eq(purchase.id, purchaseId));
+      expect(preservedOrder?.date).toBe("2032-02-29");
+      const priced = await lines();
+      expect(priced.map((row) => row.id).sort()).toEqual(
+        original.map((row) => row.id).sort(),
+      );
+      expect(priced.reduce((sum, row) => sum + (row.cost ?? 0), 0)).toBe(61);
+      expect(
+        priced.find((row) => row.id === original[0]!.id)?.productQuantity,
+      ).toBe(2);
+      expect(
+        priced.find((row) => row.id === original[2]!.id)?.productQuantity,
+      ).toBe(3);
+      expect(
+        (
+          await loadProductPricing(ctx.db, [
+            { id: corrected.entityId, price: null },
+          ])
+        ).get(corrected.entityId),
+      ).toMatchObject({ knownUnitCount: 2, derivedPrice: 14 });
+      expect(await coverage()).toMatchObject({
+        booking: "recorded",
+        itemization: "present",
+      });
+      await mergeProducts(
+        ctx.db,
+        { keepId: item.id, mergeIds: [corrected.id] },
+        ctx.actor,
+      );
+      await importVendorOrder(ctx.db, input, ctx.actor.userId);
+      await importVendorOrder(ctx.db, usd, ctx.actor.userId);
+      expect((await lines()).map((row) => row.id).sort()).toEqual(
+        original.map((row) => row.id).sort(),
+      );
+      const mergedHistory = await getProductMovementTimeline(ctx.db, {
+        filters: {},
+        ids: [item.id],
+        order: "asc",
+        pagination: { pageIndex: 0, pageSize: 20 },
+      });
+      expect(
+        mergedHistory.groups.flatMap((group) => group.movements),
+      ).toHaveLength(3);
+      expect(
+        (
+          await loadProductPricing(ctx.db, [{ id: item.entityId, price: null }])
+        ).get(item.entityId),
+      ).toMatchObject({ knownUnitCount: 4, derivedPrice: 14 });
+      expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+    },
+  );
 
   it.each([
     { orderedAt: "2032-02-29", expectedDate: "2032-02-29" },
