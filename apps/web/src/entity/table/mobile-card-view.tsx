@@ -143,8 +143,7 @@ interface SubtitlePart {
  */
 /**
  * The trailing column holds one value; further trailing-slot values would stack
- * the row taller than its one-line projection, so they join the subtitle line
- * after the meta parts.
+ * the row taller than its one-line projection, so they lead the subtitle line.
  */
 const TRAILING_STACK_LIMIT = 1;
 
@@ -152,6 +151,14 @@ function buildSubtitleParts<TItem extends RowData>(
   model: MobileListRowModel<TItem>,
 ): SubtitlePart[] {
   return [
+    // Trailing values were ranked above meta, and this line truncates from its
+    // tail, so they lead rather than clip first.
+    ...model.rightValues.slice(TRAILING_STACK_LIMIT).map((value, index) => ({
+      id: `trailing-overflow-${index}`,
+      value,
+      interactive:
+        model.rightValueInteractive[index + TRAILING_STACK_LIMIT] ?? false,
+    })),
     ...(model.subtitle !== undefined
       ? [{ id: "subtitle", value: model.subtitle }]
       : []),
@@ -159,12 +166,6 @@ function buildSubtitleParts<TItem extends RowData>(
       id,
       value,
       interactive,
-    })),
-    ...model.rightValues.slice(TRAILING_STACK_LIMIT).map((value, index) => ({
-      id: `trailing-overflow-${index}`,
-      value,
-      interactive:
-        model.rightValueInteractive[index + TRAILING_STACK_LIMIT] ?? false,
     })),
   ];
 }
@@ -305,7 +306,7 @@ function RowSubtitle({ parts }: { parts: SubtitlePart[] }) {
   );
 }
 
-/** The mono trailing value, with any extra values stacked below it. */
+/** The row's one trailing value, contained in its column. */
 function RowTrailingValues({ entries }: { entries: TrailingValueEntry[] }) {
   if (entries.length === 0) return null;
   return (

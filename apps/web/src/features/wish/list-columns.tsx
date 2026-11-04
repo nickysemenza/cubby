@@ -149,7 +149,7 @@ export const wishListOverride = defineListOverride<
                 header: "Status",
                 meta: {
                   className: "w-28",
-                  mobile: { slot: "trailing", priority: 10 },
+                  mobile: { slot: "trailing", priority: 20 },
                 },
                 cell: (info) => {
                   const row = info.row.original;
@@ -290,7 +290,8 @@ export const wishListOverride = defineListOverride<
                   numeric: true,
                   // Wide enough for two five-figure amounts plus the en-dash.
                   className: "w-48",
-                  mobile: { slot: "trailing", priority: 20 },
+                  // Money holds the phone row's one trailing slot.
+                  mobile: { slot: "trailing", priority: 10 },
                   explanation: {
                     resolve: (row) =>
                       row.kind === "wish"
