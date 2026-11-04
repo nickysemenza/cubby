@@ -174,15 +174,22 @@ describe("stored connection evidence", () => {
       "synthetic-stale-edge-fingerprint",
     );
     // A newer stale competitor cannot hide the edge's older fresh survivor.
+    const observed = new Set<string>();
     expect(
       (
         await readEntityConnectionsBatch(
           ctx.db,
           [candidate.source],
           [staleNewer.id],
+          (id) => {
+            observed.add(id);
+          },
         )
       )[0]?.map((entry) => entry.review.assessmentId),
     ).toEqual([last.review.assessmentId]);
+    expect(observed).toEqual(
+      new Set([staleNewer.id, last.review.assessmentId]),
+    );
     const newest = await compete(
       "synthetic-newest-fresh-edge",
       last.fingerprint,

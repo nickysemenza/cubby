@@ -291,6 +291,12 @@ Those markers require OLD and NEW key capture; hash collisions or an omitted
 provider/kind discriminator may cause extra preparation but never change canonical
 identity or admission. A missing lookup therefore retains a route for a later
 source insertion instead of becoming a permanent complete zero.
+Image-description input observations retain the Image identity; the existing
+Assessment/Feedback capture owns receipt changes. Connection freshness traversal
+can report each basis it actually visits before comparing fingerprints, including
+stale candidates, so publication can collect inputs without a second capture.
+Skipped competitors produce no observation; this is not proof of a complete
+component dependency set.
 
 ## Cutover preservation
 

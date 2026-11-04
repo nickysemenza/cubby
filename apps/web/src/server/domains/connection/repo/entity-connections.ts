@@ -278,6 +278,11 @@ export async function readEntityConnectionsBatch(
   db: Database,
   raw: readonly EntityRef[],
   reviewIds?: readonly string[],
+  observeBasis?: (
+    id: string,
+    candidate: ConnectionCandidate,
+    basis: z.infer<typeof connectionAssessmentEvidence>["basis"],
+  ) => void,
 ): Promise<ConnectionProposal[][]> {
   const sources = z.array(entityGraphRootSchema).max(250).parse(raw);
   if (!sources.length) return [];
@@ -387,6 +392,12 @@ export async function readEntityConnectionsBatch(
       : liveProposals
     ).map((candidate) => ({ candidate })),
     async ({ candidate: proposal }, basis) => {
+      // A stale result still needs the inputs that could make it current again.
+      observeBasis?.(
+        proposal.review.assessmentId,
+        connectionCandidate.parse(proposal),
+        basis,
+      );
       if (
         (await sha256CanonicalJson({
           version: 1,

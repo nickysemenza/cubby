@@ -820,7 +820,10 @@ export async function readAssessmentReadMemberships(
       ELSE '[]'::jsonb END`.as("retainedRefs"),
       inputRefs: (observeInputs
         ? sql`CASE WHEN ${reviewState.family} = ${assessmentFamily.enum.statement_transaction}
-          THEN ${statementInputRefs()} ELSE NULL::jsonb END`
+          THEN ${statementInputRefs()}
+          WHEN ${reviewAssessment.family} = ${assessmentFamily.enum.image_description}
+          THEN jsonb_build_array(${ref(sql`${entities.image}`, sql`s."recordId"::text`)})
+          ELSE NULL::jsonb END`
         : sql`NULL::jsonb`
       ).as("inputRefs"),
     })
