@@ -61,7 +61,8 @@ import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-reso
 const reviewAssessment = alias(assessment, "a");
 const reviewState = alias(assessmentState, "s");
 
-const entities = z.enum(shortcodeEntities).enum;
+const referenceEntity = z.enum(shortcodeEntities);
+const entities = referenceEntity.enum;
 type DecisionValue = z.infer<ReturnType<typeof z.json>>;
 const ref = (entity: SQL, id: SQL) =>
   sql`jsonb_build_object('entity', (${entity})::text, 'id', (${id})::text)`;
@@ -158,9 +159,7 @@ function fieldReferenceMatch(scope: AssessmentRecordScope) {
   return or(
     ...Object.entries(entityFieldModels).flatMap(([entity, model]) =>
       model.fields.flatMap((field) => {
-        const target = z
-          .enum(shortcodeEntities)
-          .safeParse(field.reference?.entity);
+        const target = referenceEntity.safeParse(field.reference?.entity);
         if (!target.success) return [];
         const match = relatedRecordMatch(
           scope,
@@ -186,9 +185,7 @@ const fieldReferencesFor = (requested?: readonly string[]) => {
   const referenceFields = Object.entries(entityFieldModels).flatMap(
     ([entity, model]) =>
       model.fields.flatMap((field) => {
-        const target = z
-          .enum(shortcodeEntities)
-          .safeParse(field.reference?.entity);
+        const target = referenceEntity.safeParse(field.reference?.entity);
         if (!target.success || (requested && !requested.includes(target.data)))
           return [];
         const values = (value: SQL) =>
