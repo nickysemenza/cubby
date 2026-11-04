@@ -266,6 +266,9 @@ Work’s Needs you view embeds the existing decision, financial-proposal and
 Problems queues with their canonical queries, group actions and affected-record
 navigation. Automatic work retains automatic recovery and ordinary waits;
 persistent Run stalls and Job failure attention follow existing policies.
+The feed keeps measured completion pace separate from finish estimates.
+Scheduled work, retry backoff and member pauses leave time remaining unknown; a recent pace
+does not predict when those waits will end.
 All Work queue executor views remain available at `/work-queue`.
 Work History opens retained Runs and audit changes; it is not a second
 completed-task ledger. Advanced maintenance holds the nightly pass and
