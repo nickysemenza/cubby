@@ -102,6 +102,11 @@ export function HomeKeyNumbers({ asOf }: { asOf: HomeAsOfWindow }) {
     },
   ];
   return (
-    <KeyNumbers layout="strip" label="Household key numbers" items={items} />
+    <KeyNumbers
+      layout="strip"
+      label="Household key numbers"
+      items={items}
+      className="[&>dl]:-ml-3.25"
+    />
   );
 }

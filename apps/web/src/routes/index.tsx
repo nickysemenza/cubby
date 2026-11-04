@@ -2,6 +2,8 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 
 import { createActionFor } from "~/entity/actions/action-items";
+import { CreateDialogAction } from "~/entity/editing/create-dialog-action";
+import { captureRequest } from "~/entity/editing/editor-requests";
 import { Page } from "~/entity/page/page";
 import { getHomeAsOfWindow } from "~/features/home/home-as-of-window";
 import { HomeKeyNumbers } from "~/features/home/home-key-numbers";
@@ -107,12 +109,9 @@ function Home() {
               </Button>
             )}
             {NEW_TASK && (
-              <Button
-                nativeButton={false}
-                render={<Link to={NEW_TASK.to} search={NEW_TASK.search} />}
-              >
+              <CreateDialogAction request={captureRequest("task")}>
                 New task
-              </Button>
+              </CreateDialogAction>
             )}
           </>
         }

@@ -26,6 +26,7 @@ import {
   RecordSuggestionBoundary,
 } from "~/entity/suggestions/record-suggestions";
 import { cn } from "~/lib/utils";
+import { DenseCellContext } from "~/ui/common/stacked-value";
 import { useDebug } from "~/ui/hooks/use-debug";
 import {
   type LongPressHandlers,
@@ -141,16 +142,23 @@ interface SubtitlePart {
  * the canvas has one truncated identity line, not a stacked spec grid.
  */
 /**
- * The trailing column holds one mono value (plus any Badge-shaped extras a
- * column renders); further trailing-slot values would stack the row taller
- * than its 64px, so they join the subtitle line after the meta parts.
+ * The trailing column holds one value; further trailing-slot values would stack
+ * the row taller than its one-line projection, so they lead the subtitle line.
  */
-const TRAILING_STACK_LIMIT = 2;
+const TRAILING_STACK_LIMIT = 1;
 
 function buildSubtitleParts<TItem extends RowData>(
   model: MobileListRowModel<TItem>,
 ): SubtitlePart[] {
   return [
+    // Trailing values were ranked above meta, and this line truncates from its
+    // tail, so they lead rather than clip first.
+    ...model.rightValues.slice(TRAILING_STACK_LIMIT).map((value, index) => ({
+      id: `trailing-overflow-${index}`,
+      value,
+      interactive:
+        model.rightValueInteractive[index + TRAILING_STACK_LIMIT] ?? false,
+    })),
     ...(model.subtitle !== undefined
       ? [{ id: "subtitle", value: model.subtitle }]
       : []),
@@ -158,12 +166,6 @@ function buildSubtitleParts<TItem extends RowData>(
       id,
       value,
       interactive,
-    })),
-    ...model.rightValues.slice(TRAILING_STACK_LIMIT).map((value, index) => ({
-      id: `trailing-overflow-${index}`,
-      value,
-      interactive:
-        model.rightValueInteractive[index + TRAILING_STACK_LIMIT] ?? false,
     })),
   ];
 }
@@ -207,7 +209,7 @@ function buildGridTemplateColumns({
   return [
     selectionMode || showThumb ? "2.75rem" : null,
     "minmax(0,1fr)",
-    "auto",
+    "minmax(0,auto)",
     hasRowActions ? "auto" : null,
   ]
     .filter(Boolean)
@@ -293,7 +295,10 @@ function RowSubtitle({ parts }: { parts: SubtitlePart[] }) {
                 ),
             )}
           >
-            {part.value}
+            {/* Dense: a record pill holds one line instead of wrapping the row. */}
+            <DenseCellContext.Provider value={{ linksTo: null }}>
+              {part.value}
+            </DenseCellContext.Provider>
           </span>
         </Fragment>
       ))}
@@ -301,26 +306,31 @@ function RowSubtitle({ parts }: { parts: SubtitlePart[] }) {
   );
 }
 
-/** The mono trailing value, with any extra values stacked below it. */
+/** The row's one trailing value, contained in its column. */
 function RowTrailingValues({ entries }: { entries: TrailingValueEntry[] }) {
   if (entries.length === 0) return null;
   return (
-    <span className="flex max-w-36 shrink-0 flex-col items-end gap-1 overflow-hidden text-right">
+    <span className="flex max-w-28 min-w-0 shrink flex-col items-end gap-1 overflow-hidden text-right">
       {entries.map(({ key, value, interactive, isPrimary }) => (
         <span
           key={key}
           className={cn(
+            "max-w-full overflow-hidden",
             isPrimary
               ? "text-sm text-foreground tabular-nums"
               : "text-xs text-muted-foreground",
             interactive &&
               cn(
-                "relative z-[1] -my-1 flex min-h-11 min-w-0 items-center justify-end",
+                "relative z-[1] -my-1 flex min-h-11 max-w-full min-w-0 items-center justify-end [&_[data-entity-pill]]:max-w-full",
                 TOUCH_TRIGGER_CLASS,
               ),
           )}
         >
-          {value}
+          {/* Dense so a record pill truncates inside the column instead of
+              overflowing its start edge. */}
+          <DenseCellContext.Provider value={{ linksTo: null }}>
+            {value}
+          </DenseCellContext.Provider>
         </span>
       ))}
     </span>
@@ -353,9 +363,9 @@ function RowContent<TItem extends RowData>({
   rowActions?: ReactNode;
   children?: ReactNode;
 }) {
-  // Two lines, not one: a 375px row keeps a price cell and the `…` menu at the
-  // trailing edge, so a single truncated line clips most names at ~14 chars.
-  const titleClass = "line-clamp-2 text-sm/5 break-words";
+  // One line: the full name is a tap away, and vertical space is what a phone
+  // list is short of.
+  const titleClass = "block truncate text-sm/5";
   return (
     <>
       <RowLeading
@@ -364,7 +374,7 @@ function RowContent<TItem extends RowData>({
         thumb={thumb}
         row={row}
       />
-      <span className="min-w-0">
+      <span className="flex min-w-0 flex-col">
         {href ? (
           // Stretched link: the `<a>` is the title alone (so its accessible
           // name is the record's name) and its ::after covers the row, which

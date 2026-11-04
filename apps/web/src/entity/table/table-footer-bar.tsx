@@ -150,7 +150,7 @@ export function TableFooterBar<TItem extends RowData>({
       className="flex min-h-(--table-row-height) shrink-0 items-center gap-x-3 overflow-hidden border-t border-[var(--border)] bg-background px-2 text-xs whitespace-nowrap text-muted-foreground tabular-nums"
     >
       <div
-        data-table-pending={pending || loading ? "" : undefined}
+        data-table-pending={pending || loading || failed ? "" : undefined}
         className="flex min-w-0 items-center gap-x-3"
       >
         <output className="font-medium text-foreground">

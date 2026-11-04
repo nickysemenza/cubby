@@ -165,7 +165,11 @@ export function useDeleteEntityAction(
           if (!open) finish(false);
         }}
         onSubmit={async () => {
-          const execution = await commands.remove([staged.id]);
+          // One toast follows the delete from pending to its result.
+          const toastId = toast.loading(`Deleting ${label}…`);
+          const execution = await commands
+            .remove([staged.id])
+            .finally(() => toast.dismiss(toastId));
           if (!execution.ok) {
             setFailures(
               execution.issues.length > 0
