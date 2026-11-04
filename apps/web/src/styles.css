@@ -569,10 +569,6 @@
     background: var(--table-row-surface);
     box-shadow: none;
   }
-  /* The keyboard outruns motion: J/K must never retarget a color transition. */
-  .table-record-row {
-    transition: none;
-  }
   .table-record-row[data-current="true"] {
     --table-row-surface: var(--row-current);
     background: var(--table-row-surface);
@@ -735,28 +731,4 @@
   --brand-web-radius-control: 8px;
   --brand-web-radius-panel: 12px;
   --brand-web-radius-chip: 6px;
-}
-
-/* Route crossfade: the outgoing page leaves first and the sidebar holds still. */
-html:active-view-transition-type(route)::view-transition-old(root) {
-  animation: route-out var(--brand-motion-exit) var(--brand-ease-cozy) both;
-}
-html:active-view-transition-type(route)::view-transition-new(root) {
-  animation: route-in var(--brand-motion-fast) var(--brand-ease-cozy) both;
-}
-html:active-view-transition-type(route)::view-transition-group(app-rail) {
-  animation: none;
-}
-[data-app-rail] {
-  view-transition-name: app-rail;
-}
-@keyframes route-out {
-  to {
-    opacity: 0;
-  }
-}
-@keyframes route-in {
-  from {
-    opacity: 0;
-  }
 }

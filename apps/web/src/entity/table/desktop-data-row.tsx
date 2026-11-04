@@ -358,6 +358,8 @@ function DesktopDataRowInner<TItem extends RowData>({
       className={cn(
         rowClassName,
         "table-record-row",
+        // The keyboard outruns motion: J/K never retargets a color transition.
+        "transition-none",
         onRowClick && "cursor-pointer",
         isFocused && "ring-2 ring-primary/30 ring-inset",
       )}
