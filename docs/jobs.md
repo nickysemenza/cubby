@@ -891,7 +891,9 @@ maintenance (`tab=needs-you|now|history|maintenance`). Legacy Activity links
 with queue filters open Now; audit filters open History. Needs you reuses the
 canonical Work queue and Run/Job attention predicates. It does not add an
 alert engine or change retry policy. Normal retries, waits and dependencies
-remain in Now. Existing Work queue views remain usable.
+remain in Now. Field refresh explanations and the shell backlog link explicitly
+select Now before targeting its Derived values section. Existing Work queue views
+remain usable.
 
 `RUN_KINDS` owns Run purpose, triggers, effects and declared steps.
 `JOB_KIND_POLICY` in `packages/schemas/src/job.ts` co-locates each Job kind’s
