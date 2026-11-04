@@ -3,7 +3,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import {
+  assessment,
   assessmentState,
   entityAttachment,
   feedback,
@@ -654,7 +655,7 @@ describe("product match review surfaces", () => {
       actionable: true,
       conflict: true,
     });
-    await publishDetected([anchor, weak!], {
+    const weakPublication = await publishDetected([anchor, weak!], {
       evidence: "Synthetic similar titles only",
       actionable: false,
       conflict: false,
@@ -705,6 +706,29 @@ describe("product match review surfaces", () => {
       contradictions: [],
       unknowns: [expect.stringMatching(/^Not actionable/)],
     });
+    // PostgreSQL accepts braced UUID input, but the historical text join did not.
+    await getDb(ctx.db)
+      .update(assessment)
+      .set({
+        subject: sql`jsonb_set(${assessment.subject}, '{otherId}', to_jsonb('{' || (${assessment.subject}->>'otherId') || '}'))`,
+      })
+      .where(eq(assessment.id, weakPublication.id));
+    const [primary] = await getDb(ctx.db)
+      .select({ recordId: assessmentState.recordId })
+      .from(assessmentState)
+      .where(eq(assessmentState.id, weakPublication.id));
+    const primaryProduct = [anchor, weak!].find(
+      (row) => row.entityId === primary?.recordId,
+    );
+    if (!primaryProduct) throw new Error("Synthetic primary Product missing");
+    expect(
+      (
+        await readEntityConnections(ctx.db, {
+          entityKind: "product",
+          entityId: primaryProduct.id,
+        })
+      ).map((proposal) => proposal.review.assessmentId),
+    ).not.toContain(weakPublication.id);
   });
 
   it("suggests the better-identified Product as keeper when neither side was purchased", async () => {

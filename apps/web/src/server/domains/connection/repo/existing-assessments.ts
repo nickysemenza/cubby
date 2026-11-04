@@ -11,12 +11,12 @@ import {
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
 import { PRODUCT_PAIR_NOT_ACTIONABLE } from "@cubby/schemas/recommendations";
-import { and, eq, inArray, notExists, sql } from "drizzle-orm";
+import { and, eq, inArray, notExists, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
 import {
   assessment,
   assessmentState,
@@ -102,76 +102,128 @@ export async function readExistingConnectionAssessments(
   const sourceIds = sql`SELECT source_entity."id" FROM "Entity" source_entity
     WHERE source_entity."shortcode" IN (${codes})
       AND ${inArray(sql`source_entity."kind" || ':' || source_entity."shortcode"`, keys)}`;
-  const rows = await getDb(db)
-    .select({
-      prediction: {
-        id: assessment.id,
-        family: assessment.family,
-        subject: assessment.subject,
-        judgment: assessment.judgment,
-        producer: assessment.producer,
-        fingerprint: assessment.fingerprint,
-        evidence: sql<unknown>`CASE WHEN ${assessment.family} = ${"product_pair"} THEN ${assessment.evidence} ELSE NULL END`,
-      },
-      state: { entity: assessmentState.entity, field: assessmentState.field },
-      connectionEvidence: connectionReadEvidenceSql(
-        sql`${assessmentState.data}->'connectionEvidence'`,
-      ),
-      sourceKind: from.kind,
-      sourceCode: from.shortcode,
-      targetKind: to.kind,
-      targetCode: to.shortcode,
-    })
-    .from(assessment)
-    .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
-    .innerJoin(
-      from,
-      and(
-        eq(from.id, assessmentState.recordId),
-        eq(from.kind, assessmentState.entity),
-        notDeleted(from),
-        sql`${from.mergedIntoId} IS NULL`,
-      ),
-    )
-    .innerJoin(
-      to,
-      and(
-        notDeleted(to),
-        sql`${to.mergedIntoId} IS NULL`,
-        sql`CASE ${assessment.family}
-      WHEN ${"field"} THEN ${to.shortcode}=(${assessmentState.suggestedValue} #>> '{}')
-      ELSE ${assessment.family} IN (${pairFamilyList}) AND ${to.id}::text=${assessment.subject}->>'otherId' END`,
-      ),
-    )
-    .where(
-      and(
-        eq(assessment.served, true),
-        eq(assessmentState.active, true),
-        eq(assessmentState.status, "pending"),
-        inArray(assessment.family, ["field", ...entityPairAssessmentFamilies]),
-        // Implied by the endpoint keys below, but sargable on the Assessment
-        // side: without it every pending state joined Entity before the keys
-        // could reject it.
-        sql`(${assessmentState.recordId} IN (${sourceIds})
-          OR (${assessment.family} = ${"field"} AND ${assessmentState.suggestedValue} #>> '{}' IN (${codes}))
-          OR (${assessment.family} IN (${pairFamilyList}) AND ${assessment.subject}->>'otherId' IN (SELECT source_id::text FROM (${sourceIds}) source_ids(source_id))))`,
-        sql`(${inArray(sql`${from.kind} || ':' || ${from.shortcode}`, keys)} OR ${inArray(sql`${to.kind} || ':' || ${to.shortcode}`, keys)})`,
-        notExists(
-          getDb(db)
-            .select({ id: feedback.id })
-            .from(feedback)
-            .where(
-              and(
-                eq(feedback.assessmentId, assessment.id),
-                eq(feedback.authority, "member"),
-                inArray(feedback.verdict, ["wrong", "dismissed"]),
-              ),
-            ),
+  const idsFor = (families: "all" | "field" | "pair", match: SQL) =>
+    getDb(db)
+      .select({ id: assessment.id })
+      .from(assessment)
+      .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+      .where(
+        and(
+          eq(assessment.served, true),
+          eq(assessmentState.active, true),
+          eq(assessmentState.status, "pending"),
+          families === "all"
+            ? inArray(assessment.family, [
+                "field",
+                ...entityPairAssessmentFamilies,
+              ])
+            : families === "field"
+              ? eq(assessment.family, "field")
+              : inArray(assessment.family, entityPairAssessmentFamilies),
+          match,
         ),
-        sql`NOT EXISTS (SELECT 1 FROM "AssessmentState" suppressed WHERE suppressed.active AND suppressed.entity=${assessmentState.entity} AND suppressed."recordId"=${assessmentState.recordId} AND suppressed.suppression IS NOT NULL AND suppressed.suppression->>'candidateKey'=CASE WHEN ${assessment.family} IN (${pairFamilyList}) THEN (${assessment.subject}->>'recordId') || '|' || (${assessment.subject}->>'otherId') ELSE '' END)`,
+      );
+  // Union only identities: wide evidence and endpoint joins follow this barrier.
+  const matched = await idsFor(
+    "all",
+    sql`
+    ${inArray(assessmentState.entity, [...new Set(sources.map((source) => source.entityKind))])}
+    AND ${assessmentState.recordId} IN (${sourceIds})`,
+  )
+    .union(
+      idsFor(
+        "field",
+        sql`${assessmentState.suggestedValue} #>> '{}' IN (${codes})`,
       ),
     )
-    .orderBy(assessment.createdAt, assessment.id);
+    .union(
+      idsFor(
+        "pair",
+        sql`${assessment.subject}->>'otherId' IN (SELECT source_id::text FROM (${sourceIds}) source_ids(source_id))`,
+      ),
+    );
+  if (!matched.length) return sources.map(() => []);
+  // The old text equality admitted only canonical lower-case UUID spellings.
+  // Guard the native lookup so malformed or differently spelled history stays unmatched.
+  const otherId = sql`${assessment.subject}->>'otherId'`;
+  const pairTargetId = sql`CASE WHEN ${otherId} ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    THEN (${otherId})::uuid END`;
+  const rowsFor = (family: "field" | "pair") =>
+    getDb(db)
+      .select({
+        prediction: {
+          id: assessment.id,
+          family: assessment.family,
+          subject: assessment.subject,
+          judgment: assessment.judgment,
+          producer: assessment.producer,
+          fingerprint: assessment.fingerprint,
+          evidence: sql<unknown>`CASE WHEN ${assessment.family} = ${"product_pair"} THEN ${assessment.evidence} ELSE NULL END`,
+        },
+        state: { entity: assessmentState.entity, field: assessmentState.field },
+        connectionEvidence: connectionReadEvidenceSql(
+          sql`${assessmentState.data}->'connectionEvidence'`,
+        ),
+        sourceKind: from.kind,
+        sourceCode: from.shortcode,
+        targetKind: to.kind,
+        targetCode: to.shortcode,
+        connectionOrderCreatedAt: sql`${assessment.createdAt}`.as(
+          "connectionOrderCreatedAt",
+        ),
+      })
+      .from(assessment)
+      .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+      .innerJoin(
+        from,
+        and(
+          eq(from.id, assessmentState.recordId),
+          eq(from.kind, assessmentState.entity),
+          notDeleted(from),
+          sql`${from.mergedIntoId} IS NULL`,
+        ),
+      )
+      .innerJoin(
+        to,
+        and(
+          notDeleted(to),
+          sql`${to.mergedIntoId} IS NULL`,
+          family === "field"
+            ? eq(to.shortcode, sql`${assessmentState.suggestedValue} #>> '{}'`)
+            : eq(to.id, pairTargetId),
+        ),
+      )
+      .where(
+        and(
+          eq(assessment.served, true),
+          eq(assessmentState.active, true),
+          eq(assessmentState.status, "pending"),
+          family === "field"
+            ? eq(assessment.family, "field")
+            : inArray(assessment.family, entityPairAssessmentFamilies),
+          sql`${assessment.id} = ANY(${uuidArrayParam(matched.map((row) => row.id))})`,
+          sql`(${inArray(sql`${from.kind} || ':' || ${from.shortcode}`, keys)} OR ${inArray(sql`${to.kind} || ':' || ${to.shortcode}`, keys)})`,
+          notExists(
+            getDb(db)
+              .select({ id: feedback.id })
+              .from(feedback)
+              .where(
+                and(
+                  eq(feedback.assessmentId, assessment.id),
+                  eq(feedback.authority, "member"),
+                  inArray(feedback.verdict, ["wrong", "dismissed"]),
+                ),
+              ),
+          ),
+          sql`NOT EXISTS (SELECT 1 FROM "AssessmentState" suppressed WHERE suppressed.active AND suppressed.entity=${assessmentState.entity} AND suppressed."recordId"=${assessmentState.recordId} AND suppressed.suppression IS NOT NULL AND suppressed.suppression->>'candidateKey'=CASE WHEN ${assessment.family} IN (${pairFamilyList}) THEN (${assessment.subject}->>'recordId') || '|' || (${assessment.subject}->>'otherId') ELSE '' END)`,
+        ),
+      );
+  const rows = await rowsFor("field")
+    .unionAll(rowsFor("pair"))
+    .orderBy(
+      sql`${sql.identifier("connectionOrderCreatedAt")}`,
+      sql`${sql.identifier("id")}`,
+    );
   const proposals = rows.flatMap((row) => {
     const { prediction, state } = row;
     let relation: ConnectionRelation | undefined;

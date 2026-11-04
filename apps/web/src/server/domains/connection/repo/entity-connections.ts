@@ -13,7 +13,6 @@ import {
 import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, notExists, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -47,7 +46,10 @@ import {
   resolveShortcodes,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { canonicalJson } from "~/server/lib/canonical-json";
+import {
+  canonicalJson,
+  sha256CanonicalJson,
+} from "~/server/lib/canonical-json";
 
 import {
   acquisitionPairKey,
@@ -155,7 +157,7 @@ export async function publishPreparedEntityConnections(
         candidate,
         basis,
       });
-      const fingerprint = await sha256Hex(canonicalJson(evidence));
+      const fingerprint = await sha256CanonicalJson(evidence);
       const candidateKey = await keyFor(candidate);
       const scope = scopeFor(candidate);
       const entity = z
@@ -408,13 +410,11 @@ export async function readEntityConnectionsBatch(
     liveProposals.map((candidate) => ({ candidate })),
     async ({ candidate: proposal }, basis) => {
       if (
-        (await sha256Hex(
-          canonicalJson({
-            version: 1,
-            candidate: connectionCandidate.parse(proposal),
-            basis,
-          }),
-        )) === proposal.fingerprint
+        (await sha256CanonicalJson({
+          version: 1,
+          candidate: connectionCandidate.parse(proposal),
+          basis,
+        })) === proposal.fingerprint
       )
         fresh.push(proposal);
     },
@@ -521,7 +521,7 @@ export async function applyEntityConnection(
     if (
       !input.expectedFingerprint ||
       input.expectedFingerprint !== prediction.fingerprint ||
-      (await sha256Hex(canonicalJson({ ...evidence, basis }))) !==
+      (await sha256CanonicalJson({ ...evidence, basis })) !==
         prediction.fingerprint
     )
       throw new Error(
