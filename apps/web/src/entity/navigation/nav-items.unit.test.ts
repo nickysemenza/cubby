@@ -34,6 +34,7 @@ const contextualRoutes = new Set([
   "/account/connected-apps",
   "/activities",
   "/records",
+  "/work-queue",
 ]);
 
 describe("workspace navigation contract", () => {
