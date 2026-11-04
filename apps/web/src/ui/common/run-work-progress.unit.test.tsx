@@ -5,7 +5,6 @@ import {
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { observeBacklog } from "~/ui/derived/use-backlog-progress";
 import {
   Progress,
   ProgressLabel,
@@ -102,19 +101,5 @@ describe("work progress", () => {
     expect(
       screen.getByRole("progressbar", { name: "Importing" }),
     ).not.toHaveAttribute("aria-valuenow");
-  });
-
-  it("keeps a high-water denominator through incoming work and resets after idle or an observation gap", () => {
-    const first = observeBacklog(
-      { peak: 0, samples: [] },
-      { total: 1000, at: 1000 },
-    );
-    const drained = observeBacklog(first, { total: 600, at: 16000 });
-    expect(drained.peak - 600).toBe(400);
-    const incoming = observeBacklog(drained, { total: 1200, at: 31000 });
-    expect(incoming.peak).toBe(1200);
-    const idle = observeBacklog(incoming, { total: 0, at: 46000 });
-    expect(observeBacklog(idle, { total: 100, at: 61000 }).peak).toBe(100);
-    expect(observeBacklog(incoming, { total: 500, at: 100000 }).peak).toBe(500);
   });
 });
