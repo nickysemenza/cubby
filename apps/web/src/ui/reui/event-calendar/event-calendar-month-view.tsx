@@ -305,7 +305,7 @@ function EventCalendarMonthWeek({
         .filter((bar) => !ongoing.includes(bar))
         .map((bar) => bar.lane ?? 0),
     ),
-  ].toSorted((a, b) => a - b);
+  ].sort((a, b) => a - b);
   const bars =
     ongoing.length === 0
       ? weekBars

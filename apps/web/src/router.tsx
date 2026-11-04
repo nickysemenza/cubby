@@ -20,6 +20,13 @@ import { RouteNotFound } from "~/ui/feedback/route-not-found";
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 import { routeTree } from "./routeTree.gen";
 
+function supportsRouteTransitions() {
+  return (
+    typeof CSS !== "undefined" &&
+    CSS.supports("selector(:active-view-transition-type(route))")
+  );
+}
+
 export const getRouter = () => {
   const rqContext = TanstackQuery.getContext();
 
@@ -46,6 +53,18 @@ export const getRouter = () => {
     defaultPendingComponent: RoutePending,
     defaultPendingMs: 350,
     defaultPendingMinMs: 150,
+    // Pathname changes crossfade; search-param changes never do, because a
+    // view transition freezes paint while list filters and sorts commit.
+    // Without type support the router falls back to an untyped transition on
+    // every navigation, so those browsers get none.
+    defaultViewTransition: supportsRouteTransitions()
+      ? {
+          types: ({ pathChanged }) =>
+            pathChanged && !document.documentElement.dataset.nativeWorkspace
+              ? ["route"]
+              : false,
+        }
+      : false,
   });
 
   // Initialize Sentry on client only. Dev keeps error reporting but drops
