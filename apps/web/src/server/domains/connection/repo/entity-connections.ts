@@ -18,7 +18,11 @@ import { and, eq, inArray, notExists, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import {
+  getDb,
+  uuidArrayParam,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import {
   assessment,
   assessmentState,
@@ -267,6 +271,7 @@ const connectionReadSelection = {
 export async function readEntityConnectionsBatch(
   db: Database,
   raw: readonly EntityRef[],
+  reviewIds?: readonly string[],
 ): Promise<ConnectionProposal[][]> {
   const sources = z.array(entityGraphRootSchema).max(250).parse(raw);
   if (!sources.length) return [];
@@ -284,6 +289,22 @@ export async function readEntityConnectionsBatch(
         eq(assessmentState.active, true),
         eq(assessmentState.status, "pending"),
         sql`${assessment.subject}->>'scope' LIKE 'connection.%'`,
+        // Retain every competitor on a selected edge: filtering by review ID
+        // alone could resurrect a proposal replaced by the reader's deduplication.
+        reviewIds
+          ? sql`EXISTS (SELECT 1 FROM "Assessment" selected
+              WHERE selected.id = ANY(${uuidArrayParam(reviewIds)})
+              AND (${assessment.evidence}#>>'{candidate,relation}',
+                ${assessment.evidence}#>>'{candidate,source,entityKind}',
+                ${assessment.evidence}#>>'{candidate,source,entityId}',
+                ${assessment.evidence}#>>'{candidate,target,entityKind}',
+                ${assessment.evidence}#>>'{candidate,target,entityId}') =
+              (selected.evidence#>>'{candidate,relation}',
+                selected.evidence#>>'{candidate,source,entityKind}',
+                selected.evidence#>>'{candidate,source,entityId}',
+                selected.evidence#>>'{candidate,target,entityKind}',
+                selected.evidence#>>'{candidate,target,entityId}'))`
+          : undefined,
         sql`(${inArray(sql`(${assessment.evidence}->'candidate'->${"source"}->>'entityKind') || ':' || (${assessment.evidence}->'candidate'->${"source"}->>'entityId')`, keys)} OR ${inArray(sql`(${assessment.evidence}->'candidate'->${"target"}->>'entityKind') || ':' || (${assessment.evidence}->'candidate'->${"target"}->>'entityId')`, keys)})`,
         notExists(
           getDb(db)
