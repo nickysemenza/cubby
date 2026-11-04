@@ -170,7 +170,9 @@ function renderDefaultInspector({
   onClose,
 }: EntityPreviewRendererProps) {
   return (
+    // Keyed so stepping to another record never shows the previous name.
     <EntityWorkbenchInspector
+      key={`${preview.entityKind}:${preview.id}`}
       entity={preview.entityKind}
       id={preview.id}
       onClose={onClose}

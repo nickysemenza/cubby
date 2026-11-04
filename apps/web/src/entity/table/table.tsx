@@ -965,6 +965,7 @@ export default function RTable<TItem extends RowData>(
 function DesktopTableView<TItem extends RowData>({
   table,
   isLoading,
+  error,
   controller,
   entity,
   embedded = false,
@@ -988,6 +989,7 @@ function DesktopTableView<TItem extends RowData>({
   RTableProps<TItem>,
   | "table"
   | "isLoading"
+  | "error"
   | "entity"
   | "embedded"
   | "desktopInspector"
@@ -1133,6 +1135,7 @@ function DesktopTableView<TItem extends RowData>({
               noun={noun}
               pending={isTransitioning}
               loading={Boolean(isLoading)}
+              failed={Boolean(error)}
               declaresTotals={declaresTotals}
               emptyColumns={emptyColumns}
               onRevealEmpty={revealEmptyColumns}
@@ -1690,6 +1693,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
               <DesktopTableView
                 table={table}
                 isLoading={isLoading || !hydrated}
+                error={error}
                 controller={controller}
                 entity={entity}
                 embedded={embedded}

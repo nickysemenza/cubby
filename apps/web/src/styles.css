@@ -214,6 +214,10 @@
   /* Geometry for phones, coarse pointers and hosted native workspaces. */
   --table-row-height: 32px;
   --table-header-height: 32px;
+  --table-cell-leading: 1.25rem;
+  --table-checkbox-size: 1rem;
+  --table-checkbox-glyph: 0.875rem;
+  --table-section-surface: var(--card);
   --nav-row-height: 28px;
   --pill-height: 20px;
   --pill-font-size: var(--text-2xs);
@@ -707,6 +711,10 @@
     --text-xl--line-height: 1.25rem;
     --table-row-height: 24px;
     --table-header-height: 24px;
+    --table-cell-leading: 1rem;
+    --table-checkbox-size: 0.875rem;
+    --table-checkbox-glyph: 0.75rem;
+    --table-section-surface: var(--muted);
     --nav-row-height: 22px;
     --pill-height: 18px;
     --pill-font-size: var(--text-11);

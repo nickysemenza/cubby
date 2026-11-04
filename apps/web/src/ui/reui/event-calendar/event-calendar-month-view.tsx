@@ -347,7 +347,11 @@ function EventCalendarMonthWeek({
   const reservedLanesFor = (col: number) =>
     visibleBars.reduce(
       (max, b) => (covers(b, offsets[col]!) ? Math.max(max, (b.lane ?? 0) + 1) : max),
-      ongoing.length > 0 ? 1 : 0,
+      ongoingColumns.length > 0 &&
+        col >= Math.min(...ongoingColumns) &&
+        col < Math.max(...ongoingColumns)
+        ? 1
+        : 0,
     );
   const reservedHeight = (lanes: number) =>
     lanes === 0
@@ -445,7 +449,7 @@ function EventCalendarMonthWeek({
     : null;
   const ghostLane = dragGhost
     ? (bars.find((b) => b.occurrence.key === dragGhost.occurrence.key)?.lane ??
-      0)
+      (ongoing.length > 0 ? 1 : 0))
     : 0;
   // A single-day timed MOVE is indicated INLINE in the target cell (a
   // placeholder at the time-sorted position, rendered by EventCalendarMonthCell)

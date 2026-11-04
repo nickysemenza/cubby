@@ -20,6 +20,16 @@ function rowHeight() {
     ),
   );
   measuredRowHeight = parsed > 0 ? parsed : SSR_ROW_HEIGHT;
+  // A window can cross the density breakpoint; the next read measures again.
+  window
+    .matchMedia("(min-width: 48rem) and (hover: hover) and (pointer: fine)")
+    .addEventListener(
+      "change",
+      () => {
+        measuredRowHeight = undefined;
+      },
+      { once: true },
+    );
   return measuredRowHeight;
 }
 
@@ -27,7 +37,8 @@ export const ROW_DENSITY = {
   get rowHeight() {
     return rowHeight();
   },
-  cellClass: "h-(--table-row-height) px-1 py-0 text-sm leading-4",
+  cellClass:
+    "h-(--table-row-height) px-1 py-0 text-sm leading-(--table-cell-leading)",
   rowClass: "h-(--table-row-height)",
   cellContentClass:
     "flex h-(--table-row-height) flex-col justify-center overflow-hidden",

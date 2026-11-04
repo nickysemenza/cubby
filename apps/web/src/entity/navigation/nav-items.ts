@@ -53,7 +53,6 @@ export type NavGroup = {
   icon: Icon;
   children: NavItem[];
   domain: WayfindingDomain | null;
-  defaultFolded: boolean;
   to?: LinkProps["to"];
 };
 
@@ -103,7 +102,6 @@ export const sidebarSections: NavGroup[] = SIDEBAR_SECTIONS.map((section) => ({
   id: section.id,
   label: section.label,
   domain: section.domain,
-  defaultFolded: section.defaultFolded,
   icon: sectionIcons[section.id],
   children: section.destinations.map((destination): NavItem => ({
     to: destination.route,

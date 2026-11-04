@@ -118,7 +118,7 @@ function ArrivalFade({ site }: { site: RefObject<FallbackSite | null> }) {
       return;
     for (const child of arrived.parent.children)
       if (!arrived.siblings.has(child))
-        child.animate([{ opacity: 0 }, { opacity: 1 }], {
+        child.animate?.([{ opacity: 0 }, { opacity: 1 }], {
           duration: 120,
           easing: "cubic-bezier(0.2, 0, 0, 1)",
         });

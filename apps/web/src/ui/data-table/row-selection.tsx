@@ -26,8 +26,9 @@ export function reconcileRowSelection(
   return changed ? next : current;
 }
 
-/** 14px at 24px rows; the primitive's `after:` inset keeps the hit target. */
-const TABLE_CHECKBOX_CLASS = "size-3.5 [&_svg]:size-3!";
+/** Tracks the row density; the primitive's `after:` inset keeps the hit target. */
+const TABLE_CHECKBOX_CLASS =
+  "size-(--table-checkbox-size) [&_svg]:size-(--table-checkbox-glyph)!";
 
 function SelectColumnHeader<T extends RowData>({
   table,

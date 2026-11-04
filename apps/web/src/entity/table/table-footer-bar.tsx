@@ -100,6 +100,7 @@ export function TableFooterBar<TItem extends RowData>({
   noun,
   pending,
   loading,
+  failed,
   declaresTotals = false,
   children,
   emptyColumns,
@@ -114,6 +115,8 @@ export function TableFooterBar<TItem extends RowData>({
   pending: boolean;
   /** No rows have answered yet, so "0" would be a claim the list cannot make. */
   loading: boolean;
+  /** The read failed: an empty result here is not a count of zero. */
+  failed: boolean;
   /** The list prints its own totals, so column sums would only repeat them. */
   declaresTotals?: boolean;
   /** The list's own totals and status (`ListFooterContent`). */
@@ -140,7 +143,7 @@ export function TableFooterBar<TItem extends RowData>({
     noun,
   });
   const shownCount = useRef<string | null>(null);
-  if (!loading) shownCount.current = count;
+  if (!loading && !failed) shownCount.current = count;
   return (
     <div
       data-table-footer=""

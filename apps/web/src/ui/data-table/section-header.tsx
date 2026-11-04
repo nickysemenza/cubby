@@ -75,7 +75,7 @@ export function SectionHeader({
     <div
       data-slot="list-section-header"
       className={cn(
-        "group/section relative flex h-11 items-center gap-2 border-b border-hairline-soft bg-card px-2 md:h-(--table-row-height) md:bg-muted",
+        "group/section relative flex h-11 items-center gap-2 border-b border-hairline-soft bg-card px-2 md:h-(--table-row-height) md:bg-(--table-section-surface)",
         className,
       )}
     >
@@ -95,7 +95,7 @@ export function SectionHeader({
       <div
         // The label stays readable on a horizontally scrolled table: the band
         // spans every column, and the sticky run parks at the pane's edge.
-        className="sticky left-2 z-10 flex min-w-0 items-center gap-2 bg-card md:bg-muted"
+        className="sticky left-2 z-10 flex min-w-0 items-center gap-2 bg-card md:bg-(--table-section-surface)"
         style={{ paddingInlineStart: `${depth * 12}px` }}
       >
         <h3 aria-label={title} className="min-w-0 truncate text-sm font-medium">
@@ -137,7 +137,7 @@ export function SectionHeader({
         ))}
       </div>
       {onFilter || onHide || actions ? (
-        <div className="sticky right-2 z-10 ml-auto flex items-center gap-0.5 bg-card md:bg-muted">
+        <div className="sticky right-2 z-10 ml-auto flex items-center gap-0.5 bg-card md:bg-(--table-section-surface)">
           {onFilter ? (
             <button type="button" onClick={onFilter} className={ACTION_CLASS}>
               <FunnelIcon aria-hidden className="size-3.5" />

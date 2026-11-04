@@ -1,6 +1,8 @@
+import { relationshipSources } from "@cubby/schemas/connected-views";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { onDetailSurface } from "@cubby/schemas/entity-detail-summary";
 import { type EntityFieldModel } from "@cubby/schemas/entity-fields";
+import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { isGalleryEntity } from "@cubby/schemas/entity-roster";
 import { fieldEnvelopeFor } from "@cubby/schemas/field-envelope";
@@ -393,6 +395,30 @@ function declaredSections<E extends GenericDetailEntity>(
  * can fold without mounting a table each. Only a loaded branch is a count: an
  * unanswered key or a failed read stays unknown and its table renders.
  */
+/**
+ * The graph counts local paths only, and a filter override points the table at a
+ * different query, so otherwise its count can read 0 over rows the table shows.
+ * Such a relation gets no count and never folds as empty.
+ */
+function graphCountsRelation(
+  entity: GenericDetailEntity,
+  relation: string,
+  detail: {
+    relationFilterOverrides?: Readonly<Record<string, { descriptor: string }>>;
+  },
+) {
+  if (detail.relationFilterOverrides?.[relation]) return false;
+  const declared = entityManifest[entity].relationships.find(
+    (candidate) => candidate.key === relation,
+  );
+  return (
+    declared !== undefined &&
+    relationshipSources(declared).every(
+      (source) => source.provenance.kind === "local-path",
+    )
+  );
+}
+
 function useRelationCounts(
   entity: GenericDetailEntity,
   id: string,
@@ -631,7 +657,9 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     .looseObject({ emoji: z.string().nullish() })
     .parse(record).emoji;
   const declaredRelations = detail.sections.flatMap((section) =>
-    section.kind === "relation" && onDetailSurface(section, "web")
+    section.kind === "relation" &&
+    onDetailSurface(section, "web") &&
+    graphCountsRelation(entity, section.relation, detail)
       ? [section.relation]
       : [],
   );
