@@ -777,6 +777,10 @@ describe("cross-family Suggestion list", () => {
       await getDb(ctx.db).select().from(assessmentReadPublication),
     ).toHaveLength(together.keys.length);
     expect(notified.size).toBeGreaterThan(0);
+    expect(await write(restarted, results)).toEqual({
+      kind: "activated",
+      changed: [],
+    });
     // Another component's newly owed direct work does not invalidate this one.
     await markWork(ctx.db, DERIVED_DRAIN, [
       { target: ASSESSMENT_READ_TARGET, ref: crypto.randomUUID() },

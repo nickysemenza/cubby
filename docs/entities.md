@@ -3069,6 +3069,12 @@ it does not create another queue. `publication.tickets` identifies the exact
 held invalidation generations for staging. It grants no authority beyond the
 existing source, ticket, fanout and Job-lease fences. Staged rows must remain
 invisible until their complete publication can activate atomically.
+For an identical grouped effect committed by that sink, the result may also
+name exact `covered` peer WorkItems on its own target. The generic settlement
+owner independently locks those generations; re-marked peers and items already
+claimed by a later chunk remain owed. A completed component keeps its exact
+observation acknowledgement so those later peers settle without re-running the
+canonical preparation. Coverage grants no authority to delete work in a sink.
 
 Product reads use the stored `readFacts` publication for pricing, quantity ledger,
 placement and ownership evidence, and `food` for food summaries. Their field

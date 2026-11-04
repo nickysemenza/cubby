@@ -857,6 +857,7 @@ export async function publishDerivedChunk(
     ? await publishValues(tx, valueGroups, plan)
     : { changed: new Map<string, string[]>(), published: new Map() };
   const retain: WorkItem[] = [];
+  const covered = [...chunk.covered];
   const progress = items.flatMap((item) => {
     const after = chunk.fanoutProgress.get(fanoutProgressKey(item));
     return after ? [{ item, after }] : [];
@@ -899,6 +900,12 @@ export async function publishDerivedChunk(
       const heldIds = new Set(ids);
       if ([...retainedIds].some((id) => !heldIds.has(id)))
         throw new Error("Derived sink retained an unclaimed source");
+      const peers = "retain" in outcome ? (outcome.covered ?? []) : [];
+      if (peers.some((item) => item.target !== target))
+        throw new Error("Derived sink covered another target's work");
+      // The generic settlement owner locks these exact generations; a newer
+      // ticket or a peer already claimed by a later chunk remains owed.
+      covered.push(...peers);
       changedIds = "changed" in outcome ? outcome.changed : outcome;
       publishedIds = new Set(ids.filter((id) => !retainedIds.has(id)));
     } else {
@@ -931,7 +938,7 @@ export async function publishDerivedChunk(
     expanded: chunk.expanded,
     drift,
     retain,
-    covered: chunk.covered,
+    covered,
     ...(await touched.publication(tx)),
   };
 }

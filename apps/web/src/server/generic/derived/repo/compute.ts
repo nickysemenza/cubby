@@ -14,6 +14,7 @@ import type { SQL } from "drizzle-orm";
  * derived value unless the declaration lists it in `dependsOn`.
  */
 import type { Database, DrizzleTransaction } from "~/server/db";
+import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 
 /** Current target IDs reached from an input's source-reference relation. */
 export type DerivedFanoutSelection = (refs: SQL) => SQL;
@@ -129,6 +130,8 @@ export interface DerivedSinkPublication {
 export interface DerivedSinkContinuation {
   readonly changed: readonly string[];
   readonly retain: readonly string[];
+  /** Exact peer generations whose identical effect committed with this publication. */
+  readonly covered?: readonly WorkItem[];
 }
 
 /**

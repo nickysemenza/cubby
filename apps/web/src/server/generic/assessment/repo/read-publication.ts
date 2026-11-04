@@ -215,8 +215,6 @@ export async function writeAssessmentReadStage(
   if (existing && existing.id !== stage.id) {
     if (!prepared.previousStageIds.includes(existing.id))
       return { kind: "retained", changed: [] };
-  } else if (existing && existing.nextIndex !== stage.nextIndex) {
-    return { kind: "retained", changed: [] };
   } else if (
     existing &&
     (existing.revision !== stage.revision ||
@@ -236,6 +234,14 @@ export async function writeAssessmentReadStage(
       }))
   ) {
     throw new Error("Assessment continuation metadata is immutable");
+  }
+  if (existing?.id === stage.id) {
+    // Later chunks may hold other peers from this exact applied generation.
+    // Acknowledging it never clears a newer ticket; the generic owner does CAS.
+    if (existing.nextIndex === existing.assessmentIds.length)
+      return { kind: "activated", changed: [] };
+    if (existing.nextIndex !== stage.nextIndex)
+      return { kind: "retained", changed: [] };
   }
   if (await stageInvalidated(db, stage))
     return { kind: "retained", changed: [] };

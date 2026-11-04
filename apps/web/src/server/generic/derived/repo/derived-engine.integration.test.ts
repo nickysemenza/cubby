@@ -630,6 +630,52 @@ describe("stored derived values", () => {
       attempts: 1,
       lastError: expect.stringContaining("unclaimed ref"),
     });
+    // One grouped effect covers an unclaimed peer through the generic ticket
+    // owner. A re-mark during preparation must keep its newer generation owed.
+    const coverPeers = async (remark: boolean) => {
+      await markBoth();
+      const observed = await workItemStates(ctx.db, "recipe.totals", [
+        recipeId,
+        siblingId,
+      ]);
+      let peer: string | undefined;
+      await drainDerivedPage(ctx.db, {
+        limit: 1,
+        only: (mark) => mark.target === "recipe.totals",
+        computes: {
+          ...derivedComputes,
+          "recipe.totals": derivedSink({
+            prepare: async (_db, ids) => {
+              peer = observed.find((item) => !ids.includes(item.ref))?.ref;
+              return observed;
+            },
+            publish: async (tx, ids, peers) => {
+              await unwrapDb(tx)
+                .execute(sql`UPDATE "Recipe" SET "totalsComputedAt" = now()
+                WHERE id = ANY(${uuidArrayParam(peers.map((item) => item.ref))})`);
+              return { changed: ids, retain: [], covered: peers };
+            },
+          }),
+        },
+        during: async () => {
+          if (remark) {
+            if (!peer) throw new Error("Synthetic unclaimed peer missing");
+            await getDb(ctx.db).execute(
+              sql`SELECT derived_mark('recipe.totals', ARRAY[${peer}::uuid])`,
+            );
+          }
+        },
+      });
+      return { peer, observed };
+    };
+    await coverPeers(false);
+    expect(await marks("recipe.totals")).toEqual([]);
+    const newer = await coverPeers(true);
+    expect(await marks("recipe.totals")).toEqual([newer.peer]);
+    expect(
+      (await workItemStates(ctx.db, "recipe.totals", [recipeId, siblingId]))[0]
+        ?.ticket,
+    ).not.toBe(newer.observed.find((item) => item.ref === newer.peer)?.ticket);
   });
 
   it("publishes available value marks and removals while a writer holds another mark", async () => {
