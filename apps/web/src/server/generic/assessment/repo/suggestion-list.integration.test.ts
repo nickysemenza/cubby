@@ -50,6 +50,8 @@ import { listAutomaticDecisions } from "./automatic-decisions";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
+  prepareSuggestionAdmission,
+  suggestionKeyFacts,
   suggestionRecordCounts,
   suggestionCountsByFamily,
 } from "./suggestion-list";
@@ -559,6 +561,21 @@ describe("cross-family Suggestion list", () => {
       ).toBe(true);
     }
     const ids = page.items.map((row) => row.id);
+    const together = await prepareSuggestionAdmission(ctx.db, ids);
+    const separately = [];
+    for (const id of ids)
+      separately.push(await prepareSuggestionAdmission(ctx.db, [id]));
+    expect(together.rows).toEqual(
+      new Map(page.items.map((row) => [row.assessmentId, row])),
+    );
+    expect(new Map(separately.flatMap((batch) => [...batch.rows]))).toEqual(
+      together.rows,
+    );
+    const factsById = (keys: Parameters<typeof suggestionKeyFacts>[0][]) =>
+      new Map(keys.map((key) => [key.assessmentId, suggestionKeyFacts(key)]));
+    expect(factsById(separately.flatMap((batch) => batch.keys))).toEqual(
+      factsById(together.keys),
+    );
     expect(ids.indexOf(confident)).toBeLessThan(ids.indexOf(unsure));
     const connectionRow = page.items.find(
       (row) => row.id === proposal.review.assessmentId,
