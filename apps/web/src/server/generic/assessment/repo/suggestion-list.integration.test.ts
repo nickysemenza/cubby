@@ -32,6 +32,7 @@ import { labelStatementSuggestions } from "~/server/domains/transaction-import/s
 import { executeEntity } from "~/server/entity-kernel";
 import {
   readAssessmentRecordRefs,
+  readAssessmentReadMemberships,
   touchingAssessmentIds,
 } from "~/server/generic/assessment/repo/review-families";
 import { suggestionFamilies } from "~/server/generic/assessment/repo/suggestion-families";
@@ -251,6 +252,37 @@ describe("cross-family Suggestion list", () => {
         suggestedValue: proposed.output.id,
       })
       .where(eq(assessmentState.id, id));
+    const memberships = (await readAssessmentReadMemberships(ctx.db, [id])).get(
+      id,
+    );
+    expect(memberships).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "scope",
+          entity: "productCategory",
+          value: current.output.id,
+          stateFamily: "field",
+          retained: false,
+        }),
+        expect.objectContaining({
+          kind: "scope",
+          entity: "productCategory",
+          value: proposed.output.id,
+          stateFamily: "field",
+          retained: false,
+        }),
+      ]),
+    );
+    const references =
+      (await readAssessmentRecordRefs(ctx.db, [id])).get(id) ?? [];
+    expect(
+      memberships
+        ?.filter((row) => row.kind === "ref")
+        .map((row) => ({ entity: row.entity, id: row.value })),
+    ).toEqual(expect.arrayContaining(references));
+    expect(memberships?.filter((row) => row.kind === "ref")).toHaveLength(
+      references.length,
+    );
     for (const record of [current.output.id, proposed.output.id]) {
       const page = await listSuggestionPage(ctx.db, {
         family: "field",
@@ -561,6 +593,17 @@ describe("cross-family Suggestion list", () => {
       ).toBe(true);
     }
     const ids = page.items.map((row) => row.id);
+    const memberships = await readAssessmentReadMemberships(ctx.db, ids);
+    const references = await readAssessmentRecordRefs(ctx.db, ids);
+    for (const id of ids) {
+      const published = (memberships.get(id) ?? [])
+        .filter((row) => row.kind === "ref")
+        .map((row) => ({ entity: row.entity, id: row.value }));
+      expect(published).toHaveLength(references.get(id)?.length ?? 0);
+      expect(published).toEqual(
+        expect.arrayContaining(references.get(id) ?? []),
+      );
+    }
     const together = await prepareSuggestionAdmission(ctx.db, ids);
     const separately = [];
     for (const id of ids)
@@ -674,6 +717,36 @@ describe("cross-family Suggestion list", () => {
       ),
     ).toEqual([proposal.review.assessmentId]);
     expect(await batchCounts([item.id])).toEqual([{ id: item.id, pending: 1 }]);
+    const divergent =
+      (
+        await readAssessmentReadMemberships(ctx.db, [
+          proposal.review.assessmentId,
+        ])
+      ).get(proposal.review.assessmentId) ?? [];
+    expect(divergent.filter((row) => row.kind === "scope")).toEqual([
+      expect.objectContaining({
+        entity: "product",
+        value: item.entityId,
+        stateFamily: "image_description",
+      }),
+    ]);
+    expect(divergent).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "ref",
+          entity: "expense",
+          value: charge.output.id,
+        }),
+      ]),
+    );
+    // Discovery covers the whole request batch before references are counted.
+    expect(await batchCounts([charge.output.id])).toEqual([
+      { id: charge.output.id, pending: 0 },
+    ]);
+    expect(await batchCounts([item.id, charge.output.id])).toEqual([
+      { id: item.id, pending: 1 },
+      { id: charge.output.id, pending: 1 },
+    ]);
     expect(
       (
         await suggestionCountsByFamily(ctx.db, { recordIds: [item.id] })
@@ -760,6 +833,15 @@ describe("cross-family Suggestion list", () => {
         .where(eq(assessment.id, proposal.review.assessmentId));
       // Connection endpoints stay authoritative even when retained records exist.
       expect((await touchesRetained())?.size).toBe(0);
+      expect(
+        (
+          await readAssessmentReadMemberships(ctx.db, [
+            proposal.review.assessmentId,
+          ])
+        )
+          .get(proposal.review.assessmentId)
+          ?.filter((row) => row.kind === "scope" && row.value === id),
+      ).toEqual([]);
     }
     await getDb(ctx.db)
       .update(assessment)
@@ -776,6 +858,22 @@ describe("cross-family Suggestion list", () => {
         .where(eq(assessment.id, proposal.review.assessmentId));
       expect(await touchesRetained()).toEqual(
         new Set([proposal.review.assessmentId]),
+      );
+      expect(
+        (
+          await readAssessmentReadMemberships(ctx.db, [
+            proposal.review.assessmentId,
+          ])
+        ).get(proposal.review.assessmentId),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "scope",
+            entity: "product",
+            value: id,
+            retained: true,
+          }),
+        ]),
       );
     }
     await getDb(ctx.db)

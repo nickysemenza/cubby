@@ -11,7 +11,7 @@ import { advanceJob } from "../service/jobs";
 import { jobDeadlines } from "./deadlines";
 import { enqueueJob } from "./producer";
 import { claimWork } from "./work-claims";
-import { markWork, type WorkItem } from "./work-items";
+import { advanceWorkFanouts, markWork, type WorkItem } from "./work-items";
 
 describe("generic WorkItems", () => {
   const ctx = withTestDb();
@@ -67,6 +67,13 @@ describe("generic WorkItems", () => {
     ]);
     const [before] = await claimWork(ctx.db, drain.key, 1);
     if (!before) throw new Error("Expected WorkItem");
+    const cursor = crypto.randomUUID();
+    await advanceWorkFanouts(ctx.db, [{ item: before, after: cursor }]);
+    expect((await claimWork(ctx.db, drain.key, 1))[0]).toMatchObject({
+      ticket: before.ticket,
+      attempts: before.attempts,
+      fanoutAfter: cursor,
+    });
     const [notAdmitted] = await getDb(ctx.db)
       .select()
       .from(workItem)
@@ -79,6 +86,8 @@ describe("generic WorkItems", () => {
         if (!remarked) {
           remarked = true;
           await markWork(db, drain, [{ target: "synthetic", ref }]);
+          // A stale page cannot restore its cursor after the new ticket resets it.
+          await advanceWorkFanouts(db, [{ item: before, after: cursor }]);
         }
         return { prepared: null };
       },
@@ -95,6 +104,7 @@ describe("generic WorkItems", () => {
       .where(eq(workItem.ref, ref));
     expect(current?.ticket).toBeGreaterThan(before.ticket);
     expect(current?.attempts).toBe(0);
+    expect(current?.fanoutAfter).toBeNull();
     expect(
       await getDb(ctx.db)
         .select()

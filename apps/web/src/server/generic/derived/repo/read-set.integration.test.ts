@@ -19,8 +19,8 @@ import {
   entityStoredDerivedDeclarations,
   storedDerivedDeclarations,
 } from "~/server/db/derived-declarations";
+import { textHashRefSql } from "~/server/db/derived-source-ref";
 import { getDb } from "~/server/db/helpers";
-import { textHashRefSql } from "~/server/db/helpers/query";
 import {
   entityAttachment,
   image,

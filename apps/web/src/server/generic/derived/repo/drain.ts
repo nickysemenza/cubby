@@ -42,6 +42,7 @@ import {
 import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
 import {
   type Drain,
+  advanceWorkFanouts,
   markWorkFrom,
   observeReadyWork,
   unobservedWork,
@@ -139,6 +140,8 @@ export function admitDerivedPage({
 const RING_RECORD_LIMIT = 200;
 /** Extra scheduling marks covered by one fixed-target expansion, not extra computes. */
 const FIXED_FANOUT_COVERAGE_LIMIT = 200;
+/** Dependent writes across an internal-record fanout chunk, not a source-mark count. */
+const INTERNAL_FANOUT_WRITE_LIMIT = 500;
 /** Reconcile priority: a changed value here is drift, an undeclared input. */
 const RECONCILE_PRIORITY = 2;
 
@@ -453,13 +456,54 @@ async function expandFanouts(
   items: readonly WorkItem[],
   touched: Touched,
   plan: DerivedPagePlan,
-): Promise<Pick<DerivedChunk, "expanded" | "covered">> {
+): Promise<Pick<DerivedChunk, "expanded" | "covered" | "fanoutProgress">> {
+  const paged = items.filter((item) => {
+    const parsed = parseTarget(item.target);
+    return parsed?.fanoutInput && parsed.declaration.kind === "internalRecord";
+  });
+  const fanoutProgress = new Map<string, string>();
+  let expanded = 0;
+  const pageSize = Math.max(
+    1,
+    Math.floor(INTERNAL_FANOUT_WRITE_LIMIT / Math.max(1, paged.length)),
+  );
+  for (const item of paged) {
+    const parsed = parseTarget(item.target);
+    if (!parsed?.fanoutInput) continue;
+    const { declaration, fanoutInput: input } = parsed;
+    const refs = sql`SELECT ${item.ref}::uuid AS id`;
+    const select = plan.fanoutSelections.get(item.target);
+    const dependents = fanoutRows(declaration, input, refs, select);
+    const rows = z.array(z.object({ id: z.string() })).parse(
+      (
+        await unwrapDb(tx).execute(sql`SELECT DISTINCT d.id::text AS id
+        FROM (${dependents}) d(id)
+        WHERE d.id IS NOT NULL ${item.fanoutAfter ? sql`AND d.id > ${item.fanoutAfter}::uuid` : sql``}
+        ORDER BY id LIMIT ${pageSize + 1}`)
+      ).rows,
+    );
+    const enrolled = rows.slice(0, pageSize).map((row) => row.id);
+    for (const result of await markWorkFrom(
+      tx,
+      DERIVED_DRAIN,
+      sql`SELECT ${declaration.target}::text, unnest(${uuidArrayParam(enrolled)}), ${item.priority}::int, ${item.reason ?? null}::text`,
+      { wake: false },
+    ))
+      expanded += result.count;
+    const last = enrolled.at(-1);
+    if (rows.length > pageSize && last)
+      fanoutProgress.set(fanoutProgressKey(item), last);
+  }
   const fixedTargets = [
     ...new Set(
       items.flatMap(({ target }) => {
         const input = parseTarget(target)?.fanoutInput;
         // A later covered ticket could remove a later chunk's publication fence.
-        return input?.targetWhere && !input.selection ? [target] : [];
+        return input?.targetWhere &&
+          !input.selection &&
+          parseTarget(target)?.declaration.kind === "entity"
+          ? [target]
+          : [];
       }),
     ),
   ];
@@ -476,22 +520,12 @@ async function expandFanouts(
     ([target, group]) => {
       const parsed = parseTarget(target);
       const input = parsed?.fanoutInput;
-      if (!parsed || !input) return [];
+      if (!parsed || !input || parsed.declaration.kind === "internalRecord")
+        return [];
       const { declaration } = parsed;
       const refs = sql`SELECT unnest(${uuidArrayParam(group.map((item) => item.ref))})`;
       const select = plan.fanoutSelections.get(target);
-      const dependents = select
-        ? selectedTargetRows(declaration, input, refs, select)
-        : input.targetWhere
-          ? fixedTargetRows(declaration.table, input.targetWhere)
-          : input.paths
-            ? sql.join(
-                input.paths.map((path) => sql`(${pathSql(path, refs)})`),
-                sql` UNION `,
-              )
-            : input.path
-              ? pathSql(input.path, refs)
-              : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
+      const dependents = fanoutRows(declaration, input, refs, select);
       const reasons = new Set(group.map((item) => item.reason ?? null));
       // Different source refs can reach disjoint dependents. Do not attribute
       // one ref's exact operation to every dependent in the combined expansion.
@@ -508,8 +542,7 @@ async function expandFanouts(
       ];
     },
   );
-  if (!selections.length) return { expanded: 0, covered: [] };
-  let expanded = 0;
+  if (!selections.length) return { expanded, covered: [], fanoutProgress };
   for (const { target, count, refs } of await markWorkFrom(
     tx,
     DERIVED_DRAIN,
@@ -520,7 +553,30 @@ async function expandFanouts(
     const parsed = parseTarget(target);
     if (parsed) touchDeclaredRefs(touched, parsed.declaration, refs);
   }
-  return { expanded, covered };
+  return { expanded, covered, fanoutProgress };
+}
+
+const fanoutProgressKey = (item: WorkItem) =>
+  `${item.target}:${item.ref}:${item.ticket}`;
+
+function fanoutRows(
+  declaration: StoredDerivedDeclaration,
+  input: DerivedInput,
+  refs: SQL,
+  select: DerivedFanoutSelection | undefined,
+): SQL {
+  return select
+    ? selectedTargetRows(declaration, input, refs, select)
+    : input.targetWhere
+      ? fixedTargetRows(declaration.table, input.targetWhere)
+      : input.paths
+        ? sql.join(
+            input.paths.map((path) => sql`(${pathSql(path, refs)})`),
+            sql` UNION `,
+          )
+        : input.path
+          ? pathSql(input.path, refs)
+          : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
 }
 
 /**
@@ -552,11 +608,13 @@ export type DerivedChunk = {
   expanded: number;
   touched: Touched;
   covered: readonly WorkItem[];
+  fanoutProgress: ReadonlyMap<string, string>;
 };
 export const derivedChunk = (): DerivedChunk => ({
   expanded: 0,
   touched: new Touched(),
   covered: [],
+  fanoutProgress: new Map(),
 });
 
 /**
@@ -571,9 +629,11 @@ export async function lockDerivedChunk(
 ): Promise<WorkItem[]> {
   chunk.touched = new Touched();
   chunk.covered = [];
+  chunk.fanoutProgress = new Map();
   const expansion = await expandFanouts(db, items, chunk.touched, plan);
   chunk.expanded = expansion.expanded;
   chunk.covered = expansion.covered;
+  chunk.fanoutProgress = expansion.fanoutProgress;
   const tx = unwrapDb(db);
   const narrowed: WorkItem[] = [];
   for (const [target, group] of groupByTarget(items)) {
@@ -797,6 +857,14 @@ export async function publishDerivedChunk(
     ? await publishValues(tx, valueGroups, plan)
     : { changed: new Map<string, string[]>(), published: new Map() };
   const retain: WorkItem[] = [];
+  const progress = items.flatMap((item) => {
+    const after = chunk.fanoutProgress.get(fanoutProgressKey(item));
+    return after ? [{ item, after }] : [];
+  });
+  // The dependent marks were written before source locking. Advance only the
+  // held tickets, in the same transaction, so a re-mark restarts enrollment.
+  await advanceWorkFanouts(db, progress);
+  retain.push(...progress.map(({ item }) => item));
   const drift: { target: string; count: number }[] = [];
   let changed = 0;
   for (const [target, group] of groups) {

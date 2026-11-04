@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { suggestionStatus } from "./ai";
 import { assessmentChildHandle } from "./assessment-reference";
+import { assessmentFamily } from "./assessment";
 import {
   suggestionColumnValue,
   suggestionImpact,
@@ -49,19 +50,52 @@ export const assessmentReadFact = z.object({
 });
 export type AssessmentReadFact = z.infer<typeof assessmentReadFact>;
 
-/** UUID identity indexes membership; the retained shortcode serves existing clients. */
-export const assessmentReadMembership = z.object({
+const membershipToken = z.object({
   entity: suggestionRecordRef.shape.entity,
-  recordId: z.guid(),
-  code: suggestionRecordRef.shape.id,
+  stateFamily: assessmentFamily,
 });
+/** Discovery compares raw text; counts use the separately resolved reference view. */
+export const assessmentReadMembership = z.discriminatedUnion("kind", [
+  membershipToken.extend({
+    kind: z.literal("scope"),
+    value: z.string(),
+    /** Retained recommendation record matching historically ignores a recordEntity mismatch. */
+    retained: z.boolean(),
+  }),
+  membershipToken.extend({
+    kind: z.literal("ref"),
+    value: suggestionRecordRef.shape.id,
+    retained: z.literal(false),
+  }),
+]);
 export type AssessmentReadMembership = z.infer<typeof assessmentReadMembership>;
+
+/** Retained for open proposals even when their current result is ineligible. */
+export const assessmentReadDependency = z.object({
+  sourceKind: z.string().min(1),
+  sourceId: z.guid(),
+});
+export type AssessmentReadDependency = z.infer<typeof assessmentReadDependency>;
+
+/** An exact observed ticket, not a sequence-number watermark or an authority. */
+export const assessmentReadObservedTicket = z.object({
+  target: z.string().min(1),
+  ref: assessmentChildHandle,
+  ticket: z.number().int().nonnegative(),
+});
+export type AssessmentReadObservedTicket = z.infer<
+  typeof assessmentReadObservedTicket
+>;
+
+export const assessmentReadGroupKeys = z.array(z.string().min(1)).min(1);
+export type AssessmentReadGroupKeys = z.infer<typeof assessmentReadGroupKeys>;
 
 /** Empty facts are a successful ineligible result, never a missing publication. */
 export const assessmentReadResult = z.object({
   assessmentId: assessmentChildHandle,
   facts: z.array(assessmentReadFact),
   memberships: z.array(assessmentReadMembership),
+  dependencies: z.array(assessmentReadDependency),
   /** Exact canonical competitor identity; non-competing records use their own id. */
   groupKey: z.string().min(1),
 });

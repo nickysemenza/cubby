@@ -505,6 +505,13 @@
       "when": 1793789921545,
       "tag": "0071_assessment_existing_membership_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1793801890753,
+      "tag": "0072_assessment_read_publications",
+      "breakpoints": true
     }
   ]
 }

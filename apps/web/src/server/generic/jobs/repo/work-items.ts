@@ -24,6 +24,7 @@ export type WorkItem = {
   priority: number;
   attempts: number;
   reason?: string | null;
+  fanoutAfter?: string | null;
 };
 
 /** The drain Job a family of items belongs to. */
@@ -36,6 +37,7 @@ const itemColumns = {
   priority: workItem.priority,
   attempts: workItem.attempts,
   reason: workItem.reason,
+  fanoutAfter: workItem.fanoutAfter,
 };
 
 /** Bounded ready-work observations; no locks or scheduling changes. */
@@ -91,6 +93,34 @@ export const workTickets = (items: readonly WorkItem[]) => sql`(
     items.map(({ target, ref, ticket }) => ({ target, ref, ticket })),
   )}::jsonb) AS m(target text, ref uuid, ticket bigint))`;
 
+/** Advance only held source tickets after their dependent marks commit with this transaction. */
+export async function advanceWorkFanouts(
+  db: RepositoryQueryInput,
+  progress: readonly { item: WorkItem; after: string }[],
+) {
+  if (!progress.length) return;
+  const rows = progress.map(({ item, after }) => ({
+    target: item.target,
+    ref: item.ref,
+    ticket: item.ticket,
+    after,
+  }));
+  await repositoryQueries(db)
+    .update(workItem)
+    .set({ fanoutAfter: sql`p.after`, readyAt: sql`now()` })
+    .from(
+      sql`jsonb_to_recordset(${JSON.stringify(rows)}::jsonb)
+        AS p(target text, ref uuid, ticket bigint, after uuid)`,
+    )
+    .where(
+      and(
+        eq(workItem.target, sql`p.target`),
+        eq(workItem.ref, sql`p.ref`),
+        eq(workItem.ticket, sql`p.ticket`),
+      ),
+    );
+}
+
 /**
  * A re-mark takes a fresh ticket, the more urgent priority and a fresh
  * attempt budget, so a page already holding the item cannot clear the newer
@@ -108,6 +138,7 @@ const remark = {
     lastError: null,
     waitCause: null,
     waitStartedAt: null,
+    fanoutAfter: null,
   },
 };
 
@@ -205,7 +236,7 @@ export async function markWorkFrom(
     sql`SELECT ${drain.key}, s.target, s.ref, nextval('"WorkTicket"'),
           min(s.priority), now(), now(), 0, NULL, NULL, NULL, NULL,
           (array_agg(s.reason ORDER BY s.priority, s.reason) FILTER (WHERE s.reason IS NOT NULL))[1],
-          NULL, NULL
+          NULL, NULL, NULL
           FROM (${source}) AS s(target, ref, priority, reason)
          WHERE s.ref IS NOT NULL
          GROUP BY s.target, s.ref ORDER BY s.target, s.ref`,

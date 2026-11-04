@@ -12,7 +12,7 @@ import {
   isFanoutInput,
   storedDerivedDeclarations,
 } from "~/server/db/derived-declarations";
-import { textHashRefSqlText } from "~/server/db/helpers/query";
+import { textHashRefSqlText } from "~/server/db/derived-source-ref";
 
 export const DERIVED_DRAIN_JOB_KEY = "derived:drain";
 
@@ -155,7 +155,8 @@ BEGIN
     attempts = 0,
     "lastError" = NULL,
     "waitCause" = NULL,
-    "waitStartedAt" = NULL;
+    "waitStartedAt" = NULL,
+    "fanoutAfter" = NULL;
   IF current_setting('cubby.derived_capture', true) IS DISTINCT FROM txid_current()::text THEN
     INSERT INTO "JobInvalidationCapture" (key, "capturedAt")
       VALUES (${literal(DERIVED_DRAIN_JOB_KEY)}, now() AT TIME ZONE 'UTC');

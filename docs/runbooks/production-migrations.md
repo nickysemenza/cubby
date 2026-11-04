@@ -90,6 +90,22 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Assessment read publication storage (0072)
+
+`0072_assessment_read_publications` adds the publication, fact, membership,
+dependency and staging tables, plus a nullable `WorkItem.fanoutAfter` cursor.
+Existing unfinished work starts without a cursor; tickets, attempts, deadlines,
+waits and retained errors are unchanged. The updated `derived_mark` clears the
+cursor when a new source ticket is captured. No existing rows are rewritten or
+removed. Storage creation does not seed coverage or enable a publication reader.
+
+The same transaction builds `AssessmentState_active_suppression_idx` over
+`(entity, recordId)` for active rows with non-null suppression. It may wait for
+writers and blocks State writes until commit. Keep serialized migration ownership,
+and verify the index is ready and valid after release. The seeded predecessor
+journey checks retained Assessments, Feedback, State, Jobs and WorkItems, long
+membership tokens, and cursor reset through the actual mark function.
+
 ## Assessment endpoint indexes (0065)
 
 `0065_assessment_connection_reference_indexes` adds two partial expression

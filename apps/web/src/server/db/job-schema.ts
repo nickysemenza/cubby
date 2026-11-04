@@ -90,6 +90,8 @@ export const workItem = pgTable(
     waitCause: text("waitCause", { enum: workWaitCauses }),
     /** Orders the wait's retry cadence, because a wait does not spend `attempts`. */
     waitStartedAt: timestamp("waitStartedAt", { mode: "date" }),
+    /** Last dependent enrolled by a paged fanout; a new source ticket restarts it. */
+    fanoutAfter: uuid("fanoutAfter"),
   },
   (t) => [
     check(

@@ -7,6 +7,10 @@ import {
   feedbackVerdict,
   type AssessmentFamily,
 } from "@cubby/schemas/assessment";
+import {
+  assessmentReadMembership,
+  type AssessmentReadMembership,
+} from "@cubby/schemas/assessment-read-publication";
 import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-family";
 import { SYSTEM_USER_ID } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
@@ -21,7 +25,10 @@ import {
   statementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
 import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
-import { suggestionRecordRef } from "@cubby/schemas/suggestion-list";
+import {
+  suggestionListFamily,
+  suggestionRecordRef,
+} from "@cubby/schemas/suggestion-list";
 import { parseShortcode } from "@cubby/shared";
 import {
   and,
@@ -670,11 +677,14 @@ export const automaticApplicationVerified = sql`CASE ${sql.join(
   sql` `,
 )} ELSE true END`;
 
-const assessmentRecordsSql = (entities?: readonly string[]) =>
+const assessmentRecordsSql = (
+  entities?: readonly string[],
+  familyColumn: SQL = sql`a.family`,
+) =>
   sql`CASE ${sql.join(
     Object.entries(reviewFamilyDeclarations).map(
       ([family, spec]) =>
-        sql`WHEN a.family = ${family} THEN ${entities && "recordsFor" in spec ? spec.recordsFor(entities) : spec.records}`,
+        sql`WHEN ${familyColumn} = ${family} THEN ${entities && "recordsFor" in spec ? spec.recordsFor(entities) : spec.records}`,
     ),
     sql` `,
   )} ELSE '[]'::jsonb END`;
@@ -696,6 +706,13 @@ export async function readAssessmentRecordRefs(
   }>(sql`
     SELECT a.id, ${assessmentRecordsSql()} AS refs FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
     WHERE a.id = ANY(${uuidArrayParam(ids)})`);
+  return resolveStoredRecordRefs(db, rows);
+}
+
+async function resolveStoredRecordRefs(
+  db: Database,
+  rows: readonly { id: string; refs: unknown }[],
+) {
   const parsed = rows.map((row) => ({
     id: row.id,
     refs: z
@@ -736,6 +753,120 @@ export async function readAssessmentRecordRefs(
             ) === index,
         ),
     ]),
+  );
+}
+
+/** Publish discovery tokens and count references from their existing family owners. */
+export async function readAssessmentReadMemberships(
+  db: Database,
+  ids: readonly string[],
+): Promise<Map<string, AssessmentReadMembership[]>> {
+  if (!ids.length) return new Map();
+  const admitted = and(
+    reviewAssessment.served,
+    reviewState.active,
+    eq(reviewState.status, suggestionStatus.enum.pending),
+    inArray(reviewState.family, suggestionListFamily.options),
+  );
+  const sources = reviewQueryBuilder
+    .select({
+      id: reviewAssessment.id,
+      stateFamily: sql<AssessmentFamily>`${reviewState.family}`.as(
+        "stateFamily",
+      ),
+      scopeRefs: sql`CASE WHEN ${admitted}
+      THEN ${assessmentRecordsSql(undefined, sql`${reviewState.family}`)}
+      ELSE '[]'::jsonb END`.as("scopeRefs"),
+      otherRefs:
+        sql`CASE WHEN ${reviewAssessment.family} = ${reviewState.family}
+      THEN NULL::jsonb ELSE ${assessmentRecordsSql()} END`.as("otherRefs"),
+      retainedRefs: sql`CASE WHEN ${admitted}
+      AND ${reviewState.family} = ${assessmentFamily.enum.recommendation}
+      AND (${recommendationScopes.connection}) IS NOT TRUE
+      THEN COALESCE(${reviewAssessment.evidence}->'records', '[]'::jsonb)
+      ELSE '[]'::jsonb END`.as("retainedRefs"),
+    })
+    .from(reviewAssessment)
+    .innerJoin(reviewState, eq(reviewState.id, reviewAssessment.id))
+    .where(sql`${reviewAssessment.id} = ANY(${uuidArrayParam(ids)})`);
+  const token = z.object({
+    entity: referenceEntity,
+    value: z.string(),
+    retained: z.boolean(),
+  });
+  const rows = z
+    .array(
+      z.object({
+        id: z.string(),
+        stateFamily: assessmentFamily,
+        countRefs: z.unknown(),
+        tokens: z.array(token),
+      }),
+    )
+    .parse(
+      (
+        await unwrapDb(db).execute(sql`
+    WITH membership_sources AS MATERIALIZED (${sources.getSQL()}),
+    membership_tokens AS (
+      SELECT p.id, r.value->>'entity' AS entity, r.value->>'id' AS value, false AS retained
+      FROM membership_sources p
+      CROSS JOIN LATERAL jsonb_array_elements(p."scopeRefs") r(value)
+      UNION ALL
+      SELECT p.id, r.value->>'entity', r.value->>'id', true
+      FROM membership_sources p
+      CROSS JOIN LATERAL jsonb_array_elements(p."retainedRefs") r(value)
+    ), membership_groups AS (
+      SELECT id, jsonb_agg(DISTINCT (to_jsonb(membership_tokens) - 'id')) AS tokens
+      FROM membership_tokens WHERE value IS NOT NULL
+        AND entity IN (${sql.join(
+          shortcodeEntities.map((entity) => sql`${entity}`),
+          sql`, `,
+        )})
+      GROUP BY id
+    )
+    SELECT p.id, p."stateFamily", COALESCE(p."otherRefs", p."scopeRefs") AS "countRefs",
+      COALESCE(g.tokens, '[]'::jsonb) AS tokens
+    FROM membership_sources p LEFT JOIN membership_groups g ON g.id=p.id
+  `)
+      ).rows,
+    );
+  const refs = await resolveStoredRecordRefs(
+    db,
+    rows
+      .filter((row) => row.tokens.length > 0)
+      .map((row) => ({ id: row.id, refs: row.countRefs })),
+  );
+  return new Map(
+    rows.map((row) => {
+      const memberships = [
+        ...row.tokens.map((value) =>
+          assessmentReadMembership.parse({
+            ...value,
+            kind: "scope",
+            stateFamily: row.stateFamily,
+          }),
+        ),
+        ...(refs.get(row.id) ?? []).map((value) =>
+          assessmentReadMembership.parse({
+            entity: value.entity,
+            value: value.id,
+            kind: "ref",
+            retained: false,
+            stateFamily: row.stateFamily,
+          }),
+        ),
+      ];
+      // JSON aggregate order is unspecified. Membership order must not create a
+      // new publication revision when only the query plan changes.
+      memberships.sort((a, b) => {
+        for (const key of ["kind", "entity", "value", "stateFamily"] as const) {
+          if (a[key] < b[key]) return -1;
+          if (a[key] > b[key]) return 1;
+        }
+        return Number(a.retained) - Number(b.retained);
+      });
+      return [row.id, memberships];
+    }),
   );
 }
 

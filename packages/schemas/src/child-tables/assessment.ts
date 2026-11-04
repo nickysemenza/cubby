@@ -464,19 +464,170 @@ export const assessmentChildren = [
       },
       { key: "revision", kind: "uuid", notNull: true },
       { key: "entity", kind: "text", notNull: true, type: "Entity" },
-      { key: "recordId", kind: "uuid", notNull: true },
-      { key: "code", kind: "text", notNull: true },
+      { key: "kind", kind: "text", notNull: true },
+      { key: "value", kind: "text", notNull: true },
+      {
+        key: "stateFamily",
+        kind: "text",
+        notNull: true,
+        type: "AssessmentFamily",
+      },
+      { key: "retained", kind: "boolean", notNull: true },
+      { key: "ordinal", kind: "integer", notNull: true },
     ],
-    types: [{ module: "@cubby/schemas/entity-core", exports: ["Entity"] }],
+    types: [
+      { module: "@cubby/schemas/entity-core", exports: ["Entity"] },
+      { module: "@cubby/schemas/assessment", exports: ["AssessmentFamily"] },
+    ],
     indexes: [
       {
-        name: "AssessmentReadMembership_revision_record_key",
+        name: "AssessmentReadMembership_revision_ordinal_key",
         unique: true,
-        on: ["assessmentId", "revision", "entity", "recordId"],
+        on: ["assessmentId", "revision", "kind", "ordinal"],
       },
       {
-        name: "AssessmentReadMembership_record_idx",
-        on: ["entity", "recordId", "assessmentId", "revision"],
+        name: "AssessmentReadMembership_entity_idx",
+        on: ["kind", "entity", "assessmentId", "revision"],
+      },
+      {
+        name: "AssessmentReadMembership_value_idx",
+        on: ["kind", { sql: "md5({value})" }, "assessmentId", "revision"],
+      },
+    ],
+    checks: [
+      {
+        name: "AssessmentReadMembership_kind_check",
+        sql: "{kind} IN ('scope', 'ref')",
+      },
+      { name: "AssessmentReadMembership_ordinal_check", sql: "{ordinal} >= 0" },
+    ],
+  }),
+  defineChildTable({
+    name: "AssessmentReadDependency",
+    exportName: "assessmentReadDependency",
+    columns: [
+      {
+        key: "assessmentId",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "assessment", column: "id" },
+      },
+      { key: "sourceKind", kind: "text", notNull: true },
+      { key: "sourceId", kind: "uuid", notNull: true },
+    ],
+    indexes: [
+      {
+        name: "AssessmentReadDependency_source_key",
+        unique: true,
+        on: ["assessmentId", "sourceKind", "sourceId"],
+      },
+      {
+        name: "AssessmentReadDependency_reverse_idx",
+        on: ["sourceId", "sourceKind", "assessmentId"],
+      },
+    ],
+  }),
+  // These rows stage bounded preparation; readers use only the active header's revision.
+  defineChildTable({
+    name: "AssessmentReadStage",
+    exportName: "assessmentReadStage",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      { key: "componentKey", kind: "text", notNull: true },
+      {
+        key: "groups",
+        kind: "jsonb",
+        notNull: true,
+        type: "AssessmentReadGroupKeys",
+      },
+      { key: "assessmentIds", kind: "uuid", array: true, notNull: true },
+      {
+        key: "tickets",
+        kind: "jsonb",
+        notNull: true,
+        type: "AssessmentReadObservedTicket[]",
+      },
+      { key: "revision", kind: "uuid", notNull: true },
+      { key: "nextIndex", kind: "integer", notNull: true, default: 0 },
+      { key: "rulesVersion", kind: "integer", notNull: true },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+    ],
+    types: [
+      {
+        module: "@cubby/schemas/assessment-read-publication",
+        exports: ["AssessmentReadGroupKeys", "AssessmentReadObservedTicket"],
+      },
+    ],
+    indexes: [
+      {
+        name: "AssessmentReadStage_component_key",
+        unique: true,
+        on: ["componentKey"],
+      },
+      {
+        name: "AssessmentReadStage_revision_key",
+        unique: true,
+        on: ["revision"],
+      },
+    ],
+    checks: [
+      {
+        name: "AssessmentReadStage_progress_check",
+        sql: "cardinality({assessmentIds}) > 0 AND {nextIndex} >= 0 AND {nextIndex} <= cardinality({assessmentIds})",
+      },
+    ],
+  }),
+  defineChildTable({
+    name: "AssessmentReadStageResult",
+    exportName: "assessmentReadStageResult",
+    columns: [
+      {
+        key: "stageId",
+        kind: "uuid",
+        notNull: true,
+        reference: {
+          table: "assessmentReadStage",
+          column: "id",
+          onDelete: "cascade",
+        },
+      },
+      {
+        key: "assessmentId",
+        kind: "uuid",
+        notNull: true,
+        reference: { table: "assessment", column: "id" },
+      },
+      { key: "groupKey", kind: "text", notNull: true },
+      { key: "contentHash", kind: "text", notNull: true },
+      { key: "admitted", kind: "boolean", notNull: true },
+      {
+        key: "dependencies",
+        kind: "jsonb",
+        notNull: true,
+        type: "AssessmentReadDependency[]",
+      },
+    ],
+    types: [
+      {
+        module: "@cubby/schemas/assessment-read-publication",
+        exports: ["AssessmentReadDependency"],
+      },
+    ],
+    indexes: [
+      {
+        name: "AssessmentReadStageResult_member_key",
+        unique: true,
+        on: ["stageId", "assessmentId"],
       },
     ],
   }),

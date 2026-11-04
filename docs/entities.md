@@ -3026,14 +3026,19 @@ depend on it, so it never propagates.
 An internal input's `selection: { key, path? }` names one of its sink's
 `fanoutSelections`. That callback is the whole selector: it reads a one-column
 `id` relation of source refs and returns current and retained target ids as `id`,
-because no `DerivedValue` holds prior output. Expansion stays set-based and clears
-its source ticket in the same transaction, as a path's does. The spec parser
+because no `DerivedValue` holds prior output. Internal-record expansion enrolls
+at most 500 dependent marks per publication chunk. It advances a UUID cursor on
+the held source ticket in the same transaction as those marks, retaining the
+ticket and attempts until enrollment finishes. A new invalidation resets that
+cursor; a failed or superseded transaction cannot advance it. Continued sources
+return to the end of their priority's ready frontier. Existing entity fanouts
+keep their current expansion contract. The spec parser
 rejects `selection` with `path`, `paths`, `targetWhere` or a `retained` block, and
 one whose `match` target column is not `id`, because expansion would ignore them.
 An entity `selection` still requires `targetWhere` and `retained`.
 A plain input's trigger casts its matched column to UUID, so a matched column
 holding other text declares `captureKey: "textHash"`. Its OLD and NEW values
-capture as `textHashRefSqlText` in `db/helpers/query.ts` builds them, and a selector
+capture as `textHashRefSqlText` in `db/derived-source-ref.ts` builds them, and a selector
 or dependency writer compares with `textHashRefSql`, the same SQL expression. It
 needs no parent lookup in the trigger. NULL marks nothing, stored text is hashed
 unnormalized, and a collision only adds a recompute. A hash is not a target id, so

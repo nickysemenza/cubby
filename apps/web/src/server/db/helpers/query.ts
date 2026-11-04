@@ -81,20 +81,6 @@ export const householdDaySqlText = (timestamp: string): string =>
 export const householdDaySql = (column: AnyColumn | SQL): SQL =>
   sql`((${column} AT TIME ZONE 'UTC') AT TIME ZONE ${sql.raw(`'${HOUSEHOLD_TIMEZONE}'`)})::date`;
 
-const TEXT_HASH_REF = ["md5((", ")::text)::uuid"] as const;
-
-/**
- * The UUID ref of a derived input's non-UUID source column. Generated triggers
- * and the selectors that read those refs must use this one expression. Text is
- * hashed as stored: two spellings are two refs, and NULL stays NULL. A collision
- * only adds a recompute, because the canonical computation stays authoritative.
- */
-export const textHashRefSqlText = (expression: string): string =>
-  `${TEXT_HASH_REF[0]}${expression}${TEXT_HASH_REF[1]}`;
-
-export const textHashRefSql = (expression: AnyColumn | SQL): SQL =>
-  sql`${sql.raw(TEXT_HASH_REF[0])}${expression}${sql.raw(TEXT_HASH_REF[1])}`;
-
 const LAST_PLAIN_DATE = "9999-12-31";
 
 /**
