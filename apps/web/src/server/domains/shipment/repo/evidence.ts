@@ -34,6 +34,7 @@ import {
   isNotNull,
   isNull,
   ne,
+  or,
   sql,
 } from "drizzle-orm";
 import { z } from "zod";
@@ -150,7 +151,10 @@ function retainedPackages(
   packageKey: string,
 ) {
   const tokens = packageKey.toLowerCase().split(/[^\p{L}\p{N}]+/u);
-  const packages = new Set<string>();
+  const packages = new Map<
+    string,
+    NonNullable<ReturnType<typeof vendorPackageLink>>
+  >();
   for (const { href } of carrierCaptureEvidence(capture).links) {
     const linked = vendorPackageLink(href);
     if (!linked) continue;
@@ -160,9 +164,47 @@ function retainedPackages(
       at >= 0 &&
       (tokens[at + 1] === linked.index || tokens[at + 2] === linked.index)
     )
-      packages.add(canonical(linked));
+      packages.set(canonical(linked), linked);
   }
   return packages;
+}
+
+/** The item list a notice states for its only parcel of this shipment, or null. Equal
+ * lists never identify a parcel: two boxes can hold identical lists, and a source can
+ * repeat its order's items. Amazon can also renumber one parcel between its notices, so
+ * they only hold a packet for review rather than guess either way. A single line or a
+ * grouped notice is too weak to raise that review.
+ */
+function retainedParcelItems(
+  capture: Parameters<typeof carrierCaptureEvidence>[0],
+  parcel: { order: string; shipmentId: string },
+) {
+  const { links, texts } = carrierCaptureEvidence(capture);
+  const indexes = new Set(
+    links.flatMap(({ href }) => {
+      const linked = vendorPackageLink(href);
+      return linked?.order === parcel.order &&
+        linked.shipmentId === parcel.shipmentId
+        ? [linked.index]
+        : [];
+    }),
+  );
+  if (indexes.size !== 1) return null;
+  for (const text of texts) {
+    const lines = [
+      ...text.matchAll(
+        /^[ \t]*\* +(.+?)[ \t]*$\s*^[ \t]*Quantity: *(\d+)[ \t]*$/gmu,
+      ),
+    ].map(([, name, quantity]) => ({
+      name: name?.toLowerCase(),
+      quantity,
+    }));
+    if (new Set(lines.map(({ name }) => name)).size >= 2)
+      return canonical(
+        [...lines].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "")),
+      );
+  }
+  return null;
 }
 
 // Pending preparations retain their literal provenance. This private Email ingress
@@ -211,6 +253,121 @@ async function observationIdentity(
       ? `event:${observation.sourceEventKey}`
       : `content:${literalFingerprint}:${ordinal}`,
   };
+}
+
+// Without wording, carrier or place: what must agree for one source to restate an event.
+const restatedEvent = (event: ShipmentObservationInput) =>
+  canonical({
+    kind: event.kind,
+    time: event.time,
+    forecast: event.timeBasis === "estimate",
+    trackingNumber: normalizeNumber(event.trackingNumber ?? ""),
+  });
+const eventPlace = (event: ShipmentObservationInput) =>
+  event.location?.trim().toLowerCase() ?? null;
+
+/**
+ * Occurrence identities for one packet, keeping stored keys and fingerprints. A keyless
+ * identity hashes the submitted wording and carrier hints, so re-reading identical source
+ * content under a new extraction looks like a new event. Only that same capture can revise
+ * an occurrence, and only when exactly one unclaimed occurrence and one unmatched
+ * observation restate each other, first apart from carrier hints and then apart from
+ * wording. Anything else stays a separate event: same-day occurrences are never guessed.
+ */
+async function packetObservationIdentities(
+  db: Database,
+  captureId: string,
+  observations: readonly ShipmentObservationInput[],
+  history: readonly (typeof shipmentObservation.$inferSelect)[],
+) {
+  const occurrences = new Map<string, number>();
+  const identified: (Awaited<ReturnType<typeof observationIdentity>> & {
+    observation: ShipmentObservationInput;
+    revisesFromSameCapture: boolean;
+  })[] = [];
+  for (const observation of observations)
+    identified.push({
+      observation,
+      ...(await observationIdentity(observation, occurrences)),
+      revisesFromSameCapture: false,
+    });
+  const known = new Set(history.map((version) => version.occurrenceKey));
+  const claimed = new Set(
+    identified
+      .map(({ occurrenceKey }) => occurrenceKey)
+      .filter((key) => known.has(key)),
+  );
+  const sourceVersions = history.filter(
+    (version) => version.sourceEventKey === null && !version.memberReviewed,
+  );
+  const unmatched = () =>
+    identified.filter(
+      ({ observation, occurrenceKey }) =>
+        observation.sourceEventKey === null && !claimed.has(occurrenceKey),
+    );
+  // An earlier correction already holds this wording under the original occurrence.
+  for (const entry of unmatched()) {
+    const revised = sourceVersions.find(
+      (version) =>
+        !claimed.has(version.occurrenceKey) &&
+        (version.fingerprint === entry.fingerprint ||
+          (version.event.timeBasis === undefined &&
+            version.fingerprint === entry.literalFingerprint)),
+    );
+    if (!revised) continue;
+    entry.occurrenceKey = revised.occurrenceKey;
+    claimed.add(revised.occurrenceKey);
+  }
+  if (!sourceVersions.length || !unmatched().length) return identified;
+  const supported = new Set(
+    (
+      await getDb(db)
+        .select({ id: shipmentObservationCapture.observationId })
+        .from(shipmentObservationCapture)
+        .where(eq(shipmentObservationCapture.captureId, captureId))
+    ).map(({ id }) => id),
+  );
+  for (const restated of [
+    (event: ShipmentObservationInput) =>
+      canonical([restatedEvent(event), eventPlace(event), event.rawStatus]),
+    restatedEvent,
+  ]) {
+    const pending = unmatched();
+    for (const entry of pending) {
+      const key = restated(entry.observation);
+      const open = new Map(
+        sourceVersions
+          .filter(
+            (version) =>
+              supported.has(version.id) &&
+              !claimed.has(version.occurrenceKey) &&
+              restated(version.event) === key,
+          )
+          .map((version) => [version.occurrenceKey, version.event]),
+      );
+      const [only, rival] = open.entries();
+      if (
+        !only ||
+        rival ||
+        pending.filter(
+          (other) =>
+            restated(other.observation) === key &&
+            !claimed.has(other.occurrenceKey),
+        ).length !== 1
+      )
+        continue;
+      const [occurrenceKey, event] = only;
+      const [stored, submitted] = [
+        eventPlace(event),
+        eventPlace(entry.observation),
+      ];
+      if (stored && submitted && stored !== submitted) continue;
+      entry.occurrenceKey = occurrenceKey;
+      entry.revisesFromSameCapture = true;
+      claimed.add(occurrenceKey);
+    }
+  }
+  return identified;
 }
 
 const identityWindowSchema = z.object({
@@ -269,7 +426,8 @@ const withinIdentityPeriod = (days: readonly (string | null)[]) => {
 
 /** The live Shipment another retained source links to the same parcel. Each candidate
  * must fit this packet before it counts: a parcel id reused in a separate period is no
- * rival. None fits: a separate Shipment. Several fit: "ambiguous", never a guess.
+ * rival. None fits: a separate Shipment. Several fit, or any fitting Shipment lists the
+ * same items under another parcel number: "ambiguous", never a guess.
  */
 async function retainedPackageShipment(
   db: Database,
@@ -284,6 +442,7 @@ async function retainedPackageShipment(
 ) {
   const packages = retainedPackages(input.capture, input.packageKey);
   if (!packages.size) return undefined;
+  const spelling = sourcePackageSpelling(input.packageKey);
   const bound = await getDb(db)
     .select({
       id: shipment.id,
@@ -304,17 +463,36 @@ async function retainedPackageShipment(
       and(
         notDeleted(shipment),
         ne(shipmentSourcePackage.sourceKey, input.capture.sourceKey),
-        sql`lower(regexp_replace(${shipmentSourcePackage.packageKey}, '[^[:alnum:]]', '', 'g')) = ${sourcePackageSpelling(input.packageKey)}`,
+        or(
+          sql`lower(regexp_replace(${shipmentSourcePackage.packageKey}, '[^[:alnum:]]', '', 'g')) = ${spelling}`,
+          ...[...packages.values()].map(
+            ({ shipmentId }) =>
+              sql`position(${shipmentId.toLowerCase()}::text in lower(${shipmentSourcePackage.packageKey})) > 0`,
+          ),
+        ),
       ),
     );
-  const proven = new Map(
-    bound
-      .filter((row) =>
-        [...retainedPackages(row, row.packageKey)].some((linked) =>
-          packages.has(linked),
-        ),
-      )
-      .map((row) => [row.id, row]),
+  const sameParcel = (row: (typeof bound)[number]) =>
+    sourcePackageSpelling(row.packageKey) === spelling &&
+    [...retainedPackages(row, row.packageKey).keys()].some((key) =>
+      packages.has(key),
+    );
+  const listsSameItems = (row: (typeof bound)[number]) =>
+    [...packages.values()].some((parcel) => {
+      const items = retainedParcelItems(input.capture, parcel);
+      return (
+        items !== null &&
+        [...retainedPackages(row, row.packageKey).values()].some(
+          (other) =>
+            other.order === parcel.order &&
+            other.shipmentId === parcel.shipmentId &&
+            retainedParcelItems(row, other) === items,
+        )
+      );
+    });
+  const proven = new Map(bound.filter(sameParcel).map((row) => [row.id, row]));
+  const reviewCandidates = bound.filter(
+    (row) => !proven.has(row.id) && listsSameItems(row),
   );
   const fits = async (candidate: (typeof bound)[number]) => {
     if (
@@ -353,6 +531,8 @@ async function retainedPackageShipment(
       ]),
     );
   };
+  for (const candidate of reviewCandidates)
+    if (await fits(candidate)) return "ambiguous" as const;
   const fitting = [];
   for (const candidate of proven.values())
     if (await fits(candidate)) fitting.push(candidate);
@@ -985,10 +1165,15 @@ async function writeShipmentEvidence(
             .from(shipmentObservation)
             .where(eq(shipmentObservation.sourcePackageId, binding.id))
         : [];
-      const identityOccurrences = new Map<string, number>();
+      const identified = await packetObservationIdentities(
+        tdb,
+        capture.id,
+        packet.observations,
+        history,
+      );
       const effectiveObservations = [];
-      for (const observation of packet.observations) {
-        const key = await observationIdentity(observation, identityOccurrences);
+      for (const key of identified) {
+        const { observation } = key;
         const versions = history
           .filter((version) => version.occurrenceKey === key.occurrenceKey)
           .sort((a, b) => b.firstSeenAt.getTime() - a.firstSeenAt.getTime());
@@ -1157,7 +1342,7 @@ async function writeShipmentEvidence(
       let ambiguity: string | null =
         carrierIssue ??
         (retainedPackageAmbiguous
-          ? "Multiple nearby Shipments fit this linked parcel; review the retained sources before associating it."
+          ? "Retained sources cannot prove which nearby Shipment is this linked parcel; review them before associating it."
           : null);
       if (
         !row &&
@@ -1347,8 +1532,13 @@ async function writeShipmentEvidence(
       if (!sourcePackage)
         throw new Error("Source package identity was not retained.");
       shipmentIds.push(parseShortcodeFor("shipment", row.shortcode));
-      const occurrences = new Map<string, number>();
-      for (const observation of packet.observations) {
+      for (const {
+        observation,
+        fingerprint,
+        literalFingerprint,
+        occurrenceKey,
+        revisesFromSameCapture,
+      } of identified) {
         const eventHint = await withoutDeliveryFieldCarrier(
           tdb,
           {
@@ -1369,8 +1559,6 @@ async function writeShipmentEvidence(
         };
         // Provenance was absent in historical JSON. Keep its occurrence identity and
         // fingerprint intact when the same literal scan is replayed with provenance.
-        const { fingerprint, literalFingerprint, occurrenceKey } =
-          await observationIdentity(observation, occurrences);
         const sameOccurrence = and(
           eq(shipmentObservation.sourcePackageId, sourcePackage.id),
           eq(shipmentObservation.occurrenceKey, occurrenceKey),
@@ -1422,9 +1610,13 @@ async function writeShipmentEvidence(
           repeatedObservations++;
           retainedId = prior.id;
         } else {
+          // A re-read shares its capture's time, so that time cannot mark it stale.
           const canSupersede =
             !current ||
-            (!current.memberReviewed && current.lastSeenAt < observedAt);
+            (!current.memberReviewed &&
+              (revisesFromSameCapture
+                ? current.lastSeenAt <= observedAt
+                : current.lastSeenAt < observedAt));
           const [created] = await database
             .insert(shipmentObservation)
             .values({

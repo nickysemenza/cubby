@@ -367,11 +367,28 @@ exactly one live candidate fits one identity period with no direction, member or
 Purchase conflict. Candidates that do not fit are no rivals: a parcel id reused in a
 separate period joins only that period's Shipment. Several that fit stay unresolved
 under the rule above. No proof or no fitting candidate stays separate. Neither outcome
-refuses tracked siblings. Proof never comes from counters, origin labels, box numbers,
+refuses tracked siblings. Equal item lists never prove a parcel: two boxes can hold identical
+lists, and a source can repeat its order's items, while Amazon can also renumber one parcel
+between its Shipped and Delivered notices. A fitting Shipment under the same order and shipment,
+without exact link and key proof, whose notice links a single parcel of that shipment and states
+the same item list of at least two distinct lines, therefore holds the packet under the rule above,
+even as the only candidate or beside an exact match. Period, direction, member and Purchase filter
+candidates first. A pair confirmed by other evidence, such as unique units on the order, is a
+manual repair. Other lists, one line, grouped notices and another order stay separate as before.
+Proof never comes from counters, origin labels, box numbers,
 order numbers or other vendors' ids, however opaque, from tracking pages or SMS, which
 retain no independent link, or from an unverified wrapper such as Amazon's `/gp/f.html`.
 Identical unkeyed source rows retain their multiplicity; replay updates the same
-occurrences. Native event keys scope changed versions to their source package.
+occurrences. A keyless identity hashes the submitted wording and carrier hints, so a
+re-extraction of byte-identical source content can revise an occurrence: exactly one
+unmatched observation and one unclaimed occurrence retained from that capture must state
+the same kind, time, forecast status and tracking reference, without conflicting places.
+The new version keeps the original occurrence key beside its own fingerprint and supersedes
+the old version, whose identity and fingerprint stay retained; a member-reviewed revision
+stays current. Several same-day candidates, or new source content, stay separate events:
+wording never proves that two reports are one. Rows that were already duplicated stay as
+they are until an explicit correction.
+Native event keys scope changed versions to their source package.
 A later A → B → A report retains a third version, while stale captures cannot
 replace a newer current version. Every supporting capture retains membership
 with its observations, including unchanged events in changed page snapshots.

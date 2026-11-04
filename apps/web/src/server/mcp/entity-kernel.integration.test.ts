@@ -785,6 +785,103 @@ describe("MCP entity kernel boundary", () => {
     });
   });
 
+  // Vendor resolve is a read: it answers through entity_read and never mints a Vendor.
+  it("reads a Vendor by name or alias through entity_read without creating one", async () => {
+    const entityKernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: testUserId("test-user-id") },
+      }),
+    );
+    const createVendor = async (name: string, aliases: string[]) => {
+      const created = await callKernel(
+        {
+          action: "create",
+          entity: "vendor",
+          data: mock(vendorCreateInput, { overrides: { name, aliases } }),
+        },
+        entityKernel,
+      );
+      expect(created.isError).not.toBe(true);
+      return idResultSchema.parse(created.structuredContent).item.id;
+    };
+    const named = await createVendor("Synthetic Resolve Market", [
+      "SRM Trading",
+    ]);
+    const first = await createVendor("Synthetic First Sharer", [
+      "Shared Resolve Label",
+    ]);
+    const second = await createVendor("Synthetic Second Sharer", [
+      "Shared Resolve Label",
+    ]);
+    const vendorCount = async () =>
+      listSummarySchema.parse(
+        (await callKernel({ action: "list", entity: "vendor" }, entityKernel))
+          .structuredContent,
+      ).meta.totalCount;
+    const before = await vendorCount();
+
+    const resolved = await callMcpTool(
+      createMcpServer(),
+      "entity_read",
+      {
+        action: "resolve",
+        entity: "vendor",
+        names: [
+          "synthetic resolve market",
+          "srm trading",
+          "Shared Resolve Label",
+          "Unknown Synthetic Merchant",
+        ],
+      },
+      kernelRequestContext(entityKernel),
+      { entityKernel },
+    );
+    expect(resolved.isError).not.toBe(true);
+    const { results } = z
+      .object({
+        results: z.array(
+          z.object({
+            name: z.string(),
+            status: z.string(),
+            id: z.string().nullable(),
+            vendorName: z.string().nullable(),
+            candidates: z.array(z.object({ id: z.string() })),
+          }),
+        ),
+      })
+      .parse(resolved.structuredContent);
+    expect(
+      results.map(({ status, id }) => ({ status, id })).slice(0, 2),
+    ).toEqual([
+      { status: "matched", id: named },
+      { status: "matched", id: named },
+    ]);
+    // A shared name names no Vendor: the caller picks one by id or merges them.
+    expect(results[2]).toMatchObject({ status: "ambiguous", id: null });
+    expect(results[2]?.candidates.map(({ id }) => id).sort()).toEqual(
+      [first, second].sort(),
+    );
+    expect(results[3]).toEqual({
+      name: "Unknown Synthetic Merchant",
+      status: "missing",
+      id: null,
+      vendorName: null,
+      candidates: [],
+    });
+    expect(await vendorCount()).toBe(before);
+
+    // The writing tool still resolves-or-creates only what is just a name.
+    const refused = await callMcpTool(
+      createMcpServer(),
+      "entity",
+      { action: "resolve", entity: "vendor", names: ["Unknown Synthetic"] },
+      kernelRequestContext(entityKernel),
+      { entityKernel },
+    );
+    expect(refused.isError).toBe(true);
+    expect(await vendorCount()).toBe(before);
+  });
+
   describe("recipe write coverage", () => {
     const lineCoverageSchema = z.object({
       item: z.object({ id: z.string() }).passthrough(),

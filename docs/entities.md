@@ -5305,7 +5305,9 @@ precedence rule.
    policies remain explicit. The kernel owns the write transaction: a repository
    writes through `ctx.db` and never opens a transaction on another handle.
    A declared `capabilities.resolve` needs no code: `resolveEntity` serves it
-   from `entity-kernel/resolve.ts`.
+   from `entity-kernel/resolve.ts`. MCP publishes resolve per entity rather than
+   from that declaration: `entity_read.resolve` reads Products and Vendors and
+   never creates, and `entity.resolve` resolves or creates Ingredients and Plants.
 4. Use `timestampField` and `readOnly` for common field policy instead of copying
    validation triples. Set `route.basePath` for the generic pages (`route.list: null`
    hand-writes the list route module; detail is always generic, with

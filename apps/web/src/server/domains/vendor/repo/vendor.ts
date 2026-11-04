@@ -110,7 +110,10 @@ import {
   replaceSingularAttachment,
   singularAttachmentImageIds,
 } from "~/server/entity-kernel/repo/singular-attachment";
-import { resolveNames } from "~/server/entity-kernel/resolve";
+import {
+  type ResolvedName,
+  resolveNames,
+} from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 import { ENTITY_STORED_WRITES } from "~/server/generated/entity-write-bindings.gen";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
@@ -614,6 +617,47 @@ export const vendorOptions = async (
   }));
 };
 
+/** The one Vendor a matched name answers to, or null when several share it. */
+const vendorNameMatch = (
+  name: string,
+  row: ResolvedName<"vendor">["candidates"][number],
+  others: ResolvedName<"vendor">["candidates"],
+) => {
+  // Prefer a canonical spelling over candidates reached through aliases.
+  const exactCase = [row, ...others].filter((match) => match.name === name);
+  if (exactCase.length === 1) return exactCase[0]!;
+  return others.length > 0 ? null : row;
+};
+
+/** What `findOrCreateVendor` would find for each name, without creating anything. */
+export const resolveVendorNames = async (
+  db: Database,
+  names: readonly string[],
+) => {
+  const resolved = await resolveNames(
+    db,
+    "vendor",
+    names.map((name) => ({ name })),
+    { create: false },
+  );
+  return resolved.map(({ name, row, candidates }) => {
+    const match = row && vendorNameMatch(name, row, candidates);
+    return {
+      name,
+      status: match ? "matched" : row ? "ambiguous" : "missing",
+      id: match?.shortcode ?? null,
+      vendorName: match?.name ?? null,
+      candidates:
+        row && !match
+          ? [row, ...candidates].map(({ shortcode, name: candidate }) => ({
+              id: shortcode,
+              name: candidate,
+            }))
+          : [],
+    } as const;
+  });
+};
+
 /**
  * The Vendor named exactly, by its name or a Vendor alias apart from letter
  * case and surrounding spaces, else a new one (race-safe). Near-duplicates
@@ -628,18 +672,18 @@ export const findOrCreateVendor = async (
     create: false,
   });
   if (resolved?.row) {
-    const matches = [resolved.row, ...resolved.candidates];
-    // Prefer a canonical spelling over candidates reached through aliases.
-    const exactCase = matches.filter((match) => match.name === trimmed);
-    if (exactCase.length === 1) return exactCase[0]!.id;
-    if (resolved.candidates.length > 0)
+    const match = vendorNameMatch(trimmed, resolved.row, resolved.candidates);
+    if (!match)
       throw createAppError(
         "CONSTRAINT_VIOLATION",
-        `Vendor name "${trimmed}" matches ${matches
+        `Vendor name "${trimmed}" matches ${[
+          resolved.row,
+          ...resolved.candidates,
+        ]
           .map(({ shortcode }) => shortcode)
           .join(", ")}; name the intended Vendor by id or merge them.`,
       );
-    return resolved.row.id;
+    return match.id;
   }
   const { row } = await findOrCreateWithShortcode(db, "vendor", {
     where: and(

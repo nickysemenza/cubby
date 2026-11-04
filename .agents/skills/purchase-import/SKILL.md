@@ -207,8 +207,8 @@ charge is not a settlement until the settlement checks establish the match.
    with the URL and quoted text showing the difference; prepare returns them as `vendorCandidates`. Merge real
    duplicates, which keeps the merged names as aliases. Sender proof refuses a
    merchant name another Vendor already answers to; pass that order's
-   `vendorId`. `entity.resolve {entity:"vendor", names}`
-   shows a name's Vendor without creating one.
+   `vendorId`. `entity_read.resolve {entity:"vendor", names}`
+   shows a name's Vendor, or every Vendor sharing it, without creating one.
 2. Collect one preparation payload per order: stable source identity, header, printed
    grand total and currency, item and adjustment lines, shipment state,
    transaction evidence, and finalized document image shortcodes.
