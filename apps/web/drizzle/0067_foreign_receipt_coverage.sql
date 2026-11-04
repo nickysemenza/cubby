@@ -1,5 +1,4 @@
 -- Existing Expense/source bindings own foreign itemization; no new storage.
--- Activate only after compatible consumers retire (production migration runbook).
 CREATE OR REPLACE FUNCTION derived_mark_importsourceorder() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -81,7 +80,3 @@ BEGIN
   END IF;
   RETURN NULL;
 END $$;
---> statement-breakpoint
-SELECT derived_mark('purchase.dataQuality', ARRAY(SELECT id FROM "Purchase" WHERE "deletedAt" IS NULL), 'Foreign receipt coverage rules changed');
---> statement-breakpoint
-SELECT derived_mark('financialTransaction.dataQuality', ARRAY(SELECT id FROM "FinancialTransaction" WHERE "deletedAt" IS NULL), 'Foreign receipt coverage rules changed');
