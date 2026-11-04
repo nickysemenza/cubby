@@ -1,3 +1,4 @@
+import { workWaitCause, workWaitCauses } from "@cubby/schemas/job";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -12,6 +13,8 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+
+import { sqlEnumConstant } from "./sql-enum";
 
 export { job } from "./generated/entity-table-definitions.gen";
 
@@ -83,8 +86,19 @@ export const workItem = pgTable(
     executionTicket: bigint("executionTicket", { mode: "number" }),
     executionStartedAt: timestamp("executionStartedAt", { mode: "date" }),
     reason: text("reason"),
+    /** An explicit attempt-free wait; `readyAt` is its deadline and a new ticket clears it. */
+    waitCause: text("waitCause", { enum: workWaitCauses }),
+    /** Orders the wait's retry cadence, because a wait does not spend `attempts`. */
+    waitStartedAt: timestamp("waitStartedAt", { mode: "date" }),
   },
   (t) => [
+    check(
+      "WorkItem_wait_check",
+      sql`(${t.waitCause} IS NULL AND ${t.waitStartedAt} IS NULL) OR (${t.waitCause} IN (${sql.join(
+        workWaitCauses.map((cause) => sqlEnumConstant(workWaitCause, cause)),
+        sql`, `,
+      )}) AND ${t.waitCause} IS NOT NULL AND ${t.waitStartedAt} IS NOT NULL)`,
+    ),
     // The retired automaticFields family must never be marked again (0045).
     check(
       "WorkItem_no_retired_automatic_fields",

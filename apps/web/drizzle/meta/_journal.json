@@ -484,6 +484,13 @@
       "when": 1793756281681,
       "tag": "0068_assessment_settlement_source_index",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1793765251249,
+      "tag": "0069_work_item_coverage_waits",
+      "breakpoints": true
     }
   ]
 }

@@ -47,6 +47,8 @@ export async function deferWork(
     .set({
       attempts: sql`${workItem.attempts} + 1`,
       lastError: error.slice(0, 2000),
+      waitCause: null,
+      waitStartedAt: null,
       readyAt: sql`now() + least(${backoff.maxMs}::bigint,
         ${backoff.baseMs}::bigint * (2 ^ least(${workItem.attempts}, 20))::bigint) * interval '1 millisecond'`,
     })

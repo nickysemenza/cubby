@@ -48,7 +48,7 @@ it("indexes long retained source references without changing evidence or unfinis
       ).rows,
       work: (
         await client.query(
-          `SELECT to_jsonb(w) AS value FROM "WorkItem" w ORDER BY target,ref`,
+          `SELECT to_jsonb(w) - 'waitCause' - 'waitStartedAt' AS value FROM "WorkItem" w ORDER BY target,ref`,
         )
       ).rows,
     });
@@ -74,5 +74,40 @@ it("indexes long retained source references without changing evidence or unfinis
         }),
       ],
     );
+    const beforeWaits = await retained();
+    await migrateDatabase(db, { through: "0069_work_item_coverage_waits" });
+    expect(await retained()).toEqual(beforeWaits);
+    expect(
+      (
+        await client.query(
+          `SELECT "waitCause", "waitStartedAt" FROM "WorkItem" WHERE target='synthetic.retained' AND ref=$1`,
+          [id],
+        )
+      ).rows,
+    ).toEqual([{ waitCause: null, waitStartedAt: null }]);
+    await expect(
+      client.query(
+        `UPDATE "WorkItem" SET "waitStartedAt"=now() WHERE target='synthetic.retained' AND ref=$1`,
+        [id],
+      ),
+    ).rejects.toMatchObject({ code: "23514" });
+    await client.query(
+      `UPDATE "WorkItem" SET "waitCause"='search_coverage', "waitStartedAt"=now() WHERE target='synthetic.retained' AND ref=$1`,
+      [id],
+    );
+    await client.query(
+      `SELECT derived_mark('synthetic.retained', ARRAY[$1::uuid], 'Synthetic fresh input')`,
+      [id],
+    );
+    expect(
+      (
+        await client.query(
+          `SELECT "waitCause", "waitStartedAt", attempts, "lastError" FROM "WorkItem" WHERE target='synthetic.retained' AND ref=$1`,
+          [id],
+        )
+      ).rows,
+    ).toEqual([
+      { waitCause: null, waitStartedAt: null, attempts: 0, lastError: null },
+    ]);
   });
 }, 90000);

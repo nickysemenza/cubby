@@ -156,13 +156,11 @@ describe("acquisition Expense discovery gating", () => {
       ]),
     );
     expect(
-      (
-        await discoverAcquisitionCandidateScan(ctx.db, {
-          entityKind: "expense",
-          entityId: lexical,
-        })
-      ).complete,
-    ).toBe(false);
+      await discoverAcquisitionCandidateScan(ctx.db, {
+        entityKind: "expense",
+        entityId: lexical,
+      }),
+    ).toMatchObject({ complete: false, gap: "pending" });
   });
 
   it("drops weak semantic-only hits and other-brand lines, keeping same-brand charges", async () => {

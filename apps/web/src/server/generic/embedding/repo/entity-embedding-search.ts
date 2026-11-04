@@ -9,6 +9,8 @@ import { and, eq, inArray, isNotNull, isNull, or, type SQL } from "drizzle-orm";
 import { chunk } from "es-toolkit";
 import { z } from "zod";
 
+import { findErrorCause } from "~/lib/error-diagnostics";
+import type { UnparsedError } from "~/lib/error-utils";
 import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
@@ -33,12 +35,34 @@ import { vectorPayloadHash } from "./embedding-artifact";
 interface EntityEmbeddingCandidate extends SearchableEntityRef {
   similarity: number;
 }
+/**
+ * Why a scan withheld completeness. `pending`: owed search or embedding work
+ * for these kinds can still change the answer. `budget_exceeded`: the fixed ANN
+ * budget ran out over a settled corpus, so waiting cannot change the answer.
+ */
+export type SemanticCoverageGap = "pending" | "budget_exceeded";
 /** Complete describes eligible corpus and budget, never exhaustive ANN recall. */
 export interface SemanticCandidateScan {
   candidates: EntityEmbeddingCandidate[];
   complete: boolean;
+  gap?: SemanticCoverageGap;
 }
-export class SemanticCoverageIncomplete extends Error {}
+/** No gap: neither reason is established (a provider failure or an unready seed). */
+export class SemanticCoverageIncomplete extends Error {
+  constructor(
+    message?: string,
+    readonly gap?: SemanticCoverageGap,
+  ) {
+    super(message);
+  }
+}
+/** Whether this failure only reports owed upstream work, wherever it was wrapped. */
+export const semanticCoveragePending = (error: UnparsedError) =>
+  findErrorCause(
+    error,
+    (cause): cause is SemanticCoverageIncomplete =>
+      cause instanceof SemanticCoverageIncomplete,
+  )?.gap === "pending";
 const CANDIDATE_BUDGET = 100;
 const artifactIdSchema = z.uuid();
 
@@ -186,11 +210,17 @@ function scanValidatedMatches({
       similarity: match.similarity,
     });
   }
+  // Owed work can invalidate the artifacts that filled the budget, so the budget
+  // is judged only once the corpus has settled.
+  const gap: SemanticCoverageGap | undefined = incomplete
+    ? "pending"
+    : raw.length === CANDIDATE_BUDGET && candidates.length < limit
+      ? "budget_exceeded"
+      : undefined;
   return {
     candidates: candidates.slice(0, limit),
-    complete:
-      !incomplete &&
-      !(raw.length === CANDIDATE_BUDGET && candidates.length < limit),
+    complete: !gap,
+    ...(gap ? { gap } : {}),
   };
 }
 
@@ -388,7 +418,10 @@ export async function findSimilarEntitiesPage(
   )
     for (const key of queried) {
       const result = results.get(key);
-      if (result?.status === "fulfilled") result.value.complete = false;
+      if (result?.status === "fulfilled") {
+        result.value.complete = false;
+        result.value.gap = "pending";
+      }
     }
   return results;
 }

@@ -134,6 +134,22 @@ history, and read back retained work and paused Jobs. Measure full request
 latency separately from the database plan; index-build success alone does not
 establish the badge target or lower-compute suitability.
 
+## Explicit WorkItem waits (0069)
+
+`0069_work_item_coverage_waits` appends nullable `waitCause` and
+`waitStartedAt` columns, requires both or neither, and replaces `derived_mark`
+so a fresh source ticket clears the wait. Existing tickets, attempts, errors,
+source evidence and paused Jobs are retained; no backfill or replay occurs.
+The existing `readyAt` column remains the retry deadline.
+
+Apply through the normal serialized migration-before-deploy workflow. The
+ALTER TABLE and function replacement can briefly block writers. After release,
+verify both columns and the CHECK constraint, retained unfinished work, and
+that a fresh mark clears the wait. Pending search coverage must appear as
+waiting rather than as an active failure even when an earlier error is retained.
+Fixed candidate-budget failures remain bounded failures. Historical failed
+evaluations are not reopened by this migration.
+
 ## Source-order fanout capture
 
 Migration `0061_source_order_purchase_fanout` stops new

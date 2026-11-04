@@ -21,6 +21,17 @@ export const jobWaitReasons = [
 export const jobWaitReason = z.enum(jobWaitReasons);
 export type JobWaitReason = z.infer<typeof jobWaitReason>;
 
+/**
+ * Why a WorkItem is explicitly waiting without spending an attempt. It stays on
+ * the item: a typed Job wait would stop wakes for the drain's healthy siblings.
+ */
+export const workWaitCauses = ["search_coverage"] as const;
+export const workWaitCause = z.enum(workWaitCauses);
+export type WorkWaitCause = z.infer<typeof workWaitCause>;
+export const WORK_WAIT_CAUSE_TEXT = {
+  search_coverage: "Waiting for search indexing",
+} as const satisfies Record<WorkWaitCause, string>;
+
 /** Who executes a Job kind; every waiting-on explanation names its lane. */
 export const jobLane = z.enum([
   "apple_device",
@@ -66,8 +77,8 @@ export const jobWaitingOn = z.discriminatedUnion("reason", [
     until: z.iso.datetime(),
     attempts: z.number().int().nonnegative(),
     lastError: z.string().nullable(),
-    /** A stored provider wait (`rate_limit`, `provider_capacity`), when one set the time. */
-    cause: jobWaitReason.nullable(),
+    /** A stored provider wait (`rate_limit`, `provider_capacity`), or the next WorkItem's explicit wait, when one set the time. */
+    cause: z.enum([...jobWaitReasons, ...workWaitCauses]).nullable(),
   }),
   z.object({
     reason: z.literal("blocked"),
@@ -187,6 +198,8 @@ export function describeJobWaitingOn(
     }
     case "backing_off":
       if (Date.parse(waitingOn.until) <= now.getTime()) return "Due now";
+      if (waitingOn.cause === workWaitCause.enum.search_coverage)
+        return `${WORK_WAIT_CAUSE_TEXT[waitingOn.cause]}; next attempt in ${jobSpanText((Date.parse(waitingOn.until) - now.getTime()) / 1000)}`;
       if (waitingOn.attempts === 0)
         return `Due in ${jobSpanText((Date.parse(waitingOn.until) - now.getTime()) / 1000)}`;
       return `Backing off ${untilText(waitingOn.until, now)} after ${waitingOn.attempts} ${waitingOn.attempts === 1 ? "failure" : "failures"}`;

@@ -8,6 +8,7 @@ import { findErrorCause } from "~/lib/error-diagnostics";
  */
 import type { AiEvaluationExecution } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import { ConnectionEvidenceInvalidatedError } from "~/server/domains/connection/repo/entity-connections";
+import { semanticCoveragePending } from "~/server/generic/embedding/repo/entity-embedding";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
 import {
@@ -48,6 +49,7 @@ export const runAiEvaluationExecution = (
       (cause): cause is ConnectionEvidenceInvalidatedError =>
         cause instanceof ConnectionEvidenceInvalidatedError,
     ),
+  coveragePending: semanticCoveragePending,
   pauseRun: async (db, runId, message) => {
     await pauseRunForAiWork(db, runEntityId.parse(runId), message);
   },

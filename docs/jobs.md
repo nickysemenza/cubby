@@ -59,10 +59,16 @@ that reason or a broader source description when several causes coalesce.
 Dependency publications, clock expiry and consistency checks use their owning
 producer's description. A new ticket replaces its reason; retries and `keep`
 preserve it. Existing work can have no recorded trigger.
+Nullable `waitCause` and `waitStartedAt` record an explicit attempt-free wait
+(`workWaitCause`, one cause so far: `search_coverage`); `readyAt` remains its known
+deadline. `reason` keeps why refresh was requested and `lastError` keeps retained
+history, but a stored wait outranks that error in every status read. A new ticket
+or a real failure clears the wait; a retry that still waits keeps its start.
 Nullable execution observations record a page's lease token, exact item ticket
 and start time. They grant no authority: readers show running only for the
 same ticket under a current unexpired Job lease, with no later postponement.
-Queued, future-waiting and failed items remain distinct. Activity's derived
+Queued, future-waiting and failed items remain distinct, and an item with a stored
+wait never counts as failed. Activity's derived
 backlog reports their observed per-value counts and next known attempt without
 adding idle polling or assuming an empty queue means Neon is suspended.
 Execution observations belong to public refresh metadata. Derived computations
@@ -100,6 +106,11 @@ scheduling marks add no domain computation; the adapter bounds their observation
 separately from weighted publication work. Newer or writer-held marks stay owed.
 The page reports those settlements as `covered`; `processed` and `published`
 keep counting the original page's claims.
+`published`, `failed` and `covered` count committed outcomes only: each fenced
+transaction returns its own counts, and the page adds them after it commits, so
+a rollback or SERIALIZABLE replay inflates nothing. The three do not overlap.
+`processed` also includes items a page declined or retained, which have no
+outcome yet.
 The production derived drain can use two such passes under the same Job claim:
 it first expands fanouts from the admitted ordered prefix, then observes direct
 work under the [independent expansion and preparation budgets](entities.md#background-derived-data).
@@ -161,7 +172,10 @@ waits on; every client (web, Apple, CLI, MCP) and every rollup reads it.
   `expired` once the lease lapsed unreclaimed. The holder is `Job.leaseHolder`
   (`{name, deviceId}`), which an external executor records at hand-off;
   generic code never reads a domain's attempt rows.
-- `backing_off`: a failure backoff or provider wait (`cause`) until a time.
+- `backing_off`: a failure backoff or provider wait (`cause`) until a time. A
+  healthy drain sleeping until its next item reports that item's explicit wait as
+  `cause`, read from the WorkItem and described through `WORK_WAIT_CAUSE_TEXT`; the
+  Job stores no typed wait, so a new mark still wakes it for healthy siblings.
 - `blocked`: waiting on other work, such as a device preparing AVIF input.
 - `paused`: stopped by a member or its Run.
 - `update_required`: reserved for an Apple device that must update; the
@@ -700,7 +714,8 @@ publication failure reuses it instead of buying it again.
 Failures map at the drain seam: invalidated evidence settles the evaluation
 `obsolete` as a publication outcome; AI budget, provider capacity and AI
 Gateway admission throw `JobDeferredError`, which stops the page without
-spending attempts; anything else is the item's failure, and its third
+spending attempts; [pending semantic coverage](#semantic-coverage-waits) postpones
+only its item; anything else is the item's failure, and its third
 consecutive failure settles the evaluation `failed` with the raw error and
 settles its requesters. A Run cancel withdraws its requests and drops the items
 of evaluations no other requester still wants. `maxInFlight: 2` caps this kind's
@@ -772,8 +787,8 @@ Jobs still defer when another invocation owns the claim.
 
 One batched fingerprint read fences the page before evaluation and each chunk
 before writes; a changed or deleted source is obsolete without writes.
-Incomplete candidate coverage retries the source before any of its candidates
-publish. Candidate publication locks live endpoints in the shared
+Incomplete candidate coverage [retries or waits](#semantic-coverage-waits) before
+any of the source's candidates publish. Candidate publication locks live endpoints in the shared
 `orderedEntityLockKinds` order (parents before dependent kinds, then alphabetical),
 which embedding publication also uses. Connection chunks prelock the union of
 candidate endpoints, Product pairs and field callback endpoints before any
@@ -820,6 +835,40 @@ uses the shared direct/fanout dirty-mark probe once per page. [#3320](https://gi
 owns full synthetic throughput acceptance.
 Full re-check scheduling remains gated on that acceptance; no production
 throughput improvement is established by the page lifecycle alone.
+
+### Semantic coverage waits
+
+An incomplete semantic scan names its gap on the typed coverage result, and
+`SemanticCoverageIncomplete` carries it to the drain without message matching:
+
+- `pending`: search-document marks or missing embeddings are owed for a
+  candidate kind. Owed work can invalidate the artifacts that filled the ANN
+  budget, so pending wins within one scan.
+- `budget_exceeded`: the settled corpus left the fixed ANN budget short of valid
+  matches. Waiting cannot change that, so it wins across a source's searches.
+- No gap: a provider or configuration failure.
+
+A connection source stops immediately after its acquisition scan on either typed
+gap, before the tag, Product identity and field stages. Its candidates do not
+publish. When every incomplete search is `pending`, the item keeps its ticket,
+priority, attempts, `reason` and `lastError` and stores the `search_coverage` wait.
+Healthy siblings on the page continue, and an empty page keeps the item's deadline.
+
+Nothing wakes the item when upstream settles, except a new mark for the evaluation,
+which clears the wait with its fresh ticket and attempt budget. The retry cadence
+uses the kind's ordinary backoff bounds: each delay is the wait's age so far, clamped
+to `baseMs` and `maxMs` (1, 1, 2, 4, 8 and then 15 minutes for `ai.evaluation`).
+Pending has no attempt ceiling: the evaluation stays queued and the item stays owed
+for as long as upstream owes the work, reported as waiting with its next attempt.
+Run detail counts it under Waiting; the drain Job names the cause and deadline. Each
+retry repeats page preparation, rechecking source and requester authority before any
+paid stage, and may embed its queries again. A paused or cancelled requester
+therefore settles at the next retry or through Run control, not at wait publication,
+which writes only the item. A `budget_exceeded` gap or a provider failure spends
+attempts, clears any wait, and settles `failed` as above.
+
+The `evaluation page` log describes one attempt before the drain maps it, with
+`waiting` and `failed` apart. The Job page result owns committed outcomes.
 
 ## Apple version gate
 

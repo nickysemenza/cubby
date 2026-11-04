@@ -1,4 +1,5 @@
 import { aiEvaluationTarget } from "@cubby/schemas/ai-evaluation";
+import { workWaitCause } from "@cubby/schemas/job";
 
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { findErrorCause, scrubErrorMessage } from "~/lib/error-diagnostics";
@@ -41,7 +42,11 @@ import {
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { JobDeferredError, JobTargetError } from "~/server/generic/jobs/errors";
-import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
+import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
+import {
+  waitForWork,
+  type WorkItem,
+} from "~/server/generic/jobs/repo/work-items";
 import {
   defineDrain,
   type DrainContext,
@@ -68,6 +73,8 @@ export type AiEvaluationExecution = {
   ): Promise<PreparedEvaluationPage>;
   /** Domain evidence that changed during inference: the evaluation settles obsolete. */
   evidenceInvalidated(error: UnparsedError): boolean;
+  /** Upstream work still owes this target's evidence: the item waits for it. */
+  coveragePending(error: UnparsedError): boolean;
   pauseRun(db: Database, runId: string, message: string): Promise<void>;
   runPaused(db: Database, runId: string): Promise<boolean>;
   /** The page runs once its funding window opened: resume Runs a budget stop paused. */
@@ -92,6 +99,8 @@ type Entry =
   | { kind: "park" }
   /** The item's own transactions already committed its outcome. */
   | { kind: "settled" }
+  /** Upstream still owes its evidence: same ticket and attempts, explained on the item. */
+  | { kind: "wait" }
   | { kind: "outcome" }
   | { kind: "obsolete"; reason: string }
   | { kind: "fail"; error: string };
@@ -113,8 +122,9 @@ const evidenceObsolete = (execution: AiEvaluationExecution, error: unknown) =>
 
 /**
  * Domain failures at the drain seam: evidence changes settle obsolete,
- * capacity and funding stop the page without spending attempts, and a
- * stopped requester parks the item. Everything else is the item's failure.
+ * capacity and funding stop the page without spending attempts, pending
+ * upstream coverage postpones only its item, and a stopped requester parks the
+ * item. Everything else is the item's failure.
  */
 async function mapFailure(
   db: Database,
@@ -127,6 +137,7 @@ async function mapFailure(
   if (is(AiEvaluationAttemptObsoleteError)) return { entry: { kind: "skip" } };
   if (is(AiEvaluationUnauthorizedError)) return { entry: { kind: "park" } };
   if (stopsDrainPage(error)) return { failed: error };
+  if (execution.coveragePending(error)) return { entry: { kind: "wait" } };
   const message = errorMessage(error);
   const budget = is(AiBudgetExhaustedError);
   if (budget)
@@ -324,7 +335,10 @@ function aiEvaluationDrainSpec(
         admitted.flatMap((item) => {
           const kind = prepared.entries.get(item.ref)?.kind;
           const target = prepared.targets.get(item.ref);
-          return target && kind !== "skip" && kind !== "settled"
+          return target &&
+            kind !== "skip" &&
+            kind !== "settled" &&
+            kind !== "wait"
             ? [target]
             : [];
         }),
@@ -345,9 +359,24 @@ function aiEvaluationDrainSpec(
         parked.map(({ target }) => target.evaluation),
         false,
       );
-      const retain = parked
-        .filter(({ target }) => authorization.has(target.evaluation.id))
-        .map(({ target }) => target.item);
+      // A wait writes only its own item, so it takes no evaluation or Run lock.
+      // Paused, cancelled or changed demand settles at the retry's prepare,
+      // before any paid stage; a re-marked item is no longer held here.
+      const waiting = held.flatMap(({ target, entry }) =>
+        entry.kind === "wait" ? [target.item] : [],
+      );
+      await waitForWork(
+        tx,
+        waiting,
+        workWaitCause.enum.search_coverage,
+        jobKindPolicy("ai.evaluation").backoff,
+      );
+      const retain = [
+        ...parked
+          .filter(({ target }) => authorization.has(target.evaluation.id))
+          .map(({ target }) => target.item),
+        ...waiting,
+      ];
       const written = held.filter(
         ({ entry }) =>
           entry.kind === "outcome" ||

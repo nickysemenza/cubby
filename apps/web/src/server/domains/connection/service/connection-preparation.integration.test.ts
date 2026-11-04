@@ -41,9 +41,13 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import * as selectedRead from "~/server/entity-kernel/selected-read";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
-import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
+import {
+  getSearchDocumentEmbeddingText,
+  refreshSearchDocument,
+} from "~/server/generic/search/repo/search-document";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -129,14 +133,15 @@ describe("connection preparation and publication authority", () => {
     };
   };
 
-  it("retries incomplete coverage without partial publication, then fails it with the raw error after three attempts", async () => {
-    const values = Array.from(
-      { length: getSemanticEmbeddingConfig().dimensions },
-      (_, axis) => (axis === 0 ? 1 : 0),
+  it("keeps pending coverage on its ticket and attempts, then fails a fixed budget overflow with the raw error after three attempts, never publishing part of a source", async () => {
+    const config = getSemanticEmbeddingConfig();
+    const values = Array.from({ length: config.dimensions }, (_, axis) =>
+      axis === 0 ? 1 : 0,
     );
+    const index = createInMemoryVectorizeIndex();
     setCfEnv(
       fromPartial<Env & { CUBBY_TEST_AI_GATEWAY: { fetch: typeof fetch } }>({
-        VECTORIZE: createInMemoryVectorizeIndex(),
+        VECTORIZE: index,
         BACKGROUND_QUEUE: { sendBatch: async () => {} },
         CUBBY_TEST_AI_GATEWAY: {
           fetch: async () =>
@@ -175,20 +180,63 @@ describe("connection preparation and publication authority", () => {
       .from(aiEvaluation)
       .where(eq(aiEvaluation.runId, runId));
     if (!evaluation) throw new Error("Synthetic incomplete target missing");
+    const owed = await aiEvaluationItem(ctx.db, evaluation.id);
+    const stateOfEvaluation = async () =>
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, evaluation.id))
+      )[0];
+    // The Product's search document has no embedding yet: owed upstream work.
     await drainAiEvaluations(
       ctx.db,
       [evaluation.id],
       { context: kernelCtx(ctx) },
       { pages: 1 },
     );
-    const [settled] = await getDb(ctx.db)
-      .select()
-      .from(aiEvaluation)
-      .where(eq(aiEvaluation.id, evaluation.id));
-    expect(settled?.state).toBe("queued");
+    expect((await stateOfEvaluation())?.state).toBe("queued");
+    const waiting = await aiEvaluationItem(ctx.db, evaluation.id);
+    expect(waiting).toMatchObject({
+      ticket: owed?.ticket,
+      attempts: 0,
+      lastError: null,
+      waitCause: "search_coverage",
+    });
+    expect(await readEntityConnections(ctx.db, source)).toEqual([]);
+
+    // Upstream settles, but the fixed ANN budget holds no complete answer.
+    const text = await getSearchDocumentEmbeddingText(
+      ctx.db,
+      "product",
+      target.entityId,
+    );
+    if (!text) throw new Error("Synthetic Product search document missing");
+    const embeddingId = await seedEntityEmbedding(ctx.db, {
+      ...text,
+      config,
+      values,
+    });
+    const budget = [
+      embeddingId,
+      ...Array.from({ length: 99 }, () => crypto.randomUUID()),
+    ];
+    await index.upsert(
+      budget.map((id) => ({ id, values, metadata: { entityType: "product" } })),
+    );
+    await drainAiEvaluations(
+      ctx.db,
+      [evaluation.id],
+      { context: kernelCtx(ctx) },
+      { pages: 1 },
+    );
+    expect((await stateOfEvaluation())?.state).toBe("queued");
     expect(await aiEvaluationItem(ctx.db, evaluation.id)).toMatchObject({
+      ticket: owed?.ticket,
       attempts: 1,
-      lastError: expect.stringContaining("coverage is unconfirmed"),
+      lastError: expect.stringContaining("exceeded its fixed candidate budget"),
+      waitCause: null,
+      waitStartedAt: null,
     });
     expect(await readEntityConnections(ctx.db, source)).toEqual([]);
     await drainAiEvaluations(
@@ -197,15 +245,12 @@ describe("connection preparation and publication authority", () => {
       { context: kernelCtx(ctx) },
       { pages: 2 },
     );
-    const [exhausted] = await getDb(ctx.db)
-      .select()
-      .from(aiEvaluation)
-      .where(eq(aiEvaluation.id, evaluation.id));
-    expect(exhausted).toMatchObject({
+    expect(await stateOfEvaluation()).toMatchObject({
       state: "failed",
       error: expect.stringContaining("coverage is unconfirmed"),
     });
     expect(await aiEvaluationItem(ctx.db, evaluation.id)).toBeUndefined();
+    expect(await readEntityConnections(ctx.db, source)).toEqual([]);
   });
 
   it("retries an unavailable field target alone after its healthy sibling publishes", async () => {
