@@ -1,8 +1,8 @@
 import CubbyKit
 import SwiftUI
 
-/// Activity shows this device's work, the device backlog, Runs in progress and Runs needing
-/// attention. The household's actionable work across every source is web's `/work-queue`.
+/// Work shows this device's work, the device backlog, Runs in progress and Runs needing
+/// attention. The household's actionable work across every source is web's `/activity`.
 struct ActivityView: View {
     @Environment(AppModel.self) private var appModel
 
@@ -11,7 +11,7 @@ struct ActivityView: View {
     @State private var inProgress: GenericEntityListModel?
     @State private var attention: GenericEntityListModel?
 
-    /// Reloading while Activity is on screen keeps the backlog ETA and both Run sections current.
+    /// Reloading while Work is on screen keeps the backlog ETA and both Run sections current.
     private static let refreshInterval = Duration.seconds(15)
 
     var body: some View {
@@ -23,11 +23,11 @@ struct ActivityView: View {
             runSection("In progress", savedView: "in-progress", model: inProgress)
             runSection("Runs needing attention", savedView: "attention", model: attention)
             Section {
-                OpenOnWebButton(target: .route(path: "/work-queue"), label: "Open work queue on web")
+                OpenOnWebButton(target: .route(path: "/activity"), label: "Open Work on web")
             }
         }
         .fieldGuideSectionStyle()
-        .navigationTitle("Activity")
+        .navigationTitle("Work")
         .refreshControl { await load() }
         // Reload when this device's own phase changes (a job finished, a reconnect).
         .task(id: appModel.companionImageActivity.phase) { await load() }

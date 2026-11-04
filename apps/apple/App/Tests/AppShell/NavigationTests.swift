@@ -52,7 +52,6 @@ struct NavigationTests {
         #expect(destinations.first { $0.route == "/" }?.nativeDestination == .section(.today))
         #expect(destinations.first { $0.route == "/activity" }?.nativeDestination == .section(.activity))
         #expect(destinations.first { $0.route == "/graph" }?.nativeDestination == .section(.graph))
-        #expect(destinations.first { $0.route == "/work-queue" }?.nativeDestination == nil)
     }
 
     @Test func nonBrowsableEntityHasNoNativeSidebarOrLibraryList() throws {

@@ -147,7 +147,7 @@ function streamPace(
 }
 
 /**
- * The Activity page's "Now": one row per kind of work, in plain words, with
+ * Work's "Automatic work" view: one row per kind of work, in plain words, with
  * whether it moves, how fast, and what it waits on. Pace is measured over
  * the last few minutes; time left is that pace applied to what remains.
  */

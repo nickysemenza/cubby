@@ -3,6 +3,7 @@ import {
   useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 
+import { hasIncompleteWorkInputs } from "~/features/work-queue/work-input-status";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityReport } from "~/integrations/tanstack-query/generated/domains/entityReport.gen";
 import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
@@ -75,10 +76,18 @@ export function HomeKeyNumbers({ asOf }: { asOf: HomeAsOfWindow }) {
       label: "Needs you",
       change: {
         identity: "home:needs-you",
-        value: needsYou.data?.meta.totalCount,
+        value: hasIncompleteWorkInputs(needsYou.data?.meta)
+          ? undefined
+          : needsYou.data?.meta.totalCount,
       },
-      value: figure(needsYou, (data) => formatCount(data.meta.totalCount)),
-      context: "To review",
+      value: figure(needsYou, (data) =>
+        hasIncompleteWorkInputs(data.meta)
+          ? "—"
+          : formatCount(data.meta.totalCount),
+      ),
+      context: hasIncompleteWorkInputs(needsYou.data?.meta)
+        ? "Checks incomplete"
+        : "To review",
     },
     {
       id: "spent",

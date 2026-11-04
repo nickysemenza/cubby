@@ -513,14 +513,16 @@ native PostgreSQL installation remain owned by their existing runners.
   - Image processing always accepts uploads and queued work; historical
     enabled/paused settings are ignored. Device availability and capability
     still determine which companion work can execute. Exceptional repair tools
-    live in Activity's Advanced maintenance view; Settings contains connection diagnostics. The read-only
+    live in Work's Advanced maintenance view; Settings contains connection diagnostics. The read-only
     `/api/debug/timing` endpoint requires a member session in every environment
     and returns private, non-cacheable timings and individual errors for the
     database, active USDA release, and UPCitemdb. The UPC probe uses a synthetic
     code, spends one upstream lookup per run when upstream access is enabled,
     and writes no product/cache data.
-- Inventory and location valuation are computed on every read. Search
-  projections are written inside the entity write transaction.
+- Ordinary Inventory and Location reads consume published valuations. Explicit
+  live reports and background preparation retain the canonical computations.
+  Search projections are published by the existing derived drain after input
+  changes, rather than rebuilt inside ordinary reads or source writes.
 - Secrets are set with `wrangler secret put NAME --name cubby`. Production is the only deployed
   environment.
 

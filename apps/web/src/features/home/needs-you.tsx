@@ -5,6 +5,10 @@ import { Link } from "@tanstack/react-router";
 
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import {
+  hasIncompleteWorkInputs,
+  WorkInputStatus,
+} from "~/features/work-queue/work-input-status";
+import {
   suggestionsSearch,
   WorkRowLink,
 } from "~/features/work-queue/work-row-link";
@@ -74,12 +78,13 @@ function NeedsYouContent() {
   );
   const rows = needsYou.data?.items ?? [];
   const total = needsYou.data?.meta.totalCount;
+  const incomplete = hasIncompleteWorkInputs(needsYou.data?.meta);
   return (
     <Section
       title="Needs you"
       headingAs="h2"
       ruled
-      count={total === undefined ? undefined : formatCount(total)}
+      count={total === undefined || incomplete ? undefined : formatCount(total)}
       actions={
         <Link to="/work-queue" search={NEEDS_YOU_SEARCH}>
           Work queue
@@ -97,9 +102,12 @@ function NeedsYouContent() {
         <HomeRowsLoading label="Loading work that needs you" />
       ) : (
         <>
+          <WorkInputStatus meta={needsYou.data?.meta} />
           {rows.length === 0 && (
             <EmptyState size="inline" className="mt-2">
-              Nothing is waiting on you.
+              {incomplete
+                ? "No known work while checks finish updating."
+                : "Nothing is waiting on you."}
             </EmptyState>
           )}
           <EntityDisplayImagesProvider

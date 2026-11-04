@@ -256,8 +256,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           )}
           {relatedDraft === draft &&
           !related.isPlaceholderData &&
-          related.data?.status === "unavailable" &&
-          primary.data?.length ? (
+          related.data?.status === "unavailable" ? (
             <p className="text-xs text-muted-foreground">
               Related matches are temporarily unavailable.
             </p>

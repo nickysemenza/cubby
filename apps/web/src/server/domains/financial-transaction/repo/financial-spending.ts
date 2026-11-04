@@ -7,6 +7,7 @@ import {
   financialSpendingPlan,
   financialSpendingRequest,
   financialSpendingSource,
+  financialSpendingCostType,
   type FinancialSpendingPlan,
 } from "@cubby/schemas/financial-booking";
 import { financialTransactionSettlementViolation } from "@cubby/schemas/financial-transaction";
@@ -1792,9 +1793,10 @@ export async function commitFinancialSpending(
           vendorId: resolved.row.shortcode,
           spendingCategoryId: fresh.spendingCategoryId,
           purchaserId: fresh.purchaserId,
-          costType:
-            fresh.request.costType ??
-            (facts.source.kind === "fee" ? "services" : "materials"),
+          costType: financialSpendingCostType(
+            facts.source.kind,
+            fresh.request.costType,
+          ),
         }),
         actor,
       );

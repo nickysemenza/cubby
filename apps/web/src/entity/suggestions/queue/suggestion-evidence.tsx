@@ -3,7 +3,10 @@ import {
   COST_TYPE_LABELS,
   costTypeValues,
 } from "@cubby/schemas/expense-fields";
-import type { FinancialSpendingPlan } from "@cubby/schemas/financial-booking";
+import {
+  financialSpendingCostType,
+  type FinancialSpendingPlan,
+} from "@cubby/schemas/financial-booking";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type {
   SpendingCategoryShortcode,
@@ -71,14 +74,11 @@ const COST_TYPE_OPTIONS = [
   ...costTypeValues.map((value) => ({ value, label: COST_TYPE_LABELS[value] })),
 ];
 
-function showsCostTypeChoice(
-  plan: FinancialSpendingPlan | null | undefined,
-  costType: FinancialSpendingPlan["request"]["costType"],
-) {
+function showsCostTypeChoice(plan: FinancialSpendingPlan | null | undefined) {
   return (
-    plan?.status !== "ready" ||
-    plan.effect === "create_aggregate" ||
-    costType !== undefined
+    plan == null ||
+    plan.status === "review_required" ||
+    (plan.status === "ready" && plan.effect === "create_aggregate")
   );
 }
 
@@ -158,8 +158,7 @@ function SpendingResultFacts({
           "Cost type",
           plan.effect === "create_aggregate"
             ? COST_TYPE_LABELS[
-                plan.request.costType ??
-                  (kind === "fee" ? "services" : "materials")
+                financialSpendingCostType(kind, plan.request.costType)
               ]
             : "Keep existing Expense classification",
         ],
@@ -303,7 +302,11 @@ function SpendingEvidence({
                       name: candidate.name,
                     });
                     setDraft(row.id, {
-                      booking: { ...booking, purchaseId: candidate.purchaseId },
+                      booking: {
+                        ...booking,
+                        purchaseId: candidate.purchaseId,
+                        costType: undefined,
+                      },
                     });
                   }}
                 >
@@ -354,7 +357,7 @@ function SpendingEvidence({
                 });
               }}
             />
-            {showsCostTypeChoice(controls, current.booking?.costType) ? (
+            {showsCostTypeChoice(controls) ? (
               <RecordPicker
                 mode="choose"
                 label="Cost type for new Expense"
@@ -451,7 +454,11 @@ function SpendingEvidence({
               setValue={(item) => {
                 setPurchase(item);
                 setDraft(row.id, {
-                  booking: { ...booking, purchaseId: item?.id },
+                  booking: {
+                    ...booking,
+                    purchaseId: item?.id,
+                    costType: undefined,
+                  },
                 });
               }}
             />

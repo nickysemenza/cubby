@@ -583,7 +583,7 @@ failure count alone does not establish uninterrupted execution.
   minutes. The completion sample excludes normalization, failed attempts and stale
   image sources. Without a successful completion sample the ETA is unknown.
 
-Web Activity’s Now view presents the device backlog banner, compact lane/reason
+Work’s Automatic work view presents the device backlog banner, compact lane/reason
 counts, Runs needing attention, then Jobs. Needs you also exposes Run and Job
 attention alongside the Work queue’s Decisions and Problems groups. Navigable counts use the Job entity
 population, hiding internal work with the table. Every supplied retry
@@ -952,7 +952,7 @@ Deployment's first request bootstraps existing work and AI activation once per W
 version; deployment probes initiate this explicitly. App-open coalesces recovery
 and mail discovery. Gmail provider push is not implemented here.
 
-Activity → Now shows Running, Next wake, Waiting and Last recovery enrollment, known deadlines
+Work → Automatic work shows Running, Next wake, Waiting and Last recovery enrollment, known deadlines
 linked to Jobs and disclosed wake/delivery/recovery history. Observation timestamps
 are explicit. No known deadline does not establish that Neon is suspended. An
 observed wake delivery or still-armed alarm over five minutes overdue appears in

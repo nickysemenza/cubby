@@ -18,6 +18,9 @@ handoffs. Suggestions, automatic decisions and rules remain accessible from
 Improvements, and list counts, detail and inspector suggestion review stay in place.
 These views do not persist lanes, assignments or another work ledger. A record
 can appear in more than one view when it has different actionable work.
+Home and Work disclose the same incomplete Project or diagnostic publications.
+Home leaves its total unavailable while those checks are incomplete and labels
+an empty known roster without claiming that nothing needs attention.
 
 The Work queue derives work from records, gaps, findings, execution, review
 state and Problems detectors. Each domain declares its Work sources (reasons,

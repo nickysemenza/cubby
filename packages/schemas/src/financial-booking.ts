@@ -137,6 +137,14 @@ export const financialBookingResult = z.object({
 export type FinancialBookingInput = z.infer<typeof financialBookingInput>;
 export type FinancialBookingPreview = z.infer<typeof financialBookingPreview>;
 
+/** The reviewed choice wins; otherwise fees and purchases keep their source defaults. */
+export function financialSpendingCostType(
+  kind: z.infer<typeof financialTransactionKind> | null,
+  reviewed?: FinancialBookingInput["costType"],
+): FinancialBookingInput["costType"] {
+  return reviewed ?? (kind === "fee" ? "services" : "materials");
+}
+
 export const financialConvergenceInput = z.strictObject({
   transactionId: financialTransactionShortcode,
   emailId: emailShortcode.optional(),

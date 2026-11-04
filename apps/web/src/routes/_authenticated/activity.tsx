@@ -3,6 +3,10 @@ import { auditChannelSchema } from "@cubby/schemas/context";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import { jobLane, jobState, jobWaitingOnReason } from "@cubby/schemas/job";
 import { RUN_KINDS } from "@cubby/schemas/run-fields";
+import {
+  suggestionListFamily,
+  type SuggestionListFamily,
+} from "@cubby/schemas/suggestion-list";
 import { workFamily, workQueueInput } from "@cubby/schemas/work-queue";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -57,22 +61,25 @@ const decisionScope = {
   ),
 } as const;
 const problemScope = { view: "problems" } as const;
-const financialProposalScope = workQueueInput
+const optionalProposalFamilies: readonly SuggestionListFamily[] = [
+  "field",
+  "recommendation",
+  "image_description",
+];
+const requiredProposalScope = workQueueInput
   .pick({ view: true, family: true, reason: true })
   .parse({
     view: "human",
     family: "suggestion",
-    reason: ["suggestions:statement_transaction", "suggestions:transfer_pair"],
+    reason: suggestionListFamily.options
+      .filter((family) => !optionalProposalFamilies.includes(family))
+      .map((family) => `suggestions:${family}`),
   });
 const optionalProposalScope = workQueueInput
   .pick({ view: true, family: true, reason: true })
   .parse({
     family: "suggestion",
-    reason: [
-      "suggestions:field",
-      "suggestions:recommendation",
-      "suggestions:image_description",
-    ],
+    reason: optionalProposalFamilies.map((family) => `suggestions:${family}`),
   });
 const researchScope = { family: "research" } as const;
 const externalScope = { view: "external" } as const;
@@ -188,10 +195,10 @@ function ActivityBody() {
                     <Section headingAs="h2" title="Decisions">
                       <WorkQueue scope={decisionScope} label="Decisions" />
                     </Section>
-                    <Section headingAs="h2" title="Financial proposals">
+                    <Section headingAs="h2" title="Review proposals">
                       <WorkQueue
-                        scope={financialProposalScope}
-                        label="Financial proposals"
+                        scope={requiredProposalScope}
+                        label="Review proposals"
                       />
                     </Section>
                     <Section headingAs="h2" title="Problems">

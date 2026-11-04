@@ -12,7 +12,6 @@ import {
   workRecordTypeOptions,
 } from "@cubby/schemas/work-queue";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
-import { countLabel } from "@cubby/shared/pluralize";
 import { TrayIcon } from "@phosphor-icons/react/dist/csr/Tray";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -50,7 +49,7 @@ import {
 } from "~/entity/table/use-table-state";
 import { WorkActions } from "~/entity/work-queue/work-actions";
 import { ownerLabel, OwnerPill } from "~/entity/work-queue/work-queue-display";
-import { AttentionInputStatus } from "~/features/project/attention-input-status";
+import { WorkInputStatus } from "~/features/work-queue/work-input-status";
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { copyShortcodes } from "~/lib/clipboard";
 import { formatCount } from "~/lib/number-format";
@@ -732,26 +731,9 @@ export function WorkQueue({
   const tabsTarget = usePageWorkbenchTarget("tabs", !embedded);
   const PreviewSheet = inspection.PreviewSheet;
 
-  const incompleteCount = firstPage?.meta.incompleteProjectIds?.length ?? 0;
-  const incompleteDiagnostics = firstPage?.meta.incompleteDiagnosticSources;
-  const diagnosticError = incompleteDiagnostics?.find(
-    (source) => source.error,
-  )?.error;
   return (
     <>
-      <AttentionInputStatus count={incompleteCount} />
-      {!!incompleteDiagnostics?.length && (
-        <p className="px-2 text-sm text-muted-foreground md:px-4">
-          Diagnostic counts are unavailable or out of date for{" "}
-          {countLabel(incompleteDiagnostics.length, "check")}. Counts include
-          known findings only.
-          {incompleteDiagnostics.some((source) => source.pending) &&
-            " Updates are pending."}
-          {diagnosticError && (
-            <span className="block font-mono">{diagnosticError}</span>
-          )}
-        </p>
-      )}
+      <WorkInputStatus meta={firstPage?.meta} />
       {tabsTarget &&
         createPortal(
           <ViewTabs
