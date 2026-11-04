@@ -27,29 +27,31 @@ const gapSource: WorkSource = {
   candidates: async (db, scope) => {
     const readGap = gapPublicationRead({ scope, entity: "expense" });
     if (!readGap) return null;
-    return {
-      query: selectWorkCandidates(db, gaps, {
+    const baseWhere = await expenseScaffold.prepareWhere(
+      db,
+      expenseFiltersSchema.parse(readGap.filters),
+    );
+    const candidates = (missingInputs: boolean) =>
+      selectWorkCandidates(db, gaps, {
         entity: "expense",
         id: sql`${table.shortcode}`,
         name: sql`"Expense".name`,
         owners: workExpenseSourceOwners(outer(table.id)),
         shared: false,
         ...readGap.columns,
+        ...(missingInputs ? readGap.missingColumns : {}),
         ...expenseWorkFacts(),
       })
         .from(table)
         .leftJoin(readGap.publication, readGap.match)
         .where(
           and(
-            await expenseScaffold.prepareWhere(
-              db,
-              expenseFiltersSchema.parse(readGap.filters),
-            ),
-            readGap.admission,
+            baseWhere,
+            missingInputs ? readGap.missingInputs : readGap.admission,
             recordScope(scope, sql`${table.shortcode}`),
           ),
-        ),
-    };
+        );
+    return { query: candidates(false), missingInputs: candidates(true) };
   },
 };
 export const expenseWorkSources = (): WorkSource[] => [

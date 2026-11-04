@@ -176,8 +176,17 @@ async function queryWorkQueue(
   for (const candidates of prepared)
     for (const cte of candidates.ctes ?? []) ctes.set(cte.name, cte);
   const queries: SQLWrapper[] = prepared.length
-    ? prepared.map((candidates) => candidates.query)
-    : [emptyWorkCandidates(db)];
+    ? prepared.flatMap((candidates) => [
+        sql`SELECT candidate.*, false AS input_incomplete FROM (${candidates.query}) candidate`,
+        ...(candidates.missingInputs
+          ? [
+              sql`SELECT candidate.*, true AS input_incomplete FROM (${candidates.missingInputs}) candidate`,
+            ]
+          : []),
+      ])
+    : [
+        sql`SELECT candidate.*, false AS input_incomplete FROM (${emptyWorkCandidates(db)}) candidate`,
+      ];
   const union = sql.join(
     queries.map((query) => sql`(${query})`),
     sql` UNION ALL `,
@@ -223,6 +232,20 @@ async function queryWorkQueue(
     memberFence,
     search,
     filterPredicate(requested),
+  );
+  // Missing inputs cannot establish positive or negative reason membership.
+  // Source pruning still applies; routing, record facts and search remain fenced.
+  const {
+    reason: _reason,
+    reasonExclude: _reasonExclude,
+    ...inputFilters
+  } = requested;
+  const incompletePopulation = and(
+    ...composition.deferrals.map((deferral) => sql`NOT (${deferral})`),
+    ownerAdmission,
+    memberFence,
+    search,
+    filterPredicate(inputFilters),
   );
   const viewPredicates = Object.fromEntries(
     workQueueList.views.map((view) => [
@@ -326,7 +349,12 @@ async function queryWorkQueue(
       ) routing
     ),
     filtered AS MATERIALIZED (
-      SELECT * FROM routed work ${population ? sql`WHERE ${population}` : sql``}
+      SELECT * FROM routed work WHERE NOT input_incomplete
+      ${population ? sql`AND (${population})` : sql``}
+    ),
+    incomplete AS (
+      SELECT * FROM routed work WHERE input_incomplete
+      ${incompletePopulation ? sql`AND (${incompletePopulation})` : sql``}
     ),
     eligible AS (
       SELECT * FROM filtered ${selectedView ? sql`WHERE ${selectedView}` : sql``}
@@ -338,6 +366,9 @@ async function queryWorkQueue(
     )
     SELECT
       (SELECT count(*)::int FROM eligible) AS total,
+      coalesce((SELECT jsonb_agg(to_jsonb(missing) ORDER BY source) FROM (
+        SELECT source, count(DISTINCT key)::int AS count FROM incomplete GROUP BY source
+      ) missing), '[]'::jsonb) AS "incompleteSources",
       (SELECT jsonb_build_object('all', count(*)::int, ${sql.join(
         Object.entries(viewPredicates).flatMap(([view, predicate]) => [
           sql`${view}::text`,
@@ -381,6 +412,10 @@ async function queryWorkQueue(
   const row = z
     .object({
       total: z.number(),
+      incompleteSources: workQueueOutSchema.shape.meta.shape.incompleteSources
+        .unwrap()
+        .element.omit({ label: true })
+        .array(),
       viewCounts: z.record(z.string(), z.number()),
       groups: z
         .array(
@@ -425,6 +460,10 @@ async function queryWorkQueue(
       incompleteProjectIds: await composition.incompleteProjectIds?.(),
       incompleteDiagnosticSources:
         await composition.incompleteDiagnosticSources?.(),
+      incompleteSources: row.incompleteSources.map((input) => ({
+        ...input,
+        label: sourceById.get(input.source)?.inputLabel ?? input.source,
+      })),
       totalCount: row.total,
       viewCounts: row.viewCounts,
       reasons,

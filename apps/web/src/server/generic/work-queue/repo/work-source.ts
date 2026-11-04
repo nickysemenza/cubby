@@ -45,6 +45,8 @@ export interface WorkCte {
 /** One source's candidates: its Drizzle select plus any CTEs it reads. */
 export interface WorkCandidates {
   readonly query: SQLWrapper;
+  /** Potential records whose published inputs are absent; never actionable rows. */
+  readonly missingInputs?: SQLWrapper;
   readonly ctes?: readonly WorkCte[];
 }
 
@@ -67,6 +69,8 @@ export interface WorkSource {
   readonly actions?: readonly WorkAction[];
   /** Admits gap reasons only; a reason filter of data checks keeps it. */
   readonly carriesGaps?: boolean;
+  /** Names the published inputs when a source reports missingInputs. */
+  readonly inputLabel?: string;
   readonly candidates: (
     db: Database,
     scope: WorkScope,

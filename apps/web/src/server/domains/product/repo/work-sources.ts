@@ -24,29 +24,34 @@ const gapSource: WorkSource = {
     const readGap = gapPublicationRead({ scope, entity: "product" });
     if (!readGap) return null;
     const read = productWorkReadContext(scope);
-    return {
-      query: selectWorkCandidates(db, gaps, {
+    const where = await productScaffold.prepareWhere(
+      db,
+      productFiltersSchema.parse(readGap.filters),
+      [],
+      read.context,
+    );
+    const candidates = (missingInputs: boolean) =>
+      selectWorkCandidates(db, gaps, {
         entity: "product",
         id: sql`${table.shortcode}`,
         name: sql`"Product".name`,
         owners: sql`ARRAY[]::uuid[]`,
         shared: true,
         ...readGap.columns,
+        ...(missingInputs ? readGap.missingColumns : {}),
       })
         .from(table)
         .leftJoin(readGap.publication, readGap.match)
         .where(
           and(
-            await productScaffold.prepareWhere(
-              db,
-              productFiltersSchema.parse(readGap.filters),
-              [],
-              read.context,
-            ),
-            readGap.admission,
+            where,
+            missingInputs ? readGap.missingInputs : readGap.admission,
             recordScope(scope, sql`${table.shortcode}`),
           ),
-        ),
+        );
+    return {
+      query: candidates(false),
+      missingInputs: candidates(true),
       ctes: read.ctes,
     };
   },

@@ -21,6 +21,13 @@ can appear in more than one view when it has different actionable work.
 Home and Work disclose the same incomplete Project or diagnostic publications.
 Home leaves its total unavailable while those checks are incomplete and labels
 an empty known roster without claiming that nothing needs attention.
+Gap sources also report records whose quality inputs have not been published.
+Those records contribute completeness metadata, never guessed gaps or actionable
+rows. The same candidate filters, routing, member fence and planned-Purchase
+deferral apply; negative reason filters cannot establish that unknown records
+are excluded. Search uses the source's possible reason labels until facts exist.
+Counts and view counts cover known work only while any admitted source is
+incomplete. Publication makes the ordinary read complete without a read repair.
 
 The Work queue derives work from records, gaps, findings, execution, review
 state and Problems detectors. Each domain declares its Work sources (reasons,

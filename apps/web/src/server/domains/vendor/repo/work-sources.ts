@@ -22,28 +22,30 @@ const gapSource: WorkSource = {
   candidates: async (db, scope) => {
     const readGap = gapPublicationRead({ scope, entity: "vendor" });
     if (!readGap) return null;
-    return {
-      query: selectWorkCandidates(db, gaps, {
+    const baseWhere = await vendorScaffold.prepareWhere(
+      db,
+      vendorFiltersSchema.parse(readGap.filters),
+    );
+    const candidates = (missingInputs: boolean) =>
+      selectWorkCandidates(db, gaps, {
         entity: "vendor",
         id: sql`${table.shortcode}`,
         name: sql`"Vendor".name`,
         owners: sql`ARRAY[]::uuid[]`,
         shared: true,
         ...readGap.columns,
+        ...(missingInputs ? readGap.missingColumns : {}),
       })
         .from(table)
         .leftJoin(readGap.publication, readGap.match)
         .where(
           and(
-            await vendorScaffold.prepareWhere(
-              db,
-              vendorFiltersSchema.parse(readGap.filters),
-            ),
-            readGap.admission,
+            baseWhere,
+            missingInputs ? readGap.missingInputs : readGap.admission,
             recordScope(scope, sql`${table.shortcode}`),
           ),
-        ),
-    };
+        );
+    return { query: candidates(false), missingInputs: candidates(true) };
   },
 };
 export const vendorWorkSources = (): WorkSource[] => [
