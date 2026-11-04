@@ -922,7 +922,14 @@ function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
             ${immutable.judgment} AS ${sql.identifier("judgment")}`,
           );
         return client
-          .select(selection)
+          .select({
+            ...selection,
+            id: outer(a.id),
+            family:
+              scope.eligibility.kind === "suggestions"
+                ? s.family
+                : outer(a.family),
+          })
           .from(s)
           .innerJoinLateral(
             sql`(${publication} OFFSET 0) AS ${sql.identifier("a")}`,
