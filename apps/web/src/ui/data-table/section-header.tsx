@@ -85,7 +85,7 @@ export function SectionHeader({
           data-section-total={total.columnId}
           className={cn(
             // Above the sticky label, so a money column near the start keeps its total.
-            "absolute inset-y-0 z-20 flex items-center truncate px-1 text-xs tabular-nums",
+            "pointer-events-none absolute inset-y-0 z-20 flex items-center truncate px-1 text-xs tabular-nums",
             total.numeric && "justify-end",
           )}
           style={{ insetInlineStart: total.start, width: total.width }}

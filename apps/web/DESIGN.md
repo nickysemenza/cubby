@@ -512,7 +512,7 @@ Share the visual grammar, never the domain arithmetic. Statistical charts (ranke
 
 ### Decision steps
 
-`DecisionSteps` is the interactive RecordList timeline, using RecordRow expanded detail and actions. Done uses a filled positive dot, blocked a faint point, not needed a hollow ring, and needs input a citron attention mark, never warning. Answered rows keep their summary inline and a quiet change disclosure: table-height on desktop, 44px phone targets. Only the open body is visible; hidden bodies stay mounted to preserve drafts and suggestion receipts. Opening a body moves focus into it. Optional 112px evidence media spans the rows on desktop and precedes them on phone. Callers supply steps and bodies; the component owns only disclosure.
+`DecisionSteps` is the interactive RecordList timeline, using RecordRow expanded detail and actions. Done uses a filled positive dot, blocked a faint point, not needed a hollow ring, and needs input a citron attention mark, never warning. Answered rows keep their summary inline and a quiet change disclosure: 28px on desktop, 44px phone targets. Only the open body is visible; hidden bodies stay mounted to preserve drafts and suggestion receipts. Opening a body moves focus into it. Optional 112px evidence media spans the rows on desktop and precedes them on phone. Callers supply steps and bodies; the component owns only disclosure.
 
 ### Photo inventory review
 
