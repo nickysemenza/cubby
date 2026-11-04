@@ -15,6 +15,11 @@ import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { refreshStateSummary } from "~/ui/derived/backlog";
+import {
+  backlogStates,
+  describeRecentPublications,
+} from "~/ui/derived/backlog-summary";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -208,10 +213,9 @@ export function WorkFeed({
   const finished = views.filter((view) => view.status === "done");
   const windows = activity.data?.windows;
   const derivedRecent = backlog.data?.recent.perMinute ?? [];
-  const derivedUpdated = derivedRecent.reduce((sum, n) => sum + n, 0);
-  const derivedPace =
-    derivedRecent.slice(-5).reduce((sum, n) => sum + n, 0) / 5;
+  const derivedPublished = derivedRecent.reduce((sum, n) => sum + n, 0);
   const derivedWaiting = backlog.data?.total ?? 0;
+  const derivedExecution = backlog.data ? backlogStates(backlog.data) : null;
   const completedTotal = views.reduce(
     (sum, view) => sum + view.stream.completed,
     0,
@@ -220,10 +224,10 @@ export function WorkFeed({
     ? "stale"
     : derivedWaiting === 0
       ? "done"
-      : derivedPace > 0
+      : (derivedExecution?.running ?? 0) > 0
         ? "working"
-        : (backlog.data?.oldestWaitingSeconds ?? 0) >= 600
-          ? "stuck"
+        : (derivedExecution?.failed ?? 0) > 0
+          ? "failed"
           : "waiting";
   const working =
     (!activity.isError && views.some((view) => view.status === "working")) ||
@@ -234,8 +238,8 @@ export function WorkFeed({
   const caption = unknown
     ? "Current work status unavailable"
     : activeCount
-      ? `${countLabel(activeCount, "kind")} of work in progress · ${formatCount(completedTotal + derivedUpdated)} finished in the last ${windows?.completedMinutes ?? 15} min`
-      : `All quiet · ${formatCount(completedTotal + derivedUpdated)} finished in the last ${windows?.completedMinutes ?? 15} min`;
+      ? `${countLabel(activeCount, "kind")} of work outstanding · ${formatCount(completedTotal)} Jobs finished in the last ${windows?.completedMinutes ?? 15} min`
+      : `All quiet · ${formatCount(completedTotal)} Jobs finished in the last ${windows?.completedMinutes ?? 15} min`;
 
   const visibleViews = attentionOnly
     ? live.filter(
@@ -246,7 +250,9 @@ export function WorkFeed({
       )
     : [...live, ...finished];
   const showDerived =
-    !attentionOnly || derivedStatus === "stuck" || derivedStatus === "stale";
+    !attentionOnly ||
+    (derivedExecution?.failed ?? 0) > 0 ||
+    derivedStatus === "stale";
   return (
     <Section
       headingAs={attentionOnly ? "h3" : "h2"}
@@ -320,7 +326,7 @@ export function WorkFeed({
             }
           />
         ) : showDerived &&
-          ((backlog.data && (derivedWaiting > 0 || derivedUpdated > 0)) ||
+          ((backlog.data && (derivedWaiting > 0 || derivedPublished > 0)) ||
             backlogStale) ? (
           <FeedRow
             testId="work-stream-derived"
@@ -345,12 +351,12 @@ export function WorkFeed({
               backlogStale
                 ? `Data read ${formatRelative(backlog.dataUpdatedAt, now)}`
                 : derivedWaiting
-                  ? `${formatCount(derivedWaiting)} waiting${(backlog.data?.oldestWaitingSeconds ?? 0) >= 60 ? ` · oldest waiting ${duration(backlog.data?.oldestWaitingSeconds ?? 0)}` : ""}`
+                  ? `${derivedExecution?.unknown ? "Known states: " : ""}${derivedExecution ? refreshStateSummary(derivedExecution) : "Execution state unavailable"}${derivedExecution?.unknown ? ` · ${formatCount(derivedExecution.unknown)} state not reported` : ""}${(backlog.data?.oldestWaitingSeconds ?? 0) >= 60 ? ` · oldest waiting ${duration(backlog.data?.oldestWaitingSeconds ?? 0)}` : ""}`
                   : "Up to date"
             }
             pace={
               backlog.data && !backlogStale
-                ? `${formatCount(derivedUpdated)} updated in ${backlog.data.recent.windowMinutes} min`
+                ? describeRecentPublications(backlog.data)
                 : null
             }
           />

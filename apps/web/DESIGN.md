@@ -580,27 +580,25 @@ source header and the chosen cover outlined. Header and table thumbnails open
 the chain; the Images section also renders it. Both read the record-level
 `fieldExplanation.imageChain` query and preserve its precedence order. Editing
 remains #3310.
-The sidebar shows “Updating N values · Activity” only with a nonempty backlog;
-Activity shows outstanding work as a record type x derived value cross-tab:
+The sidebar shows remaining refreshes only with a nonempty backlog.
+Work shows outstanding entity-field work as a record type x derived value cross-tab:
 fields shared by the most types lead, `·` marks a value the type does not
 declare, idle declared cells read a muted 0, and counts take the shared heat
 scale with row and column totals. Queued work matching no declaration is
 counted below the matrix rather than dropped.
-While Activity is open, it samples the backlog every 15 seconds and shows an
-approximate remaining time after a minute of net decrease, using up to five
-minutes of observations. A gap over a minute resets the estimate. Flat or growing
-work has no ETA; new dependency work can change the estimate.
+Internal refresh sources, including Assessment reviews, retain their own labels,
+observed execution states, triggers and retry deadlines beside the field matrix.
+Remaining counts do not establish completed outcomes, a workload total or an ETA.
+Current publications are shown by source and age window, without interpreting
+their age distribution as an execution-event rate.
 
 Progress uses `ui/primitives/progress.tsx`, following ReUI's Base UI pattern with
 `ProgressLabel`, `ProgressValue`, and a 6px token-colored track. Labels and
 values stack on phone widths so long Job kinds retain their own line. Run detail and
 Activity Work cells show the current phase's known processed/total counts;
-unknown totals remain text. The expanded sidebar's large derived backlog (100 or more observed values)
-shows net depletion from the
-view's high-water mark, never lifetime completion. Incoming work can reduce the
-fill. Idle work or an observation gap over a minute resets the baseline; the
-sidebar samples every 15 seconds and its collapsed rail retains the status dot.
-The observation window is local to the mounted view, not a durable workload total.
+unknown totals remain text. The derived backlog uses counts and observed states;
+it has no completion bar based on queue depletion. The collapsed rail retains
+its status dot. Client synchronization remains separate from execution progress.
 
 ### Activity and evaluation progress
 
