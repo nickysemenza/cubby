@@ -468,10 +468,13 @@ precision and use the event id to break ties. Data-only web consumers use
 
 Detail sections are authored for reading (`detail.sections` below); nothing is
 derived from edit groups. A section keeps its declared `workspace`, else a
-timeline joins Evidence and a relation Work. Web detail renders every section in one full-width
-column in declaration order — there is no supporting rail. A section's
+timeline joins Evidence and a relation Work. Web detail renders sections in declaration order after any declared `detail.lead`
+sections, full width unless `detail.pairs` sets two side by side; pairs stack below
+1000px of workspace, relation tables cannot pair, and there is no supporting rail.
+Native ignores `lead` and `pairs`: `detailSectionJSON` omits them. A board list view
+marked `webOnly` is likewise omitted from generated Swift. A section's
 `placement` is `primary` (shares a ruled plane with its neighbors) or `full`
-(its own plane); journal presentations keep their relation-first ordering. Web identity/media composition follows
+(its own plane); journal presentations keep their relation-first ordering. A quality check's `placement: "images"` shows its result in Images, and summary cells drop absent fields and readers that find nothing. Web identity/media composition follows
 [the web design contract](../apps/web/DESIGN.md); galleries remain their own section.
 
 `presentation.recordIconEntityField` names a read-only projection containing an
