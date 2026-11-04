@@ -131,6 +131,18 @@ export async function prepareEntityConnections(
     await captureCandidates(scan.candidates);
     return scan;
   });
+  // A source with a known coverage gap cannot publish on this attempt, so it
+  // never enters the paid tag, identity and field stages below.
+  if (acquisition.gap)
+    return {
+      connections,
+      productPairs,
+      lockRefs,
+      publications: publishers,
+      complete: false,
+      coverageErrors: acquisition.coverageErrors,
+      coverageGap: acquisition.gap,
+    };
   const candidates: ConnectionCandidate[] = [];
   if (
     (!ports.initialConnections && source.entityKind === "expense") ||
@@ -212,6 +224,7 @@ export async function prepareEntityConnections(
     publications: publishers,
     complete: acquisition.complete,
     coverageErrors: acquisition.coverageErrors,
+    coverageGap: acquisition.gap,
   };
 }
 

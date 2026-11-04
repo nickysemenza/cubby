@@ -97,6 +97,10 @@ import {
   fieldInputFingerprintIfLive,
 } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import {
+  SemanticCoverageIncomplete,
+  semanticCoveragePending,
+} from "~/server/generic/embedding/repo/entity-embedding";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import type { DrainContext } from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
@@ -1300,11 +1304,15 @@ async function evaluateAiRefreshPage<P, O>(
     if (result.status === "fulfilled") outcomes.set(id, result.value);
     else failures.set(id, result.reason);
   });
+  // This attempt before the drain maps or commits it. Committed outcomes are the
+  // Job page's result; a coverage wait is neither a failure nor a spent attempt.
+  const waiting = [...failures.values()].filter(semanticCoveragePending).length;
   log.info("evaluation page", {
     claimedSlots: targets.length,
     prepared: ready.length,
     evaluated: outcomes.size,
-    failed: failures.size + oversized.size,
+    waiting,
+    failed: failures.size - waiting + oversized.size,
     overflow: overflowed.length,
     usageGroups: groups.size,
     preparedBytes,
@@ -1745,10 +1753,11 @@ function connectionEvaluationPageAdapter(
         },
       );
       // Incomplete coverage retries the whole source rather than publishing
-      // part of its candidates.
+      // part of its candidates. The drain maps a pending gap to a wait.
       if (!preparation.complete)
-        throw new Error(
+        throw new SemanticCoverageIncomplete(
           `Connection candidate coverage is unconfirmed. ${preparation.coverageErrors.join("\n")}`,
+          preparation.coverageGap,
         );
       return {
         source,

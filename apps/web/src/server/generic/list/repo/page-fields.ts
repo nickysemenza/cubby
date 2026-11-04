@@ -88,6 +88,7 @@ export async function withPageFields<Row>(
           pending: work?.pending ?? false,
           refreshReason: work?.refreshReason,
           waiting: work?.waiting ?? false,
+          waitCause: work?.waitCause ?? null,
           ...(work?.execution ? { execution: work.execution } : {}),
           error: work?.error ?? null,
           retryAt: work?.retryAt ?? null,

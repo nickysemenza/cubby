@@ -4,6 +4,7 @@ import type {
   fieldWork,
   ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
+import type { WorkWaitCause } from "@cubby/schemas/job";
 import { z } from "zod";
 
 /** Batch read facts without importing database or hydration implementations. */
@@ -22,6 +23,7 @@ export interface StoredDerivedRead {
   readonly pending?: boolean;
   readonly refreshReason?: string | null;
   readonly waiting?: boolean;
+  readonly waitCause?: WorkWaitCause | null;
   readonly execution?: Extract<
     z.output<typeof fieldWork>,
     { kind: "pending" }

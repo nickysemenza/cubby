@@ -5,7 +5,7 @@
  * producer and adapter interface; claiming and settlement belong to
  * `defineDrain` (`work-claims.ts`).
  */
-import { jobState } from "@cubby/schemas/job";
+import { jobState, type WorkWaitCause } from "@cubby/schemas/job";
 import { and, asc, eq, inArray, lte, sql, type SQL } from "drizzle-orm";
 
 import {
@@ -14,6 +14,7 @@ import {
 } from "~/server/db/repository-access.boundary";
 import { job, workItem } from "~/server/db/retained-tables";
 
+import type { JobBackoff } from "../kind-policy";
 import { wakeJob } from "./producer";
 
 export type WorkItem = {
@@ -105,6 +106,8 @@ const remark = {
     readyAt: sql`excluded."readyAt"`,
     attempts: 0,
     lastError: null,
+    waitCause: null,
+    waitStartedAt: null,
   },
 };
 
@@ -201,7 +204,8 @@ export async function markWorkFrom(
   const insert = queries.insert(workItem).select(
     sql`SELECT ${drain.key}, s.target, s.ref, nextval('"WorkTicket"'),
           min(s.priority), now(), now(), 0, NULL, NULL, NULL, NULL,
-          (array_agg(s.reason ORDER BY s.priority, s.reason) FILTER (WHERE s.reason IS NOT NULL))[1]
+          (array_agg(s.reason ORDER BY s.priority, s.reason) FILTER (WHERE s.reason IS NOT NULL))[1],
+          NULL, NULL
           FROM (${source}) AS s(target, ref, priority, reason)
          WHERE s.ref IS NOT NULL
          GROUP BY s.target, s.ref ORDER BY s.target, s.ref`,
@@ -279,6 +283,30 @@ export async function postponeWork(
     .where(workTickets(items));
 }
 
+/**
+ * Explain and hold items that upstream work still owes. Same ticket, attempts,
+ * `reason` and `lastError`; a new ticket clears the wait. The delay follows the
+ * kind's ordinary backoff bounds and doubles with the wait's age, because a wait
+ * spends no attempts to count.
+ */
+export async function waitForWork(
+  tx: RepositoryQueryInput,
+  items: readonly WorkItem[],
+  cause: WorkWaitCause,
+  backoff: JobBackoff,
+) {
+  if (!items.length) return;
+  await repositoryQueries(tx)
+    .update(workItem)
+    .set({
+      waitCause: cause,
+      waitStartedAt: sql`coalesce(${workItem.waitStartedAt}, now())`,
+      readyAt: sql`now() + least(${backoff.maxMs}::double precision, greatest(${backoff.baseMs}::double precision,
+        extract(epoch FROM now() - coalesce(${workItem.waitStartedAt}, now())) * 1000)) * interval '1 millisecond'`,
+    })
+    .where(workTickets(items));
+}
+
 /** Hold a target's items until `until`, whatever their ticket; a page already holding one keeps it. */
 export async function postponeWorkRefs(
   tx: RepositoryQueryInput,
@@ -340,6 +368,8 @@ export const workItemStates = (
           drain: workItem.drain,
           lastError: workItem.lastError,
           readyAt: workItem.readyAt,
+          waitCause: workItem.waitCause,
+          waitStartedAt: workItem.waitStartedAt,
         })
         .from(workItem)
         .where(
@@ -383,14 +413,17 @@ const currentWorkExecution = sql`j.state = ${jobState.enum.running}
   AND w."executionTicket" = w.ticket
   AND w."executionStartedAt" >= w."readyAt" AND w."readyAt" <= now()`;
 
-/** Owed work is an input to derived computations; Job execution is not. */
+/**
+ * Owed work is an input to derived computations; Job execution is not. An
+ * explicit wait outranks a retained `lastError`, which is history, not its state.
+ */
 export const owedWorkItem = (target: SQL, ref: SQL) =>
-  sql`(SELECT ${workItem.ref} AS ref, ${workItem.lastError} AS "lastError", ${workItem.readyAt} AS "readyAt"
+  sql`(SELECT ${workItem.ref} AS ref, CASE WHEN ${workItem.waitCause} IS NULL THEN ${workItem.lastError} END AS "lastError", ${workItem.readyAt} AS "readyAt"
     FROM ${workItem} WHERE ${workItem.target} = ${target} AND ${workItem.ref} = ${ref})`;
 
 /** Public refresh metadata additionally observes the exact executing Job lease. */
 export const observedWorkItem = (target: SQL, ref: SQL) =>
-  sql`(SELECT w.ref, w.reason, w."lastError", w."readyAt",
+  sql`(SELECT w.ref, w.reason, CASE WHEN w."waitCause" IS NULL THEN w."lastError" END AS "lastError", w."readyAt", w."waitCause",
       (w."readyAt" > now()) IS TRUE AS waiting,
       CASE WHEN ${currentWorkExecution}
         THEN w."executionStartedAt" ELSE NULL END AS "runningSince",
@@ -458,16 +491,18 @@ export const unobservedWork = (
 export async function drainBacklog(db: RepositoryQueryInput, drain: string) {
   const family = sql<string>`split_part(w.target, '@', 1)`;
   const notRunning = sql`(${currentWorkExecution}) IS NOT TRUE`;
+  // An explicit wait outranks the retained error; the four states still partition `count`.
+  const notFailed = sql`(w."lastError" IS NULL OR w."waitCause" IS NOT NULL)`;
   const queries = repositoryQueries(db);
   const buckets = await queries
     .select({
       target: family,
       reason: sql<string | null>`w.reason`,
       count: sql<number>`count(*)::int`,
-      queued: sql<number>`count(*) FILTER (WHERE ${notRunning} AND w."lastError" IS NULL AND w."readyAt" <= now())::int`,
+      queued: sql<number>`count(*) FILTER (WHERE ${notRunning} AND ${notFailed} AND w."readyAt" <= now())::int`,
       running: sql<number>`count(*) FILTER (WHERE ${currentWorkExecution})::int`,
-      waiting: sql<number>`count(*) FILTER (WHERE ${notRunning} AND w."lastError" IS NULL AND w."readyAt" > now())::int`,
-      failed: sql<number>`count(*) FILTER (WHERE ${notRunning} AND w."lastError" IS NOT NULL)::int`,
+      waiting: sql<number>`count(*) FILTER (WHERE ${notRunning} AND ${notFailed} AND w."readyAt" > now())::int`,
+      failed: sql<number>`count(*) FILTER (WHERE ${notRunning} AND NOT ${notFailed})::int`,
       nextAttemptAt: sql<Date | null>`min(w."readyAt") FILTER (WHERE w."readyAt" > now())`,
       oldestSeconds: sql<number>`extract(epoch FROM now() - min(w."dirtiedAt"))::int`,
     })
@@ -517,6 +552,27 @@ export async function drainBacklog(db: RepositoryQueryInput, drain: string) {
       ? Math.max(...targets.map((row) => row.oldestSeconds))
       : null,
   };
+}
+
+/** The explicit wait of each drain's next item; drains whose next item has none are absent. */
+export async function drainNextWaitCauses(
+  db: RepositoryQueryInput,
+  drains: readonly string[],
+) {
+  if (!drains.length) return new Map<string, WorkWaitCause>();
+  const rows = await repositoryQueries(db)
+    .selectDistinctOn([workItem.drain], {
+      drain: workItem.drain,
+      cause: workItem.waitCause,
+    })
+    .from(workItem)
+    .where(inArray(workItem.drain, [...drains]))
+    .orderBy(workItem.drain, workItem.readyAt);
+  return new Map(
+    rows.flatMap(({ drain, cause }) =>
+      cause ? [[drain, cause] as const] : [],
+    ),
+  );
 }
 
 /** A target's owed item priority for `ref` (a correlated column), or null. */

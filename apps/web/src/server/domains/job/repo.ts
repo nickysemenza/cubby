@@ -7,7 +7,7 @@ import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import { jobListScaffold } from "~/server/generic/jobs/repo/entity-list";
 import { readJobs, type JobRow } from "~/server/generic/jobs/repo/job-reads";
-import { loadJobWaitingOn } from "~/server/generic/jobs/repo/waiting-on";
+import { loadDrainJobWaitingOn } from "~/server/generic/jobs/repo/waiting-on";
 import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -36,7 +36,9 @@ const read = {
     runId: { kind: "lookup", missing: "null", includeDeleted: true },
   },
   bindings: (bind) => {
-    const waiting = bind.batch(async ({ rows }) => loadJobWaitingOn(rows));
+    const waiting = bind.batch(async ({ db, rows }) =>
+      loadDrainJobWaitingOn(db, rows),
+    );
     const subjects = bind.batch(async ({ db, rows }) => {
       const [images, locations] = await Promise.all([
         lookupEntityReferences(

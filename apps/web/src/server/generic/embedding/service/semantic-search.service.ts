@@ -5,8 +5,8 @@ import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
 import {
-  SemanticCoverageIncomplete,
   findSemanticEntityCandidates,
+  type SemanticCoverageGap,
 } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/generic/embedding/service/semantic/constants";
@@ -30,7 +30,15 @@ export interface SemanticProductCandidateScan {
   candidates: SemanticProductCandidate[];
   complete: boolean;
   error?: string;
+  /** Absent on an incomplete scan when a provider failed instead. */
+  gap?: SemanticCoverageGap;
 }
+
+const COVERAGE_GAP_ERROR = {
+  pending: "Semantic candidate coverage is pending",
+  budget_exceeded:
+    "Semantic candidate coverage exceeded its fixed candidate budget",
+} satisfies Record<SemanticCoverageGap, string>;
 
 async function semanticSearchCandidates(
   db: Database,
@@ -89,12 +97,7 @@ async function semanticSearchCandidates(
   return {
     candidates,
     complete: scan.complete,
-    ...(!scan.complete
-      ? {
-          error:
-            "Semantic candidate coverage is pending or exceeded its fixed candidate budget",
-        }
-      : {}),
+    ...(scan.gap ? { error: COVERAGE_GAP_ERROR[scan.gap], gap: scan.gap } : {}),
   };
 }
 
@@ -126,7 +129,6 @@ export async function semanticEntityCandidates(
   limit: number,
   entityKind: SearchableEntity,
   runId?: RunId,
-  options: { requireComplete?: boolean } = {},
 ): Promise<SemanticProductCandidate[]> {
   try {
     const scan = await semanticSearchCandidates(
@@ -136,11 +138,8 @@ export async function semanticEntityCandidates(
       [entityKind],
       runId,
     );
-    if (options.requireComplete && !scan.complete)
-      throw new SemanticCoverageIncomplete(scan.error);
     return scan.candidates;
   } catch (error) {
-    if (options.requireComplete) throw error;
     log.warn(`${entityKind}-candidates failed`, {
       query,
       message: getErrorMessage(error),
@@ -154,6 +153,5 @@ export const semanticProductCandidates = (
   query: string,
   limit: number,
   runId?: RunId,
-  options: { requireComplete?: boolean } = {},
 ): Promise<SemanticProductCandidate[]> =>
-  semanticEntityCandidates(db, query, limit, "product", runId, options);
+  semanticEntityCandidates(db, query, limit, "product", runId);

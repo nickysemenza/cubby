@@ -146,7 +146,9 @@ BEGIN
     priority = LEAST("WorkItem".priority, EXCLUDED.priority),
     "readyAt" = now(),
     attempts = 0,
-    "lastError" = NULL;
+    "lastError" = NULL,
+    "waitCause" = NULL,
+    "waitStartedAt" = NULL;
   IF current_setting('cubby.derived_capture', true) IS DISTINCT FROM txid_current()::text THEN
     INSERT INTO "JobInvalidationCapture" (key, "capturedAt")
       VALUES (${literal(DERIVED_DRAIN_JOB_KEY)}, now() AT TIME ZONE 'UTC');

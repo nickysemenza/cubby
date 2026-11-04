@@ -8,6 +8,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
  * figure the row shows; freshness is one EXISTS on the dirty marks.
  */
 import { fieldDecision, fieldProvenance } from "@cubby/schemas/field-envelope";
+import { workWaitCause } from "@cubby/schemas/job";
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -198,6 +199,7 @@ const valueRow = z.object({
   stale: z.boolean(),
   pending: z.boolean(),
   waiting: z.boolean(),
+  waitCause: workWaitCause.nullable(),
   runningSince: dateTime.nullable(),
   leaseExpiresAt: dateTime.nullable(),
   error: z.string().nullable(),
@@ -265,7 +267,7 @@ export async function loadStoredDerived(
            CASE WHEN d.ref IS NOT NULL THEN d.reason WHEN k."fanoutPending" THEN 'Related refresh pending'
              WHEN k.clock = 'householdDay' AND ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date THEN 'Daily refresh due' END AS "refreshReason",
            d."lastError" AS error, d."readyAt" AS "retryAt",
-           coalesce(d.waiting, false) AS waiting,
+           coalesce(d.waiting, false) AS waiting, d."waitCause",
            d."runningSince", d."leaseExpiresAt"
       FROM unnest(${uuidArrayParam(ids)}) AS i(id)
      CROSS JOIN keys k
@@ -299,6 +301,7 @@ export async function loadStoredDerived(
       pending: row.pending,
       refreshReason: row.refreshReason,
       waiting: row.waiting,
+      waitCause: row.waitCause,
       ...(row.runningSince && row.leaseExpiresAt
         ? {
             execution: {

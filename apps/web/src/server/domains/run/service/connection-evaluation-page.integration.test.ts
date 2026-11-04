@@ -1,4 +1,6 @@
 import type { EntityRef } from "@cubby/schemas/entity";
+import { describeJobWaitingOn } from "@cubby/schemas/job";
+import type { SearchableEntity } from "@cubby/schemas/search";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, inArray } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -6,7 +8,14 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { drainAiEvaluations } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
+import {
+  aiEvaluationDrain,
+  markAiEvaluationWork,
+} from "~/server/ai/evaluation/repo/ai-evaluation-work";
+import {
+  aiEvaluationItem,
+  drainAiEvaluations,
+} from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import * as productIdentity from "~/server/ai/product-identity";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { setCfEnv } from "~/server/cf-env";
@@ -25,10 +34,17 @@ import { readEntityConnections } from "~/server/domains/connection/repo/entity-c
 import * as connectionService from "~/server/domains/connection/service/entity-connections";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
+import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
-import { updateWorkItems } from "~/server/generic/jobs/jobs.fixtures";
+import {
+  updateJobs,
+  updateWorkItems,
+} from "~/server/generic/jobs/jobs.fixtures";
+import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
+import { jobFactsOf } from "~/server/generic/jobs/repo/job-queue";
+import { drainBacklog, markWork } from "~/server/generic/jobs/repo/work-items";
 import { readRunEvaluationsByCode } from "~/server/generic/run-detail/repo/run-evaluations";
 import {
   refreshSearchDocument,
@@ -36,7 +52,10 @@ import {
 } from "~/server/generic/search/repo/search-document";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
+import {
+  drainDerivedRefreshFrontier,
+  reconcileDerivedRefreshInputs,
+} from "~/server/testing/background-queue";
 import {
   createIngredientFixture,
   createPlantFixture,
@@ -48,7 +67,8 @@ import {
 // Failure modes: each connection evaluation pays its own claim, guard and
 // settlement (a sweep of ~55k sources took days); a page publishes a source
 // that changed after its evaluation was queued; a candidate is lost on the
-// page path.
+// page path; a source spends attempts and paid stages on coverage upstream
+// work still owes.
 describe("connection evaluation pages", () => {
   const ctx = withTestDb();
   afterEach(() => {
@@ -163,6 +183,99 @@ describe("connection evaluation pages", () => {
       }),
     );
     return { index, config, values };
+  }
+
+  /** Records each paid decision request; embedding requests stay unrecorded. */
+  function decisionEnvironment() {
+    const index = createInMemoryVectorizeIndex();
+    const config = getSemanticEmbeddingConfig();
+    const values = Array.from({ length: config.dimensions }, (_, axis) =>
+      axis === 0 ? 1 : 0,
+    );
+    const requests: { operation: string; questions: number }[] = [];
+    setCfEnv(
+      fromPartial<Env & { CUBBY_TEST_AI_GATEWAY: { fetch: typeof fetch } }>({
+        VECTORIZE: index,
+        BACKGROUND_QUEUE: { sendBatch: async () => {} },
+        CUBBY_TEST_AI_GATEWAY: {
+          fetch: async (
+            _url: Parameters<typeof fetch>[0],
+            init?: RequestInit,
+          ) => {
+            if (!init?.body) return Response.json({});
+            const body = JSON.parse(String(init.body));
+            if (!body.questions)
+              return Response.json({ data: [{ index: 0, embedding: values }] });
+            const questions = z
+              .record(
+                z.string(),
+                z.object({ criteria: z.record(z.string(), z.string()) }),
+              )
+              .parse(body.questions);
+            const metadata = z
+              .object({ operation: z.string() })
+              .parse(
+                JSON.parse(
+                  new Headers(init?.headers).get("cf-aig-metadata") ?? "{}",
+                ),
+              );
+            requests.push({
+              operation: metadata.operation,
+              questions: Object.keys(questions).length,
+            });
+            return Response.json({
+              result: {
+                answers: Object.fromEntries(
+                  Object.entries(questions).map(([key, question]) => {
+                    const choices = Object.keys(question.criteria);
+                    const selected = choices.includes("none")
+                      ? "none"
+                      : choices.at(-1);
+                    return [
+                      key,
+                      {
+                        type: "choice",
+                        choice: selected,
+                        confidence: 0.9,
+                        probabilities: Object.fromEntries(
+                          choices.map((choice) => [
+                            choice,
+                            choice === selected
+                              ? 0.9
+                              : 0.1 / Math.max(1, choices.length - 1),
+                          ]),
+                        ),
+                      },
+                    ];
+                  }),
+                ),
+              },
+            });
+          },
+        },
+      }),
+    );
+    const embed = async (
+      refs: readonly { entityKind: SearchableEntity; entityId: string }[],
+    ) => {
+      for (const ref of refs) {
+        const text = await getSearchDocumentEmbeddingText(
+          ctx.db,
+          ref.entityKind,
+          ref.entityId,
+        );
+        if (!text) throw new Error("Synthetic search document missing");
+        const id = await seedEntityEmbedding(ctx.db, {
+          ...text,
+          config,
+          values,
+        });
+        await index.upsert([
+          { id, values, metadata: { entityType: ref.entityKind } },
+        ]);
+      }
+    };
+    return { requests, embed };
   }
 
   it("settles a single source and a page of sources", async () => {
@@ -439,74 +552,7 @@ describe("connection evaluation pages", () => {
 
   it("packs Product identity and field questions across the page at the gateway", async () => {
     await setup();
-    const index = createInMemoryVectorizeIndex();
-    const config = getSemanticEmbeddingConfig();
-    const values = Array.from({ length: config.dimensions }, (_, axis) =>
-      axis === 0 ? 1 : 0,
-    );
-    const requests: { operation: string; questions: number }[] = [];
-    setCfEnv(
-      fromPartial<Env & { CUBBY_TEST_AI_GATEWAY: { fetch: typeof fetch } }>({
-        VECTORIZE: index,
-        BACKGROUND_QUEUE: { sendBatch: async () => {} },
-        CUBBY_TEST_AI_GATEWAY: {
-          fetch: async (
-            _url: Parameters<typeof fetch>[0],
-            init?: RequestInit,
-          ) => {
-            if (!init?.body) return Response.json({});
-            const body = JSON.parse(String(init.body));
-            if (!body.questions)
-              return Response.json({ data: [{ index: 0, embedding: values }] });
-            const questions = z
-              .record(
-                z.string(),
-                z.object({ criteria: z.record(z.string(), z.string()) }),
-              )
-              .parse(body.questions);
-            const metadata = z
-              .object({ operation: z.string() })
-              .parse(
-                JSON.parse(
-                  new Headers(init?.headers).get("cf-aig-metadata") ?? "{}",
-                ),
-              );
-            requests.push({
-              operation: metadata.operation,
-              questions: Object.keys(questions).length,
-            });
-            return Response.json({
-              result: {
-                answers: Object.fromEntries(
-                  Object.entries(questions).map(([key, question]) => {
-                    const choices = Object.keys(question.criteria);
-                    const selected = choices.includes("none")
-                      ? "none"
-                      : choices.at(-1);
-                    return [
-                      key,
-                      {
-                        type: "choice",
-                        choice: selected,
-                        confidence: 0.9,
-                        probabilities: Object.fromEntries(
-                          choices.map((choice) => [
-                            choice,
-                            choice === selected
-                              ? 0.9
-                              : 0.1 / Math.max(1, choices.length - 1),
-                          ]),
-                        ),
-                      },
-                    ];
-                  }),
-                ),
-              },
-            });
-          },
-        },
-      }),
-    );
+    const { requests, embed } = decisionEnvironment();
     const products: Awaited<ReturnType<typeof createProductIdentityFixture>>[] =
       [];
     for (const suffix of ["alpha", "beta", "gamma", "delta"])
@@ -541,18 +587,7 @@ describe("connection evaluation pages", () => {
     for (const ref of refs)
       await refreshSearchDocument(ctx.db, ref.entityKind, ref.entityId);
     await reconcileDerivedRefreshInputs(ctx.db);
-    for (const ref of refs) {
-      const text = await getSearchDocumentEmbeddingText(
-        ctx.db,
-        ref.entityKind,
-        ref.entityId,
-      );
-      if (!text) throw new Error("Synthetic search document missing");
-      const id = await seedEntityEmbedding(ctx.db, { ...text, config, values });
-      await index.upsert([
-        { id, values, metadata: { entityType: ref.entityKind } },
-      ]);
-    }
+    await embed(refs);
     const ids = await scheduleSources(
       products.map((item) => ({ entityKind: "product", entityId: item.id })),
     );
@@ -583,6 +618,169 @@ describe("connection evaluation pages", () => {
           .filter((request) => request.operation === operation)
           .some((request) => request.questions >= 2),
       ).toBe(true);
+  });
+
+  it("holds a source on pending coverage before paid stages while its healthy sibling finishes, then resumes", async () => {
+    const base = await setup();
+    const { requests, embed } = decisionEnvironment();
+    const [source, other] = [
+      await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic basil alpha" }),
+        ctx.actor,
+      ),
+      await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic basil beta" }),
+        ctx.actor,
+      ),
+    ];
+    const charge = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic basil alpha charge",
+      cost: 24,
+      date: "2026-10-01",
+      trade: "other",
+      costType: "materials",
+    });
+    const products = [source, other].map((item) => ({
+      entityKind: "product" as const,
+      entityId: item.entityId,
+    }));
+    const chargeRef = {
+      entityKind: "expense" as const,
+      entityId: charge.entityId,
+    };
+    for (const ref of [...products, chargeRef])
+      await refreshSearchDocument(ctx.db, ref.entityKind, ref.entityId);
+    await reconcileDerivedRefreshInputs(ctx.db);
+    // Expenses have no selected embeddings; a real search mark holds coverage.
+    await embed(products);
+    const [sibling] = await emails(base, 1, "pending-sibling");
+    if (!sibling) throw new Error("Synthetic sibling Email missing");
+    const ids = await scheduleSources([
+      { entityKind: "product", entityId: source.id },
+      { entityKind: "email", entityId: sibling.message.shortcode },
+    ]);
+    const rows = await getDb(ctx.db)
+      .select({
+        id: aiEvaluation.id,
+        state: aiEvaluation.state,
+        target: aiEvaluation.target,
+      })
+      .from(aiEvaluation)
+      .where(inArray(aiEvaluation.id, ids));
+    const evaluationFor = (recordId: string) => {
+      const found = rows.find(
+        (row) =>
+          typeof row.target === "object" &&
+          row.target !== null &&
+          "recordId" in row.target &&
+          row.target.recordId === recordId,
+      );
+      if (!found) throw new Error("Synthetic evaluation missing");
+      return found.id;
+    };
+    const waitingId = evaluationFor(source.entityId);
+    const siblingId = evaluationFor(sibling.message.id);
+    const productRef = { entityKind: "product" as const, entityId: source.id };
+    await updateWorkItems(
+      ctx.db,
+      { refs: [waitingId] },
+      { attempts: 1, lastError: "Synthetic earlier failure" },
+    );
+    const owed = await aiEvaluationItem(ctx.db, waitingId);
+    await markWork(ctx.db, DERIVED_DRAIN, [
+      {
+        target: "expense.searchDocument",
+        ref: charge.entityId,
+        reason: "Synthetic pending search refresh",
+      },
+    ]);
+
+    expect(await runPage(ids)).toBe("succeeded");
+
+    expect(await states([siblingId])).toEqual(["completed"]);
+    expect(await states([waitingId])).toEqual(["queued"]);
+    const waiting = await aiEvaluationItem(ctx.db, waitingId);
+    expect(waiting).toMatchObject({
+      ticket: owed?.ticket,
+      reason: owed?.reason,
+      attempts: 1,
+      lastError: "Synthetic earlier failure",
+      waitCause: "search_coverage",
+    });
+    const { baseMs, maxMs } = jobKindPolicy("ai.evaluation").backoff;
+    if (!waiting?.waitStartedAt) throw new Error("Synthetic wait missing");
+    expect(waiting.readyAt.getTime() - waiting.waitStartedAt.getTime()).toBe(
+      baseMs,
+    );
+    expect(requests).toEqual([]);
+    expect(await readEntityConnections(ctx.db, productRef)).toEqual([]);
+
+    // The explicit wait outranks retained history, and its Job explains it.
+    const drain = aiEvaluationDrain("entity-connections").key;
+    const { targets } = await drainBacklog(ctx.db, drain);
+    expect(targets).toEqual([
+      expect.objectContaining({ count: 1, waiting: 1, failed: 0 }),
+    ]);
+    const [sleeping] = await updateJobs(
+      ctx.db,
+      { key: drain },
+      { availableAt: waiting.readyAt },
+    );
+    if (!sleeping) throw new Error("Synthetic drain missing");
+    const [facts] = await jobFactsOf(ctx.db, [sleeping]);
+    expect(facts?.waitingOn).toMatchObject({
+      reason: "backing_off",
+      cause: "search_coverage",
+    });
+    expect(describeJobWaitingOn(facts?.waitingOn ?? null)).toMatch(
+      /^Waiting for search indexing; next attempt in /,
+    );
+
+    // A long wait keeps its start and its bound, without spending an attempt.
+    const longAgo = new Date(Date.now() - 24 * 60 * 60_000);
+    await updateWorkItems(
+      ctx.db,
+      { refs: [waitingId] },
+      { waitStartedAt: longAgo },
+    );
+    expect(await runPage([waitingId])).toBe("succeeded");
+    const bounded = await aiEvaluationItem(ctx.db, waitingId);
+    expect(bounded).toMatchObject({ attempts: 1, waitStartedAt: longAgo });
+    expect(
+      Math.abs(
+        (bounded?.readyAt.getTime() ?? 0) -
+          longAgo.getTime() -
+          24 * 60 * 60_000 -
+          maxMs,
+      ),
+    ).toBeLessThan(60_000);
+
+    // A fresh mark clears the wait with a new ticket and attempt budget.
+    await markAiEvaluationWork(ctx.db, [waitingId]);
+    const remarked = await aiEvaluationItem(ctx.db, waitingId);
+    expect(remarked).toMatchObject({
+      attempts: 0,
+      lastError: null,
+      waitCause: null,
+      waitStartedAt: null,
+    });
+    expect(remarked?.ticket).not.toBe(owed?.ticket);
+
+    await drainDerivedRefreshFrontier(ctx.db);
+    expect(await runPage([waitingId])).toBe("succeeded");
+
+    expect(await states([waitingId])).toEqual(["completed"]);
+    expect(await aiEvaluationItem(ctx.db, waitingId)).toBeUndefined();
+    expect(
+      requests.some((request) => request.operation === "product-identity"),
+    ).toBe(true);
+    expect(await readEntityConnections(ctx.db, productRef)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ relation: "product-expense" }),
+      ]),
+    );
   });
 
   it("publishes a source's candidates and retires a deleted source without writes", async () => {

@@ -16,6 +16,7 @@ import {
   fieldResolutionsSchema,
   type FieldResolution,
 } from "@cubby/schemas/field-resolution";
+import { WORK_WAIT_CAUSE_TEXT } from "@cubby/schemas/job";
 import { z } from "zod";
 
 import type {
@@ -483,7 +484,9 @@ export function buildFieldEnvelopeRow<S extends z.ZodObject>({
             : read?.waiting
               ? {
                   kind: "waiting",
-                  reason: "Refresh is scheduled",
+                  reason: read.waitCause
+                    ? WORK_WAIT_CAUSE_TEXT[read.waitCause]
+                    : "Refresh is scheduled",
                   ...(read.retryAt ? { retryAt: read.retryAt } : {}),
                 }
               : (read?.pending ?? read?.stale)

@@ -3,6 +3,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { repositoryBeforeCommit } from "~/server/db/repository-access.boundary";
 import { job, workItem } from "~/server/db/retained-tables";
 
 import { defineDrain } from "../service/drain";
@@ -10,7 +11,7 @@ import { advanceJob } from "../service/jobs";
 import { jobDeadlines } from "./deadlines";
 import { enqueueJob } from "./producer";
 import { claimWork } from "./work-claims";
-import { markWork } from "./work-items";
+import { markWork, type WorkItem } from "./work-items";
 
 describe("generic WorkItems", () => {
   const ctx = withTestDb();
@@ -118,7 +119,7 @@ describe("generic WorkItems", () => {
     ).toEqual([]);
   });
 
-  it("splits isolated SQL failures, backs off each item, then exhausts at maxAttempts", async () => {
+  it("splits isolated SQL failures, counts only committed outcomes across a replay, backs off each item, then exhausts at maxAttempts", async () => {
     const { drain, jobId } = await createDrain("synthetic.work-isolation");
     const sqlStates = new Map<string, string>([
       [crypto.randomUUID(), "22000"],
@@ -126,19 +127,27 @@ describe("generic WorkItems", () => {
       [crypto.randomUUID(), "54000"],
     ]);
     const valid = crypto.randomUUID();
+    const coveredRef = crypto.randomUUID();
     const refs = [...sqlStates.keys(), valid];
     await markWork(
       ctx.db,
       drain,
-      refs.map((ref) => ({ target: "synthetic", ref })),
+      [...refs, coveredRef].map((ref) => ({ target: "synthetic", ref })),
     );
     const published: string[] = [];
     const exhausted: string[] = [];
+    let coveredMark: WorkItem | undefined;
+    let commitAborted = false;
     const handler = defineDrain({
       limit: 10,
       maxAttempts: 2,
+      isolationLevel: "serializable",
+      admit: (observed) => {
+        coveredMark ??= observed.find((item) => item.ref === coveredRef);
+        return observed.filter((item) => item.ref !== coveredRef);
+      },
       prepare: async () => ({ prepared: null }),
-      publish: async (_tx, items) => {
+      publish: async (tx, items) => {
         const bad = items.find((item) => sqlStates.has(item.ref));
         if (bad) {
           const error = new Error(
@@ -148,6 +157,20 @@ describe("generic WorkItems", () => {
           throw error;
         }
         published.push(...items.map((item) => item.ref));
+        // Abort after the publication callback finishes, so the real
+        // transaction owner rolls back and replays a whole attempt.
+        await repositoryBeforeCommit(
+          tx,
+          async () => {
+            if (commitAborted) return;
+            commitAborted = true;
+            throw Object.assign(new Error("Synthetic SQLSTATE 40001"), {
+              code: "40001",
+            });
+          },
+          { phase: "validation" },
+        );
+        return { covered: coveredMark ? [coveredMark] : [] };
       },
       // Each isolated item exhausts alone.
       exhaust: async (_tx, items) => {
@@ -159,7 +182,23 @@ describe("generic WorkItems", () => {
     await expect(advanceJob(ctx.db, jobId, handlers)).resolves.toBe(
       "succeeded",
     );
-    expect(published).toEqual([valid]);
+    expect(published).toEqual([valid, valid]);
+    const [firstPage] = await getDb(ctx.db)
+      .select({ result: job.result })
+      .from(job)
+      .where(eq(job.id, jobId));
+    expect(firstPage!.result).toMatchObject({
+      processed: 4,
+      published: 1,
+      failed: 3,
+      covered: 1,
+    });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(workItem)
+        .where(inArray(workItem.ref, [valid, coveredRef])),
+    ).toEqual([]);
     const retried = await getDb(ctx.db)
       .select()
       .from(workItem)

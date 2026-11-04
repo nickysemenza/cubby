@@ -19,6 +19,7 @@ import {
   retrieveAcquisitionNotes,
 } from "~/server/domains/connection/repo/connection-candidates";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
+import type { SemanticCoverageGap } from "~/server/generic/embedding/repo/entity-embedding";
 import { semanticEntityCandidateScan } from "~/server/generic/embedding/service/semantic-search.service";
 import { SEMANTIC_MATCH_MIN_SIMILARITY } from "~/server/generic/embedding/service/semantic/constants";
 import { findLexicalSearchCandidates } from "~/server/generic/search/service/search.service";
@@ -32,6 +33,8 @@ export async function discoverAcquisitionCandidateScan(
   candidates: ConnectionCandidate[];
   complete: boolean;
   coverageErrors: string[];
+  /** Typed only when every incomplete search has a typed gap; a fixed budget outranks pending. */
+  gap?: SemanticCoverageGap;
 }> {
   if (!["product", "purchase", "expense"].includes(source.entityKind))
     return { candidates: [], complete: true, coverageErrors: [] };
@@ -107,11 +110,14 @@ export async function discoverAcquisitionCandidateScan(
     ),
   );
   const pairs: { from: EntityRef; to: EntityRef }[] = [];
+  const gaps = new Set<SemanticCoverageGap | undefined>();
   for (const { kind, lexical, semantic } of searches) {
-    if (!semantic.complete)
+    if (!semantic.complete) {
+      gaps.add(semantic.gap);
       coverageErrors.push(
         semantic.error ?? `Semantic coverage is unconfirmed for ${kind}`,
       );
+    }
     const otherRefs: EntityRef[] = [
       ...lexical.map((hit) => ({ entityKind: kind, entityId: hit.id })),
       // Meaning alone must clear the floor; a record also hit lexically or
@@ -197,10 +203,19 @@ export async function discoverAcquisitionCandidateScan(
       },
     });
   }
+  // Waiting cannot repair another kind's fixed budget or a provider failure.
+  const gap: SemanticCoverageGap | undefined = gaps.has(undefined)
+    ? undefined
+    : gaps.has("budget_exceeded")
+      ? "budget_exceeded"
+      : gaps.has("pending")
+        ? "pending"
+        : undefined;
   return {
     candidates: [...candidates.values()].slice(0, 30),
     complete: coverageErrors.length === 0,
     coverageErrors: [...new Set(coverageErrors)],
+    ...(gap ? { gap } : {}),
   };
 }
 

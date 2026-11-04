@@ -42,7 +42,7 @@ type DrainPreparation<P> = {
 };
 
 type DrainPublication = {
-  /** Items whose `readyAt` was moved forward with `postponeWork`. */
+  /** Items held with `postponeWork` or `waitForWork`; their tickets stay owed. */
   retain?: readonly WorkItem[];
   /** Bounded extra ready marks whose identical effect this publication already applied. */
   covered?: readonly WorkItem[];
@@ -154,15 +154,18 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
       const claimedRefs = new Set(
         items.map(({ target, ref }) => `${target}\0${ref}`),
       );
+      // Fenced callbacks roll back and may replay on 40001, so each one returns
+      // its own counts and the page adds them only after that fence commits.
       const settleFailed = async (
         tx: Database,
         entries: readonly (readonly [WorkItem, unknown])[],
       ) => {
+        let settled = 0;
         for (const [item, error] of entries) {
           const narrowed = (await spec.lock?.(tx, [item], prepared)) ?? [item];
           const held = await lockWork(tx, narrowed);
           if (!held.length) continue;
-          failed++;
+          settled++;
           if (
             spec.exhaust &&
             spec.maxAttempts !== undefined &&
@@ -172,6 +175,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
             await clearWork(tx, held);
           } else await deferWork(tx, held, message(error), backoff);
         }
+        return settled;
       };
       const { prepared, failed: preparationFailures = new Map() } =
         await withJobPhase("drain.prepare", () =>
@@ -180,19 +184,19 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
       for (const error of preparationFailures.values())
         if (stopsDrainPage(error)) throw error;
       if (preparationFailures.size)
-        await context.fenced((tx) =>
+        failed += await context.fenced((tx) =>
           settleFailed(tx, [...preparationFailures]),
         );
       // A rolled-back chunk splits; committed siblings never replay.
       const publish = async (chunk: readonly WorkItem[]): Promise<void> => {
         try {
-          await withJobPhase("drain.publish", () =>
+          const committed = await withJobPhase("drain.publish", () =>
             context.fenced(
               async (tx) => {
                 const narrowed =
                   (await spec.lock?.(tx, chunk, prepared)) ?? chunk;
                 const held = await lockWork(tx, narrowed);
-                if (!held.length) return;
+                if (!held.length) return { published: 0, covered: 0 };
                 const publication = await spec.publish(tx, held, prepared);
                 const retained = new Set(
                   (publication?.retain ?? []).map(
@@ -213,21 +217,24 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
                   { drain: claim.key },
                 );
                 await clearWork(tx, [...completed, ...covered]);
-                published += completed.length;
-                coalesced += covered.length;
+                return { published: completed.length, covered: covered.length };
               },
               { isolationLevel: spec.isolationLevel },
             ),
           );
+          published += committed.published;
+          coalesced += committed.covered;
         } catch (error) {
           if (
             classifyJobFailure(error, { publication: true }).kind !== "isolated"
           )
             throw error;
-          if (chunk.length === 1)
-            return context.fenced((tx) =>
+          if (chunk.length === 1) {
+            failed += await context.fenced((tx) =>
               settleFailed(tx, [[chunk[0]!, error]]),
             );
+            return;
+          }
           const middle = Math.ceil(chunk.length / 2);
           await publish(chunk.slice(0, middle));
           await publish(chunk.slice(middle));
