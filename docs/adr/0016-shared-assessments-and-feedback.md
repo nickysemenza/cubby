@@ -275,6 +275,11 @@ count. Consumers must not turn an empty incomplete relation into a complete zero
 The internal target and foreground cutover require complete invalidation and
 publication coverage before these tables become the read authority. The storage
 and canonical preparation seam alone establish neither coverage nor latency.
+Background admission preparation returns canonical rows and exact scope/ref
+memberships together. Family freshness reads and membership input observations
+merge into one deduplicated dependency set per Assessment; preparing a shared
+batch or each Assessment separately must produce the same values. Browsing does
+not request this additional publication preparation.
 Canonical preparation reports observed dependencies by Assessment id as it reads
 them, including advice hidden by changed inputs. A missing observation is not an
 empty or complete read set. Ordinary field advice reuses the fingerprint owner's

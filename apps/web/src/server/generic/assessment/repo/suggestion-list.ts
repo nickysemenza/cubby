@@ -1,6 +1,7 @@
 import type {
   AssessmentReadFilterFacts,
   AssessmentReadDependency,
+  AssessmentReadMembership,
 } from "@cubby/schemas/assessment-read-publication";
 import {
   suggestionRecordCountsInput,
@@ -56,6 +57,7 @@ import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-res
 
 import {
   readAssessmentRecordRefs,
+  readAssessmentReadMemberships,
   touchingAssessmentFamilies,
 } from "./review-families";
 
@@ -350,10 +352,27 @@ export async function prepareSuggestionAdmission(
   rows: Map<string, SuggestionListRow>;
   /** Only observed read sets are present; a missing entry must not be treated as complete. */
   dependencies: Map<string, AssessmentReadDependency[]>;
+  memberships: Map<string, AssessmentReadMembership[]>;
 }> {
   const filters = suggestionListFilters.parse({});
   const identities = [...new Set(assessmentIds)];
   const dependencies = new Map<string, AssessmentReadDependency[]>();
+  const observeInputs: SuggestionReadObserver = (id, sources) => {
+    const unique = new Map(
+      (dependencies.get(id) ?? []).map((source) => [
+        JSON.stringify([source.sourceKind, source.sourceId]),
+        source,
+      ]),
+    );
+    for (const source of sources)
+      unique.set(JSON.stringify([source.sourceKind, source.sourceId]), source);
+    dependencies.set(
+      id,
+      [...unique]
+        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+        .map(([, source]) => source),
+    );
+  };
   const admitted = await currentCandidates(
     db,
     filters,
@@ -366,27 +385,19 @@ export async function prepareSuggestionAdmission(
         assessmentIds: identities,
       },
     },
-    (id, sources) => {
-      const unique = new Map(
-        (dependencies.get(id) ?? []).map((source) => [
-          JSON.stringify([source.sourceKind, source.sourceId]),
-          source,
-        ]),
-      );
-      for (const source of sources)
-        unique.set(
-          JSON.stringify([source.sourceKind, source.sourceId]),
-          source,
-        );
-      dependencies.set(
-        id,
-        [...unique]
-          .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-          .map(([, source]) => source),
-      );
-    },
+    observeInputs,
   );
-  return { keys: admitted.keys, rows: admitted.rows, dependencies };
+  const memberships = await readAssessmentReadMemberships(
+    db,
+    identities,
+    observeInputs,
+  );
+  return {
+    keys: admitted.keys,
+    rows: admitted.rows,
+    dependencies,
+    memberships,
+  };
 }
 
 async function scopedKeys(

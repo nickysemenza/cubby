@@ -798,8 +798,12 @@ describe("cross-family Suggestion list", () => {
       );
     }
     const together = await prepareSuggestionAdmission(ctx.db, ids);
+    expect(together.memberships).toEqual(memberships);
     expect([...together.dependencies.keys()].sort()).toEqual(
-      [confident, unsure].sort(),
+      page.items
+        .filter((row) => row.family !== "recommendation")
+        .map((row) => row.id)
+        .sort(),
     );
     expect(together.dependencies.get(confident)).toEqual(
       expect.arrayContaining([
@@ -816,6 +820,12 @@ describe("cross-family Suggestion list", () => {
     expect(new Map(separately.flatMap((batch) => [...batch.rows]))).toEqual(
       together.rows,
     );
+    expect(
+      new Map(separately.flatMap((batch) => [...batch.memberships])),
+    ).toEqual(together.memberships);
+    expect(
+      new Map(separately.flatMap((batch) => [...batch.dependencies])),
+    ).toEqual(together.dependencies);
     const factsById = (keys: Parameters<typeof suggestionKeyFacts>[0][]) =>
       new Map(keys.map((key) => [key.assessmentId, suggestionKeyFacts(key)]));
     expect(factsById(separately.flatMap((batch) => batch.keys))).toEqual(
