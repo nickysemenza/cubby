@@ -875,7 +875,15 @@ function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   const matched = sql.join(
     branches.map((match) =>
       client
-        .select({ id: a.id, family: a.family, status: s.status })
+        .select({
+          id: a.id,
+          family:
+            scope.eligibility.kind === "suggestions" ? s.family : a.family,
+          immutableFamily: sql<AssessmentFamily>`${a.family}`.as(
+            "immutableFamily",
+          ),
+          status: s.status,
+        })
         .from(a)
         .innerJoin(s, eq(s.id, a.id))
         .where(and(admission, match))
@@ -890,21 +898,35 @@ function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   // still enter through the same candidate and authority checks.
   return sql`WITH matched AS MATERIALIZED (
     SELECT DISTINCT id, family, status FROM (${matched}) identities)
-    SELECT DISTINCT a.id FROM matched a
+    SELECT DISTINCT a.id, a.family, a.family AS "immutableFamily" FROM matched a
     CROSS JOIN LATERAL (SELECT a.status) s
     WHERE ${automaticAssessmentEligibility(scope.eligibility.appliedRule(sql`${a.id}`), true)}`;
+}
+
+/** Adapters use both State and immutable family authority after discovery. */
+export async function touchingAssessmentFamilies(
+  db: Database,
+  scope: AssessmentRecordScope,
+): Promise<Map<string, readonly AssessmentFamily[]> | null> {
+  if (!scope.entity && !scope.records) return null;
+  if (scope.records?.length === 0)
+    return new Map<string, readonly AssessmentFamily[]>();
+  const { rows } = await unwrapDb(db).execute<{
+    id: string;
+    family: AssessmentFamily;
+    immutableFamily: AssessmentFamily;
+  }>(touchingAssessmentQuery(db, scope));
+  return new Map(
+    rows.map((row) => [row.id, [row.family, row.immutableFamily]]),
+  );
 }
 
 export async function touchingAssessmentIds(
   db: Database,
   scope: AssessmentRecordScope,
-) {
-  if (!scope.entity && !scope.records) return null;
-  if (scope.records?.length === 0) return new Set<string>();
-  const { rows } = await unwrapDb(db).execute<{ id: string }>(
-    touchingAssessmentQuery(db, scope),
-  );
-  return new Set(rows.map((row) => row.id));
+): Promise<Set<string> | null> {
+  const touching = await touchingAssessmentFamilies(db, scope);
+  return touching ? new Set(touching.keys()) : null;
 }
 
 /** Pending image admission shared by Suggestions and record-scoped Work summaries.

@@ -51,7 +51,7 @@ import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-res
 
 import {
   readAssessmentRecordRefs,
-  touchingAssessmentIds,
+  touchingAssessmentFamilies,
 } from "./review-families";
 
 const STRENGTH_RANK = { strong: 2, medium: 1, weak: 0 } as const;
@@ -273,7 +273,7 @@ const familiesOf = (filters: SuggestionListFilters) =>
 async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
   const families = familiesOf(filters);
   const query = await familyQuery(db, filters);
-  const touching = await touchingAssessmentIds(db, {
+  const matched = await touchingAssessmentFamilies(db, {
     entity: filters.recordEntity,
     records: query.records,
     eligibility: {
@@ -283,6 +283,10 @@ async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
       runCode: filters.runId,
     },
   });
+  const touching = matched ? new Set(matched.keys()) : null;
+  const matchedFamilies = matched
+    ? new Set([...matched.values()].flat())
+    : null;
   const familyScope = {
     filters: {
       ...query.filters,
@@ -291,22 +295,23 @@ async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
     },
     assessmentIds: touching ? [...touching] : undefined,
   };
-  return { families, touching, familyScope };
+  return { families, touching, matchedFamilies, familyScope };
 }
 
-async function scopedKeys(
+async function currentCandidates(
   db: Database,
   filters: SuggestionListFilters,
   prepared?: Awaited<ReturnType<typeof scopedFamilyQuery>>,
 ) {
-  const { families, touching, familyScope } =
+  const { families, touching, matchedFamilies, familyScope } =
     prepared ?? (await scopedFamilyQuery(db, filters));
-  if (touching?.size === 0) return { families, keys: [], all: [] };
+  if (touching?.size === 0)
+    return { families, keys: [], rows: new Map<string, SuggestionListRow>() };
   const keys = (
     await Promise.all(
-      families.map((family) =>
-        suggestionFamilies[family].keys(db, familyScope),
-      ),
+      families
+        .filter((family) => !matchedFamilies || matchedFamilies.has(family))
+        .map((family) => suggestionFamilies[family].keys(db, familyScope)),
     )
   )
     .flat()
@@ -319,11 +324,23 @@ async function scopedKeys(
   // freshness checks that cannot be inferred from a stored pending status.
   const rows = await hydrate(db, keys);
   const current = keys.filter((key) => rows.has(key.assessmentId));
+  return { families, keys: current, rows };
+}
+
+async function scopedKeys(
+  db: Database,
+  filters: SuggestionListFilters,
+  prepared?: Awaited<ReturnType<typeof scopedFamilyQuery>>,
+) {
+  const candidates = await currentCandidates(db, filters, prepared);
   return {
-    families,
-    keys: (await selectKeys(db, current, filters)).map((entry) => entry.key),
-    all: current,
-    rows,
+    ...candidates,
+    all: candidates.keys,
+    keys: candidates.keys.length
+      ? (await selectKeys(db, candidates.keys, filters)).map(
+          (entry) => entry.key,
+        )
+      : [],
   };
 }
 
@@ -335,7 +352,9 @@ export async function suggestionRecordCounts(
   const input = suggestionRecordCountsInput.parse(raw);
   if (!input.recordIds.length)
     return suggestionRecordCountsOut.parse({ records: [] });
-  const { keys } = await scopedKeys(
+  // This input has no relation filters or ordering. Candidate preparation
+  // already enforces pending admission, member decisions and live freshness.
+  const { keys } = await currentCandidates(
     db,
     suggestionListFilters.parse({ recordIds: input.recordIds }),
   );
@@ -494,15 +513,16 @@ export async function suggestionCountsByFamily(
     ...suggestionCountsInput.parse(raw),
     status: "pending" as const,
   };
-  const { families, touching, familyScope } = await scopedFamilyQuery(
-    db,
-    filters,
-  );
+  const { families, touching, matchedFamilies, familyScope } =
+    await scopedFamilyQuery(db, filters);
   const counts = await Promise.all(
     families.map(async (family) => {
       const presentation = suggestionFamilies[family];
       let pending = emptyPendingCounts();
-      if (touching?.size !== 0) {
+      if (
+        touching?.size !== 0 &&
+        (!matchedFamilies || matchedFamilies.has(family))
+      ) {
         if (
           "pendingCounts" in presentation &&
           presentation.pendingCounts &&
@@ -520,6 +540,7 @@ export async function suggestionCountsByFamily(
             {
               families: [family],
               touching,
+              matchedFamilies,
               familyScope: {
                 ...familyScope,
                 filters: { ...familyScope.filters, family },
