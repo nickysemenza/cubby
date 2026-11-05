@@ -2715,7 +2715,8 @@ rather than a partial healthy zero; other sources still publish. Source edits ne
 mixed-age reads. Own assignments and money/identity command validation remain
 immediate and live. Queue continuations and the hourly timer both enter the shared
 background drain. An interrupted isolate's duplicate delivery waits out the coarse
-lease. Drain errors are reported to Sentry and schedule a retry without preventing
+lease. Worker logs record each claimed invocation's target and its yield or full
+completion, without record IDs or values, to correlate platform terminations. Drain errors are reported to Sentry and schedule a retry without preventing
 purchase dispatch reconciliation. Search publication re-marks embeddings only for
 changed, embeddable documents, preserving unchanged documents' failure backoff.
 

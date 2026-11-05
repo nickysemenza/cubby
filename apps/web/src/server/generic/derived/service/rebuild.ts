@@ -1,3 +1,5 @@
+import { createLogger } from "@cubby/worker-tracing";
+
 import {
   describeErrorCauses,
   scrubErrorMessage,
@@ -17,6 +19,8 @@ import {
   rebuildIds,
   releaseRebuild,
 } from "~/server/generic/derived/repo/rebuild";
+
+const log = createLogger("derived-rebuild");
 
 /** A transport retry must outlive the single-writer lease after an isolate is terminated. */
 export class DerivedRebuildBusyError extends Error {
@@ -40,6 +44,7 @@ export async function rebuildDerived(
     if (await rebuildActive(db)) throw new DerivedRebuildBusyError();
     return false;
   }
+  log.info("pass invocation started", { target: claim.target });
   const declarations = rebuildDeclarations();
   let current = { target: claim.target, afterId: claim.afterId };
 
@@ -157,11 +162,15 @@ export async function rebuildDerived(
         )
           return false;
       }
-      if (!next) return false;
+      if (!next) {
+        log.info("pass completed", { target: current.target });
+        return false;
+      }
       current = next;
       if (Date.now() >= deadline) break;
     }
     await releaseRebuild(db, claim.token);
+    log.info("pass invocation yielded", { target: current.target });
     return true;
   } catch (error) {
     await releaseRebuild(
