@@ -2719,7 +2719,8 @@ failures. A requested new pass clears the previous pass's error before starting.
 Incomplete diagnostic sources omit their counts, so Work reports unavailable
 rather than a partial healthy zero; other sources still publish. Source edits need no fences or generations; the next hourly pass repairs
 mixed-age reads. Own assignments and money/identity command validation remain
-immediate and live. Queue continuations and the hourly timer both enter the shared
+immediate and live. View explanations compare the displayed decision rather than
+the view query time, so an unchanged live value is never reported as superseded. Queue continuations and the hourly timer both enter the shared
 background drain. An interrupted isolate's duplicate delivery waits out the coarse
 lease. Drain errors are reported to Sentry and schedule a retry without preventing
 purchase dispatch reconciliation. Search publication re-marks embeddings only for

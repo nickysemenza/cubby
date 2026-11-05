@@ -612,7 +612,10 @@ async function loadSourceProjection(
 function matchesDisplayedPublication(
   displayed: ExplainFieldInput["displayedResult"],
   actual: ReadableFieldEnvelope["result"] | undefined,
+  input: Pick<ExplainFieldInput, "entityKind" | "field">,
 ): boolean {
+  const view = storedDerived(input.entityKind, input.field)?.snapshotSource
+    ?.view;
   if (!displayed) return true;
   if (!actual || displayed.kind !== actual.kind) return false;
   if (displayed.kind === "live" && actual.kind === "live")
@@ -620,7 +623,7 @@ function matchesDisplayedPublication(
   return (
     displayed.kind !== "cached" ||
     (actual.kind === "cached" &&
-      displayed.computedAt === actual.computedAt &&
+      (view || displayed.computedAt === actual.computedAt) &&
       isEqual(displayed.decision, actual.decision))
   );
 }
@@ -818,6 +821,7 @@ async function loadExplanationSnapshot(
           matchesDisplayedPublication(
             input.displayedResult,
             currentEnvelope?.result,
+            input,
           )
         ? await explainLiveDerived(
             snapshotDb,
@@ -1060,7 +1064,7 @@ function explainPublication({
   const subject = { entityKind: input.entityKind, entityId: input.entityId };
   const displayed = input.displayedResult;
   const actual = envelope.result;
-  const matches = matchesDisplayedPublication(displayed, actual);
+  const matches = matchesDisplayedPublication(displayed, actual, input);
   const capturedProjection = {
     storedResult: publishedFacts ?? null,
     // A null parent is known absence in ordinary projections; missing evidence is not.
@@ -1273,7 +1277,7 @@ export async function explainField(
   if (
     envelope.result.kind !== "live" ||
     input.displayedResult?.kind === "cached" ||
-    !matchesDisplayedPublication(input.displayedResult, envelope.result)
+    !matchesDisplayedPublication(input.displayedResult, envelope.result, input)
   ) {
     return explainPublication({
       input,

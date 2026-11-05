@@ -357,9 +357,12 @@ describe("category-based service Products", () => {
             entityId: service.id,
             field: "cost",
             surface: "detail",
+            displayedResult: changed.fields.cost.result,
           },
         );
-      expect((await explainCost()).sources).toContainEqual(
+      const explained = await explainCost();
+      expect(explained.publication.kind).not.toBe("superseded");
+      expect(explained.sources).toContainEqual(
         expect.objectContaining({ label: "Positive charge total", value: 230 }),
       );
       const refreshedSort = await listProductsFixture(
