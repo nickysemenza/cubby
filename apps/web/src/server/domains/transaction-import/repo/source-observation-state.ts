@@ -170,10 +170,11 @@ export const sourceObservationField = (
     )} END`;
   }
   if (key === "reviewState") {
-    return sql`(SELECT CASE WHEN owner."reviewState"=${sourceOccurrenceReviewState.enum.ready}
-      AND ${sourceOccurrenceHasUnresolvedHistory(sql`owner.id`, sql`owner."acceptedTransactionId"`)}
-      THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE owner."reviewState" END
-      FROM "SourceOccurrence" owner JOIN "SourceTransactionRecord" record ON record."occurrenceId"=owner.id WHERE record.id=${id})`;
+    // The point helper owns an inner "owner" alias; keep its root distinct.
+    return sql`(SELECT CASE WHEN point_owner."reviewState"=${sourceOccurrenceReviewState.enum.ready}
+      AND ${sourceOccurrenceHasUnresolvedHistory(sql`point_owner.id`, sql`point_owner."acceptedTransactionId"`)}
+      THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE point_owner."reviewState" END
+      FROM "SourceOccurrence" point_owner JOIN "SourceTransactionRecord" record ON record."occurrenceId"=point_owner.id WHERE record.id=${id})`;
   }
   return sql`(SELECT observed.${sql.identifier(key)} FROM ${key === "historicalTransactionIds" ? sourceObservations : sourceObservationFacts} observed WHERE observed.id=${id})`;
 };

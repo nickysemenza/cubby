@@ -374,6 +374,33 @@ describe("statement row ledger", () => {
       amount: 128.5,
       sourceRefs: [],
     });
+    await record(
+      [
+        rowInput({
+          merchant: "Independent synthetic merchant",
+          providerAmount: -47.25,
+        }),
+      ],
+      {
+        fingerprint: "synthetic-independent-ready-owner",
+      },
+    );
+    expect(
+      (await listSourceTransactionRecords(ctx.db, {})).data.find(
+        (item) => item.merchant === "Independent synthetic merchant",
+      ),
+    ).toMatchObject({ matchState: "unmatched", historicalTransactionIds: [] });
+    const retainedJudgments = await getDb(ctx.db)
+      .select()
+      .from(sourceObservationAnnotation);
+    expect(retainedJudgments).toHaveLength(ignoredJudgments.length + 1);
+    expect(
+      retainedJudgments.filter((item) =>
+        ignoredJudgments.some(
+          (original) => original.observationId === item.observationId,
+        ),
+      ),
+    ).toEqual(ignoredJudgments);
     const [conflict] = await getDb(ctx.db)
       .insert(financialEvidenceAlias)
       .values({
@@ -418,7 +445,7 @@ describe("statement row ledger", () => {
     ).toBe(true);
     expect(
       await getDb(ctx.db).select().from(sourceObservationAnnotation),
-    ).toEqual(ignoredJudgments);
+    ).toEqual(retainedJudgments);
     expect(
       (
         await getDb(ctx.db).execute(
