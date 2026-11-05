@@ -171,7 +171,7 @@ test("a new account must choose its identity kind instead of getting a default",
   });
 });
 
-// Tester Army (web) found the Edit dialog refusing a source-claim description edit with
+// A browser journey found the Edit dialog refusing a source-claim description edit with
 // "Invalid input at sourceClaims" before any request left the browser.
 test("an expense's source claim description is edited without losing the claim", async ({
   page,
