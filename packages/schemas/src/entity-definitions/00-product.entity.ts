@@ -2814,16 +2814,6 @@ Rules:
         // either way, so the index was pure write cost.
         { trigram: "name" },
         { on: ["name", "brandId"] },
-        {
-          name: "Product_name_active_idx",
-          on: ["name"],
-          where: "{deletedAt} IS NULL",
-        },
-        {
-          name: "Product_brand_active_idx",
-          on: ["brandId"],
-          where: "{deletedAt} IS NULL",
-        },
       ],
       // Values come from the `kind` select options. Widening the value array
       // widens this CHECK: ship the migration before the code that writes it.
