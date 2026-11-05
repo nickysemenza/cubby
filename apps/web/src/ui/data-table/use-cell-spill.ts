@@ -297,6 +297,9 @@ export function useCellSpill(
             ) ?? cell;
           const EventClass = type === "pointerdown" ? PointerEvent : MouseEvent;
           target.dispatchEvent(new EventClass(type, event));
+          // Held until the click: removing the overlay on press retargets
+          // the click to whatever lies beneath it.
+          if (type === "click") hide();
         });
       }
       element.addEventListener("pointerleave", (event) => {
@@ -340,6 +343,12 @@ export function useCellSpill(
       else hide();
     };
 
+    // A real press elsewhere in the pane ends the spill; presses the overlay
+    // forwards to its source cell are synthetic and keep it until the click.
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.isTrusted) hide();
+    };
+
     // The rail copy sits outside the pane; reaching it keeps the overlay.
     const onPointerLeave = (event: PointerEvent) => {
       if (
@@ -354,7 +363,7 @@ export function useCellSpill(
     root.addEventListener("pointerleave", onPointerLeave);
     root.addEventListener("focusin", onFocusIn);
     root.addEventListener("focusout", hide);
-
+    root.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("scroll", hide, true);
     window.addEventListener("wheel", hide, { passive: true });
     return () => {
@@ -363,7 +372,7 @@ export function useCellSpill(
       root.removeEventListener("pointerleave", onPointerLeave);
       root.removeEventListener("focusin", onFocusIn);
       root.removeEventListener("focusout", hide);
-
+      root.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("scroll", hide, true);
       window.removeEventListener("wheel", hide);
     };

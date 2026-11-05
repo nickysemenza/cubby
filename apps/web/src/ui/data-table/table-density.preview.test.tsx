@@ -118,7 +118,8 @@ describe("table density", () => {
     expect(Math.round(rect(spill).top)).toBe(Math.round(rect(clipped).top));
     expect(Math.round(rect(clipped).height)).toBe(24);
 
-    await userEvent.hover(view.getByTestId("cell-1"));
+    // The overlay now covers its neighbour, so leave through the header.
+    await userEvent.hover(view.getByTestId("head-1"));
     await waitFor(() => expect(overlay()).toBeNull());
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(overlay()).toBeNull();
