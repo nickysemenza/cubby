@@ -27,7 +27,7 @@ import {
  * resolves each source in one pass, so a filter costs the same for a member
  * on nearly every order as for one on a few.
  */
-const purchasePurchasersSql = (purchases: SQL) => sql`
+export const purchasePurchasersSql = (purchases: SQL) => sql`
   WITH purchase AS MATERIALIZED (${purchases}),
   mail AS MATERIALIZED (${purchaseMailMembersSql(sql`SELECT * FROM purchase`)}),
   settled AS (

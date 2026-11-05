@@ -1,3 +1,4 @@
+import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sql, type SQL } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -30,3 +31,50 @@ export const sourceHistoricalTransactionRows = (
   JOIN "FinancialEvidenceAlias" binding ON binding.source=evidence.source AND binding.value=evidence.value AND ${notDeleted("binding")}
   JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}
   WHERE observed."observationId"=${observationId} OR observed."occurrenceId" IN (SELECT unnest(${occurrenceIds}))`;
+
+/** Live binding edges, materialized before sibling expansion by the read projection. */
+const directHistoricalEvidence = sql`
+  SELECT DISTINCT evidence."observationId", evidence."occurrenceId",
+    binding."historicalTransactionId", historical.shortcode AS code
+  FROM "FinancialEvidenceAlias" evidence
+  JOIN "FinancialEvidenceAlias" binding ON binding.source=evidence.source AND binding.value=evidence.value AND ${notDeleted("binding")}
+  JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}`;
+
+/** Same negative ownership fence as the point check, evaluated once for a read. */
+export const sourceOccurrencesWithUnresolvedHistory = sql`(
+  SELECT DISTINCT owner.id
+  FROM (${directHistoricalEvidence}) evidence
+  JOIN "SourceOccurrence" owner ON owner.id=evidence."occurrenceId"
+  WHERE owner."reviewState"=${sourceOccurrenceReviewState.enum.ready}
+    AND evidence."historicalTransactionId" IS DISTINCT FROM owner."acceptedTransactionId"
+    AND NOT COALESCE(owner."identityProof"->'resolvedHistoricalTransactionIds' ? evidence."historicalTransactionId"::text,false)
+)`;
+
+/** The original alias/sibling/occurrence closure, shared by every observation in a read. */
+export const sourceObservationHistoricalLinks = sql`(
+  WITH evidence_history AS MATERIALIZED (${directHistoricalEvidence}),
+  key_history AS MATERIALIZED (
+    SELECT sibling.source, sibling.value, evidence."historicalTransactionId", evidence.code
+    FROM "FinancialEvidenceAlias" sibling
+    JOIN evidence_history evidence ON evidence."observationId"=sibling."observationId"
+    WHERE sibling."observationId" IS NOT NULL
+    UNION
+    SELECT sibling.source, sibling.value, evidence."historicalTransactionId", evidence.code
+    FROM "FinancialEvidenceAlias" sibling
+    JOIN evidence_history evidence ON evidence."occurrenceId"=sibling."occurrenceId"
+    WHERE sibling."observationId" IS NOT NULL AND sibling."occurrenceId" IS NOT NULL
+  ),
+  history AS (
+    SELECT observed."observationId", history."historicalTransactionId", history.code
+    FROM "FinancialEvidenceAlias" observed JOIN key_history history ON history.source=observed.source AND history.value=observed.value
+    WHERE observed."observationId" IS NOT NULL
+    UNION
+    SELECT record.id, history."historicalTransactionId", history.code
+    FROM "SourceTransactionRecord" record
+    JOIN "FinancialEvidenceAlias" observed ON observed."occurrenceId"=record."occurrenceId"
+    JOIN key_history history ON history.source=observed.source AND history.value=observed.value
+    WHERE record."occurrenceId" IS NOT NULL
+  )
+  SELECT "observationId", array_agg(code ORDER BY code) AS codes
+  FROM history GROUP BY "observationId"
+)`;

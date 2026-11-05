@@ -76,6 +76,10 @@ benefits. If no usable paying-account owner is known, use the Purchase's
 effective purchaser, then the singleton Household party. Explicit beneficiary
 rows, including an explicitly unknown party, always win. Partially known
 payment ownership keeps its unknown share instead of silently reallocating it.
+The live reader computes payment-owner availability once per expense and batches
+effective purchaser resolution for the scoped purchases. The same seed selection,
+unknown shares, precedence and largest-remainder allocation apply to point and
+household reads.
 Missing, partial,
 unavailable, and null-attributed evidence remains an explicit gap.
 

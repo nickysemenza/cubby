@@ -27,7 +27,8 @@ import {
 import { expenseDerivedCostsSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { paymentFundingPartySql } from "~/server/domains/financial-account/repo/funding-sql";
-import { purchasePurchaserSql } from "~/server/domains/purchase/repo/purchase-purchaser";
+import { purchaseRowSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import { purchasePurchasersSql } from "~/server/domains/purchase/repo/purchase-purchaser";
 
 /**
  * Where a row's party came from. One boolean could not carry this once funder
@@ -238,22 +239,30 @@ const expenseAllocationSeedsSql = (
             AND ${notDeleted("a")}
         )
 
+    -- Partial ownership retains its unknown share; entirely unknown ownership
+    -- can fall back. Evaluate that fence once instead of a correlated semi-join
+    -- that can underestimate cardinality and rescan all weights per expense.
+    ), beneficiary_payment_weight AS MATERIALIZED (
+      SELECT n.*, p.id AS live_owner_id, p.shortcode AS party_shortcode,
+        bool_or(p.id IS NOT NULL) OVER (PARTITION BY n."expenseId") AS has_known_owner
+      FROM payment_weight n
+      LEFT JOIN ${ledgerParty} p ON p.id = n.owner_party_id AND ${notDeleted(nullableParty)}
+      WHERE n.role = ${contributionRole.enum.beneficiary} AND n.weight_cents > 0
     ), beneficiary_payment AS (
       SELECT e."expenseId", e."expenseShortcode", e."projectId", e.cost_cents,
         ${contributionRole.enum.beneficiary}::text AS role, n.owner_party_id AS "ledgerPartyId",
-        coalesce(p.shortcode, '~unattributed') AS "allocationKey",
+        coalesce(n.party_shortcode, '~unattributed') AS "allocationKey",
         n.weight_cents AS weight,
-        CASE WHEN p.id IS NOT NULL THEN ${expenseBeneficiaryEvidence.shape.basis.enum.derived_from_payment} ELSE ${expenseBeneficiaryEvidence.shape.basis.enum.unknown} END AS basis
+        CASE WHEN n.live_owner_id IS NOT NULL THEN ${expenseBeneficiaryEvidence.shape.basis.enum.derived_from_payment} ELSE ${expenseBeneficiaryEvidence.shape.basis.enum.unknown} END AS basis
       FROM scoped_expense e
-      JOIN payment_weight n ON n."expenseId" = e."expenseId" AND n.role = ${contributionRole.enum.beneficiary}
-      LEFT JOIN ${ledgerParty} p ON p.id = n.owner_party_id AND ${notDeleted(nullableParty)}
-      WHERE n.weight_cents > 0
+      JOIN beneficiary_payment_weight n ON n."expenseId" = e."expenseId"
+      WHERE n.has_known_owner
         AND NOT EXISTS (SELECT 1 FROM explicit_attr a WHERE a."expenseId" = e."expenseId" AND a.role = ${contributionRole.enum.beneficiary})
-        -- Partial payment ownership retains its unknown share. Entirely
-        -- unknown payment ownership can use the purchaser/household fallback.
-        AND EXISTS (SELECT 1 FROM payment_weight known
-          JOIN ${ledgerParty} owner ON owner.id = known.owner_party_id AND ${notDeleted("owner")}
-          WHERE known."expenseId" = e."expenseId" AND known.role = ${contributionRole.enum.beneficiary} AND known.weight_cents > 0)
+
+    ), purchaser_sources AS MATERIALIZED (
+      ${purchasePurchasersSql(sql`${purchaseRowSql(sql`"Purchase"`)} FROM "Purchase"
+        WHERE "Purchase".id IN (SELECT "purchaseId" FROM scoped_expense)
+          AND ${notDeleted(purchase)}`)}
     ), beneficiary_purchaser AS (
       SELECT e."expenseId", e."expenseShortcode", e."projectId", e.cost_cents,
         ${contributionRole.enum.beneficiary}::text AS role, purchaser_party.id AS "ledgerPartyId",
@@ -261,8 +270,9 @@ const expenseAllocationSeedsSql = (
         ${expenseBeneficiaryEvidence.shape.basis.enum.derived_from_purchaser}::text AS basis
       FROM scoped_expense e
       JOIN ${purchase} ON ${purchase.id} = e."purchaseId" AND ${notDeleted(purchase)}
+      JOIN purchaser_sources purchaser_source ON purchaser_source.id = ${purchase.id}
       JOIN ${ledgerParty} purchaser_party
-        ON purchaser_party.shortcode = ${purchasePurchaserSql} AND ${notDeleted(purchaserParty)}
+        ON purchaser_party.shortcode = purchaser_source.value AND ${notDeleted(purchaserParty)}
       WHERE NOT EXISTS (SELECT 1 FROM explicit_attr a WHERE a."expenseId" = e."expenseId" AND a.role = ${contributionRole.enum.beneficiary})
         AND NOT EXISTS (SELECT 1 FROM beneficiary_payment b WHERE b."expenseId" = e."expenseId")
 
