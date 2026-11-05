@@ -34,6 +34,7 @@ import { DebugDialog } from "../../ui/data-table/debug-dialog";
 import { ROW_DENSITY } from "../../ui/data-table/density";
 import {
   CellKeyProvider,
+  railPopupOpen,
   RowActiveProvider,
   RowActivityStoreContext,
   tableCellKey,
@@ -182,6 +183,12 @@ function DesktopDataCell<TItem extends RowData>({
   const edges = cell.getSelectionEdges();
   const activity = useContext(RowActivityStoreContext);
   const cellKey = tableCellKey(cell.row.id, cell.column.id);
+  const activateCellFromPointer = (
+    event: PointerEvent<HTMLTableCellElement>,
+  ) => {
+    if (event.pointerType === "touch" || activity.isCellActive(cellKey)) return;
+    if (!railPopupOpen(event.currentTarget)) activity.activateCell(cellKey);
+  };
   return (
     <TableCell
       key={cell.id}
@@ -198,10 +205,11 @@ function DesktopDataCell<TItem extends RowData>({
       onMouseDown={selectable ? cell.getSelectionStartHandler() : undefined}
       onMouseEnter={selectable ? cell.getSelectionExtendHandler() : undefined}
       // The explanation rail belongs to the cell being worked in, not the
-      // whole row: 20 ⓘ marks across a hovered row read as noise.
-      onPointerEnter={(event: PointerEvent<HTMLTableCellElement>) => {
-        if (event.pointerType !== "touch") activity.activateCell(cellKey);
-      }}
+      // whole row: 20 ⓘ marks across a hovered row read as noise. Moves
+      // count too: a cell entered while a rail popup held activity takes it
+      // once the pointer stirs after the popup closes.
+      onPointerEnter={activateCellFromPointer}
+      onPointerMove={activateCellFromPointer}
       onFocus={() => activity.activateCell(cellKey)}
       className={cn(
         cellClassName,
@@ -390,9 +398,13 @@ function DesktopDataRowInner<TItem extends RowData>({
       }}
       onPointerEnter={(event: PointerEvent<HTMLTableRowElement>) => {
         if (event.pointerType === "touch") return;
-        activity.activate();
+        if (!railPopupOpen(event.currentTarget)) activity.activate();
         if (onRowHover && !isInteractiveEventTarget(event.target))
           onRowHover(row);
+      }}
+      onPointerMove={(event: PointerEvent<HTMLTableRowElement>) => {
+        if (event.pointerType === "touch" || activity.active) return;
+        if (!railPopupOpen(event.currentTarget)) activity.activate();
       }}
       onPointerLeave={(event: PointerEvent<HTMLTableRowElement>) => {
         if (event.pointerType === "touch") return;
