@@ -35,6 +35,7 @@ import {
 } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { drainStoredDerived } from "~/server/testing/background-queue";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import { recordSourceTransactionRecords } from "./source-transaction-record";
 import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";
@@ -200,8 +201,8 @@ describe("statement spending review and re-import", () => {
       (SELECT count(*)::int FROM "FinancialTransactionAllocation") AS allocations,
       (SELECT count(*)::int FROM "Purchase") AS purchases,
       (SELECT count(*)::int FROM "Expense") AS expenses,
-      (SELECT count(*)::int FROM "Feedback" WHERE "assessmentId" = ${suggestion.id}::uuid) AS "totalFeedback",
-      (SELECT count(*)::int FROM "Feedback" WHERE "assessmentId" = ${suggestion.id}::uuid AND "operationId" IN (${command.operationId}, ${`command-application:${command.operationId}`})) AS feedback`)
+      (SELECT count(*)::int FROM "Suggestion" s CROSS JOIN LATERAL jsonb_array_elements(s.decisions) decision WHERE s.id = ${suggestion.id}::uuid) AS "totalFeedback",
+      (SELECT count(*)::int FROM "Suggestion" s CROSS JOIN LATERAL jsonb_array_elements(s.decisions) decision WHERE s.id = ${suggestion.id}::uuid AND decision->>'operationId' IN (${command.operationId}, ${`command-application:${command.operationId}`})) AS feedback`)
         ).rows[0]!;
       const before = await read();
       await enqueueJob(ctx.db, {
@@ -337,7 +338,7 @@ describe("statement spending review and re-import", () => {
           purchases: before.purchases + 1,
           expenses: before.expenses + 1,
           feedback: before.feedback + 2,
-          totalFeedback: before.totalFeedback + 3,
+          totalFeedback: before.totalFeedback + 2,
         });
         expect(
           await getDb(ctx.db).query.suggestionTable.findFirst({
@@ -551,7 +552,7 @@ describe("statement spending review and re-import", () => {
           )
         ).rows[0]!.snapshot,
       ).toEqual(before);
-      const feedback = await getDb(ctx.db).query.feedback.findMany();
+      const feedback = await readSuggestionDecisions(ctx.db);
       expect(feedback).toEqual(
         expect.arrayContaining([
           expect.objectContaining({

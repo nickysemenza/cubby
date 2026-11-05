@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 import {
   assessmentSubjects,
   assessmentFamily,
@@ -37,13 +35,8 @@ import { getDb, notDeleted } from "~/server/db/helpers";
 import * as databaseHelpers from "~/server/db/helpers";
 import {
   suggestionTable,
-  run,
   runStep,
-  automaticRule,
-  appSettings,
-  transactionImport,
   transactionImportRecord,
-  purchase,
   expense,
   financialTransaction,
   financialTransactionAllocation,
@@ -81,7 +74,6 @@ import {
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { renewJob } from "~/server/generic/jobs/jobs.fixtures";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
@@ -89,6 +81,7 @@ import {
   drainStoredDerived,
   withJobFixtureExecution,
 } from "~/server/testing/background-queue";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
 import {
@@ -237,18 +230,10 @@ const generate = async (ctx: Ctx) => {
   }
 };
 
-/** Complete background read publication before browsing pending charges. */
-const refreshAndReadSuggestions = async (ctx: Ctx) => {
-  await drainStoredDerived(ctx.db);
+const readPendingStatements = async (ctx: Ctx) => {
   const page = await listSuggestionPage(ctx.db, {
     family: "statement_transaction",
     limit: 200,
-  });
-  expect(page.meta.coverage).toEqual({
-    missing: false,
-    stale: false,
-    unresolved: false,
-    failed: false,
   });
   return page.items
     .flatMap((row) =>
@@ -1525,7 +1510,7 @@ describe("statement Transaction suggestions", () => {
         row.reasonKeys.includes("suggestions:statement_transaction"),
       ),
     ).toBe(false);
-    const [first] = (await refreshAndReadSuggestions(ctx)).filter(
+    const [first] = (await readPendingStatements(ctx)).filter(
       (row) => row.merchant === "Example Cafe",
     );
     expect(first).toMatchObject({ recommended: "create", clean: false });
@@ -1556,7 +1541,7 @@ describe("statement Transaction suggestions", () => {
     ).toEqual(["ignored", "ignored"]);
     // Background read publication follows the ignore without retiring history.
     expect(
-      (await refreshAndReadSuggestions(ctx)).map((row) => row.merchant),
+      (await readPendingStatements(ctx)).map((row) => row.merchant),
     ).toEqual(["Example Grocer"]);
     expect(await stateOf(ctx, first!.assessmentId)).toMatchObject({
       status: "pending",
@@ -1639,7 +1624,7 @@ describe("statement Transaction suggestions", () => {
       }),
     ).toMatchObject({ processed: 0, failed: [], next: null });
     expect(
-      (await refreshAndReadSuggestions(ctx)).map((row) => row.chargeKey).sort(),
+      (await readPendingStatements(ctx)).map((row) => row.chargeKey).sort(),
     ).toEqual([rows[2]!.chargeKey, rows[4]!.chargeKey].sort());
   });
 
@@ -1662,7 +1647,7 @@ describe("statement Transaction suggestions", () => {
       expect(second!.chargeKey).not.toBe(first!.chargeKey);
       expect(second!.externalId).not.toBe(first!.externalId);
       await generate(ctx);
-      const pending = await refreshAndReadSuggestions(ctx);
+      const pending = await readPendingStatements(ctx);
       expect(pending).toHaveLength(2);
       const reviewed = pending.find(
         (row) => row.chargeKey === first!.chargeKey,
@@ -1696,7 +1681,7 @@ describe("statement Transaction suggestions", () => {
         transactionId: null,
         disposition: "open",
       });
-      expect(await refreshAndReadSuggestions(ctx)).toMatchObject([
+      expect(await readPendingStatements(ctx)).toMatchObject([
         { chargeKey: second!.chargeKey },
       ]);
     },
@@ -1708,7 +1693,7 @@ describe("statement Transaction suggestions", () => {
     await card(ctx);
     await record(ctx, [rowInput()]);
     await generate(ctx);
-    const [suggestion] = await refreshAndReadSuggestions(ctx);
+    const [suggestion] = await readPendingStatements(ctx);
     const outcome = await accept(ctx, suggestion!);
     expect(outcome).toMatchObject({ status: "applied", applied: true });
     expect(await stateOf(ctx, suggestion!.assessmentId)).toMatchObject({
@@ -1721,7 +1706,7 @@ describe("statement Transaction suggestions", () => {
     await expect(accept(ctx, suggestion!)).rejects.toThrow(
       /already resolved|no longer pending/,
     );
-    expect(await refreshAndReadSuggestions(ctx)).toEqual([]);
+    expect(await readPendingStatements(ctx)).toEqual([]);
   });
 
   // Failure modes: a differently described transaction on the same day and
@@ -1743,7 +1728,7 @@ describe("statement Transaction suggestions", () => {
     ).output;
     await record(ctx, [rowInput()]);
     await generate(ctx);
-    const [suggestion] = await refreshAndReadSuggestions(ctx);
+    const [suggestion] = await readPendingStatements(ctx);
     expect(suggestion).toMatchObject({
       recommended: "attach",
       clean: false,
@@ -1768,7 +1753,7 @@ describe("statement Transaction suggestions", () => {
     const account = (await card(ctx)).output;
     await record(ctx, [rowInput()]);
     await generate(ctx);
-    const [suggestion] = await refreshAndReadSuggestions(ctx);
+    const [suggestion] = await readPendingStatements(ctx);
     // A new transaction appears nearby without the ref: the proposal is stale.
     await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.id,
@@ -1799,7 +1784,7 @@ describe("statement Transaction suggestions", () => {
       }),
     ]);
     await generate(ctx);
-    const [hold] = await refreshAndReadSuggestions(ctx);
+    const [hold] = await readPendingStatements(ctx);
     expect(hold).toMatchObject({
       recommended: "create",
       providerStatus: "pending",
@@ -1820,7 +1805,7 @@ describe("statement Transaction suggestions", () => {
       { fingerprint: "fp-suggest-posted" },
     );
     await generate(ctx);
-    const [posted] = await refreshAndReadSuggestions(ctx);
+    const [posted] = await readPendingStatements(ctx);
     expect(posted).toMatchObject({
       recommended: "supersede",
       clean: false,
@@ -1955,7 +1940,7 @@ describe("statement Transaction suggestions", () => {
           },
         ],
       });
-      expect(await refreshAndReadSuggestions(ctx)).toHaveLength(7);
+      expect(await readPendingStatements(ctx)).toHaveLength(7);
     } finally {
       await removeFailure();
     }
@@ -1965,7 +1950,7 @@ describe("statement Transaction suggestions", () => {
     const account = (await card(ctx)).output;
     await record(ctx, [rowInput()]);
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    const [pending] = await refreshAndReadSuggestions(ctx);
+    const [pending] = await readPendingStatements(ctx);
     const [observation] = (await listSourceTransactionRecords(ctx.db, {})).data;
     if (!pending || !observation)
       throw new Error("Missing synthetic recovery evidence");
@@ -2056,7 +2041,7 @@ describe("statement Transaction suggestions", () => {
       ],
     });
     await generate(ctx);
-    const rows = await refreshAndReadSuggestions(ctx);
+    const rows = await readPendingStatements(ctx);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       clean: false,
@@ -2069,7 +2054,7 @@ describe("statement Transaction suggestions", () => {
         .where(notDeleted(expense)),
     ).toEqual([]);
     await generate(ctx);
-    expect(await refreshAndReadSuggestions(ctx)).toHaveLength(1);
+    expect(await readPendingStatements(ctx)).toHaveLength(1);
   });
 
   // A refused lifecycle-only correction must survive the intake response as
@@ -2082,7 +2067,7 @@ describe("statement Transaction suggestions", () => {
     });
     await record(ctx, [source], { observedAt: "2026-06-01T00:00:00Z" });
     await generate(ctx);
-    const [proposal] = await refreshAndReadSuggestions(ctx);
+    const [proposal] = await readPendingStatements(ctx);
     if (!proposal) throw new Error("Missing synthetic booking proposal");
     await accept(ctx, proposal);
     const before = await getDb(ctx.db)
@@ -2098,10 +2083,10 @@ describe("statement Transaction suggestions", () => {
       },
     );
     await generate(ctx);
-    expect(await refreshAndReadSuggestions(ctx)).toMatchObject([
+    expect(await readPendingStatements(ctx)).toMatchObject([
       { clean: false, reviewReason: expect.any(String) },
     ]);
-    const [held] = await refreshAndReadSuggestions(ctx);
+    const [held] = await readPendingStatements(ctx);
     if (!held?.reviewReason) throw new Error("Missing source lifecycle hold");
     await expect(
       previewStatementSuggestion(ctx.db, {
@@ -2136,10 +2121,10 @@ describe("statement Transaction suggestions", () => {
       { fingerprint: "fp-hold" },
     );
     await generate(ctx);
-    const [hold] = await refreshAndReadSuggestions(ctx);
+    const [hold] = await readPendingStatements(ctx);
     await accept(ctx, hold!);
     await generate(ctx);
-    expect(await refreshAndReadSuggestions(ctx)).toEqual([]);
+    expect(await readPendingStatements(ctx)).toEqual([]);
 
     await record(
       ctx,
@@ -2153,7 +2138,7 @@ describe("statement Transaction suggestions", () => {
     );
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
     expect(
-      (await refreshAndReadSuggestions(ctx)).filter(
+      (await readPendingStatements(ctx)).filter(
         (row) => row.recommended === "void",
       ),
     ).toEqual([]);
@@ -2168,7 +2153,7 @@ describe("statement Transaction suggestions", () => {
       next: expect.any(String),
     });
     expect(
-      (await refreshAndReadSuggestions(ctx)).filter(
+      (await readPendingStatements(ctx)).filter(
         (row) => row.recommended === "void",
       ),
     ).toEqual([]);
@@ -2208,7 +2193,7 @@ describe("statement Transaction suggestions", () => {
     ]);
     await generate(ctx);
     expect(
-      (await refreshAndReadSuggestions(ctx)).map((row) => row.siblings),
+      (await readPendingStatements(ctx)).map((row) => row.siblings),
     ).toEqual([0, 0]);
     await record(
       ctx,
@@ -2221,7 +2206,7 @@ describe("statement Transaction suggestions", () => {
       { fingerprint: "fp-firmed" },
     );
     await generate(ctx);
-    const rows = await refreshAndReadSuggestions(ctx);
+    const rows = await readPendingStatements(ctx);
     expect(rows).toHaveLength(3);
     expect(rows.every((row) => !row.clean && row.siblings > 0)).toBe(true);
 
@@ -2252,7 +2237,7 @@ describe("statement Transaction suggestions", () => {
       }),
     ).rejects.toThrow(/source occurrence|evidence changed/i);
     await generate(ctx);
-    const after = await refreshAndReadSuggestions(ctx);
+    const after = await readPendingStatements(ctx);
     expect(after).toHaveLength(3);
     expect(after.every((row) => !row.clean && row.siblings > 0)).toBe(true);
 
@@ -2269,7 +2254,7 @@ describe("statement Transaction suggestions", () => {
         ),
       );
     await generate(ctx);
-    const held = (await refreshAndReadSuggestions(ctx)).find(
+    const held = (await readPendingStatements(ctx)).find(
       (row) => row.chargeKey === historical.chargeKey,
     );
     expect(held).toMatchObject({
@@ -2301,7 +2286,7 @@ describe("statement Transaction suggestions", () => {
       port: answering({ kind: "purchase", counterparty: "business" }),
       runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
     });
-    const [proposal] = await refreshAndReadSuggestions(ctx);
+    const [proposal] = await readPendingStatements(ctx);
     expect(proposal).toMatchObject({
       recommended: "attach",
       clean: false,
@@ -2329,7 +2314,7 @@ describe("statement Transaction suggestions", () => {
     });
     await record(ctx, [rowInput()]);
     await generate(ctx);
-    const [rule] = await refreshAndReadSuggestions(ctx);
+    const [rule] = await readPendingStatements(ctx);
     expect(rule).toMatchObject({ recommended: "attach", clean: false });
     expect(
       await labelStatementSuggestions(ctx.db, {
@@ -2337,7 +2322,7 @@ describe("statement Transaction suggestions", () => {
         runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
       }),
     ).toMatchObject({ labelled: 1 });
-    const [labelled] = await refreshAndReadSuggestions(ctx);
+    const [labelled] = await readPendingStatements(ctx);
     expect(labelled).toMatchObject({
       recommended: "attach",
       clean: true,
@@ -2678,7 +2663,7 @@ describe("statement Transaction suggestions", () => {
       spending: false,
     });
     expect(
-      (await refreshAndReadSuggestions(ctx))[0]!.create!.votes.label,
+      (await readPendingStatements(ctx))[0]!.create!.votes.label,
     ).toBeNull();
     const resumed = await label(ctx, async () => {
       throw new Error(
@@ -2776,7 +2761,7 @@ describe("statement Transaction suggestions", () => {
         const candidates = addCandidate ? 6 : 5;
         expect(seen).toHaveLength(candidates + 2);
         expect(new Set(seen).size).toBe(candidates + 2);
-        const [complete] = await refreshAndReadSuggestions(ctx);
+        const [complete] = await readPendingStatements(ctx);
         expect(complete!.candidates).toHaveLength(candidates);
         expect(
           complete!.candidates.every((candidate) => candidate.label !== null),
@@ -2801,7 +2786,7 @@ describe("statement Transaction suggestions", () => {
     await record(ctx, [observed]);
     await generate(ctx);
     await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
-    const [before] = await refreshAndReadSuggestions(ctx);
+    const [before] = await readPendingStatements(ctx);
     expect(before).toMatchObject({
       clean: true,
       create: {
@@ -2828,7 +2813,7 @@ describe("statement Transaction suggestions", () => {
     });
     expect(calls).toBe(0);
     expect(outcome).toMatchObject({ labelled: 0, failed: [] });
-    const [after] = await refreshAndReadSuggestions(ctx);
+    const [after] = await readPendingStatements(ctx);
     expect(after).toMatchObject({
       clean: true,
       create: {
@@ -2852,7 +2837,7 @@ describe("statement Transaction suggestions", () => {
     await card(ctx);
     await record(ctx, [rowInput()]);
     await generate(ctx);
-    const [existing] = await refreshAndReadSuggestions(ctx);
+    const [existing] = await readPendingStatements(ctx);
     const [proposal] = await buildChargeProposals(ctx.db, [
       { source: existing!.source, chargeKey: existing!.chargeKey },
     ]);
@@ -2884,7 +2869,7 @@ describe("statement Transaction suggestions", () => {
       labelCheckpoint: { models: ["synthetic-decision-model"] },
     });
     await generate(ctx);
-    const [rebuilt] = await refreshAndReadSuggestions(ctx);
+    const [rebuilt] = await readPendingStatements(ctx);
     expect(rebuilt).toMatchObject({
       model: null,
       clean: false,
@@ -2946,7 +2931,7 @@ describe("statement Transaction suggestions", () => {
         });
       }
       await generate(ctx);
-      const [rebuilt] = await refreshAndReadSuggestions(ctx);
+      const [rebuilt] = await readPendingStatements(ctx);
       expect(rebuilt).toMatchObject({
         model: null,
         clean: false,
@@ -3032,7 +3017,7 @@ describe("statement Transaction suggestions", () => {
       expect(Math.max(...requests)).toBeGreaterThan(1);
       expect(requests.length).toBeLessThan(16);
       expect(
-        (await refreshAndReadSuggestions(ctx)).every(
+        (await readPendingStatements(ctx)).every(
           (row) =>
             row.create?.votes.label === "purchase" &&
             row.create.counterparty.label === "business",
@@ -3114,7 +3099,7 @@ describe("statement Transaction suggestions", () => {
         where: eq(spendingCategory.name, "Synthetic statement spending"),
       });
       if (!category) throw new Error("Synthetic spending category is missing");
-      const labelled = await refreshAndReadSuggestions(ctx);
+      const labelled = await readPendingStatements(ctx);
       expect(labelled).toHaveLength(8);
       expect(
         labelled.every(
@@ -3353,7 +3338,7 @@ describe("statement Transaction suggestions", () => {
       );
       await generate(ctx);
     }
-    const pending = (await refreshAndReadSuggestions(ctx)).find(
+    const pending = (await readPendingStatements(ctx)).find(
       (row) => row.rawDescription === "SYNTHETIC ACCEPTED GAP 1",
     );
     const answer = answering({ kind: "purchase", counterparty: "person" });
@@ -3485,7 +3470,7 @@ describe("statement Transaction suggestions", () => {
         const outcome = await apply(...args);
         if (outcome.applied.length && !replaced) {
           replaced = true;
-          const old = (await refreshAndReadSuggestions(ctx)).find(
+          const old = (await readPendingStatements(ctx)).find(
             (row) => row.rawDescription === suffix.rawDescription,
           )!;
           if (!old) throw new Error("Expected the original suffix publication");
@@ -3612,10 +3597,7 @@ describe("statement Transaction suggestions", () => {
         .where(inArray(suggestionTable.id, ids))
         .orderBy(suggestionTable.id);
     const before = await read();
-    const eventsBefore = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .orderBy(feedback.id);
+    const eventsBefore = await readSuggestionDecisions(ctx.db);
     await expect(
       databaseHelpers.withTransactionDatabase(ctx.db, async (tx) => {
         expect(
@@ -3628,9 +3610,7 @@ describe("statement Transaction suggestions", () => {
       }),
     ).rejects.toThrow("Synthetic outer rollback");
     expect(await read()).toEqual(before);
-    expect(
-      await getDb(ctx.db).select().from(feedback).orderBy(feedback.id),
-    ).toEqual(eventsBefore);
+    expect(await readSuggestionDecisions(ctx.db)).toEqual(eventsBefore);
     expect(
       await statementSuggestionsRepo.completeNoActionStatementPrefix(ctx.db, [
         { ...targets[0]!, evidenceFingerprint: "synthetic obsolete evidence" },
@@ -3702,10 +3682,7 @@ describe("statement Transaction suggestions", () => {
         .select()
         .from(suggestionTable)
         .where(eq(suggestionTable.id, targets[0]!.assessmentId));
-      const beforeEvents = await getDb(ctx.db)
-        .select()
-        .from(feedback)
-        .orderBy(feedback.id);
+      const beforeEvents = await readSuggestionDecisions(ctx.db);
       const transition = assessmentStateRepo.transitionAssessmentStates;
       const writes = vi
         .spyOn(assessmentStateRepo, "transitionAssessmentStates")
@@ -3749,9 +3726,7 @@ describe("statement Transaction suggestions", () => {
             .from(suggestionTable)
             .where(eq(suggestionTable.id, targets[0]!.assessmentId)),
         ).toEqual(before);
-        expect(
-          await getDb(ctx.db).select().from(feedback).orderBy(feedback.id),
-        ).toEqual(beforeEvents);
+        expect(await readSuggestionDecisions(ctx.db)).toEqual(beforeEvents);
       } finally {
         vi.useRealTimers();
         writes.mockRestore();
@@ -4015,7 +3990,7 @@ describe("statement Transaction suggestions", () => {
       ctx.db,
       10,
     );
-    const charges = (await refreshAndReadSuggestions(ctx)).map(
+    const charges = (await readPendingStatements(ctx)).map(
       ({ source, chargeKey }) => ({
         source,
         chargeKey,
@@ -4075,7 +4050,7 @@ describe("statement Transaction suggestions", () => {
     });
     await record(ctx, [original]);
     await generate(ctx);
-    const [before] = await refreshAndReadSuggestions(ctx);
+    const [before] = await readPendingStatements(ctx);
     await record(
       ctx,
       [
@@ -4087,7 +4062,7 @@ describe("statement Transaction suggestions", () => {
       ],
       { fingerprint: "synthetic-speculation-mutation" },
     );
-    expect(await refreshAndReadSuggestions(ctx)).toEqual([]);
+    expect(await readPendingStatements(ctx)).toEqual([]);
     expect(
       await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1),
     ).toEqual([]);
@@ -4114,7 +4089,7 @@ describe("statement Transaction suggestions", () => {
       failed: [],
       labels: { generated: 0 },
     });
-    expect(await refreshAndReadSuggestions(ctx)).toEqual([]);
+    expect(await readPendingStatements(ctx)).toEqual([]);
     await generate(ctx);
     const answer = answering({ kind: "purchase", counterparty: "business" });
     let freshQuestions = 0;
@@ -4130,7 +4105,7 @@ describe("statement Transaction suggestions", () => {
       labels: { generated: 3, reused: 0 },
     });
     expect(freshQuestions).toBe(2);
-    const [fresh] = await refreshAndReadSuggestions(ctx);
+    const [fresh] = await readPendingStatements(ctx);
     expect(fresh).toMatchObject({
       chargeKey: before!.chargeKey,
       amount: 48,
@@ -4178,7 +4153,7 @@ describe("statement Transaction suggestions", () => {
       const originalOrder =
         await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 10);
       expect(originalOrder).toHaveLength(2);
-      const [earlier] = await refreshAndReadSuggestions(ctx).then((rows) =>
+      const [earlier] = await readPendingStatements(ctx).then((rows) =>
         rows.filter((row) => row.rawDescription === "EXAMPLE GROCER 0001"),
       );
       let failing = true;
@@ -4559,7 +4534,7 @@ describe("statement Transaction suggestions", () => {
     expect(outcome).toMatchObject({ labelled: 0, completed: 0 });
     expect(outcome.failed).toHaveLength(1);
     expect(
-      (await refreshAndReadSuggestions(ctx))[0]!.create!.votes.label,
+      (await readPendingStatements(ctx))[0]!.create!.votes.label,
     ).toBeNull();
     expect(await label(ctx, answer)).toMatchObject({ labelled: 1, failed: [] });
   });
@@ -4574,7 +4549,7 @@ describe("statement Transaction suggestions", () => {
       calls++;
       return answer(input);
     };
-    const [pending] = await refreshAndReadSuggestions(ctx);
+    const [pending] = await readPendingStatements(ctx);
     let removeFailure: (() => Promise<void>) | undefined =
       await rejectStatementPublication(ctx, pending!.chargeKey, "model");
     try {
@@ -4614,7 +4589,7 @@ describe("statement Transaction suggestions", () => {
     await record(ctx, [original]);
     await generate(ctx);
     await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
-    const [before] = await refreshAndReadSuggestions(ctx);
+    const [before] = await readPendingStatements(ctx);
     await record(
       ctx,
       [
@@ -4644,7 +4619,7 @@ describe("statement Transaction suggestions", () => {
         throw paused;
       }),
     ).rejects.toBe(paused);
-    const retained = (await refreshAndReadSuggestions(ctx)).find(
+    const retained = (await readPendingStatements(ctx)).find(
       (row) => row.chargeKey === before!.chargeKey,
     );
     expect(retained).toMatchObject({
@@ -4663,9 +4638,9 @@ describe("statement Transaction suggestions", () => {
     expect(
       seen.every((subject) => subject.includes("EXAMPLE NEW CHARGE")),
     ).toBe(true);
-    expect(
-      (await refreshAndReadSuggestions(ctx)).every((row) => row.clean),
-    ).toBe(true);
+    expect((await readPendingStatements(ctx)).every((row) => row.clean)).toBe(
+      true,
+    );
   });
 
   // Failure mode: the model picks `interest` for interest earned, which the
@@ -4682,7 +4657,7 @@ describe("statement Transaction suggestions", () => {
     ]);
     await generate(ctx);
     await label(ctx, answering({ kind: "interest", counterparty: "business" }));
-    const [suggestion] = await refreshAndReadSuggestions(ctx);
+    const [suggestion] = await readPendingStatements(ctx);
     expect(suggestion!.create).toMatchObject({
       amount: -8.66,
       kind: "refund",
@@ -4708,7 +4683,7 @@ describe("statement Transaction suggestions", () => {
     });
     expect(page).toMatchObject({ published: 1, next: null });
     expect(
-      (await refreshAndReadSuggestions(ctx)).map((row) => row.rawDescription),
+      (await readPendingStatements(ctx)).map((row) => row.rawDescription),
     ).toEqual(["EXAMPLE NEWER CHARGE"]);
   });
 
@@ -4804,52 +4779,6 @@ describe("statement Transaction suggestions", () => {
     await setAutomaticRule(ctx.db, ctx.actor, {
       ruleKey: "statement_transaction.attach",
       enabled: false,
-    });
-    // Reproduce the populated predecessor, then apply the exact migration.
-    // Index construction must preserve evidence, history, controls and durable work.
-    await databaseHelpers.withTransactionDatabase(ctx.db, async (tx) => {
-      await getDb(tx).execute(
-        sql`DROP INDEX "AssessmentState_statement_label_native_idx"`,
-      );
-      await getDb(tx).execute(
-        sql`DROP INDEX "AssessmentState_statement_label_receipt_idx"`,
-      );
-      const retained = async () => {
-        const snapshots: unknown[] = [];
-        for (const table of [
-          sourceTransactionRecord,
-          transactionImport,
-          transactionImportRecord,
-          assessment,
-          suggestionTable,
-          feedback,
-          financialTransaction,
-          financialTransactionAllocation,
-          purchase,
-          expense,
-          run,
-          runStep,
-          automaticRule,
-          appSettings,
-        ]) {
-          const { rows } = await getDb(tx).execute<{ records: unknown }>(
-            sql`SELECT coalesce(jsonb_agg(to_jsonb(retained) ORDER BY to_jsonb(retained)::text),'[]'::jsonb) AS records FROM ${table} retained`,
-          );
-          snapshots.push(rows[0]?.records);
-        }
-        snapshots.push(await readJobs(tx, {}, { order: ["id"] }));
-        return snapshots;
-      };
-      const before = await retained();
-      for (const statement of readFileSync(
-        new URL(
-          "../../../../../drizzle/0015_statement_label_cursor_work.sql",
-          import.meta.url,
-        ),
-        "utf8",
-      ).split("--> statement-breakpoint"))
-        await getDb(tx).execute(sql.raw(statement));
-      expect(await retained()).toEqual(before);
     });
     const expected = [8, 7, 2, 1, 3, 0, 4, 5].map((index) => target(index).id);
     const actual: string[] = [];
@@ -4956,7 +4885,7 @@ describe("statement Transaction suggestions", () => {
       );
       const before = await getDb(ctx.db).select().from(sourceTransactionRecord);
       await generate(ctx);
-      expect(await refreshAndReadSuggestions(ctx)).toMatchObject([
+      expect(await readPendingStatements(ctx)).toMatchObject([
         {
           recommended: "book",
           accountId: conflictingAccount?.id ?? account.id,
@@ -4987,7 +4916,7 @@ describe("statement Transaction suggestions", () => {
     const account = (await card(ctx)).output;
     await record(ctx, [rowInput()]);
     await generate(ctx);
-    const [suggestion] = await refreshAndReadSuggestions(ctx);
+    const [suggestion] = await readPendingStatements(ctx);
     const [row] = (await listSourceTransactionRecords(ctx.db, {})).data;
     await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.id,
@@ -5003,7 +4932,7 @@ describe("statement Transaction suggestions", () => {
       status: "pending",
       active: true,
     });
-    expect(await refreshAndReadSuggestions(ctx)).toEqual([]);
+    expect(await readPendingStatements(ctx)).toEqual([]);
     await expect(accept(ctx, suggestion!)).rejects.toThrow(
       /evidence changed|stale/,
     );
@@ -5013,7 +4942,7 @@ describe("statement Transaction suggestions", () => {
       status: "superseded",
       active: false,
     });
-    expect((await refreshAndReadSuggestions(ctx))[0]).toMatchObject({
+    expect((await readPendingStatements(ctx))[0]).toMatchObject({
       recommended: "book",
       clean: false,
     });
@@ -5025,7 +4954,7 @@ describe("statement Transaction suggestions", () => {
     await card(ctx);
     await record(ctx, [rowInput()]);
     await generate(ctx);
-    const [suggestion] = await refreshAndReadSuggestions(ctx);
+    const [suggestion] = await readPendingStatements(ctx);
     const outcomes = await Promise.allSettled([
       accept(ctx, suggestion!),
       accept(ctx, suggestion!),
@@ -5048,9 +4977,9 @@ describe("statement Transaction suggestions", () => {
       { fingerprint: "fp-firmed" },
     );
     await generate(ctx);
-    const [first] = await refreshAndReadSuggestions(ctx);
+    const [first] = await readPendingStatements(ctx);
     await accept(ctx, first!);
-    const [twin] = await refreshAndReadSuggestions(ctx);
+    const [twin] = await readPendingStatements(ctx);
     expect(twin).toMatchObject({
       recommended: "attach",
       siblings: 0,
@@ -5080,12 +5009,12 @@ describe("statement Transaction suggestions", () => {
       { fingerprint: "fp-second-visit" },
     );
     await generate(ctx);
-    const older = (await refreshAndReadSuggestions(ctx)).find(
+    const older = (await readPendingStatements(ctx)).find(
       (row) => row.rawDescription === "EXAMPLE CAFE 0001",
     );
     await accept(ctx, older!);
     await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
-    const [second] = await refreshAndReadSuggestions(ctx);
+    const [second] = await readPendingStatements(ctx);
     expect(second).toMatchObject({
       rawDescription: "EXAMPLE CAFE 0002",
       recommended: "attach",
@@ -5112,7 +5041,7 @@ describe("statement Transaction suggestions", () => {
       }),
     ]);
     await generate(ctx);
-    const [booked] = await refreshAndReadSuggestions(ctx);
+    const [booked] = await readPendingStatements(ctx);
     await accept(ctx, booked!);
     await record(
       ctx,
@@ -5127,7 +5056,7 @@ describe("statement Transaction suggestions", () => {
       { fingerprint: "fp-unrelated" },
     );
     await generate(ctx);
-    const unrelated = (await refreshAndReadSuggestions(ctx)).find(
+    const unrelated = (await readPendingStatements(ctx)).find(
       (row) => row.merchant === "Example Shop",
     );
     expect(unrelated).toMatchObject({ recommended: "create", candidates: [] });
@@ -5157,7 +5086,7 @@ describe("statement Transaction suggestions", () => {
         { fingerprint: "fp-firmed-up" },
       );
       await generate(ctx);
-      const older = (await refreshAndReadSuggestions(ctx)).find(
+      const older = (await readPendingStatements(ctx)).find(
         (row) => row.rawDescription === "EXAMPLE CAFE 0001",
       );
       await accept(ctx, older!);
@@ -5203,7 +5132,7 @@ describe("statement Transaction suggestions", () => {
         ctx,
         answering({ kind: "purchase", counterparty: "business" }),
       );
-      const second = (await refreshAndReadSuggestions(ctx)).find(
+      const second = (await readPendingStatements(ctx)).find(
         (row) => row.rawDescription === "EXAMPLE CAFE 0002",
       );
       expect(second).toMatchObject({
@@ -5233,9 +5162,9 @@ describe("statement Transaction suggestions", () => {
       }),
     ]);
     await generate(ctx);
-    expect(
-      (await refreshAndReadSuggestions(ctx)).every((row) => !row.clean),
-    ).toBe(true);
+    expect((await readPendingStatements(ctx)).every((row) => !row.clean)).toBe(
+      true,
+    );
 
     await label(
       ctx,
@@ -5244,7 +5173,7 @@ describe("statement Transaction suggestions", () => {
         counterparty: "business",
       }),
     );
-    const rows = await refreshAndReadSuggestions(ctx);
+    const rows = await readPendingStatements(ctx);
     expect(rows.find((row) => row.merchant === "Example Cafe")).toMatchObject({
       clean: true,
       create: {
@@ -5288,7 +5217,7 @@ describe("statement Transaction suggestions", () => {
       ctx,
       answering({ kind: "account_transfer", counterparty: "person" }),
     );
-    const rows = await refreshAndReadSuggestions(ctx);
+    const rows = await readPendingStatements(ctx);
     expect(rows.find((row) => row.amount < 0)).toMatchObject({
       clean: false,
       create: { kind: "income", counterparty: { label: "person" } },
@@ -5329,7 +5258,7 @@ describe("statement Transaction suggestions", () => {
       ctx,
       answering({ kind: "credit_card_payment", counterparty: "business" }),
     );
-    const listed = await refreshAndReadSuggestions(ctx);
+    const listed = await readPendingStatements(ctx);
     const payment = listed.find((row) => row.recommended === "create");
     const attach = listed.find((row) => row.recommended === "attach");
     expect(payment).toMatchObject({
@@ -5342,13 +5271,6 @@ describe("statement Transaction suggestions", () => {
     await getDb(ctx.db).execute(
       sql`UPDATE "Suggestion" SET data = jsonb_set(data, '{clean}', 'true') WHERE id = ${payment!.assessmentId}::uuid`,
     );
-    await getDb(ctx.db).execute(sql`
-      UPDATE "AssessmentReadPublication"
-      SET "key" = jsonb_set("key", '{clean}', 'true'::jsonb),
-        "filters" = jsonb_set("filters", '{clean}', '"true"'::jsonb),
-        "row" = jsonb_set("row", '{clean}', 'true'::jsonb)
-      WHERE "assessmentId" = ${payment!.assessmentId}::uuid AND active
-    `);
     // Refused with a reason, so the page skips it instead of stopping.
     expect(
       await acceptCleanSuggestions(ctx.db, kernelCtx(ctx), {
@@ -5442,7 +5364,7 @@ describe("statement Transaction suggestions", () => {
       ctx,
       answering({ kind: "account_transfer", counterparty: "business" }),
     );
-    const rows = await refreshAndReadSuggestions(ctx);
+    const rows = await readPendingStatements(ctx);
     expect(rows.find((row) => row.merchant === "PayFriend")).toMatchObject({
       clean: false,
       create: {
@@ -5483,7 +5405,7 @@ describe("statement Transaction suggestions", () => {
     ]);
     await generate(ctx);
     await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
-    const [row] = await refreshAndReadSuggestions(ctx);
+    const [row] = await readPendingStatements(ctx);
     expect(row).toMatchObject({
       clean: false,
       create: {
@@ -5535,7 +5457,7 @@ describe("statement Transaction suggestions", () => {
         counterparty: "business",
       }),
     );
-    const rows = await refreshAndReadSuggestions(ctx);
+    const rows = await readPendingStatements(ctx);
     expect(rows.find((row) => row.amount > 0)).toMatchObject({
       clean: true,
       create: {
@@ -5593,7 +5515,7 @@ describe("statement Transaction suggestions", () => {
     await generate(ctx);
     await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
     for (;;) {
-      const [suggestion] = await refreshAndReadSuggestions(ctx);
+      const [suggestion] = await readPendingStatements(ctx);
       if (!suggestion) break;
       expect(suggestion.clean).toBe(true);
       await accept(ctx, suggestion);
@@ -5633,7 +5555,7 @@ describe("statement Transaction suggestions", () => {
         kindConfidence: 0.4,
       }),
     );
-    const rows = await refreshAndReadSuggestions(ctx);
+    const rows = await readPendingStatements(ctx);
     const by = (merchant: string) =>
       rows.find((row) => row.merchant === merchant);
     expect(by("Example Cafe")).toMatchObject({

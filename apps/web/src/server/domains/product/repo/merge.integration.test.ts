@@ -527,22 +527,28 @@ describe("mergeProducts", () => {
         sourceUrls: ["https://example.com/b"],
       });
 
-      const beforeHistory = await getDb(ctx.db)
-        .select()
-        .from(suggestionTable)
-        .where(eq(suggestionTable.family, "product_pair"))
-        .orderBy(asc(suggestionTable.id));
+      // Merging moves the current target; published evidence and decisions stay.
+      const retainedHistory = () =>
+        getDb(ctx.db)
+          .select({
+            id: suggestionTable.id,
+            publicationKey: suggestionTable.publicationKey,
+            subject: suggestionTable.subject,
+            judgment: suggestionTable.judgment,
+            evidence: suggestionTable.evidence,
+            decisions: suggestionTable.decisions,
+          })
+          .from(suggestionTable)
+          .where(eq(suggestionTable.family, "product_pair"))
+          .orderBy(asc(suggestionTable.id));
+      const beforeHistory = await retainedHistory();
       await mergeProducts(
         ctx.db,
         { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
         TEST_ACTOR,
       );
 
-      const history = await getDb(ctx.db)
-        .select()
-        .from(suggestionTable)
-        .where(eq(suggestionTable.family, "product_pair"))
-        .orderBy(asc(suggestionTable.id));
+      const history = await retainedHistory();
       expect(history).toHaveLength(4);
       expect(history).toEqual(beforeHistory);
       expect(

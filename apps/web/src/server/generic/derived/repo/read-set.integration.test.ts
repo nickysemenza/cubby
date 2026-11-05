@@ -61,16 +61,6 @@ const UNDECLARED_READS = new Set(["Entity", "DerivedValue"]);
 
 /** Full read models also load presentation fields these sinks never publish. */
 const INCIDENTAL_READS = {
-  // The sink's retained revisions, continuation and execution observations are
-  // publication bookkeeping; capturing their writes would refresh itself.
-  "assessment.reviewFacts": new Set([
-    "WorkItem",
-    "Job",
-    "AssessmentReadStage",
-    "AssessmentReadPublication",
-    "AssessmentReadMembership",
-    "AssessmentReadDependency",
-  ]),
   // Input availability reads queue status and envelope execution observations.
   // The calculation discards execution metadata; Job lifecycle is not an input.
   "project.workDiagnosticFacts": new Set(["WorkItem", "Job"]),

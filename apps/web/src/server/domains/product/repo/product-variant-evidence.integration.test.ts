@@ -4,11 +4,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import {
-  suggestionTable,
-  inventoryEntry,
-  product,
-} from "~/server/db/schema";
+import { suggestionTable, inventoryEntry, product } from "~/server/db/schema";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import {
   prepareProductIdentityPair,
@@ -112,6 +108,18 @@ describe("retained Product identity conflict guards", () => {
       .values({
         publicationKey: `synthetic:historical:${crypto.randomUUID()}`,
         family: "product_pair",
+        entity: "product",
+        recordId: first!,
+        status: "superseded",
+        active: false,
+        data: {
+          otherId: second!,
+          source: "detector",
+          evidence: "Synthetic retained pair",
+          sourceUrls: [],
+          actionable: true,
+          conflict,
+        },
         subject: {
           kind: "product_pair",
           entity: "product",
@@ -384,12 +392,10 @@ describe("retained Product identity conflict guards", () => {
             .select()
             .from(inventoryEntry)
             .orderBy(inventoryEntry.id),
-          getDb(ctx.db).select().from(suggestionTable).orderBy(suggestionTable.id),
           getDb(ctx.db)
             .select()
             .from(suggestionTable)
             .orderBy(suggestionTable.id),
-          getDb(ctx.db).select().from(feedback).orderBy(feedback.id),
         ]);
       const before = await readPreserved();
       const input = {

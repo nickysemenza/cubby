@@ -14,6 +14,7 @@ import {
 import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -140,18 +141,16 @@ describe("Run detail reports", () => {
         ],
       }),
     );
-    await getDb(ctx.db)
-      .insert(feedback)
-      .values({
-        assessmentId: first.id,
-        operationId: "synthetic:later-manual",
-        verdict: "correct",
-        correction: { present: false },
-        intent: "apply",
-        authority: "member",
-        actorUserId: ctx.actor.userId,
-        receipt: { kind: "saved_field", recordId: vendor.id },
-      });
+    await recordFeedback(ctx.db, {
+      assessmentId: first.id,
+      operationId: "synthetic:later-manual",
+      verdict: "correct",
+      correction: { present: false },
+      intent: "apply",
+      authority: "member",
+      actorUserId: ctx.actor.userId,
+      receipt: { kind: "saved_field", recordId: vendor.id },
+    });
     await getDb(ctx.db)
       .update(suggestionTable)
       .set({ status: "applied" })

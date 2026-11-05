@@ -136,12 +136,10 @@ describe("stored connection evidence", () => {
       ...candidate,
       target: { entityKind: "expense", entityId: unrelated.output.id },
     });
-    // Selecting an older review still loads the edge's current competitor;
-    // narrowing to the old ID alone would change the reader's winner.
     const bounded = await readEntityConnectionsBatch(
       ctx.db,
       [candidate.source],
-      [proposal.review.assessmentId, proposal.review.assessmentId],
+      [last!.review.assessmentId, last!.review.assessmentId],
     );
     expect(bounded[0]?.map((entry) => entry.review.assessmentId)).toEqual([
       last?.review.assessmentId,

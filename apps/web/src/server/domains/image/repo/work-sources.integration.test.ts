@@ -5,11 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import {
-  suggestionTable,
-  image,
-  vendorAccount,
-} from "~/server/db/schema";
+import { suggestionTable, image, vendorAccount } from "~/server/db/schema";
 import {
   readRecordWorkQueue,
   readWorkQueue,
@@ -20,6 +16,7 @@ import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { insertEntityAttachments } from "~/server/testing/repo.fixtures";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 // Work must expose pending descriptions without inventing application authority,
 // bypassing private original ownership, or scheduling correction work on reads.
@@ -102,7 +99,7 @@ describe("image Suggestions in Work", () => {
     await drainStoredDerived(ctx.db);
     const before = {
       jobs: await readJobs(ctx.db, {}),
-      feedback: await getDb(ctx.db).select().from(feedback),
+      decisions: await readSuggestionDecisions(ctx.db),
     };
     const queue = await readWorkQueue(ctx.db, {
       input: input(),
@@ -141,7 +138,7 @@ describe("image Suggestions in Work", () => {
     ]);
     expect({
       jobs: await readJobs(ctx.db, {}),
-      feedback: await getDb(ctx.db).select().from(feedback),
+      decisions: await readSuggestionDecisions(ctx.db),
     }).toEqual(before);
     await getDb(ctx.db)
       .update(image)

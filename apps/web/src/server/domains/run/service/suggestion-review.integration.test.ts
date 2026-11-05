@@ -266,29 +266,18 @@ describe("Suggestion review", () => {
       );
       const id = live.result.suggestions.categoryId?.assessmentId;
       if (!id) throw new Error("Synthetic live assessment missing");
-      const [livePrediction] = await getDb(ctx.db)
+      const [liveRow] = await getDb(ctx.db)
         .select()
         .from(suggestionTable)
         .where(eq(suggestionTable.id, id));
-      const [liveState] = await getDb(ctx.db)
-        .select()
-        .from(suggestionTable)
-        .where(eq(suggestionTable.id, id));
-      if (!livePrediction || !liveState)
-        throw new Error("Synthetic live history missing");
+      if (!liveRow) throw new Error("Synthetic live history missing");
       const siblingId = crypto.randomUUID();
       await getDb(ctx.db)
         .insert(suggestionTable)
         .values({
-          ...livePrediction,
+          ...liveRow,
           id: siblingId,
           publicationKey: `synthetic-sibling:${siblingId}`,
-        });
-      await getDb(ctx.db)
-        .insert(suggestionTable)
-        .values({
-          ...liveState,
-          id: siblingId,
           active: true,
           status: "pending",
         });

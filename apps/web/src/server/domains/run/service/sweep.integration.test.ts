@@ -663,7 +663,7 @@ describe("Sweeps", () => {
     const { rows: retained } = await getDb(ctx.db).execute<{
       subject: unknown;
     }>(sql`SELECT s.subject
-      FROM "Suggestion" a WHERE s.id=${waiting[1]!.id}::uuid`);
+      FROM "Suggestion" s WHERE s.id=${waiting[1]!.id}::uuid`);
     const later = await recordRows(
       [row({ providerAmount: 40, sourceCategory: null })],
       "synthetic-later-label-arrival",

@@ -55,6 +55,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import {
   rejectPhotoProductCandidate,
@@ -1097,12 +1098,7 @@ describe("photo group proposals", () => {
         undefined,
         ctx.actor,
       );
-      expect(
-        await getDb(ctx.db)
-          .select({ id: feedback.id })
-          .from(feedback)
-          .where(eq(feedback.assessmentId, suggestion!.id)),
-      ).toHaveLength(0);
+      expect(await readSuggestionDecisions(ctx.db, suggestion!.id)).toEqual([]);
       await proposePhotoGroups(
         ctx.db,
         {
@@ -1124,10 +1120,7 @@ describe("photo group proposals", () => {
         undefined,
         ctx.actor,
       );
-      const [rejected] = await getDb(ctx.db)
-        .select({ verdict: feedback.verdict })
-        .from(feedback)
-        .where(eq(feedback.assessmentId, suggestion!.id));
+      const [rejected] = await readSuggestionDecisions(ctx.db, suggestion!.id);
       expect(rejected?.verdict).toBe("wrong");
       await expect(
         proposePhotoGroups(

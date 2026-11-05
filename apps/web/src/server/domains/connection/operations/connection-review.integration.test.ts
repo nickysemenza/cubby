@@ -21,6 +21,7 @@ import {
   createLocationFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import { retrieveConnectionCandidates } from "../repo/connection-candidates";
 import {
@@ -284,10 +285,10 @@ describe("connection application through generic Feedback", () => {
     expect((await work()).items).not.toContainEqual(
       expect.objectContaining({ key: `pending-suggestions:${item.id}` }),
     );
-    const events = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, proposal.review.assessmentId));
+    const events = await readSuggestionDecisions(
+      ctx.db,
+      proposal.review.assessmentId,
+    );
     expect(
       events.filter(
         (event) =>
