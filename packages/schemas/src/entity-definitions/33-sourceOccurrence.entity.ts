@@ -3,6 +3,7 @@ import { dateTime } from "../codec";
 import { shortcodeSchema } from "../identifier-fields";
 import {
   sourceOccurrenceIdentityKind,
+  sourceOccurrenceClosure,
   sourceOccurrenceReviewState,
 } from "../source-occurrence-fields";
 import {
@@ -226,6 +227,18 @@ export const { definition, readSchemas } = defineEntityModel({
         output: false,
         validation: readOnly(z.json()),
       },
+      {
+        key: "closure",
+        kind: "json",
+        provenance: {
+          kind: "relation",
+          sources: [
+            { label: "Occurrence evidence and accepted financial graph" },
+          ],
+        },
+        display: { list: false, detail: false },
+        validation: readOnly(sourceOccurrenceClosure),
+      },
       timestampField("createdAt"),
       timestampField("updatedAt"),
       {
@@ -354,7 +367,15 @@ export const { definition, readSchemas } = defineEntityModel({
     ],
   },
   search: false,
-  extensions: { ports: {} },
+  extensions: {
+    ports: {
+      repository: {
+        module:
+          "~/server/domains/transaction-import/repo/source-occurrence-read",
+        export: "sourceOccurrenceRepository",
+      },
+    },
+  },
 });
 
 export default defineEntity(
