@@ -531,6 +531,11 @@ running in Node. Image processing always schedules work; do not suppress its
 queue seam with persisted enable/pause settings. Assert durable jobs and their
 captured wakeups, draining only when the scenario needs consumer behavior.
 
+The offline browser pump accelerates full deterministic rebuilds. A journey
+asserting the interval before the next hourly pass overrides `e2eDerivedRefresh`
+with a plain `provide()` fixture; prerequisite helpers still publish explicitly.
+Do not let the accelerated pump repair the missing publication being asserted.
+
 Do not overlap PostgreSQL and E2E locally: they contend for
 containers, workerd, browsers, and database connections. For changed workspace packages, run their affected test rather than every
 package. A cross-package contract change may need its consumers too.
