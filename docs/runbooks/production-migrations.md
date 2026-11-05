@@ -260,6 +260,29 @@ or memory-limit terminations. A target miss is reported, never hidden by clearin
 retained work. Trigger retirement, catalog checks and DerivedValue drop remain
 separate deployed-reader-first steps under ADR 0025.
 
+## Retiring derived source triggers
+
+Deploy and verify the Worker with the ticket engine and explicit SQL admission
+callers removed first. Require the full-pass gate in issue #3662 and per-kind
+replacement coverage before this step. Retained tickets are not a completion
+counter and are not deleted by either DDL migration.
+
+First replace only the shared `derived_mark(text, uuid[], text)` function with a
+no-op. Keep its signature/default and all source triggers for this deployment.
+Use transaction-per-statement with a 2-second lock timeout. Read back its
+`pg_get_functiondef` and confirm it references neither WorkItem nor
+JobInvalidationCapture. Verify source edits still commit and replacement reads
+remain available. B1 still owns the retained work tables.
+
+Then retire source triggers table by table in a separate migration. Every drop
+is idempotent and uses `-- cubby:transaction-per-statement` with the 2-second
+lock timeout, including after partial commits/retry. Verify `pg_trigger` has no
+remaining derived-mark trigger and `pg_proc` has no body referring to retained
+work tables before B1 drops them. Keep ProductConversionCoverage; only its ticket
+trigger retires. The separate DerivedValue drop still requires its full consumer
+trace, legacy count by key, production preservation proof and immediately named
+manual snapshot under the table-drop procedure.
+
 ## Typed domain read snapshots
 
 The read snapshot cutover copies each declared result into named, typed columns
