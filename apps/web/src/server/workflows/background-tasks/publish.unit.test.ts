@@ -1,8 +1,10 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
+import * as cfEnv from "~/server/cf-env";
 import { runWithExecutionCtx } from "~/server/cf-env";
 
-import { wakeJobs } from "./publish";
+import { wakeAt, wakeJobs } from "./publish";
 
 describe("Job wake transport", () => {
   it("sends only a versioned wake, with no domain payload", async () => {
@@ -55,16 +57,65 @@ describe("Job wake transport", () => {
     expect(settled).toBe(true);
   });
 
-  it("leaves committed intent recoverable when a queue send rejects", async () => {
-    await expect(
-      wakeJobs({
-        source: "synthetic-test",
-        queue: {
-          sendBatch: async () => {
-            throw new Error("Synthetic unavailable queue");
-          },
-        },
-      }),
-    ).resolves.toBeUndefined();
+  // A member's Run can have no other wake: without a retry here it waits for the next
+  // hourly tick, because a send that failed enqueued nothing for the queue to retry.
+  it("retries a failed send until the wake is delivered", async () => {
+    vi.useFakeTimers();
+    try {
+      const sendBatch = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Synthetic queue outage"))
+        .mockRejectedValueOnce(new Error("Synthetic queue outage"))
+        .mockResolvedValue(undefined);
+      const wake = wakeJobs({ source: "run-launch", queue: { sendBatch } });
+      await vi.runAllTimersAsync();
+      await wake;
+      expect(sendBatch).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives up after bounded attempts and leaves the work to the hourly cron", async () => {
+    vi.useFakeTimers();
+    try {
+      const sendBatch = vi
+        .fn()
+        .mockRejectedValue(new Error("Synthetic outage"));
+      const wake = wakeJobs({ source: "run-launch", queue: { sendBatch } });
+      await vi.runAllTimersAsync();
+      await expect(wake).resolves.toBeUndefined();
+      expect(sendBatch).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries a delayed wake with the delay still owed", async () => {
+    vi.useFakeTimers();
+    try {
+      const sendBatch = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Synthetic queue outage"))
+        .mockResolvedValue(undefined);
+      vi.spyOn(cfEnv, "getBackgroundQueue").mockReturnValue(
+        fromPartial({ sendBatch }),
+      );
+      const wake = wakeAt(new Date(Date.now() + 60_000), {
+        source: "synthetic-due",
+      });
+      await vi.runAllTimersAsync();
+      await wake;
+      expect(sendBatch).toHaveBeenCalledTimes(2);
+      const delays = sendBatch.mock.calls.map(
+        ([[message]]) => message.delaySeconds,
+      );
+      expect(delays[0]).toBe(60);
+      expect(delays[1]).toBeLessThanOrEqual(60);
+      expect(delays[1]).toBeGreaterThan(50);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
   });
 });

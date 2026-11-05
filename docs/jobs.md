@@ -923,15 +923,13 @@ eligibility does not imply a human review queue.
 PostgreSQL owns Jobs, WorkItems, claims, progress, member pauses and retry policy.
 The queue executes ready work immediately; subsequent pages continue while work
 is runnable. Kind capacity refusals do not themselves generate immediate wake loops.
-The shared `JobSchedulerDurableObject` stores only wake obligations and a bounded
-100-event diagnostic history. It serializes deadline observations across database
-awaits so an older read cannot overwrite a newer notification. Live server leases
-are registered before provider work and refreshed on renewal and settlement.
-Future availability and lease expiry arm one alarm; an empty deadline set disarms it.
-An alarm delivers the ordinary generic queue wake, never executes a second runtime.
-Queue transport and deadline-observation failures retry with bounded backoff; accepted queue deliveries use
-queue retry semantics for runtime failures. A process dying between commit and its
-post-commit signal remains recoverable on app-open or the daily sweep.
+Nothing but Postgres holds a deadline. At the end of a round the drains and the Job
+drain each send one Queue-delayed wake for their next known due time, up to one hour
+out; the hourly cron reaches anything later and anything whose message was lost. Each
+round that claims a Job first arms a wake for its lease to lapse, so a killed
+invocation recovers without waiting for the cron. A wake cannot be cancelled, so a
+stale one touches Postgres once and finds nothing due. A process dying between commit
+and its post-commit signal recovers on app-open or the next hourly tick.
 
 Derived drains retain WorkItem retry deadlines rather than completing and relying
 on minute enrollment. Daily reconciliation pages through all 24 buckets. Queue
@@ -940,14 +938,16 @@ five minutes. Existing Job identities, cursors, tickets, errors and stops surviv
 
 The cron fires hourly and drains whatever is due, so it is the timer for work due
 later and the backstop for a lost wake. Daily recovery runs at 7 a.m.
-America/Los_Angeles: the invocation at that household hour also admits the daily
-pass, with a leased household-date claim preventing duplicate admission. Failed enrollment releases the claim for retry; only successful durable enrollment completes the date.
-Deployment's first request bootstraps existing work and AI activation once per Worker
-version; deployment probes initiate this explicitly. App-open coalesces recovery
-and mail discovery. Gmail provider push is not implemented here.
+America/Los_Angeles: the invocation at that household hour also runs the daily pass.
+Every daily step is idempotent, and the nightly pass is keyed by its household date
+(`Run.clientKey`), so a repeated invocation reuses that date's pass even after it
+finished. Only an earlier date's budget-paused pass makes way for a new one. A failed
+wake send retries three times over about five seconds before the hourly cron is its
+only recovery.
+The first hourly tick after a deploy activates that Worker version's AI policy.
+App-open coalesces recovery and mail discovery. Gmail provider push is not implemented here.
 
-`job.schedule` reports Running, Next wake, Waiting and Last recovery enrollment, known deadlines and wake/delivery/recovery history to agents. No known deadline does not establish that Neon is suspended. Status reads are on demand. Scheduler transitions use structured Worker
-logs and bounded DO history, with no database-backed idle heartbeat.
+`job.activity` and the status page report what runs, waits and last finished.
 
 ### Routine Run history
 

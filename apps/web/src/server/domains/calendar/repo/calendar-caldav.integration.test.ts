@@ -267,6 +267,9 @@ describe("durable calendar dirty-mark fallback", () => {
       await vi.advanceTimersByTimeAsync(750);
 
       await expect(tasks[0]).resolves.toBeUndefined();
+      // The fallback's wake is its own retained task, with its own bounded retries.
+      await vi.advanceTimersByTimeAsync(5_250);
+      await Promise.all(tasks);
       expect(consoleError).toHaveBeenCalledWith(
         expect.objectContaining({
           source: "calendar-feed.mark-dirty-fallback",

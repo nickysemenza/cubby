@@ -1,7 +1,6 @@
 import { CalendarFeedDurableObject } from "~/server/domains/calendar/operations/durable-object";
 
 export { CalendarFeedDurableObject };
-export { JobSchedulerDurableObject } from "~/server/generic/jobs/scheduler/durable-object";
 
 /**
  * The Worker pool exercises the production Durable Object class through its

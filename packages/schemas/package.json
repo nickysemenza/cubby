@@ -192,7 +192,6 @@
     "./run-step": "./src/run-step.ts",
     "./run-step-input": "./src/run-step-input.ts",
     "./job": "./src/job.ts",
-    "./job-scheduler": "./src/job-scheduler.ts",
     "./job-entity": "./src/job-entity.ts",
     "./run-work-progress": "./src/run-work-progress.ts",
     "./sweep": "./src/sweep.ts",

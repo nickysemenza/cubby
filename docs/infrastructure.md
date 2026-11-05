@@ -90,7 +90,7 @@ retain `subjectKind` / `subjectId` for diagnostics on their owning record.
 `retry_wait` retains the raw scrubbed error and consecutive failure attempt of
 `maxAttempts`. Application page sizes live in `JOB_PAGE_LIMITS`.
 
-The minute cron publishes `ai-refresh.activate`, keyed by deployment version
+The hourly cron publishes `ai-refresh.activate`, keyed by deployment version
 and its observed occurrence. A transaction serializes occurrence admission,
 checks the gateway DO's running version and fences activation to the recorded
 occurrence. A rollback A → B → A receives a new occurrence and restarts automatic

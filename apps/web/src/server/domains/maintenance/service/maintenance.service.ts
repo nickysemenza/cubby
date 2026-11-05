@@ -1,5 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor, type RunId } from "@cubby/schemas/identifiers";
 import type {
   MaintenanceRunOut,
   MaintenanceRunSummary,
@@ -16,12 +16,11 @@ import {
 } from "~/server/domains/image/repo/image";
 import {
   ACTIVE_MAINTENANCE_STATUSES,
-  endBudgetPausedPass,
+  admitMaintenancePass,
   latestMaintenanceRun,
   readRunShortcode,
 } from "~/server/domains/maintenance/repo/maintenance-run";
 import { countStaleRecipeTotals } from "~/server/domains/recipe/repo/totals";
-import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   leftOf,
   listRunSteps,
@@ -37,51 +36,58 @@ import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 const ACTIVE_CONSTRAINT = "Run_one_active_maintenance";
 const PENDING_UPLOAD_HOURS = 24;
 
+const launchedPass = async (
+  db: Database,
+  row: { id: RunId },
+): Promise<MaintenanceRunOut> => {
+  const shortcode = await readRunShortcode(db, row.id);
+  if (!shortcode)
+    throw new Error(`Maintenance Run ${row.id} vanished on launch`);
+  return { runId: parseShortcodeFor("run", shortcode), existing: true };
+};
+
 /**
- * Starts one maintenance pass, or returns the one already running or paused.
- * Racing launches lose the `Run_one_active_maintenance` insert and return the
- * winner instead.
+ * Starts one maintenance pass, or returns the one already running or paused. Racing
+ * launches lose the `Run_one_active_maintenance` insert and return the winner instead.
+ *
+ * A nightly launch names its household date, and that date admits one pass: a repeated
+ * invocation reuses it even after it finished, and it is never superseded by its own
+ * date. Only an earlier night's budget-paused pass makes way.
  */
 export async function launchMaintenanceRun(
   db: Database,
   actor: ActorContext,
-  trigger: "manual" | "scheduled",
+  admission: "manual" | { householdDate: string },
 ): Promise<MaintenanceRunOut> {
-  let active = await latestMaintenanceRun(db, true);
-  if (
-    active &&
-    trigger === "scheduled" &&
-    (await endBudgetPausedPass(db, active.id))
-  )
-    active = await latestMaintenanceRun(db, true);
-  if (active)
-    return {
-      runId: parseShortcodeFor("run", active.shortcode),
-      existing: true,
-    };
-  let runId;
+  let admitted;
   try {
-    runId = await ensureRun(db, actor, {
-      purpose: "maintenance",
-      trigger,
-      status: "running",
-      notes:
-        trigger === "scheduled" ? "Nightly maintenance" : "Maintenance run now",
-    });
+    admitted = await admitMaintenancePass(db, actor, admission);
   } catch (error) {
     if (!isUniqueViolation(error, ACTIVE_CONSTRAINT)) throw error;
+    admitted = { active: true as const };
+  }
+  if ("active" in admitted) {
     const winner = await latestMaintenanceRun(db, true);
-    if (!winner) throw error;
+    if (!winner)
+      throw new Error("The active maintenance pass finished during launch");
     return {
       runId: parseShortcodeFor("run", winner.shortcode),
       existing: true,
     };
   }
-  await launchWorkflowRun(db, { runId, purpose: "maintenance" });
-  const shortcode = await readRunShortcode(db, runId);
-  if (!shortcode)
-    throw new Error(`Maintenance Run ${runId} vanished on launch`);
-  return { runId: parseShortcodeFor("run", shortcode), existing: false };
+  if (admitted.status === null) {
+    await launchWorkflowRun(db, { runId: admitted.id, purpose: "maintenance" });
+    const out = await launchedPass(db, admitted);
+    return { ...out, existing: false };
+  }
+  // The first invocation can die between committing the pass and launching it.
+  if (admitted.status === runStatus.enum.running)
+    await launchWorkflowRun(db, {
+      runId: admitted.id,
+      purpose: "maintenance",
+      automatic: true,
+    });
+  return launchedPass(db, admitted);
 }
 
 const summarize = (

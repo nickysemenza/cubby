@@ -51,7 +51,7 @@ describe("app-open catch-up queue handoff", () => {
         BACKGROUND_QUEUE: {
           sendBatch: async () => {
             calls += 1;
-            if (calls === 1) throw new Error("queue unavailable");
+            throw new Error("queue unavailable");
           },
         },
       }),
@@ -59,7 +59,8 @@ describe("app-open catch-up queue handoff", () => {
 
     await expect(requestCatchUp(ctx.db)).resolves.toEqual({ status: "queued" });
     await expect(requestCatchUp(ctx.db)).resolves.toEqual({ status: "recent" });
-    expect(calls).toBe(1);
+    // Every bounded attempt failed, and the second request sends nothing.
+    expect(calls).toBe(4);
     expect((await claimJob(ctx.db, pending.id))?.id).toBe(pending.id);
   });
 });

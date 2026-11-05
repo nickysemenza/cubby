@@ -28,7 +28,7 @@ import { jobKindPolicy, jobRetryDelayMs } from "../kind-policy";
 import { JOB_DRAIN } from "../limits";
 
 /** How long a claim holds a Job before another worker may take it over. */
-const JOB_LEASE_MS = 5 * 60_000;
+export const JOB_LEASE_MS = 5 * 60_000;
 export type JobRow = typeof job.$inferSelect;
 export type JobClaim = JobRow & {
   leaseToken: string;
@@ -152,6 +152,29 @@ export async function dueJobs(
     kind: row.kind,
     runOwned: row.run_owned,
   }));
+}
+
+/** The next time a queued Job falls due or a held lease lapses, if later than now. */
+export async function nextJobDue(
+  db: RepositoryQueryInput,
+): Promise<Date | null> {
+  const now = sql`${new Date().toISOString()}::timestamp`;
+  const until = sql`CASE WHEN ${job.state} = ${"running"} THEN ${job.leaseExpiresAt} ELSE ${job.availableAt} END`;
+  const [row] = await repositoryQueries(db)
+    .select({
+      // Epoch milliseconds: the driver would read a zoneless timestamp as local time.
+      at: sql<
+        number | null
+      >`(extract(epoch FROM min(${until})) * 1000)::float8`,
+    })
+    .from(job)
+    .where(
+      and(
+        inArray(job.state, ["queued", "retry_wait", "running"]),
+        sql`${until} > ${now}`,
+      ),
+    );
+  return row?.at == null ? null : new Date(row.at);
 }
 
 /**

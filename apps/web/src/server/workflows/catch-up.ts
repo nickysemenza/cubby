@@ -2,10 +2,6 @@ import type { JobId } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 
 import {
-  describeErrorCauses,
-  scrubErrorMessage,
-} from "~/lib/error-diagnostics";
-import {
   getPurchaseImportRunAgentNamespace,
   isCloudflareRuntime,
 } from "~/server/cf-env";
@@ -50,8 +46,6 @@ export async function recoverMissedWork(
   coordinatorRetireBefore?: Date,
   { daily = true, wake = true }: { daily?: boolean; wake?: boolean } = {},
 ) {
-  const { jobScheduler } =
-    await import("~/server/generic/jobs/scheduler/client");
   const obligations = await Promise.allSettled([
     (async () => {
       const { scheduleDerivedJobs } =
@@ -88,14 +82,6 @@ export async function recoverMissedWork(
     ).wakeJobs({ source: daily ? "daily-recovery" : "app-open-recovery" });
   const errors = obligations.flatMap((result) =>
     result.status === "rejected" ? [result.reason] : [],
-  );
-  await jobScheduler()?.recovered(
-    daily ? "daily" : "app-open",
-    errors.length
-      ? scrubErrorMessage(
-          JSON.stringify(errors.map((error) => describeErrorCauses(error))),
-        )
-      : null,
   );
   if (errors.length)
     throw new AggregateError(errors, "Background recovery failed");

@@ -211,7 +211,9 @@ describe("maintenance Run", () => {
   it("returns the active pass instead of starting a second one", async () => {
     const first = await launchMaintenanceRun(ctx.db, ctx.actor, "manual");
     const [again, concurrent] = await Promise.all([
-      launchMaintenanceRun(ctx.db, ctx.actor, "scheduled"),
+      launchMaintenanceRun(ctx.db, ctx.actor, {
+        householdDate: "2026-01-15",
+      }),
       launchMaintenanceRun(ctx.db, ctx.actor, "manual"),
     ]);
     expect(first.existing).toBe(false);
@@ -292,6 +294,53 @@ describe("maintenance Run", () => {
     expect(await readRun(id)).toMatchObject({ status: "completed" });
   });
 
+  // A repeated cron invocation carries the same household date. It must not end the
+  // pass it just launched, and it must not start a second full pass after that one.
+  it("admits one nightly pass per household date, whatever became of it", async () => {
+    const date = { householdDate: "2026-01-15" };
+    const first = await launchMaintenanceRun(ctx.db, ctx.actor, date);
+    expect(first.existing).toBe(false);
+    const id = await resolveOrThrow(ctx.db, "run", first.runId);
+    const setStatus = (set: Partial<typeof run.$inferInsert>) =>
+      getDb(ctx.db).update(run).set(set).where(eq(run.id, id));
+    const passes = () =>
+      getDb(ctx.db)
+        .select({ id: run.id, status: run.status })
+        .from(run)
+        .where(eq(run.purpose, "maintenance"));
+
+    await setStatus({ status: "paused_auth", failureCode: "execution_limit" });
+    expect(await launchMaintenanceRun(ctx.db, ctx.actor, date)).toEqual({
+      runId: first.runId,
+      existing: true,
+    });
+    expect(await passes()).toEqual([{ id, status: "paused_auth" }]);
+
+    await setStatus({ status: "completed", failureCode: null });
+    expect(await launchMaintenanceRun(ctx.db, ctx.actor, date)).toEqual({
+      runId: first.runId,
+      existing: true,
+    });
+    expect(await passes()).toEqual([{ id, status: "completed" }]);
+
+    await setStatus({ status: "paused_auth", failureCode: "execution_limit" });
+    const next = await launchMaintenanceRun(ctx.db, ctx.actor, {
+      householdDate: "2026-01-16",
+    });
+    expect(next.existing).toBe(false);
+    expect(next.runId).not.toBe(first.runId);
+  });
+
+  it("admits one pass when the same date's invocations overlap", async () => {
+    const date = { householdDate: "2026-01-15" };
+    const launches = await Promise.all([
+      launchMaintenanceRun(ctx.db, ctx.actor, date),
+      launchMaintenanceRun(ctx.db, ctx.actor, date),
+    ]);
+    expect(new Set(launches.map((entry) => entry.runId)).size).toBe(1);
+    expect(launches.filter((entry) => !entry.existing)).toHaveLength(1);
+  });
+
   // Failure mode (review): a pass parked on the AI budget held the one-active
   // slot, so no nightly pass drained the free backlogs while it waited.
   it("ends a budget-paused pass when the nightly launch starts a fresh one", async () => {
@@ -306,7 +355,9 @@ describe("maintenance Run", () => {
       runId: first.runId,
       existing: true,
     });
-    const nightly = await launchMaintenanceRun(ctx.db, ctx.actor, "scheduled");
+    const nightly = await launchMaintenanceRun(ctx.db, ctx.actor, {
+      householdDate: "2026-01-15",
+    });
     expect(nightly.existing).toBe(false);
     expect(nightly.runId).not.toBe(first.runId);
     const [ended] = await getDb(ctx.db)

@@ -10,7 +10,7 @@ import { failJob, claimJob } from "~/server/generic/jobs/repo/queue";
 
 import { JobDeferredError, JobPausedError } from "../errors";
 import { advanceJob } from "../service/jobs";
-import { jobDeadlines } from "./deadlines";
+import { nextJobDue } from "./queue";
 
 describe("Job retry policy", () => {
   const ctx = withTestDb();
@@ -31,13 +31,7 @@ describe("Job retry policy", () => {
     });
     const first = await claimJob(ctx.db, saved.id, 1_000);
     expect(first?.attempts).toBe(0);
-    expect(await jobDeadlines(ctx.db)).toContainEqual(
-      expect.objectContaining({
-        job: saved.shortcode,
-        reason: "lease-expiry",
-        at: first!.leaseExpiresAt.toISOString(),
-      }),
-    );
+    expect(await nextJobDue(ctx.db)).toEqual(first!.leaseExpiresAt);
     await getDb(ctx.db)
       .update(job)
       .set({ leaseExpiresAt: new Date(0) })
@@ -90,13 +84,7 @@ describe("Job retry policy", () => {
         },
       }),
     ).resolves.toBe("deferred");
-    expect(await jobDeadlines(ctx.db)).toContainEqual(
-      expect.objectContaining({
-        job: saved.shortcode,
-        reason: "available",
-        at: until.toISOString(),
-      }),
-    );
+    expect(await nextJobDue(ctx.db)).toEqual(until);
     expect(await read(saved.id)).toMatchObject({
       state: "queued",
       attempts: 0,
@@ -121,11 +109,7 @@ describe("Job retry policy", () => {
         },
       }),
     ).resolves.toBe("paused");
-    expect(
-      (await jobDeadlines(ctx.db)).some(
-        (deadline) => deadline.job === saved.shortcode,
-      ),
-    ).toBe(false);
+    expect(await nextJobDue(ctx.db)).toBeNull();
     expect(await read(saved.id)).toMatchObject({
       state: "paused",
       attempts: 0,

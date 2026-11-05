@@ -12,64 +12,71 @@ import type { Database } from "~/server/db";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { jobScheduler } from "~/server/generic/jobs/scheduler/client";
 
 import type { BackgroundQueueProducer } from "../background-queue-types";
 
-const log = createLogger("jobs");
+const logger = createLogger("jobs");
 export interface PublishOptions {
   readonly source: string;
+}
+
+type WakeMessage =
+  Parameters<BackgroundQueueProducer["sendBatch"]>[0] extends Iterable<infer M>
+    ? M
+    : never;
+
+/**
+ * Waits between producer attempts. A member's Run can have no other wake, so a transient
+ * send failure is retried here and not left for the next hourly tick. The queue's own
+ * `maxRetries` cannot help, because a failed send never enqueued anything. The total fits
+ * the 30 seconds `waitUntil` allows after a response.
+ */
+const WAKE_RETRY_DELAYS_MS = [250, 1_000, 4_000];
+
+/** Send a wake, retrying a failed send. Exhaustion leaves the work to the hourly cron. */
+async function sendWake(
+  queue: BackgroundQueueProducer,
+  message: () => WakeMessage,
+  log: { source: string; exhausted: string },
+) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await queue.sendBatch([message()]);
+      return;
+    } catch (error) {
+      const wait = WAKE_RETRY_DELAYS_MS[attempt];
+      if (wait === undefined) {
+        logger.error(log.exhausted, { source: log.source, error });
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
 }
 
 /** Best-effort wake for intent already committed in Postgres. */
 export async function wakeJobs(
   options: PublishOptions & { queue?: BackgroundQueueProducer },
 ) {
-  const scheduler = options.queue ? undefined : jobScheduler();
-  if (scheduler) {
-    await afterResponse(
-      (async () => {
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            await scheduler.wake(options.source);
-            return;
-          } catch (error) {
-            log.error("scheduler notification failed", {
-              source: options.source,
-              attempt,
-              error,
-            });
-          }
-        }
-        // The queue remains usable if the alarm service is temporarily unavailable.
-        const fallback = getBackgroundQueue();
-        if (fallback) await wakeJobs({ ...options, queue: fallback });
-      })(),
-    );
-    return;
-  }
   const queue = options.queue ?? getBackgroundQueue();
   if (!queue) return;
-  const send = async () => {
-    try {
-      await queue.sendBatch([
-        {
-          body: {
-            version: BACKGROUND_TASK_MESSAGE_VERSION,
-            queueType: "background",
-          },
-        },
-      ]);
-    } catch (error) {
-      log.error("wake failed; daily recovery will drain committed jobs", {
-        source: options.source,
-        error,
-      });
-    }
-  };
   // Only the wake is deferred: callers commit durable intent before getting here.
   // Queue and cron invocations have no request lifetime and still await the send.
-  await afterResponse(send());
+  await afterResponse(
+    sendWake(
+      queue,
+      () => ({
+        body: {
+          version: BACKGROUND_TASK_MESSAGE_VERSION,
+          queueType: "background",
+        },
+      }),
+      {
+        source: options.source,
+        exhausted: "wake failed; the hourly cron will drain committed work",
+      },
+    ),
+  );
 }
 
 /** A Queue delay at most this long; anything later waits for the hourly cron. */
@@ -85,33 +92,29 @@ export async function wakeAt(
   at: Date,
   options: PublishOptions & { ring?: boolean },
 ) {
-  const delaySeconds = Math.max(
-    0,
-    Math.ceil((at.getTime() - Date.now()) / 1000),
-  );
-  if (delaySeconds > MAX_WAKE_DELAY_SECONDS) return;
+  const delayFromNow = () =>
+    Math.max(0, Math.ceil((at.getTime() - Date.now()) / 1000));
+  if (delayFromNow() > MAX_WAKE_DELAY_SECONDS) return;
   const queue = getBackgroundQueue();
   if (!queue) return;
-  const send = async () => {
-    try {
-      await queue.sendBatch([
-        {
-          body: {
-            version: BACKGROUND_TASK_MESSAGE_VERSION,
-            queueType: "background",
-            ...(options.ring ? { ring: true as const } : {}),
-          },
-          delaySeconds,
+  await afterResponse(
+    sendWake(
+      queue,
+      () => ({
+        body: {
+          version: BACKGROUND_TASK_MESSAGE_VERSION,
+          queueType: "background",
+          ...(options.ring ? { ring: true as const } : {}),
         },
-      ]);
-    } catch (error) {
-      log.error("delayed wake failed; the hourly cron will reach this work", {
+        // A retry still lands when the work is due.
+        delaySeconds: delayFromNow(),
+      }),
+      {
         source: options.source,
-        error,
-      });
-    }
-  };
-  await afterResponse(send());
+        exhausted: "delayed wake failed; the hourly cron will reach this work",
+      },
+    ),
+  );
 }
 
 function taskKey(task: BackgroundTaskInput) {
