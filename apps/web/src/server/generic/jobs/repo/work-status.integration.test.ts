@@ -70,32 +70,6 @@ describe("background work status", () => {
     ]);
   });
 
-  it("does not call an idle drain stuck over tickets it never claims", async () => {
-    const now = new Date();
-    await enqueueJob(ctx.db, {
-      key: DERIVED_DRAIN_JOB_KEY,
-      kind: "derived.drain",
-      input: {},
-    });
-    await updateJobs(
-      ctx.db,
-      { key: DERIVED_DRAIN_JOB_KEY },
-      { state: "completed", updatedAt: minutesAgo(600, now) },
-    );
-    await insertWorkItems(ctx.db, [
-      {
-        drain: DERIVED_DRAIN_JOB_KEY,
-        target: "assessment.reviewFacts",
-        ref: crypto.randomUUID(),
-        priority: 1,
-        readyAt: minutesAgo(720, now),
-      },
-    ]);
-    const status = await readBackgroundWorkStatus(ctx.db, now);
-    expect(status.stuck).toEqual([]);
-    expect(status.behind).toBe(false);
-  });
-
   it("does not count a stale page result while pages keep failing", async () => {
     const now = new Date();
     await seedDrain(now, 3, 720, 40, 15);

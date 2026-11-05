@@ -15,8 +15,6 @@ import {
 import { textHashRefSqlText } from "~/server/db/derived-source-ref";
 
 export const DERIVED_DRAIN_JOB_KEY = "derived:drain";
-/** Retained publication tickets the drain never claims; they are not owed work. */
-export const DERIVED_UNCLAIMED_TARGETS = "assessment.reviewFacts%";
 
 const ident = (name: string) => `"${name.replaceAll('"', '""')}"`;
 const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;

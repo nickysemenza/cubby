@@ -8,6 +8,7 @@ import { withMigrationDatabase } from "./test-database-lease";
 const id = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const PREDECESSOR = "0079_quality_snapshot";
+const MIGRATION = "0080_suggestion_table";
 const MEMBER = "synthetic-member";
 
 type Db = Client | PoolClient;
@@ -328,7 +329,8 @@ describe("Suggestion table migration", () => {
       const before = await snapshot("");
       const tickets = () => count(client, `SELECT count(*) FROM "WorkItem"`);
       const queued = await tickets();
-      await migrateDatabase(db);
+      // Later migrations retire tickets; this asserts only what this one does.
+      await migrateDatabase(db, { through: MIGRATION });
 
       expect(await snapshot("archive.")).toEqual(before);
       // Copying is not a source change: no population is enrolled.
@@ -421,9 +423,9 @@ describe("Suggestion table migration", () => {
         authority: "member",
         actorUserId: MEMBER,
       });
-      const failure: unknown = await migrateDatabase(db).catch(
-        (error: unknown) => error,
-      );
+      const failure: unknown = await migrateDatabase(db, {
+        through: MIGRATION,
+      }).catch((error: unknown) => error);
       expect(failure).toBeInstanceOf(Error);
       expect(
         String((failure as Error).cause ?? (failure as Error).message),
