@@ -25,7 +25,10 @@ import {
   isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
 import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
-import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
+import {
+  rebuildDerived,
+  DerivedRebuildBusyError,
+} from "~/server/generic/derived/service/rebuild";
 import { claimJob, releaseJobClaim } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import {
@@ -41,7 +44,7 @@ import { derivedComputes } from "~/server/workflows/derived-computes";
 const fixtureUsda = () => {
   const env = getUsdaReleaseEnv();
   return new USDAClient(
-    env
+    env?.USDA_RELEASE && env.USDA_ACTIVE_RELEASE
       ? env.USDA_RELEASE.getByName(
           usdaReleaseObjectName(releaseId.parse(env.USDA_ACTIVE_RELEASE)),
           { locationHint: "wnam" },
@@ -113,9 +116,14 @@ export async function drainStoredDerived(
   for (let round = 0; round < rounds; round++) {
     let finished = false;
     for (let page = 0; page < maxPages; page++) {
-      if (!(await rebuildDerived(db, computes, { force: page === 0 }))) {
-        finished = true;
-        break;
+      try {
+        if (!(await rebuildDerived(db, computes, { force: page === 0 }))) {
+          finished = true;
+          break;
+        }
+      } catch (error) {
+        if (!(error instanceof DerivedRebuildBusyError)) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
     }
     if (!finished)
