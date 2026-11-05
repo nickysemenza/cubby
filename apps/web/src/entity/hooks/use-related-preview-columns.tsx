@@ -30,11 +30,6 @@ export interface RelatedPreviewState {
   errorsBySourceId: Map<string, Error>;
 }
 
-export interface RelatedPreviewColumnsResult<TData extends { id: string }> {
-  relatedColumns: ColumnDef<TData>[];
-  rowContentVersion: RelatedPreviewState;
-}
-
 interface RelatedPreviewColumnMeta {
   columnGroup?: string;
   filterConfig?: FilterConfig;
@@ -211,49 +206,4 @@ export function useRelatedPreviewData({
   relatedStateRef.current = relatedState;
 
   return useMemo(() => relatedState, [relatedState]);
-}
-
-/**
- * Supplies stable relation-preview column definitions plus an explicit render
- * invalidation token. Cells intentionally read a ref so their definitions do
- * not churn as query data arrives; `rowContentVersion` is therefore required
- * to repaint memoized desktop rows and pre-rendered mobile cards.
- */
-export function useRelatedPreviewColumns<TData extends { id: string }>({
-  entity,
-  sourceIds,
-  visibleRelationKeys,
-  relatedViews,
-  columnHelper,
-  filterOptions,
-  supportsServerSorting,
-  operations,
-}: {
-  entity: BrowserRoutedEntity;
-  sourceIds: string[];
-  visibleRelationKeys: RelatedViewKey[];
-  relatedViews: readonly RelatedViewDefinition[];
-  columnHelper: ColumnHelper<TData>;
-  filterOptions?: RuntimeFilterOptions;
-  supportsServerSorting: boolean;
-  operations?: RelatedPreviewOperations;
-}): RelatedPreviewColumnsResult<TData> {
-  const relatedStateRef = useRelatedPreviewStateRef();
-  const relatedColumns = useRelatedPreviewColumnDefs({
-    entity,
-    relatedViews,
-    columnHelper,
-    filterOptions,
-    supportsServerSorting,
-    relatedStateRef,
-  });
-  const rowContentVersion = useRelatedPreviewData({
-    entity,
-    sourceIds,
-    visibleRelationKeys,
-    relatedStateRef,
-    operations,
-  });
-
-  return { relatedColumns, rowContentVersion };
 }

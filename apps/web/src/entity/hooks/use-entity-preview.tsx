@@ -63,7 +63,7 @@ export interface EntityPreviewBrowserOperations {
   cancelPrefetch: (queryKey: readonly unknown[]) => void | Promise<void>;
 }
 
-export interface PreviewPresentationPort {
+interface PreviewPresentationPort {
   getSnapshot: () => PreviewPresentation;
   subscribe: (onStoreChange: () => void) => () => void;
 }
