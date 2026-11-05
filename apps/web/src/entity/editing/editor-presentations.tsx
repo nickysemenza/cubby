@@ -717,6 +717,35 @@ const presentations = {
  * the manifest singular. A bespoke entry above wins when it exists — it
  * carries copy or a field layout the declaration cannot express.
  */
+const genericFieldComponents = new Map<
+  string,
+  ComponentType<EntityEditorFieldsProps>
+>();
+
+/** Callers build edit requests during render and the dialog mounts `Fields` as
+ * an element type, so a fresh function per request would remount every field
+ * whenever a background refetch rerenders the page, closing an open picker and
+ * dropping its typed query. */
+function genericFields(
+  entity: EditableEntity,
+  intent: string,
+  isUpdate: boolean,
+): ComponentType<EntityEditorFieldsProps> {
+  const key = `${entity}:${intent}:${isUpdate}`;
+  const cached = genericFieldComponents.get(key);
+  if (cached) return cached;
+  const Fields = ({ record }: EntityEditorFieldsProps) => (
+    <EntityIntentFields
+      entity={entity}
+      record={record}
+      intent={intent}
+      mode={isUpdate ? "edit" : "create"}
+    />
+  );
+  genericFieldComponents.set(key, Fields);
+  return Fields;
+}
+
 function genericPresentation<E extends EditableEntity>(
   queryClient: QueryClient,
   input: {
@@ -727,21 +756,13 @@ function genericPresentation<E extends EditableEntity>(
 ): EntityEditorPresentation<E> {
   const { singular } = entityMetadata(queryClient, input.entity).summary;
   const isUpdate = input.operation === "update";
-  const Fields = ({ record }: EntityEditorFieldsProps) => (
-    <EntityIntentFields
-      entity={input.entity}
-      record={record}
-      intent={input.intent}
-      mode={isUpdate ? "edit" : "create"}
-    />
-  );
   return {
     title: () => (isUpdate ? `Edit ${singular}` : `New ${singular}`),
     // An update's subtitle is the record's own name (the dialog shell).
     description: () =>
       isUpdate ? "" : `Add a ${singular.toLocaleLowerCase()}.`,
     submitLabel: isUpdate ? "Save changes" : "Create",
-    Fields,
+    Fields: genericFields(input.entity, input.intent, isUpdate),
     successMessage: () =>
       isUpdate ? `${singular} updated` : `${singular} created`,
   };
