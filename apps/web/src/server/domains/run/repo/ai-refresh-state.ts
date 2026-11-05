@@ -486,7 +486,6 @@ export async function settleAppliedFieldRefresh(
         },
       };
     },
-    { kind: "field_refresh_evaluated" },
   );
 }
 

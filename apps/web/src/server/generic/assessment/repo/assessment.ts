@@ -1,6 +1,7 @@
 import {
   assessmentChildHandle,
   assessmentPublication,
+  mailDecisionFamily,
   assessmentJudgments,
   assessmentProjectionTargets,
   feedbackAuthority,
@@ -94,8 +95,8 @@ export async function publishAssessments(
       projection.suggestedValue === undefined
         ? input.judgment
         : projection.suggestedValue;
-    if (input.subject.kind === "evaluation_sample")
-      throw new Error("A Suggestion needs a target record");
+    if (mailDecisionFamily.safeParse(input.family).success)
+      throw new Error("Mail decisions live with their domain owners");
     const { entity, recordId } = input.subject;
     const state = {
       // An answer for an unsaved record has no target to validate yet.
@@ -277,7 +278,7 @@ export async function recordFeedbackWithInsertion(
   raw: z.input<typeof feedbackEvent>,
 ) {
   const input = feedbackEvent.parse(raw);
-  const { assessmentId, projection: _projection, ...event } = input;
+  const { assessmentId, ...event } = input;
   return withTransactionDatabase(db, async (transactionDb) => {
     const client = getDb(transactionDb);
     const [prediction] = await client

@@ -476,12 +476,9 @@ async function applySuggestionValue(
         row.recordId,
         row.field,
       );
-      await transitionAssessmentState(
-        tx,
-        row.id,
-        { acceptanceReceipt: { ...receipt, appliedInputFingerprint } },
-        { kind: "field_input_settled" },
-      );
+      await transitionAssessmentState(tx, row.id, {
+        acceptanceReceipt: { ...receipt, appliedInputFingerprint },
+      });
     },
     "capture",
   );
@@ -663,12 +660,7 @@ export async function acceptSuggestion(
     }
     // The shared write path excludes this row by status while superseding its
     // pending siblings. A failed application rolls the status transition back.
-    await transitionAssessmentState(
-      transactionDb,
-      id,
-      { status: "applied" },
-      { kind: "field_applied" },
-    );
+    await transitionAssessmentState(transactionDb, id, { status: "applied" });
     const receipt = await applySuggestionValue(
       transactionDb,
       { ...context, db: transactionDb },
@@ -676,12 +668,9 @@ export async function acceptSuggestion(
       row.suggestedValue,
       automatic ? { ...automatic, reason: "confident_assignment" } : {},
     );
-    await transitionAssessmentState(
-      transactionDb,
-      id,
-      { acceptanceReceipt: receipt },
-      { kind: "field_applied" },
-    );
+    await transitionAssessmentState(transactionDb, id, {
+      acceptanceReceipt: receipt,
+    });
     await recordFeedback(transactionDb, {
       assessmentId: id,
       operationId: "saved-application",
@@ -729,12 +718,10 @@ export async function applyFieldCorrection(
       const parsed = suggestionRowSchema.parse(row);
       // Remove this row from the pending set before the shared write path
       // supersedes sibling Suggestions. A failure rolls both operations back.
-      await transitionAssessmentState(
-        transactionDb,
-        parsedInput.id,
-        { status: "rejected", correctValue: parsedInput.correctValue },
-        { kind: "field_corrected" },
-      );
+      await transitionAssessmentState(transactionDb, parsedInput.id, {
+        status: "rejected",
+        correctValue: parsedInput.correctValue,
+      });
       const receipt = await applySuggestionValue(
         transactionDb,
         { ...context, db: transactionDb },
@@ -742,12 +729,9 @@ export async function applyFieldCorrection(
         parsedInput.correctValue,
         { reason: "member_correction" },
       );
-      await transitionAssessmentState(
-        transactionDb,
-        parsedInput.id,
-        { acceptanceReceipt: receipt },
-        { kind: "field_corrected" },
-      );
+      await transitionAssessmentState(transactionDb, parsedInput.id, {
+        acceptanceReceipt: receipt,
+      });
       await recordFeedback(transactionDb, {
         assessmentId: parsedInput.id,
         operationId: "saved-correction",

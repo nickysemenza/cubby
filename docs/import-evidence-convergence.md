@@ -1416,11 +1416,10 @@ Receipt replay and independent preservation read-back establish separate facts.
 
 ### Statement review receipts and classification
 
-Statement `suggestions.review` application uses a Feedback-backed command receipt
-with operation ID `command-application:<operationId>`, linked to the immutable
-Assessment identified by the review handle. Read that Assessment and its Feedback
-by the handle, not by `AssessmentState.evaluationId`. This family does not require
-`AssessmentState.acceptanceReceipt` to establish successful application.
+Statement `suggestions.review` application records a command receipt with operation
+ID `command-application:<operationId>` in the `decisions` of the Suggestion identified
+by the review handle. Read that Suggestion by the handle, not by `evaluationId`. This
+family does not require `acceptanceReceipt` to establish successful application.
 
 Replay the exact committed review request under the same actor and operation ID.
 The generic command returns its original applied outcome from the receipt before

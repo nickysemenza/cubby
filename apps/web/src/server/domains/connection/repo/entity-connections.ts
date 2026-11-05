@@ -247,7 +247,6 @@ export async function publishPreparedEntityConnections(
         )`,
       ),
       { active: false, status: "superseded" },
-      { kind: "superseded_by_publication" },
     );
     await pruneReplacedSuggestions(
       db,

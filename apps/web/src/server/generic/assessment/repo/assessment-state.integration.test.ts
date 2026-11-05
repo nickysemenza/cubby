@@ -201,16 +201,11 @@ describe("Suggestion publication and transitions", () => {
       { input: reviewedInput },
     ]);
     await withTransaction(ctx.db, (tx) =>
-      transitionAssessmentState(
-        tx,
-        reviewed!.id,
-        {
-          status: "resolved",
-          confidence: 0.7,
-          confirmedValue: { present: true, value: "retained" },
-        },
-        { kind: "synthetic-batch-review" },
-      ),
+      transitionAssessmentState(tx, reviewed!.id, {
+        status: "resolved",
+        confidence: 0.7,
+        confirmedValue: { present: true, value: "retained" },
+      }),
     );
     const ids = [reviewed!.id];
     const before = await getDb(ctx.db)
@@ -265,18 +260,11 @@ describe("Suggestion publication and transitions", () => {
     });
     // Two transitions in one transaction must apply in statement order.
     await withTransaction(ctx.db, async (tx) => {
-      await transitionAssessmentState(
-        tx,
-        kept.id,
-        { confidence: 0.4 },
-        { kind: "synthetic" },
-      );
-      await transitionAssessmentState(
-        tx,
-        kept.id,
-        { confidence: 0.7, acceptanceReceipt: null },
-        { kind: "synthetic" },
-      );
+      await transitionAssessmentState(tx, kept.id, { confidence: 0.4 });
+      await transitionAssessmentState(tx, kept.id, {
+        confidence: 0.7,
+        acceptanceReceipt: null,
+      });
     });
     // Grades without a patch never move the projection.
     await recordFeedback(ctx.db, {
@@ -338,7 +326,6 @@ describe("Suggestion publication and transitions", () => {
           fingerprint: null,
           confidence: undefined,
         }),
-        { kind: "synthetic_bulk" },
       );
       expect(changed.map((row) => row.id)).toEqual([...ids].sort());
       expect(changed).toEqual(
@@ -363,7 +350,6 @@ describe("Suggestion publication and transitions", () => {
           tx,
           inArray(suggestionTable.id, ids),
           (row) => ({ data: row.data }),
-          { kind: "synthetic_noop" },
         ),
       ).toEqual([]);
     });
@@ -373,7 +359,6 @@ describe("Suggestion publication and transitions", () => {
           tx,
           inArray(suggestionTable.id, ids),
           (row) => ({ data: { abandoned: row.id } }),
-          { kind: "synthetic_abandoned" },
         );
         throw new Error("synthetic rollback");
       }),

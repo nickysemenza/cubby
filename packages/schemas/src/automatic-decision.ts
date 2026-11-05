@@ -9,10 +9,7 @@ import {
   SUGGESTION_RECORD_IDS_MAX,
 } from "./suggestion-list";
 
-export const automaticDecisionFamily = assessmentFamily.exclude([
-  "run_finding",
-  "evaluation_sample",
-]);
+export const automaticDecisionFamily = assessmentFamily;
 
 export const automaticDecisionFilters = z.object({
   family: automaticDecisionFamily.optional(),

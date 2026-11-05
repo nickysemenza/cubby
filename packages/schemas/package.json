@@ -27,7 +27,6 @@
     "./compiler/photo-categories": "./src/photo-categories.ts",
     "./image-policy": "./src/generated/image-policy.gen.ts",
     "./image-identification": "./src/image-identification.ts",
-    "./email-accuracy": "./src/email-accuracy.ts",
     "./purchase-import-debug": "./src/purchase-import-debug.ts",
     "./mailbox-research": "./src/mailbox-research.ts",
     "./mail-coverage-control": "./src/mail-coverage-control.ts",

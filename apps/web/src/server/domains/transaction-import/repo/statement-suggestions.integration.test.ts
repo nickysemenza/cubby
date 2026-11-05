@@ -3584,7 +3584,6 @@ describe("statement Transaction suggestions", () => {
                     : [],
           },
         }),
-        { kind: "synthetic_prefix_setup" },
       );
     });
     await setAutomaticRule(ctx.db, ctx.actor, {

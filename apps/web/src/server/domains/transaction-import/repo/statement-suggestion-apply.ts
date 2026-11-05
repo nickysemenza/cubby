@@ -95,12 +95,7 @@ export async function applyStatementTransactionSuggestion(
         return `${ref.slice(0, split)}\0${ref.slice(split + 1)}`;
       }),
     );
-    await transitionAssessmentState(
-      tx,
-      state.id,
-      { status: "applied" },
-      { kind: "statement_applied" },
-    );
+    await transitionAssessmentState(tx, state.id, { status: "applied" });
   });
 
   const charge = { source: subject.source, chargeKey: subject.chargeKey };

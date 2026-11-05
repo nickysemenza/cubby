@@ -26,14 +26,9 @@ are excluded. Search uses the source's possible reason labels until facts exist.
 Counts and view counts cover known work only while any admitted source is
 incomplete. Publication makes the ordinary read complete without a read repair.
 
-Assessment source observations remain pending the separately owned producer
-cutover; this UI contract does not imply that registration has shipped.
-
-Suggestion candidates consume the shared indexed
-Assessment publication references and current authority gates. Their coverage
-flags are conservative and global: incomplete coverage has no record count.
-References and coverage share the queue statement's snapshot. Work does not
-capture suggestion evidence, enroll refreshes or reconstruct eligibility on read.
+Suggestion candidates read pending `Suggestion` rows and current authority gates
+directly. Work does not capture suggestion evidence, enroll refreshes or
+reconstruct eligibility on read.
 This consumer switch requires the matching producer registration and publication
 cutover; it must not deploy independently of that integration.
 
