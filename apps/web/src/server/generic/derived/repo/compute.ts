@@ -70,18 +70,8 @@ export type DerivedCompute = {
   ): Promise<ReadonlyMap<string, DerivedComputed>>;
   /** Maximum same-adapter records sharing a preparation page; omitted keeps the conservative default. */
   readonly preparationBatchSize?: number;
-  readonly sharedPreparation?: DerivedSharedPreparation;
   readonly fanoutSelections?: Readonly<Record<string, DerivedFanoutSelection>>;
 };
-
-export interface DerivedSharedPreparation<Prepared = unknown> {
-  readonly source: object;
-  prepare(db: Database, ids: readonly string[]): Promise<Prepared>;
-  project(
-    prepared: Prepared,
-    ids: readonly string[],
-  ): ReadonlyMap<string, DerivedComputed>;
-}
 
 /** One immutable authoritative input set, shared only by a preparation page. */
 export const sharedDerivedPreparation =
@@ -94,19 +84,8 @@ export const sharedDerivedPreparation =
       ids: readonly string[],
     ) => ReadonlyMap<string, DerivedComputed>,
   ): DerivedCompute =>
-    Object.assign(
-      async (db: Database, ids: readonly string[]) =>
-        project(await prepare(db, ids), ids),
-      {
-        sharedPreparation: {
-          source: prepare,
-          prepare,
-          // SAFETY: the source token identifies this exact preparation function.
-          project: (prepared: unknown, ids: readonly string[]) =>
-            project(prepared as Prepared, ids),
-        },
-      },
-    );
+  async (db: Database, ids: readonly string[]) =>
+    project(await prepare(db, ids), ids);
 
 /** One sink publication's reader notification, committed with its transaction. */
 interface DerivedSinkPublication {

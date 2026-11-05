@@ -373,31 +373,6 @@ export const workItemStates = (
         )
     : Promise.resolve([]);
 
-/** Every item of a drain with its retry state, in claim order. */
-export const drainItems = (db: RepositoryQueryInput, drain: string) =>
-  repositoryQueries(db)
-    .select({
-      ...itemColumns,
-      lastError: workItem.lastError,
-      readyAt: workItem.readyAt,
-    })
-    .from(workItem)
-    .where(eq(workItem.drain, drain))
-    .orderBy(workItem.priority, workItem.readyAt, workItem.ticket);
-
-/** Whether the drain has an item ready now (not backing off). */
-export async function drainReady(db: RepositoryQueryInput, drain: string) {
-  const [row] = await repositoryQueries(db)
-    .select({ ref: workItem.ref })
-    .from(workItem)
-    .where(and(eq(workItem.drain, drain), lte(workItem.readyAt, sql`now()`)))
-    .limit(1);
-  return row !== undefined;
-}
-
-/** Whether any item whose target matches `target` is still owed. */
-export const workPendingWhere = (target: (column: SQL) => SQL) =>
-  sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${target(sql`${workItem.target}`)})`;
 
 /** Fenced caller only. An observation grants no authority over a work ticket. */
 export async function observeWorkExecution(
@@ -419,6 +394,7 @@ export async function observeWorkExecution(
     })
     .where(workTickets(held));
 }
+
 
 /** Whether a drain (a key or a correlated key column) still owes any item. */
 export const drainPending = (drain: string | SQL) =>

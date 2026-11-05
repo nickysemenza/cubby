@@ -62,7 +62,7 @@ describe("assignment and stored projection precedence", () => {
       .get(first.entityId)
       ?.get("price");
     expect(stored).toMatchObject({
-      value: 13,
+      value: 15,
       stale: false,
       decision: { provenance: { kind: "own" } },
     });

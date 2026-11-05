@@ -1,41 +1,90 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   backgroundTaskMessageSchema,
   type BackgroundTaskMessage,
 } from "@cubby/schemas/queue-messages";
+import { releaseId, usdaReleaseObjectName } from "@cubby/usda/release";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { sql } from "drizzle-orm";
 
 import { setCfEnv } from "~/server/cf-env";
+import { getUsdaReleaseEnv } from "~/server/cf-env";
+import { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
+import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
+import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
+import { productFoodCompute } from "~/server/domains/product/repo/read-facts";
+import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
+import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
 import {
   type DerivedAdapter,
   type DerivedComputes,
   derivedSink,
   isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
-import {
-  DERIVED_DRAIN,
-  DERIVED_DRAIN_JOB_KEY,
-  markAllStoredDerived,
-} from "~/server/generic/derived/repo/drain";
-import { derivedDrainHandler } from "~/server/generic/derived/service/drain-job";
-import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
+import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
 import { claimJob, releaseJobClaim } from "~/server/generic/jobs/jobs.fixtures";
-import { readJob, readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { wakeJob } from "~/server/generic/jobs/repo/producer";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import {
-  drainItems,
-  drainReady,
-  postponeWorkRefs,
   workItemsFor,
   workTicketsWhere,
-  type WorkItem,
 } from "~/server/generic/jobs/repo/work-items";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
-import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
+import type { JobHandlers } from "~/server/generic/jobs/types";
+import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import { derivedComputes } from "~/server/workflows/derived-computes";
+
+/** Database-only journeys have no Worker binding; configured USDA fixtures retain their exact port. */
+const fixtureUsda = () => {
+  const env = getUsdaReleaseEnv();
+  return new USDAClient(
+    env
+      ? env.USDA_RELEASE.getByName(
+          usdaReleaseObjectName(releaseId.parse(env.USDA_ACTIVE_RELEASE)),
+          { locationHint: "wnam" },
+        )
+      : fromPartial<UsdaReleaseRpc>({
+          lookupBatch: async (lookups: readonly unknown[]) =>
+            lookups.map(() => null),
+          search: async () => ({ data: [], count: 0 }),
+        }),
+  );
+};
+const fixtureComputes: DerivedComputes = {
+  ...derivedComputes,
+  "product.food": (db, ids) =>
+    productFoodCompute({
+      findFoodsBatch: (lookups) => fixtureUsda().findFoodsBatch(lookups),
+    })(db, ids),
+  "product.conversionCoverage": derivedSink({
+    prepare: (db, ids) =>
+      prepareProductConversionCoverage(
+        db,
+        ids.map((id) => parseEntityId("product", id)),
+        fixtureUsda(),
+      ),
+    publish: (tx, ids, prepared) => prepared.publish(tx, ids),
+  }),
+  "recipe.totals": derivedSink({
+    prepare: (db, ids) =>
+      new RecipeCostingService(db, {
+        findFoodsBatch: (lookups) => fixtureUsda().findFoodsBatch(lookups),
+      }).computeStoredTotals(ids.map((id) => parseEntityId("recipe", id))),
+    publish: (tx, ids, totals) =>
+      commitRecipeTotals(tx, {
+        updates: ids.flatMap((id) => {
+          const value = totals.get(id);
+          return value
+            ? [{ id: parseEntityId("recipe", id), totals: value }]
+            : [];
+        }),
+        freshOnlyIds: [],
+      }),
+  }),
+};
 
 const frontierDrains = new WeakMap<Database, Promise<void>>();
 
@@ -53,145 +102,85 @@ export function drainDerivedRefreshFrontier(
   return pending;
 }
 
-/**
- * Drain every ready derived mark through the real `derived.drain` handler and
- * the production compute adapters (or `computes`). Stops once no mark is
- * ready; a failed page throws.
- */
+/** Run the same bounded pass as the Worker; retained tickets are never a completion signal. */
 export async function drainStoredDerived(
   db: Database,
   maxPages = 1_000,
-  computes: DerivedComputes = derivedComputes,
+  computes: DerivedComputes = fixtureComputes,
 ): Promise<void> {
-  for (let page = 0; page < maxPages; page++) {
-    if (!(await drainReady(db, DERIVED_DRAIN_JOB_KEY))) return;
-    // A running server (E2E) may hold the drain's lease; its page drains the
-    // same items, so wait for it instead of failing.
-    if (
-      (await advanceDerivedPage(
-        db,
-        derivedDrainHandler(computes, { limit: 500, chunk: 500 }),
-        {
-          allowSkip: true,
-        },
-      )) === "skipped"
-    )
-      await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`Stored derived drain exceeded ${maxPages} pages`);
-}
-
-/**
- * One real derived drain page. `only` postpones every other ready item for
- * the page; `during` runs once after the page's first compute read its
- * inputs and before publication, the window in which a concurrent write
- * re-tickets or locks a prepared item.
- */
-export async function drainDerivedPage(
-  db: Database,
-  {
-    only,
-    during,
-    computes = derivedComputes,
-    limit,
-  }: {
-    only?: (item: WorkItem) => boolean;
-    during?: () => Promise<void>;
-    computes?: DerivedComputes;
-    limit?: number;
-  } = {},
-): Promise<void> {
-  let pending = during;
-  const after = async <T>(read: Promise<T>) => {
-    const result = await read;
-    const run = pending;
-    pending = undefined;
-    await run?.();
-    return result;
-  };
-  const observed: DerivedComputes = Object.fromEntries(
-    Object.entries(computes).map(([key, adapter]): [string, DerivedAdapter] => {
-      if (isDerivedSink(adapter))
-        return [
-          key,
-          { ...adapter, prepare: (tx, ids) => after(adapter.prepare(tx, ids)) },
-        ];
-      const shared = adapter.sharedPreparation;
-      return [
-        key,
-        Object.assign(
-          (tx: Parameters<typeof adapter>[0], ids: readonly string[]) =>
-            after(adapter(tx, ids)),
-          {
-            preparationBatchSize: adapter.preparationBatchSize,
-            fanoutSelections: adapter.fanoutSelections,
-            sharedPreparation: shared
-              ? {
-                  ...shared,
-                  prepare: (
-                    tx: Parameters<typeof shared.prepare>[0],
-                    ids: readonly string[],
-                  ) => after(shared.prepare(tx, ids)),
-                }
-              : undefined,
-          },
-        ),
-      ];
-    }),
-  );
-  const held = only
-    ? (await drainItems(db, DERIVED_DRAIN_JOB_KEY)).filter(
-        (item) => !only(item),
-      )
-    : [];
-  const byTarget = new Map<string, WorkItem[]>();
-  for (const item of held)
-    byTarget.set(item.target, [...(byTarget.get(item.target) ?? []), item]);
-  for (const [target, items] of byTarget)
-    await postponeWorkRefs(
-      db,
-      target,
-      items.map((item) => item.ref),
-      new Date(Date.now() + 60 * 60_000),
-    );
-  try {
-    await advanceDerivedPage(db, derivedDrainHandler(observed, { limit }));
-    if (pending) throw new Error("The derived page computed nothing");
-  } finally {
-    for (const [target, items] of byTarget)
-      await postponeWorkRefs(
-        db,
-        target,
-        items.map((item) => item.ref),
-        new Date(),
+  // Finish an interrupted fixture cycle, then rebuild current inputs from its first phase.
+  const rounds = (await readDerivedRebuildStatus(db)).running ? 2 : 1;
+  for (let round = 0; round < rounds; round++) {
+    let finished = false;
+    for (let page = 0; page < maxPages; page++) {
+      if (!(await rebuildDerived(db, computes, { force: page === 0 }))) {
+        finished = true;
+        break;
+      }
+    }
+    if (!finished)
+      throw new Error(
+        `Deterministic fixture rebuild exceeded ${maxPages} pages`,
       );
   }
 }
 
-async function advanceDerivedPage(
+/** A source edit during preparation may publish mixed-age output; the next pass repairs it. */
+export async function drainDerivedPage(
   db: Database,
-  handler: JobHandler,
-  { allowSkip = false }: { allowSkip?: boolean } = {},
-) {
-  await wakeJob(db, { ...DERIVED_DRAIN, input: {} });
-  // Job retries and waits end now: the helper drains what is ready.
-  const [drain] = await updateJobs(
-    db,
-    { key: DERIVED_DRAIN_JOB_KEY },
-    { availableAt: new Date(0), waitReason: null, waitUntil: null },
+  {
+    target,
+    during,
+    computes = fixtureComputes,
+  }: {
+    target?: string;
+    during?: () => Promise<void>;
+    computes?: DerivedComputes;
+  } = {},
+): Promise<void> {
+  let pending = during;
+  const selected = target
+    ? storedDerivedDeclarations().find((entry) => entry.target === target)
+        ?.compute
+    : undefined;
+  const after = async <T>(key: string, read: Promise<T>) => {
+    const result = await read;
+    if (pending && (!selected || selected === key)) {
+      const run = pending;
+      pending = undefined;
+      await run();
+    }
+    return result;
+  };
+  const observed = Object.fromEntries(
+    Object.entries(computes).map(([key, adapter]): [string, DerivedAdapter] =>
+      isDerivedSink(adapter)
+        ? [
+            key,
+            {
+              ...adapter,
+              prepare: (db, ids) => after(key, adapter.prepare(db, ids)),
+            },
+          ]
+        : [
+            key,
+            Object.assign(
+              (db: Parameters<typeof adapter>[0], ids: readonly string[]) =>
+                after(key, adapter(db, ids)),
+              { preparationBatchSize: adapter.preparationBatchSize },
+            ),
+          ],
+    ),
   );
-  if (!drain) throw new Error("Derived drain Job is missing");
-  const outcome = await advanceJob(db, drain.id, {
-    [DERIVED_DRAIN.kind]: handler,
-  });
-  if (outcome === "skipped" && allowSkip) return outcome;
-  if (outcome !== "succeeded") {
-    const failed = await readJob(db, { id: drain.id });
-    throw new Error(
-      `Derived drain page ${outcome}: ${JSON.stringify(failed?.error)}`,
-    );
+  for (let page = 0; page < 1_000; page++) {
+    const more = await rebuildDerived(db, observed, {
+      force: page === 0,
+      pageLimit: 1,
+    });
+    if (!pending) return;
+    if (!more) break;
   }
-  return outcome;
+  if (pending) throw new Error("The selected derived preparation did not run");
 }
 
 /**
@@ -251,7 +240,7 @@ export async function drainRecipeRefreshJobs(
     },
   });
   return drainStoredDerived(db, maxPages, {
-    ...derivedComputes,
+    ...fixtureComputes,
     "recipe.totals": recipeSink,
   });
 }
@@ -260,7 +249,6 @@ export async function drainRecipeRefreshJobs(
 export async function reconcileDerivedRefreshInputs(
   db: Database,
 ): Promise<void> {
-  await markAllStoredDerived(db);
   await drainDerivedRefreshFrontier(db);
 }
 

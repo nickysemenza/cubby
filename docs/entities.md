@@ -2723,6 +2723,12 @@ derived side so clearing an explicit override cannot reuse that old override.
 An unpublished rollup remains missing, rather than becoming a successful empty
 date. This avoids repeating the household Expense allocation on each page.
 
+The former ticket drain, dependency fan-out, publication fences and per-value
+clock admission are removed. Explicit search repair joins the same pass and
+survives a disconnected status reader. Retained source triggers and predecessor
+tickets retire only after deployed replacement coverage; Assessment source
+relevance remains with its separate B3 cutover.
+
 The pass skips declared views. Named read snapshots hold Product, Inventory,
 Location, Project, Expense, Email and Shipment results. Each manifest declaration
 names its typed value, decision, sort and publication-time columns; there is no
