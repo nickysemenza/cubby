@@ -268,16 +268,13 @@ export async function resolveSourceIdentity(
       at: new Date().toISOString(),
     },
   });
-  const createdOwner = !owner;
   if (!owner)
     owner = await insertWithShortcode(tx, "sourceOccurrence", {
       source: observation.source,
       identityKind: "reviewed",
       identityScope: `reviewed-observation:${observation.id}`,
       accountId: account.id,
-      disposition: annotation.disposition,
-      dispositionReason: annotation.dispositionReason,
-      dispositionNote: annotation.dispositionNote,
+      ...financialJudgment,
       identityProof: proof,
       currentObservationId: null,
       lastObservedAt: annotation.lastObservedAt,
@@ -377,12 +374,6 @@ export async function resolveSourceIdentity(
       },
     ],
   );
-  await recordChange(
-    tx,
-    "sourceOccurrence",
-    owner.id,
-    createdOwner ? "created" : "updated",
-  );
-  await recordChange(tx, "sourceTransactionRecord", observation.id, "updated");
+  await recordChange(tx, { kind: "source", categories: [] });
   return { source: owner.source, chargeKey: owner.shortcode };
 }

@@ -107,7 +107,7 @@ export function householdDayRangeConditions(
 
 /** Shared server-side bounds for list-table Created / Updated filters. */
 export function auditDateWhereConditions(
-  table: { createdAt: AnyColumn; updatedAt: AnyColumn },
+  table: { createdAt: AnyColumn | SQL; updatedAt: AnyColumn | SQL },
   filters: {
     createdFrom?: string;
     createdTo?: string;

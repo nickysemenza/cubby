@@ -188,9 +188,6 @@ export const sourceTransactionRecordScaffold = listScaffold(
     },
     derived: {
       matchState: sourceObservationField("matchState"),
-      historicalTransactionIds: sourceObservationField(
-        "historicalTransactionIds",
-      ),
       externalId: sourceObservationField("externalId"),
       legacyExternalId: sourceObservationField("legacyExternalId"),
       chargeKey: sourceObservationField("chargeKey"),

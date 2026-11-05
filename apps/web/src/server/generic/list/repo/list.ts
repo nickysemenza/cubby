@@ -1459,6 +1459,11 @@ export function listScaffold<
   const rowsSql: AnyRowsSql = options?.rows ?? {};
   const derivedFields = derivedFieldsOf(entity);
   const listFields = generatedEntityListFields[entity];
+  // Immutable observations expose their latest annotation time through the declared projection.
+  const updatedAtSql = (context: ListContext) =>
+    derivedFields.updatedAt
+      ? derivedValueSql(entity, derivedSql, "updatedAt", context)
+      : (table.updatedAt ?? table.createdAt);
   // The static scope: declared columns pinned to NULL on every read.
   const tableColumns: AnyColumn[] = Object.values(getTableColumns(table));
   const staticScope = listFields.scope.map((name) => {
@@ -1839,7 +1844,13 @@ export function listScaffold<
           ...(scored
             ? dataQualityFilterPredicates(scored, table, filters)
             : []),
-          ...auditDateWhereConditions(table, filters),
+          ...auditDateWhereConditions(
+            {
+              createdAt: table.createdAt,
+              updatedAt: updatedAtSql(context.withRead(readContext)),
+            },
+            filters,
+          ),
           // The declared related-view filters (`related-<key>`, `<prefix>Id`,
           // `<prefix>PresenceFilter`, `<prefix>Search`) for every list.
           ...relatedWhereConditions(entity, filters, table.id),
@@ -2074,9 +2085,7 @@ export function listScaffold<
             searchable && searchQuery !== undefined && sorts.length === 0
               ? [
                   asc(lexicalRelevance(entity, table.id, searchQuery)),
-                  desc(
-                    derivedSql.updatedAt ?? table.updatedAt ?? table.createdAt,
-                  ),
+                  desc(updatedAtSql(context)),
                 ]
               : undefined,
           resolve: (sort) =>
