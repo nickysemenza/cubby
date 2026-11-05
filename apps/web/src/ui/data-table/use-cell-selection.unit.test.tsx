@@ -43,6 +43,8 @@ describe("useCellSelection", () => {
     ["PageDown", false, true, 1, 0],
     ["PageUp", false, false, 0, 0],
     ["Tab", false, false, 0, 1],
+    // Shift+Tab at the first cell leaves the grid instead of moving.
+    ["Tab", false, true, 0, 0],
   ])("moves with %s (mod=%s, shift=%s)", (key, ctrlKey, shiftKey, row, col) => {
     const { result } = renderHook(() => {
       const table = useCubbyTable({

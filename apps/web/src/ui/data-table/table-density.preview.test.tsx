@@ -125,6 +125,37 @@ describe("table density", () => {
     expect(overlay()).toBeNull();
   });
 
+  it("replays a press on the spilled copy on the clipped original", async () => {
+    await page.viewport(1440, 900);
+    const press = vi.fn();
+    const select = vi.fn();
+    const view = render(
+      <Fixture
+        cells={[
+          {
+            id: "c1",
+            width: 160,
+            content: (
+              <button type="button" className="block w-full" onClick={press}>
+                <span className="block truncate">{LONG_NAME}</span>
+              </button>
+            ),
+          },
+          { id: "c2", width: 160, content: <span>Short</span> },
+        ]}
+      />,
+    );
+    view.getByTestId("cell-0").addEventListener("mousedown", select);
+    await userEvent.hover(view.getByTestId("cell-0"));
+    await waitFor(() => expect(overlay()).not.toBeNull());
+    const copy = overlay()?.querySelector<HTMLElement>("span");
+    if (!copy) throw new Error("missing spilled copy");
+    await userEvent.click(copy);
+    expect(select).toHaveBeenCalledOnce();
+    expect(press).toHaveBeenCalledOnce();
+    expect(overlay()).toBeNull();
+  });
+
   it("overlays the explanation on the active row without reserving width", async () => {
     await page.viewport(1440, 900);
     const explain = (

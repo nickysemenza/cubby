@@ -99,6 +99,16 @@ const OVERLAY_GUARDED_KEYS = new Set([
   "Escape",
 ]);
 
+/** The first (or last) text field in an editor, where Tab leaves the editor. */
+function edgeField(root: HTMLElement | null, first: boolean) {
+  const fields = [
+    ...(root?.querySelectorAll<HTMLElement>(
+      "input:not([type=hidden]):not([disabled]), textarea:not([disabled])",
+    ) ?? []),
+  ];
+  return (first ? fields[0] : fields.at(-1)) ?? null;
+}
+
 /**
  * Portals an inline-cell editor OVER its cell so it can be wider than the
  * `table-fixed` column (body cells are `overflow-hidden`, which used to clip
@@ -203,13 +213,28 @@ export function CellEditorOverlay({
         // combobox dropdown open never gets here — the combobox stops its
         // own Escape — so this is the "second Escape" that cancels the edit.
         if (e.key === "Tab" && !e.defaultPrevented) {
-          tabMove.current = e.shiftKey;
-          e.preventDefault();
           e.stopPropagation();
-          if (document.activeElement instanceof HTMLElement)
-            document.activeElement.blur();
+          const field = edgeField(overlayRef.current, e.shiftKey);
+          // Tab moves natively between the editor's own fields and actions;
+          // only leaving its edge field commits and advances. The commit runs
+          // through the field's own Enter path, so a failed save keeps the
+          // editor, its draft and focus, and the pending move is dropped.
+          if (!field || field !== document.activeElement) return;
+          e.preventDefault();
+          tabMove.current = e.shiftKey;
+          field.dispatchEvent(
+            new KeyboardEvent("keydown", {
+              key: "Enter",
+              ctrlKey: field instanceof HTMLTextAreaElement,
+              bubbles: true,
+              cancelable: true,
+            }),
+          );
           return;
         }
+        // Any other key the member presses abandons a pending Tab move; the
+        // synthetic commit Enter above is untrusted and keeps it.
+        if (e.nativeEvent.isTrusted) tabMove.current = null;
         if (!OVERLAY_GUARDED_KEYS.has(e.key)) return;
         e.stopPropagation();
         if (e.key === "Escape") {

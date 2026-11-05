@@ -122,10 +122,20 @@ function clippedSource(cell: HTMLElement): HTMLElement | null {
   return null;
 }
 
-/** The value laid out on one unclipped line, without ids or live controls. */
+/**
+ * The value laid out on one unclipped line, without ids or live controls,
+ * with each copied element mapped back to the original it stands in for.
+ */
 function unclippedClone(source: HTMLElement) {
   const clone = source.cloneNode(true);
   if (!(clone instanceof HTMLElement)) return null;
+  // A deep clone keeps document order, so the two element lists align.
+  const originals = new WeakMap<Element, HTMLElement>();
+  const sourceElements = [source, ...source.querySelectorAll<HTMLElement>("*")];
+  [clone, ...clone.querySelectorAll("*")].forEach((copy, index) => {
+    const original = sourceElements[index];
+    if (original) originals.set(copy, original);
+  });
   // Stand-ins for hidden text (a code's "…") give way to the text itself.
   for (const omitted of clone.querySelectorAll("[data-spill-omit]"))
     omitted.remove();
@@ -146,8 +156,17 @@ function unclippedClone(source: HTMLElement) {
     element.style.setProperty("-webkit-line-clamp", "none");
   }
   clone.style.width = "max-content";
-  return clone;
+  return { clone, originals };
 }
+
+const FORWARDED_EVENTS = [
+  "pointerdown",
+  "mousedown",
+  "pointerup",
+  "mouseup",
+  "click",
+  "dblclick",
+] as const;
 
 /**
  * The cell's rail (its ⓘ) drawn at the spill-over's end, or
@@ -227,8 +246,8 @@ export function useCellSpill(
 
     const show = (cell: HTMLElement) => {
       const source = clippedSource(cell);
-      const clone = source && unclippedClone(source);
-      if (!source || !clone) return;
+      const copy = source && unclippedClone(source);
+      if (!source || !copy) return;
       const cellBox = cell.getBoundingClientRect();
       const sourceBox = source.getBoundingClientRect();
       const typography = getComputedStyle(source);
@@ -269,7 +288,7 @@ export function useCellSpill(
         element.style.left = `${sourceBox.left - EDGE_PX - space}px`;
         element.style.paddingLeft = `${EDGE_PX + space}px`;
       } else if (railBox) element.style.paddingRight = `${EDGE_PX + space}px`;
-      element.append(clone);
+      element.append(copy.clone);
       document.body.append(element);
       const limit =
         Math.min(root.getBoundingClientRect().right, window.innerWidth) -
@@ -278,9 +297,24 @@ export function useCellSpill(
       if (box.right > limit)
         element.style.left = `${Math.max(EDGE_PX, limit - box.width)}px`;
       if (rail) railCopy(rail, start, element, hide);
-      // Preserve the source's selection and row/edit click semantics even where
-      // the spill paints over a neighbouring cell.
-      for (const type of ["pointerdown", "mousedown", "click"] as const) {
+      // Presses replay on the original under the copied element, so a
+      // clipped link, suggestion accept or edit trigger acts, and selection
+      // (the cell's mousedown) moves, even where the spill paints over a
+      // neighbouring cell; blank overlay space stands for the cell. The real
+      // pointerdown is left uncancelled so the browser still sends the
+      // mousedown that selection listens for.
+      const originalOf = (target: EventTarget | null) => {
+        for (
+          let node = target instanceof Element ? target : null;
+          node && node !== element;
+          node = node.parentElement
+        ) {
+          const original = copy.originals.get(node);
+          if (original) return original;
+        }
+        return cell;
+      };
+      for (const type of FORWARDED_EVENTS) {
         element.addEventListener(type, (event) => {
           if (
             event.target instanceof Element &&
@@ -289,17 +323,22 @@ export function useCellSpill(
             )
           )
             return;
-          event.preventDefault();
+          if (type !== "pointerdown") event.preventDefault();
           event.stopPropagation();
-          const target =
-            source.closest<HTMLElement>(
-              "button, a, [data-cell-edit-trigger]",
-            ) ?? cell;
-          const EventClass = type === "pointerdown" ? PointerEvent : MouseEvent;
+          const target = originalOf(event.target);
+          const EventClass = type.startsWith("pointer")
+            ? PointerEvent
+            : MouseEvent;
           target.dispatchEvent(new EventClass(type, event));
-          // Held until the click: removing the overlay on press retargets
-          // the click to whatever lies beneath it.
-          if (type === "click") hide();
+          // Held through a plain click so a double-click can still open the
+          // editor; a control's click or a double-click ends the spill.
+          // Removing it on press would retarget the click beneath it.
+          if (
+            type === "dblclick" ||
+            (type === "click" &&
+              target.closest("a, button, [data-cell-edit-trigger]"))
+          )
+            hide();
         });
       }
       element.addEventListener("pointerleave", (event) => {

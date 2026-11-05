@@ -156,11 +156,26 @@ function handleArrowKey<TItem extends RowData>(
     event.key,
   );
   if (!direction && !special) return false;
-  event.preventDefault();
   const selection = context.getSelection();
   const lastRow = context.rows.length - 1;
   const lastCol = context.selectableColumnIds.current.length - 1;
   let { row, col } = selection?.focus ?? { row: 0, col: 0 };
+  // Tab is a grid move only from the focused grid itself with a cell
+  // selected. A control inside a cell (a suggestion's accept and review
+  // actions) keeps native traversal, and the first and last cells let focus
+  // leave the grid rather than trapping it.
+  if (event.key === "Tab") {
+    const step = event.shiftKey ? -1 : 1;
+    const index = row * (lastCol + 1) + col + step;
+    if (
+      !selection ||
+      event.target !== event.currentTarget ||
+      index < 0 ||
+      index > (lastRow + 1) * (lastCol + 1) - 1
+    )
+      return true;
+  }
+  event.preventDefault();
   if (special || mod) {
     if (direction === "up") row = 0;
     if (direction === "down") row = lastRow;
@@ -185,13 +200,7 @@ function handleArrowKey<TItem extends RowData>(
       );
     }
     if (event.key === "Tab") {
-      const index = Math.max(
-        0,
-        Math.min(
-          (lastRow + 1) * (lastCol + 1) - 1,
-          row * (lastCol + 1) + col + (event.shiftKey ? -1 : 1),
-        ),
-      );
+      const index = row * (lastCol + 1) + col + (event.shiftKey ? -1 : 1);
       row = Math.floor(index / (lastCol + 1));
       col = index % (lastCol + 1);
     }
