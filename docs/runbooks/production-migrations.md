@@ -94,6 +94,32 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Dropping a table
+
+A table with no member facts, money, evidence, decisions or unfinished paid or
+member-requested work may be dropped without an archive. Deploy the Worker with its
+readers and writers removed and verify it first, and run one destructive migration
+at a time. Immediately before the migration:
+
+```sh
+neon snapshots create --name drop-<table>-<date>
+```
+
+Record the snapshot id and keep the snapshot until the owner deletes it. To recover,
+export the table from an unfinalized restored branch and load it into production:
+
+```sh
+neon snapshots restore <id> --name verify-<table>
+```
+
+Never pass `--finalize`, never run `snapshots finalize`, and never reset or restore
+onto the production branch. If table-level recovery would not be enough, do not drop
+the table.
+
+`0081_drop_assessment_read` drops `AssessmentReadPublication`,
+`AssessmentReadMembership`, `AssessmentReadDependency` and `AssessmentReadStage`
+this way, and aborts if any holds a row.
+
 ## Suggestion table (0080)
 
 `0080_suggestion_table` creates `Suggestion` from `Assessment`, `AssessmentState` and
