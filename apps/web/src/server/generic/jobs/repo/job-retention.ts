@@ -2,7 +2,6 @@ import { jobState } from "@cubby/schemas/job";
 import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { job, jobInvalidationCapture } from "~/server/db/retained-tables";
 import { drainPending } from "~/server/generic/jobs/repo/work-items";
@@ -12,7 +11,7 @@ export const JOB_RETENTION_MS = 14 * 24 * 60 * 60_000;
 
 /**
  * Delete one bounded batch of finished execution rows. Domain evidence lives
- * on its own tables; each pruned Job's entity identity is removed atomically.
+ * on its own tables.
  */
 export async function pruneFinishedJobs(
   db: Database,
@@ -51,17 +50,6 @@ export async function pruneFinishedJobs(
       .delete(job)
       .where(inArray(job.id, doomed))
       .returning({ id: job.id });
-    if (deleted.length)
-      await tx.delete(entityIdentity).where(
-        and(
-          // Old identity rows until the destructive follow-up removes them all.
-          sql`${entityIdentity.kind} = 'job'`,
-          inArray(
-            entityIdentity.id,
-            deleted.map((row) => row.id),
-          ),
-        ),
-      );
     return deleted.length;
   });
 }

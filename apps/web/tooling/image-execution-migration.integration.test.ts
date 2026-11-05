@@ -508,3 +508,47 @@ it("retires the Job entity without deleting a row, and new Jobs need no identity
     ).rejects.toThrow("Entity_kind_check");
   });
 });
+
+it("deletes old Job identities and leaves unfinished Jobs and their attempts", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle(client);
+    await migrateDatabase(db, {
+      through: "0085_automatic_ai_evaluations_have_no_run",
+    });
+    const id = "00000000-0000-4000-8000-000000000001";
+    await identity(client, "job", id, "JOB-SYNTH1");
+    await client.query(
+      `INSERT INTO "Job" (id, shortcode, key, kind, state, input, attempts)
+       VALUES ($1, 'JOB-SYNTH1', 'synthetic:paused', 'run.execute', 'paused', '{}', 2)`,
+      [id],
+    );
+    await migrateDatabase(db, {
+      through: "0091_drop_columns_that_hold_nothing",
+    });
+    await client.query(
+      `INSERT INTO "JobLaneAdmission" (lane, "ownedStreak") VALUES ('synthetic', 1)`,
+    );
+
+    await migrateDatabase(db, { through: "0092_drop_job_identities" });
+
+    expect(
+      (
+        await client.query(`SELECT state, attempts FROM "Job" WHERE id = $1`, [
+          id,
+        ])
+      ).rows,
+    ).toEqual([{ state: "paused", attempts: 2 }]);
+    expect(
+      (await client.query(`SELECT 1 FROM "Entity" WHERE kind = 'job'`)).rows,
+    ).toEqual([]);
+    expect(
+      (
+        await client.query(`SELECT convalidated FROM pg_constraint
+          WHERE conname IN ('Entity_kind_check', 'Entity_shortcode_prefix_check')`)
+      ).rows,
+    ).toEqual([{ convalidated: true }, { convalidated: true }]);
+    await expect(
+      client.query(`SELECT 1 FROM "JobLaneAdmission"`),
+    ).rejects.toThrow("does not exist");
+  });
+});

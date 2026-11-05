@@ -31,8 +31,7 @@ import { sqlEnumConstant } from "./sql-enum";
 
 /**
  * Durable background work with no natural owner row. It is not an entity: it has no
- * public code or identity, and nothing links to it. `shortcode` stays only until the
- * destructive follow-up drops it with the old identity rows.
+ * public code or identity, and nothing links to it.
  */
 export const job = pgTable(
   "Job",
@@ -40,7 +39,6 @@ export const job = pgTable(
     id: uuid("id")
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    shortcode: text("shortcode"),
     key: text("key").notNull(),
     kind: text("kind").notNull(),
     state: text("state").$type<JobState>().notNull().default("queued"),
@@ -128,19 +126,6 @@ export const jobInvalidationCapture = pgTable(
       .where(sql`NOT ${table.observed}`),
   ],
 );
-
-/**
- * Fairness state a lane's pulls serialize on. A device pull locks its lane's
- * row, classifies the claim when it admits it, and advances or resets
- * `ownedStreak` in the claim's transaction: concurrent pulls cannot both take
- * Run work at backfill's turn, and a Run finishing later never reclassifies
- * services already counted.
- */
-export const jobLaneAdmission = pgTable("JobLaneAdmission", {
-  lane: text("lane").primaryKey(),
-  ownedStreak: integer("ownedStreak").notNull().default(0),
-  updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
-});
 
 /**
  * Tickets order work items across all drains. A per-row counter restarts

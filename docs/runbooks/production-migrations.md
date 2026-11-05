@@ -437,3 +437,23 @@ table in the same migration. Regenerate it from `renderDeclaredDerivedViews` and
 verify its values before retiring the old source. `db:check`, including
 `--against-production`, rejects public views and materialized views with catalog
 dependencies on `archive`; the populated catalog journey covers this exact move.
+
+## Dropping a table or deleting retained rows
+
+Do this only after the Worker with its readers and writers removed is deployed and read
+back. Run one destructive migration at a time. Immediately before merging it, take a
+named manual snapshot and record its id in the PR:
+
+```sh
+neon snapshots create --name drop-<table>-<date>
+```
+
+Keep it until the final report, which lists it for the owner to delete. To recover,
+restore to a new branch, export the table from there and load it into production:
+
+```sh
+neon snapshots restore <id> --name verify-<table>
+```
+
+Never pass `--finalize`, never run `snapshots finalize`, and never reset or restore onto
+the production branch. If table-level recovery would not be enough, stop and report.
