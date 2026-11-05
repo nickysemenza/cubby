@@ -17,7 +17,7 @@ import type { Database } from "~/server/db/database";
 import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 
 /** Current target IDs reached from an input's source-reference relation. */
-export type DerivedFanoutSelection = (refs: SQL) => SQL;
+type DerivedFanoutSelection = (refs: SQL) => SQL;
 
 export interface DerivedComputed {
   /** The published value; JSON. */

@@ -285,8 +285,6 @@ export const workItemStates = (
         )
     : Promise.resolve([]);
 
-
-
 /** Whether a drain (a key or a correlated key column) still owes any item. */
 export const drainPending = (drain: string | SQL) =>
   sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${workItem.drain} = ${drain})`;
