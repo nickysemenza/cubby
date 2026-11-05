@@ -502,7 +502,7 @@ Financial cutover gates recognize only done steps or an ended failed Run with fa
 
 ## Ledger-transfer minor units
 
-`0085_ledger_transfer_minor_units` follows the source-claim migration in this
+`0088_ledger_transfer_minor_units` follows the source-claim migration in this
 unmerged stack; the release owner renumbers the stack against the actual main
 prefix. Hold it for the terminal financial refresh and independent money review.
 It preserves original transfer rows under `archive.LedgerTransfer_dollar_preimage`
