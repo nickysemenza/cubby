@@ -32,7 +32,12 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Alert, AlertDescription, AlertTitle } from "~/ui/shadcn/alert";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "~/ui/shadcn/alert";
 import { Badge } from "~/ui/shadcn/badge";
 import { Button } from "~/ui/shadcn/button";
 import { Skeleton } from "~/ui/shadcn/skeleton";
@@ -109,20 +114,19 @@ function FlowAvailability({
       <AlertTitle>Could not generate recipe flow</AlertTitle>
       <AlertDescription>
         {generationError ?? "No valid flow is available for this recipe."}
-        <DetailAction>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            className="mt-2"
-            onClick={onRetry}
-            disabled={isGenerating}
-          >
-            <ArrowClockwiseIcon />
-            Retry
-          </Button>
-        </DetailAction>
       </AlertDescription>
+      <AlertAction>
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          onClick={onRetry}
+          disabled={isGenerating}
+        >
+          <ArrowClockwiseIcon />
+          Retry
+        </Button>
+      </AlertAction>
     </Alert>
   );
 }

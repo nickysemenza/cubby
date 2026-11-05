@@ -34,7 +34,12 @@ import { entityReport } from "~/integrations/tanstack-query/generated/domains/en
 import { project } from "~/integrations/tanstack-query/generated/domains/project.gen";
 import { flattenUniquePageItems } from "~/ui/hooks/infinite-page-utils";
 import { Panel } from "~/ui/layout/panel";
-import { Alert, AlertDescription, AlertTitle } from "~/ui/shadcn/alert";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "~/ui/shadcn/alert";
 import { Button, buttonVariants } from "~/ui/shadcn/button";
 
 import {
@@ -69,15 +74,11 @@ function ScheduleError({
     <Alert variant="destructive">
       <AlertTitle>Couldn't load the project schedule</AlertTitle>
       <AlertDescription>{getErrorMessage(error)}</AlertDescription>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="mt-3"
-        onClick={retry}
-      >
-        Retry
-      </Button>
+      <AlertAction>
+        <Button type="button" variant="outline" size="sm" onClick={retry}>
+          Retry
+        </Button>
+      </AlertAction>
     </Alert>
   );
 }
