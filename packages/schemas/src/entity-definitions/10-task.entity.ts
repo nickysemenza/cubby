@@ -2,7 +2,6 @@ import { galleryImagesField, galleryWriteFields } from "./image-fields";
 import { idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
-import { imageAssociationStorage } from "./image-associations";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { MAX_PROJECT_TREE_DEPTH } from "../project-fields.js";
 import { selectControlOptions } from "./select-control-options.js";
@@ -852,21 +851,6 @@ export const { definition, readSchemas } = defineEntityModel({
     },
   },
   fields: {
-    embedded: [
-      {
-        path: ["images"],
-        entity: "image",
-        projections: [
-          "output",
-          "list",
-          "detail",
-          "mcpOutput",
-          "mcpList",
-          "mcpDetail",
-        ],
-      },
-    ],
-
     list: {
       module: "@cubby/schemas/work-raw-read",
       export: "rawTaskListItemOut",
@@ -1102,7 +1086,7 @@ export const { definition, readSchemas } = defineEntityModel({
   capabilities: {
     timeline: "default",
     images: {
-      storage: imageAssociationStorage.shape.task.value,
+      storage: "gallery",
       displaySources: [
         {
           relationPath: ["subject"],

@@ -1,7 +1,6 @@
 import { borrowedImagesField } from "./image-fields";
 import { idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { imageAssociationStorage } from "./image-associations";
 import { cookbookReadSchemas } from "../cookbook-fields";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { cookbookProductSummary } from "@cubby/schemas/cookbook-fields";
@@ -370,7 +369,7 @@ export const { definition, readSchemas } = defineEntityModel(
     },
     capabilities: {
       images: {
-        storage: imageAssociationStorage.shape.cookbook.value,
+        storage: "cover",
         displaySources: [
           {
             relationPath: ["product"],

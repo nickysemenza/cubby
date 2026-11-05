@@ -9,7 +9,7 @@ import {
   imageAssociationEntity,
   imageAssociationRole,
 } from "./image-processing";
-import { imageAssociationStorage } from "./entity-definitions/image-associations";
+import { imageAssociationStorage } from "./entity-definitions/image-association-storage.gen";
 import { parseShortcode } from "@cubby/shared";
 import { IMAGE_FIELD_KEYS } from "./image-field-keys";
 import { productImagePurpose } from "./image-summary";

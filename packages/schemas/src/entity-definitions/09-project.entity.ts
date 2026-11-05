@@ -6,7 +6,6 @@ import {
   dateRangeSchema,
   storedDateRangeSchema,
 } from "../date-range";
-import { imageAssociationStorage } from "./image-associations";
 import { recordEmojiField } from "../emoji";
 import {
   type DerivedStoredInput,
@@ -1623,7 +1622,7 @@ Rules:
   },
   capabilities: {
     images: {
-      storage: imageAssociationStorage.shape.project.value,
+      storage: "gallery",
       displaySources: [
         {
           relationPath: ["tasks"],

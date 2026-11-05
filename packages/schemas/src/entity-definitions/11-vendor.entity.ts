@@ -1,7 +1,6 @@
 import { historicalDateRangePresets } from "../date-range";
 import { aliasList, idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { imageAssociationStorage } from "./image-associations";
 import { vendorSpendingProfile } from "../spending-classification.js";
 import {
   purchasedCategorySummary,
@@ -1489,7 +1488,7 @@ export const { definition, readSchemas } = defineEntityModel({
   capabilities: {
     suggestions: ["statement_transaction"],
     images: {
-      storage: imageAssociationStorage.shape.vendor.value,
+      storage: "logo",
       ingress: [
         { kind: "self", routeId: "vendor-logo" },
         {

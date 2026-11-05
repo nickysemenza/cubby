@@ -2,7 +2,6 @@ import { galleryWriteFields } from "./image-fields";
 import { historicalDateRangePresets } from "../date-range";
 import { idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { imageAssociationStorage } from "./image-associations";
 import { labelField } from "./label-field.js";
 import { purchaseChildren } from "../child-tables/purchase.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
@@ -1361,20 +1360,6 @@ export const { definition, readSchemas } = defineEntityModel({
     },
   },
   fields: {
-    embedded: [
-      {
-        path: ["images"],
-        entity: "image",
-        projections: [
-          "output",
-          "list",
-          "detail",
-          "mcpOutput",
-          "mcpList",
-          "mcpDetail",
-        ],
-      },
-    ],
     create: {
       module: "@cubby/schemas/purchase",
       export: "purchaseCreateInput",
@@ -2231,7 +2216,7 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     images: {
-      storage: imageAssociationStorage.shape.purchase.value,
+      storage: "gallery",
       displaySources: [
         {
           relationPath: ["products"],

@@ -1,7 +1,6 @@
 import { galleryImagesField, galleryWriteFields } from "./image-fields";
 import { idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { imageAssociationStorage } from "./image-associations";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
@@ -312,21 +311,6 @@ export const { definition, readSchemas } = defineEntityModel({
     },
   },
   fields: {
-    embedded: [
-      {
-        path: ["images"],
-        entity: "image",
-        projections: [
-          "output",
-          "list",
-          "detail",
-          "mcpOutput",
-          "mcpList",
-          "mcpDetail",
-        ],
-      },
-    ],
-
     list: {
       module: "@cubby/schemas/garden-entry-raw-read",
       export: "rawGardenEntryListItemOut",
@@ -442,7 +426,7 @@ export const { definition, readSchemas } = defineEntityModel({
   capabilities: {
     timeline: "default",
     images: {
-      storage: imageAssociationStorage.shape.gardenEntry.value,
+      storage: "gallery",
       ingress: [
         { kind: "self", routeId: "garden-entry-self" },
         {

@@ -37,6 +37,22 @@ const valueOf = (object: ObjectExpression, name: string) => {
 };
 
 /**
+ * `capabilities.images.storage` as written, for the image contracts declarations
+ * import. An entity with no direct storage, or no capabilities block, reads null.
+ */
+const directImageStorage = (declaration: ObjectExpression, name: string) => {
+  const capabilities = valueOf(declaration, "capabilities");
+  const images =
+    capabilities?.type === "ObjectExpression"
+      ? valueOf(capabilities, "images")
+      : undefined;
+  if (images?.type !== "ObjectExpression") return null;
+  const storage = valueOf(images, "storage");
+  if (storage?.type === "Literal" && storage.value === false) return null;
+  return literal(storage, `${name} capabilities.images.storage`);
+};
+
+/**
  * The shortcode registry is read from the declarations' source instead of
  * their evaluated modules: every declaration imports `@cubby/shared`, whose
  * shortcode schemas are built from this registry, so it must exist before the
@@ -51,6 +67,7 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
   const entityKeys: string[] = [];
   const prefixes: Record<string, string> = {};
   const lengths: Record<string, number> = {};
+  const imageStorage: Record<string, string> = {};
   for (const name of files) {
     const path = resolve(SPEC_DIRECTORY, name);
     const program = parseSync(path, await readFile(path, "utf8")).program;
@@ -118,7 +135,14 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
         .max(32)
         .parse(length.type === "Literal" ? length.value : undefined);
     }
+    const storage = directImageStorage(declaration, name);
+    if (storage !== null) imageStorage[key] = storage;
   }
+  const imageStorageOrder = ["gallery", "cover", "logo"];
+  const attachable = Object.entries(imageStorage).sort(
+    ([, left], [, right]) =>
+      imageStorageOrder.indexOf(left) - imageStorageOrder.indexOf(right),
+  );
   // The stable per-entity import surface (`productShortcode` /
   // `ProductShortcode`, >150 sites): each is the schema-map entry, never a
   // second `makeShortcodeSchema` call.
@@ -157,6 +181,21 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
           }) +
           "export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;\n" +
           `export const SHORTCODE_LENGTH: Partial<Record<ShortcodeType, number>> = ${JSON.stringify(lengths)};\n`,
+      ),
+    },
+    {
+      relativePath:
+        "packages/schemas/src/entity-definitions/image-association-storage.gen.ts",
+      source: rawSource(
+        generatedHeader +
+          'import { z } from "zod";\n\n' +
+          "/** Declared direct image storage, galleries first. */\n" +
+          `export const imageAssociationStorage = z.object({${attachable
+            .map(
+              ([entity, storage]) =>
+                `${JSON.stringify(entity)}: z.literal(${JSON.stringify(storage)})`,
+            )
+            .join(", ")}});\n`,
       ),
     },
     {
