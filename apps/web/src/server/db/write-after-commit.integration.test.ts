@@ -25,7 +25,6 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { jobInvalidationCaptureCounts } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { derivedMarkTickets } from "~/server/testing/background-queue";
 import {
   createImageFixture,
   createPlantFixture,
@@ -219,9 +218,6 @@ describe("repository writes publish after their commit", () => {
         values.every((value) => value === "no"),
       ),
     ).toBe(true);
-    expect(
-      await derivedMarkTickets(ctx.db, "plant.searchDocument"),
-    ).toHaveLength(2);
   });
 
   it("clears a location's AI description with its last image before the vision refresh is published", async () => {

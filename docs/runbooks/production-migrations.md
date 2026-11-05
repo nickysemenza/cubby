@@ -260,6 +260,40 @@ or memory-limit terminations. A target miss is reported, never hidden by clearin
 retained work. Trigger retirement, catalog checks and DerivedValue drop remain
 separate deployed-reader-first steps under ADR 0025.
 
+## Retiring derived source triggers
+
+Deploy and verify the Worker with the ticket engine and explicit SQL admission
+callers removed first and require per-kind replacement coverage. Record pass
+timings and safety in issue #3662; timing misses do not block this recoverable
+marker/trigger retirement. Retained tickets are not a completion counter and
+are not deleted by this migration.
+
+In one retirement PR and deployment, first replace the shared
+`derived_mark(text, uuid[], text)` function with a no-op preserving its signature
+and default. The same migration then discovers wrapper triggers through `pg_trigger`,
+`pg_proc` and `pg_depend`, then retires them table by table and
+finally removes the shared marker. There is no intervening deployment or timed
+wait. The migration uses transaction-per-statement and a 2-second lock timeout;
+the trigger migration refuses a marker that still writes retained work. Each
+existing repeat-batch transaction locks just one source table and verifies the
+removed trigger count against that transaction's live catalog count. Discovery
+uses the reserved wrapper-function name, including empty wrapper bodies; a
+source-text search or frozen table census cannot establish coverage. Before any
+function drop, require zero wrapper triggers and zero other functions referencing
+the shared marker. Repeat the guard after wrapper-function removal, before
+dropping the shared marker. On refusal, the shared no-op remains installed.
+
+Take a named manual snapshot immediately before this combined retirement, record
+its id, and retain it through the final report. Every drop is idempotent,
+including after partial commits/retry. After deployment, verify source edits
+still commit and replacement reads remain available. Verify `pg_trigger` has no
+remaining derived-mark trigger and `pg_proc` has no body referring to retained
+work tables before B1 drops them. B1 still owns those work tables. Keep
+ProductConversionCoverage; only its ticket trigger retires.
+The separate DerivedValue drop still requires its full consumer
+trace, legacy count by key, production preservation proof and immediately named
+manual snapshot under the table-drop procedure.
+
 ## Typed domain read snapshots
 
 The read snapshot cutover copies each declared result into named, typed columns

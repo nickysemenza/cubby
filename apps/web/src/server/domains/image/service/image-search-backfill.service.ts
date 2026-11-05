@@ -8,7 +8,7 @@ import {
   countImagesMissingSearchDocument,
   selectImageIdsMissingSearchDocument,
 } from "~/server/domains/image/repo/image";
-import { recordChange } from "~/server/generic/changes/repo/change";
+import { scheduleSearchRepair } from "~/server/generic/search/repo/search-index-repair";
 
 /**
  * Project and queue embeddings for live images that never got a SearchDocument.
@@ -36,10 +36,10 @@ export async function backfillImageSearchDocuments(
     batches += 1;
     scanned += ids.length;
     afterId = ids.at(-1);
-    await recordChange(db, { kind: "source", categories: ["image"] });
   }
 
+  if (scanned > 0) await scheduleSearchRepair(db);
   const remaining = await countImagesMissingSearchDocument(db);
   if (remaining === 0) stopped = "complete";
-  return { batches, scanned, published: scanned, remaining, stopped };
+  return { batches, scanned, published: 0, remaining, stopped };
 }

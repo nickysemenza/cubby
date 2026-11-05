@@ -7,10 +7,7 @@ import { unwrapDb } from "~/server/db/helpers";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { purchaseScaffold } from "~/server/domains/purchase/repo/purchase";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
-import {
-  derivedMarkTickets,
-  drainStoredDerived,
-} from "~/server/testing/background-queue";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { makeExpenseInput } from "~/server/testing/repo.fixtures";
 
 import {
@@ -165,9 +162,7 @@ describe("stored Purchase quality", () => {
     );
     // An Expense edit marks its Purchase's stored quality (ADR 0021).
     await updateExpense(ctx.db, line.output.id, { cost: 7 }, ctx.actor);
-    expect(
-      await derivedMarkTickets(ctx.db, "purchase.dataQuality", order.entityId),
-    ).toHaveLength(1);
+
     expect((await list()).data).toEqual([]);
     expect(await queue()).toEqual([]);
     await refresh();

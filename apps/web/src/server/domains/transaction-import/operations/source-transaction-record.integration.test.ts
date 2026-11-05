@@ -26,7 +26,6 @@ import { readWorkItems, renewJob } from "~/server/generic/jobs/jobs.fixtures";
 import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { systemPrincipal } from "~/server/http/authenticate";
-import { derivedMarkTickets } from "~/server/testing/background-queue";
 
 import { sourceTransactionRecordHandlers } from "./source-transaction-record.server";
 
@@ -459,12 +458,7 @@ describe("finance.record source and Job lifecycle contention", () => {
               description: { description: "A synthetic orchard" },
             },
           });
-        expect(
-          await derivedMarkTickets(
-            ctx.db,
-            "sourceTransactionRecord.searchDocument",
-          ),
-        ).not.toEqual([]);
+
         expect(writerCommits).toHaveLength(
           change === "cloud_completion" ? 1 : conflicts,
         );

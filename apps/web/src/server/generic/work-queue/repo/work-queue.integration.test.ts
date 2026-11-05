@@ -19,7 +19,6 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { user } from "~/server/db/auth.schema";
-import { derivedTriggerDdl } from "~/server/db/derived-trigger-ddl";
 import { getDb } from "~/server/db/helpers";
 import { project, financialAccount } from "~/server/db/schema";
 import { loadWorkDiagnosticFacts } from "~/server/domains/work/repo/work-diagnostic-facts";
@@ -430,23 +429,6 @@ describe("composed Work queue engine", () => {
 
   it("retains published diagnostic counts across missing inputs without read repair", async () => {
     const anchor = await diagnosticAnchor();
-    await getDb(ctx.db).execute(
-      sql.raw(
-        `DO $install$ BEGIN EXECUTE $ddl$${derivedTriggerDdl()}$ddl$; END $install$;`,
-      ),
-    );
-    await getDb(ctx.db).execute(sql`SELECT derived_mark(
-      ${"project.workDiagnosticFacts@50"}, ARRAY[gen_random_uuid()], ${"Synthetic entity removed"})`);
-    expect(
-      (
-        await getDb(ctx.db)
-          .execute(sql`SELECT count(*)::int AS count FROM "WorkItem"
-      WHERE target LIKE ${"project.workDiagnosticFacts%"}`)
-      ).rows,
-    ).toEqual([{ count: 0 }]);
-    const before = await getDb(ctx.db).execute(
-      sql`SELECT target, ref, ticket FROM "WorkItem" ORDER BY target, ref`,
-    );
     const missing = await readDiagnostics({ reason: "dependencyCycles" });
     expect(missing.items).toEqual([]);
     expect(missing.meta.incompleteDiagnosticSources).toEqual([
@@ -455,13 +437,6 @@ describe("composed Work queue engine", () => {
         state: "unavailable",
       }),
     ]);
-    expect(
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT target, ref, ticket FROM "WorkItem" ORDER BY target, ref`,
-        )
-      ).rows,
-    ).toEqual(before.rows);
     await publishDiagnostics(anchor, {
       counts: { dependencyCycles: 17, unconnectedEntities: 0 },
       privateEntries: {},
@@ -497,9 +472,6 @@ describe("composed Work queue engine", () => {
       sql`INSERT INTO "ExternalSource" (slug, label, "vendorId", issuer) VALUES ('synthetic-work-source', 'Synthetic work source', NULL, false)`,
     );
     expect((await loadWorkDiagnosticFacts(ctx.db))?.pending).toBe(false);
-    await getDb(ctx.db).execute(
-      sql`DELETE FROM "WorkItem" WHERE target LIKE 'project.workDiagnosticFacts%'`,
-    );
     await getDb(ctx.db).execute(
       sql`UPDATE "ExternalSource" SET issuer = true WHERE slug = 'synthetic-work-source'`,
     );

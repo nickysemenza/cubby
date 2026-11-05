@@ -8,10 +8,7 @@ import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import { updatePurchase } from "~/server/domains/purchase/repo/purchase";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import {
-  derivedMarkTickets,
-  drainStoredDerived,
-} from "~/server/testing/background-queue";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   storedQuality,
   storedQualityIds,
@@ -29,8 +26,6 @@ describe("stored Expense quality", () => {
   const ctx = withTestDb();
   const refresh = () => drainStoredDerived(ctx.db);
   // A source write marks stored Expense quality with a fresh ticket.
-  const generation = async () =>
-    Math.max(0, ...(await derivedMarkTickets(ctx.db, "expense.dataQuality")));
 
   it("publishes unclassified principal item lines to Research without overriding category intent", async () => {
     const vendor = await createRepoEntity(ctx, "vendor", {
@@ -259,14 +254,14 @@ describe("stored Expense quality", () => {
     const published = await storedQuality(ctx.db, line.entityId);
     expect(published?.rulesVersion).toBe(EXPENSE_QUALITY_RULES_VERSION);
     expect((await queue()).items).toEqual([]);
-    const before = await generation();
+
     await updatePurchase(
       ctx.db,
       order.output.id,
       { spendingCategoryId: category.shortcode },
       ctx.actor,
     );
-    expect(await generation()).toBeGreaterThan(before);
+
     // Reads keep the old publication until the enrolled family evaluates descendants.
     expect((await list()).data).toEqual([]);
     expect((await queue()).items).toEqual([]);
@@ -314,9 +309,8 @@ describe("stored Expense quality", () => {
     expect((await list()).data).toEqual([]);
     expect((await queue()).items).toEqual([]);
 
-    const previous = await generation();
     await updateExpense(ctx.db, line.output.id, { cost: 0 }, ctx.actor);
-    expect(await generation()).toBeGreaterThan(previous);
+
     await refresh();
     expect((await quality()).gaps.map((gap) => gap.check)).not.toContain(
       "expense_cost",
