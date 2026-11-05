@@ -23,6 +23,12 @@ BEGIN
   ) THEN RAISE EXCEPTION 'Receipt evidence contains unproven whole-cent money; preserve it for review'; END IF;
   CREATE SCHEMA IF NOT EXISTS archive;
   CREATE TABLE archive."PurchasePaymentEvidence_dollar_preimage" AS TABLE public."PurchasePaymentEvidence";
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint WHERE contype='f' AND
+      (conrelid='archive."PurchasePaymentEvidence_dollar_preimage"'::regclass OR confrelid='archive."PurchasePaymentEvidence_dollar_preimage"'::regclass)
+    UNION ALL SELECT 1 FROM pg_trigger WHERE tgrelid='archive."PurchasePaymentEvidence_dollar_preimage"'::regclass AND NOT tgisinternal
+    UNION ALL SELECT 1 FROM pg_index WHERE indrelid='archive."PurchasePaymentEvidence_dollar_preimage"'::regclass
+  ) THEN RAISE EXCEPTION 'Archived receipt evidence retains active relationships, triggers or indexes'; END IF;
   ALTER TABLE public."PurchasePaymentEvidence" RENAME COLUMN amount TO "amountMinor";
   ALTER TABLE public."PurchasePaymentEvidence" ALTER COLUMN "amountMinor" TYPE bigint
     USING ("amountMinor"::numeric * 100)::bigint;
