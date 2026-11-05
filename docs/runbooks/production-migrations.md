@@ -263,9 +263,10 @@ separate deployed-reader-first steps under ADR 0025.
 ## Retiring derived source triggers
 
 Deploy and verify the Worker with the ticket engine and explicit SQL admission
-callers removed first. Require the full-pass gate in issue #3662 and per-kind
-replacement coverage before this step. Retained tickets are not a completion
-counter and are not deleted by either DDL migration.
+callers removed first and require per-kind replacement coverage. Record pass
+timings and safety in issue #3662; timing misses do not block this recoverable
+marker/trigger retirement. Retained tickets are not a completion counter and
+are not deleted by this migration.
 
 In one retirement PR and deployment, first replace the shared
 `derived_mark(text, uuid[], text)` function with a no-op preserving its signature
