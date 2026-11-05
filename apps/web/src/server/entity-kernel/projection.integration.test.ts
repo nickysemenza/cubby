@@ -9,7 +9,7 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
 
-import { derivedMarkTickets } from "~/server/testing/background-queue";
+import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
 import {
   captureBackgroundQueue,
   drainDerivedRefreshFrontier,
@@ -325,16 +325,16 @@ describe("entity kernel search projections", () => {
           EXECUTE FUNCTION reject_projection()`),
       );
       try {
-        // The drain Job retains the raised message in its stored cause chain.
+        // A failed page retains its old document and records the pass failure.
         await expect(
           rename(category.id, "Projected awnings"),
         ).resolves.toMatchObject({ action: "update" });
-        await expect(drainDerivedRefreshFrontier(ctx.db)).rejects.toThrow(
-          "synthetic projection failure",
-        );
-        expect(
-          await derivedMarkTickets(ctx.db, "product.searchDocument", productId),
-        ).not.toEqual([]);
+        await expect(
+          drainDerivedRefreshFrontier(ctx.db),
+        ).resolves.toBeUndefined();
+        const failed = await readDerivedRebuildStatus(ctx.db);
+        expect(failed.failures).toBeGreaterThan(0);
+        expect(failed.error).toContain("synthetic projection failure");
       } finally {
         await db.execute(
           sql`DROP TRIGGER reject_projection ON "SearchDocument"`,
@@ -353,6 +353,9 @@ describe("entity kernel search projections", () => {
       expect(await searchDocumentTitle(ctx.db, "product", productId)).toBe(
         "Projected tarp",
       );
+      await drainDerivedRefreshFrontier(ctx.db);
+      expect(await typeHints([productId])).toEqual(["Projected awnings"]);
+      expect((await readDerivedRebuildStatus(ctx.db)).failures).toBe(0);
     });
   });
 });
