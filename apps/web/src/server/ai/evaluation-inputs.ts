@@ -62,8 +62,3 @@ export async function withAiInputs<T>(
   if (options.captureToParent !== false) parent?.inputs.push(...store.inputs);
   return { result, inputs: store.inputs, incomplete: store.incomplete };
 }
-
-/** A provider-free decision replaces inference only after its authority is resolved. */
-export function adoptPreparedAiInputs(inputs: readonly CapturedInput[]) {
-  scope.getStore()?.inputs.push(...inputs);
-}
