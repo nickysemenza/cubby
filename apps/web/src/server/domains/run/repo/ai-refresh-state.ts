@@ -44,7 +44,7 @@ import {
   emailClassificationObservation,
   ledgerParty,
   run,
-  assessmentState as suggestion,
+  suggestionTable as suggestion,
 } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";

@@ -5,7 +5,9 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { assessmentState } from "~/server/db/schema";
+import {
+  suggestionTable,
+} from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   publishSuggestion,
@@ -82,14 +84,14 @@ describe("Suggestion publication", () => {
   const rows = (key: string) =>
     getDb(ctx.db)
       .select({
-        id: assessmentState.id,
-        active: assessmentState.active,
-        status: assessmentState.status,
-        runId: assessmentState.runId,
+        id: suggestionTable.id,
+        active: suggestionTable.active,
+        status: suggestionTable.status,
+        runId: suggestionTable.runId,
       })
-      .from(assessmentState)
-      .where(sql`${assessmentState.data}->>'candidateKey' = ${key}`)
-      .orderBy(asc(assessmentState.createdAt), asc(assessmentState.id));
+      .from(suggestionTable)
+      .where(sql`${suggestionTable.data}->>'candidateKey' = ${key}`)
+      .orderBy(asc(suggestionTable.createdAt), asc(suggestionTable.id));
 
   it("keeps suppressed slots, reconfirms unchanged evidence and replaces changed evidence", async () => {
     const first = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
@@ -127,7 +129,7 @@ describe("Suggestion publication", () => {
 
     // Suppression belongs to retained history even after its projection retires.
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({
         suppression: {
           scope: "recommendation",
@@ -135,7 +137,7 @@ describe("Suggestion publication", () => {
           fingerprint: null,
         },
       })
-      .where(eq(assessmentState.id, original!.id));
+      .where(eq(suggestionTable.id, original!.id));
     expect(
       await publishSuggestion(
         ctx.db,

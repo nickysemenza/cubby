@@ -22,7 +22,10 @@ import {
 import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { assessment, automaticRule } from "~/server/db/schema";
+import {
+  suggestionTable,
+  automaticRule,
+} from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -95,9 +98,9 @@ export async function assertAutomaticRuleOn(
         "A member-switched automatic rule requires its retained Assessment.",
       );
     const [prediction] = await getDb(db)
-      .select({ judgment: assessment.judgment })
-      .from(assessment)
-      .where(eq(assessment.id, assessmentId))
+      .select({ judgment: suggestionTable.judgment })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, assessmentId))
       .limit(1);
     const judgment = statementTransactionJudgment.safeParse(
       prediction?.judgment,
@@ -272,10 +275,9 @@ export async function applyAutomaticRules(
   const outcome: AutomaticRuleOutcome = { applied: [], refused: [] };
   if (!assessmentIds.length) return outcome;
   const { rows } = await unwrapDb(db).execute<Candidate>(sql`
-    SELECT s.id, s.family, s.status, s.active, a.served, s.data, s.entity, s.field,
-      s.kind, s.confidence, s.model, s.fingerprint, s."runId", a.judgment, a.evidence, a.subject
-    FROM "AssessmentState" s
-    JOIN "Assessment" a ON a.id = s.id
+    SELECT s.id, s.family, s.status, s.active, s.served, s.data, s.entity, s.field,
+      s.kind, s.confidence, s.model, s.fingerprint, s."runId", s.judgment, s.evidence, s.subject
+    FROM "Suggestion" s
     WHERE s.id IN (${sql.join(
       assessmentIds.map((id) => sql`${id}::uuid`),
       sql`, `,
@@ -422,7 +424,7 @@ export async function applyAutomaticRulesForCharge(
   statementScope?: StatementSuggestionScope,
 ) {
   const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
-    SELECT id FROM "AssessmentState"
+    SELECT id FROM "Suggestion"
     WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
       AND status = ${suggestionStatus.enum.pending}
       AND data->>${"source"} = ${charge.source} AND data->>${"chargeKey"} = ${charge.chargeKey}

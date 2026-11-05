@@ -51,7 +51,7 @@ export function statementSourceAssessmentIdsSql(
   if (kind === "sourceTransactionRecord")
     return sql`WITH changed_statement_sources AS MATERIALIZED (${refs})
       SELECT s.id FROM "SourceTransactionRecord" r
-      JOIN "AssessmentState" s ON s.data->>${sqlEnumConstant(statementReadFields, statementReadFields.enum.source)} = r.source
+      JOIN "Suggestion" s ON s.data->>${sqlEnumConstant(statementReadFields, statementReadFields.enum.source)} = r.source
         AND s.data->>${sqlEnumConstant(statementReadFields, statementReadFields.enum.chargeKey)} = ${chargeKeyOf("r")}
       WHERE r.id IN (SELECT id FROM changed_statement_sources) AND ${pending}`;
   if (kind === "financialAccount" || kind === "ledgerParty") {
@@ -61,7 +61,7 @@ export function statementSourceAssessmentIdsSql(
         : sql`SELECT account.id FROM "FinancialAccount" account
           WHERE account."ledgerPartyId" IN (${refs})`;
     return sql`SELECT s.id FROM (${accounts}) account
-      JOIN "AssessmentState" s ON s.data->>'accountId' = account.id::text
+      JOIN "Suggestion" s ON s.data->>'accountId' = account.id::text
       WHERE ${pending}`;
   }
   // Include removed evidence: deleting a settlement reference must refresh the
@@ -70,19 +70,19 @@ export function statementSourceAssessmentIdsSql(
       SELECT evidence.source, evidence."externalId" FROM "EntityExternalId" evidence
       WHERE evidence."entityId" IN (${refs}) AND evidence.kind = 'settlement_ref'
     ) SELECT s.id FROM changed_settlement_keys key
-      JOIN "AssessmentState" s ON s.data->'refs' @> jsonb_build_array(key.source || ':' || key."externalId")
+      JOIN "Suggestion" s ON s.data->'refs' @> jsonb_build_array(key.source || ':' || key."externalId")
       WHERE ${pending}
-    UNION SELECT s.id FROM changed_settlement_keys key
+    UNION SELECT matched.id FROM changed_settlement_keys key
       CROSS JOIN LATERAL (
-        SELECT a.id FROM "Assessment" a WHERE a.served
-          AND a.judgment #>> '{create,sourceRef,source}' IS NOT NULL
-          AND a.judgment #>> '{create,sourceRef,externalId}' IS NOT NULL
-          AND md5(a.judgment #>> '{create,sourceRef,source}') = md5(key.source)
-          AND md5(a.judgment #>> '{create,sourceRef,externalId}') = md5(key."externalId")
-          AND a.judgment #>> '{create,sourceRef,source}' = key.source
-          AND a.judgment #>> '{create,sourceRef,externalId}' = key."externalId"
+        SELECT s.id FROM "Suggestion" s WHERE s.served AND ${pending}
+          AND s.judgment #>> '{create,sourceRef,source}' IS NOT NULL
+          AND s.judgment #>> '{create,sourceRef,externalId}' IS NOT NULL
+          AND md5(s.judgment #>> '{create,sourceRef,source}') = md5(key.source)
+          AND md5(s.judgment #>> '{create,sourceRef,externalId}') = md5(key."externalId")
+          AND s.judgment #>> '{create,sourceRef,source}' = key.source
+          AND s.judgment #>> '{create,sourceRef,externalId}' = key."externalId"
         OFFSET 0
-      ) a JOIN "AssessmentState" s ON s.id = a.id WHERE ${pending}`;
+      ) matched`;
 }
 
 /**

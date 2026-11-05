@@ -16,7 +16,7 @@ import { setCfEnv } from "~/server/cf-env";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   aiEvaluation,
-  assessmentState,
+  suggestionTable,
   entityLink,
   vendor as vendorTable,
   run,
@@ -290,12 +290,12 @@ describe("connection preparation and publication authority", () => {
       )[0];
     const fieldAssessments = (recordId: typeof task.entityId) =>
       getDb(ctx.db)
-        .select({ id: assessmentState.id })
-        .from(assessmentState)
+        .select({ id: suggestionTable.id })
+        .from(suggestionTable)
         .where(
           and(
-            eq(assessmentState.recordId, recordId),
-            eq(assessmentState.field, "subjectProductId"),
+            eq(suggestionTable.recordId, recordId),
+            eq(suggestionTable.field, "subjectProductId"),
           ),
         );
     const owedTicket = (await aiEvaluationItem(ctx.db, unavailableId))?.ticket;
@@ -396,12 +396,12 @@ describe("connection preparation and publication authority", () => {
         expect(
           await getDb(ctx.db)
             .select()
-            .from(assessmentState)
+            .from(suggestionTable)
             .where(
               and(
-                eq(assessmentState.recordId, task.entityId),
-                eq(assessmentState.active, true),
-                eq(assessmentState.status, "pending"),
+                eq(suggestionTable.recordId, task.entityId),
+                eq(suggestionTable.active, true),
+                eq(suggestionTable.status, "pending"),
               ),
             ),
         ).toEqual([]);
@@ -441,12 +441,12 @@ describe("connection preparation and publication authority", () => {
       expect(
         await getDb(ctx.db)
           .select()
-          .from(assessmentState)
+          .from(suggestionTable)
           .where(
             and(
-              eq(assessmentState.recordId, task.entityId),
-              eq(assessmentState.active, true),
-              eq(assessmentState.status, "pending"),
+              eq(suggestionTable.recordId, task.entityId),
+              eq(suggestionTable.active, true),
+              eq(suggestionTable.status, "pending"),
             ),
           ),
       ).toEqual([]);
@@ -505,11 +505,11 @@ describe("connection preparation and publication authority", () => {
     expect(
       await getDb(ctx.db)
         .select()
-        .from(assessmentState)
+        .from(suggestionTable)
         .where(
           and(
-            eq(assessmentState.recordId, task.entityId),
-            eq(assessmentState.status, "pending"),
+            eq(suggestionTable.recordId, task.entityId),
+            eq(suggestionTable.status, "pending"),
           ),
         ),
     ).toEqual([]);
@@ -608,13 +608,13 @@ describe("connection preparation and publication authority", () => {
     expect(
       await getDb(ctx.db)
         .select()
-        .from(assessmentState)
+        .from(suggestionTable)
         .where(
           and(
-            eq(assessmentState.family, "recommendation"),
-            eq(assessmentState.recordId, item.entityId),
-            eq(assessmentState.active, true),
-            eq(assessmentState.status, "pending"),
+            eq(suggestionTable.family, "recommendation"),
+            eq(suggestionTable.recordId, item.entityId),
+            eq(suggestionTable.active, true),
+            eq(suggestionTable.status, "pending"),
           ),
         ),
     ).toEqual([]);
@@ -712,13 +712,13 @@ describe("connection preparation and publication authority", () => {
         expect(
           await getDb(transactionDb)
             .select()
-            .from(assessmentState)
+            .from(suggestionTable)
             .where(
               and(
-                eq(assessmentState.recordId, task.entityId),
-                eq(assessmentState.field, "subjectProductId"),
-                eq(assessmentState.active, true),
-                eq(assessmentState.status, "pending"),
+                eq(suggestionTable.recordId, task.entityId),
+                eq(suggestionTable.field, "subjectProductId"),
+                eq(suggestionTable.active, true),
+                eq(suggestionTable.status, "pending"),
               ),
             ),
         ).toContainEqual(
@@ -733,12 +733,12 @@ describe("connection preparation and publication authority", () => {
     expect(
       await getDb(ctx.db)
         .select()
-        .from(assessmentState)
+        .from(suggestionTable)
         .where(
           and(
-            eq(assessmentState.recordId, task.entityId),
-            eq(assessmentState.active, true),
-            eq(assessmentState.status, "pending"),
+            eq(suggestionTable.recordId, task.entityId),
+            eq(suggestionTable.active, true),
+            eq(suggestionTable.status, "pending"),
           ),
         ),
     ).toEqual([]);
@@ -830,13 +830,13 @@ describe("connection preparation and publication authority", () => {
     expect(
       await getDb(ctx.db)
         .select()
-        .from(assessmentState)
+        .from(suggestionTable)
         .where(
           and(
-            eq(assessmentState.recordId, task.entityId),
-            eq(assessmentState.field, "subjectProductId"),
-            eq(assessmentState.active, true),
-            eq(assessmentState.status, "pending"),
+            eq(suggestionTable.recordId, task.entityId),
+            eq(suggestionTable.field, "subjectProductId"),
+            eq(suggestionTable.active, true),
+            eq(suggestionTable.status, "pending"),
           ),
         ),
     ).toEqual([]);

@@ -10,7 +10,10 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { product, assessment, assessmentState } from "~/server/db/schema";
+import {
+  product,
+  suggestionTable,
+} from "~/server/db/schema";
 import { loadImageAnalysisEvidence } from "~/server/domains/image/repo/image-analysis-summary";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
@@ -173,10 +176,9 @@ export async function assertPhotoProductReviewCurrent(
         "Product correction has no retained review evidence; save the draft again before approval",
       );
     const [saved] = await getDb(db)
-      .select({ prediction: assessment, status: assessmentState.status })
-      .from(assessment)
-      .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
-      .where(eq(assessment.id, retained.id))
+      .select({ prediction: suggestionTable, status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, retained.id))
       .for("update");
     if (!saved || saved.prediction.family !== "field")
       throw new Error(

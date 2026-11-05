@@ -6,9 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
-  assessment,
-  assessmentState,
-  feedback,
+  suggestionTable,
   auditLog,
   image,
 } from "~/server/db/schema";
@@ -254,9 +252,9 @@ describe("shared Assessment history", () => {
       { sourceKind: "image", sourceId: picture.id },
     ]);
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ createdAt: new Date("2000-01-01T00:00:00Z") })
-      .where(eq(assessmentState.id, prediction.id));
+      .where(eq(suggestionTable.id, prediction.id));
     const command = {
       assessmentId: prediction.id,
       operationId: "synthetic:image-command",
@@ -365,8 +363,8 @@ describe("shared Assessment history", () => {
       (
         await getDb(ctx.db)
           .select()
-          .from(assessmentState)
-          .where(eq(assessmentState.id, prediction.id))
+          .from(suggestionTable)
+          .where(eq(suggestionTable.id, prediction.id))
       )[0]?.confirmedValue,
     ).toEqual({ present: true, value: "Confirmed description" });
     await getDb(ctx.db)
@@ -483,16 +481,16 @@ describe("shared Assessment history", () => {
       (
         await getDb(ctx.db)
           .select()
-          .from(assessmentState)
-          .where(eq(assessmentState.id, prediction.id))
+          .from(suggestionTable)
+          .where(eq(suggestionTable.id, prediction.id))
       )[0],
     ).toMatchObject({ active: false, status: "superseded" });
     expect(
       (
         await getDb(ctx.db)
           .select()
-          .from(assessment)
-          .where(eq(assessment.id, prediction.id))
+          .from(suggestionTable)
+          .where(eq(suggestionTable.id, prediction.id))
       )[0]?.subject,
     ).toEqual(prediction.subject);
   });
@@ -538,8 +536,8 @@ describe("shared Assessment history", () => {
         { evidence: "same" },
       ),
     ).toEqual(first);
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(1);
-    expect(await getDb(ctx.db).select().from(assessmentState)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(1);
   });
 
   it("retains corrected null and separates wrong from presentation suppression", async () => {
@@ -565,8 +563,8 @@ describe("shared Assessment history", () => {
     expect(review?.correction).toEqual({ present: true, value: null });
     const [current] = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.id, first.id));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, first.id));
     expect(current?.suppression).toBeNull();
     await executeEntity(kernelCtx(ctx), {
       action: "delete",
@@ -575,16 +573,16 @@ describe("shared Assessment history", () => {
     });
     const [retired] = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.id, first.id));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, first.id));
     expect(retired).toMatchObject({
       active: false,
       status: "superseded",
       suppression: null,
     });
-    expect((await getDb(ctx.db).select().from(assessment)).length).toBe(1);
+    expect((await getDb(ctx.db).select().from(suggestionTable)).length).toBe(1);
     expect(
-      (await getDb(ctx.db).select().from(assessment))[0]?.subject,
+      (await getDb(ctx.db).select().from(suggestionTable))[0]?.subject,
     ).toMatchObject({ recordId: subjectId });
     expect(
       (await getDb(ctx.db).select().from(feedback)).filter(

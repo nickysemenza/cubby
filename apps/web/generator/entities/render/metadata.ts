@@ -422,6 +422,7 @@ export const renderEntityMetadataArtifacts = (
                 browserRoutes: entity.descriptor.browserRoutes !== false,
                 hasImages: entity.descriptor.hasImages,
                 imageStorage: entity.descriptor.imageStorage,
+                suggestionFamilies: entity.suggestionFamilies,
                 searchable: entity.descriptor.searchable,
                 embeddable: entity.descriptor.embeddable,
                 auditable: entity.descriptor.auditable,

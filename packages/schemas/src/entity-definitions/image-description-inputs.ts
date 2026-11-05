@@ -33,24 +33,25 @@ export const imageDescriptionInputs = (
       path: owners,
     },
     {
-      table: "AssessmentState",
+      table: "Suggestion",
       match: { recordId: "id" },
       where: { family: "image_description" },
       path: owners,
     },
     {
-      table: "Assessment",
+      table: "Suggestion",
       match: { subject: "id" },
       json: { key: "recordId" },
       where: { family: "image_description" },
       path: owners,
     },
     {
-      table: "Feedback",
-      match: { assessmentId: "id" },
-      where: imageDescriptionReceiptWhere,
+      // Decisions live on the Suggestion, whose own input above captures them.
+      table: "Suggestion",
+      capture: false,
+      match: { id: "id" },
       path: [
-        { table: "AssessmentState", from: "id", to: "recordId" },
+        { table: "Suggestion", from: "id", to: "recordId" },
         ...owners,
       ],
     },

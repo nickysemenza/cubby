@@ -30,8 +30,8 @@ import { reviewFamilyDeclarations } from "~/server/generic/assessment/repo/revie
 import { isClean } from "./statement-suggestions";
 
 const currentClean = sql`coalesce((coalesce((${suggestionField("clean")})::boolean, false) AND (
-  a.judgment->${"create"}->>${"kind"} NOT IN (${financialTransactionKind.enum.purchase}, ${financialTransactionKind.enum.refund}, ${financialTransactionKind.enum.fee})
-  OR a.judgment->${"spending"}->>${"status"} IN (${"ready" satisfies FinancialSpendingPlan["status"]}, ${"already_booked" satisfies FinancialSpendingPlan["status"]}))), false)`;
+  s.judgment->${"create"}->>${"kind"} NOT IN (${financialTransactionKind.enum.purchase}, ${financialTransactionKind.enum.refund}, ${financialTransactionKind.enum.fee})
+  OR s.judgment->${"spending"}->>${"status"} IN (${"ready" satisfies FinancialSpendingPlan["status"]}, ${"already_booked" satisfies FinancialSpendingPlan["status"]}))), false)`;
 
 /** Record-level scope the cross-family list pushes into SQL. */
 export type StatementSuggestionScope = {
@@ -62,16 +62,15 @@ const conditions = (filters: StatementSuggestionScope): SQL => {
       sql`, `,
     );
     where.push(sql`(fa.id::text IN (${ids})
-      OR EXISTS (SELECT 1 FROM jsonb_array_elements(a.judgment->'candidates') candidate WHERE candidate->>'transactionId' IN (${ids}))
-      OR a.judgment->${"supersede"}->>'pendingTransactionId' IN (${ids})
-      OR a.judgment->${"void"}->>'transactionId' IN (${ids})
+      OR EXISTS (SELECT 1 FROM jsonb_array_elements(s.judgment->'candidates') candidate WHERE candidate->>'transactionId' IN (${ids}))
+      OR s.judgment->${"supersede"}->>'pendingTransactionId' IN (${ids})
+      OR s.judgment->${"void"}->>'transactionId' IN (${ids})
       OR EXISTS (SELECT 1 FROM jsonb_array_elements(${reviewFamilyDeclarations.statement_transaction.records}) ref WHERE ref->>'id' IN (${ids})))`);
   }
   return sql.join(where, sql` AND `);
 };
 
-const FROM = sql`FROM "AssessmentState" s
-  JOIN "Assessment" a ON a.id = s.id
+const FROM = sql`FROM "Suggestion" s
   JOIN "FinancialAccount" fa ON fa.id = (${suggestionField("accountId")})::uuid AND ${notDeleted("fa")}
   LEFT JOIN "LedgerParty" account_owner ON account_owner.id = fa."ledgerPartyId"
   JOIN "SourceTransactionRecord" r ON r.id = s."recordId"`;
@@ -79,7 +78,7 @@ const FROM = sql`FROM "AssessmentState" s
 // List keys use the same first surviving candidate as hydration.
 const FIRST_CANDIDATE = sql`LEFT JOIN LATERAL (
       SELECT candidate->${"label"} AS label, ft.shortcode
-      FROM jsonb_array_elements(a.judgment->'candidates') WITH ORDINALITY AS c(candidate, position)
+      FROM jsonb_array_elements(s.judgment->'candidates') WITH ORDINALITY AS c(candidate, position)
       JOIN "FinancialTransaction" ft ON ft.id = (candidate->>'transactionId')::uuid
       ORDER BY position LIMIT 1
     ) first_candidate ON true`;
@@ -95,9 +94,6 @@ export function statementSuggestionFacts(
 ) {
   const has = (...names: string[]) => names.some((name) => needs.has(name));
   const exactStrength = has("exactStrength");
-  const judged =
-    exactStrength ||
-    has("kind", "kindSource", "providerStatus", "candidate", "modelLabel");
   const firstCandidate = exactStrength || has("candidate", "modelLabel");
   const stateFilters: SQL[] = [
     filters.status === "applied"
@@ -113,7 +109,7 @@ export function statementSuggestionFacts(
       sql`s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runCode})`,
     );
   const clean = sql`CASE WHEN (${suggestionField("clean")})::boolean
-    THEN (SELECT ${currentClean} FROM "Assessment" a WHERE a.id = s.id)
+    THEN ${currentClean}
     ELSE false END`;
   const labelSame = sql`first_candidate.label->>${"same"}`;
   const labelConfidence = sql`first_candidate.label->>${"confidence"}`;
@@ -135,17 +131,16 @@ export function statementSuggestionFacts(
       merchant: sql`ARRAY[concat_ws(' ', r.merchant, r."rawDescription")]`,
       amount: sql`coalesce((${suggestionField("amount")})::numeric, 0)`,
       action: suggestionField("recommended"),
-      kind: sql`a.judgment->${"create"}->>${"kind"}`,
-      kindSource: sql`a.judgment->${"create"}->>${"kindSource"}`,
+      kind: sql`s.judgment->${"create"}->>${"kind"}`,
+      kindSource: sql`s.judgment->${"create"}->>${"kindSource"}`,
       providerCategory: sql`r."sourceCategory"`,
-      providerStatus: sql`a.judgment->>'providerStatus'`,
+      providerStatus: sql`s.judgment->>'providerStatus'`,
       candidate: sql`first_candidate.shortcode`,
       modelLabel: sql`${labelSame} || ':' || ${labelConfidence}`,
     } satisfies Record<string, SQL>,
     from: sql.join(
       [
-        sql`"AssessmentState" s`,
-        ...(judged ? [sql`JOIN "Assessment" a ON a.id = s.id`] : []),
+        sql`"Suggestion" s`,
         ...(has("account", "owner")
           ? [
               sql`JOIN "FinancialAccount" fa ON fa.id = (${suggestionField("accountId")})::uuid AND ${notDeleted("fa")}`,
@@ -193,15 +188,15 @@ export async function statementSuggestionKeys(
   }>(sql`
     SELECT s.id, s.fingerprint, (${currentClean}) AS clean,
       ${suggestionField("recommended")} AS recommended,
-      a.judgment->>${"reviewReason"} AS "reviewReason",
+      s.judgment->>${"reviewReason"} AS "reviewReason",
       first_candidate.label->>${"same"} AS "labelSame",
       first_candidate.label->>${"confidence"} AS "labelConfidence",
-      a."createdAt", a.judgment->>'statementDate' AS "statementDate",
+      s."createdAt", s.judgment->>'statementDate' AS "statementDate",
       fa.shortcode AS "accountCode", account_owner.shortcode AS "ownerCode",
       r.merchant, r."rawDescription", ${suggestionField("amount")} AS amount,
-      a.judgment->${"create"}->>${"kind"} AS kind,
-      a.judgment->${"create"}->>${"kindSource"} AS "kindSource",
-      r."sourceCategory", a.judgment->>'providerStatus' AS "providerStatus",
+      s.judgment->${"create"}->>${"kind"} AS kind,
+      s.judgment->${"create"}->>${"kindSource"} AS "kindSource",
+      r."sourceCategory", s.judgment->>'providerStatus' AS "providerStatus",
       first_candidate.shortcode AS "candidateCode",
       ${matchedRulesOf(sql`s.data`)} AS "matchedRules",
       ${automaticApplicationRule(sql`s.id`)} AS "automaticRule"
@@ -237,7 +232,7 @@ export async function readStatementSuggestions(
     rawDescription: string;
     sourceCategory: string | null;
   }>(sql`
-    SELECT s.id, s.fingerprint, s.data, a.judgment, s.model, a."createdAt",
+    SELECT s.id, s.fingerprint, s.data, s.judgment, s.model, s."createdAt",
       fa.shortcode AS "accountCode", account_owner.shortcode AS "ownerCode",
       r.merchant, r."rawDescription", r."sourceCategory"
     ${FROM}
@@ -256,7 +251,7 @@ export async function readStatementSuggestions(
   }>(sql`
     WITH roots AS (
       SELECT s.id, s.data->>${"source"} AS source, s.data->>'chargeKey' AS "chargeKey"
-      FROM "AssessmentState" s WHERE s.id = ANY(${uuidArrayParam(page.rows.map((row) => row.id))})
+      FROM "Suggestion" s WHERE s.id = ANY(${uuidArrayParam(page.rows.map((row) => row.id))})
     ), matched AS (
       SELECT roots.id, cs.shortcode FROM roots
       JOIN ${chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (SELECT source, "chargeKey" FROM roots)`)} cs
@@ -407,7 +402,7 @@ export async function statementSuggestionStatusCounts(
     status: string;
     count: number;
   }>(sql`
-    SELECT s.status, count(*)::int AS count FROM "AssessmentState" s
+    SELECT s.status, count(*)::int AS count FROM "Suggestion" s
     WHERE s.family = ${assessmentFamily.enum.statement_transaction}
       ${runCode ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runCode})` : sql``}
     GROUP BY s.status

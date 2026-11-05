@@ -11,9 +11,14 @@ import { z } from "zod";
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { assessmentState } from "~/server/db/schema";
+import {
+  suggestionTable,
+} from "~/server/db/schema";
 import { publishAssessments } from "~/server/generic/assessment/repo/assessment";
-import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import {
+  pruneReplacedSuggestions,
+  transitionAssessmentStates,
+} from "~/server/generic/assessment/repo/assessment-state";
 import {
   assertWorkflowEffect,
   isWorkflowInterrupted,
@@ -179,8 +184,8 @@ export async function lockSuggestionSlots<
     SELECT s.id::text AS id, s.status, s.active, s.fingerprint, s.suppression, s.data,
       s.data->>'evidenceFingerprint' AS "evidenceFingerprint",
       to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",
-      a.producer, a.judgment, ARRAY[${fields}] AS slot
-    FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
+      s.producer, s.judgment, ARRAY[${fields}] AS slot
+    FROM "Suggestion" s
     WHERE s.family = ${family.family} AND (${fields}) IN (${sql.join(
       slots.map(
         (slot) =>
@@ -245,7 +250,7 @@ export async function retireSupersededSuggestions(
   if (!ids.length) return;
   await transitionAssessmentStates(
     tx,
-    inArray(assessmentState.id, [...ids]),
+    inArray(suggestionTable.id, [...ids]),
     (row) => ({
       active: false,
       ...(row.status === "pending" && { status: "superseded" }),
@@ -307,7 +312,7 @@ async function publishLocked<
       if (pending.length)
         await transitionAssessmentStates(
           tx,
-          inArray(assessmentState.id, pending),
+          inArray(suggestionTable.id, pending),
           { active: false, status: "superseded" },
           { kind: check.cause },
         );
@@ -329,7 +334,7 @@ async function publishLocked<
         await transitionAssessmentStates(
           tx,
           inArray(
-            assessmentState.id,
+            suggestionTable.id,
             unchanged.map((row) => row.id),
           ),
           { runId: producer.runId },
@@ -378,6 +383,10 @@ async function publishLocked<
     },
   );
   await family.afterPublish?.(tx, receipts, context);
+  await pruneReplacedSuggestions(
+    tx,
+    publications.flatMap(({ rows }) => rows.map((row) => row.id)),
+  );
   return outcomes;
 }
 
@@ -521,7 +530,7 @@ export async function publishSuggestionBatches<
 export type SuggestionLabelCursor = { createdAt: string; id: string };
 
 /** Family label predicates read the backlog as `AssessmentState s`. */
-const backlogState = alias(assessmentState, "s");
+const backlogState = alias(suggestionTable, "s");
 const backlogCreatedAt = sql<string>`to_char(${backlogState.createdAt}, 'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const backlogWhere = (
   family: Pick<SuggestionFamily<unknown>, "family" | "labelBacklog">,

@@ -12,11 +12,10 @@ import {
   aiEvaluationRequest,
   auditLog,
   expense as expenseTable,
-  feedback,
   run as runTable,
   vendor as vendorTable,
   product as productTable,
-  assessment,
+  suggestionTable,
 } from "~/server/db/schema";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
@@ -123,10 +122,10 @@ describe("persisted Suggestion sweeps", () => {
     const rows = await runSuggestions(ctx.db, started.id);
     expect(rows).toHaveLength(1);
     const histories = await getDb(ctx.db)
-      .select({ served: assessment.served })
-      .from(assessment)
+      .select({ served: suggestionTable.served })
+      .from(suggestionTable)
       .where(
-        sql`${assessment.id} IN (${sql.join(
+        sql`${suggestionTable.id} IN (${sql.join(
           rows.map((row) => sql`${row.id}::uuid`),
           sql`, `,
         )})`,

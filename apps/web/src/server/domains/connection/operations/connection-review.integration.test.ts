@@ -5,9 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
-  assessmentState,
+  suggestionTable,
   expense,
-  feedback,
   financialTransactionAllocation,
   product,
 } from "~/server/db/schema";
@@ -139,11 +138,11 @@ describe("connection application through generic Feedback", () => {
     // Neither the read nor the refused apply moves the review state.
     const [state] = await getDb(ctx.db)
       .select({
-        active: assessmentState.active,
-        status: assessmentState.status,
+        active: suggestionTable.active,
+        status: suggestionTable.status,
       })
-      .from(assessmentState)
-      .where(eq(assessmentState.id, proposal.review.assessmentId));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     expect(state).toEqual({ active: true, status: "pending" });
     expect(
       await getDb(ctx.db)

@@ -1758,6 +1758,7 @@ export const { definition, readSchemas } = defineEntityModel({
     ],
   },
   capabilities: {
+    suggestions: ["statement_transaction"],
     dataQuality: {
       // Rows the stored evaluator reads beyond its own row (ADR 0021).
       inputs: [
@@ -1837,7 +1838,7 @@ export const { definition, readSchemas } = defineEntityModel({
           path: [{ table: "Purchase", from: "id", to: "id" }],
         },
         {
-          table: "AssessmentState",
+          table: "Suggestion",
           match: { recordId: "id" },
           where: { entity: "purchase" },
         },

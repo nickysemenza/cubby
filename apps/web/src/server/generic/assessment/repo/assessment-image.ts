@@ -10,10 +10,8 @@ import {
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
 import {
-  assessmentState,
-  assessment,
+  suggestionTable,
   image,
-  feedback,
 } from "~/server/db/retained-tables";
 
 /** Shared direct/batch selection verifies automatic effect receipts once per requested page. */
@@ -25,20 +23,16 @@ export async function readImageDescriptionConfirmations(
   if (!ids.length) return [];
   const rows = await getDb(db)
     .select({
-      assessmentId: assessmentState.id,
+      assessmentId: suggestionTable.id,
       imageId: image.id,
       shortcode: image.shortcode,
       contentHash: image.sha256,
-      description: sql<string>`${assessmentState.confirmedValue}->>'value'`,
-      data: assessmentState.data,
-      confirmedAt:
-        sql<Date>`coalesce((SELECT max(f."createdAt") FROM ${feedback} f WHERE f."assessmentId"=${assessmentState.id} AND f.metadata @> ${JSON.stringify({ kind: "assessment_application" })}::jsonb AND f.receipt @> ${JSON.stringify({ applied: true })}::jsonb),(${assessmentState.data}->>'confirmedAt')::timestamp,${assessmentState.updatedAt})`.mapWith(
-          assessmentState.updatedAt,
-        ),
+      description: sql<string>`${suggestionTable.confirmedValue}->>'value'`,
+      data: suggestionTable.data,
+      confirmedAt: suggestionTable.updatedAt,
     })
-    .from(assessmentState)
-    .innerJoin(assessment, eq(assessment.id, assessmentState.id))
-    .innerJoin(image, eq(image.id, assessmentState.recordId))
+    .from(suggestionTable)
+    .innerJoin(image, eq(image.id, suggestionTable.recordId))
     .where(
       and(
         "imageIds" in scope
@@ -47,7 +41,7 @@ export async function readImageDescriptionConfirmations(
         currentImageDescriptionConfirmation(),
       ),
     )
-    .orderBy(desc(assessmentState.updatedAt));
+    .orderBy(desc(suggestionTable.updatedAt));
   const prepared = [
     ...new Map(rows.map((row) => [row.assessmentId, row])).values(),
   ].flatMap((row) => {

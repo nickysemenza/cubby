@@ -447,7 +447,7 @@ it.each(sizes)(
         .execute(sql`SELECT count(*)::int AS active,
         count(*) FILTER (WHERE data->>'needsLabel' = 'true' OR data->>'applicationPending' = 'true')::int AS unfinished,
         count(*) FILTER (WHERE data->'labelCheckpoint'->>'revision' = ${STATEMENT_LABEL_REVISION})::int AS checkpoints
-        FROM "AssessmentState" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active`);
+        FROM "Suggestion" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active`);
       expect(durable.rows[0]).toEqual({
         active: size,
         unfinished: 0,

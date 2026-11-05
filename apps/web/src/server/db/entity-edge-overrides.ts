@@ -93,7 +93,7 @@ import {
   planting,
   sourceTransactionRecord,
   transactionImportRecord,
-  assessmentState,
+  suggestionTable,
   task,
   vendorAccount,
 } from "./schema";
@@ -703,8 +703,8 @@ export const ENTITY_EDGE_OVERRIDES = {
       description: "The member scope for an idempotent imported source.",
       liveness: { kind: "must-target-live" },
     },
-    "AssessmentState.ledgerPartyId": {
-      column: assessmentState.ledgerPartyId,
+    "Suggestion.ledgerPartyId": {
+      column: suggestionTable.ledgerPartyId,
       role: "history",
       label: "import findings",
       description: "The member whose import requires review.",
@@ -1643,8 +1643,8 @@ export const ENTITY_EDGE_OVERRIDES = {
         "A device's Live Activity or notification push registration for this Run; deleting the Run removes it.",
       liveness: { kind: "must-target-live" },
     },
-    "AssessmentState.runId": {
-      column: assessmentState.runId,
+    "Suggestion.runId": {
+      column: suggestionTable.runId,
       role: "history",
       label: "Suggestions",
       description:

@@ -26,8 +26,7 @@ import { describe, expect, it } from "vitest";
 import { textHashRefSql } from "~/server/db/derived-source-ref";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
-  assessment,
-  assessmentState,
+  suggestionTable,
   assessmentReadPublication,
   assessmentReadDependency,
   financialTransactionAllocation,
@@ -254,10 +253,10 @@ describe("cross-family Suggestion list", () => {
   const refreshReadFacts = async () => {
     const ids = (
       await getDb(ctx.db)
-        .select({ id: assessmentState.id })
-        .from(assessmentState)
+        .select({ id: suggestionTable.id })
+        .from(suggestionTable)
         .where(
-          sql`${assessmentState.active} AND ${assessmentState.status} = ${"pending"}`,
+          sql`${suggestionTable.active} AND ${suggestionTable.status} = ${"pending"}`,
         )
     ).map(({ id }) => id);
     for (let start = 0; start < ids.length; start += 20)
@@ -393,9 +392,9 @@ describe("cross-family Suggestion list", () => {
       },
     ]);
     await getDb(ctx.db)
-      .update(assessmentState)
-      .set({ data: sql`${assessmentState.data} - 'liveInputFingerprint'` })
-      .where(eq(assessmentState.id, id));
+      .update(suggestionTable)
+      .set({ data: sql`${suggestionTable.data} - 'liveInputFingerprint'` })
+      .where(eq(suggestionTable.id, id));
     const unavailable = await prepareCanonicalAssessmentReadPublication(
       ctx.db,
       [id],
@@ -406,9 +405,9 @@ describe("cross-family Suggestion list", () => {
       unavailable.components.flatMap(({ prepared }) => prepared.results),
     ).toEqual(hidden.components.flatMap(({ prepared }) => prepared.results));
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set({ served: false })
-      .where(eq(assessment.id, id));
+      .where(eq(suggestionTable.id, id));
     const unserved = await prepareCanonicalAssessmentReadPublication(
       ctx.db,
       [id],
@@ -427,13 +426,13 @@ describe("cross-family Suggestion list", () => {
       },
     ]);
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set({ served: true })
-      .where(eq(assessment.id, id));
+      .where(eq(suggestionTable.id, id));
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ active: false, status: "superseded" })
-      .where(eq(assessmentState.id, id));
+      .where(eq(suggestionTable.id, id));
     const closed = await prepareCanonicalAssessmentReadPublication(
       ctx.db,
       [id],
@@ -528,12 +527,12 @@ describe("cross-family Suggestion list", () => {
     });
     const id = await fieldSuggestion(ctx, item, "categoryId", 0.9, new Date());
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({
         currentValue: current.output.id,
         suggestedValue: proposed.output.id,
       })
-      .where(eq(assessmentState.id, id));
+      .where(eq(suggestionTable.id, id));
     const memberships = (await readAssessmentReadMemberships(ctx.db, [id])).get(
       id,
     );
@@ -820,9 +819,9 @@ describe("cross-family Suggestion list", () => {
     );
 
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ status: "superseded", active: false })
-      .where(eq(assessmentState.id, proposal.assessmentId));
+      .where(eq(suggestionTable.id, proposal.assessmentId));
     await recordFeedback(ctx.db, {
       assessmentId: proposal.assessmentId,
       operationId: "synthetic.statement-history",
@@ -1302,7 +1301,7 @@ describe("cross-family Suggestion list", () => {
       declaration: {
         kind: "internalRecord",
         target: ASSESSMENT_READ_TARGET,
-        table: "Assessment",
+        table: "Suggestion",
         compute: ASSESSMENT_READ_TARGET,
         label: "Synthetic Assessment reviews",
         publishes: "ownTable",
@@ -1649,9 +1648,9 @@ describe("cross-family Suggestion list", () => {
     // The connection adapter uses immutable family authority even when State
     // differs; primary-record discovery must retain that adapter.
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ family: "image_description" })
-      .where(eq(assessmentState.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     const divergentInputs: AssessmentReadDependency[] = [];
     const divergent =
       (
@@ -1672,11 +1671,11 @@ describe("cross-family Suggestion list", () => {
       ]),
     );
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set({
-        evidence: sql`jsonb_set(${assessment.evidence}, '{candidate,target,entityId}', to_jsonb(${"  " + charge.output.id.toLowerCase() + "  "}::text))`,
+        evidence: sql`jsonb_set(${suggestionTable.evidence}, '{candidate,target,entityId}', to_jsonb(${"  " + charge.output.id.toLowerCase() + "  "}::text))`,
       })
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     const normalizedInputs: AssessmentReadDependency[] = [];
     await readAssessmentReadMemberships(
       ctx.db,
@@ -1688,11 +1687,11 @@ describe("cross-family Suggestion list", () => {
       sourceId: await resolveOrThrow(ctx.db, "expense", charge.output.id),
     });
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set({
-        evidence: sql`jsonb_set(${assessment.evidence}, '{candidate,target,entityId}', to_jsonb(${charge.output.id}::text))`,
+        evidence: sql`jsonb_set(${suggestionTable.evidence}, '{candidate,target,entityId}', to_jsonb(${charge.output.id}::text))`,
       })
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     expect(divergent.filter((row) => row.kind === "scope")).toEqual([
       expect.objectContaining({
         entity: "product",
@@ -1718,9 +1717,9 @@ describe("cross-family Suggestion list", () => {
       { id: charge.output.id, pending: 1 },
     ]);
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ family: "recommendation" })
-      .where(eq(assessmentState.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     const category = await createRepoEntity(ctx, "productCategory", {
       name: "Synthetic unrelated category",
     });
@@ -1763,9 +1762,9 @@ describe("cross-family Suggestion list", () => {
       ).items.map((row) => row.id),
     ).toEqual([proposal.review.assessmentId]);
     const [originalReference] = await getDb(ctx.db)
-      .select({ subject: assessment.subject, evidence: assessment.evidence })
-      .from(assessment)
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .select({ subject: suggestionTable.subject, evidence: suggestionTable.evidence })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     if (!originalReference) throw new Error("Synthetic recommendation missing");
 
     const retained = await createProductFixture(
@@ -1791,11 +1790,11 @@ describe("cross-family Suggestion list", () => {
       });
     for (const id of [retained.entityId, retained.id]) {
       await getDb(ctx.db)
-        .update(assessment)
+        .update(suggestionTable)
         .set({
-          evidence: sql`${assessment.evidence} || ${JSON.stringify({ records: [{ entity: "product", id, label: "Synthetic retained reference" }] })}::jsonb`,
+          evidence: sql`${suggestionTable.evidence} || ${JSON.stringify({ records: [{ entity: "product", id, label: "Synthetic retained reference" }] })}::jsonb`,
         })
-        .where(eq(assessment.id, proposal.review.assessmentId));
+        .where(eq(suggestionTable.id, proposal.review.assessmentId));
       // Connection endpoints stay authoritative even when retained records exist.
       expect((await touchesRetained())?.size).toBe(0);
       expect(
@@ -1809,18 +1808,18 @@ describe("cross-family Suggestion list", () => {
       ).toEqual([]);
     }
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set({
-        subject: sql`jsonb_set(${assessment.subject}, '{scope}', '"synthetic.retained-history"'::jsonb)`,
+        subject: sql`jsonb_set(${suggestionTable.subject}, '{scope}', '"synthetic.retained-history"'::jsonb)`,
       })
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     for (const id of [retained.entityId, retained.id]) {
       await getDb(ctx.db)
-        .update(assessment)
+        .update(suggestionTable)
         .set({
-          evidence: sql`${assessment.evidence} || ${JSON.stringify({ records: [{ entity: "product", id, label: "Synthetic retained reference" }] })}::jsonb`,
+          evidence: sql`${suggestionTable.evidence} || ${JSON.stringify({ records: [{ entity: "product", id, label: "Synthetic retained reference" }] })}::jsonb`,
         })
-        .where(eq(assessment.id, proposal.review.assessmentId));
+        .where(eq(suggestionTable.id, proposal.review.assessmentId));
       expect(await touchesRetained()).toEqual(
         new Set([proposal.review.assessmentId]),
       );
@@ -1842,9 +1841,9 @@ describe("cross-family Suggestion list", () => {
       );
     }
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set(originalReference)
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     const taskUuid = await resolveOrThrow(ctx.db, "task", task.output.id);
     const taskConnection = await publishEntityConnection(ctx.db, {
       relation: "task-subject-product",
@@ -1866,9 +1865,9 @@ describe("cross-family Suggestion list", () => {
 
     // Retained current state can differ from the immutable candidate source.
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ entity: "task", recordId: taskUuid })
-      .where(eq(assessmentState.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     const productUuid = await resolveOrThrow(ctx.db, "product", item.id);
     const expenseUuid = await resolveOrThrow(
       ctx.db,
@@ -1877,12 +1876,12 @@ describe("cross-family Suggestion list", () => {
     );
     // Model a retained unknown connection scope with a UUID-form source ref.
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set({
-        subject: sql`jsonb_set(${assessment.subject}, '{scope}', to_jsonb('connection.legacy-synthetic'::text))`,
-        evidence: sql`jsonb_set(${assessment.evidence}, '{candidate,source,entityId}', to_jsonb(${productUuid}::text))`,
+        subject: sql`jsonb_set(${suggestionTable.subject}, '{scope}', to_jsonb('connection.legacy-synthetic'::text))`,
+        evidence: sql`jsonb_set(${suggestionTable.evidence}, '{candidate,source,entityId}', to_jsonb(${productUuid}::text))`,
       })
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     const eligibility = {
       kind: "suggestions" as const,
       families: [assessmentFamily.enum.recommendation],
@@ -1901,9 +1900,9 @@ describe("cross-family Suggestion list", () => {
 
     // Automatic history still follows both original endpoints after retirement.
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ status: "superseded", active: false })
-      .where(eq(assessmentState.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     await recordFeedback(ctx.db, {
       assessmentId: proposal.review.assessmentId,
       operationId: "synthetic.connection-history",
@@ -1932,12 +1931,12 @@ describe("cross-family Suggestion list", () => {
 
     // A retained null scope uses explicit evidence records, not candidate refs.
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set({
-        subject: sql`jsonb_set(${assessment.subject}, '{scope}', 'null'::jsonb)`,
-        evidence: sql`jsonb_set(${assessment.evidence}, '{records}', ${JSON.stringify([{ entity: "product", id: item.id }])}::jsonb)`,
+        subject: sql`jsonb_set(${suggestionTable.subject}, '{scope}', 'null'::jsonb)`,
+        evidence: sql`jsonb_set(${suggestionTable.evidence}, '{records}', ${JSON.stringify([{ entity: "product", id: item.id }])}::jsonb)`,
       })
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     for (const record of records) {
       expect(
         (

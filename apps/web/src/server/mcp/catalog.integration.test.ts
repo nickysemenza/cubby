@@ -160,7 +160,7 @@ describe("MCP catalog", () => {
       (
         await getDb(ctx.db).execute(sql`
       SELECT (SELECT count(*) FROM "Run") AS runs, (SELECT count(*) FROM "Job") AS jobs,
-        (SELECT count(*) FROM "Assessment") AS assessments,
+        (SELECT count(*) FROM "Suggestion") AS assessments,
         (SELECT coalesce(sum(cost),0) FROM "Expense" WHERE "deletedAt" IS NULL) AS money
     `)
       ).rows;

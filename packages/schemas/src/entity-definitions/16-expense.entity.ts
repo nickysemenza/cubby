@@ -1885,6 +1885,7 @@ Rules:
     ],
   },
   capabilities: {
+    suggestions: ["statement_transaction"],
     images: {
       storage: false,
       displaySourceOverrides: [

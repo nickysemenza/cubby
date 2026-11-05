@@ -24,7 +24,7 @@ import {
   expense,
   financialTransactionAllocation,
   inventoryEntry,
-  assessmentState,
+  suggestionTable,
 } from "~/server/db/schema";
 import {
   expenseProjectRecommendationContext,
@@ -185,7 +185,7 @@ export const connectionReadEvidence = connectionAssessmentEvidence.omit({
 
 /** Lists validate the candidate; stored snapshots stay in PostgreSQL. */
 export const connectionReadEvidenceSql = (evidence: SQL) => sql<unknown>`CASE
-  WHEN ${evidence} ? 'basis' THEN jsonb_build_object(
+  WHEN ${evidence} ? 'candidate' THEN jsonb_build_object(
     'version', ${evidence}->'version', 'candidate', ${evidence}->'candidate'
   ) ELSE NULL END`;
 
@@ -196,12 +196,12 @@ export async function connectionBasisIsCurrent(
   basis: Awaited<ReturnType<typeof captureConnectionBasis>>,
 ) {
   const [match] = await getDb(db)
-    .select({ id: assessmentState.id })
-    .from(assessmentState)
+    .select({ id: suggestionTable.id })
+    .from(suggestionTable)
     .where(
       and(
-        eq(assessmentState.id, assessmentId),
-        sql`${assessmentState.data}->'connectionEvidence'->'basis' = ${JSON.stringify(basis)}::jsonb`,
+        eq(suggestionTable.id, assessmentId),
+        sql`${suggestionTable.data}->'connectionEvidence'->'basis' = ${JSON.stringify(basis)}::jsonb`,
       ),
     )
     .limit(1);

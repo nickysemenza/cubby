@@ -5,7 +5,10 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { assessmentState, image } from "~/server/db/schema";
+import {
+  suggestionTable,
+  image,
+} from "~/server/db/schema";
 import {
   transitionAssessmentState,
   transitionAssessmentStates,
@@ -16,7 +19,7 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 export async function writeImageDescriptionConfirmation(
   db: Database,
   state: Pick<
-    typeof assessmentState.$inferSelect,
+    typeof suggestionTable.$inferSelect,
     "id" | "recordId" | "fingerprint" | "data"
   >,
   description: string,
@@ -45,9 +48,9 @@ export async function writeImageDescriptionConfirmation(
   await transitionAssessmentStates(
     db,
     and(
-      eq(assessmentState.family, "image_description"),
-      eq(assessmentState.recordId, state.recordId),
-      sql`${assessmentState.id} <> ${state.id}`,
+      eq(suggestionTable.family, "image_description"),
+      eq(suggestionTable.recordId, state.recordId),
+      sql`${suggestionTable.id} <> ${state.id}`,
     ),
     { confirmedValue: null },
     cause,

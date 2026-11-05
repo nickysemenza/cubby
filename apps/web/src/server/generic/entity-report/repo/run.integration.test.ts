@@ -5,9 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
-  assessmentState,
+  suggestionTable,
   auditLog,
-  feedback,
   run as runTable,
   runOperation,
   runStep,
@@ -154,9 +153,9 @@ describe("Run detail reports", () => {
         receipt: { kind: "saved_field", recordId: vendor.id },
       });
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ status: "applied" })
-      .where(eq(assessmentState.id, first.id));
+      .where(eq(suggestionTable.id, first.id));
     await getDb(ctx.db)
       .insert(auditLog)
       .values({

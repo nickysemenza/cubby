@@ -14,10 +14,8 @@ import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
 import { getDb } from "~/server/db/helpers";
 import {
-  assessment,
-  assessmentState,
+  suggestionTable,
   entityAttachment,
-  feedback,
   inventoryEntry,
   product as productTable,
 } from "~/server/db/schema";
@@ -117,9 +115,9 @@ describe("product match queue", () => {
     // A first publication has no reverse dependency yet. The current attachment
     // path must still observe image work as relevant to this pending pair.
     const [pair] = await getDb(ctx.db)
-      .select({ id: assessmentState.id })
-      .from(assessmentState)
-      .where(eq(assessmentState.family, "product_pair"));
+      .select({ id: suggestionTable.id })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.family, "product_pair"));
     const declaration = storedDerivedDeclarations().find(
       (entry) => entry.target === ASSESSMENT_READ_TARGET,
     );
@@ -570,12 +568,12 @@ describe("product_enrichment.propose_product_match", () => {
     });
     const states = await getDb(ctx.db)
       .select({
-        active: assessmentState.active,
-        status: assessmentState.status,
+        active: suggestionTable.active,
+        status: suggestionTable.status,
       })
-      .from(assessmentState)
-      .where(eq(assessmentState.family, "product_pair"))
-      .orderBy(assessmentState.createdAt);
+      .from(suggestionTable)
+      .where(eq(suggestionTable.family, "product_pair"))
+      .orderBy(suggestionTable.createdAt);
     expect(states).toEqual([
       { active: false, status: "superseded" },
       { active: true, status: "pending" },
@@ -599,9 +597,9 @@ describe("product_enrichment.propose_product_match", () => {
       .set({ aliases: ["Synthetic enriched alias"] })
       .where(eq(productTable.id, vendorId!));
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ fingerprint: null })
-      .where(eq(assessmentState.id, pair.id));
+      .where(eq(suggestionTable.id, pair.id));
     const [row] = await listProductMatchRows(ctx.db, undefined, {
       reviewableOnly: true,
     });
@@ -757,15 +755,15 @@ describe("product match review surfaces", () => {
     });
     // PostgreSQL accepts braced UUID input, but the historical text join did not.
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set({
-        subject: sql`jsonb_set(${assessment.subject}, '{otherId}', to_jsonb('{' || (${assessment.subject}->>'otherId') || '}'))`,
+        subject: sql`jsonb_set(${suggestionTable.subject}, '{otherId}', to_jsonb('{' || (${suggestionTable.subject}->>'otherId') || '}'))`,
       })
-      .where(eq(assessment.id, weakPublication.id));
+      .where(eq(suggestionTable.id, weakPublication.id));
     const [primary] = await getDb(ctx.db)
-      .select({ recordId: assessmentState.recordId })
-      .from(assessmentState)
-      .where(eq(assessmentState.id, weakPublication.id));
+      .select({ recordId: suggestionTable.recordId })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, weakPublication.id));
     const primaryProduct = [anchor, weak!].find(
       (row) => row.entityId === primary?.recordId,
     );

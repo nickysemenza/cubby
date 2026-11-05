@@ -17,7 +17,9 @@ import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { runAfterCommit, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { assessmentState } from "~/server/db/schema";
+import {
+  suggestionTable,
+} from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   previewFinancialSpending,
@@ -54,7 +56,7 @@ const refused = (message: string) =>
 export async function applyStatementTransactionSuggestion(
   db: Database,
   context: EntityKernelContext,
-  state: typeof assessmentState.$inferSelect,
+  state: typeof suggestionTable.$inferSelect,
   input: {
     application: StatementTransactionApplication;
     corrected: boolean;

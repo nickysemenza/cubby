@@ -17,7 +17,9 @@ import {
   notDeleted,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { assessmentState } from "~/server/db/schema";
+import {
+  suggestionTable,
+} from "~/server/db/schema";
 import { saveSweepSuggestions } from "~/server/domains/run/repo/suggestion-sweep-state";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
@@ -186,11 +188,11 @@ export async function saveConnectionFieldGuard(
         await transitionAssessmentStates(
           db,
           and(
-            eq(assessmentState.runId, runId),
-            eq(assessmentState.recordId, publication.recordId),
-            eq(assessmentState.field, input.field),
-            eq(assessmentState.status, "pending"),
-            sql`${assessmentState.data}->>'reviewKey'=${reviewKey}`,
+            eq(suggestionTable.runId, runId),
+            eq(suggestionTable.recordId, publication.recordId),
+            eq(suggestionTable.field, input.field),
+            eq(suggestionTable.status, "pending"),
+            sql`${suggestionTable.data}->>'reviewKey'=${reviewKey}`,
           ),
           { data: { reviewKey, connectionEvidence: evidence } },
           { kind: "connection_evidence_attached" },
@@ -208,11 +210,11 @@ export async function assertConnectionFieldFresh(
   const [state] = await getDb(db)
     .select({
       connectionEvidence: connectionReadEvidenceSql(
-        sql`${assessmentState.data}->'connectionEvidence'`,
+        sql`${suggestionTable.data}->'connectionEvidence'`,
       ),
     })
-    .from(assessmentState)
-    .where(eq(assessmentState.id, assessmentId))
+    .from(suggestionTable)
+    .where(eq(suggestionTable.id, assessmentId))
     .limit(1);
   if (!state) throw new Error("Field Assessment not found");
   const data = connectionReadEvidence.safeParse(state.connectionEvidence);
@@ -221,9 +223,9 @@ export async function assertConnectionFieldFresh(
   if (!(await connectionBasisIsCurrent(db, assessmentId, current)))
     throw new Error("Connection field evidence changed before acceptance");
   const [fresh] = await getDb(db)
-    .select({ active: assessmentState.active, status: assessmentState.status })
-    .from(assessmentState)
-    .where(eq(assessmentState.id, assessmentId))
+    .select({ active: suggestionTable.active, status: suggestionTable.status })
+    .from(suggestionTable)
+    .where(eq(suggestionTable.id, assessmentId))
     .limit(1)
     .for("update");
   if (!fresh?.active || fresh.status !== "pending")

@@ -36,9 +36,7 @@ import * as cfEnv from "~/server/cf-env";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import * as databaseHelpers from "~/server/db/helpers";
 import {
-  assessmentState,
-  assessment,
-  feedback,
+  suggestionTable,
   run,
   runStep,
   automaticRule,
@@ -317,7 +315,7 @@ const accept = async (
 const stateOf = async (ctx: Ctx, assessmentId: string) =>
   (
     await getDb(ctx.db).execute<{ status: string; active: boolean }>(
-      sql`SELECT status, active FROM "AssessmentState" WHERE id = ${assessmentId}::uuid`,
+      sql`SELECT status, active FROM "Suggestion" WHERE id = ${assessmentId}::uuid`,
     )
   ).rows[0];
 
@@ -359,11 +357,11 @@ async function rejectStatementPublication(
     END;
     $$
   `);
-  await client.execute(sql`CREATE TRIGGER synthetic_statement_publication_failure BEFORE INSERT ON "Assessment"
+  await client.execute(sql`CREATE TRIGGER synthetic_statement_publication_failure BEFORE INSERT ON "Suggestion"
     FOR EACH ROW EXECUTE FUNCTION synthetic_statement_publication_failure()`);
   return async () => {
     await client.execute(
-      sql`DROP TRIGGER synthetic_statement_publication_failure ON "Assessment"`,
+      sql`DROP TRIGGER synthetic_statement_publication_failure ON "Suggestion"`,
     );
     await client.execute(
       sql`DROP FUNCTION synthetic_statement_publication_failure()`,
@@ -582,14 +580,14 @@ describe("statement Transaction suggestions", () => {
       const createdAt = `2026-01-01T00:00:0${order}.000001`;
       // Retained positions are historical state that ordinary writers preserve.
       await getDb(ctx.db)
-        .update(assessmentState)
+        .update(suggestionTable)
         .set({
           createdAt: new Date(`2026-01-01T00:00:0${order}Z`),
           ...(entry.applicationPending && {
-            data: sql`${assessmentState.data} || ${JSON.stringify({ applicationOrder: { createdAt, id: entry.cursorId } })}::jsonb`,
+            data: sql`${suggestionTable.data} || ${JSON.stringify({ applicationOrder: { createdAt, id: entry.cursorId } })}::jsonb`,
           }),
         })
-        .where(eq(assessmentState.id, entry.id));
+        .where(eq(suggestionTable.id, entry.id));
     }
     const scope = {
       accountIds: [
@@ -702,13 +700,13 @@ describe("statement Transaction suggestions", () => {
       const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
       if (!source)
         throw new Error("Synthetic receipt completion source missing");
-      let before: typeof assessmentState.$inferSelect | undefined;
+      let before: typeof suggestionTable.$inferSelect | undefined;
       const move = async (assessmentId: string) => {
         if (before) return;
         [before] = await getDb(ctx.db)
           .select()
-          .from(assessmentState)
-          .where(eq(assessmentState.id, assessmentId));
+          .from(suggestionTable)
+          .where(eq(suggestionTable.id, assessmentId));
         await updateSourceTransactionRecords(
           ctx.db,
           {
@@ -766,8 +764,8 @@ describe("statement Transaction suggestions", () => {
         );
         const [after] = await getDb(ctx.db)
           .select()
-          .from(assessmentState)
-          .where(eq(assessmentState.id, before.id));
+          .from(suggestionTable)
+          .where(eq(suggestionTable.id, before.id));
         expect(after?.data).toEqual(before.data);
         expect(after?.createdAt).toEqual(before.createdAt);
         expect(
@@ -812,7 +810,7 @@ describe("statement Transaction suggestions", () => {
     await generate(ctx);
     // The supported publications exist; only their historical cursor positions
     // are arranged to put a long excluded suffix behind 32 admitted rows.
-    await getDb(ctx.db).execute(sql`UPDATE "AssessmentState" SET "createdAt" =
+    await getDb(ctx.db).execute(sql`UPDATE "Suggestion" SET "createdAt" =
       '2026-01-01'::timestamp + ((data->>'amount')::int - 100) * interval '1 second'
       WHERE family = ${assessmentFamily.enum.statement_transaction}`);
     const scope = {
@@ -946,18 +944,18 @@ describe("statement Transaction suggestions", () => {
         expect(result).toMatchObject({ labelled: 0, completed: 0, failed: [] });
         const [retained] = await getDb(ctx.db)
           .select()
-          .from(assessmentState)
-          .where(eq(assessmentState.id, before.id));
+          .from(suggestionTable)
+          .where(eq(suggestionTable.id, before.id));
         expect(
           z.record(z.string(), z.json()).parse(retained?.data)
             .labelCheckpoint ?? null,
         ).toBeNull();
         expect(
           await getDb(ctx.db)
-            .select({ id: assessment.id })
-            .from(assessment)
+            .select({ id: suggestionTable.id })
+            .from(suggestionTable)
             .where(
-              sql`${assessment.producer}->>${"kind"} = ${assessmentProducer.shape.kind.enum.model}`,
+              sql`${suggestionTable.producer}->>${"kind"} = ${assessmentProducer.shape.kind.enum.model}`,
             ),
         ).toEqual([]);
       } finally {
@@ -997,8 +995,8 @@ describe("statement Transaction suggestions", () => {
       throw new Error("Synthetic publication receipt missing");
     const before = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.id, receipt.receipt.assessmentId));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, receipt.receipt.assessmentId));
     await updateSourceTransactionRecords(
       ctx.db,
       {
@@ -1025,8 +1023,8 @@ describe("statement Transaction suggestions", () => {
     expect(
       await getDb(ctx.db)
         .select()
-        .from(assessmentState)
-        .where(eq(assessmentState.id, receipt.receipt.assessmentId)),
+        .from(suggestionTable)
+        .where(eq(suggestionTable.id, receipt.receipt.assessmentId)),
     ).toEqual(before);
   });
 
@@ -1984,9 +1982,9 @@ describe("statement Transaction suggestions", () => {
     });
     // Recreate only the stale projection a missed after-commit retirement left.
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ active: true, status: "pending" })
-      .where(eq(assessmentState.id, pending.assessmentId));
+      .where(eq(suggestionTable.id, pending.assessmentId));
     const charge = {
       source: observation.source,
       chargeKey: observation.chargeKey,
@@ -2014,9 +2012,9 @@ describe("statement Transaction suggestions", () => {
     });
     expect(
       await getDb(ctx.db)
-        .select({ active: assessmentState.active })
-        .from(assessmentState)
-        .where(eq(assessmentState.id, pending.assessmentId)),
+        .select({ active: suggestionTable.active })
+        .from(suggestionTable)
+        .where(eq(suggestionTable.id, pending.assessmentId)),
     ).toEqual([{ active: true }]);
     expect(
       await retryStatementGenerationRefs(ctx.db, {
@@ -2027,11 +2025,11 @@ describe("statement Transaction suggestions", () => {
     expect(
       await getDb(ctx.db)
         .select({
-          active: assessmentState.active,
-          status: assessmentState.status,
+          active: suggestionTable.active,
+          status: suggestionTable.status,
         })
-        .from(assessmentState)
-        .where(eq(assessmentState.id, pending.assessmentId)),
+        .from(suggestionTable)
+        .where(eq(suggestionTable.id, pending.assessmentId)),
     ).toEqual([{ active: false, status: "superseded" }]);
     expect(
       await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
@@ -2874,12 +2872,12 @@ describe("statement Transaction suggestions", () => {
       },
     );
     const [publishedCheckpoint] = await getDb(ctx.db)
-      .select({ data: assessmentState.data })
-      .from(assessmentState)
+      .select({ data: suggestionTable.data })
+      .from(suggestionTable)
       .where(
         and(
-          eq(assessmentState.family, "statement_transaction"),
-          eq(assessmentState.active, true),
+          eq(suggestionTable.family, "statement_transaction"),
+          eq(suggestionTable.active, true),
         ),
       );
     expect(publishedCheckpoint?.data).toMatchObject({
@@ -3504,8 +3502,8 @@ describe("statement Transaction suggestions", () => {
           );
           const [retained] = await getDb(ctx.db)
             .select()
-            .from(assessmentState)
-            .where(eq(assessmentState.id, old.assessmentId));
+            .from(suggestionTable)
+            .where(eq(suggestionTable.id, old.assessmentId));
           if (retained?.active)
             throw new Error("Expected the old suffix receipt to be retired");
         }
@@ -3586,7 +3584,7 @@ describe("statement Transaction suggestions", () => {
     await databaseHelpers.withTransactionDatabase(ctx.db, async (tx) => {
       await transitionAssessmentStates(
         tx,
-        inArray(assessmentState.id, ids),
+        inArray(suggestionTable.id, ids),
         (row) => ({
           data: {
             ...z.record(z.string(), z.json()).parse(row.data),
@@ -3610,9 +3608,9 @@ describe("statement Transaction suggestions", () => {
     const read = () =>
       getDb(ctx.db)
         .select()
-        .from(assessmentState)
-        .where(inArray(assessmentState.id, ids))
-        .orderBy(assessmentState.id);
+        .from(suggestionTable)
+        .where(inArray(suggestionTable.id, ids))
+        .orderBy(suggestionTable.id);
     const before = await read();
     const eventsBefore = await getDb(ctx.db)
       .select()
@@ -3702,8 +3700,8 @@ describe("statement Transaction suggestions", () => {
       ];
       const before = await getDb(ctx.db)
         .select()
-        .from(assessmentState)
-        .where(eq(assessmentState.id, targets[0]!.assessmentId));
+        .from(suggestionTable)
+        .where(eq(suggestionTable.id, targets[0]!.assessmentId));
       const beforeEvents = await getDb(ctx.db)
         .select()
         .from(feedback)
@@ -3748,8 +3746,8 @@ describe("statement Transaction suggestions", () => {
         expect(
           await getDb(ctx.db)
             .select()
-            .from(assessmentState)
-            .where(eq(assessmentState.id, targets[0]!.assessmentId)),
+            .from(suggestionTable)
+            .where(eq(suggestionTable.id, targets[0]!.assessmentId)),
         ).toEqual(before);
         expect(
           await getDb(ctx.db).select().from(feedback).orderBy(feedback.id),
@@ -4464,9 +4462,9 @@ describe("statement Transaction suggestions", () => {
     });
     // Freeze historical cursor order so the real overflow precedes fitting work.
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ createdAt: new Date("2026-01-01T00:00:00Z") })
-      .where(eq(assessmentState.id, overflowing.id));
+      .where(eq(suggestionTable.id, overflowing.id));
     const fits = vi.spyOn(decisionModel, "decisionChoiceFitsContext");
     const port = vi.fn(answering({ kind: "other", counterparty: "business" }));
     try {
@@ -4770,12 +4768,12 @@ describe("statement Transaction suggestions", () => {
         ...(index === 7 && { reviewReason: "Synthetic withdrawn review" }),
       };
       await getDb(ctx.db)
-        .update(assessmentState)
+        .update(suggestionTable)
         .set({
           createdAt: new Date(Date.UTC(2026, 0, 1) + seconds * 1000),
-          data: sql`${assessmentState.data} || ${JSON.stringify(extra)}::jsonb`,
+          data: sql`${suggestionTable.data} || ${JSON.stringify(extra)}::jsonb`,
         })
-        .where(eq(assessmentState.id, target(index).id));
+        .where(eq(suggestionTable.id, target(index).id));
     }
     // A withdrawn head is absent unless its retained correction review allows it.
     for (const index of [6, 7])
@@ -4783,7 +4781,7 @@ describe("statement Transaction suggestions", () => {
         .update(sourceTransactionRecord)
         .set({ withdrawnAt: new Date() })
         .where(
-          sql`${sourceTransactionRecord.source}='monarch' AND ${sourceTransactionRecord.externalId}=(SELECT data->>'headRef' FROM "AssessmentState" WHERE id=${target(index).id}::uuid)`,
+          sql`${sourceTransactionRecord.source}='monarch' AND ${sourceTransactionRecord.externalId}=(SELECT data->>'headRef' FROM "Suggestion" WHERE id=${target(index).id}::uuid)`,
         );
     const durableRun = await ensureRun(ctx.db, ctx.actor, {
       purpose: "sweep",
@@ -4823,7 +4821,7 @@ describe("statement Transaction suggestions", () => {
           transactionImport,
           transactionImportRecord,
           assessment,
-          assessmentState,
+          suggestionTable,
           feedback,
           financialTransaction,
           financialTransactionAllocation,
@@ -5342,7 +5340,7 @@ describe("statement Transaction suggestions", () => {
     // Reproduce an older successful publication's clean selection operands.
     // The action must recheck current advice even when bulk selects this row.
     await getDb(ctx.db).execute(
-      sql`UPDATE "AssessmentState" SET data = jsonb_set(data, '{clean}', 'true') WHERE id = ${payment!.assessmentId}::uuid`,
+      sql`UPDATE "Suggestion" SET data = jsonb_set(data, '{clean}', 'true') WHERE id = ${payment!.assessmentId}::uuid`,
     );
     await getDb(ctx.db).execute(sql`
       UPDATE "AssessmentReadPublication"

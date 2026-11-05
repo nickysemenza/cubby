@@ -35,7 +35,7 @@ import {
 import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   run as runTable,
-  assessmentState as suggestionTable,
+  suggestionTable,
 } from "~/server/db/schema";
 import {
   captureConnectionBasis,
@@ -58,7 +58,6 @@ import {
   fieldInputFingerprint,
   fieldInputFingerprintIfLive,
   readFieldInputs,
-  type FieldInputRead,
   fenceFieldInputsAtCommit,
 } from "~/server/generic/assessment/repo/field-input-fence";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
@@ -112,7 +111,7 @@ function reviewableRow(
   ];
 }
 /** Only served Assessments are member review candidates. */
-const reviewableSuggestionSql = sql`EXISTS (SELECT 1 FROM "Assessment" prediction WHERE prediction.id=${suggestionTable.id} AND prediction.served)`;
+const reviewableSuggestionSql = sql`EXISTS (SELECT 1 FROM "Suggestion" prediction WHERE prediction.id=${suggestionTable.id} AND prediction.served)`;
 
 /** Pending review queue, or reviewed history by `status` (the label set a
  * decision eval replays). Every filter composes, including a list page's
@@ -186,15 +185,13 @@ type StoredFieldRow = {
 async function presentFieldRows(
   db: Database,
   rows: StoredFieldRow[],
-  observeInputs?: (id: string, inputs: FieldInputRead) => void,
 ) {
   const ordinary = rows.filter(({ suggestion }) => {
     if (suggestion.status !== "pending") return false;
     const data = z.record(z.string(), z.json()).parse(suggestion.data);
     return (
       !("connectionEvidence" in data) &&
-      (observeInputs !== undefined ||
-        typeof data.liveInputFingerprint === "string")
+      typeof data.liveInputFingerprint === "string"
     );
   });
   const current = await readFieldInputs(
@@ -205,10 +202,6 @@ async function presentFieldRows(
       field: suggestion.field,
     })),
   );
-  for (const [index, row] of ordinary.entries()) {
-    const read = current[index];
-    if (read) observeInputs?.(row.suggestion.id, read);
-  }
   const fingerprints = new Map(
     ordinary.map(({ suggestion }, index) => [
       suggestion.id,
@@ -296,7 +289,6 @@ async function presentFieldRows(
 export async function readFieldSuggestions(
   db: Database,
   ids: readonly string[],
-  observeInputs?: (id: string, inputs: FieldInputRead) => void,
 ) {
   if (!ids.length) return [];
   const rows = await getDb(db)
@@ -310,7 +302,7 @@ export async function readFieldSuggestions(
         reviewableSuggestionSql,
       ),
     );
-  return presentFieldRows(db, rows, observeInputs);
+  return presentFieldRows(db, rows);
 }
 
 /** The list facts of every reviewable field suggestion for a roster, entity or Run. */
@@ -323,12 +315,7 @@ export async function fieldSuggestionKeys(
     runId?: string;
     assessmentIds?: readonly string[];
   },
-  observeInputs?: (id: string, inputs: FieldInputRead) => void,
 ) {
-  if (observeInputs && scope.assessmentIds === undefined)
-    throw new Error(
-      "Field publication observations require scoped Assessment ids",
-    );
   const conditions: (SQL | undefined)[] = [
     eq(suggestionTable.family, "field"),
     eq(suggestionTable.active, true),
@@ -362,15 +349,6 @@ export async function fieldSuggestionKeys(
     .from(suggestionTable)
     .leftJoin(runTable, eq(runTable.id, suggestionTable.runId))
     .where(and(...conditions));
-  if (observeInputs && scope.status === "pending") {
-    // Automatic receipts hide these keys before hydration, but their retained
-    // publication still needs source observations. Other keys hydrate once.
-    await readFieldSuggestions(
-      db,
-      rows.filter((row) => row.automaticRule !== null).map((row) => row.id),
-      observeInputs,
-    );
-  }
   return rows;
 }
 

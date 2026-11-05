@@ -18,7 +18,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
-  assessment,
+  suggestionTable,
   email,
   emailClassificationObservation,
   emailPurchaseDecision,
@@ -152,9 +152,9 @@ export async function resolveMailDecisionHandle(
   if (finding)
     throw new Error("run_finding Assessments are not reviewed as Suggestions");
   const [retained] = await client
-    .select({ subject: assessment.subject })
-    .from(assessment)
-    .where(and(eq(assessment.id, id), eq(assessment.family, "email_relevance")))
+    .select({ subject: suggestionTable.subject })
+    .from(suggestionTable)
+    .where(and(eq(suggestionTable.id, id), eq(suggestionTable.family, "email_relevance")))
     .limit(1);
   const predictionId = assessmentSubjects.email_relevance.safeParse(
     retained?.subject,

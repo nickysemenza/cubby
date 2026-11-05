@@ -14,9 +14,8 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
-  assessmentState,
+  suggestionTable,
   aiAnalysis,
-  feedback,
   photoGroupSourceEvidence,
   image,
   imageProcessingJob,
@@ -924,11 +923,11 @@ describe("photo group proposals", () => {
     });
     const states = await getDb(ctx.db)
       .select({
-        status: assessmentState.status,
-        active: assessmentState.active,
+        status: suggestionTable.status,
+        active: suggestionTable.active,
       })
-      .from(assessmentState)
-      .where(eq(assessmentState.recordId, original.entityId));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.recordId, original.entityId));
     expect(states).toContainEqual({ status: "applied", active: false });
     const replay = await approvePhotoGroupProposals(
       ctx.db,
@@ -1071,11 +1070,11 @@ describe("photo group proposals", () => {
       expect(suggestion?.field).toBe("brandId");
       const [pending] = await getDb(ctx.db)
         .select({
-          active: assessmentState.active,
-          status: assessmentState.status,
+          active: suggestionTable.active,
+          status: suggestionTable.status,
         })
-        .from(assessmentState)
-        .where(eq(assessmentState.id, suggestion!.id));
+        .from(suggestionTable)
+        .where(eq(suggestionTable.id, suggestion!.id));
       expect(pending).toEqual({ active: false, status: "pending" });
       await proposePhotoGroups(
         ctx.db,
@@ -1184,9 +1183,9 @@ describe("photo group proposals", () => {
         newSuggestion,
       );
       const [oldReview] = await getDb(ctx.db)
-        .select({ status: assessmentState.status })
-        .from(assessmentState)
-        .where(eq(assessmentState.id, suggestion!.id));
+        .select({ status: suggestionTable.status })
+        .from(suggestionTable)
+        .where(eq(suggestionTable.id, suggestion!.id));
       expect(oldReview?.status).toBe("rejected");
     },
   );
@@ -1341,9 +1340,9 @@ describe("photo group proposals", () => {
           .where(eq(vendor.name, name)),
       ).toHaveLength(kind === "new" ? 1 : 0);
       const [receipt] = await getDb(ctx.db)
-        .select({ status: assessmentState.status })
-        .from(assessmentState)
-        .where(eq(assessmentState.id, refs![0]!.id));
+        .select({ status: suggestionTable.status })
+        .from(suggestionTable)
+        .where(eq(suggestionTable.id, refs![0]!.id));
       expect(receipt?.status).toBe("applied");
       const [photoReceipt] = await getDb(ctx.db)
         .select({ receipt: photoRunImage.commitReceipt })

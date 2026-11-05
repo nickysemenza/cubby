@@ -28,8 +28,7 @@ import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
   aiEvaluationRequest,
-  assessment,
-  assessmentState,
+  suggestionTable,
   entityExternalId,
   importSourceClaim,
   importSourceOrder,
@@ -181,9 +180,9 @@ describe("stored Product identity pairs", () => {
           conflict: false,
         },
       }));
-      await getDb(ctx.db).insert(assessment).values(predictions);
+      await getDb(ctx.db).insert(suggestionTable).values(predictions);
       await getDb(ctx.db)
-        .insert(assessmentState)
+        .insert(suggestionTable)
         .values(
           predictions.map((prediction, index) => ({
             id: prediction.id,
@@ -506,7 +505,7 @@ describe("stored Product identity pairs", () => {
       .where(eq(product.id, ids[1]!));
     expect((await getProductMatchQueue(ctx.db, {})).items).toEqual([]);
     expect(await readInputs()).toEqual(dependencies);
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(1);
   });
   // Claim loading must share issuer reads across accepted lines, while a later
   // operation must observe current registry ownership instead of a stale cache.
@@ -797,7 +796,7 @@ describe("stored Product identity pairs", () => {
         );
       }),
     ).rejects.toThrow(/obsolete/);
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(0);
+    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(0);
   });
   it("publishes exact rule evidence through an activated catalog pass while the model is unavailable", async () => {
     const { ids } = await acceptedIdentityPair([
@@ -994,8 +993,8 @@ describe("stored Product identity pairs", () => {
     await publishProductIdentity(ctx.db, result);
     const [pair] = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.family, "product_pair"));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.family, "product_pair"));
     expect(pair?.data).toEqual(
       expect.objectContaining({ actionable: true, conflict: false }),
     );
@@ -1018,14 +1017,14 @@ describe("stored Product identity pairs", () => {
       },
     });
     await publishProductIdentity(ctx.db, opposite);
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(1);
     const [reviewed] = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.id, pair!.id));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, pair!.id));
     expect(reviewed).toMatchObject({ status: "rejected", suppression: null });
     expect(await listProductMatchRows(ctx.db)).toEqual([]);
-    const originalProducer = (await getDb(ctx.db).select().from(assessment))[0]!
+    const originalProducer = (await getDb(ctx.db).select().from(suggestionTable))[0]!
       .producer;
     expect(originalProducer?.runId).toBe(runId);
     const revised = opposite.pairs[0]!;
@@ -1040,9 +1039,9 @@ describe("stored Product identity pairs", () => {
         },
       ],
     });
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(2);
+    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(2);
     expect(
-      (await getDb(ctx.db).select().from(assessmentState)).filter(
+      (await getDb(ctx.db).select().from(suggestionTable)).filter(
         (row) => row.active,
       ),
     ).toEqual([
@@ -1067,7 +1066,7 @@ describe("stored Product identity pairs", () => {
       ctx.db,
       await evaluateProductIdentity(ctx.db, bId, secondRunId, unavailable),
     );
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(3);
+    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(3);
     await expect(
       mergeReviewedProductPair(kernelCtx(ctx), {
         keepId: a.id,
@@ -1079,7 +1078,7 @@ describe("stored Product identity pairs", () => {
     expect(
       (await productIdentitySnapshot(ctx.db, bId))?.fingerprint,
     ).toBeTruthy();
-    expect((await getDb(ctx.db).select().from(assessment))[0]?.subject).toEqual(
+    expect((await getDb(ctx.db).select().from(suggestionTable))[0]?.subject).toEqual(
       expect.objectContaining({
         recordId: [aId, bId].sort()[0],
         otherId: [aId, bId].sort()[1],
@@ -1236,8 +1235,8 @@ describe("stored Product identity pairs", () => {
     ).toEqual([]);
     const [state] = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.family, "product_pair"));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.family, "product_pair"));
     expect(state).toMatchObject({ status: "resolved", suppression: null });
     await getDb(ctx.db)
       .update(product)

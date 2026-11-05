@@ -5,7 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 import * as queryTelemetry from "~/server/db/db-query-telemetry";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { updateManyAndReturn } from "~/server/db/helpers/crud";
-import { assessment, assessmentState, feedback } from "~/server/db/schema";
+import {
+  suggestionTable,
+} from "~/server/db/schema";
 import {
   kernelCtx,
   productFixture,
@@ -31,16 +33,16 @@ const liveRows = async (ctx: Ctx, ids: readonly string[]) =>
   (
     await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(inArray(assessmentState.id, [...ids]))
-      .orderBy(assessmentState.id)
+      .from(suggestionTable)
+      .where(inArray(suggestionTable.id, [...ids]))
+      .orderBy(suggestionTable.id)
   ).map(({ updatedAt: _updatedAt, ...row }) => row);
 
 /** Drop the current rows and replay them from the ledger alone. */
 async function rebuiltRows(ctx: Ctx, ids: readonly string[]) {
   await getDb(ctx.db)
-    .delete(assessmentState)
-    .where(inArray(assessmentState.id, [...ids]));
+    .delete(suggestionTable)
+    .where(inArray(suggestionTable.id, [...ids]));
   await rebuildAssessmentStates(ctx.db, ids);
   return liveRows(ctx, ids);
 }
@@ -155,8 +157,8 @@ describe("AssessmentState rebuild", () => {
     expect(
       await getDb(ctx.db)
         .select()
-        .from(assessment)
-        .where(eq(assessment.publicationKey, fresh.publicationKey)),
+        .from(suggestionTable)
+        .where(eq(suggestionTable.publicationKey, fresh.publicationKey)),
     ).toEqual([]);
     expect(await liveRows(ctx, [existing.id])).toEqual(before);
   });
@@ -181,9 +183,9 @@ describe("AssessmentState rebuild", () => {
     expect(
       await getDb(ctx.db)
         .select()
-        .from(assessment)
+        .from(suggestionTable)
         .where(
-          inArray(assessment.publicationKey, [
+          inArray(suggestionTable.publicationKey, [
             duplicate.publicationKey,
             other.publicationKey,
           ]),
@@ -211,9 +213,9 @@ describe("AssessmentState rebuild", () => {
     expect(
       await getDb(ctx.db)
         .select()
-        .from(assessment)
+        .from(suggestionTable)
         .where(
-          inArray(assessment.publicationKey, [
+          inArray(suggestionTable.publicationKey, [
             valid.publicationKey,
             invalid.publicationKey,
           ]),
@@ -244,13 +246,13 @@ describe("AssessmentState rebuild", () => {
     );
     // A publication retry cannot repair a missing projection implicitly.
     await getDb(ctx.db)
-      .delete(assessmentState)
-      .where(eq(assessmentState.id, absent!.id));
+      .delete(suggestionTable)
+      .where(eq(suggestionTable.id, absent!.id));
     const ids = [reviewed!.id, absent!.id];
     const before = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(inArray(assessmentState.id, ids));
+      .from(suggestionTable)
+      .where(inArray(suggestionTable.id, ids));
     const fresh = recommendation(productId, "bulk-with-replays");
     const rows = await publishAssessments(ctx.db, [
       {
@@ -268,8 +270,8 @@ describe("AssessmentState rebuild", () => {
     expect(
       await getDb(ctx.db)
         .select()
-        .from(assessmentState)
-        .where(inArray(assessmentState.id, ids)),
+        .from(suggestionTable)
+        .where(inArray(suggestionTable.id, ids)),
     ).toEqual(before);
     expect(
       await liveRows(
@@ -377,14 +379,14 @@ describe("AssessmentState rebuild", () => {
       .spyOn(queryTelemetry, "databaseStatementForTrace")
       .mockImplementation((head) => {
         const text = typeof head === "string" ? head : head.text;
-        if (text.startsWith('update "AssessmentState"'))
+        if (text.startsWith('update "Suggestion"'))
           returning.push(text.split(" returning ")[1] ?? "");
         return statementForTrace(head);
       });
     await withTransaction(ctx.db, async (tx) => {
       const changed = await transitionAssessmentStates(
         tx,
-        inArray(assessmentState.id, ids),
+        inArray(suggestionTable.id, ids),
         (row) => ({
           data: { retained: row.data, completed: row.id },
           suggestedValue: null,
@@ -426,7 +428,7 @@ describe("AssessmentState rebuild", () => {
       expect(
         await transitionAssessmentStates(
           tx,
-          inArray(assessmentState.id, ids),
+          inArray(suggestionTable.id, ids),
           (row) => ({ data: row.data }),
           { kind: "synthetic_noop" },
         ),
@@ -442,7 +444,7 @@ describe("AssessmentState rebuild", () => {
       withTransaction(ctx.db, async (tx) => {
         await transitionAssessmentStates(
           tx,
-          inArray(assessmentState.id, ids),
+          inArray(suggestionTable.id, ids),
           (row) => ({ data: { abandoned: row.id } }),
           { kind: "synthetic_abandoned" },
         );
@@ -468,7 +470,7 @@ describe("AssessmentState rebuild", () => {
       { data: { retained: "synthetic evidence" }, fingerprint: "before" },
     );
     const changed = await withTransaction(ctx.db, (tx) =>
-      updateManyAndReturn(tx, assessmentState, {
+      updateManyAndReturn(tx, suggestionTable, {
         key: "id",
         returning: [
           "id",
@@ -509,7 +511,7 @@ describe("AssessmentState rebuild", () => {
     // Shape of a migrated row: no creation snapshot, and one legacy snapshot
     // carrying a column the schema no longer has.
     const [legacy] = await getDb(ctx.db)
-      .insert(assessment)
+      .insert(suggestionTable)
       .values(recommendation(productId, "legacy"))
       .returning();
     const before = {
@@ -521,7 +523,7 @@ describe("AssessmentState rebuild", () => {
       suggestedValue: { candidateKey: "legacy" },
       status: "resolved",
     };
-    await getDb(ctx.db).insert(assessmentState).values(before);
+    await getDb(ctx.db).insert(suggestionTable).values(before);
     const [current] = await liveRows(ctx, [legacy!.id]);
     const {
       id: _id,
@@ -581,9 +583,9 @@ describe("AssessmentState rebuild", () => {
     // History stays: the Assessment row is untouched.
     expect(
       await getDb(ctx.db)
-        .select({ id: assessment.id })
-        .from(assessment)
-        .where(eq(assessment.id, published.id)),
+        .select({ id: suggestionTable.id })
+        .from(suggestionTable)
+        .where(eq(suggestionTable.id, published.id)),
     ).toEqual([{ id: published.id }]);
   });
 });

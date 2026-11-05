@@ -12,7 +12,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { assessment, type assessmentState } from "~/server/db/schema";
+import { suggestionTable } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 
 import {
@@ -30,16 +30,16 @@ const projection = z.object({
 
 export async function loadStatementApplication(
   db: Database,
-  state: typeof assessmentState.$inferSelect,
+  state: typeof suggestionTable.$inferSelect,
 ) {
   if (!state.active || state.status !== "pending")
     throw refuseStatementApplication(
       "This Transaction suggestion is no longer pending.",
     );
   const [prediction] = await getDb(db)
-    .select({ subject: assessment.subject, judgment: assessment.judgment })
-    .from(assessment)
-    .where(eq(assessment.id, state.id))
+    .select({ subject: suggestionTable.subject, judgment: suggestionTable.judgment })
+    .from(suggestionTable)
+    .where(eq(suggestionTable.id, state.id))
     .limit(1);
   const published = statementTransactionJudgment.parse(prediction?.judgment);
   // A published review hold blocks preview and apply even if its draft can be planned.

@@ -24,7 +24,7 @@ import {
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import {
-  assessmentState,
+  suggestionTable,
   automaticRule,
   expense,
   spendingCategory,
@@ -115,7 +115,7 @@ const stateOf = async (ctx: Ctx, assessmentId: string) =>
       status: string;
       data: { matchedRules?: string[] };
     }>(
-      sql`SELECT status, data FROM "AssessmentState" WHERE id = ${assessmentId}::uuid`,
+      sql`SELECT status, data FROM "Suggestion" WHERE id = ${assessmentId}::uuid`,
     )
   ).rows[0]!;
 
@@ -232,7 +232,7 @@ async function expectCurrentPending(ctx: Ctx, count: number) {
   }>(
     sql`SELECT data->>${"source"} AS source, data->>${"chargeKey"} AS "chargeKey",
         data->>${"evidenceFingerprint"} AS "evidenceFingerprint"
-      FROM "AssessmentState"
+      FROM "Suggestion"
       WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
         AND status = ${suggestionStatus.enum.pending} AND data ? ${"chargeKey"}`,
   );
@@ -271,17 +271,17 @@ const chargeSuggestion = async (ctx: Ctx) =>
   (
     await getDb(ctx.db)
       .select({
-        id: assessmentState.id,
-        fingerprint: assessmentState.fingerprint,
+        id: suggestionTable.id,
+        fingerprint: suggestionTable.fingerprint,
       })
-      .from(assessmentState)
+      .from(suggestionTable)
       .where(
         and(
-          eq(assessmentState.family, "statement_transaction"),
-          eq(assessmentState.active, true),
+          eq(suggestionTable.family, "statement_transaction"),
+          eq(suggestionTable.active, true),
         ),
       )
-      .orderBy(desc(assessmentState.createdAt))
+      .orderBy(desc(suggestionTable.createdAt))
       .limit(1)
   )[0]!;
 
@@ -941,8 +941,8 @@ describe("automatic field assignments", () => {
       );
       const [state] = await getDb(ctx.db)
         .select()
-        .from(assessmentState)
-        .where(eq(assessmentState.runId, sweep.id));
+        .from(suggestionTable)
+        .where(eq(suggestionTable.runId, sweep.id));
       expect(state?.status).toBe(confidence >= 0.85 ? "applied" : "pending");
       expect(await productCategoryId(ctx.db, item.id)).toBe(
         confidence >= 0.85 ? taxonomyId("food") : null,
@@ -965,8 +965,8 @@ describe("automatic field assignments", () => {
       );
       const [state] = await getDb(ctx.db)
         .select()
-        .from(assessmentState)
-        .where(eq(assessmentState.runId, sweep.id));
+        .from(suggestionTable)
+        .where(eq(suggestionTable.runId, sweep.id));
       expect(state?.status).toBe("applied");
       if (!state) throw new Error("Missing automatic application");
       expect(
@@ -1095,7 +1095,7 @@ describe("automatic field assignments", () => {
       kind: "addition",
     });
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({
         confidence: 0.97,
         provenance: {
@@ -1108,7 +1108,7 @@ describe("automatic field assignments", () => {
           model: "typesafe/jev",
         },
       })
-      .where(eq(assessmentState.id, pending.id));
+      .where(eq(suggestionTable.id, pending.id));
     expect(
       await canAutomaticallyFillField(ctx.db, kernelCtx(ctx), pending.id),
     ).toBe(false);
@@ -1153,7 +1153,7 @@ describe("automatic field assignments", () => {
       kind: "addition",
     });
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({
         confidence: 0.97,
         provenance: {
@@ -1166,7 +1166,7 @@ describe("automatic field assignments", () => {
           model: "typesafe/jev",
         },
       })
-      .where(eq(assessmentState.id, pending.id));
+      .where(eq(suggestionTable.id, pending.id));
     expect(
       await canAutomaticallyFillField(ctx.db, kernelCtx(ctx), pending.id),
     ).toBe(false);
@@ -1206,8 +1206,8 @@ describe("automatic field assignments", () => {
     );
     const [pending] = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.runId, sweep.id));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.runId, sweep.id));
     expect(pending).toMatchObject({ kind: "correction", status: "pending" });
     expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("tools"));
     expect(await feedbackFor(ctx, pending!.id)).toEqual([]);

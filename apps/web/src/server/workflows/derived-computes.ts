@@ -2,19 +2,13 @@
  * Every stored derived value's compute adapter, by the `compute` id its
  * declaration names (ADR 0021). The drain looks adapters up here only.
  */
-import { ASSESSMENT_READ_TARGET } from "@cubby/schemas/assessment-read-publication";
 import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import {
   type SearchableEntity,
   searchableEntities,
 } from "@cubby/schemas/search";
-import type { SQL } from "drizzle-orm";
 
 import { USDAClient } from "~/server/clients/usda";
-import {
-  fanoutTarget,
-  storedDerivedDeclarations,
-} from "~/server/db/derived-declarations";
 import { emailDerivedComputes } from "~/server/domains/email/repo/derived";
 import { expenseDerivedComputes } from "~/server/domains/expense/repo/derived";
 import { inventoryDerivedComputes } from "~/server/domains/inventory/repo/derived";
@@ -30,22 +24,12 @@ import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
 import { shipmentDerivedComputes } from "~/server/domains/shipment/repo/event-summary";
 import { requestUsdaRelease } from "~/server/domains/usda-release/service/client";
 import { computeWorkDiagnosticFacts } from "~/server/domains/work/service/work-diagnostics";
-import {
-  assessmentReadSourceSelection,
-  expiredAssessmentPublicationClockSql,
-} from "~/server/generic/assessment/repo/read-publication";
-import {
-  prepareCanonicalAssessmentReadPublication,
-  assessmentReadPublicationBlocked,
-  publishPreparedAssessmentReadPublication,
-} from "~/server/generic/assessment/service/read-publication";
 import { qualityDerivedComputes } from "~/server/generic/data-quality/repo/derived";
 import {
   type DerivedAdapter,
   type DerivedComputes,
   derivedSink,
 } from "~/server/generic/derived/repo/compute";
-import { derivedFanoutSourceScope } from "~/server/generic/derived/repo/drain";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import {
   prepareSearchDocuments,
@@ -125,71 +109,7 @@ const searchComputes: Record<string, DerivedAdapter> = Object.fromEntries(
   searchableEntities.map((entity) => [`search.${entity}`, searchSink(entity)]),
 );
 
-const assessmentDeclaration = storedDerivedDeclarations().find(
-  (entry) => entry.target === ASSESSMENT_READ_TARGET,
-);
-if (!assessmentDeclaration || assessmentDeclaration.kind !== "internalRecord")
-  throw new Error("Assessment publication declaration is missing");
-const assessmentSelections = Object.fromEntries(
-  assessmentDeclaration.inputs.flatMap((input) => {
-    const key = input.selection?.key;
-    return key
-      ? [
-          [
-            key,
-            (refs: SQL) => assessmentReadSourceSelection(key, refs),
-          ] as const,
-        ]
-      : [];
-  }),
-);
-
-// These selectors depend only on the component's Assessment identities and
-// current authority, whose changes are independently captured. Their input
-// refs name that Assessment, its stable pair endpoints, or are intentionally
-// irrelevant to a global policy/roster. A moved path or opaque capture has
-// no proven inverse: retain its conservative fence instead of checking only
-// old dependencies.
-const assessmentScopedSources = new Set(
-  assessmentDeclaration.inputs.flatMap((input, index) =>
-    input.selection &&
-    !input.selection.path?.length &&
-    [
-      "assessment",
-      "pairPolicy",
-      "transferPolicy",
-      "settlementPolicy",
-      "projectRoster",
-      "projectTools",
-      "productQuality",
-    ].includes(input.selection.key)
-      ? [fanoutTarget(assessmentDeclaration.target, index)]
-      : [],
-  ),
-);
-
 export const derivedComputes: DerivedComputes = {
-  [ASSESSMENT_READ_TARGET]: derivedSink({
-    notificationCategories: ["suggestions", "workQueue"],
-    fanoutSelections: assessmentSelections,
-    clockExpiredRefs: expiredAssessmentPublicationClockSql,
-    prepare: (db, ids) =>
-      prepareCanonicalAssessmentReadPublication(
-        db,
-        ids,
-        async (_snapshot, frame) =>
-          derivedFanoutSourceScope({
-            declaration: assessmentDeclaration,
-            selections: assessmentSelections,
-            dependentIds: frame.assessmentIds,
-            sourceRefs: new Map(),
-            sourceTargets: assessmentScopedSources,
-          }),
-      ),
-    preparationFailures: (prepared) => prepared.failures,
-    publicationBlocked: assessmentReadPublicationBlocked,
-    publish: publishPreparedAssessmentReadPublication,
-  }),
   ...productDerivedComputes,
   "product.readFacts": computeProductReadFacts,
   "product.food": (db, ids) =>

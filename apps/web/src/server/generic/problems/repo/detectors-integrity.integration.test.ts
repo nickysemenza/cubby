@@ -36,7 +36,7 @@ import {
   mealRecipePortion,
   orderMail,
   orderMailAttachment,
-  assessmentState as suggestion,
+  suggestionTable as suggestion,
   photoGroupProposal,
   photoGroupSourceEvidence,
   runPushRegistration,

@@ -31,8 +31,7 @@ import * as cfEnv from "~/server/cf-env";
 import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
 import { unwrapDb } from "~/server/db/helpers";
 import {
-  assessmentState,
-  feedback,
+  suggestionTable,
   financialAccount,
   financialTransaction,
   ledgerParty,
@@ -270,8 +269,7 @@ describe("transfer-pair suggestions", () => {
       judgment: unknown;
       fingerprint: string;
     }>(sql`
-      SELECT s.id AS "assessmentId", a.judgment, s.fingerprint FROM "AssessmentState" s
-      JOIN "Assessment" a ON a.id = s.id
+      SELECT s.id AS "assessmentId", s.judgment, s.fingerprint FROM "Suggestion" s
       WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.active
         AND s.status = ${suggestionStatus.enum.pending}
     `);
@@ -780,7 +778,7 @@ describe("transfer-pair suggestions", () => {
     `);
     await unwrapDb(ctx.db).execute(sql`
       CREATE TRIGGER synthetic_transfer_publication_failure
-      BEFORE INSERT ON "AssessmentState"
+      BEFORE INSERT ON "Suggestion"
       FOR EACH ROW EXECUTE FUNCTION synthetic_transfer_publication_failure()
     `);
     try {
@@ -798,7 +796,7 @@ describe("transfer-pair suggestions", () => {
       ).toEqual([90]);
     } finally {
       await unwrapDb(ctx.db).execute(
-        sql`DROP TRIGGER synthetic_transfer_publication_failure ON "AssessmentState"`,
+        sql`DROP TRIGGER synthetic_transfer_publication_failure ON "Suggestion"`,
       );
       await unwrapDb(ctx.db).execute(
         sql`DROP FUNCTION synthetic_transfer_publication_failure()`,
@@ -901,7 +899,7 @@ describe("transfer-pair suggestions", () => {
     `);
     await unwrapDb(ctx.db).execute(sql`
       CREATE TRIGGER synthetic_transfer_refresh_failure
-      BEFORE INSERT OR UPDATE ON "AssessmentState"
+      BEFORE INSERT OR UPDATE ON "Suggestion"
       FOR EACH ROW EXECUTE FUNCTION synthetic_transfer_refresh_failure()
     `);
     try {
@@ -919,7 +917,7 @@ describe("transfer-pair suggestions", () => {
       );
     } finally {
       await unwrapDb(ctx.db).execute(
-        sql`DROP TRIGGER synthetic_transfer_refresh_failure ON "AssessmentState"`,
+        sql`DROP TRIGGER synthetic_transfer_refresh_failure ON "Suggestion"`,
       );
       await unwrapDb(ctx.db).execute(
         sql`DROP FUNCTION synthetic_transfer_refresh_failure()`,
@@ -1275,9 +1273,9 @@ describe("transfer-pair suggestions", () => {
     });
     expect(check!.judgment.blockers).toContain("weak_movement");
     const transferIds = await unwrapDb(ctx.db)
-      .select({ id: assessmentState.id })
-      .from(assessmentState)
-      .where(eq(assessmentState.family, assessmentFamily.enum.transfer_pair));
+      .select({ id: suggestionTable.id })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.family, assessmentFamily.enum.transfer_pair));
     const observed: AssessmentReadDependency[] = [];
     await readAssessmentReadMemberships(
       ctx.db,
@@ -1809,8 +1807,8 @@ describe("transfer-pair suggestions", () => {
       });
       const stateIds = (
         await unwrapDb(ctx.db)
-          .select({ id: assessmentState.id })
-          .from(assessmentState)
+          .select({ id: suggestionTable.id })
+          .from(suggestionTable)
       ).map((state) => state.id);
       const suggestion = (
         await readStatementSuggestions(ctx.db, stateIds)

@@ -71,7 +71,9 @@ import { afterResponse } from "~/server/cf-env";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { assessment, assessmentState, feedback } from "~/server/db/schema";
+import {
+  suggestionTable,
+} from "~/server/db/schema";
 import { applyFinanceCategorySuggestion } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import {
   aiCallRunInput,
@@ -102,6 +104,7 @@ import {
   type BulkWorkflowSummary,
   workflow,
 } from "~/server/workflows/runtime";
+import { memberRejectedSql } from "~/server/generic/assessment/repo/suggestion-decisions";
 
 const log = createLogger("precomputeEnrichmentProposals");
 const suggestionLog = createLogger("suggestFields");
@@ -333,18 +336,18 @@ export const inferFieldAssessments = async (
     );
     const publicationKey = `field-inference:${input.entity}:${recordId}:${field}:${fingerprint}`;
     const publishedFields = {
-      id: assessment.id,
-      evidence: sql<unknown>`CASE WHEN ${assessment.evidence} ? 'proposal'
-        THEN jsonb_build_object('proposal', ${assessment.evidence}->'proposal')
+      id: suggestionTable.id,
+      evidence: sql<unknown>`CASE WHEN ${suggestionTable.evidence} ? 'proposal'
+        THEN jsonb_build_object('proposal', ${suggestionTable.evidence}->'proposal')
         ELSE '{}'::jsonb END`,
-      judgment: sql<unknown>`jsonb_build_object('outcome', ${assessment.judgment}->'outcome')`,
+      judgment: sql<unknown>`jsonb_build_object('outcome', ${suggestionTable.judgment}->'outcome')`,
     };
     // A repeated question reuses its published assessment without opening the
     // locking transaction; the transaction below still rechecks under its lock.
     const [published] = await getDb(context.db)
       .select(publishedFields)
-      .from(assessment)
-      .where(eq(assessment.publicationKey, publicationKey))
+      .from(suggestionTable)
+      .where(eq(suggestionTable.publicationKey, publicationKey))
       .limit(1);
     const prediction =
       published ??
@@ -354,8 +357,8 @@ export const inferFieldAssessments = async (
         );
         const [existing] = await getDb(transactionDb)
           .select(publishedFields)
-          .from(assessment)
-          .where(eq(assessment.publicationKey, publicationKey))
+          .from(suggestionTable)
+          .where(eq(suggestionTable.publicationKey, publicationKey))
           .limit(1);
         if (existing) return existing;
         return publishAssessment(
@@ -417,12 +420,12 @@ export const inferFieldAssessments = async (
     const withholding = [
       exists(
         client
-          .select({ id: assessmentState.id })
-          .from(assessmentState)
+          .select({ id: suggestionTable.id })
+          .from(suggestionTable)
           .where(
             and(
-              eq(assessmentState.id, prediction.id),
-              eq(assessmentState.status, "rejected"),
+              eq(suggestionTable.id, prediction.id),
+              eq(suggestionTable.status, "rejected"),
             ),
           ),
       ),
@@ -430,13 +433,13 @@ export const inferFieldAssessments = async (
         ? [
             exists(
               client
-                .select({ id: assessmentState.id })
-                .from(assessmentState)
+                .select({ id: suggestionTable.id })
+                .from(suggestionTable)
                 .where(
                   and(
-                    eq(assessmentState.family, "field"),
-                    eq(assessmentState.status, "rejected"),
-                    sql`${assessmentState.data}->>'reviewKey' = ${reviewKey}`,
+                    eq(suggestionTable.family, "field"),
+                    eq(suggestionTable.status, "rejected"),
+                    sql`${suggestionTable.data}->>'reviewKey' = ${reviewKey}`,
                   ),
                 ),
             ),
@@ -444,17 +447,11 @@ export const inferFieldAssessments = async (
         : []),
       ...(recordId === null
         ? [
-            exists(
-              client
-                .select({ id: feedback.id })
-                .from(feedback)
-                .where(
-                  and(
-                    eq(feedback.assessmentId, prediction.id),
-                    eq(feedback.authority, "member"),
-                    eq(feedback.verdict, "wrong"),
-                  ),
-                ),
+            and(
+              eq(suggestionTable.id, prediction.id),
+              memberRejectedSql(sql`${suggestionTable.decisions}`, {
+                dismissed: false,
+              }),
             ),
           ]
         : []),

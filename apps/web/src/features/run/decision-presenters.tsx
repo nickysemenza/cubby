@@ -209,7 +209,7 @@ const genericPresenter = (family: AssessmentFamily): DecisionPresenter => ({
     },
     {
       id: "id",
-      header: "Assessment",
+      header: "Suggestion",
       value: (row) => row.id,
       cell: (row) => <span className="font-mono">{shortId(row.id)}</span>,
     },
@@ -649,7 +649,7 @@ const transferPairPresenter: DecisionPresenter = {
     },
     {
       id: "id",
-      header: "Assessment",
+      header: "Suggestion",
       value: (row) => row.id,
       className: "font-mono text-muted-foreground",
       cell: (row) => shortId(row.id),

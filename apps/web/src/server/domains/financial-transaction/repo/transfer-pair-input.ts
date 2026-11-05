@@ -48,7 +48,7 @@ export function transferPairSourceAssessmentIdsSql(
   if (kind === "policy")
     // Accounts/cash destinations and removed booking or settlement claims can
     // admit legs absent from every retained judgment. Keep that scope complete.
-    return sql`SELECT s.id FROM "AssessmentState" s WHERE ${pending}`;
+    return sql`SELECT s.id FROM "Suggestion" s WHERE ${pending}`;
   const amounts =
     kind === "financialTransaction"
       ? sql`SELECT ${transferPoolAmountSql(sql`changed.amount`)} AS cents
@@ -59,7 +59,7 @@ export function transferPairSourceAssessmentIdsSql(
   // Historical invalid state stays unavailable; it must not abort unrelated
   // source expansion before the canonical producer can report its failure.
   const numericAmount = sql`CASE WHEN pg_input_is_valid(${amount}, ${"numeric"}) THEN (${amount})::numeric END`;
-  return sql`SELECT s.id FROM "AssessmentState" s WHERE ${pending}
+  return sql`SELECT s.id FROM "Suggestion" s WHERE ${pending}
     AND ${transferPoolAmountSql(numericAmount)} IN (${amounts})`;
 }
 

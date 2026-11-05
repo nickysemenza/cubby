@@ -236,7 +236,7 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "the native install that registered for pushes",
   },
-  "AssessmentState.runId": {
+  "Suggestion.runId": {
     classification: "metadata",
     reason: "records the Sweep or suggestion Run that computed a Suggestion",
   },
@@ -337,7 +337,7 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     reason:
       "an original line binding supplies retained variant evidence through Product and Purchase research context; the child row is not a navigable entity",
   },
-  "AssessmentState.ledgerPartyId": {
+  "Suggestion.ledgerPartyId": {
     classification: "metadata",
     reason: "scopes an operational review finding to a household member",
   },

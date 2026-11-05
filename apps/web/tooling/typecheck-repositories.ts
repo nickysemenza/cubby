@@ -33,7 +33,6 @@ export const repositoryOwners = [
   "src/server/domains/purchase/repo/purchase-evidence-policy.ts",
   "src/server/generic/data-quality/repo/presentation.ts",
   "src/server/generic/assessment/repo/automatic-fields.ts",
-  "src/server/generic/assessment/repo/read-publication.ts",
   "src/server/generic/assessment/repo/pending-admission.ts",
   "src/server/domains/transaction-import/repo/statement-charge.ts",
   "src/server/domains/financial-transaction/repo/transfer-pair-input.ts",

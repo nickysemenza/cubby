@@ -1,13 +1,11 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { mergeProductMatchInput } from "@cubby/schemas/recommendations";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
-  assessment,
-  assessmentState,
-  feedback,
+  suggestionTable,
   product,
 } from "~/server/db/schema";
 import {
@@ -32,6 +30,7 @@ import {
 } from "~/server/generic/assessment/repo/assessment";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { decisionForOperation } from "~/server/generic/assessment/repo/suggestion-decisions";
 
 export async function mergeReviewedProductPair(
   context: EntityKernelContext,
@@ -40,12 +39,12 @@ export async function mergeReviewedProductPair(
   const operationId = `merge:${input.keepId}:${input.mergeId}:${input.expectedFingerprint}`;
   const [prediction] = await getDb(context.db)
     .select({
-      id: assessment.id,
-      family: assessment.family,
-      producer: assessment.producer,
+      id: suggestionTable.id,
+      family: suggestionTable.family,
+      producer: suggestionTable.producer,
     })
-    .from(assessment)
-    .where(eq(assessment.id, input.assessmentId))
+    .from(suggestionTable)
+    .where(eq(suggestionTable.id, input.assessmentId))
     .limit(1);
   if (!prediction || prediction.family !== "product_pair")
     throw new Error("Product pair Assessment not found");
@@ -58,16 +57,15 @@ export async function mergeReviewedProductPair(
     actorUserId: context.actorContext.userId,
   });
   const previousReceipt = async (db: EntityKernelContext["db"]) => {
-    const [receipt] = await getDb(db)
-      .select()
-      .from(feedback)
-      .where(
-        and(
-          eq(feedback.assessmentId, input.assessmentId),
-          eq(feedback.operationId, `application:${operationId}`),
-        ),
-      )
-      .limit(1);
+    const [owner] = await getDb(db)
+      .select({ decisions: suggestionTable.decisions })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, input.assessmentId));
+    const receipt = decisionForOperation(
+      input.assessmentId,
+      owner?.decisions ?? [],
+      `application:${operationId}`,
+    );
     if (!receipt) return false;
     assertApplicationReceipt(receipt, command, "product_merge");
     z.object({
@@ -94,8 +92,8 @@ export async function mergeReviewedProductPair(
       .for("update");
     const [state] = await getDb(transactionDb)
       .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.id, prediction.id))
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, prediction.id))
       .for("update")
       .limit(1);
     if (await previousReceipt(transactionDb)) return { ok: true as const };

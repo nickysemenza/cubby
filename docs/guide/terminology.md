@@ -732,9 +732,10 @@ record: the field is required, not expected, unknown, or not allowed.
 _Avoid_: field rule, expectation (when meaning the whole policy)
 
 **Assessment**:
-A computed judgment about a record, field or relationship, based on specified
-evidence. It may support a Suggestion or a Problem; it is not a confirmed
-household fact.
+The retired name for a stored computed judgment. Code and wire fields such as
+`assessmentId` still use it for a Suggestion's id. The old `Assessment`,
+`AssessmentState` and `Feedback` rows stay in the `archive` schema.
+_Avoid_: for anything new; say Suggestion
 
 **Connection candidate**:
 A proposed, specifically named relationship between existing records, with
@@ -748,9 +749,10 @@ acquired a Product. Repeat purchases of the same exact variant are separate
 acquisition events; item cost and quantity can remain unknown.
 
 **Feedback**:
-The household's review of an Assessment, including its verdict and any
-corrected value, reason or supporting evidence. Feedback supplies evidence for
-improving detection and evaluating future judgments.
+The household's review of a Suggestion, including its verdict and any corrected
+value, reason or supporting evidence. Each one is kept as a decision on the
+Suggestion, beside automatic application receipts, and a regenerated candidate
+never overwrites it.
 
 **Dismissal**:
 A preference to stop presenting a candidate, without asserting whether the
@@ -771,7 +773,9 @@ duplicates.
 **Suggestion**:
 A classification, field value or record change that has been computed but not
 yet accepted by the household. It changes data only when accepted, or when an
-explicit Automatic rule authorizes its application.
+explicit Automatic rule authorizes its application. One table holds every
+family. A replaced Suggestion nobody decided on is deleted rather than kept as
+history, and an explicit correction that was never applied stays visible in Work.
 _Avoid_: proposal, Jev suggestion, recommendation
 
 **Automatic decision**:
@@ -801,8 +805,8 @@ that pair. Clean, cash-leg and overlap policy lives in
 _Avoid_: transfer match, auto-pair
 
 **Suggestion family**:
-One kind of Suggestion with its own Assessment family, evidence and review
-apply, such as Transaction suggestions or Transfer pair suggestions. A family
+One kind of Suggestion with its own evidence and review apply, declared on the
+entities it touches, such as Transaction suggestions or Transfer pair suggestions. A family
 a Sweep publishes declares how its candidates map to slots, fingerprints and
 the checks it runs before publication.
 _Avoid_: suggestion type, generator

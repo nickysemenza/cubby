@@ -9,7 +9,10 @@ import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { assessmentState, financialTransaction } from "~/server/db/schema";
+import {
+  suggestionTable,
+  financialTransaction,
+} from "~/server/db/schema";
 import { previewFinancialSpending } from "~/server/domains/financial-transaction/repo/financial-spending";
 
 import {
@@ -26,10 +29,10 @@ export async function previewStatementSuggestion(
   raw: unknown,
 ): Promise<StatementSuggestionPreviewOut> {
   const input = statementSuggestionPreviewInput.parse(raw);
-  const state = await getDb(db).query.assessmentState.findFirst({
+  const state = await getDb(db).query.suggestionTable.findFirst({
     where: and(
-      eq(assessmentState.id, input.assessmentId),
-      eq(assessmentState.family, "statement_transaction"),
+      eq(suggestionTable.id, input.assessmentId),
+      eq(suggestionTable.family, "statement_transaction"),
     ),
   });
   if (!state)

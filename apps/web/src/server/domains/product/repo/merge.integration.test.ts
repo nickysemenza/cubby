@@ -8,8 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
-  assessment,
-  assessmentState,
+  suggestionTable,
   entityAttachment,
   entityExternalId,
   inventoryEntry,
@@ -530,9 +529,9 @@ describe("mergeProducts", () => {
 
       const beforeHistory = await getDb(ctx.db)
         .select()
-        .from(assessment)
-        .where(eq(assessment.family, "product_pair"))
-        .orderBy(asc(assessment.id));
+        .from(suggestionTable)
+        .where(eq(suggestionTable.family, "product_pair"))
+        .orderBy(asc(suggestionTable.id));
       await mergeProducts(
         ctx.db,
         { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
@@ -541,9 +540,9 @@ describe("mergeProducts", () => {
 
       const history = await getDb(ctx.db)
         .select()
-        .from(assessment)
-        .where(eq(assessment.family, "product_pair"))
-        .orderBy(asc(assessment.id));
+        .from(suggestionTable)
+        .where(eq(suggestionTable.family, "product_pair"))
+        .orderBy(asc(suggestionTable.id));
       expect(history).toHaveLength(4);
       expect(history).toEqual(beforeHistory);
       expect(
@@ -555,8 +554,8 @@ describe("mergeProducts", () => {
       ).toBe(true);
       const states = await getDb(ctx.db)
         .select()
-        .from(assessmentState)
-        .where(eq(assessmentState.family, "product_pair"));
+        .from(suggestionTable)
+        .where(eq(suggestionTable.family, "product_pair"));
       const [pairA, pairB] = [keeper.id, third.id].sort();
       expect(states.find((row) => row.id === thirdPair.id)).toMatchObject({
         recordId: pairA,

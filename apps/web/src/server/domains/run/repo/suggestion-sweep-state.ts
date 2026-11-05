@@ -11,7 +11,7 @@ import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   run as runTable,
-  assessmentState as suggestionTable,
+  suggestionTable,
 } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";

@@ -18,9 +18,8 @@ import { decisionCatalogRows } from "~/server/ai/decision-catalog";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { getDb } from "~/server/db/helpers";
 import {
-  assessment,
+  suggestionTable,
   expense as expenseTable,
-  assessmentState as suggestionTable,
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
@@ -269,8 +268,8 @@ describe("Suggestion review", () => {
       if (!id) throw new Error("Synthetic live assessment missing");
       const [livePrediction] = await getDb(ctx.db)
         .select()
-        .from(assessment)
-        .where(eq(assessment.id, id));
+        .from(suggestionTable)
+        .where(eq(suggestionTable.id, id));
       const [liveState] = await getDb(ctx.db)
         .select()
         .from(suggestionTable)
@@ -279,7 +278,7 @@ describe("Suggestion review", () => {
         throw new Error("Synthetic live history missing");
       const siblingId = crypto.randomUUID();
       await getDb(ctx.db)
-        .insert(assessment)
+        .insert(suggestionTable)
         .values({
           ...livePrediction,
           id: siblingId,

@@ -1,6 +1,6 @@
 # ADR 0016: Shared Assessments and Feedback
 
-Status: Accepted design; implementation and migration are under review.
+Status: Superseded by [ADR 0025](0025-radical-simplification-of-background-work.md) decision 5 for storage, history and publication. The sections below record what was replaced; financial and identity constraints stay with their domain owners.
 
 Field Suggestions, Email review and accuracy grading, image-description
 corrections, Product matches and generic recommendation Dismissals capture
@@ -804,3 +804,19 @@ receipts and the conflict hold on later model answers. A member correction now
 applies only to its own record, and no later answer is withheld because a similar
 question was corrected elsewhere. Existing receipts stay in the ledger, and
 completed `assessment.correction` Jobs stay readable.
+
+## One Suggestion table
+
+`0075_suggestion_table` replaces Assessment, AssessmentState and Feedback with one
+`Suggestion` table and moves the old tables to the `archive` schema. A row keeps its
+old id. Member and automatic decisions move to `Suggestion.decisions`; projection
+events are not carried, and transitions no longer record any. A replaced row with
+no decision is deleted, except in the field family, whose rows queued evaluations
+and settled answers name by id. Connection evidence keeps only its candidate.
+Review still hashes the current basis against the stored fingerprint.
+
+Rows with no member input may be dropped. Evidence for this migration: of 52,983
+connection recommendations ever published, none was applied and one drew a member
+verdict; 5 of 200 sampled `transaction-purchase` and 3 of 200 `transaction-refund`
+rows passed the freshness check. Those two relations (19,410 rows) do not carry; a
+changed input re-admits discovery. Other pending connections carry, slimmed.

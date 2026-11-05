@@ -9,7 +9,7 @@ import { fieldSuggestSpecFor } from "~/server/ai/field-suggest/registry";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { getDb } from "~/server/db/helpers";
 import {
-  assessmentState as suggestionTable,
+  suggestionTable,
   financialAccount,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";

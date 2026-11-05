@@ -34,7 +34,9 @@ import {
   getDb,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { assessment, assessmentState } from "~/server/db/schema";
+import {
+  suggestionTable,
+} from "~/server/db/schema";
 import { variantVerification } from "~/server/domains/product/repo/product-variant-evidence";
 import { publishAssessments } from "~/server/generic/assessment/repo/assessment";
 import {
@@ -256,10 +258,10 @@ export async function publishProductPairPublications(
     return outcomes.map(({ key }) => ({ key, valid: false, row: null }));
   const published = await client
     .select()
-    .from(assessment)
+    .from(suggestionTable)
     .where(
       inArray(
-        assessment.publicationKey,
+        suggestionTable.publicationKey,
         prepared.map((entry) => entry.publicationKey),
       ),
     );
@@ -324,8 +326,8 @@ export async function publishProductPairPublications(
   await transitionAssessmentStateBatch(
     tx,
     and(
-      eq(assessmentState.family, "product_pair"),
-      sql`(${assessmentState.recordId}::text || '|' || (${assessmentState.data}->>'otherId')) IN (${sql.join(
+      eq(suggestionTable.family, "product_pair"),
+      sql`(${suggestionTable.recordId}::text || '|' || (${suggestionTable.data}->>'otherId')) IN (${sql.join(
         [...byPair.keys()].map((key) => sql`${key}`),
         sql`, `,
       )})`,
@@ -523,51 +525,50 @@ export async function listProductMatchRows(
   } = {},
 ): Promise<ProductMatchCandidateRow[]> {
   const rows = await getDb(db)
-    .select(getTableColumns(assessmentState))
-    .from(assessmentState)
-    .innerJoin(assessment, eq(assessment.id, assessmentState.id))
+    .select(getTableColumns(suggestionTable))
+    .from(suggestionTable)
     .where(
       and(
-        eq(assessmentState.family, "product_pair"),
-        eq(assessmentState.active, true),
-        eq(assessment.served, true),
+        eq(suggestionTable.family, "product_pair"),
+        eq(suggestionTable.active, true),
+        eq(suggestionTable.served, true),
         options.assessmentIds
-          ? sql`${assessmentState.id} IN (${sql.join(
+          ? sql`${suggestionTable.id} IN (${sql.join(
               options.assessmentIds.map((id) => sql`${id}::uuid`),
               sql`, `,
             )})`
           : undefined,
-        currentProductPairPolicySql(sql`${assessment.producer}`),
+        currentProductPairPolicySql(sql`${suggestionTable.producer}`),
         options.reviewableOnly
           ? and(
-              eq(assessmentState.status, "pending"),
-              isNull(assessmentState.suppression),
+              eq(suggestionTable.status, "pending"),
+              isNull(suggestionTable.suppression),
             )
           : or(
-              eq(assessmentState.status, "pending"),
-              sql`${assessmentState.suppression} IS NOT NULL`,
+              eq(suggestionTable.status, "pending"),
+              sql`${suggestionTable.suppression} IS NOT NULL`,
             ),
         options.actionableOnly
-          ? sql`${assessmentState.data}->>'actionable' = 'true'`
+          ? sql`${suggestionTable.data}->>'actionable' = 'true'`
           : undefined,
         options.candidateId
           ? or(
-              eq(assessmentState.recordId, options.candidateId),
-              sql`${assessmentState.data}->>'otherId' = ${options.candidateId}`,
+              eq(suggestionTable.recordId, options.candidateId),
+              sql`${suggestionTable.data}->>'otherId' = ${options.candidateId}`,
             )
           : undefined,
         productId
           ? or(
-              eq(assessmentState.recordId, productId),
-              sql`${assessmentState.data}->>'otherId' = ${productId}`,
+              eq(suggestionTable.recordId, productId),
+              sql`${suggestionTable.data}->>'otherId' = ${productId}`,
             )
           : undefined,
       ),
     )
     .orderBy(
-      sql`(${assessmentState.data}->>${pairProjection.keyof().enum.source} = ${pairProjection.shape.source.enum.agent}) DESC`,
-      sql`(${assessmentState.data}->>'actionable')::boolean DESC`,
-      assessmentState.id,
+      sql`(${suggestionTable.data}->>${pairProjection.keyof().enum.source} = ${pairProjection.shape.source.enum.agent}) DESC`,
+      sql`(${suggestionTable.data}->>'actionable')::boolean DESC`,
+      suggestionTable.id,
     )
     .limit(options.limit ?? 2147483647);
   // Open detector advice is hidden once either snapshot moved; agent rows
@@ -627,14 +628,14 @@ export async function repointProductMatchCandidatesTx(
   if (!loserIds.length) return;
   const rows = await tx
     .select()
-    .from(assessmentState)
+    .from(suggestionTable)
     .where(
       and(
-        eq(assessmentState.family, "product_pair"),
-        eq(assessmentState.active, true),
+        eq(suggestionTable.family, "product_pair"),
+        eq(suggestionTable.active, true),
         or(
-          inArray(assessmentState.recordId, [...loserIds]),
-          inArray(sql`${assessmentState.data}->>'otherId'`, [...loserIds]),
+          inArray(suggestionTable.recordId, [...loserIds]),
+          inArray(sql`${suggestionTable.data}->>'otherId'`, [...loserIds]),
         ),
       ),
     );

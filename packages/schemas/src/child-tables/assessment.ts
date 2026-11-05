@@ -7,11 +7,15 @@ import { defineChildTable } from "../entity-definitions/child-definition.js";
 const sqlList = (values: readonly string[]) =>
   values.map((value) => `'${value}'`).join(", ");
 
-/** Histories have no live entity/Run ownership: current edges belong to the projection. */
 export const assessmentChildren = [
+  /**
+   * One row per noticed issue or proposed action. Pending rows come from
+   * idempotent evaluators; `decisions` retains every explicit decision and
+   * automatic application receipt, so a decided row is never regenerated over.
+   */
   defineChildTable({
-    name: "Assessment",
-    exportName: "assessment",
+    name: "Suggestion",
+    exportName: "suggestionTable",
     columns: [
       {
         key: "id",
@@ -28,136 +32,15 @@ export const assessmentChildren = [
         type: "AssessmentSubject",
       },
       { key: "judgment", kind: "jsonb", notNull: true },
-      { key: "projection", kind: "jsonb" },
-      { key: "fingerprint", kind: "text" },
       { key: "producer", kind: "jsonb", type: "AssessmentProducer" },
       { key: "evidence", kind: "jsonb" },
-      { key: "origin", kind: "jsonb" },
       { key: "served", kind: "boolean", notNull: true, default: true },
       {
-        key: "createdAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-    ],
-    types: [
-      {
-        module: "@cubby/schemas/assessment",
-        exports: [
-          "AssessmentFamily",
-          "AssessmentSubject",
-          "AssessmentProducer",
-        ],
-      },
-    ],
-    indexes: [
-      {
-        name: "Assessment_publication_key",
-        unique: true,
-        on: ["publicationKey"],
-      },
-      { name: "Assessment_family_idx", on: ["family", "createdAt"] },
-      {
-        name: "Assessment_served_other_id_idx",
-        on: [{ sql: "md5({subject}->>'otherId')" }],
-        where: "{served} AND ({subject}->>'otherId') IS NOT NULL",
-      },
-      {
-        name: "Assessment_served_source_ref_idx",
-        on: [
-          { sql: "md5({judgment} #>> '{create,sourceRef,source}')" },
-          { sql: "md5({judgment} #>> '{create,sourceRef,externalId}')" },
-        ],
-        where:
-          "{served} AND ({judgment} #>> '{create,sourceRef,source}') IS NOT NULL AND ({judgment} #>> '{create,sourceRef,externalId}') IS NOT NULL",
-      },
-      {
-        name: "Assessment_reference_records_idx",
-        using: "gin",
-        on: [{ sql: "({evidence}->'records')" }],
-        where: "{served}",
-      },
-    ],
-  }),
-  defineChildTable({
-    name: "Feedback",
-    exportName: "feedback",
-    columns: [
-      {
-        key: "id",
-        kind: "uuid",
-        primaryKey: true,
-        default: { sql: "gen_random_uuid()" },
-      },
-      {
-        key: "assessmentId",
-        kind: "uuid",
-        notNull: true,
-        reference: { table: "assessment", column: "id" },
-      },
-      { key: "operationId", kind: "text", notNull: true },
-      { key: "verdict", kind: "text", notNull: true },
-      {
-        key: "correction",
+        key: "decisions",
         kind: "jsonb",
         notNull: true,
-        type: "AssessmentCorrection",
-      },
-      { key: "reason", kind: "text" },
-      { key: "evidence", kind: "jsonb" },
-      { key: "intent", kind: "text", notNull: true },
-      { key: "authority", kind: "text", notNull: true },
-      { key: "actorUserId", kind: "text" },
-      { key: "suppression", kind: "jsonb", type: "AssessmentSuppression" },
-      { key: "receipt", kind: "jsonb" },
-      { key: "metadata", kind: "jsonb" },
-      { key: "projection", kind: "jsonb" },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-    ],
-    types: [
-      {
-        module: "@cubby/schemas/assessment",
-        exports: ["AssessmentCorrection", "AssessmentSuppression"],
-      },
-    ],
-    indexes: [
-      {
-        name: "Feedback_operation_key",
-        unique: true,
-        on: ["assessmentId", "operationId"],
-      },
-      { name: "Feedback_assessment_idx", on: ["assessmentId", "createdAt"] },
-    ],
-    checks: [
-      {
-        name: "Feedback_verdict_check",
-        sql: "{verdict} IN ('correct', 'wrong', 'uncertain', 'dismissed', 'ungraded')",
-      },
-      {
-        name: "Feedback_authority_check",
-        sql: "{authority} IN ('member', 'evaluation', 'automatic', 'unknown', 'system')",
-      },
-      {
-        name: "Feedback_system_check",
-        sql: "{authority} <> 'system' OR ({actorUserId} IS NULL AND {verdict} = 'ungraded' AND {suppression} IS NULL)",
-      },
-    ],
-  }),
-  defineChildTable({
-    name: "AssessmentState",
-    exportName: "assessmentState",
-    columns: [
-      {
-        key: "id",
-        kind: "uuid",
-        primaryKey: true,
-        default: { sql: "gen_random_uuid()" },
+        default: { sql: "'[]'::jsonb" },
+        type: "SuggestionDecision[]",
       },
       {
         key: "runId",
@@ -209,13 +92,6 @@ export const assessmentChildren = [
       },
       { key: "correctValue", kind: "jsonb" },
       {
-        key: "family",
-        kind: "text",
-        notNull: true,
-        default: "field",
-        type: "AssessmentFamily",
-      },
-      {
         key: "data",
         kind: "jsonb",
         notNull: true,
@@ -244,8 +120,11 @@ export const assessmentChildren = [
         module: "@cubby/schemas/assessment",
         exports: [
           "AssessmentFamily",
+          "AssessmentSubject",
+          "AssessmentProducer",
           "AssessmentCorrection",
           "AssessmentSuppression",
+          "SuggestionDecision",
         ],
       },
       {
@@ -257,55 +136,72 @@ export const assessmentChildren = [
         ],
       },
     ],
-    foreignKeys: [
-      {
-        name: "AssessmentState_history_fk",
-        columns: ["id"],
-        table: "assessment",
-        references: ["id"],
-      },
-    ],
     indexes: [
       {
-        name: "AssessmentState_family_active_idx",
+        name: "Suggestion_publication_key",
+        unique: true,
+        on: ["publicationKey"],
+      },
+      {
+        name: "Suggestion_family_active_idx",
         on: ["family", "active", "status"],
       },
-      { name: "AssessmentState_run_status_idx", on: ["runId", "status"] },
+      { name: "Suggestion_run_status_idx", on: ["runId", "status"] },
       {
-        name: "AssessmentState_active_suppression_idx",
+        name: "Suggestion_active_suppression_idx",
         on: ["entity", "recordId"],
         where: "{active} AND {suppression} IS NOT NULL",
       },
       {
-        name: "AssessmentState_ledger_party_idx",
+        name: "Suggestion_ledger_party_idx",
         on: ["ledgerPartyId", "family", "status"],
       },
-      { name: "AssessmentState_evaluation_idx", on: ["evaluationId"] },
+      { name: "Suggestion_evaluation_idx", on: ["evaluationId"] },
       {
-        name: "AssessmentState_entity_field_status_idx",
+        name: "Suggestion_entity_field_status_idx",
         on: ["entity", "field", "status"],
       },
       {
-        name: "AssessmentState_entity_record_status_idx",
+        name: "Suggestion_entity_record_status_idx",
         on: ["entity", "recordId", "status"],
       },
       {
-        name: "AssessmentState_active_value_status_idx",
+        name: "Suggestion_active_value_status_idx",
         on: ["status", { sql: "md5({suggestedValue} #>> '{}')" }],
         where: "{active}",
+      },
+      {
+        name: "Suggestion_served_other_id_idx",
+        on: [{ sql: "md5({subject}->>'otherId')" }],
+        where: "{served} AND ({subject}->>'otherId') IS NOT NULL",
+      },
+      {
+        name: "Suggestion_served_source_ref_idx",
+        on: [
+          { sql: "md5({judgment} #>> '{create,sourceRef,source}')" },
+          { sql: "md5({judgment} #>> '{create,sourceRef,externalId}')" },
+        ],
+        where:
+          "{served} AND ({judgment} #>> '{create,sourceRef,source}') IS NOT NULL AND ({judgment} #>> '{create,sourceRef,externalId}') IS NOT NULL",
+      },
+      {
+        name: "Suggestion_reference_records_idx",
+        using: "gin",
+        on: [{ sql: "({evidence}->'records')" }],
+        where: "{served}",
       },
     ],
     checks: [
       {
-        name: "AssessmentState_kind_check",
+        name: "Suggestion_kind_check",
         sql: "{kind} IN ('correction', 'addition')",
       },
       {
-        name: "AssessmentState_status_check",
+        name: "Suggestion_status_check",
         sql: "{status} IN ('pending', 'applied', 'rejected', 'superseded', 'resolved')",
       },
       {
-        name: "AssessmentState_confidence_check",
+        name: "Suggestion_confidence_check",
         sql: "{confidence} BETWEEN 0 AND 1",
       },
     ],
@@ -391,7 +287,6 @@ export const assessmentChildren = [
         key: "assessmentId",
         kind: "uuid",
         notNull: true,
-        reference: { table: "assessment", column: "id" },
       },
       { key: "revision", kind: "uuid", notNull: true },
       { key: "family", kind: "text", type: "SuggestionListFamily" },
@@ -403,14 +298,13 @@ export const assessmentChildren = [
       { key: "computedAt", kind: "timestamp", notNull: true },
       /** Household day verified for a clock-sensitive component; independent of publication age. */
       { key: "clockDay", kind: "date" },
-      { key: "key", kind: "jsonb", type: "AssessmentReadKey" },
-      { key: "filters", kind: "jsonb", type: "AssessmentReadFilterFacts" },
+      { key: "key", kind: "jsonb" },
+      { key: "filters", kind: "jsonb" },
       { key: "row", kind: "jsonb", type: "SuggestionListRow" },
       {
         key: "dependencies",
         kind: "jsonb",
         notNull: true,
-        type: "AssessmentReadDependency[]",
       },
     ],
     types: [
@@ -470,7 +364,6 @@ export const assessmentChildren = [
         key: "assessmentId",
         kind: "uuid",
         notNull: true,
-        reference: { table: "assessment", column: "id" },
       },
       { key: "revision", kind: "uuid", notNull: true },
       { key: "entity", kind: "text", notNull: true, type: "Entity" },
@@ -520,7 +413,6 @@ export const assessmentChildren = [
         key: "assessmentId",
         kind: "uuid",
         notNull: true,
-        reference: { table: "assessment", column: "id" },
       },
       { key: "sourceKind", kind: "text", notNull: true },
       { key: "sourceId", kind: "uuid", notNull: true },
@@ -553,14 +445,12 @@ export const assessmentChildren = [
         key: "groups",
         kind: "jsonb",
         notNull: true,
-        type: "AssessmentReadGroupKeys",
       },
       { key: "assessmentIds", kind: "uuid", array: true, notNull: true },
       {
         key: "tickets",
         kind: "jsonb",
         notNull: true,
-        type: "AssessmentReadObservedTicket[]",
       },
       { key: "revision", kind: "uuid", notNull: true },
       { key: "nextIndex", kind: "integer", notNull: true, default: 0 },
@@ -571,12 +461,6 @@ export const assessmentChildren = [
         kind: "timestamp",
         notNull: true,
         default: { now: true },
-      },
-    ],
-    types: [
-      {
-        module: "@cubby/schemas/assessment-read-publication",
-        exports: ["AssessmentReadGroupKeys", "AssessmentReadObservedTicket"],
       },
     ],
     indexes: [

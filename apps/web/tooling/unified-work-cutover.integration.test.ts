@@ -75,7 +75,7 @@ it("carries populated history and pending paid work into the unified job cutover
       [oldAttemptId, processingId],
     );
     await client.query(
-      `INSERT INTO "Assessment"
+      `INSERT INTO "Suggestion"
       (id,"publicationKey",family,subject,judgment,evidence)
       VALUES ($1,'synthetic-cutover-history','field',$2,'{"value":"Synthetic proposal"}',
         '{"source":"Synthetic retained evidence"}')`,
@@ -125,7 +125,7 @@ it("carries populated history and pending paid work into the unified job cutover
       [runId],
     );
     await client.query(
-      `INSERT INTO "AssessmentState"
+      `INSERT INTO "Suggestion"
       (id,"runId",entity,"recordId",field,family,"suggestedValue",status)
       VALUES ($1,$2,'run',$2,'notes','field','"Synthetic proposal"','pending')`,
       [assessmentId, runId],
@@ -188,19 +188,19 @@ it("carries populated history and pending paid work into the unified job cutover
       [runId],
     );
     await client.query(
-      `INSERT INTO "Assessment"
+      `INSERT INTO "Suggestion"
       (id,"publicationKey",family,subject,judgment,served)
       VALUES ($1,'synthetic-unserved-trial','field',jsonb_build_object('kind','field','entity','run','recordId',$2::text,'field','notes'),'{"value":"Synthetic unserved proposal"}',false)`,
       [trialId, runId],
     );
     await client.query(
-      `INSERT INTO "AssessmentState"
+      `INSERT INTO "Suggestion"
       (id,entity,"recordId",field,family,status,"pairKey")
       VALUES ($1,'run',$2,'notes','field','pending','00000000-0000-4000-8000-000000000917')`,
       [trialId, runId],
     );
     const history = (
-      await client.query('SELECT * FROM "Assessment" WHERE id=$1', [
+      await client.query('SELECT * FROM "Suggestion" WHERE id=$1', [
         assessmentId,
       ])
     ).rows;
@@ -236,7 +236,7 @@ it("carries populated history and pending paid work into the unified job cutover
       );
     }
     await client.query(
-      `INSERT INTO "Assessment" (id,"publicationKey",family,subject,judgment,evidence) VALUES ($1,'synthetic-evidence-suppression','statement_transaction',$2,'{}','{}')`,
+      `INSERT INTO "Suggestion" (id,"publicationKey",family,subject,judgment,evidence) VALUES ($1,'synthetic-evidence-suppression','statement_transaction',$2,'{}','{}')`,
       [
         evidenceAssessmentId,
         JSON.stringify({
@@ -248,7 +248,7 @@ it("carries populated history and pending paid work into the unified job cutover
       ],
     );
     await client.query(
-      `INSERT INTO "AssessmentState" (id,entity,"recordId",family,status,data,suppression) VALUES ($1,'statementRow',$2,'statement_transaction','rejected',$3,'{"reason":"synthetic-dismissal"}')`,
+      `INSERT INTO "Suggestion" (id,entity,"recordId",family,status,data,suppression) VALUES ($1,'statementRow',$2,'statement_transaction','rejected',$3,'{"reason":"synthetic-dismissal"}')`,
       [
         evidenceAssessmentId,
         evidenceRowId,
@@ -283,7 +283,7 @@ it("carries populated history and pending paid work into the unified job cutover
     expect(
       (
         await client.query(
-          `SELECT status,active,suppression,data->>'chargeKey' AS owner FROM "AssessmentState" WHERE id=$1`,
+          `SELECT status,active,suppression,data->>'chargeKey' AS owner FROM "Suggestion" WHERE id=$1`,
           [evidenceAssessmentId],
         )
       ).rows,
@@ -314,7 +314,7 @@ it("carries populated history and pending paid work into the unified job cutover
 
     expect(
       (
-        await client.query('SELECT * FROM "Assessment" WHERE id=$1', [
+        await client.query('SELECT * FROM "Suggestion" WHERE id=$1', [
           assessmentId,
         ])
       ).rows,
@@ -346,7 +346,7 @@ it("carries populated history and pending paid work into the unified job cutover
     expect(
       (
         await client.query(
-          'SELECT family,status,"ledgerPartyId" FROM "AssessmentState" WHERE id=$1',
+          'SELECT family,status,"ledgerPartyId" FROM "Suggestion" WHERE id=$1',
           [findingId],
         )
       ).rows,
@@ -368,7 +368,7 @@ it("carries populated history and pending paid work into the unified job cutover
     expect(
       (
         await client.query(
-          'SELECT family,served,judgment FROM "Assessment" WHERE id=$1',
+          'SELECT family,served,judgment FROM "Suggestion" WHERE id=$1',
           [sampleId],
         )
       ).rows,
@@ -522,7 +522,7 @@ it("carries populated history and pending paid work into the unified job cutover
     ]);
     const findingKeys = (
       await client.query(
-        'SELECT id,"publicationKey" FROM "Assessment" WHERE id=ANY($1::uuid[])',
+        'SELECT id,"publicationKey" FROM "Suggestion" WHERE id=ANY($1::uuid[])',
         [[findingId, appliedFindingId]],
       )
     ).rows;
@@ -602,14 +602,14 @@ it("carries populated history and pending paid work into the unified job cutover
     expect(
       (
         await client.query(
-          'SELECT status,active FROM "AssessmentState" WHERE id=$1',
+          'SELECT status,active FROM "Suggestion" WHERE id=$1',
           [trialId],
         )
       ).rows,
     ).toEqual([{ status: "superseded", active: false }]);
     expect(
       (
-        await client.query('SELECT origin FROM "Assessment" WHERE id=$1', [
+        await client.query('SELECT origin FROM "Suggestion" WHERE id=$1', [
           trialId,
         ])
       ).rows,

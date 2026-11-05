@@ -105,7 +105,7 @@ export const statementInputCharges = (
           AND ft.kind IN (${financialTransactionKind.enum.purchase},${financialTransactionKind.enum.refund},${financialTransactionKind.enum.fee})
           AND (NOT EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" allocation
               WHERE allocation."transactionId" = ft.id AND ${notDeleted("allocation")})
-            OR EXISTS (SELECT 1 FROM "AssessmentState" existing
+            OR EXISTS (SELECT 1 FROM "Suggestion" existing
               WHERE existing.family = ${assessmentFamily.enum.statement_transaction} AND existing.active
                 AND existing.status = ${suggestionStatus.enum.pending}
                 AND existing.data->>${"source"} = cs.source AND existing.data->>${"chargeKey"} = cs."chargeKey"

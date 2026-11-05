@@ -94,6 +94,37 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Suggestion table (0075)
+
+`0075_suggestion_table` creates `Suggestion` from `Assessment`, `AssessmentState` and
+`Feedback`, then moves those three tables to the `archive` schema with their foreign
+keys, triggers and secondary indexes removed. It never drops them. It runs in one
+transaction under `lock_timeout` 10s: `AuditLog` and `DerivedValue` trigger drops
+first, then Run, LedgerParty and AiEvaluation, then the three ledgers ACCESS
+EXCLUSIVE. Reading connection candidates out of wide evidence dominates its run
+time, about 10 ms a row for about 32,000 rows when sampled read-only, so suggestions
+and every writer of these tables are down for minutes. The runner retries a lock
+timeout or deadlock.
+
+It carries every row with a decision, suppression, confirmation or acceptance
+receipt, or status applied or rejected; every field, product pair, transfer pair and
+image description row; active statement rows and the newest row of each charge;
+active connections except `transaction-purchase` and `transaction-refund`. Projection
+events do not carry. It compares each carried row and each retained event by hash,
+fails on any unaccounted Feedback category, and verifies the archive by catalog
+query. `db:check` covers only `public`.
+
+After release, read back the counts below against the pre-release aggregates. The
+archive stays until the owner decides otherwise. Tickets named
+`assessment.reviewFacts%` stay unclaimed until the `WorkItem` drop.
+
+```sql
+SELECT family, status, active, count(*) FROM "Suggestion" GROUP BY 1, 2, 3;
+SELECT count(*) FROM "Suggestion" s, jsonb_array_elements(s.decisions);
+SELECT count(*) FROM archive."Assessment";
+SELECT count(*) FROM archive."Feedback";
+```
+
 ## Mail decision owners (0074)
 
 `0074_mail_decision_owners` moves `email_link`, `email_relevance`,

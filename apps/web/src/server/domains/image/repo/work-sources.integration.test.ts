@@ -6,9 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
-  assessmentState,
+  suggestionTable,
   image,
-  feedback,
   vendorAccount,
 } from "~/server/db/schema";
 import {
@@ -85,12 +84,12 @@ describe("image Suggestions in Work", () => {
     await propose(first.id, "blank", true, "  ");
     const inactive = await propose(first.id, "inactive");
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ active: false })
-      .where(eq(assessmentState.id, inactive.id));
+      .where(eq(suggestionTable.id, inactive.id));
     const suppressed = await propose(first.id, "suppressed");
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({
         suppression: {
           scope: "synthetic-image-description",
@@ -98,7 +97,7 @@ describe("image Suggestions in Work", () => {
           fingerprint: "a".repeat(64),
         },
       })
-      .where(eq(assessmentState.id, suppressed.id));
+      .where(eq(suggestionTable.id, suppressed.id));
     await propose(second.id, "second");
     await drainStoredDerived(ctx.db);
     const before = {

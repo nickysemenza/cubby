@@ -38,12 +38,11 @@ import { withTransactionDatabase } from "~/server/db/helpers";
 import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
-  assessmentState as suggestion,
+  suggestionTable as suggestion,
   run,
   email,
   product,
   appSettings,
-  feedback,
 } from "~/server/db/schema";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";

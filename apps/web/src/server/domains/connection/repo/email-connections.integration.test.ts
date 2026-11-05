@@ -8,7 +8,7 @@ import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
 import { getDb } from "~/server/db/helpers";
 import { purchase as purchaseTable, vendorAccount } from "~/server/db/schema";
 import {
-  assessment,
+  suggestionTable,
   email,
   importSourceClaim,
   importSourceOrder,
@@ -128,8 +128,8 @@ describe("fresh retained Email connection recommendations", () => {
     ).toContain(proposal.review.assessmentId);
     const [stored] = await getDb(ctx.db)
       .select()
-      .from(assessment)
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     expect(stored?.evidence).toMatchObject({
       basis: {
         dependencies: {
