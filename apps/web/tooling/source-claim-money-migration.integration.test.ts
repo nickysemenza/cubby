@@ -10,7 +10,7 @@ import { withMigrationDatabase } from "./test-database-lease";
 it("preserves source claims and their dollar-number wire through the minor-unit cutover", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
-    await migrateDatabase(db, { through: "0092_drop_job_identities" });
+    await migrateDatabase(db, { through: "0093_retire_two_job_kinds" });
     const expense = "00000000-0000-4000-8000-000000000101";
     await client.query(
       `INSERT INTO "Entity" (id, kind, shortcode) VALUES ($1, 'expense', 'EXP-SYNMONEY')`,
@@ -68,8 +68,9 @@ it("preserves source claims and their dollar-number wire through the minor-unit 
       `INSERT INTO "RunStep" ("runId",key,label,position,state) VALUES ($1,'statement_generate','Synthetic generation',0,'running')`,
       [run],
     );
+    await client.query(`UPDATE "Run" SET "endedAt"=now() WHERE id=$1`, [run]);
     await expect(
-      migrateDatabase(db, { through: "0093_source_claim_minor_units" }),
+      migrateDatabase(db, { through: "0094_source_claim_minor_units" }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",
@@ -77,15 +78,56 @@ it("preserves source claims and their dollar-number wire through the minor-unit 
           "Financial refresh has unfinished steps; complete or explicitly cancel its retained work before the money cutover",
       },
     });
-    await client.query(`UPDATE "RunStep" SET state='done' WHERE "runId"=$1`, [
-      run,
-    ]);
+    await client.query(
+      `UPDATE "Run" SET "failureCode"='user_cancelled',"endedAt"=now() WHERE id=$1`,
+      [run],
+    );
+    await client.query(
+      `INSERT INTO "Job" (key,kind,state,"runId",input) VALUES ('synthetic-financial-gate','run.execute','queued',$1,'{}')`,
+      [run],
+    );
+    for (const state of ["queued", "running", "retry_wait", "paused"]) {
+      await client.query(
+        `UPDATE "Job" SET state=$1 WHERE key='synthetic-financial-gate'`,
+        [state],
+      );
+      await expect(
+        migrateDatabase(db, { through: "0094_source_claim_minor_units" }),
+      ).rejects.toMatchObject({
+        cause: {
+          code: "P0001",
+          message:
+            "Financial refresh has unfinished steps; complete or explicitly cancel its retained work before the money cutover",
+        },
+      });
+    }
+    await client.query(
+      `UPDATE "Job" SET state='cancelled' WHERE key='synthetic-financial-gate'`,
+    );
+    await client.query(
+      `UPDATE "Run" SET "failureCode"='job_failed' WHERE id=$1`,
+      [run],
+    );
+    await expect(
+      migrateDatabase(db, { through: "0094_source_claim_minor_units" }),
+    ).rejects.toMatchObject({
+      cause: {
+        code: "P0001",
+        message:
+          "Financial refresh has unfinished steps; complete or explicitly cancel its retained work before the money cutover",
+      },
+    });
+    // The cancelled parent and terminal Job permit the original running step; nothing rewrites its cursor or counters.
+    await client.query(
+      `UPDATE "Run" SET "failureCode"='user_cancelled' WHERE id=$1`,
+      [run],
+    );
     // The old epsilon permits noise that the new contract must not silently round.
     await client.query(
       `UPDATE "LedgerSourceClaim" SET "targetAmountAtClaim"=10.010000000001 WHERE "sourceKey"='synthetic-key-0'`,
     );
     await expect(
-      migrateDatabase(db, { through: "0093_source_claim_minor_units" }),
+      migrateDatabase(db, { through: "0094_source_claim_minor_units" }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",
@@ -107,7 +149,7 @@ it("preserves source claims and their dollar-number wire through the minor-unit 
       `UPDATE "LedgerSourceClaim" SET "targetAmountAtClaim"=10.010000000000002 WHERE "sourceKey"='synthetic-key-0'`,
     );
     await expect(
-      migrateDatabase(db, { through: "0093_source_claim_minor_units" }),
+      migrateDatabase(db, { through: "0094_source_claim_minor_units" }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",
@@ -125,7 +167,7 @@ it("preserves source claims and their dollar-number wire through the minor-unit 
     await client.query(
       `UPDATE "LedgerSourceClaim" SET "targetAmountAtClaim"=10.01 WHERE "sourceKey"='synthetic-key-0'`,
     );
-    await migrateDatabase(db, { through: "0093_source_claim_minor_units" });
+    await migrateDatabase(db, { through: "0094_source_claim_minor_units" });
     const after = await client.query(
       `SELECT (to_jsonb(c) - 'targetAmountMinor') || jsonb_build_object('targetAmountAtClaim', c."targetAmountMinor"::numeric / 100) AS value FROM "LedgerSourceClaim" c ORDER BY id`,
     );

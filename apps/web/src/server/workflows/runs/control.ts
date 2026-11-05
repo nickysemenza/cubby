@@ -5,6 +5,7 @@ import {
   OWNED_AI_WORK_PURPOSES,
   type RunControlAction,
 } from "@cubby/schemas/run-fields";
+import { runStepState } from "@cubby/schemas/run-step";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import {
@@ -13,7 +14,7 @@ import {
 } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { ledgerParty, run as runTable } from "~/server/db/schema";
+import { ledgerParty, runStep, run as runTable } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { createAppError } from "~/server/errors/app-error";
@@ -178,6 +179,21 @@ export async function controlWorkflowRun(
         "The Run finished before it was cancelled",
       );
     await cancelRunJobs(tx, row.id);
+    // Cancellation ends execution, without inventing item failures or losing its retry cursor.
+    await database
+      .update(runStep)
+      .set({
+        state: runStepState.enum.failed,
+        endedAt: new Date(),
+        pausedReason: "Cancelled by a member",
+        pausedUntil: null,
+      })
+      .where(
+        and(
+          eq(runStep.runId, row.id),
+          eq(runStep.state, runStepState.enum.running),
+        ),
+      );
     return cancelRunAiWork(tx, row.id, "Cancelled by a member", {
       owned: ownsAiWork(purpose),
       requested: requestsAiWork(purpose),

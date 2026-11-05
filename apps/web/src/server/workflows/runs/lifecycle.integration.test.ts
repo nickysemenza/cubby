@@ -3,7 +3,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { run } from "~/server/db/schema";
+import { run, runStep } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { withJobExecution } from "~/server/generic/jobs/context";
 import { claimJob, publishJobPage } from "~/server/generic/jobs/jobs.fixtures";
@@ -64,6 +64,19 @@ describe("Run Job admission", () => {
       .from(run)
       .where(eq(run.id, id));
     if (!owner) throw new Error("Missing Run");
+    await getDb(ctx.db)
+      .insert(runStep)
+      .values({
+        runId: id,
+        key: "synthetic-cancelled-scan",
+        label: "Synthetic scan",
+        position: 0,
+        state: "running",
+        found: 10,
+        done: 1,
+        skipped: 2,
+        cursor: { after: "synthetic-retained-cursor" },
+      });
     await controlWorkflowRun(
       ctx.db,
       ctx.actor,
@@ -81,6 +94,20 @@ describe("Run Job admission", () => {
       (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0]
         ?.failureCode,
     ).toBe("user_cancelled");
+    expect(
+      (
+        await getDb(ctx.db).select().from(runStep).where(eq(runStep.runId, id))
+      )[0],
+    ).toMatchObject({
+      state: "failed",
+      done: 1,
+      skipped: 2,
+      failed: 0,
+      errors: [],
+      cursor: { after: "synthetic-retained-cursor" },
+      pausedReason: "Cancelled by a member",
+      endedAt: expect.any(Date),
+    });
   });
 
   // Progress must use the same Job generation as publication; an old Worker

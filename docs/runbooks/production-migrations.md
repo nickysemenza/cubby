@@ -460,7 +460,7 @@ the production branch. If table-level recovery would not be enough, stop and rep
 
 ## Source-claim minor units
 
-`0093_source_claim_minor_units` is a direct contract cutover. The running statement planner and label application read LedgerSourceClaim through booking-lineage checks. Label application also reaches LedgerTransfer through canonical FinancialTransaction read-back. A zero-row result does not establish table independence, so these refresh gates remain until the retained steps are terminal. The release owner
+`0094_source_claim_minor_units` is a direct contract cutover. The running statement planner and label application read LedgerSourceClaim through booking-lineage checks. Label application also reaches LedgerTransfer through canonical FinancialTransaction read-back. A zero-row result does not establish table independence, so these refresh gates remain until the retained steps are terminal. The release owner
 must wait for the active financial refresh's generation and subsequent statement
 steps to reach terminal outcomes before merging it. No writer hold, branch-copy
 rehearsal or dual writer is required. Parent owns merge sequencing with other
@@ -497,3 +497,5 @@ Worker's whole-dollar integer as cents, especially on a reviewed mismatch.
 Old writers must fail at the database boundary; downtime does not authorize
 wrong-unit writes. Keep client dollar-number fields at the checked output
 boundary. Verify a predecessor write refuses after the cutover.
+
+Financial cutover gates recognize only done steps or an ended failed Run with failureCode user_cancelled and no nonterminal Job. Run, Job and RunStep share locks close admission races. A cancelled parent with queued, running, retry_wait or paused execution remains blocked; every other failure still blocks the existing active/latest-refresh scope. Old running step cursors and counters remain unchanged by the gate exception. No nonexistent RunStep cancelled state is assumed.
