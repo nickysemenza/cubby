@@ -868,10 +868,10 @@ const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
       "Deleting a transaction keeps its source reservation; it cannot recreate money through replay.",
   },
   "FinancialEvidenceAlias.historicalTransactionId": {
-    code: "preserve-financial-source-provenance",
-    effect: "preserve",
+    code: "retire-financial-source-provenance",
+    effect: "soft-delete",
     description:
-      "Original source bindings remain explainable after the transaction is deleted.",
+      "Deleting a transaction retires its reference bindings while preserving every alias row and provenance through tombstones. Proven source occurrence reservations remain independent.",
   },
 } as const satisfies IncomingEdgePolicy<
   "financialTransaction",
@@ -969,6 +969,14 @@ export const financialTransactionRepository = defineRepository(
           tx,
           "reviewed-booking",
           ids.map((id) => `transaction:${id}`),
+        );
+        const refs = await financialSourceRefsFor(tx, ids);
+        await lockFinancialEvidenceKeys(
+          tx,
+          "transaction-ref",
+          [...refs.values()]
+            .flat()
+            .map((ref) => JSON.stringify([ref.source, ref.externalId])),
         );
         await tx
           .select({ id: sourceOccurrence.id })

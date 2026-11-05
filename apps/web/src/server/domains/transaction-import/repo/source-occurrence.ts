@@ -10,6 +10,7 @@ import type {
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
+import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import {
   sourceOccurrence,
@@ -280,6 +281,9 @@ export async function updateSourceObservationJudgments(
     selected.some((row) => row.occurrenceId === owner.id),
   )) {
     const sameOccurrence = successor?.occurrenceId === owner.id;
+    const { rows: history } = await db.execute<{ held: boolean }>(
+      sql`SELECT ${sourceOccurrenceHasUnresolvedHistory(sql`${owner.id}::uuid`, sql`${owner.acceptedTransactionId}::uuid`)} AS held`,
+    );
     const values = {
       ...financial,
       ...(patch.supersededByRowId === undefined
@@ -288,7 +292,11 @@ export async function updateSourceObservationJudgments(
           ? {
               currentObservationId: successor.id,
               ...(owner.reviewState === "revision_order_unknown"
-                ? { reviewState: "ready" as const }
+                ? {
+                    reviewState: history[0]?.held
+                      ? ("ownership_conflict" as const)
+                      : ("ready" as const),
+                  }
                 : {}),
             }
           : {

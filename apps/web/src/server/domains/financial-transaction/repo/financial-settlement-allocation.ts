@@ -86,6 +86,7 @@ export async function applyFinancialSettlementAllocation(
         "financialTransaction",
         input.transactionId,
       );
+      await lockFinancialTransactionSources(tx, [input.transactionId]);
       await lockUpdatePurchases(tx, id, { allocations: input.allocations });
       await tx
         .select({ id: financialTransaction.id })

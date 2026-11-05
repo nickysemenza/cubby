@@ -27,6 +27,11 @@ import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import { advanceStepRun } from "~/server/domains/run/service/step-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { startSweep } from "~/server/domains/run/service/sweep";
+import {
+  sourceObservationColumns,
+  sourceObservationFrom,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
+import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
@@ -374,11 +379,24 @@ describe("transfer pairs in the global queue", () => {
       .from(financialAccount)
       .where(eq(financialAccount.name, "Synthetic savings"));
     const [observed] = await getDb(ctx.db)
-      .select()
-      .from(sourceTransactionRecord)
+      .select(sourceObservationColumns)
+      .from(sourceObservationFrom)
       .where(
         eq(sourceTransactionRecord.accountDescriptor, "Synthetic savings"),
       );
+    if (!observed || !destination)
+      throw new Error("Synthetic transfer evidence missing");
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: {
+          source: observed.source,
+          externalIds: [observed.externalId],
+        },
+        data: { accountId: destination.shortcode },
+      },
+      ctx.actor,
+    );
     await createRepoEntity(ctx, "financialTransaction", {
       accountId: destination!.shortcode,
       amount: -180,
@@ -386,7 +404,7 @@ describe("transfer pairs in the global queue", () => {
       kind: "account_transfer",
       postedDate: "2026-05-05",
       sourceRefs: [
-        { source: observed!.source, externalId: observed!.externalId },
+        { source: observed!.source, externalId: observed!.chargeKey },
       ],
     });
     await generateTransferPairSuggestions(ctx.db, { runId: null });
@@ -400,6 +418,7 @@ describe("transfer pairs in the global queue", () => {
     const [row] = (
       await listSuggestionPage(ctx.db, { family: "statement_transaction" })
     ).items;
+
     expect(row?.clean).toBe(true);
     const result = await acceptCleanSuggestions(ctx.db, kernelCtx(ctx), {
       filters: { family: "statement_transaction" },

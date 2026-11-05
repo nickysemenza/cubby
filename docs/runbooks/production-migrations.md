@@ -539,19 +539,11 @@ field independently, and refuses any mismatch. Exact source money must pass
 independent IEEE round-trip comparison. Incoming/outgoing FKs and row triggers
 are rebound; archives retain no live FK, trigger or nonessential index.
 
-Only pending machine advice without decisions or suppression is retired when
-its source-key contract is stale. Its complete preimage remains in
-`archive.Suggestion_occurrence_preimage`; judgment, evidence and all other
-fields remain identical. Successful receipts, paid-work checkpoints, member
-suppression and decisions are retained. Suppression remains a negative fence
-through legacy alias provenance, without copying it into source state.
+Retain pending review rows in place: no pending Suggestion, paid label, suppression or member decision is retired by the cutover. Existing held work remains visible in review; automatic eligibility is a separate current-identity check. Historical transaction links are labelled evidence, never accepted ownership. Failed Run steps retain their errors, counters and metadata. Their old source-key cursors are archived in `archive.RunStep_occurrence_cursor_preimage` and cleared; retry resolves retained aliases into current independent source handles before planning, with one progress unit per original failure ref. Held identities keep a specific review-required failure until explicitly resolved and retried.
 
-The measured baseline is 22,139 proven identity candidates covering 22,328 of
-56,208 observations; 33,880 observations are unproven. Never turn a sole alias
-owner into accepted identity. The migration promotes acceptance only with a
-ready proven occurrence, direct v2/v3 binding, complete unique retained binding
-closure, live target and exact account/amount agreement. Otherwise money stays
-unchanged and automatic actions remain held without new member tasks.
+The exact migration predicates prove **22,057 identities covering 22,057 of 56,208 observations**: 169 attested provider observations and 21,888 original physical positions; 34,151 remain unresolved. This supersedes the initial 22,139-candidate estimate: 271 flat Monarch rows fail raw scope agreement. Never turn a sole alias owner into accepted identity. The migration promotes acceptance only with a ready proven occurrence, direct v2/v3 binding, complete unique retained binding closure, live target and exact account/amount agreement. Otherwise money stays unchanged. No new review task is generated merely for missing proof.
+
+SourceRecord's existing audited update accepts an explicit `identityResolution`: confirm a distinct event, accept a named existing transaction, or assign an unresolved observation to a reviewed occurrence. It requires the exact observation fingerprint, owner version, accepted owner and complete live historical transaction set that were reviewed, plus account, explicit open/ignored judgment and decision note. It preserves ignore judgments and original evidence, records resolved historical bindings without deleting them, and never runs from intake or automatic rules. Missing proof alone is not a member task. Use this only for an actual explicit financial judgment; do not invent one to drain historical work.
 
 Before release, independently review identity partitions, current-pointer and
 replacement membership FKs, all lock classes and stale receipts, money and

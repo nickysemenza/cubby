@@ -369,12 +369,14 @@ export const sourceTransactionRecordListOut = z.object({
 export const sourceTransactionRecordSummaryOut = z.object({
   total: z.number().int(),
   matched: z.number().int(),
+  held: z.number().int(),
   unmatched: z.number().int(),
   ignored: z.number().int(),
   superseded: z.number().int(),
   amountTotal: money,
-  /** `amountTotal` split by match state; the four sum to it. */
+  /** `amountTotal` split by match state; every state contributes to the total. */
   matchedAmount: money,
+  heldAmount: money,
   unmatchedAmount: money,
   ignoredAmount: money,
   supersededAmount: money,

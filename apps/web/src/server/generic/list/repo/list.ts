@@ -1444,7 +1444,7 @@ export function listScaffold<
     id: AnyColumn;
     deletedAt?: AnyColumn;
     createdAt: AnyColumn;
-    updatedAt: AnyColumn;
+    updatedAt?: AnyColumn;
     shortcode: AnyColumn;
   },
   Row = InferSelectModel<T> & ListReadRow,
@@ -2074,7 +2074,9 @@ export function listScaffold<
             searchable && searchQuery !== undefined && sorts.length === 0
               ? [
                   asc(lexicalRelevance(entity, table.id, searchQuery)),
-                  desc(table.updatedAt),
+                  desc(
+                    derivedSql.updatedAt ?? table.updatedAt ?? table.createdAt,
+                  ),
                 ]
               : undefined,
           resolve: (sort) =>
@@ -2870,7 +2872,7 @@ type ListScaffoldTable = PgTable & {
   id: AnyColumn;
   deletedAt?: AnyColumn;
   createdAt: AnyColumn;
-  updatedAt: AnyColumn;
+  updatedAt?: AnyColumn;
   shortcode: AnyColumn;
 };
 

@@ -1688,11 +1688,11 @@ describe("statement Transaction suggestions", () => {
     expect(new Set(retained.map((row) => row.chargeKey)).size).toBe(2);
     await generate(ctx);
     expect(await readPendingStatements(ctx)).toHaveLength(1);
-    expect(
-      retained.every(
-        (row) => row.matchState === "unmatched" && row.transactionId === null,
-      ),
-    ).toBe(true);
+    expect(retained.every((row) => row.transactionId === null)).toBe(true);
+    expect(retained.map((row) => row.matchState).sort()).toEqual([
+      "held",
+      "unmatched",
+    ]);
     expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
   });
 
@@ -1945,7 +1945,7 @@ describe("statement Transaction suggestions", () => {
         failed: [
           {
             ref: "charge:synthetic:missing",
-            message: expect.stringContaining("not found"),
+            message: expect.stringContaining("requires source identity"),
           },
         ],
       });

@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import {
   sourceOccurrence,
+  sourceObservationAnnotation,
   sourceTransactionRecord,
   transactionImportRecord,
   auditLog,
@@ -129,6 +130,118 @@ describe("statement row ledger", () => {
         ctx.actor,
       ),
     ).rejects.toThrow("retained collection");
+    await getDb(ctx.db)
+      .update(sourceOccurrence)
+      .set({ currentObservationId: null });
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ occurrenceId: null, rowPosition: null });
+    await getDb(ctx.db)
+      .update(transactionImportRecord)
+      .set({ rowPosition: null, requestFingerprint: null });
+    await getDb(ctx.db).update(sourceObservationAnnotation).set({
+      disposition: "ignored",
+      dispositionReason: "not_modeled",
+      dispositionNote: "Explicit synthetic member ignore",
+    });
+    await getDb(ctx.db)
+      .update(financialEvidenceAlias)
+      .set({ occurrenceId: null });
+    await getDb(ctx.db).delete(sourceOccurrence);
+    const ignoredEvidence = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    const ignoredJudgments = await getDb(ctx.db)
+      .select()
+      .from(sourceObservationAnnotation);
+    const moneyBefore = await getDb(ctx.db).execute(
+      sql`SELECT (SELECT count(*) FROM "FinancialTransaction") AS transactions,(SELECT count(*) FROM "Expense") AS expenses`,
+    );
+    await expect(
+      recordSourceTransactionRecords(ctx.db, input, ctx.actor),
+    ).rejects.toThrow("unpositioned evidence");
+    await expect(
+      recordSourceTransactionRecords(
+        ctx.db,
+        {
+          ...input,
+          rows: input.rows.map((row) => ({
+            ...row,
+            accountDescriptor: ` ${row.accountDescriptor} `,
+            rawDescription: row.rawDescription.toLowerCase(),
+          })),
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow("unpositioned evidence");
+    expect(await getDb(ctx.db).select().from(sourceTransactionRecord)).toEqual(
+      ignoredEvidence,
+    );
+    expect(
+      await getDb(ctx.db).select().from(sourceObservationAnnotation),
+    ).toEqual(ignoredJudgments);
+    expect(await getDb(ctx.db).select().from(sourceOccurrence)).toEqual([]);
+    expect(
+      (
+        await getDb(ctx.db).execute(
+          sql`SELECT (SELECT count(*) FROM "FinancialTransaction") AS transactions,(SELECT count(*) FROM "Expense") AS expenses`,
+        )
+      ).rows,
+    ).toEqual(moneyBefore.rows);
+    const [unresolved] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!unresolved) throw new Error("Synthetic unresolved evidence missing");
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic reviewed legacy account",
+    });
+    const target = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-05-04",
+      amount: 128.5,
+      sourceRefs: [],
+    });
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "sourceTransactionRecord",
+      unresolved.id,
+      {
+        identityResolution: {
+          decision: "accept_existing",
+          expectedFactFingerprint: unresolved.factFingerprint,
+          expectedOccurrenceVersion: null,
+          expectedAcceptedTransactionId: null,
+          historicalTransactionIds: [],
+          accountId: account.output.id,
+          transactionId: target.output.id,
+          note: "Member confirmed this source evidence belongs to the existing transaction",
+          judgment: {
+            disposition: "ignored",
+            dispositionReason: "not_modeled",
+            dispositionNote: "Explicit synthetic member ignore",
+          },
+        },
+      },
+    );
+    expect(
+      (await getDb(ctx.db).select().from(sourceOccurrence))[0],
+    ).toMatchObject({
+      identityKind: "reviewed",
+      disposition: "ignored",
+      reviewState: "ready",
+      acceptedTransactionId: target.entityId,
+    });
+    expect(
+      await getDb(ctx.db).select().from(sourceObservationAnnotation),
+    ).toEqual(ignoredJudgments);
+    expect(
+      (
+        await getDb(ctx.db).execute(
+          sql`SELECT count(*)::int AS count FROM "Expense"`,
+        )
+      ).rows,
+    ).toEqual([{ count: 0 }]);
   });
 
   it("keeps null scope and different attested provider accounts independent", async () => {
@@ -282,6 +395,41 @@ describe("statement row ledger", () => {
       (await listSourceTransactionRecords(ctx.db, { current: true })).data[0]
         ?.id,
     ).toBe(successor.id);
+    const reviewedOwners = await getDb(ctx.db).select().from(sourceOccurrence);
+    const reviewedAudits = await getDb(ctx.db).select().from(auditLog);
+    await record([providerRow()]);
+    expect(await getDb(ctx.db).select().from(sourceOccurrence)).toEqual(
+      reviewedOwners,
+    );
+    expect(await getDb(ctx.db).select().from(auditLog)).toEqual(reviewedAudits);
+    for (const hold of ["identity_conflict", "ownership_conflict"] as const) {
+      await getDb(ctx.db).update(sourceOccurrence).set({ reviewState: hold });
+      await record(
+        [providerRow({ providerNotes: `Synthetic retained ${hold}` })],
+        { fingerprint: `synthetic-sticky-${hold}` },
+      );
+      expect(
+        (await getDb(ctx.db).select().from(sourceOccurrence))[0]?.reviewState,
+      ).toBe(hold);
+      const next = (await listSourceTransactionRecords(ctx.db, {})).data.find(
+        (row) => row.providerNotes === `Synthetic retained ${hold}`,
+      );
+      if (!next) throw new Error("Synthetic held revision missing");
+      await updateSourceTransactionRecords(
+        ctx.db,
+        {
+          selector: {
+            source: original.source,
+            externalIds: [original.externalId],
+          },
+          data: { supersededByExternalId: next.externalId },
+        },
+        ctx.actor,
+      );
+      expect(
+        (await getDb(ctx.db).select().from(sourceOccurrence))[0]?.reviewState,
+      ).toBe(hold);
+    }
   });
 
   it("accepts only an explicit occurrence handle and returns matching dollar values", async () => {
@@ -311,7 +459,7 @@ describe("statement row ledger", () => {
         amount: 128.5,
         sourceRefs: [{ source: row.source, externalId: row.externalId }],
       }),
-    ).rejects.toThrow("legacy source reference");
+    ).rejects.toThrow("Retained source evidence");
     const transaction = (
       await createRepoEntity(ctx, "financialTransaction", {
         accountId: account.id,
@@ -473,6 +621,39 @@ describe("statement row ledger", () => {
       recordSourceTransactionRecords(ctx.db, removed, ctx.actor),
     ).resolves.toMatchObject({ withdrawn: 1, completed: true });
     const before = (await getDb(ctx.db).select().from(sourceOccurrence))[0];
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic reappearance account",
+    });
+    const [evidence] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!before || !evidence)
+      throw new Error("Synthetic withdrawal evidence missing");
+    const resolution = {
+      decision: "distinct" as const,
+      expectedFactFingerprint: evidence.factFingerprint,
+      expectedOccurrenceVersion: before.version,
+      expectedAcceptedTransactionId: null,
+      historicalTransactionIds: [],
+      accountId: account.output.id,
+      note: "Member confirmed source reappearance",
+      judgment: { disposition: "open" as const },
+    };
+    await expect(
+      updateThroughKernel(
+        ctx.db,
+        ctx.actor,
+        "sourceTransactionRecord",
+        evidence.id,
+        { identityResolution: resolution },
+      ),
+    ).rejects.toThrow("positive source evidence");
+    await recordSourceTransactionRecords(
+      ctx.db,
+      { ...first, complete: true },
+      ctx.actor,
+    );
+    expect((await getDb(ctx.db).select().from(sourceOccurrence))[0]).toEqual(
+      before,
+    );
     await record([providerRow()], {
       fingerprint: "synthetic-reappeared",
       observedAt: "2026-06-02T00:00:00Z",
@@ -491,6 +672,32 @@ describe("statement row ledger", () => {
     expect(await getDb(ctx.db).select().from(sourceOccurrence)).toEqual(
       retained,
     );
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "sourceTransactionRecord",
+      evidence.id,
+      {
+        identityResolution: {
+          ...resolution,
+          expectedOccurrenceVersion: after!.version,
+        },
+      },
+    );
+    expect(
+      (await getDb(ctx.db).select().from(sourceOccurrence))[0],
+    ).toMatchObject({
+      reviewState: "ready",
+      withdrawnAt: null,
+      acceptedTransactionId: null,
+    });
+    expect(
+      (
+        await getDb(ctx.db).execute(
+          sql`SELECT count(*)::int AS count FROM "Expense"`,
+        )
+      ).rows,
+    ).toEqual([{ count: 0 }]);
   });
 
   it("keeps projection, drift and guarded judgment edits on the existing member surfaces", async () => {

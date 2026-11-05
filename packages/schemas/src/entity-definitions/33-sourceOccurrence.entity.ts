@@ -314,7 +314,7 @@ export const { definition, readSchemas } = defineEntityModel({
       { column: "dispositionReason", nullClause: true },
       {
         name: "SourceOccurrence_identity_check",
-        sql: "({identityKind} = 'provider' AND {providerIdentity} IS NOT NULL AND {physicalImportId} IS NULL AND {physicalPosition} IS NULL) OR ({identityKind} = 'positioned' AND {providerIdentity} IS NULL AND {physicalImportId} IS NOT NULL AND {physicalPosition} > 0)",
+        sql: "({identityKind} = 'provider' AND {providerIdentity} IS NOT NULL AND {physicalImportId} IS NULL AND {physicalPosition} IS NULL) OR ({identityKind} = 'positioned' AND {providerIdentity} IS NULL AND {physicalImportId} IS NOT NULL AND {physicalPosition} > 0) OR ({identityKind} = 'reviewed' AND {providerIdentity} IS NULL AND {physicalImportId} IS NULL AND {physicalPosition} IS NULL)",
       },
       { name: "SourceOccurrence_version_check", sql: "{version} > 0" },
       {
@@ -357,4 +357,32 @@ export const { definition, readSchemas } = defineEntityModel({
   extensions: { ports: {} },
 });
 
-export default defineEntity(definition, () => [], readSchemas);
+export default defineEntity(
+  definition,
+  (r) => [
+    r
+      .field("physicalImportId")
+      .named("physicalImport", "Original physical collection"),
+    r
+      .field("currentObservationId")
+      .named("currentObservation", "Current observation"),
+    r.field("accountId").named("account", "Resolved account"),
+    r
+      .field("supersededByOccurrenceId")
+      .named("replacementOccurrence", "Replacement occurrence"),
+    r
+      .field("replacementObservationId")
+      .named("replacementObservation", "Reviewed replacement observation", {
+        inverseOmit:
+          "The source observation reaches its reserved occurrence; replacement evidence is read on that owner.",
+      }),
+    r.field("withdrawalImportId").named("withdrawalProof", "Withdrawal proof", {
+      inverseOmit:
+        "A collection reaches source identities through its original physical relation and observation memberships.",
+    }),
+    r
+      .field("acceptedTransactionId")
+      .named("acceptedTransaction", "Accepted transaction"),
+  ],
+  readSchemas,
+);

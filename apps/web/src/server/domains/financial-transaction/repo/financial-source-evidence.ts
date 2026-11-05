@@ -8,6 +8,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
+import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   repositoryQueries,
@@ -21,6 +22,7 @@ import {
   financialTransaction,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 
@@ -127,6 +129,17 @@ export async function lockFinancialTransactionSources(
     "reviewed-booking",
     targets.map((target) => `transaction:${target.id}`),
   );
+  const retainedRefs = await financialSourceRefsFor(
+    tx,
+    targets.map((target) => target.id),
+  );
+  await lockFinancialEvidenceKeys(
+    tx,
+    "transaction-ref",
+    [...refs, ...[...retainedRefs.values()].flat()]
+      .filter((ref) => !occurrenceCode(ref).success)
+      .map(refKey),
+  );
   const occurrences = refs.flatMap((ref) => {
     const code = occurrenceCode(ref);
     return code.success ? [code.data] : [];
@@ -157,6 +170,17 @@ export async function lockFinancialSourceOccurrences(
   refs: readonly SourceRef[],
   transactionId?: string,
 ) {
+  const retainedRefs = transactionId
+    ? ((await financialSourceRefsFor(tx, [transactionId])).get(transactionId) ??
+      [])
+    : [];
+  await lockFinancialEvidenceKeys(
+    tx,
+    "transaction-ref",
+    [...refs, ...retainedRefs]
+      .filter((ref) => !occurrenceCode(ref).success)
+      .map(refKey),
+  );
   const codes = refs.flatMap((ref) => {
     const code = occurrenceCode(ref);
     return code.success ? [code.data] : [];
@@ -220,6 +244,13 @@ export async function assertFinancialSourceRefsAvailable(
         refuse(
           "The proven occurrence is unavailable or has a different accepted owner. Refresh its source review.",
         );
+      const history = await query.execute<{ held: boolean }>(
+        sql`SELECT ${sourceOccurrenceHasUnresolvedHistory(sql`${owner.id}::uuid`, sql`${owner.acceptedTransactionId}::uuid`)} AS held`,
+      );
+      if (history.rows[0]?.held)
+        refuse(
+          "Unresolved historical bindings require an explicit ownership review before accepting this source occurrence.",
+        );
       continue;
     }
     if (have.has(refKey(ref))) continue;
@@ -230,13 +261,17 @@ export async function assertFinancialSourceRefsAvailable(
         and(
           eq(financialEvidenceAlias.source, ref.source),
           eq(financialEvidenceAlias.value, ref.externalId),
+          or(
+            sql`${financialEvidenceAlias.observationId} IS NOT NULL`,
+            sql`(${financialEvidenceAlias.deletedAt} IS NULL AND EXISTS(SELECT 1 FROM "FinancialTransaction" bound WHERE bound.id=${financialEvidenceAlias.historicalTransactionId} AND ${notDeleted("bound")}))`,
+          ),
         ),
       )
       .limit(1);
     // Retired and ambiguous bindings block fresh actions too; alias uniqueness never proves ownership.
     if (alias || /^v[123]:/.test(ref.externalId))
       refuse(
-        "This legacy source reference is retained evidence. Refresh the review to use a proven occurrence handle.",
+        "Retained source evidence requires an explicit identity and ownership review before it can authorize a new transaction.",
       );
   }
 }
@@ -374,17 +409,28 @@ export async function replaceFinancialSourceRefs(
       tx,
       added.map((ref) => ref.source),
     );
-    await query.insert(financialEvidenceAlias).values(
-      added.map((ref) => ({
-        source: ref.source,
-        kind: "transaction_ref",
-        value: ref.externalId,
-        historicalTransactionId: id,
-        provenanceKey: `manual:${randomUUID()}`,
-        provenance: { kind: "explicit_transaction_reference" },
-        scopeEvidence: {},
-      })),
-    );
+    try {
+      await query.insert(financialEvidenceAlias).values(
+        added.map((ref) => ({
+          source: ref.source,
+          kind: "transaction_ref",
+          value: ref.externalId,
+          historicalTransactionId: id,
+          provenanceKey: `manual:${randomUUID()}`,
+          provenance: { kind: "explicit_transaction_reference" },
+          scopeEvidence: {},
+        })),
+      );
+    } catch (error) {
+      if (
+        findPgError(error)?.constraint ===
+        "FinancialEvidenceAlias_live_manual_reference_key"
+      )
+        refuse(
+          "Another transaction accepted this explicit reference while the reviewed write was waiting.",
+        );
+      throw error;
+    }
   }
   if (
     added.length ||

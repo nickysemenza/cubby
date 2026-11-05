@@ -149,6 +149,13 @@ export const financialEvidenceChildren = [
         on: ["provenanceKey"],
       },
       {
+        name: "FinancialEvidenceAlias_live_manual_reference_key",
+        unique: true,
+        on: ["source", "value"],
+        where:
+          "{kind} = 'transaction_ref' AND {deletedAt} IS NULL AND {provenance}->>'kind' = 'explicit_transaction_reference'",
+      },
+      {
         name: "FinancialEvidenceAlias_lookup_idx",
         on: ["source", "kind", "value"],
       },

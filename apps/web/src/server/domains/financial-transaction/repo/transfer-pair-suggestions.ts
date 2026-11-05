@@ -1349,7 +1349,7 @@ const transferPairSuggestions: SuggestionFamily<Pair> = {
   },
   // Rule pairs awaiting movement labels, or committed model publications
   // awaiting their statement refresh.
-  labelBacklog: sql`((s.active AND s.status = ${suggestionStatus.enum.pending} AND (s.data->>'needsLabel')::boolean)
+  labelBacklog: sql`((s.judgment#>>'{outflow,charge,chargeKey}' IS NULL OR s.judgment#>>'{outflow,charge,chargeKey}' LIKE 'SOC-%') AND (s.judgment#>>'{inflow,charge,chargeKey}' IS NULL OR s.judgment#>>'{inflow,charge,chargeKey}' LIKE 'SOC-%')) AND ((s.active AND s.status = ${suggestionStatus.enum.pending} AND (s.data->>'needsLabel')::boolean)
     OR coalesce((s.data->>'statementRefreshPending')::boolean, false))`,
 };
 
@@ -1635,9 +1635,15 @@ export async function generateTransferPairSuggestionsPage(
         pairKey: string;
         active: boolean;
         status: string;
+        retainReview: boolean;
       }>(sql`
       SELECT s.id::text AS id, to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",
-        s.data->>'pairKey' AS "pairKey", s.active, s.status
+        s.data->>'pairKey' AS "pairKey", s.active, s.status,
+        (s.decisions <> '[]'::jsonb OR s.judgment#>>'{outflow,charge,chargeKey}' NOT LIKE 'SOC-%'
+          OR s.judgment#>>'{inflow,charge,chargeKey}' NOT LIKE 'SOC-%'
+          OR EXISTS(SELECT 1 FROM ${sourceObservations} observed WHERE observed.source IN (s.judgment#>>'{outflow,charge,source}',s.judgment#>>'{inflow,charge,source}')
+            AND observed."chargeKey" IN (s.judgment#>>'{outflow,charge,chargeKey}',s.judgment#>>'{inflow,charge,chargeKey}')
+            AND observed."reviewState" IS DISTINCT FROM ${sourceOccurrenceReviewState.enum.ready})) AS "retainReview"
       FROM "Suggestion" s
       WHERE ${retireScope(scope, input.createdBefore)}
         ${after.after ? sql`AND (s."createdAt", s.id) > (${after.after.createdAt}::timestamp, ${after.after.id}::uuid)` : sql``}
@@ -1678,6 +1684,10 @@ export async function generateTransferPairSuggestionsPage(
             return;
           }
           try {
+            if (row.retainReview) {
+              page.reasons.still_candidate++;
+              return;
+            }
             // Absence is verified now, not inferred from an earlier seed page.
             // Matching preparation holds no publication transaction open.
             const current = await buildTransferPair(db, row.pairKey);

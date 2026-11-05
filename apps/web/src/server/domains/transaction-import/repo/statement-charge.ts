@@ -78,15 +78,21 @@ export const pendingSuggestion = (alias = "s") =>
   sql`${sql.raw(`"${alias}"`)}.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.statement_transaction)}
     AND ${sql.raw(`"${alias}"`)}.active
     AND ${sql.raw(`"${alias}"`)}.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
-    AND EXISTS (SELECT 1 FROM "SourceOccurrence" occurrence
-      JOIN ${sourceObservations} head ON head.id = occurrence."currentObservationId"
-      WHERE occurrence.source = ${suggestionField("source", alias)}
-        AND occurrence.shortcode = ${suggestionField("chargeKey", alias)}
-        AND occurrence."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
-        AND ${notDeleted("occurrence")} AND ${notDeleted("head")}
-        AND occurrence.disposition <> ${sourceTransactionRecordDisposition.enum.ignored}
-        AND occurrence."supersededByOccurrenceId" IS NULL
-        AND occurrence."replacementObservationId" IS NULL
-        AND head."externalId" = ${sql.raw(`"${alias}"`)}.data->>'headRef'
-        AND (occurrence."withdrawnAt" IS NULL OR ${sql.raw(`"${alias}"`)}.data->>'reviewReason' IS NOT NULL)
-        AND (occurrence."acceptedTransactionId" IS NULL OR ${sql.raw(`"${alias}"`)}.data->>'recommended' IN (${statementTransactionAction.enum.void}, ${statementTransactionAction.enum.book})))`;
+    AND EXISTS (SELECT 1 FROM ${sourceObservations} observation
+      WHERE observation.id=${sql.raw(`"${alias}"`)}."recordId" AND ${notDeleted("observation")}
+        AND observation.disposition <> ${sourceTransactionRecordDisposition.enum.ignored}
+        AND observation."supersededByRowId" IS NULL
+        AND (observation."acceptedTransactionId" IS NULL OR ${sql.raw(`"${alias}"`)}.data->>'recommended' IN (${statementTransactionAction.enum.void}, ${statementTransactionAction.enum.book})))`;
+
+/** Retained review can remain visible while automatic work requires current proven authority. */
+export const sourceSuggestionAutomaticEligible = (
+  alias = "s",
+  allowRetainedCorrection = false,
+) => sql`EXISTS (
+  SELECT 1 FROM ${sourceObservations} observed
+  WHERE observed.id=${sql.identifier(alias)}."recordId" AND ${notDeleted("observed")}
+    AND observed."occurrenceId" IS NOT NULL AND observed."reviewState"=${sourceOccurrenceReviewState.enum.ready}
+    AND observed.current AND observed.disposition <> ${sourceTransactionRecordDisposition.enum.ignored} AND observed."supersededByRowId" IS NULL
+    AND observed."chargeKey"=${sql.identifier(alias)}.data->>'chargeKey'
+    AND (observed."withdrawnAt" IS NULL OR ${allowRetainedCorrection ? sql`${sql.identifier(alias)}.data->>'reviewReason' IS NOT NULL` : sql`${sql.identifier(alias)}.data->>'recommended'=${statementTransactionAction.enum.void}`})
+)`;

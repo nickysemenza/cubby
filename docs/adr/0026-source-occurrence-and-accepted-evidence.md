@@ -41,8 +41,7 @@ memberships and external bindings as full row multisets, checks exact IEEE money
 round trips, and verifies inert archives. Other money and member choices do not change.
 The RunStep gate refuses unfinished financial refresh work. No production migration,
 native installation or preservation read-back is implied by a local fixture.
-Incompatible pending machine advice with no decisions or suppression is retired
-with complete preimages retained; member decisions and successful receipts stay intact.
+Pending advice, paid labels, suppressions and member decisions stay in the existing review. Unsupported identity is displayed as held rather than unmatched; retained transaction links are historical evidence, not accepted ownership. Missing proof creates no new task. An explicit audited SourceRecord identityResolution can confirm a distinct event, accept an exact existing transaction, or assign an unproven observation to an existing reviewed occurrence. Its reviewed fingerprint, owner version and complete historical binding set fence concurrent changes. Ignore judgments and original evidence survive. Automatic intake never makes that judgment.
 
 ## Consequences
 

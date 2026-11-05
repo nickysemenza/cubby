@@ -6,6 +6,7 @@ import type {
   TransactionImportId,
   FinancialTransactionId,
 } from "@cubby/schemas/identifiers";
+import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import type {
   SourceTransactionRecordDisposition,
   SourceTransactionRecordDispositionReason,
@@ -19,6 +20,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sourceTransactionRecord } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
@@ -46,8 +48,12 @@ const sourceObservationFacts = sql`(
     CASE WHEN r."occurrenceId" IS NULL THEN a."withdrawalImportId" ELSE o."withdrawalImportId" END AS "withdrawalImportId",
     CASE WHEN r."occurrenceId" IS NULL THEN a."lastObservedAt" ELSE o."lastObservedAt" END AS "lastObservedAt",
     CASE WHEN r."occurrenceId" IS NULL THEN a."updatedAt" ELSE greatest(a."updatedAt", o."updatedAt") END AS "updatedAt",
-    a.notes, o."reviewState", o.version AS "occurrenceVersion", o."acceptedTransactionId",
-    ft.shortcode AS "transactionShortcode"
+    a.notes, CASE WHEN o."reviewState"=${sourceOccurrenceReviewState.enum.ready} AND ${sourceOccurrenceHasUnresolvedHistory(sql`o.id`, sql`o."acceptedTransactionId"`)} THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE o."reviewState" END AS "reviewState", o.version AS "occurrenceVersion", o."acceptedTransactionId",
+    ft.shortcode AS "transactionShortcode",
+    ARRAY(SELECT DISTINCT historical.shortcode FROM "FinancialEvidenceAlias" observed_alias
+      JOIN "FinancialEvidenceAlias" binding ON binding.source=observed_alias.source AND binding.value=observed_alias.value
+      JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}
+      WHERE (observed_alias."observationId"=r.id OR (r."occurrenceId" IS NOT NULL AND observed_alias."occurrenceId"=r."occurrenceId")) ORDER BY historical.shortcode) AS "historicalTransactionIds"
   FROM "SourceTransactionRecord" r
   LEFT JOIN "SourceOccurrence" o ON o.id = r."occurrenceId"
   LEFT JOIN "SourceObservationAnnotation" a ON a."observationId" = r.id
@@ -60,12 +66,13 @@ const sourceObservationFacts = sql`(
 export const sourceObservations = sql`(SELECT observation.*,
   CASE WHEN observation.disposition = ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} THEN ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}
     WHEN observation."supersededByRowId" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.superseded}
+    WHEN observation."transactionShortcode" IS NULL AND (observation."occurrenceId" IS NULL OR observation."reviewState" <> ${sourceOccurrenceReviewState.enum.ready} OR cardinality(observation."historicalTransactionIds") > 0) THEN ${sourceTransactionRecordMatchState.enum.held}
     WHEN observation."transactionShortcode" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.matched} ELSE ${sourceTransactionRecordMatchState.enum.unmatched} END AS "matchState"
   FROM ${sourceObservationFacts} observation)`;
 
 /** One row per explicit owner; there is no alias lookup or observation-state fold. */
 export const sourceOccurrenceStates = sql`(
-  SELECT o.source, o.shortcode AS "chargeKey", o.id AS "occurrenceId", o."reviewState", o.version, o."acceptedTransactionId",
+  SELECT o.source, o.shortcode AS "chargeKey", o.id AS "occurrenceId", CASE WHEN o."reviewState"=${sourceOccurrenceReviewState.enum.ready} AND ${sourceOccurrenceHasUnresolvedHistory(sql`o.id`, sql`o."acceptedTransactionId"`)} THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE o."reviewState" END AS "reviewState", o.version, o."acceptedTransactionId",
     o.disposition = ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} AS ignored, (o."supersededByOccurrenceId" IS NOT NULL OR o."replacementObservationId" IS NOT NULL) AS superseded,
     ft.shortcode
   FROM "SourceOccurrence" o
@@ -130,9 +137,10 @@ export const sourceObservationColumns = {
   occurrenceVersion: projected<number | null>("occurrenceVersion"),
   reviewState: projected<string | null>("reviewState"),
   transactionShortcode: projected<string | null>("transactionShortcode"),
-  matchState: projected<"ignored" | "superseded" | "matched" | "unmatched">(
-    "matchState",
-  ),
+  historicalTransactionIds: projected<string[]>("historicalTransactionIds"),
+  matchState: projected<
+    "ignored" | "superseded" | "matched" | "held" | "unmatched"
+  >("matchState"),
 };
 
 export const sourceObservationFrom = sql`${sourceObservations} "SourceTransactionRecord"`;

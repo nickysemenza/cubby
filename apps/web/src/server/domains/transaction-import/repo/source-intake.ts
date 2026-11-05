@@ -58,16 +58,19 @@ const requiredIdentity = (identity: Identity | null): Identity => {
     return refuse("A new observation requires proven source identity.");
   return identity;
 };
-const identityKey = (identity: Identity) =>
+const identityKey = (identity: {
+  kind: z.infer<typeof sourceOccurrenceIdentityKind>;
+  scope: string;
+  providerId: string | null;
+  position: number | null;
+}) =>
   JSON.stringify([
     identity.kind,
     identity.scope,
     identity.providerId,
     identity.position,
   ]);
-const storedIdentity = (
-  owner: typeof sourceOccurrence.$inferSelect,
-): Identity => ({
+const storedIdentity = (owner: typeof sourceOccurrence.$inferSelect) => ({
   kind: owner.identityKind,
   scope: owner.identityScope,
   providerId: owner.providerIdentity,
@@ -288,6 +291,10 @@ export async function recordSourceTransactionRecords(
             .select({
               membership: transactionImportRecord,
               observation: sourceTransactionRecord,
+              legacyAlias: sql<
+                string | null
+              >`(SELECT retained.value FROM "FinancialEvidenceAlias" retained
+                WHERE retained."observationId"=${sourceTransactionRecord.id} AND retained.value LIKE 'v1:%' ORDER BY retained.id LIMIT 1)`,
             })
             .from(transactionImportRecord)
             .innerJoin(
@@ -407,6 +414,21 @@ export async function recordSourceTransactionRecords(
             )
         : [];
       const chosen = prepared.map((incoming) => {
+        // A parser-supplied ordinal cannot retroactively attest an old collection.
+        // Refuse even an ignored twin before a new occurrence could authorize money.
+        if (
+          incoming.identity?.kind === "positioned" &&
+          members.some(
+            (member) =>
+              member.membership.rowPosition === null &&
+              (member.observation.factFingerprint ===
+                incoming.factFingerprint ||
+                member.legacyAlias === incoming.legacyExternalId),
+          )
+        )
+          refuse(
+            "A retained collection has unpositioned evidence; replay cannot attest a new physical position. Retain the original observation and its decisions.",
+          );
         if (incoming.identity === null) {
           const retainedMembers = members.filter(
             (member) =>
@@ -628,7 +650,7 @@ export async function recordSourceTransactionRecords(
         WITH incoming(key,reference,provider,owner,kind) AS (VALUES ${sql.join(
           fresh.map(
             ({ incoming }) =>
-              sql`(${incoming.key},${incoming.legacyExternalId},${requiredIdentity(incoming.identity).providerId}::text,${byKey.get(incoming.key)!.id}::uuid,${requiredIdentity(incoming.identity).kind}::text)`,
+              sql`(${incoming.key},${incoming.legacyExternalId},${incoming.row.providerTransactionId ?? null}::text,${byKey.get(incoming.key)!.id}::uuid,${requiredIdentity(incoming.identity).kind}::text)`,
           ),
           sql`, `,
         )})
@@ -640,14 +662,14 @@ export async function recordSourceTransactionRecords(
         SELECT DISTINCT incoming.key FROM incoming
         JOIN "SourceTransactionRecord" antecedent ON antecedent.source=${source} AND antecedent."providerTransactionId"=incoming.provider
         LEFT JOIN "SourceOccurrence" prior ON prior.id=antecedent."occurrenceId"
-        WHERE incoming.kind=${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)} AND antecedent."batchId"<>${batch.id}::uuid AND antecedent."occurrenceId" IS DISTINCT FROM incoming.owner
+        WHERE incoming.provider IS NOT NULL AND antecedent."batchId"<>${batch.id}::uuid AND antecedent."occurrenceId" IS DISTINCT FROM incoming.owner
           AND (prior.id IS NULL OR prior."identityKind"<>${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)})`)
             ).rows.map((row) => row.key)
           : [],
       );
       const headChanges = chosen.flatMap((row) => {
         const owner = byKey.get(row.incoming.key);
-        if (!owner) return [];
+        if (!owner || row.member) return [];
         const observation =
           row.observation ??
           createdObservations.find(
@@ -662,16 +684,25 @@ export async function recordSourceTransactionRecords(
             ?.factFingerprint !== row.incoming.factFingerprint;
         const currentObservationId = !row.owner
           ? observation.id
-          : differentFacts && owner.withdrawnAt === null
+          : differentFacts &&
+              owner.withdrawnAt === null &&
+              owner.reviewState === "ready"
             ? null
             : owner.currentObservationId;
-        const reviewState = overlapKeys.has(row.incoming.key)
-          ? "identity_conflict"
-          : owner.withdrawnAt !== null
-            ? "reappeared"
-            : differentFacts
-              ? "revision_order_unknown"
-              : owner.reviewState;
+        const failedProviderProof =
+          !!row.incoming.row.providerTransactionId &&
+          row.incoming.identity?.kind !== "provider";
+        const reviewState =
+          owner.reviewState !== "ready" &&
+          owner.reviewState !== "revision_order_unknown"
+            ? owner.reviewState
+            : overlapKeys.has(row.incoming.key) || failedProviderProof
+              ? "identity_conflict"
+              : owner.withdrawnAt !== null && observedAt > owner.withdrawnAt
+                ? "reappeared"
+                : differentFacts && owner.reviewState === "ready"
+                  ? "revision_order_unknown"
+                  : owner.reviewState;
         const semantic =
           row.owner !== undefined &&
           (currentObservationId !== owner.currentObservationId ||
@@ -792,7 +823,7 @@ export async function recordSourceTransactionRecords(
           coverage.visibility !== "all" ||
           input.import.rowCountDeclared !== rowCountStored
         )
-          refuse(
+          return refuse(
             "Withdrawals require a completed, exhaustive rechecked account window.",
           );
         const withdrawals = locked.filter(

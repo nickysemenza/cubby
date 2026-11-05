@@ -26,9 +26,10 @@ export async function assertSourceTransactionRecordDeletionAllowed(
       WHERE ${notDeleted("owner")} AND (
         owner."replacementObservationId" IN (${selected})
         -- includes-deleted: an accepted reservation protects every retained observation.
-        OR (owner."acceptedTransactionId" IS NOT NULL AND EXISTS (
+        OR (owner."acceptedTransactionId" IS NOT NULL
+          AND EXISTS(SELECT 1 FROM "FinancialTransaction" accepted WHERE accepted.id=owner."acceptedTransactionId" AND ${notDeleted("accepted")})
           -- includes-deleted: an accepted reservation protects the original retained observation.
-          SELECT 1 FROM "SourceTransactionRecord" observation
+          AND EXISTS (SELECT 1 FROM "SourceTransactionRecord" observation
           WHERE observation."occurrenceId" = owner.id AND observation.id IN (${selected}))))
       UNION ALL
       SELECT 1 FROM "SourceObservationAnnotation" annotation
@@ -38,7 +39,9 @@ export async function assertSourceTransactionRecordDeletionAllowed(
       UNION ALL
       -- Historical bindings remain evidence blockers; they never choose a current owner.
       SELECT 1 FROM "FinancialEvidenceAlias" evidence
-      WHERE evidence."observationId" IN (${selected}) AND evidence."historicalTransactionId" IS NOT NULL
+      JOIN "FinancialEvidenceAlias" binding ON binding.source=evidence.source AND binding.value=evidence.value AND ${notDeleted("binding")}
+      JOIN "FinancialTransaction" target ON target.id=binding."historicalTransactionId" AND ${notDeleted("target")}
+      WHERE evidence."observationId" IN (${selected}) AND binding."historicalTransactionId" IS NOT NULL
     ) AS protected`);
   if (rows[0]?.protected)
     throw createAppError(

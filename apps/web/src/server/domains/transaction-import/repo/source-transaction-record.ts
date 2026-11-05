@@ -128,11 +128,13 @@ export async function getSourceTransactionRecordSummary(
   const { rows } = await unwrapDb(db).execute<{
     total: number;
     matched: number;
+    held: number;
     unmatched: number;
     ignored: number;
     superseded: number;
     amountTotal: string;
     matchedAmount: string;
+    heldAmount: string;
     unmatchedAmount: string;
     ignoredAmount: string;
     supersededAmount: string;
@@ -161,11 +163,13 @@ export async function getSourceTransactionRecordSummary(
   return {
     total: Number(row?.total ?? 0),
     matched: Number(row?.matched ?? 0),
+    held: Number(row?.held ?? 0),
     unmatched: Number(row?.unmatched ?? 0),
     ignored: Number(row?.ignored ?? 0),
     superseded: Number(row?.superseded ?? 0),
     amountTotal: Number(row?.amountTotal ?? 0),
     matchedAmount: Number(row?.matchedAmount ?? 0),
+    heldAmount: Number(row?.heldAmount ?? 0),
     unmatchedAmount: Number(row?.unmatchedAmount ?? 0),
     ignoredAmount: Number(row?.ignoredAmount ?? 0),
     supersededAmount: Number(row?.supersededAmount ?? 0),

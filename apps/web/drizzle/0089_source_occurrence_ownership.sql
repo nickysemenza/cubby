@@ -6,6 +6,8 @@ DO $migration$
 DECLARE
   item record;
   locks text;
+  entity_mark_enabled boolean;
+  review_preimage_hash text;
   original_oids oid[] := ARRAY['public."SourceTransactionRecord"'::regclass::oid,
     'public."TransactionImportRecord"'::regclass::oid, 'public."EntityExternalId"'::regclass::oid];
 BEGIN
@@ -21,8 +23,12 @@ BEGIN
   FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
   WHERE c.oid IN (SELECT unnest(original_oids) UNION SELECT conrelid FROM pg_constraint WHERE contype='f' AND confrelid=ANY(original_oids)
     UNION SELECT confrelid FROM pg_constraint WHERE contype='f' AND conrelid=ANY(original_oids)
-    UNION SELECT 'public."FinancialTransaction"'::regclass::oid UNION SELECT 'public."Suggestion"'::regclass::oid);
+    UNION SELECT 'public."FinancialTransaction"'::regclass::oid UNION SELECT 'public."Suggestion"'::regclass::oid
+    UNION SELECT unnest(ARRAY['public."EntityAttachment"'::regclass::oid,'public."EntityLink"'::regclass::oid,'public."Expense"'::regclass::oid,'public."FinancialTransactionAllocation"'::regclass::oid,'public."Image"'::regclass::oid,'public."ImportSourceOrder"'::regclass::oid,'public."ImportSourceProduct"'::regclass::oid,'public."Product"'::regclass::oid,'public."ProductCategory"'::regclass::oid,'public."Purchase"'::regclass::oid,'public."SpendingCategory"'::regclass::oid,'public."Vendor"'::regclass::oid]));
   EXECUTE 'LOCK TABLE '||locks||' IN ACCESS EXCLUSIVE MODE';
+  SELECT md5(coalesce(string_agg(md5(to_jsonb(s)::text),'|' ORDER BY s.id),'')) INTO review_preimage_hash FROM public."Suggestion" s;
+  SELECT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public."Entity"'::regclass AND tgname='Entity_derived_mark' AND tgenabled='O') INTO entity_mark_enabled;
+  IF entity_mark_enabled THEN ALTER TABLE public."Entity" DISABLE TRIGGER "Entity_derived_mark"; END IF;
   IF EXISTS(SELECT 1 FROM pg_depend dep JOIN pg_rewrite rewrite ON rewrite.oid=dep.objid WHERE dep.refobjid=ANY(original_oids)) THEN
     RAISE EXCEPTION 'Source evidence view dependencies require an explicit disposition'; END IF;
   IF EXISTS(SELECT 1 FROM public."SourceTransactionRecord" r WHERE r.amount::text IN ('NaN','Infinity','-Infinity')
@@ -128,11 +134,11 @@ CREATE TABLE "SourceOccurrence" (
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL,
 	"deletedAt" timestamp,
-	CONSTRAINT "SourceOccurrence_identityKind_check" CHECK ("SourceOccurrence"."identityKind" IN ('provider', 'positioned')),
+	CONSTRAINT "SourceOccurrence_identityKind_check" CHECK ("SourceOccurrence"."identityKind" IN ('provider', 'positioned', 'reviewed')),
 	CONSTRAINT "SourceOccurrence_reviewState_check" CHECK ("SourceOccurrence"."reviewState" IN ('ready', 'identity_conflict', 'judgment_conflict', 'ownership_conflict', 'revision_order_unknown', 'reappeared')),
 	CONSTRAINT "SourceOccurrence_disposition_check" CHECK ("SourceOccurrence"."disposition" IN ('open', 'ignored')),
 	CONSTRAINT "SourceOccurrence_dispositionReason_check" CHECK ("SourceOccurrence"."dispositionReason" IS NULL OR "SourceOccurrence"."dispositionReason" IN ('not_modeled', 'not_a_purchase', 'duplicate_of_other_source', 'pre_cubby', 'other')),
-	CONSTRAINT "SourceOccurrence_identity_check" CHECK (("SourceOccurrence"."identityKind" = 'provider' AND "SourceOccurrence"."providerIdentity" IS NOT NULL AND "SourceOccurrence"."physicalImportId" IS NULL AND "SourceOccurrence"."physicalPosition" IS NULL) OR ("SourceOccurrence"."identityKind" = 'positioned' AND "SourceOccurrence"."providerIdentity" IS NULL AND "SourceOccurrence"."physicalImportId" IS NOT NULL AND "SourceOccurrence"."physicalPosition" > 0)),
+	CONSTRAINT "SourceOccurrence_identity_check" CHECK (("SourceOccurrence"."identityKind" = 'provider' AND "SourceOccurrence"."providerIdentity" IS NOT NULL AND "SourceOccurrence"."physicalImportId" IS NULL AND "SourceOccurrence"."physicalPosition" IS NULL) OR ("SourceOccurrence"."identityKind" = 'positioned' AND "SourceOccurrence"."providerIdentity" IS NULL AND "SourceOccurrence"."physicalImportId" IS NOT NULL AND "SourceOccurrence"."physicalPosition" > 0) OR ("SourceOccurrence"."identityKind" = 'reviewed' AND "SourceOccurrence"."providerIdentity" IS NULL AND "SourceOccurrence"."physicalImportId" IS NULL AND "SourceOccurrence"."physicalPosition" IS NULL)),
 	CONSTRAINT "SourceOccurrence_version_check" CHECK ("SourceOccurrence"."version" > 0),
 	CONSTRAINT "SourceOccurrence_supersession_check" CHECK ("SourceOccurrence"."supersededByOccurrenceId" IS NULL OR "SourceOccurrence"."supersededByOccurrenceId" <> "SourceOccurrence"."id"),
 	CONSTRAINT "SourceOccurrence_disposition_state_check" CHECK (("SourceOccurrence"."disposition" = 'open' AND "SourceOccurrence"."dispositionReason" IS NULL AND "SourceOccurrence"."dispositionNote" IS NULL) OR ("SourceOccurrence"."disposition" = 'ignored' AND "SourceOccurrence"."dispositionReason" IS NOT NULL AND "SourceOccurrence"."dispositionNote" IS NOT NULL))
@@ -251,17 +257,23 @@ CREATE TABLE "TransactionImportRecord" (
         ELSE jsonb_build_object('kind','original_collection_position','source',owner.source,'fingerprint',substring(owner.identity_scope FROM length('collection:')+1),'position',owner.physical_position) END,
       frontier.created_at,frontier.updated_at,NULL
     FROM proven_occurrences owner JOIN occurrence_frontiers frontier USING(id)
-    JOIN LATERAL(SELECT * FROM observation_mapping member WHERE member.occurrence_id=owner.id ORDER BY member.id LIMIT 1) representative ON true;
+    JOIN (SELECT DISTINCT ON (occurrence_id) * FROM observation_mapping ORDER BY occurrence_id,id) representative ON representative.occurrence_id=owner.id;
   -- Retain exact replacement meaning. Neither this edge nor an alias copies accepted ownership.
   UPDATE public."SourceOccurrence" owner SET "replacementObservationId"=old."supersededByRowId",
     "supersededByOccurrenceId"=CASE WHEN successor.occurrence_id<>owner.id THEN successor.occurrence_id END
     FROM occurrence_frontiers frontier JOIN observation_mapping old ON old.occurrence_id=frontier.id
     LEFT JOIN observation_mapping successor ON successor.id=old."supersededByRowId"
     WHERE owner.id=frontier.id AND frontier.judgment_count=1 AND old."supersededByRowId" IS NOT NULL AND successor.occurrence_id IS DISTINCT FROM owner.id;
+  CREATE INDEX observation_mapping_occurrence_idx ON observation_mapping(occurrence_id);
+  CREATE INDEX observation_mapping_legacy_idx ON observation_mapping(source,"legacyExternalId");
+  ANALYZE observation_mapping;
+  UPDATE public."SourceOccurrence" owner SET "reviewState"='identity_conflict'
+    WHERE owner."reviewState"='ready' AND EXISTS(SELECT 1 FROM observation_mapping member
+      WHERE member.occurrence_id=owner.id AND member."providerTransactionId" IS NOT NULL AND NOT member.provider_proven);
   -- Weak historical grouping can only hold uncertain cross-collection overlap, never establish identity.
   UPDATE public."SourceOccurrence" owner SET "reviewState"='identity_conflict'
     WHERE owner."reviewState"='ready' AND EXISTS(
-      SELECT 1 FROM observation_mapping own JOIN observation_mapping other ON other.source=own.source AND other."chargeKey"=own."chargeKey"
+      SELECT 1 FROM observation_mapping own JOIN observation_mapping other ON other.source=own.source AND (other."chargeKey"=own."chargeKey" OR other."legacyExternalId"=own."legacyExternalId")
       WHERE own.occurrence_id=owner.id AND other.occurrence_id IS DISTINCT FROM own.occurrence_id);
   UPDATE public."SourceOccurrence" owner SET "deletedAt"=(SELECT max(member."deletedAt") FROM observation_mapping member WHERE member.occurrence_id=owner.id)
     WHERE NOT EXISTS(SELECT 1 FROM observation_mapping member WHERE member.occurrence_id=owner.id AND member."deletedAt" IS NULL);
@@ -319,6 +331,8 @@ CREATE UNIQUE INDEX "EntityExternalId_entity_source_kind_primary_key" ON "Entity
 CREATE INDEX "EntityExternalId_entityId_idx" ON "EntityExternalId" USING btree ("entityId");
 
 CREATE UNIQUE INDEX "FinancialEvidenceAlias_provenance_key" ON "FinancialEvidenceAlias" USING btree ("provenanceKey");
+
+CREATE UNIQUE INDEX "FinancialEvidenceAlias_live_manual_reference_key" ON "FinancialEvidenceAlias" USING btree ("source","value") WHERE "FinancialEvidenceAlias"."kind" = 'transaction_ref' AND "FinancialEvidenceAlias"."deletedAt" IS NULL AND "FinancialEvidenceAlias"."provenance"->>'kind' = 'explicit_transaction_reference';
 
 CREATE INDEX "FinancialEvidenceAlias_lookup_idx" ON "FinancialEvidenceAlias" USING btree ("source","kind","value");
 
@@ -433,18 +447,21 @@ ALTER TABLE "TransactionImportRecord" ADD CONSTRAINT "TransactionImportRecord_im
 
 ALTER TABLE "TransactionImportRecord" ADD CONSTRAINT "TransactionImportRecord_statementRowId_SourceTransactionRecord_id_fk" FOREIGN KEY ("statementRowId") REFERENCES "public"."SourceTransactionRecord"("id") ON DELETE no action ON UPDATE no action;
 
-  -- Only uncommitted machine advice becomes stale. Member decisions/suppression and successful receipts are untouched.
-  CREATE TABLE archive."Suggestion_occurrence_preimage" AS SELECT * FROM public."Suggestion" suggestion
-    WHERE suggestion.status='pending' AND suggestion.suppression IS NULL AND suggestion.decisions='[]'::jsonb AND (
-      suggestion.family='statement_transaction' AND suggestion.data->>'chargeKey' NOT LIKE 'SOC-%'
-      OR suggestion.family='transfer_pair' AND (
-        suggestion.judgment#>>'{outflow,charge,chargeKey}' NOT LIKE 'SOC-%'
-        OR suggestion.judgment#>>'{inflow,charge,chargeKey}' NOT LIKE 'SOC-%'));
-  UPDATE public."Suggestion" current SET active=false,status='superseded',"updatedAt"=now()
-    FROM archive."Suggestion_occurrence_preimage" original WHERE current.id=original.id;
-  IF EXISTS(SELECT 1 FROM archive."Suggestion_occurrence_preimage" original JOIN public."Suggestion" current USING(id)
-    WHERE (to_jsonb(original)-'active'-'status'-'updatedAt') IS DISTINCT FROM (to_jsonb(current)-'active'-'status'-'updatedAt')) THEN
-    RAISE EXCEPTION 'Stale-advice retirement changed retained financial evidence or decisions'; END IF;
+  -- A failed predecessor Run resumes through retained refs, never by ordering an old
+  -- charge-key cursor against SOC handles. Preserve its complete cursor preimage.
+  CREATE TABLE archive."RunStep_occurrence_cursor_preimage" AS
+    SELECT * FROM public."RunStep" WHERE (key LIKE 'statement\_%' ESCAPE '\' OR key LIKE 'transfer\_pair\_%' ESCAPE '\')
+      AND state NOT IN ('done','skipped','cancelled') AND cursor IS NOT NULL;
+  UPDATE public."RunStep" step SET cursor=NULL
+    FROM archive."RunStep_occurrence_cursor_preimage" old WHERE step.id=old.id;
+  IF EXISTS(SELECT 1 FROM archive."RunStep_occurrence_cursor_preimage" old JOIN public."RunStep" step USING(id)
+    WHERE (to_jsonb(old)-'cursor') IS DISTINCT FROM (to_jsonb(step)-'cursor')) THEN
+    RAISE EXCEPTION 'Retained failed work changed beyond cursor rebinding'; END IF;
+  -- Pending paid advice, member review, suppressions and receipts remain active and byte-identical.
+  -- Readers mark unsupported source identity held, and no automatic action uses retained legacy advice.
+  IF review_preimage_hash IS DISTINCT FROM (SELECT md5(coalesce(string_agg(md5(to_jsonb(s)::text),'|' ORDER BY s.id),'')) FROM public."Suggestion" s) THEN
+    RAISE EXCEPTION 'Source cutover changed retained review, paid labels or member decisions'; END IF;
+  IF entity_mark_enabled THEN ALTER TABLE public."Entity" ENABLE TRIGGER "Entity_derived_mark"; END IF;
   -- Restore external incoming references and row triggers against the replacement public owners.
   FOR item IN SELECT * FROM occurrence_original_fks WHERE NOT owner_oid=ANY(original_oids) LOOP
     EXECUTE format('ALTER TABLE %s ADD CONSTRAINT %I %s',item.owner,item.conname,item.definition); END LOOP;
@@ -499,7 +516,6 @@ ALTER TABLE "TransactionImportRecord" ADD CONSTRAINT "TransactionImportRecord_st
     RAISE EXCEPTION 'Archived source preimages are not inert'; END IF;
 END $migration$;
 
---> statement-breakpoint
 CREATE OR REPLACE FUNCTION derived_mark_entityattachment() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN

@@ -7,7 +7,11 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
-import { unwrapDb, withTransactionOn } from "~/server/db/helpers";
+import {
+  unwrapDb,
+  withTransactionOn,
+  runAfterCommit,
+} from "~/server/db/helpers";
 import { sourceTransactionRecord } from "~/server/db/schema";
 import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import { sourceTransactionRecordSearch } from "~/server/domains/transaction-import/repo/search-read-source-transaction-record";
@@ -39,7 +43,6 @@ import {
 type ReaderDb = Database | DrizzleTransaction;
 type SourceRow = typeof sourceTransactionRecord.$inferSelect;
 
-const chargeState = sourceObservationField("matchState");
 const initialFingerprint = sql`(SELECT i.fingerprint FROM "TransactionImport" i WHERE i.id = "SourceTransactionRecord"."batchId")`;
 const transactionCode = sourceObservationField("transactionShortcode");
 
@@ -47,6 +50,7 @@ const sourceRead = {
   media: true,
   references: {
     source: { kind: "public" },
+    occurrenceId: { kind: "lookup", missing: "null", includeDeleted: true },
     accountId: { kind: "lookup", missing: "null", includeDeleted: true },
     batchId: { kind: "lookup", missing: "error", includeDeleted: true },
     withdrawalImportId: {
@@ -70,7 +74,7 @@ const sourceRead = {
       const result = await unwrapDb(db)
         .select({
           id: sourceTransactionRecord.id,
-          matchState: chargeState,
+          matchState: sourceObservationField("matchState"),
           transactionId: transactionCode,
         })
         .from(sourceTransactionRecord)
@@ -183,7 +187,10 @@ export const sourceTransactionRecordScaffold = listScaffold(
       acceptedTransactions: sql`SELECT "record" AS "owner", "transaction" FROM (${sourceTransactionSettlements}) accepted`,
     },
     derived: {
-      matchState: chargeState,
+      matchState: sourceObservationField("matchState"),
+      historicalTransactionIds: sourceObservationField(
+        "historicalTransactionIds",
+      ),
       externalId: sourceObservationField("externalId"),
       legacyExternalId: sourceObservationField("legacyExternalId"),
       chargeKey: sourceObservationField("chargeKey"),
@@ -199,6 +206,9 @@ export const sourceTransactionRecordScaffold = listScaffold(
     read: {
       ...sourceRead,
       columns: {
+        historicalTransactionIds: sourceObservationField(
+          "historicalTransactionIds",
+        ),
         accountName: sql`(SELECT account.name FROM "FinancialAccount" account WHERE account.id=${sourceObservationField("accountId")})`,
         ...Object.fromEntries(
           (
@@ -260,6 +270,21 @@ const updateSource = defineMutationWriter({
     const data = sourceTransactionRecordUpdateData.strict().parse(input);
     const id = await resolveOrThrow(db, "sourceTransactionRecord", code);
     return withTransactionOn(db, async (tx) => {
+      if (data.identityResolution) {
+        const { resolveSourceIdentity } =
+          await import("~/server/domains/transaction-import/repo/source-identity-resolution");
+        const charge = await resolveSourceIdentity(
+          tx,
+          id,
+          data.identityResolution,
+          actor,
+        );
+        await runAfterCommit(tx, async (committed) => {
+          const { regenerateCharges } =
+            await import("~/server/domains/transaction-import/repo/statement-suggestions");
+          await regenerateCharges(committed, [charge]);
+        });
+      }
       await updateSourceObservationJudgments(
         tx,
         [id],
@@ -301,9 +326,9 @@ const SOURCE_TRANSACTION_RECORD_DELETE_POLICY = {
   },
   "SourceOccurrence.replacementObservationId": {
     code: "retain-replacement-proof",
-    effect: "preserve",
+    effect: "block",
     description:
-      "Explicit replacement evidence is retained; the deletion hook protects live decisions.",
+      "A live explicit replacement decision requires its exact observation evidence.",
   },
   "SourceObservationAnnotation.observationId": {
     code: "retain-observation-judgments",
@@ -313,9 +338,9 @@ const SOURCE_TRANSACTION_RECORD_DELETE_POLICY = {
   },
   "SourceObservationAnnotation.supersededByObservationId": {
     code: "retain-replacement-history",
-    effect: "preserve",
+    effect: "block",
     description:
-      "The deletion hook protects live replacement decisions; historical choices remain.",
+      "A live predecessor retains its exact reviewed replacement observation.",
   },
   "FinancialEvidenceAlias.observationId": {
     code: "retain-source-aliases",

@@ -39,6 +39,7 @@ export const sourceTransactionRecordProviderStatus =
  */
 export const sourceTransactionRecordMatchState = z.enum([
   "matched",
+  "held",
   "unmatched",
   "superseded",
   "ignored",

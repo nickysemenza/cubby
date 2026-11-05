@@ -37,6 +37,7 @@ import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { outer, type RelatedColumns } from "~/server/db/helpers/related";
 import { suggestionTable, run } from "~/server/db/schema";
+import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
@@ -154,17 +155,17 @@ const leg = (end: "outflow" | "inflow") => sql`jsonb_build_array(
   ${ref(sql`${entities.financialTransaction}`, sql`s.judgment->${end}->>'transactionId'`)},
   ${ref(sql`${entities.ledgerParty}`, sql`s.judgment->${end}->'owner'->>'id'`)})`;
 
-const statementSettlementRelation = sql`"SourceOccurrence" evidence
-  JOIN "FinancialTransaction" settled ON settled.id=evidence."acceptedTransactionId" AND ${notDeleted("settled")}
+const statementSettlementRelation = sql`${financialSourceReferenceRows} evidence
+  JOIN "FinancialTransaction" settled ON settled.id=evidence.owner AND ${notDeleted("settled")}
   JOIN "FinancialAccount" account ON account.id=settled."accountId"
   LEFT JOIN "FinancialTransactionAllocation" allocation ON allocation."transactionId"=settled.id AND ${notDeleted("allocation")}
   LEFT JOIN "Purchase" booked ON booked.id=allocation."purchaseId" AND ${notDeleted("booked")}
   LEFT JOIN "Expense" line ON line."purchaseId"=booked.id AND ${notDeleted("line")}`;
 const statementSettlementFrom = sql`FROM ${statementSettlementRelation}`;
-const statementSettlementEligibility = sql`${notDeleted("evidence")}`;
+const statementSettlementEligibility = sql`true`;
 const statementSettlementScope = sql`${statementSettlementEligibility}
   AND evidence.source=s.judgment #>> '{create,sourceRef,source}'
-  AND evidence.shortcode=s.judgment #>> '{create,sourceRef,externalId}'`;
+  AND evidence."externalId"=s.judgment #>> '{create,sourceRef,externalId}'`;
 const statementSettlementRefs = [
   { entity: entities.financialTransaction, id: sql<string>`settled.id` },
   { entity: entities.purchase, id: sql<string>`booked.id` },
@@ -702,7 +703,7 @@ function settlementAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   const keys = reviewQueryBuilder
     .selectDistinct({
       source: sql<string>`evidence.source`.as("source"),
-      externalId: sql<string>`evidence.shortcode`.as("externalId"),
+      externalId: sql<string>`evidence."externalId"`.as("externalId"),
     })
     .from(statementSettlementRelation)
     .where(and(statementSettlementEligibility, match));

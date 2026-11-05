@@ -1,15 +1,23 @@
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { and, eq } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { entityIdentity } from "~/server/db/entity-identity-schema";
-import { getDb } from "~/server/db/helpers";
+import {
+  getDb,
+  databaseForTransaction,
+  withSnapshotWrite,
+} from "~/server/db/helpers";
 import { entityExternalId } from "~/server/db/schema";
-import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import {
+  updateFinancialTransaction,
+  createFinancialTransaction,
+} from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { updateProduct } from "~/server/domains/product/repo/crud";
 import {
   externalIdKey,
@@ -147,18 +155,15 @@ describe("EntityExternalId", () => {
       .where(eq(entityIdentity.shortcode, transactionShortcode))
       .orderBy(entityExternalId.source, entityExternalId.externalId);
 
-  it("re-records a settlement reference after its transaction is deleted", async () => {
+  it("re-records an unscoped manual reference after its transaction is deleted", async () => {
     const account = await mkAccount("Delete Visa");
     const ref = { source: "monarch", externalId: "mon-deleted-1" };
     const first = await mkTransaction(account.id, [ref]);
     await deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
       first.id,
     ]);
-    // The deleted transaction's reference went with it...
-    expect(await refRows(first.id)).toEqual([
-      expect.objectContaining({ ...ref, deletedAt: expect.any(Date) }),
-    ]);
-    // ...so the same bank line can be recorded again.
+    // Financial references are retained evidence aliases, outside generic ExternalId ownership.
+    expect(await refRows(first.id)).toEqual([]);
     const second = await mkTransaction(account.id, [ref]);
     expect(second.sourceRefs).toEqual([ref]);
   });
@@ -172,9 +177,7 @@ describe("EntityExternalId", () => {
     ];
     const transaction = await mkTransaction(account.id, refs);
     expect(transaction.sourceRefs).toEqual(refs);
-    expect((await refRows(transaction.id)).map((row) => row.isPrimary)).toEqual(
-      [null, null, null],
-    );
+    expect(await refRows(transaction.id)).toEqual([]);
 
     const updated = await updateFinancialTransaction(
       ctx.db,
@@ -184,19 +187,48 @@ describe("EntityExternalId", () => {
     );
     expect(updated.output.sourceRefs).toEqual([refs[0], refs[2]]);
     const rows = await refRows(transaction.id);
-    expect(rows.filter((row) => row.deletedAt === null)).toHaveLength(2);
-    expect(rows.filter((row) => row.deletedAt !== null)).toEqual([
-      expect.objectContaining(refs[1]),
-    ]);
+    expect(rows).toEqual([]);
   });
 
   it("refuses a reference another live transaction holds, with the structured reason", async () => {
     const account = await mkAccount("Conflict Visa");
     const ref = { source: "monarch", externalId: "mon-held" };
-    await mkTransaction(account.id, [ref]);
-    await expect(mkTransaction(account.id, [ref])).rejects.toMatchObject({
-      reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT",
+    let arrived = 0;
+    let release: () => void = () => undefined;
+    const bothSnapshots = new Promise<void>((resolve) => {
+      release = resolve;
     });
+    const attempt = () =>
+      withSnapshotWrite(
+        ctx.db,
+        async (tx) => {
+          // Both snapshots precede either reference claim: the unique guard must
+          // also fence a writer whose snapshot cannot see the advisory-lock winner.
+          await tx.select().from(entityExternalId);
+          if (++arrived === 2) release();
+          await bothSnapshots;
+          return createFinancialTransaction(
+            databaseForTransaction(tx),
+            buildEntity("financialTransaction", {
+              accountId: account.id,
+              kind: "purchase",
+              status: "pending",
+              amount: 12.5,
+              sourceRefs: [ref],
+            }),
+            ctx.actor,
+          );
+        },
+        { isolationLevel: "repeatable read" },
+      );
+    const results = await Promise.allSettled([attempt(), attempt()]);
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    const rejected = results.find((result) => result.status === "rejected");
+    expect(
+      rejected?.status === "rejected" ? rejected.reason : null,
+    ).toMatchObject({ reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT" });
   });
 
   it("settles a purchase by reference exactly as before and reopens the gap when the reference goes", async () => {

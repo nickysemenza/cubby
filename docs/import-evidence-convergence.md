@@ -624,8 +624,8 @@ resolver or charge-key aggregation controls current state.
 
 The public number shape is unchanged: source amounts store exact signed bigint
 minor units, with checked dollar-number reads for shipped clients. `chargeKey`
-is an opaque occurrence handle (`SOC-`) for proven records; a retained record's
-`STR-` handle is diagnostic when proof is absent. Original v1/v2/v3 references
+is an opaque occurrence handle (`SOC-`) for proven or explicitly reviewed records; a retained record's
+`STR-` handle addresses its unresolved review when proof is absent. Original v1/v2/v3 references
 remain evidence aliases. Fresh source acceptance uses an SOC handle and rechecks
 its ready state, head, live target, exact amount and account. Old successful
 operation receipts replay before fresh guards; uncommitted legacy-reference
@@ -633,7 +633,7 @@ applications require a new preview.
 
 Unproven identity blocks automatic acceptance/correction, with money unchanged.
 It creates no new member task for missing source proof. Original evidence and
-existing actionable member review remain retained. Prior member suppressions
+existing actionable member review remain retained. `matchState: held` distinguishes unresolved historical transaction evidence from unmatched money. `historicalTransactionIds` lists those retained links explicitly; it never supplies accepted ownership. Existing SourceRecord updates accept `identityResolution` only as an explicit reviewed judgment, with the observation fingerprint, expected owner version, accepted owner, complete live historical transaction set, resolved account, explicit open/ignored judgment and note. Choose distinct, accept_existing, or assign. The transaction is audited, preserves ignore decisions and original aliases, and does not alter money. Exact replay never supplies that decision. Prior member suppressions
 remain negative fences through retained alias provenance; they never prove identity.
 
 Transaction imports are read-only outside intake. Neither generic create,

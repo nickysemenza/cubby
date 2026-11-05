@@ -283,6 +283,11 @@ export const SIDEBAR_SECTIONS = [
         entity: "financialTransaction",
       },
       {
+        label: "Source occurrences",
+        route: "/source-occurrences",
+        entity: "sourceOccurrence",
+      },
+      {
         label: "Evidence",
         route: "/source-transaction-records",
         entity: "sourceTransactionRecord",

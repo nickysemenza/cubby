@@ -166,10 +166,10 @@ async function readConvergenceFacts(
               a.amount::text AS "allocatedAmount", t."postedDate",
               t."transactionDate",
               COALESCE((
-                SELECT jsonb_agg(jsonb_build_object('source', x.source, 'externalId', x."externalId")
-                  ORDER BY x.source, x."externalId")
-                FROM "EntityExternalId" x
-                WHERE x."entityId" = t.id AND x.kind = 'settlement_ref' AND x."deletedAt" IS NULL
+                SELECT jsonb_agg(jsonb_build_object('source', x.source, 'externalId', x.value)
+                  ORDER BY x.source, x.value)
+                FROM "FinancialEvidenceAlias" x
+                WHERE x."historicalTransactionId" = t.id AND x."deletedAt" IS NULL
               ), '[]'::jsonb) AS "sourceRefs"
        FROM "FinancialTransaction" t
        JOIN "FinancialTransactionAllocation" a ON a."transactionId" = t.id

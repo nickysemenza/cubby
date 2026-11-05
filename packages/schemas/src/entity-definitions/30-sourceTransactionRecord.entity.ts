@@ -1,3 +1,4 @@
+import { sourceIdentityResolution } from "../source-occurrence-fields";
 import { readOnly, timestampField } from "./field-policy";
 import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
@@ -110,6 +111,8 @@ export const { definition, readSchemas } = defineEntityModel({
           fields: [
             "id",
             "displayName",
+            "occurrenceId",
+            "factFingerprint",
             "batchId",
             "source",
             "externalId",
@@ -137,6 +140,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "supersededBy",
             "matchState",
             "transactionId",
+            "historicalTransactionIds",
             "vendorInference",
           ],
         },
@@ -162,11 +166,22 @@ export const { definition, readSchemas } = defineEntityModel({
   model: {
     fields: [
       {
+        key: "identityResolution",
+        kind: "json",
+        output: false,
+        audit: false,
+        validation: {
+          read: null,
+          create: null,
+          update: sourceIdentityResolution.optional(),
+        },
+      },
+      {
         key: "occurrenceId",
         kind: "identifier",
         nullable: true,
         reference: { entity: "sourceOccurrence" },
-        output: false,
+        display: { list: false },
         validation: {
           read: shortcodeSchema("sourceOccurrence").nullable(),
           create: null,
@@ -176,7 +191,7 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "factFingerprint",
         kind: "text",
-        output: false,
+        display: { list: false },
         validation: { read: z.string(), create: null, update: null },
       },
       {
@@ -661,6 +676,22 @@ export const { definition, readSchemas } = defineEntityModel({
         validation: readOnly(sourceTransactionRecordMatchState),
       },
       {
+        key: "historicalTransactionIds",
+        kind: "json",
+        labelOverride: "Historical transactions (evidence only)",
+        provenance: {
+          kind: "derived",
+          sources: [
+            {
+              label:
+                "Retained historical bindings; these do not establish accepted ownership",
+            },
+          ],
+        },
+        display: { list: false },
+        validation: readOnly(z.array(shortcodeSchema("financialTransaction"))),
+      },
+      {
         key: "transactionId",
         kind: "identifier",
         nullable: true,
@@ -1040,6 +1071,7 @@ export const { definition, readSchemas } = defineEntityModel({
 export default defineEntity(
   definition,
   (r) => [
+    r.field("occurrenceId").named("occurrence", "Source occurrence"),
     r.query("sourceObservationAccount", "one").named("account", "Account"),
     r.field("batchId").named("firstImport", "First import"),
     r

@@ -101,9 +101,23 @@ export async function applyStatementTransactionSuggestion(
         "source",
         stored.refs.map((ref) => ref.slice(0, ref.indexOf(":"))),
       );
+      const candidateIds = published.candidates.map(
+        (candidate) => candidate.transactionId,
+      );
+      const candidates = candidateIds.length
+        ? await unwrapDb(tx).execute<{ shortcode: string }>(sql`
+            SELECT shortcode FROM "FinancialTransaction"
+            WHERE id IN (${sql.join(
+              candidateIds.map((id) => sql`${id}::uuid`),
+              sql`, `,
+            )})
+          `)
+        : { rows: [] };
       await lockFinancialTransactionSources(
         tx,
-        published.candidates.map((candidate) => candidate.transactionId),
+        candidates.rows.map((candidate) =>
+          parseShortcodeFor("financialTransaction", candidate.shortcode),
+        ),
         stored.refs.map((ref) => {
           const split = ref.indexOf(":");
           return {

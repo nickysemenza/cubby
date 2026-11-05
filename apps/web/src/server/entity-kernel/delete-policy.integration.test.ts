@@ -104,6 +104,7 @@ import {
   photoGroupProposal,
   photoRunImage,
   sourceTransactionRecord,
+  sourceObservationAnnotation,
 } from "~/server/db/schema";
 import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
 import { attachExistingImageToEntity } from "~/server/domains/image/repo/image";
@@ -958,9 +959,12 @@ async function seedSourceTransactionRecord(db: Database, ids: StagingIds) {
   if (!predecessor || !successor)
     throw new Error("Synthetic source record staging failed");
   await getDb(db)
-    .update(sourceTransactionRecord)
-    .set({ accountId: ids.financialAccountId, supersededByRowId: successor.id })
-    .where(eq(sourceTransactionRecord.id, predecessor.id));
+    .update(sourceObservationAnnotation)
+    .set({
+      accountId: ids.financialAccountId,
+      supersededByObservationId: successor.id,
+    })
+    .where(eq(sourceObservationAnnotation.observationId, predecessor.id));
 }
 
 /**

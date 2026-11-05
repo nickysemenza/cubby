@@ -3,6 +3,7 @@ import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { FinancialSpendingPlan } from "@cubby/schemas/financial-booking";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import {
   statementSuggestionOut,
   statementTransactionAction,
@@ -17,6 +18,7 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   pendingSuggestion,
+  sourceSuggestionAutomaticEligible,
   suggestionField,
   chargeKeyOf,
   chargeStateOf,
@@ -30,7 +32,7 @@ import { reviewFamilyDeclarations } from "~/server/generic/assessment/repo/revie
 
 import { isClean } from "./statement-suggestions";
 
-const currentClean = sql`coalesce((coalesce((${suggestionField("clean")})::boolean, false) AND (
+const currentClean = sql`${sourceSuggestionAutomaticEligible()} AND coalesce((coalesce((${suggestionField("clean")})::boolean, false) AND (
   s.judgment->${"create"}->>${"kind"} NOT IN (${financialTransactionKind.enum.purchase}, ${financialTransactionKind.enum.refund}, ${financialTransactionKind.enum.fee})
   OR s.judgment->${"spending"}->>${"status"} IN (${"ready" satisfies FinancialSpendingPlan["status"]}, ${"already_booked" satisfies FinancialSpendingPlan["status"]}))), false)`;
 
@@ -228,8 +230,10 @@ export async function readStatementSuggestions(
     merchant: string | null;
     rawDescription: string;
     sourceCategory: string | null;
+    sourceHeld: boolean;
   }>(sql`
     SELECT s.id, s.fingerprint, s.data, s.judgment, s.model, s."createdAt",
+      (r."occurrenceId" IS NULL OR NOT r.current OR r."reviewState" <> ${sourceOccurrenceReviewState.enum.ready} OR r."chargeKey" <> s.data->>'chargeKey') AS "sourceHeld",
       fa.shortcode AS "accountCode", account_owner.shortcode AS "ownerCode",
       r.merchant, r."rawDescription", r."sourceCategory"
     ${FROM}
@@ -354,8 +358,10 @@ export async function readStatementSuggestions(
       sourceCategories: categories.get(row.id) ?? [],
       providerStatus: judgment.providerStatus,
       recommended: judgment.recommended,
-      reviewReason: judgment.reviewReason,
-      clean: isClean(judgment, judgment.create?.amount ?? 0),
+      reviewReason: row.sourceHeld
+        ? "Source identity or historical ownership needs an explicit review. Retained advice and member decisions are unchanged."
+        : judgment.reviewReason,
+      clean: !row.sourceHeld && isClean(judgment, judgment.create?.amount ?? 0),
       spending: judgment.spending,
       matchedTransactionId:
         judgment.matchedTransactionId && code(judgment.matchedTransactionId),

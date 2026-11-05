@@ -59,10 +59,26 @@ export async function findInvalidFinancialJson(
 export async function findDuplicateFinancialTransactionSourceRefs(
   db: Database,
 ): Promise<ProblemItem<"duplicateFinancialTransactionSourceRefs">[]> {
-  // Occurrence identity is unique and its single accepted FK cannot have competing owners.
-  // Retained ambiguous aliases are evidence holds, not actionable duplicate-owner Problems.
-  void db;
-  return [];
+  const { rows } = await getDb(db).execute<{
+    source: string;
+    value: string;
+    transactions: string[];
+  }>(sql`
+    SELECT alias.source,alias.value,array_agg(DISTINCT target.shortcode ORDER BY target.shortcode) AS transactions
+    FROM "FinancialEvidenceAlias" alias
+    JOIN "FinancialTransaction" target ON target.id=alias."historicalTransactionId" AND ${notDeleted("target")}
+    WHERE alias.kind='transaction_ref' AND ${notDeleted("alias")}
+      -- includes-deleted: retained source aliases remain evidence rather than non-occurrence ownership.
+      AND NOT EXISTS(SELECT 1 FROM "FinancialEvidenceAlias" observation WHERE observation.source=alias.source AND observation.value=alias.value AND observation."observationId" IS NOT NULL)
+    GROUP BY alias.source,alias.value HAVING count(DISTINCT target.id)>1
+    ORDER BY alias.source,alias.value`);
+  return rows.map((row) => ({
+    source: row.source,
+    externalId: row.value,
+    transactionIds: row.transactions.map((id) =>
+      parseShortcodeFor("financialTransaction", id),
+    ),
+  }));
 }
 
 /**

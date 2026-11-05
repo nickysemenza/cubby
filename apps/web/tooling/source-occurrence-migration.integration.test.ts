@@ -215,8 +215,8 @@ it("promotes only proven occurrence identity and retains unresolved history with
     ).toEqual([
       {
         publicationKey: "synthetic-machine",
-        status: "superseded",
-        active: false,
+        status: "pending",
+        active: true,
       },
       { publicationKey: "synthetic-member", status: "pending", active: true },
       {
@@ -226,8 +226,8 @@ it("promotes only proven occurrence identity and retains unresolved history with
       },
       {
         publicationKey: "synthetic-transfer",
-        status: "superseded",
-        active: false,
+        status: "pending",
+        active: true,
       },
     ]);
     expect(
@@ -240,10 +240,10 @@ it("promotes only proven occurrence identity and retains unresolved history with
     expect(
       (
         await client.query(
-          `SELECT count(*)::int AS count FROM archive."Suggestion_occurrence_preimage"`,
+          `SELECT count(*)::int AS count FROM "Suggestion" WHERE status='pending' AND active`,
         )
       ).rows[0].count,
-    ).toBe(2);
+    ).toBe(4);
     const counts = (
       await client.query(
         `SELECT count(*)::int AS observations,count("occurrenceId")::int AS proven,count(*) FILTER(WHERE "amountMinor"=1001 AND "providerAmountMinor"=-1001)::int AS exact FROM "SourceTransactionRecord"`,

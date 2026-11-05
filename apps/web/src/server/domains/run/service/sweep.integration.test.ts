@@ -20,6 +20,11 @@ import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { ledgerParty, run, transactionImport } from "~/server/db/schema";
 import { runHandlers } from "~/server/domains/run/operations/run.server";
+import {
+  sourceObservationFrom,
+  sourceObservationColumns,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
+import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
   buildHoldVoidProposals,
@@ -99,7 +104,19 @@ describe("Sweeps", () => {
           rowCountDeclared: null,
           notes: null,
         },
-        rows,
+        rows: rows.map((row) => ({
+          ...row,
+          ...(row.providerTransactionId
+            ? {
+                providerAccountId:
+                  row.providerAccountId ?? row.accountDescriptor,
+                providerData: {
+                  id: row.providerTransactionId,
+                  account_id: row.providerAccountId ?? row.accountDescriptor,
+                },
+              }
+            : {}),
+        })),
       }),
       ctx.actor,
     );
@@ -189,7 +206,7 @@ describe("Sweeps", () => {
       }),
     ).toEqual(retained);
     const { rows } = await getDb(ctx.db).execute<{ count: number }>(sql`
-      SELECT count(*)::int AS count FROM "SourceTransactionRecord"
+      SELECT count(*)::int AS count FROM ${sourceObservationFrom}
       WHERE "withdrawnAt" IS NOT NULL
     `);
     expect(rows[0]?.count).toBe(0);
@@ -241,6 +258,42 @@ describe("Sweeps", () => {
         ],
         "synthetic-unrelated-hold",
       );
+      const originalFacts = await getDb(
+        ctx.db,
+      ).query.sourceTransactionRecord.findMany();
+      const observations = await getDb(ctx.db)
+        .select(sourceObservationColumns)
+        .from(sourceObservationFrom);
+      for (const observation of observations) {
+        const accountCode =
+          observation.accountDescriptor === "Other Card (...9999)"
+            ? foreign.id
+            : primary.id;
+        await updateSourceTransactionRecords(
+          ctx.db,
+          {
+            selector: {
+              source: observation.source,
+              externalIds: [observation.externalId],
+            },
+            data: { accountId: accountCode },
+          },
+          ctx.actor,
+        );
+        await createRepoEntity(ctx, "financialTransaction", {
+          accountId:
+            observation.accountDescriptor === "Other Card (...9999)"
+              ? foreign.id
+              : primary.id,
+          kind: "other",
+          status: "pending",
+          amount: observation.amount,
+          transactionDate: observation.statementDate,
+          sourceRefs: [
+            { source: observation.source, externalId: observation.chargeKey },
+          ],
+        });
+      }
       // Persist explicit complete-window withdrawal proof before restoring the
       // legacy pending transactions that the Sweep must inspect. Incomplete
       // membership alone supplies no disappearance proof.
@@ -272,24 +325,6 @@ describe("Sweeps", () => {
           ctx.actor,
         );
         expect(withdrawal.withdrawn).toBe(ids.length);
-      }
-      const observations = await getDb(
-        ctx.db,
-      ).query.sourceTransactionRecord.findMany();
-      for (const observation of observations) {
-        await createRepoEntity(ctx, "financialTransaction", {
-          accountId:
-            observation.accountDescriptor === "Other Card (...9999)"
-              ? foreign.id
-              : primary.id,
-          kind: "other",
-          status: "pending",
-          amount: observation.amount,
-          transactionDate: observation.statementDate,
-          sourceRefs: [
-            { source: observation.source, externalId: observation.externalId },
-          ],
-        });
       }
       expect(await buildHoldVoidProposals(ctx.db)).toHaveLength(4);
       const selectedIds = new Set<string>(included);
@@ -358,7 +393,7 @@ describe("Sweeps", () => {
       );
       expect(
         await getDb(ctx.db).query.sourceTransactionRecord.findMany(),
-      ).toEqual(observations);
+      ).toEqual(originalFacts);
     },
   );
 
@@ -515,7 +550,7 @@ describe("Sweeps", () => {
       source: string;
       chargeKey: string;
     }>(sql`
-      SELECT source, "chargeKey" FROM "SourceTransactionRecord" ORDER BY id LIMIT 1
+      SELECT source, "chargeKey" FROM ${sourceObservationFrom} ORDER BY id LIMIT 1
     `);
     const charge = original[0]!;
     // Simulate a committed publication whose after-commit acknowledgement failed.

@@ -20,6 +20,7 @@ import {
 import { financialTransactionProviderStatus } from "@cubby/schemas/financial-transaction-fields";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
+import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
 import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record-fields";
 import {
@@ -53,6 +54,7 @@ import {
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { suggestionTable, financialTransaction } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
+import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   previewFinancialTransactionImport,
   prepareFinancialStatementPreview,
@@ -68,6 +70,7 @@ import {
   hasStatementOccurrence,
   OCCURRENCE_IDENTITY_REVIEW,
   pendingSuggestion,
+  sourceSuggestionAutomaticEligible,
   suggestionField,
   suggestionRefKey,
 } from "~/server/domains/transaction-import/repo/statement-charge";
@@ -568,17 +571,15 @@ async function merchantHistory(
       FROM (VALUES ${values}) AS v(key, account, merchant, day, direction)
     ),
     -- Transactions clean creates on these accounts made when accepted as is,
-    -- derived once from the accept Feedback and probed through the
-    -- settlement-ref unique index. Ref keys split at the first ':', the
+    -- derived once from retained accept decisions and their historical evidence. Ref keys split at the first ':', the
     -- separator suggestionRefKey writes after the source.
     ruled AS MATERIALIZED (
-      SELECT DISTINCT fx."acceptedTransactionId" AS id
+      SELECT DISTINCT fx.owner AS id
       FROM "Suggestion" s
       CROSS JOIN LATERAL jsonb_array_elements(s.decisions) f(event)
       CROSS JOIN LATERAL jsonb_array_elements_text(s.data->'refs') ref(key)
-      JOIN "SourceOccurrence" fx ON fx."acceptedTransactionId" IS NOT NULL AND ${notDeleted("fx")}
-        AND fx.source = split_part(ref.key, ':', 1)
-        AND fx.shortcode = substr(ref.key, length(split_part(ref.key, ':', 1)) + 2)
+      JOIN ${financialSourceReferenceRows} fx ON fx.source = split_part(ref.key, ':', 1)
+        AND fx."externalId" = substr(ref.key, length(split_part(ref.key, ':', 1)) + 2)
       WHERE s.family = ${assessmentFamily.enum.statement_transaction}
         AND (s.judgment->>'clean')::boolean
         AND s.judgment->>'recommended' = ${statementTransactionAction.enum.create}
@@ -1998,7 +1999,7 @@ const statementSuggestions: SuggestionFamily<
         );
     }
   },
-  labelBacklog: sql`${pendingSuggestion()} AND ((s.data->>'needsLabel')::boolean
+  labelBacklog: sql`${pendingSuggestion()} AND ${sourceSuggestionAutomaticEligible("s", true)} AND ((s.data->>'needsLabel')::boolean
     OR coalesce((s.data->>'applicationPending')::boolean, false))`,
 };
 
@@ -2573,32 +2574,43 @@ export async function retryStatementGenerationRefs(
   let published = 0;
   let labelsReused = 0;
   let unchanged = 0;
-  const batchSize = input.scope?.importId
-    ? JOB_PAGE_LIMITS.statementApplicationsPerPage
-    : JOB_PAGE_LIMITS.statementGenerationPerPage;
-  // Keep the same bounded page size even for a large historical failure set.
-  for (let offset = 0; offset < input.refs.length; offset += batchSize) {
-    const refs = input.refs.slice(offset, offset + batchSize);
-    const charges = refs.flatMap((ref) => {
-      const charge = statementChargeFromWorkRef(ref);
-      if (charge) return [charge];
+  for (const ref of input.refs) {
+    const original = statementChargeFromWorkRef(ref);
+    if (!original) {
       failed.push(
         statementGenerationFailure(
           ref,
-          new Error("Unsupported statement charge failure reference"),
+          new Error("Unsupported retained statement work reference"),
         ),
       );
-      return [];
-    });
-    if (!charges.length) continue;
-    const admitted: ChargeRef[] = [];
-    for (const charge of charges) {
-      const ref = `charge:${chargeId(charge)}`;
-      try {
+      continue;
+    }
+    try {
+      const { rows: mapped } = await getDb(db).execute<{
+        source: string;
+        chargeKey: string;
+        held: boolean;
+      }>(sql`
+        SELECT DISTINCT observation.source,observation."chargeKey",
+          (observation."occurrenceId" IS NULL OR observation."reviewState"<>${sourceOccurrenceReviewState.enum.ready}) AS held
+        FROM ${sourceObservations} observation
+        WHERE observation.source=${original.source} AND ${notDeleted("observation")}
+          AND (observation."chargeKey"=${original.chargeKey} OR
+            -- includes-deleted: retained aliases rebind original work references without accepting ownership.
+            EXISTS(SELECT 1 FROM "FinancialEvidenceAlias" retained WHERE retained."observationId"=observation.id
+              AND retained.source=${original.source} AND retained.value=${original.chargeKey}))
+        ORDER BY observation.source,observation."chargeKey"`);
+      if (!mapped.length || mapped.some((charge) => charge.held))
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Retained statement work requires source identity or ownership review. Its original failure reference and paid advice remain retained; resolve the source evidence and retry this same work.",
+        );
+      const admitted: ChargeRef[] = [];
+      for (const charge of mapped) {
         const inScope = await withTransactionDatabase(db, async (tx) => {
           await assertWorkflowEffect(tx);
           await getDb(tx).execute(
-            sql`SELECT pg_advisory_xact_lock(hashtextextended(${`statement-suggestion:${chargeId(charge)}`}, 0))`,
+            sql`SELECT pg_advisory_xact_lock(hashtextextended(${`statement-suggestion:${chargeId(charge)}`},0))`,
           );
           if (!(await admitRetriedCharge(tx, charge, input.scope ?? {})))
             return false;
@@ -2606,26 +2618,35 @@ export async function retryStatementGenerationRefs(
           return true;
         });
         if (inScope) admitted.push(charge);
-        else skipped++;
-      } catch (error) {
-        if (isWorkflowInterrupted(error)) throw error;
-        failed.push(statementGenerationFailure(ref, error));
       }
+      if (!admitted.length) {
+        skipped++;
+        continue;
+      }
+      // A retained work reference remains one progress unit even when its old hint
+      // resolves to several independent proven source occurrences.
+      const page = await generateStatementSuggestionPage(db, {
+        runId: input.runId,
+        scope: input.scope,
+        after: null,
+        retryCharges: admitted,
+        work: input.work,
+      });
+      published += page.published;
+      labelsReused += page.labelsReused;
+      unchanged += page.unchanged;
+      if (page.failed.length)
+        failed.push(
+          statementGenerationFailure(
+            ref,
+            new Error(JSON.stringify(page.failed)),
+          ),
+        );
+      else done++;
+    } catch (error) {
+      if (isWorkflowInterrupted(error)) throw error;
+      failed.push(statementGenerationFailure(ref, error));
     }
-    if (!admitted.length) continue;
-    const page = await generateStatementSuggestionPage(db, {
-      runId: input.runId,
-      scope: input.scope,
-      after: null,
-      retryCharges: admitted,
-      work: input.work,
-    });
-    published += page.published;
-    labelsReused += page.labelsReused;
-    unchanged += page.unchanged;
-    failed.push(...page.failed);
-    skipped += page.outOfScope;
-    done += page.processed - page.failed.length - page.outOfScope;
   }
   return { done, skipped, failed, published, labelsReused, unchanged };
 }
@@ -3203,12 +3224,21 @@ async function statementLabelCandidates(
     retryCharges === undefined
       ? sql`true`
       : retryCharges.length
-        ? sql`(${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (${sql.join(
-            retryCharges.map(
-              (charge) => sql`(${charge.source}, ${charge.chargeKey})`,
-            ),
-            sql`, `,
-          )})`
+        ? sql`-- includes-deleted: retained aliases map prior work without establishing current financial ownership.
+    EXISTS (
+    SELECT 1 FROM ${sourceObservations} observation
+    WHERE observation.source=${suggestionField("source")} AND observation."chargeKey"=${suggestionField("chargeKey")}
+      AND (${sql.join(
+        retryCharges.map(
+          (
+            charge,
+          ) => sql`(observation.source=${charge.source} AND (observation."chargeKey"=${charge.chargeKey} OR
+        -- includes-deleted: retained aliases rebind original work references without accepting ownership.
+        EXISTS(SELECT 1 FROM "FinancialEvidenceAlias" retained WHERE retained."observationId"=observation.id AND retained.source=${charge.source} AND retained.value=${charge.chargeKey})))`,
+        ),
+        sql` OR `,
+      )})
+  )`
         : sql`false`;
   const positionAt = sql`coalesce((s.data->'applicationOrder'->>'createdAt')::timestamp, s."createdAt")`;
   const positionId = sql`coalesce((s.data->'applicationOrder'->>'id')::uuid, s.id)`;

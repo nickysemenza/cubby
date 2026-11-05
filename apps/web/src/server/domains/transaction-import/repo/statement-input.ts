@@ -155,7 +155,7 @@ export const statementPendingInputTransactions = (
         LEFT JOIN "SourceTransactionRecord" held ON held.id = other."currentObservationId"
         WHERE other."acceptedTransactionId" = ft.id
           AND (other."deletedAt" IS NOT NULL OR other."reviewState" <> ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
-            OR other."supersededByOccurrenceId" IS NOT NULL OR other."withdrawnAt" IS NOT NULL
+            OR other."supersededByOccurrenceId" IS NOT NULL
             OR held.id IS NULL OR held."deletedAt" IS NOT NULL
             OR held."providerStatus" IS DISTINCT FROM ${sourceTransactionRecordProviderStatus.enum.pending})
       )

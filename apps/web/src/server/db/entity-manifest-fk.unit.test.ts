@@ -120,6 +120,40 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
+  "SourceObservationAnnotation.observationId": {
+    classification: "ownership",
+    reason:
+      "local notes and original unresolved judgments are owned by their immutable observation",
+  },
+  "SourceObservationAnnotation.accountId": {
+    classification: "metadata",
+    reason:
+      "retains original account judgments without granting proven occurrence ownership",
+  },
+  "SourceObservationAnnotation.supersededByObservationId": {
+    classification: "metadata",
+    reason: "retains the exact original replacement decision as evidence",
+  },
+  "SourceObservationAnnotation.withdrawalImportId": {
+    classification: "metadata",
+    reason: "retains the original collection that attested withdrawal",
+  },
+  "FinancialEvidenceAlias.observationId": {
+    classification: "ownership",
+    reason:
+      "evidence aliases are scoped child evidence of an immutable observation",
+  },
+  "FinancialEvidenceAlias.occurrenceId": {
+    classification: "metadata",
+    reason:
+      "scopes retained alias evidence without establishing accepted financial ownership",
+  },
+  "FinancialEvidenceAlias.historicalTransactionId": {
+    classification: "metadata",
+    reason:
+      "retains original transaction bindings without resolving the current accepted owner",
+  },
+
   "ShipmentSourcePackage.shipmentId": {
     classification: "ownership",
     reason: "source package identity owned by its accepted Shipment",
@@ -458,7 +492,10 @@ function introspectFkEdges(): IntrospectedEdge[] {
         continue;
       }
       const targetEntity = ENTITY_BY_TABLE.get(targetTableName);
-      for (const column of ref.columns) {
+      for (const [index, column] of ref.columns.entries()) {
+        // Composite scope columns constrain ownership; only the column targeting
+        // the entity primary key is a navigable entity reference.
+        if (targetEntity && ref.foreignColumns[index]?.name !== "id") continue;
         edges.push({
           key: `${sourceTableName}.${column.name}`,
           sourceEntity,
