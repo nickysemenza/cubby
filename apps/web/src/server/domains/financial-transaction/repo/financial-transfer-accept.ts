@@ -5,7 +5,8 @@ import {
   type AcceptFinancialTransferPairOut,
 } from "@cubby/schemas/household-contribution";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { cents } from "@cubby/shared";
+import { settledMoney } from "@cubby/schemas/money";
+import { moneyToMinor } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -103,7 +104,14 @@ export async function acceptFinancialTransferPair(
         return refuse(
           `Opposite signs required: outflow ${outflow.shortcode} is ${outflow.amount} and inflow ${inflow.shortcode} is ${inflow.amount}; the outflow must be positive and the inflow negative.`,
         );
-      if (cents(outflow.amount) !== -cents(inflow.amount))
+      if (
+        !settledMoney.safeParse(outflow.amount).success ||
+        !settledMoney.safeParse(inflow.amount).success
+      )
+        return refuse(
+          "Transfer evidence amounts must be exact, supported whole-cent amounts.",
+        );
+      if (moneyToMinor(outflow.amount) !== -moneyToMinor(inflow.amount))
         return refuse(
           `Amounts differ: ${outflow.shortcode} is ${outflow.amount} and ${inflow.shortcode} is ${inflow.amount}.`,
         );

@@ -37,6 +37,7 @@ import {
   transferPairSeedPage,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-input";
 import { labelTransferPairSuggestions } from "~/server/domains/financial-transaction/service/transfer-pair-labels";
+import { readLedgerTransfer } from "~/server/domains/ledger-transfer/repo";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
@@ -1221,7 +1222,13 @@ describe("transfer-pair suggestions", () => {
     const [move] = await transfers();
     expect(move!.fromPartyId).toBe(await partyUuid(payer));
     expect(move!.toPartyId).toBe(await partyUuid(payee));
-    expect(Number(move!.amount)).toBe(900);
+    expect(move!.amount).toBe(90000n);
+    await expect(
+      readLedgerTransfer(
+        ctx.db,
+        parseShortcodeFor("ledgerTransfer", move!.shortcode),
+      ),
+    ).resolves.toMatchObject({ amount: 900 });
   });
 
   it("treats medium-confidence movement labels as weak", async () => {

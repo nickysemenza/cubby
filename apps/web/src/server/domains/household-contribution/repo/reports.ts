@@ -8,6 +8,7 @@ import {
 } from "@cubby/schemas/household-contribution";
 import type { LedgerPartyId, ProjectId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { minorToMoney as money } from "@cubby/shared";
 import { and, lte, sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
@@ -34,7 +35,6 @@ import {
 type Party = HouseholdContributionLedgerOut["parties"][number]["party"];
 type Gap = HouseholdContributionLedgerOut["gaps"][number];
 
-const money = (cents: bigint): number => Number(cents) / 100;
 const sum = (values: Iterable<bigint>): bigint => {
   let total = 0n;
   for (const value of values) total += value;
@@ -215,7 +215,7 @@ async function loadTransfers(
       t.shortcode,
       t."fromPartyId",
       t."toPartyId",
-      round(t.amount::numeric * 100)::bigint::text AS cents,
+      t."amountMinor"::text AS cents,
       count(e.id)::int AS "evidenceCount"
     FROM ${ledgerTransfer} t
     LEFT JOIN ${financialTransaction} e
@@ -464,7 +464,7 @@ export async function projectContribution(
   // "committed" means. `wholeGroupCost` stays the blended figure it always was.
   const spend = splitExpenseSpend(
     facts.map((row) => ({
-      cost: row.costCents === null ? null : Number(BigInt(row.costCents)) / 100,
+      cost: row.costCents === null ? null : money(BigInt(row.costCents)),
       future: row.future,
     })),
   );

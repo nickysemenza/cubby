@@ -4,7 +4,7 @@ import { financialTransactionShortcode } from "./identifier-fields";
 import { z } from "zod";
 import { dateTime } from "./codec";
 
-export const ledgerTransferAmount = wholeCentAmount.positive();
+export const ledgerTransferAmount = settledMoney.positive();
 
 export const ledgerSource = z
   .string()

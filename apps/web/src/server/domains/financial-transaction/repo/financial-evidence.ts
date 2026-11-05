@@ -1,8 +1,10 @@
+import { moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+import { createAppError } from "~/server/errors/app-error";
 
 /**
  * Serialize source-owned financial identities before checking their JSONB
@@ -30,3 +32,16 @@ export async function lockFinancialEvidenceKeys(
     );
   }
 }
+
+/** Legacy evidence doubles must refuse through the financial constraint boundary. */
+export const financialEvidenceAmountMinor = (amount: number): bigint => {
+  try {
+    return moneyToMinor(amount);
+  } catch {
+    // SILENT: Replace the low-level conversion error with the owning financial constraint.
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Financial evidence amount must be an exact, supported whole-cent amount.",
+    );
+  }
+};

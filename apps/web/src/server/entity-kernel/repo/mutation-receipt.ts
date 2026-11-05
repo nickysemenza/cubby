@@ -48,7 +48,9 @@ export async function readMutationReceiptFields(
     const own =
       adapted ??
       (column
-        ? sql`${sql.identifier("saved")}.${sql.identifier(column.name)}`
+        ? stored?.specialized === "minor-unit-money"
+          ? sql`${sql.identifier("saved")}.${sql.identifier(column.name)}::numeric / 100`
+          : sql`${sql.identifier("saved")}.${sql.identifier(column.name)}`
         : undefined);
     if (!own) continue;
     const target =

@@ -85,13 +85,18 @@ describe("acceptFinancialTransferPair", () => {
     const existing = await insertWithShortcode(ctx.db, "ledgerTransfer", {
       fromPartyId: memberA.id,
       toPartyId: memberB.id,
-      amount: 5,
+      amount: 500n,
       date: "2026-01-01",
     });
     const out = await transaction(accountA.id, 40, "2026-03-02");
     const inn = await transaction(accountB.id, -40, "2026-03-03");
     const otherOut = await transaction(accountB.id, 40, "2026-03-03");
     const unequalIn = await transaction(accountB.id, -39, "2026-03-03");
+    const noisyIn = await transaction(
+      accountB.id,
+      -40.00000000000001,
+      "2026-03-03",
+    );
     const sameAccountIn = await transaction(accountA.id, -40, "2026-03-03");
     const unownedIn = await transaction(unowned.id, -40, "2026-03-03");
     const linkedIn = await transaction(
@@ -107,6 +112,7 @@ describe("acceptFinancialTransferPair", () => {
       [out, otherOut, /Opposite signs required/],
       [inn, out, /Opposite signs required/],
       [out, unequalIn, /Amounts differ/],
+      [out, noisyIn, /exact, supported whole-cent/],
       [out, sameAccountIn, new RegExp(`both on account ${accountA.shortcode}`)],
       [out, unownedIn, new RegExp(`Account ${unowned.shortcode} .*no owner`)],
       [out, linkedIn, new RegExp(`${linkedIn} already evidences`)],
@@ -269,6 +275,7 @@ describe("acceptFinancialTransferPair", () => {
       .from(ledgerTransfer)
       .where(eq(ledgerTransfer.shortcode, result.transferId));
     expect(transfer).toBeDefined();
+    expect(transfer?.amount).toBe(7550n);
     const legs = await unwrapDb(ctx.db)
       .select({
         shortcode: financialTransaction.shortcode,

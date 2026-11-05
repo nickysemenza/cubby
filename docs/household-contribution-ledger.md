@@ -204,3 +204,20 @@ confirmation, and never rewrites explicit overrides. Existing stored attribution
 remain explicit. Clear references in live account history before deleting,
 merging, or changing the kind of a referenced party; primary cardholders must
 also be detached before merging. Existing card-number history is unchanged.
+
+### Exact party movements
+
+LedgerTransfer keeps a positive signed-bigint `amountMinor` in storage; from/to
+parties retain direction. Contribution accounting consumes those integer cents
+directly. Account-leg comparisons convert their reviewed dollar values to exact
+minor units. The public `amount` remains a checked dollar number for web, MCP
+and shipped native clients. The physical rename makes predecessor dollar writes
+fail rather than silently changing units.
+
+`minor-unit-money` is the existing model storage specialization for these
+fields. It generates `<key>Minor` bigint storage and preserves the declared
+number-shaped read/write contract. Generic list reads and audits convert at
+their boundary, stored/related filters and metrics project exact dollar SQL,
+and declared totals sum integer cents before checked numeric output. Domain
+writers convert validated dollar input once before writing the authoritative
+minor column. No second amount column is retained in the active table.

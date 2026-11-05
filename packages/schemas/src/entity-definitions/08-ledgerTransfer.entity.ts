@@ -298,7 +298,7 @@ export const { definition, readSchemas } = defineEntityModel({
       { key: "shortcode", specialized: "shortcode" },
       "fromPartyId",
       "toPartyId",
-      { key: "amount", specialized: "double-precision" },
+      { key: "amount", specialized: "minor-unit-money" },
       "date",
       "notes",
       { key: "createdAt" },
@@ -331,7 +331,7 @@ export const { definition, readSchemas } = defineEntityModel({
     checks: [
       {
         name: "LedgerTransfer_amount_whole_cent_check",
-        sql: "{amount} > 0 AND abs({amount} * 100 - round({amount} * 100)) < 0.0000001",
+        sql: "{amount} > 0 AND {amount} <= 100000000000000",
       },
     ],
     relations: {

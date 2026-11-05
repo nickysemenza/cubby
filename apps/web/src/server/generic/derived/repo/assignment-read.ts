@@ -55,7 +55,17 @@ export async function loadCurrentAssignmentFacts(
       return [{ key, value: amountJsonSql(value, unit) }];
     }
     const column = storedColumns[key];
-    return column ? [{ key, value: sql`${column}` }] : [];
+    return column
+      ? [
+          {
+            key,
+            value:
+              storage?.specialized === "minor-unit-money"
+                ? sql`${column}::numeric / 100`
+                : sql`${column}`,
+          },
+        ]
+      : [];
   });
   if (!ids.length || !slots.length) return new Map();
   const columns = slots.flatMap(({ key, value }) => [sql`${key}::text`, value]);

@@ -2,6 +2,7 @@
 export { defineMutationWriter, type MutationReceipt } from "./mutation-writer";
 
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 /**
  * One repository shape for every kernel entity.
  *
@@ -43,6 +44,7 @@ import {
   type EntityId,
   parseEntityId,
 } from "@cubby/schemas/identifiers";
+import { minorToMoney } from "@cubby/shared";
 import {
   and,
   eq,
@@ -392,11 +394,28 @@ export function createEntityCrud<
       if (entityManifest[config.entity].auditable) {
         const relationsAfter: RelationSnapshot<TRelKey> =
           (await config.relations?.read(tx, id, data)) ?? {};
-        const changes = computeChanges<
-          InferSelectModel<TTable> & RelationSnapshot<TRelKey>
-        >(
-          { ...before, ...relationsBefore },
-          { ...before, ...updated, ...relationsAfter },
+        // Audit values retain the same dollar-number shape as entity reads.
+        const moneyFields = new Set<string>(
+          entityFieldModels[config.entity].storage
+            .filter((field) => field.specialized === "minor-unit-money")
+            .map((field) => field.key),
+        );
+        const snapshot = (
+          row: InferSelectModel<TTable> & RelationSnapshot<TRelKey>,
+        ) => ({
+          ...row,
+          ...Object.fromEntries(
+            Object.entries(row)
+              .filter(([key]) => moneyFields.has(key))
+              .map(([key, value]) => [
+                key,
+                value === null ? null : minorToMoney(z.bigint().parse(value)),
+              ]),
+          ),
+        });
+        const changes = computeChanges(
+          snapshot({ ...before, ...relationsBefore }),
+          snapshot({ ...before, ...updated, ...relationsAfter }),
           [...config.auditUpdateFields],
         );
         if (changes)
