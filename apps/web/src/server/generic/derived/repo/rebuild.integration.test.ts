@@ -104,17 +104,25 @@ describe("hourly deterministic rebuild", () => {
       makeProductInput({ name: "Synthetic isolated provider failure" }),
       ctx.actor,
     );
-    const computes: DerivedComputes = Object.fromEntries(
-      Object.keys(derivedComputes).map((key) => [key, async () => new Map()]),
+    const realPhases = new Set(
+      rebuildDeclarations()
+        .filter(
+          (declaration) =>
+            declaration.rebuildPhase === "quality" ||
+            declaration.rebuildPhase === "search",
+        )
+        .map((declaration) => declaration.compute),
     );
-    for (const declaration of rebuildDeclarations())
-      if (
-        declaration.rebuildPhase === "quality" ||
-        declaration.rebuildPhase === "search"
-      )
-        computes[declaration.compute] = derivedComputes[declaration.compute];
-    computes["product.price"] = async () => {
-      throw new Error("Synthetic provider unavailable");
+    const computes: DerivedComputes = {
+      ...Object.fromEntries(
+        Object.entries(derivedComputes).map(([key, adapter]) => [
+          key,
+          realPhases.has(key) ? adapter : async () => new Map(),
+        ]),
+      ),
+      "product.price": async () => {
+        throw new Error("Synthetic provider unavailable");
+      },
     };
     expect(
       await rebuildDerived(ctx.db, computes, { force: true, pageLimit: 1 }),
