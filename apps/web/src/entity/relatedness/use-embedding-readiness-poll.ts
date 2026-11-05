@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 /** How often the relatedness query re-checks readiness while an Index-now
  * refresh is outstanding. */
-export const EMBEDDING_READINESS_POLL_INTERVAL_MS = 1_000;
+const EMBEDDING_READINESS_POLL_INTERVAL_MS = 1_000;
 
 /** Ceiling on how long to keep polling before showing "Check again" instead
  * of spinning forever on a queue message that never lands. */
-export const EMBEDDING_READINESS_POLL_TIMEOUT_MS = 120_000;
+const EMBEDDING_READINESS_POLL_TIMEOUT_MS = 120_000;
 
 type PollPhase = "idle" | "polling" | "timedOut";
 

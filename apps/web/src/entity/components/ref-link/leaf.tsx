@@ -87,7 +87,7 @@ type PreviewRefLinkProps = {
  * children) both render through it. On touch there is no hover; the tap
  * navigates, so the preview is a pure pointer-device enhancement.
  */
-export function PreviewRefLink({
+function PreviewRefLink({
   entity,
   id,
   children,

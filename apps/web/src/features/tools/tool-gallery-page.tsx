@@ -78,7 +78,7 @@ const GROUP_NOUN = {
 
 export type ToolGalleryPresentation = "cards" | "compact" | "flow";
 
-export function toolLocationPath(entry: ToolGalleryInventoryEntryOut): string {
+function toolLocationPath(entry: ToolGalleryInventoryEntryOut): string {
   return [...entry.location.ancestors, entry.location]
     .map((part) => part.name)
     .join(" / ");
@@ -103,7 +103,7 @@ function ToolAmount({ entry }: { entry: ToolGalleryInventoryEntryOut }) {
   );
 }
 
-export function toolPlacementSummary(
+function toolPlacementSummary(
   entries: ToolGalleryInventoryEntryOut[],
 ): ToolPlacementSummary {
   const installed = entries.some((entry) => entry.placement === "installed");
@@ -144,7 +144,7 @@ function GallerySkeleton({ compact }: { compact: boolean }) {
   );
 }
 
-export function ToolCard({
+function ToolCard({
   item,
   compact = false,
   current,
@@ -290,7 +290,7 @@ export function ToolCard({
   );
 }
 
-export function ToolInspectorSummary({ item }: { item: ToolGalleryItemOut }) {
+function ToolInspectorSummary({ item }: { item: ToolGalleryItemOut }) {
   return (
     <section
       aria-label="Tool placements and usage"
