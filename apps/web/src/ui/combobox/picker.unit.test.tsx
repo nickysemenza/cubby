@@ -660,3 +660,29 @@ describe("inline option picker", () => {
     await waitFor(() => expect(onValueChange).toHaveBeenCalledWith("open"));
   });
 });
+
+it("keeps freeform text and fills a suggestion", async () => {
+  function SuggestHarness() {
+    const [value, setValue] = useState("");
+    return (
+      <OptionPicker
+        mode="suggest"
+        label="Unit"
+        value={value}
+        onValueChange={setValue}
+        options={[{ value: "cup", label: "cup" }]}
+      />
+    );
+  }
+  render(<SuggestHarness />);
+  const input = screen.getByRole("combobox", { name: "Unit" });
+  input.focus();
+  fireEvent.change(input, { target: { value: "cu" } });
+  expect(input).toHaveValue("cu");
+  openPicker(input);
+  const suggestion = await screen.findByRole("option", { name: "cup" });
+  fireEvent.click(suggestion);
+  expect(input).toHaveValue("cup");
+  fireEvent.change(input, { target: { value: "custom" } });
+  expect(input).toHaveValue("custom");
+});

@@ -31,6 +31,7 @@ import { urlStringParam } from "~/lib/search-params";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { NumberInput } from "~/ui/forms/number-input";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
@@ -170,45 +171,51 @@ function LabelsPage() {
               }
             />
             {isSheetFormat(format) && (
-              <label className="flex items-center gap-1.5 text-sm" /* tight */>
+              <label
+                htmlFor="label-skip"
+                className="flex items-center gap-1.5 text-sm" /* tight */
+              >
                 <span className="text-muted-foreground">Skip</span>
-                <input
-                  type="number"
+                <NumberInput
+                  id="label-skip"
                   min={0}
                   max={SHEET_LAYOUTS[format].labelsPerSheet - 1}
                   value={effectiveSkip}
-                  onChange={(e) =>
+                  onValueChange={(next) =>
                     navigate({
                       search: {
                         codes,
                         format,
                         copies,
-                        skip: Math.max(0, Number(e.target.value) || 0),
+                        skip: Math.max(0, next ?? 0),
                       },
                     })
                   }
-                  className="h-11 w-14 border border-border bg-input/20 px-2 text-center text-sm md:h-7.5"
+                  className="h-11 w-14 text-center text-sm md:h-7.5"
                 />
               </label>
             )}
-            <label className="flex items-center gap-1.5 text-sm" /* tight */>
+            <label
+              htmlFor="label-copies"
+              className="flex items-center gap-1.5 text-sm" /* tight */
+            >
               <span className="text-muted-foreground">Copies</span>
-              <input
-                type="number"
+              <NumberInput
+                id="label-copies"
                 min={1}
                 max={20}
                 value={copies}
-                onChange={(e) =>
+                onValueChange={(next) =>
                   navigate({
                     search: {
                       codes,
                       format,
                       skip,
-                      copies: Math.max(1, Number(e.target.value) || 1),
+                      copies: Math.max(1, next ?? 1),
                     },
                   })
                 }
-                className="h-11 w-14 border border-input bg-background px-2 text-center text-sm md:h-7.5"
+                className="h-11 w-14 text-center text-sm md:h-7.5"
               />
             </label>
             {format !== "ptouch" ? (

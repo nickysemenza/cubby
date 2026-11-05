@@ -41,7 +41,7 @@ it("collects declared report command inputs before dispatching their exact opera
   const action = screen.getByRole("button", { name: "Change portion" });
   expect(action).toBeDisabled();
   expect(run).not.toHaveBeenCalled();
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Portion" }), {
+  fireEvent.change(screen.getByRole("textbox", { name: "Portion" }), {
     target: { value: "2" },
   });
   fireEvent.click(action);

@@ -87,6 +87,7 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
+import { Picker as SuggestPicker } from "~/ui/combobox/picker";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
@@ -887,7 +888,6 @@ function CommitInput({
   crossCheck?: PhotoFieldCrossCheck;
   actions?: ReactNode;
 }) {
-  const optionsId = useId();
   const inputId = useId();
   const hintId = useId();
   const { session, state } = usePhotoDraft();
@@ -925,28 +925,54 @@ function CommitInput({
             : undefined
         }
       >
-        <Input
-          id={inputId}
-          data-photo-unsaved={state.drafts.has(inputId) || undefined}
-          aria-describedby={options ? hintId : undefined}
-          list={options ? optionsId : undefined}
-          type={type}
-          min={type === "number" ? 1 : undefined}
-          step={type === "number" ? 1 : undefined}
-          aria-invalid={
-            (type === "number" && !/^[1-9]\d*$/.test(draft)) ||
-            (required && !draft.trim())
-          }
-          value={draft}
-          disabled={disabled}
-          onChange={(event) =>
-            session.edit(inputId, groupKey, event.target.value, value)
-          }
-          onBlur={commit}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") event.currentTarget.blur();
-          }}
-        />
+        {options ? (
+          <SuggestPicker
+            mode="suggest"
+            inputId={inputId}
+            data-photo-unsaved={state.drafts.has(inputId) || undefined}
+            aria-describedby={hintId}
+            aria-invalid={required && !draft.trim()}
+            value={draft}
+            options={options.map((option) => ({
+              value: option.value,
+              label: option.value,
+            }))}
+            disabled={disabled}
+            onValueChange={(next) =>
+              session.edit(inputId, groupKey, next, value)
+            }
+            onBlur={commit}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                event.currentTarget.getAttribute("aria-expanded") !== "true"
+              )
+                event.currentTarget.blur();
+            }}
+          />
+        ) : (
+          <Input
+            id={inputId}
+            data-photo-unsaved={state.drafts.has(inputId) || undefined}
+            aria-describedby={options ? hintId : undefined}
+            type={type}
+            min={type === "number" ? 1 : undefined}
+            step={type === "number" ? 1 : undefined}
+            aria-invalid={
+              (type === "number" && !/^[1-9]\d*$/.test(draft)) ||
+              (required && !draft.trim())
+            }
+            value={draft}
+            disabled={disabled}
+            onChange={(event) =>
+              session.edit(inputId, groupKey, event.target.value, value)
+            }
+            onBlur={commit}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
+            }}
+          />
+        )}
         {crossCheck &&
         (crossCheck.labelValue || crossCheck.mark !== "unknown") ? (
           <div className="min-w-0 space-y-1">
@@ -975,13 +1001,6 @@ function CommitInput({
       )}
       {options ? (
         <>
-          <datalist id={optionsId}>
-            {options.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.value}
-              </option>
-            ))}
-          </datalist>
           <span id={hintId} className="text-muted-foreground sm:col-start-2">
             {optionsLoading
               ? "Checking existing brands…"

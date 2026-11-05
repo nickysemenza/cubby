@@ -102,7 +102,7 @@ and raw Base UI combobox/select/toggle-group or the toggle-group primitive
 explicitly: `search` (text input, filter or server search, create) for records
 and long lists; `choose` (Base UI `Select`: arrows, Home/End, letter typeahead,
 no soft keyboard) for a short fixed list; `segmented` (inline button group) for
-a handful of view modes or formats. `multiple` keeps several values as chips;
+a handful of view modes or formats; `suggest` keeps the typed string as its value, with suggestions that fill it. `multiple` keeps several values as chips;
 `footer` pins Clear/Apply for a draft filter. String choices pass `options`
 (`PickerOption`); records pass `items` with an `entity`, built by
 `combobox-builders.tsx` from the manifest — `displayImages[0]` is the picture

@@ -1,4 +1,5 @@
 import {
+  Autocomplete as AutocompletePrimitive,
   Combobox as ComboboxPrimitive,
   Select as SelectPrimitive,
 } from "@base-ui/react";
@@ -159,13 +160,37 @@ interface PickerOptionsProps {
   setValues?: never;
 }
 
-export type PickerProps<TId extends string = string> = PickerCommonProps<TId> &
-  (
-    | PickerRecordProps<TId>
-    | PickerOptionProps
-    | PickerRecordsProps<TId>
-    | PickerOptionsProps
-  );
+export type ChoicePickerProps<TId extends string = string> =
+  PickerCommonProps<TId> &
+    (
+      | PickerRecordProps<TId>
+      | PickerOptionProps
+      | PickerRecordsProps<TId>
+      | PickerOptionsProps
+    );
+
+type SuggestPickerProps = {
+  mode: "suggest";
+  options: readonly PickerOption[];
+  value: string;
+  onValueChange: (value: string) => void;
+  inputId?: string;
+  inputRef?: (element: HTMLElement | null) => void;
+  label?: string;
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+  required?: boolean;
+  "aria-invalid"?: React.AriaAttributes["aria-invalid"];
+  "aria-describedby"?: string;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  "data-photo-unsaved"?: boolean;
+};
+
+export type PickerProps<TId extends string = string> =
+  | ChoicePickerProps<TId>
+  | SuggestPickerProps;
 
 /** A record-valued single picker's props — what wrappers that own the
  * roster (search providers, reference pickers) extend. */
@@ -187,7 +212,16 @@ type ResolvedPickerProps<TId extends string> = PickerCommonProps<TId> & {
  * contract and `multiple` the value shape. Entity shortcodes stay searchable
  * without ever being displayed or announced.
  */
+export function Picker<TId extends string = string>(
+  props: ChoicePickerProps<TId>,
+): React.JSX.Element;
+export function Picker(props: SuggestPickerProps): React.JSX.Element;
 export function Picker<TId extends string = string>(props: PickerProps<TId>) {
+  if (props.mode === "suggest") return <SuggestPicker {...props} />;
+  return <ChoicePicker {...props} />;
+}
+
+function ChoicePicker<TId extends string>(props: ChoicePickerProps<TId>) {
   const resolved = useResolvedPickerProps(props);
   // A picker's `records` is fixed for its lifetime, so this branch never
   // remounts the control; only record pickers read records.
@@ -195,6 +229,69 @@ export function Picker<TId extends string = string>(props: PickerProps<TId>) {
     <RecordValuePicker {...resolved} records={resolved.records} />
   ) : (
     <PickerBody {...resolved} />
+  );
+}
+
+function SuggestPicker({
+  mode: _mode,
+  options,
+  value,
+  onValueChange,
+  inputId,
+  inputRef,
+  label,
+  className,
+  disabled,
+  required,
+  ...inputProps
+}: SuggestPickerProps) {
+  const gate = useHydrationGate(disabled);
+  return (
+    <AutocompletePrimitive.Root
+      items={options.map((option) => option.value)}
+      value={value}
+      onValueChange={onValueChange}
+      openOnInputClick
+    >
+      <AutocompletePrimitive.Input
+        {...inputProps}
+        {...gate}
+        id={inputId}
+        ref={inputRef}
+        aria-label={label}
+        required={required}
+        className={cn(
+          "h-(--input-height) w-full min-w-0 rounded-sm border border-border bg-card px-2.5 py-1 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[2px] focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-60 aria-invalid:border-destructive aria-invalid:ring-[2px] aria-invalid:ring-destructive/20 max-sm:h-11 max-sm:text-base",
+          className,
+        )}
+      />
+      <AutocompletePrimitive.Portal>
+        <AutocompletePrimitive.Positioner
+          sideOffset={4}
+          className="isolate z-[200]"
+          data-combobox-popup=""
+        >
+          <AutocompletePrimitive.Popup
+            className={cn(
+              "max-h-64 w-(--anchor-width) overflow-auto rounded-sm border bg-popover p-1 text-popover-foreground",
+              popoverElevationClassName,
+            )}
+          >
+            <AutocompletePrimitive.List>
+              {(item: string) => (
+                <AutocompletePrimitive.Item
+                  key={item}
+                  value={item}
+                  className="cursor-default rounded-sm px-2 py-1.5 text-sm data-highlighted:bg-accent"
+                >
+                  {item}
+                </AutocompletePrimitive.Item>
+              )}
+            </AutocompletePrimitive.List>
+          </AutocompletePrimitive.Popup>
+        </AutocompletePrimitive.Positioner>
+      </AutocompletePrimitive.Portal>
+    </AutocompletePrimitive.Root>
   );
 }
 
@@ -233,7 +330,7 @@ function useSelectedValues<TId extends string>({
 }
 
 const isOptionProps = <TId extends string>(
-  props: PickerProps<TId>,
+  props: ChoicePickerProps<TId>,
 ): props is PickerCommonProps<TId> & (PickerOptionProps | PickerOptionsProps) =>
   props.options !== undefined;
 
@@ -256,7 +353,7 @@ function missingOption<TId extends string>(
 }
 
 function useResolvedPickerProps<TId extends string>(
-  props: PickerProps<TId>,
+  props: ChoicePickerProps<TId>,
 ): ResolvedPickerProps<TId> {
   const options = props.options;
   const optionItems = React.useMemo(
