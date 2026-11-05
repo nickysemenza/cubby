@@ -96,8 +96,7 @@ struct EntityFieldSuggestionSection: View {
                         }
                     }.disabled(review.isApplying || review.isLoading)
                 }
-                if !review.fields.contains(where: { review.proposal($0.key) != nil })
-                {
+                if !review.fields.contains(where: { review.proposal($0.key) != nil }) {
                     Text("No current suggestion to review. Edit the fields or request fresh suggestions.")
                         .foregroundStyle(.secondary)
                 }
