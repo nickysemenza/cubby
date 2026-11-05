@@ -28,7 +28,10 @@ import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { householdDaySql, uuidArrayParam } from "~/server/db/helpers/query";
-import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
+import {
+  repositoryQueries,
+  type RepositoryQueryInput,
+} from "~/server/db/repository-access.boundary";
 import {
   type DerivedComputed,
   computedDecision,
@@ -699,23 +702,27 @@ type ValueGroup = {
  * behind a newer fanout keeps its previous values and its marks.
  */
 async function publishValues(
-  tx: ReturnType<typeof unwrapDb>,
+  db: RepositoryQueryInput,
   groups: readonly ValueGroup[],
   plan: DerivedPagePlan,
-) {
+): Promise<{
+  changed: Map<string, string[]>;
+  published: Map<string, string[]>;
+}> {
+  const tx = repositoryQueries(db);
   const snapshots = groups.filter(
     ({ declaration }) => declaration.snapshotSource !== undefined,
   );
   if (snapshots.length) {
     const legacy = await publishValues(
-      tx,
+      db,
       groups.filter(({ declaration }) => !declaration.snapshotSource),
       plan,
     );
     for (const { declaration, items, values } of snapshots) {
       if (await blockedSnapshot(declaration.target)) continue;
       const ids = items.map((item) => item.ref);
-      await publishRebuiltValues(tx, declaration, ids, values);
+      await publishRebuiltValues(db, declaration, ids, values);
       legacy.changed.set(declaration.target, ids);
       legacy.published.set(declaration.target, ids);
     }
@@ -906,7 +913,7 @@ export async function publishDerivedChunk(
       });
   }
   const values = valueGroups.length
-    ? await publishValues(tx, valueGroups, plan)
+    ? await publishValues(db, valueGroups, plan)
     : { changed: new Map<string, string[]>(), published: new Map() };
   const retain: WorkItem[] = [];
   const covered = [...chunk.covered];
