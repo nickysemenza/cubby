@@ -119,9 +119,8 @@ INSERT INTO "Suggestion" (
 )
 SELECT a.id, a."publicationKey", a.family, a.subject, a.judgment, a.producer,
   -- Freshness hashes the current basis against the fingerprint; it never read the stored one.
-  CASE WHEN a.subject->>'scope' LIKE 'connection.%' AND a.evidence ? 'candidate'
-    THEN jsonb_build_object('version', a.evidence->'version', 'candidate', a.evidence->'candidate')
-    ELSE a.evidence END,
+  -- One read of each wide value: every further reference detoasts it again.
+  CASE WHEN a.subject->>'scope' LIKE 'connection.%' THEN a.evidence - 'basis' ELSE a.evidence END,
   a.served,
   coalesce((SELECT jsonb_agg(e.event ORDER BY e."createdAt", e.id) FROM "suggestion_retained_event" e WHERE e."assessmentId" = a.id), '[]'::jsonb),
   s."runId", s."ledgerPartyId", s.entity, s."recordId", s.field, s."financeReviewFingerprint", s."evaluationId",
@@ -140,7 +139,7 @@ BEGIN
   -- Every carried row, column by column, including nulls.
   SELECT count(*) INTO difference FROM (
     (SELECT md5(ROW(a.id, a."publicationKey", a.family, a.subject, a.judgment, a.producer,
-        CASE WHEN a.subject->>'scope' LIKE 'connection.%' AND a.evidence ? 'candidate' THEN a.evidence->'candidate' ELSE a.evidence END,
+        CASE WHEN a.subject->>'scope' LIKE 'connection.%' THEN a.evidence - 'basis' ELSE a.evidence END,
         a.served, s."runId", s."ledgerPartyId", s.entity, s."recordId", s.field, s."financeReviewFingerprint",
         s."evaluationId", s.provenance, s."acceptanceReceipt", s."supersessionReceipt", s."currentValue", s."suggestedValue",
         s.confidence, s."runnerUpValue", s."runnerUpConfidence", s.model, s.kind, s.status, s."correctValue", s.data,
@@ -148,7 +147,7 @@ BEGIN
       FROM "suggestion_carried" c JOIN "AssessmentState" s ON s.id = c.id JOIN "Assessment" a ON a.id = c.id
     EXCEPT ALL
     SELECT md5(ROW(n.id, n."publicationKey", n.family, n.subject, n.judgment, n.producer,
-        CASE WHEN n.subject->>'scope' LIKE 'connection.%' AND n.evidence ? 'candidate' THEN n.evidence->'candidate' ELSE n.evidence END,
+        n.evidence,
         n.served, n."runId", n."ledgerPartyId", n.entity, n."recordId", n.field, n."financeReviewFingerprint",
         n."evaluationId", n.provenance, n."acceptanceReceipt", n."supersessionReceipt", n."currentValue", n."suggestedValue",
         n.confidence, n."runnerUpValue", n."runnerUpConfidence", n.model, n.kind, n.status, n."correctValue", n.data,

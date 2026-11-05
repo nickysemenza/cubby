@@ -101,10 +101,11 @@ whose journal already contains an undeployed contract.
 keys, triggers and secondary indexes removed. It never drops them. It runs in one
 transaction under `lock_timeout` 10s: `AuditLog` and `DerivedValue` trigger drops
 first, then Run, LedgerParty and AiEvaluation, then the three ledgers ACCESS
-EXCLUSIVE. Reading connection candidates out of wide evidence dominates its run
-time, about 10 ms a row for about 32,000 rows when sampled read-only, so suggestions
-and every writer of these tables are down for minutes. The runner retries a lock
-timeout or deadlock.
+EXCLUSIVE. Reading wide connection evidence dominates its run time: each of about
+32,000 rows is read twice, once to copy and once to compare, at about 10 ms a read
+when sampled read-only, so suggestions and every writer of these tables are down for
+about ten minutes. That duration is an estimate; no run at 2 CU has measured it. The
+runner retries a lock timeout or deadlock.
 
 It carries every row with a decision, suppression, confirmation or acceptance
 receipt, or status applied or rejected; every field, product pair, transfer pair and
