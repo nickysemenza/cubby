@@ -20,10 +20,10 @@ import { workPurchaseSourceOwners } from "~/server/domains/purchase/repo/work-ow
 import { workRunReviewOwners } from "~/server/domains/run/repo/work-owners";
 import { workRecordFactsFor } from "~/server/domains/work/repo/record-facts";
 import {
-  publishedAssessmentRecordRefsSql,
   publishedAssessmentCoverageSql,
   type AssessmentPublishedScope,
 } from "~/server/generic/assessment/repo/read-publication";
+import { canonicalSuggestionRecordRefs } from "~/server/generic/assessment/repo/suggestion-list";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
@@ -136,7 +136,8 @@ const source: WorkSource = {
       ctes: [
         {
           name: "work_published_suggestion_refs",
-          sql: publishedAssessmentRecordRefsSql(selection),
+          sql: sql`SELECT * FROM jsonb_to_recordset(${JSON.stringify(await canonicalSuggestionRecordRefs(db, selection))}::jsonb)
+            AS refs(families text[], entity text, "recordCode" text)`,
         },
         {
           name: "work_pending_records",

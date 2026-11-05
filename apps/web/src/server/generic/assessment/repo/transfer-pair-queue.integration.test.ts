@@ -493,18 +493,14 @@ describe("transfer pairs in the global queue", () => {
         { ledgerPartyId: other.output.id },
         ctx.actor,
       );
-      // A prior publication remains useful while the owner edit is pending;
-      // current evidence, rather than background completion, must fence apply.
+      // Canonical admission rereads current evidence, so the changed pair leaves
+      // the list at once. A direct apply with the old fingerprint stays refused.
       const stale = await listSuggestionPage(ctx.db, {
         family: "transfer_pair",
       });
-      expect(stale.items.map((row) => row.assessmentId)).toContain(
+      expect(stale.items.map((row) => row.assessmentId)).not.toContain(
         pair.assessmentId,
       );
-      expect(stale.meta.coverage).toMatchObject({
-        stale: true,
-        unresolved: true,
-      });
       const bulk = await acceptCleanSuggestions(ctx.db, kernelCtx(ctx), {
         filters: { family: "statement_transaction" },
       });

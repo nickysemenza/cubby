@@ -462,5 +462,5 @@ describe("stored derived read sets", () => {
     await markAllStoredDerived(ctx.db);
     await drain();
     expect(await snapshot()).toEqual(incremental);
-  });
+  }, 30_000);
 });

@@ -766,3 +766,12 @@ cursors, receipts and scope rules differ, and a shared page would only forward
 to them. Suppression,
 fingerprint and reconfirm behavior are unchanged. Suggestions still publish in
 Run steps; moving them onto drains comes later, with #3142.
+
+## Publication retirement relief
+
+Pending suggestion lists, counts, bulk admission and Work read canonical family
+admission while ADR 0025 retires the publication pipeline. Empty or unavailable
+read publications must not turn existing review work into an empty queue.
+The derived drain retains but does not claim `assessment.reviewFacts` tickets:
+activation exhausted PostgreSQL memory and rolled back unrelated publications.
+Member decisions, evidence, paid work and all existing tickets remain retained.
