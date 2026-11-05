@@ -54,7 +54,7 @@ const publishedOutcome = {
 } satisfies { value: "value"; empty: "empty" };
 
 /** Keep publication identity and the kind/key index predicate together. */
-export function storedPublicationMatch(
+function storedPublicationMatch(
   publication: {
     entityId: AnyColumn | SQL;
     kind: AnyColumn | SQL;
