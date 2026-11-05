@@ -42,6 +42,9 @@ test("meal product nutrition preserves entered amounts on creation", async ({
   );
   await dialog.getByLabel("Amount").fill("1 1/2");
   await dialog.getByLabel("Unit").fill("serving");
+  // Close the unit suggestions; an open combobox popup hides the dialog from
+  // the accessibility tree.
+  await page.keyboard.press("Tab");
   await expect(dialog).toContainText("Estimated weight 45 g");
   const firstSaveRequest = page.waitForRequest(
     (request) =>
@@ -139,6 +142,9 @@ test("meal ingredient nutrition preserves entered amounts through removal", asyn
   );
   await ingredientDialog.getByLabel("Amount").fill("1/2");
   await ingredientDialog.getByLabel("Unit").fill("serving");
+  // Close the unit suggestions; an open combobox popup hides the dialog from
+  // the accessibility tree.
+  await page.keyboard.press("Tab");
   await expect(ingredientDialog).toContainText("Estimated weight 15 g");
   await ingredientDialog.getByRole("button", { name: "Add food" }).click();
   await expect(ingredientDialog).not.toBeVisible();
@@ -237,6 +243,9 @@ test("daily nutrition keeps manual food input after a failed save and retries it
   await dailyFoodDialog.getByLabel("Carbs (g)").fill("0");
   await dailyFoodDialog.getByLabel(/Serving amount/).fill("1/2");
   await dailyFoodDialog.getByLabel("Unit").fill("bowl");
+  // Close the unit suggestions; an open combobox popup hides the dialog from
+  // the accessibility tree.
+  await page.keyboard.press("Tab");
   await expect(dailyFoodDialog).toContainText(
     "Current conversion unavailable; this amount can still be saved.",
   );
