@@ -84,7 +84,7 @@ const attentionFilterOf = (type: string) =>
   )?.[0];
 
 /**
- * The effective start the drain stores (ADR 0021). Stop at explicit starts:
+ * The live effective start (ADR 0025). Stop at explicit starts:
  * descendants behind an override must not influence an ancestor's folded date.
  */
 export const projectStartDateSql = sql`(
@@ -115,7 +115,7 @@ export const projectScaffold = listScaffold("project", project, {
       }),
     // Stored (ADR 0021): the TS subtree fold no longer runs per list read.
     completionYear: storedDerivedSql("project", "completionYear", project.id),
-    startDate: storedDerivedSql("project", "startDate", project.id),
+    startDate: projectStartDateSql,
   },
   rows: {
     attentionItems: projectAttention.rows(({ items }) => {

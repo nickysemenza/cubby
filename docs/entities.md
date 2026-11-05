@@ -2954,6 +2954,13 @@ edge and gets the toggle like any other.
 
 ### Background derived data
 
+ADR 0025 replaces ticketed derived values one kind at a time. Project
+start-date ordering and filtering now read the canonical recursive SQL directly,
+including descendant overrides and inherited expense attribution. This read needs
+no publication. Its old target remains registered temporarily so deployed source
+triggers and retained tickets remain serviceable until the separate retirement
+migration; other Project rollups still read their publications.
+
 Refresh execution observations are separate from work ownership. A derived
 preparation page records its current WorkItem ticket, Job lease and start time;
 readers report execution only while that exact ticket and unexpired running

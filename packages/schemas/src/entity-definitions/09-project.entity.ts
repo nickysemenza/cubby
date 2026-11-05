@@ -1214,8 +1214,9 @@ Rules:
       // Orders by the effective assignee's name.
       assigneeId: { via: "assignee" },
       // The effective start: the stored date, else the earliest task or
-      // expense date in the subtree below an unset start. Stored (ADR 0021):
-      // the recursive fold per row made start-date sorts ~430-630 ms.
+      // expense date in the subtree below an unset start. Reads use live SQL
+      // (ADR 0025); retain the old target until the deployed reader cutover
+      // is verified and its source triggers and tickets can retire separately.
       startDate: {
         type: "date",
         stored: {
