@@ -21,6 +21,8 @@ type RecordLinkProps = {
   entity: Entity;
   id: string;
   name?: string | null;
+  /** Hierarchy ancestors of `name`; the pill draws the leaf first. */
+  parent?: string | null;
   displayImage?: ImageUrlSummary | null;
   emoji?: string | null;
   bare?: boolean;
@@ -46,6 +48,7 @@ export function EntityRefLink(props: InlineRefLinkProps | RecordLinkProps) {
         entity={props.entity}
         id={props.id}
         name={props.name}
+        parent={props.parent}
         displayImage={props.displayImage ?? null}
         emoji={props.emoji}
       />

@@ -68,6 +68,7 @@ import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { useTableConfig } from "~/ui/data-table/use-table-config";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useDocumentTitle } from "~/ui/hooks/use-document-title";
+import { NoneValue } from "~/ui/text/none-value";
 import { CurrencyValue } from "~/ui/values/currency-value";
 
 import { type EntityActionSubject } from "../actions/entity-actions";
@@ -344,7 +345,7 @@ function GroupMetricValue({
       className="inline-flex items-center gap-1"
       title={`${metric.label}: ${value.presentCount} of ${value.totalCount} records have a value`}
     >
-      {value.sum === null ? "–" : amount(value.sum)}
+      {value.sum === null ? <NoneValue /> : amount(value.sum)}
       {average !== null && (
         <span className="text-muted-foreground">avg {amount(average)}</span>
       )}

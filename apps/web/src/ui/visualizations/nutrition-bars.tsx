@@ -9,6 +9,7 @@ import { aggregateEstimates, scaleNutrition } from "~/lib/nutrition-estimates";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import type { IngredientDataItem } from "~/lib/recipe-costing";
 import { KeyNumbers } from "~/ui/records/key-numbers";
+import { NoneValue } from "~/ui/text/none-value";
 import { Visualization } from "~/ui/visualizations/visualization";
 
 const SEGMENT_COLORS = [
@@ -247,7 +248,7 @@ export default function NutritionBars({
                         : (estimateStatusText(estimate) ?? undefined)
                     }
                   >
-                    {estimate == null ? "—" : formatGrams(estimate)}
+                    {estimate == null ? <NoneValue /> : formatGrams(estimate)}
                   </span>
                 </div>
                 <div className="h-3.5 overflow-hidden border-[1.5px] border-[var(--border)] bg-card">

@@ -61,3 +61,19 @@ export function PersonAvatar({
     </span>
   );
 }
+
+/**
+ * A person reference no evidence resolves: a hollow dashed avatar and a muted
+ * label, so "nobody known" reads as a person slot rather than a stray dash.
+ */
+export function UnknownPersonValue({ label = "Unknown" }: { label?: string }) {
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1 text-muted-foreground">
+      <span
+        aria-hidden
+        className="inline-flex size-4 shrink-0 rounded-full border border-dashed border-hairline-strong"
+      />
+      <span className="min-w-0 truncate">{label}</span>
+    </span>
+  );
+}

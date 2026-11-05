@@ -44,10 +44,11 @@ export function CellBar({
       : Math.max(0, Math.min(1, value / maximum));
   return (
     <span className="relative block w-full" title={label}>
+      {/* A thin bar along the cell's foot; a full-cell block read as a selection. */}
       {fraction !== null && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 left-0 bg-foreground/10"
+          className="pointer-events-none absolute bottom-[calc((var(--table-cell-leading)_-_var(--table-row-height))/2_+_1px)] left-0 h-[3px] bg-foreground/15"
           style={{ width: `${fraction * 100}%` }}
         />
       )}

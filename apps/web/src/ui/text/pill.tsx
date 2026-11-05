@@ -9,8 +9,9 @@ const pillVariants = cva(
     variants: {
       mode: {
         value: "",
+        // A pending decision: the action-change hue, dashed, never filled.
         suggestion:
-          "border-dashed border-muted-foreground/40 bg-muted/40 text-muted-foreground",
+          "border-dashed border-action-change/60 bg-transparent text-foreground",
       },
     },
     defaultVariants: {

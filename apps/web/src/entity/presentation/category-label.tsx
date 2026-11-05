@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ProductCategorySummary as ProductCategory } from "@cubby/schemas/product-category-fields";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -5,20 +6,28 @@ import { useProductCategories } from "~/entity/hooks/use-product-categories";
 import { Spinner } from "~/ui/primitives/spinner";
 import { NoneValue } from "~/ui/text/none-value";
 
-import { categoryText } from "./category-text";
+import { categoryLeafParts } from "./category-text";
 
 interface CategoryLabelProps {
   category: ProductCategory | null;
 }
 
-/** A category supplies its full-path label to the shared record identity. */
+/**
+ * A category pill leads with its leaf and follows with the muted ancestors;
+ * the link's accessible name stays the full root-to-leaf path.
+ */
 export function CategoryLabel({ category }: CategoryLabelProps) {
   if (!category) return <NoneValue />;
+  const { leaf, parent } = categoryLeafParts(
+    (fieldValueOf(category.fields.path) ?? []).map((node) => node.name),
+    category.name,
+  );
   return (
     <EntityRefLink
       entity="productCategory"
       id={category.id}
-      name={categoryText(category)}
+      name={leaf}
+      parent={parent}
     />
   );
 }

@@ -68,7 +68,7 @@ export function StackedValue({
       <span
         data-stacked-line=""
         data-cell-spill-text={primarySpillText}
-        className="block truncate text-sm leading-[15px]"
+        className="block truncate text-sm leading-[15px] tabular-nums"
       >
         {primary}
       </span>

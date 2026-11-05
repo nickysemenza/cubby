@@ -65,7 +65,7 @@ function DateContents({
     );
   return (
     <>
-      {primary}
+      <span className="tabular-nums">{primary}</span>
       {secondary && (
         <span
           className={overdue ? "text-destructive" : "text-muted-foreground"}

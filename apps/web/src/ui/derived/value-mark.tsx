@@ -12,6 +12,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import {
+  RecordPillTreatmentContext,
+  SuggestionSparkle,
+} from "~/ui/records/record-pill";
+
+const AUTO_LABEL = "Set automatically";
 
 type PendingWork = Extract<ReadableFieldEnvelope["work"], { kind: "pending" }>;
 
@@ -115,8 +121,10 @@ export function FieldValueMark({
       className={cn(
         "inline-flex max-w-full min-w-0 items-center gap-1",
         inherited && "text-muted-foreground",
+        // An automatic value is a settled neutral chip; a record value's own
+        // pill carries the chip and sparkle, so this wrapper steps aside.
         auto &&
-          "w-fit rounded-md border border-dashed border-action-change/40 bg-action-change-surface px-1 text-action-change",
+          "group/auto h-(--pill-height) w-fit rounded-(--brand-web-radius-chip) bg-muted px-1.5 has-data-entity-pill:h-auto has-data-entity-pill:bg-transparent has-data-entity-pill:px-0",
       )}
     >
       {inherited ? (
@@ -128,9 +136,29 @@ export function FieldValueMark({
         </span>
       ) : null}
       <span className="min-w-0 truncate">
-        {missing && envelope ? fieldMissingLabel(envelope.work) : children}
+        {missing && envelope ? (
+          fieldMissingLabel(envelope.work)
+        ) : auto ? (
+          <RecordPillTreatmentContext.Provider value={{ kind: "auto" }}>
+            {children}
+          </RecordPillTreatmentContext.Provider>
+        ) : (
+          children
+        )}
       </span>
-      {auto ? <span className="shrink-0 text-3xs">auto</span> : null}
+      {auto ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span className="inline-flex shrink-0 group-has-data-entity-pill/auto:sr-only" />
+            }
+          >
+            <SuggestionSparkle className="size-2.5" />
+            <span className="sr-only">{AUTO_LABEL}</span>
+          </TooltipTrigger>
+          <TooltipContent>{AUTO_LABEL}</TooltipContent>
+        </Tooltip>
+      ) : null}
       {updating && error === null ? (
         <UpdatingDot label={refreshLabel} active={running} />
       ) : null}

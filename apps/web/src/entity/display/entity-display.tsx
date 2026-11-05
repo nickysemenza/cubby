@@ -96,6 +96,7 @@ import {
   NotRecordedValue,
   useFactsAdd,
 } from "~/ui/records/facts";
+import { UnknownPersonValue } from "~/ui/records/person-avatar";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
 import { ExternalLinkText } from "~/ui/text/external-link";
 import { tryFormatAmount } from "~/ui/text/format-amount";
@@ -418,7 +419,16 @@ function resolutionEmptyLabel(
   const text =
     fieldVisibleEmptyLabel(resolution, labels) ??
     (explainMissing ? fieldEmptyLabel(resolution, labels) : null);
-  return text ? <span className="text-muted-foreground">{text}</span> : null;
+  if (!text) return null;
+  // An unresolved person (effective owner unknown) keeps a person slot.
+  const outcome = fieldDecisionOf(resolution)?.outcome;
+  if (
+    field.reference?.entity === "ledgerParty" &&
+    outcome?.kind === "empty" &&
+    outcome.reason === "unset"
+  )
+    return <UnknownPersonValue label={text} />;
+  return <span className="text-muted-foreground">{text}</span>;
 }
 
 /**
@@ -681,7 +691,7 @@ export function renderSuggestedListFieldValue<TRecord extends { id: string }>(
   const field = entityMetadata(queryClient, entity).fields.fields.find(
     (candidate) => candidate.key === fieldKey,
   );
-  if (!field) return String(value ?? "—");
+  if (!field) return value === undefined ? <NoneValue /> : String(value);
   const readKey = field.readKey ?? field.key;
   // A proposal must not inherit the current value's resolved projection,
   // nested reference labels, allocations, or field resolution.

@@ -135,11 +135,11 @@ export function CellEditTrigger<TSaved>({
         // would paint a native word selection under the editor.
         "group relative inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm px-2 py-1 text-left select-none hover:bg-muted",
         // In a table cell the value must start on the cell's own padding like
-        // every plain cell, so "—" and text line up across columns; the hover
-        // wash still bleeds into that padding.
-        "in-data-[slot=table-cell]:-mx-1 in-data-[slot=table-cell]:max-w-[calc(100%+0.5rem)] in-data-[slot=table-cell]:px-1 in-data-[slot=table-cell]:py-0.5",
+        // every plain cell, so values line up across columns. A table shows
+        // no hover box; the pencil reveal alone marks the editable cell.
+        "in-data-[slot=table-cell]:-mx-1 in-data-[slot=table-cell]:max-w-[calc(100%+0.5rem)] in-data-[slot=table-cell]:px-1 in-data-[slot=table-cell]:py-0.5 in-data-[slot=table-cell]:hover:bg-transparent",
         // Same in a detail facts ledger: text starts on the value column's
-        // edge like links and "—" beside it.
+        // edge like the links and empty marks beside it.
         "in-data-[slot=fact-value]:-ms-2 in-data-[slot=fact-value]:max-w-[calc(100%+0.5rem)] in-data-[slot=fact-value]:py-0.5",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         "data-[clipboard-flash]:ring-2 data-[clipboard-flash]:ring-ring",
@@ -183,7 +183,7 @@ export function CellEditTrigger<TSaved>({
             <span
               data-cell-edit-pencil
               aria-hidden
-              className="pointer-events-none absolute inset-y-0 right-0.5 my-auto flex size-5 items-center justify-center rounded-sm bg-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 pointer-coarse:static pointer-coarse:bg-transparent pointer-coarse:opacity-100 pointer-coarse:shadow-none"
+              className="pointer-events-none absolute inset-y-0 right-0.5 my-auto flex size-5 items-center justify-center rounded-sm bg-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 in-data-[slot=table-cell]:bg-transparent pointer-coarse:static pointer-coarse:bg-transparent pointer-coarse:opacity-100 pointer-coarse:shadow-none"
             >
               <PencilIcon className="size-3 text-muted-foreground" />
             </span>
