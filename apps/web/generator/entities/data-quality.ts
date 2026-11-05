@@ -1,5 +1,7 @@
 import { displayImageQualityCheck } from "@cubby/schemas/compiler/entity-definitions/data-quality-image";
 import { dataQuality } from "@cubby/schemas/data-quality-shape";
+import { defaultFieldDisplay } from "@cubby/schemas/entity-definitions/definition";
+import { compiledFieldDisplay } from "./presentation.ts";
 import {
   EntityDeclarationError,
   type CompiledEntity,
@@ -66,25 +68,14 @@ const qualityField = (entityKey: string): EntityField => ({
   },
   resolution: null,
   control: null,
-  display: {
+  display: compiledFieldDisplay(defaultFieldDisplay(), {
     list: true,
-    detail: false,
     columnId: DATA_QUALITY_FIELD,
-    standard: null,
     detailOrder: null,
     listOrder: -1,
-    width: null,
-    readPath: null,
-    labelPath: null,
-    format: null,
     renderer: { list: DATA_QUALITY_LIST_RENDERER, detail: null },
-    mobile: null,
-    listHidden: false,
     valueOptions: [...STATUS_OPTIONS],
-    referencePreviewLimit: null,
-    columnLabel: null,
-    preview: false,
-  },
+  }),
   validation: { read: dataQuality, create: null, update: null },
 });
 
@@ -205,25 +196,16 @@ export const compileDataQuality = (
     control: null,
     // Hidden by default: it hosts the `dataGap` header filter and, when
     // shown, reads the gap check ids straight off the row's data quality.
-    display: {
+    display: compiledFieldDisplay(defaultFieldDisplay(), {
       list: true,
-      detail: false,
-      columnId: null,
-      standard: null,
       detailOrder: null,
       listOrder: raw.listOrder ?? null,
       width: "md",
       readPath: "dataQuality.gaps[].check",
-      labelPath: null,
       format: "join",
-      renderer: null,
-      mobile: null,
       listHidden: true,
       valueOptions: null,
-      referencePreviewLimit: null,
-      columnLabel: null,
-      preview: false,
-    },
+    }),
     validation: { read: null, create: null, update: null },
   };
   const descriptorBase = {

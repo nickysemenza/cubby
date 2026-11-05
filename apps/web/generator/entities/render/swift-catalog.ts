@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { assertManifestWire, renderManifestWire } from "./manifest-wire.ts";
-import type { ManifestWire } from "@cubby/schemas/compiler/manifest-wire";
+import {
+  fieldDisplayWire,
+  type ManifestWire,
+} from "@cubby/schemas/compiler/manifest-wire";
 import { capitalize } from "@cubby/shared/text-case";
 import {
   excludedFilterValue,
@@ -338,20 +341,19 @@ const fieldControlInputJSON = (control: Field["control"]) => ({
   controlRequired: control?.required ?? null,
 });
 
+// SAFETY: every `fieldDisplayWire` key is a declared display key, and a compiled key left out when unset is null on the wire.
+const sharedDisplayJSON = (display: Field["display"]) =>
+  Object.fromEntries(
+    Object.keys(fieldDisplayWire).map((key) => [
+      key,
+      display[key as keyof typeof fieldDisplayWire] ?? null,
+    ]),
+  ) as Pick<ManifestWire<"FieldDescriptor">, keyof typeof fieldDisplayWire>;
+
 const fieldDisplayJSON = (display: Field["display"]) => ({
   showInList: display.list,
   showInDetail: display.detail,
-  detailOrder: display.detailOrder ?? null,
-  listOrder: display.listOrder ?? null,
-  referencePreviewLimit: display.referencePreviewLimit ?? null,
-  listHidden: display.listHidden,
-  width: display.width ?? null,
-  format: display.format ?? null,
-  readPath: display.readPath ?? null,
-  labelPath: display.labelPath ?? null,
-  emptyLabel: display.emptyLabel ?? null,
-  detailLabelPath: display.detailLabelPath ?? null,
-  itemsPath: display.itemsPath ?? null,
+  ...sharedDisplayJSON(display),
   listRenderer: display.renderer?.list ?? null,
   detailRenderer: display.renderer?.detail ?? null,
   mobileSlot: display.mobile?.slot ?? null,

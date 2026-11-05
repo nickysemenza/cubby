@@ -14,10 +14,10 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `apps/web/generator/entities/*`. Record and gallery fields come from `idField` and
   `image-fields.ts`, and a record's images relation from `r.images()`. Raw-read facades import named read schemas
   independently of relationship inference. Relation sections consume one compiled
-  scope/create/sort/page plan on web and Apple. Presentation metadata changes also update the compiled contract in
-  `apps/web/generator/entities/declarations.ts`, the web field-model emitter, and
-  the native wire/catalog projection. Generation checks structure; the web/test
-  typecheck verifies those contracts agree.
+  scope/create/sort/page plan on web and Apple. A field `display` key is declared once in
+  `definition.ts`: the compiled contract and web field model pass it through, and listing
+  it in `fieldDisplayWire` (`manifest-wire.ts`) adds it to the Swift descriptor and catalog
+  JSON. Generation checks structure; the web/test typecheck verifies those contracts agree.
 - Repository SQL titles: `scaffold.title()` reads the stored `titleField`
   column or the repository's declared computed `read.title` expression; shortcode
   labels, graph labels and filter options use it. `read.optionCount` names a

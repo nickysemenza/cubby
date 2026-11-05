@@ -25,6 +25,34 @@ type CompiledControl = Omit<DeclaredControl, "options"> & {
   options: readonly CompiledFieldOption[] | null;
 };
 
+type DeclaredDisplay = DeclaredField["display"];
+/**
+ * Every declared display fact passes through, so a new key needs no edit here.
+ * Only what the compiler resolves or omits when unset is restated.
+ */
+type CompiledFieldDisplay = Omit<
+  DeclaredDisplay,
+  | "list"
+  | "detail"
+  | "valueOptions"
+  | "optionRole"
+  | "optionColor"
+  | "optionGlyph"
+  | "columnGroup"
+  | "columnBar"
+  | "detailLabelPath"
+  | "itemsPath"
+> & {
+  list: boolean;
+  detail: boolean;
+  detailOrder: number | null;
+  valueOptions: readonly DisplayFieldOption[] | null;
+  columnGroup?: string;
+  columnBar?: boolean;
+  detailLabelPath?: string;
+  itemsPath?: string;
+};
+
 export type GeneratedEntityFieldKind = EntityFieldKind;
 export type GeneratedEntityFieldControlKind = EntityFieldControlKind;
 
@@ -78,44 +106,7 @@ export type GeneratedEntityFieldModel<E extends string = Entity> = {
     provenance: GeneratedEntityFieldProvenance<E> | null;
     collection?: DeclaredField["collection"];
     control: CompiledControl | null;
-    display: {
-      list: boolean;
-      detail: boolean;
-      columnId: string | null;
-      standard: "name" | "image" | null;
-      detailOrder: number | null;
-      listOrder: number | null;
-      width: "xs" | "sm" | "md" | "lg" | "xl" | null;
-      readPath: string | null;
-      readFields?: readonly string[];
-      labelPath: string | null;
-      emptyLabel?: string | null;
-      detailLabelPath?: string | null;
-      itemsPath?: string | null;
-      format:
-        | "currency"
-        | "signedCurrency"
-        | "plainDate"
-        | "timestamp"
-        | "external-link"
-        | "amount"
-        | "presence"
-        | "bytes"
-        | "join"
-        | "arrayCount"
-        | "count"
-        | "resolvedList"
-        | null;
-      renderer: { list: string | null; detail: string | null } | null;
-      mobile: { slot: string; priority: number; interactive?: boolean } | null;
-      listHidden: boolean;
-      referencePreviewLimit: number | null;
-      columnLabel: string | null;
-      columnGroup?: string;
-      columnBar?: boolean;
-      valueOptions: readonly DisplayFieldOption[] | null;
-      preview: boolean;
-    };
+    display: CompiledFieldDisplay;
   }[];
 
   storage: readonly {

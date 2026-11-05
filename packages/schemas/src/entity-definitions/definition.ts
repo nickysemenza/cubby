@@ -618,61 +618,11 @@ const buildMetadataSchemas = () => {
         .default(false),
     })
     .strict()
-    .transform(
-      ({
-        list,
-        detail,
-        columnIdOverride,
-        standard,
-        listOrderOverride,
-        width,
-        readPath,
-        readFields,
-        labelPath,
-        emptyLabel,
-        detailLabelPath,
-        itemsPath,
-        format,
-        renderer,
-        mobile,
-        listHidden,
-        columnLabel,
-        columnGroup,
-        columnBar,
-        referencePreviewLimit,
-        valueOptions,
-        optionRole,
-        optionColor,
-        optionGlyph,
-        preview,
-      }) => ({
-        list,
-        detail,
-        columnId: columnIdOverride,
-        standard,
-        listOrder: listOrderOverride,
-        width,
-        readPath,
-        readFields,
-        labelPath,
-        emptyLabel,
-        detailLabelPath,
-        itemsPath,
-        format,
-        renderer,
-        mobile,
-        listHidden,
-        columnLabel,
-        columnGroup,
-        columnBar,
-        referencePreviewLimit,
-        valueOptions,
-        optionRole,
-        optionColor,
-        optionGlyph,
-        preview,
-      }),
-    );
+    .transform(({ columnIdOverride, listOrderOverride, ...display }) => ({
+      ...display,
+      columnId: columnIdOverride,
+      listOrder: listOrderOverride,
+    }));
 
   const entityFieldProvenanceSourceMetadataSchema = z.union([
     z
@@ -3274,6 +3224,7 @@ const buildMetadataSchemas = () => {
   return {
     declaration: entityDeclarationMetadataSchema,
     field: entityFieldMetadataSchema,
+    fieldDisplay: entityFieldDisplayMetadataSchema,
     fieldModel: entityFieldModelMetadataSchema,
     storage: entityStorageMetadataSchema,
     presentation: entityPresentationMetadataSchema,
@@ -3287,6 +3238,9 @@ const metadataSchemas = () => (metadataSchemaCache ??= buildMetadataSchemas());
 
 type EntityMetadataSchemas = ReturnType<typeof buildMetadataSchemas>;
 export type EntityStorageMetadata = z.output<EntityMetadataSchemas["storage"]>;
+/** The declared display block, with every default applied. */
+export const defaultFieldDisplay = () =>
+  metadataSchemas().fieldDisplay.parse({});
 export type EntityFieldModelMetadata = z.output<
   EntityMetadataSchemas["fieldModel"]
 >;
