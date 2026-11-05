@@ -144,8 +144,8 @@ export async function rebuildDerived(
             return false;
         }
       } catch (error) {
-        // Keep prior output for this target; a provider outage cannot block quality or search.
-        next = followingTarget;
+        // Keep this page's prior output; later IDs must not starve behind one bad record.
+        // During an outage this deliberately makes one failed call per bounded page.
         if (
           !(await commitRebuildPage(
             db,

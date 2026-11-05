@@ -2712,10 +2712,12 @@ round deadline. Publication and cursor advancement commit together. Claims recor
 attempts before compute, so isolate termination counts too: after three attempts
 the page halves, down to one record. Three failed attempts at one record skip it,
 retain its prior output and record a failure. A thrown compute or publication
-fails its target, retains prior output and advances to the next target. Every
+fails only its page, retains prior output and advances to the next page. Later
+records in the target still refresh; a provider outage costs one failed call per
+bounded page. Every
 interrupted pass resumes its committed cursor across hour boundaries. Completed
-passes with failures retry after five minutes; only a fully healthy pass clears
-failures. A requested new pass clears the previous pass's error before starting.
+passes, including failed ones, wait for the next hourly slot; only a fully healthy
+pass clears failures. Five-minute retries resume interrupted running passes. A requested new pass clears the previous pass's error before starting.
 Incomplete diagnostic sources omit their counts, so Work reports unavailable
 rather than a partial healthy zero; other sources still publish. Source edits need no fences or generations; the next hourly pass repairs
 mixed-age reads. Own assignments and money/identity command validation remain
