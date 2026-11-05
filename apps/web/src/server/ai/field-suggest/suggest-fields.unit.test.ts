@@ -240,7 +240,7 @@ describe("suggestFields", () => {
           identity: '{"kind":"credit_card","network":null}',
         },
       },
-      { decisionPort, resolveCorrections: false },
+      { decisionPort },
     );
     expect(decisionPort).toHaveBeenCalledOnce();
     const request = vi.mocked(decisionPort).mock.calls[0]![0];
@@ -262,7 +262,7 @@ describe("suggestFields", () => {
         targets: ["type"],
         basis: { name: "17", type: "shelf" },
       },
-      { decisionPort, resolveCorrections: false },
+      { decisionPort },
     );
     expect(
       decisionPort.mock.calls[0]?.[0].questions.selection.criteria,
@@ -627,7 +627,7 @@ describe("suggestFields", () => {
           basis: { name: "evening meal" },
           basisMode,
         },
-        { decisionPort, resolveCorrections: false },
+        { decisionPort },
       );
       await vi.waitFor(() => expect(release).toHaveLength(2));
       release.forEach((resolve) => resolve());
@@ -683,7 +683,6 @@ describe("suggestFields", () => {
       },
       {
         decisionPort,
-        resolveCorrections: false,
         resolveLabels: async () => new Map([[parentId, "Food"]]),
       },
     );
@@ -904,7 +903,7 @@ describe("suggestFields", () => {
           targets: ["notAField"],
           basis: {},
         },
-        { decisionPort, resolveCorrections: false },
+        { decisionPort },
       ),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",

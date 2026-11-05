@@ -1,11 +1,6 @@
 import { type ImageId } from "@cubby/schemas/identifiers";
-import {
-  imageDescriptionConfirmationOwner,
-  imageDescriptionCorrectionReceipt,
-} from "@cubby/schemas/image-processing";
+import { imageDescriptionConfirmationOwner } from "@cubby/schemas/image-processing";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
-import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
 import { currentImageDescriptionConfirmation } from "~/server/db/computed/image-description-confirmation";
@@ -20,10 +15,6 @@ import {
   image,
   feedback,
 } from "~/server/db/retained-tables";
-import {
-  correctionOperationId,
-  indexCorrectionReceipts,
-} from "~/server/generic/assessment/repo/correction-receipt";
 
 /** Shared direct/batch selection verifies automatic effect receipts once per requested page. */
 export async function readImageDescriptionConfirmations(
@@ -32,10 +23,8 @@ export async function readImageDescriptionConfirmations(
 ) {
   const ids = "imageIds" in scope ? scope.imageIds : scope.shortcodes;
   if (!ids.length) return [];
-  const correction = alias(feedback, "description_correction_receipt");
   const rows = await getDb(db)
     .select({
-      correctionReceipt: correction,
       assessmentId: assessmentState.id,
       imageId: image.id,
       shortcode: image.shortcode,
@@ -50,13 +39,6 @@ export async function readImageDescriptionConfirmations(
     .from(assessmentState)
     .innerJoin(assessment, eq(assessment.id, assessmentState.id))
     .innerJoin(image, eq(image.id, assessmentState.recordId))
-    .leftJoin(
-      correction,
-      eq(
-        correction.operationId,
-        sql`'correction:' || (${assessmentState.data}->'confirmationOwner'->>'sourceFeedbackId') || ':' || (${assessmentState.data}->'confirmationOwner'->>'targetAssessmentId')`,
-      ),
-    )
     .where(
       and(
         "imageIds" in scope
@@ -78,56 +60,7 @@ export async function readImageDescriptionConfirmations(
       ? [{ ...row, owner: ownership.data.confirmationOwner ?? null }]
       : [];
   });
-  const automatic = prepared.flatMap((row) =>
-    row.owner?.kind === "correction"
-      ? [
-          {
-            sourceFeedbackId: row.owner.sourceFeedbackId,
-            targetAssessmentId: row.owner.targetAssessmentId,
-          },
-        ]
-      : [],
-  );
-  const receipts = indexCorrectionReceipts(
-    automatic,
-    rows.flatMap((row) =>
-      row.correctionReceipt ? [row.correctionReceipt] : [],
-    ),
-  );
-  return prepared.filter((row) => {
-    if (row.owner?.kind !== "correction") return true;
-    const found = receipts.get(
-      correctionOperationId(
-        row.owner.sourceFeedbackId,
-        row.owner.targetAssessmentId,
-      ),
-    );
-    if (found?.kind !== "valid") return false;
-    const effect = z
-      .object({
-        status: z.literal("applied"),
-        receipt: imageDescriptionCorrectionReceipt,
-      })
-      .safeParse(found.receipt.receipt);
-    const lineage = z
-      .object({
-        sourceApplicationFeedbackId: z.string(),
-        sourceActorUserId: z.string(),
-      })
-      .safeParse(found.receipt.metadata);
-    return (
-      effect.success &&
-      lineage.success &&
-      lineage.data.sourceApplicationFeedbackId ===
-        row.owner.sourceApplicationFeedbackId &&
-      lineage.data.sourceActorUserId === row.owner.sourceActorUserId &&
-      row.owner.targetAssessmentId === row.assessmentId &&
-      effect.data.receipt.recordId === row.imageId &&
-      effect.data.receipt.contentHash === row.contentHash &&
-      effect.data.receipt.description === row.description &&
-      isEqual(effect.data.receipt.owner, row.owner)
-    );
-  });
+  return prepared;
 }
 
 export async function readConfirmedDescription(db: Database, imageId: ImageId) {

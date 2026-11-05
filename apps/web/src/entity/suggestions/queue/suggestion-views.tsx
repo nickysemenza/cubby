@@ -575,7 +575,7 @@ function fieldColumns() {
         }),
         cell: ({ row }) => {
           const value = evidence(row.original);
-          return value && !value.correctionAuthority ? (
+          return value ? (
             <span className="tabular-nums">
               {formatConfidence(value.confidence)}
             </span>
@@ -609,9 +609,7 @@ function fieldColumns() {
           if (!value) return null;
           return (
             <span className="inline-flex min-w-0 items-center gap-1 text-muted-foreground">
-              <span className="truncate">
-                {value.correctionAuthority ? "Member correction" : value.model}
-              </span>
+              <span className="truncate">{value.model}</span>
               {value.runId ? (
                 <>
                   <span aria-hidden>·</span>

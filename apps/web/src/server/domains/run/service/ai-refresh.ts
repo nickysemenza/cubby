@@ -85,12 +85,7 @@ import { publishProductPairPublications } from "~/server/domains/product/repo/ma
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
-import {
-  fieldCorrectionIdentity,
-  fieldCorrectionRecipe,
-  fieldReviewIdentity,
-} from "~/server/generic/assessment/repo/field-assessment-review";
-import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
+import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
@@ -161,8 +156,6 @@ const fieldSnapshot = z.object({
 });
 const fieldResult = z.object({
   reviewKey: z.string().nullable().optional(),
-  correctionKey: z.string().nullable().optional(),
-  correctionRecipe: fieldCorrectionRecipe.optional(),
   output: fieldSuggestionsOut,
   provenance: aiProvenance,
 });
@@ -835,17 +828,15 @@ export async function executeAiRefreshTarget(
     const provenance = {
       ...prepared.provenance,
       model:
-        evaluated.result.outcomes?.[snapshot.field]?.kind === "correction"
-          ? null
-          : ([...evaluated.inputs]
-              .reverse()
-              .find(
-                (call) =>
-                  call.operation ===
-                  `suggestFields.${snapshot.entity}.${snapshot.field}`,
-              )?.model ??
-            snapshot.decisionModelOverride ??
-            null),
+        [...evaluated.inputs]
+          .reverse()
+          .find(
+            (call) =>
+              call.operation ===
+              `suggestFields.${snapshot.entity}.${snapshot.field}`,
+          )?.model ??
+        snapshot.decisionModelOverride ??
+        null,
     };
     const reviewKey = await fieldReviewIdentity({
       entity: snapshot.entity,
@@ -861,24 +852,6 @@ export async function executeAiRefreshTarget(
       output: evaluated.result,
       provenance,
       reviewKey,
-      correctionRecipe: evaluated.incomplete
-        ? undefined
-        : {
-            version: "field-correction-v2",
-            entity: snapshot.entity,
-            field: snapshot.field,
-            basis: snapshot.basis,
-            inputs: evaluated.inputs,
-            dependencies: provenance.dependencies,
-          },
-      correctionKey: await fieldCorrectionIdentity({
-        entity: snapshot.entity,
-        field: snapshot.field,
-        basis: snapshot.basis,
-        inputs: evaluated.inputs,
-        dependencies: provenance.dependencies,
-        incomplete: evaluated.incomplete,
-      }),
     });
     if (!result.success) throw result.error;
     if (
@@ -899,24 +872,6 @@ export async function executeAiRefreshTarget(
     )
       throw new Error("AI evaluation target changed during inference");
     const decision = saved.output.suggestions[snapshot.field];
-    const correctionOutcome = saved.output.outcomes?.[snapshot.field];
-    if (correctionOutcome?.kind === "correction") {
-      await publishFieldCorrectionQuestion(tx, {
-        entity: snapshot.entity,
-        recordId: target.recordId,
-        field: snapshot.field,
-        currentValue: snapshot.currentValue,
-        outcome: correctionOutcome,
-        correctionRecipe: saved.correctionRecipe,
-        provenance: saved.provenance,
-        runId: claimed.runId,
-      });
-      return {
-        outcome: "queued",
-        applicationFailures: [],
-        evaluatedOutcome: correctionOutcome,
-      };
-    }
     const model =
       saved.provenance.model ?? snapshot.decisionModelOverride ?? "unknown";
     const entry = decision
@@ -948,8 +903,6 @@ export async function executeAiRefreshTarget(
             {
               ...entry,
               reviewKey: saved.reviewKey,
-              correctionKey: saved.correctionKey,
-              correctionRecipe: saved.correctionRecipe,
               model: saved.provenance.model ?? entry.model,
             },
           ]

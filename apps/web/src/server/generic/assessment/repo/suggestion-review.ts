@@ -3,7 +3,6 @@ import {
   financeCategoryApplyInput,
   suggestionReviewListInput,
   suggestionStatus,
-  confirmedFieldDecision,
 } from "@cubby/schemas/ai";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
 import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
@@ -105,16 +104,10 @@ function reviewableRow(
   suggestion: typeof suggestionTable.$inferSelect,
   runCode: string | null,
 ) {
-  const authority = confirmedFieldDecision.safeParse(
-    z
-      .object({ correctionAuthority: z.json().optional() })
-      .safeParse(suggestion.data).data?.correctionAuthority,
-  );
   return [
     {
       ...suggestionRowSchema.parse(suggestion),
       runId: runCode,
-      ...(authority.success && { correctionAuthority: authority.data }),
     },
   ];
 }
@@ -362,7 +355,6 @@ export async function fieldSuggestionKeys(
       field: suggestionTable.field,
       kind: suggestionTable.kind,
       confidence: suggestionTable.confidence,
-      correctionAuthority: sql<unknown>`${suggestionTable.data}->'correctionAuthority'`,
       createdAt: suggestionTable.createdAt,
       matchedRules: matchedRulesOf(sql`${suggestionTable.data}`),
       automaticRule: automaticApplicationRule(sql`${suggestionTable.id}`),

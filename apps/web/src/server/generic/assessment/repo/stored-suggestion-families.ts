@@ -12,7 +12,6 @@ import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { currentProductPairPolicySql } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
-import { readCorrectionOutcomes } from "~/server/generic/assessment/repo/correction-outcomes";
 
 import {
   pendingImageDescriptionEligibility,
@@ -177,10 +176,6 @@ export const imageDescriptionFamily: SuggestionFamilyPresentation<"image_descrip
     keys: (db, query) => storedKeys(db, query, "image_description"),
     rows: async (db, keys) => {
       if (!keys.length) return new Map();
-      const corrections = await readCorrectionOutcomes(
-        db,
-        keys.map((key) => key.assessmentId),
-      );
       const { rows } = await unwrapDb(db).execute<{
         id: string;
         judgment: unknown;
@@ -201,9 +196,6 @@ export const imageDescriptionFamily: SuggestionFamilyPresentation<"image_descrip
             record = refs.get(row.id)?.[0];
           if (!key || !record) return [];
           const description = z.string().min(1).parse(row.judgment);
-          const correction = corrections.get(row.id);
-          const held =
-            correction?.outcome.status === "held" ? correction.outcome : null;
           return [
             [
               row.id,
@@ -211,20 +203,8 @@ export const imageDescriptionFamily: SuggestionFamilyPresentation<"image_descrip
                 ...keyBase(key),
                 family: "image_description",
                 record,
-                summary: [
-                  { kind: "text", text: description },
-                  ...(held
-                    ? [
-                        {
-                          kind: "text",
-                          text: `Automatic correction held: ${held.reason}`,
-                        },
-                      ]
-                    : []),
-                ],
-                actions: held
-                  ? actions("correct", "dismiss")
-                  : actions("accept", "correct", "reject", "dismiss"),
+                summary: [{ kind: "text", text: description }],
+                actions: actions("accept", "correct", "reject", "dismiss"),
                 review: {
                   correction: {
                     label: "Correct description",
@@ -234,18 +214,7 @@ export const imageDescriptionFamily: SuggestionFamilyPresentation<"image_descrip
                 evidence: {
                   kind: "declared",
                   description,
-                  facts: held
-                    ? [
-                        { label: "Automatic correction", value: held.reason },
-                        {
-                          label: "Confirmed description",
-                          value:
-                            typeof correction?.correctedValue === "string"
-                              ? correction.correctedValue
-                              : JSON.stringify(correction?.correctedValue),
-                        },
-                      ]
-                    : [],
+                  facts: [],
                 },
               }),
             ] as const,

@@ -579,31 +579,6 @@ const suggestionRecordId = anyShortcodeSchema([
   firstShortcodeEntity,
   ...otherShortcodeEntities,
 ]);
-export const confirmedFieldDecision = z.discriminatedUnion("status", [
-  z.object({
-    status: z.literal("confirmed"),
-    correctionKey: z.string(),
-    revision: z.string(),
-    sourceFeedbackId: assessmentChildHandle,
-    sourceApplicationFeedbackId: assessmentChildHandle,
-    value: z.json(),
-  }),
-  z.object({
-    status: z.literal("conflict"),
-    correctionKey: z.string(),
-    revision: z.string(),
-    sources: z
-      .array(
-        z.object({
-          sourceFeedbackId: assessmentChildHandle,
-          sourceApplicationFeedbackId: assessmentChildHandle,
-          value: z.json(),
-        }),
-      )
-      .min(1),
-  }),
-]);
-
 export const suggestionReviewRowSchema = z.object({
   assessmentId: assessmentChildHandle,
   provenance: aiProvenance.nullable().optional(),
@@ -625,7 +600,6 @@ export const suggestionReviewRowSchema = z.object({
   currentValue: z.json().nullable(),
   suggestedValue: z.json(),
   confidence: z.number(),
-  correctionAuthority: confirmedFieldDecision.optional(),
   model: z.string(),
   kind: z.enum(["correction", "addition"]),
   status: suggestionStatus,
@@ -770,16 +744,7 @@ export type FieldSuggestion = z.infer<typeof fieldSuggestionSchema>;
  * candidate (a fill target), withheld a pick under suggestion policy, or kept
  * every entry (a prune target).
  */
-export const fieldCorrectionOutcome = z.object({
-  kind: z.literal("correction"),
-  reviewStatus: z.literal("rejected").optional(),
-  assessmentId: assessmentChildHandle.optional(),
-  targetInputFingerprint: z.string().nullable(),
-  decision: confirmedFieldDecision,
-});
-
 export const fieldSuggestionOutcomeSchema = z.discriminatedUnion("kind", [
-  fieldCorrectionOutcome,
   z.object({
     kind: z.literal("skipped"),
     reviewStatus: z.literal("rejected").optional(),

@@ -157,7 +157,7 @@ export function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
       secondary={
         <Stack gap="sm">
           <span>{row.summary}</span>
-          {!row.correctionAttempt && !row.applicationVerified ? (
+          {!row.applicationVerified ? (
             <span className="text-xs text-muted-foreground">
               Unverified application — this saved prediction may not have been
               used.
@@ -165,55 +165,39 @@ export function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
           ) : null}
         </Stack>
       }
-      trailing={
-        <DateDisplay
-          timestamp={row.correctionAttempt?.createdAt ?? row.createdAt}
-        />
-      }
+      trailing={<DateDisplay timestamp={row.createdAt} />}
       actions={
-        row.correctionAttempt?.outcome.status === "held" ? null : (
-          <Row gap="sm" className="items-center">
-            <span className="text-xs">
-              {row.verdict === "wrong"
-                ? "Feedback recorded"
-                : row.verdict
-                  ? humanize(row.verdict)
-                  : "Not reviewed"}
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={review.isPending || row.verdict === "wrong"}
-              onClick={() =>
-                review.mutate({
-                  assessmentId: row.id,
-                  operationId: crypto.randomUUID(),
-                  verdict: "wrong",
-                  intent: "history",
-                  expectedFingerprint: row.fingerprint,
-                  correction: { present: false },
-                })
-              }
-            >
-              Report incorrect
-            </Button>
-          </Row>
-        )
+        <Row gap="sm" className="items-center">
+          <span className="text-xs">
+            {row.verdict === "wrong"
+              ? "Feedback recorded"
+              : row.verdict
+                ? humanize(row.verdict)
+                : "Not reviewed"}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={review.isPending || row.verdict === "wrong"}
+            onClick={() =>
+              review.mutate({
+                assessmentId: row.id,
+                operationId: crypto.randomUUID(),
+                verdict: "wrong",
+                intent: "history",
+                expectedFingerprint: row.fingerprint,
+                correction: { present: false },
+              })
+            }
+          >
+            Report incorrect
+          </Button>
+        </Row>
       }
       detail={
         <Stack gap="sm">
-          <section
-            aria-label={
-              row.correctionAttempt
-                ? "Recorded correction attempt"
-                : "Applied result"
-            }
-          >
-            <p className="text-sm font-medium">
-              {row.correctionAttempt
-                ? "Recorded correction attempt"
-                : "Applied result"}
-            </p>
+          <section aria-label="Applied result">
+            <p className="text-sm font-medium">Applied result</p>
             <p className="text-xs">{row.summary}</p>
             {row.automaticRule ? (
               <p className="text-xs text-muted-foreground">
@@ -221,41 +205,12 @@ export function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
               </p>
             ) : null}
           </section>
-          {row.correctionAttempt ? (
-            <Disclosure summary="Correction provenance" className="text-xs">
-              <Stack gap="xs">
-                <p>
-                  This is the latest retained attempt for this suggestion, not a
-                  current eligibility check.
-                </p>
-                <p>
-                  Member decision:{" "}
-                  <code className="break-all">
-                    {row.correctionAttempt.sourceFeedbackId}
-                  </code>
-                </p>
-                <p>
-                  Source application receipt:{" "}
-                  <code className="break-all">
-                    {row.correctionAttempt.sourceApplicationFeedbackId}
-                  </code>
-                </p>
-                <p>
-                  Attempt receipt:{" "}
-                  <code className="break-all">
-                    {row.correctionAttempt.receiptId}
-                  </code>
-                </p>
-              </Stack>
-            </Disclosure>
-          ) : null}
           <Disclosure summary="Evidence" className="text-xs">
             <pre className="break-words whitespace-pre-wrap">
               {JSON.stringify(row.decision, null, 2)}
             </pre>
           </Disclosure>
-          {row.verdict === "wrong" &&
-          row.correctionAttempt?.outcome.status !== "held" ? (
+          {row.verdict === "wrong" ? (
             <p className="text-xs text-muted-foreground">
               Feedback recorded for reassessment where supported on the next
               suggestion run. Applied records stay as they are; open an affected

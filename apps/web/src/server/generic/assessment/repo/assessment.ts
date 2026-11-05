@@ -26,7 +26,6 @@ import {
   feedback,
 } from "~/server/db/retained-tables";
 import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
-import { recordAssessmentChange } from "~/server/generic/changes/repo/change";
 
 import {
   assessmentProjectionSnapshot,
@@ -172,15 +171,6 @@ export async function publishAssessments(
         return state ? [{ ...state, id: row.id, family: row.family }] : [];
       }),
     );
-    const correctionTargets = inserted.filter(
-      (row) => row.family === "field" || row.family === "image_description",
-    );
-    if (correctionTargets.length) {
-      await recordAssessmentChange(transactionDb, {
-        kind: "publications",
-        ids: correctionTargets.map((row) => row.id),
-      });
-    }
     return rows;
   });
 }
@@ -251,10 +241,6 @@ export async function publishFieldAssessment(
       evidence: {
         currentValue: z.json().parse(projection.currentValue ?? null),
         provenance: projection.provenance ?? null,
-        correctionKey: data.correctionKey ?? null,
-        ...(data.correctionRecipe
-          ? { correctionRecipe: data.correctionRecipe }
-          : {}),
       },
       served,
     },
@@ -331,17 +317,6 @@ export async function recordFeedbackWithInsertion(
     if (!row) throw new Error("Feedback publication returned no row");
     if (!isEqual(input, feedbackEvent.parse(row)))
       throw new Error("Immutable Feedback retry changed its event");
-    if (
-      inserted &&
-      row.authority === "member" &&
-      row.intent === "apply" &&
-      row.receipt !== null
-    ) {
-      await recordAssessmentChange(transactionDb, {
-        kind: "application",
-        receiptId: row.id,
-      });
-    }
     // A member's review of an Email-to-Purchase connection protects that Email,
     // and the protecting read has one owner. The two rows share an id, so a
     // command's Feedback and its frontier name the same review.
