@@ -460,7 +460,7 @@ the production branch. If table-level recovery would not be enough, stop and rep
 
 ## Source-claim minor units
 
-`0094_source_claim_minor_units` is a direct contract cutover. The running statement planner and label application read LedgerSourceClaim through booking-lineage checks. Label application also reaches LedgerTransfer through canonical FinancialTransaction read-back. A zero-row result does not establish table independence, so these refresh gates remain until the retained steps are terminal. The release owner
+`0096_source_claim_minor_units` is a direct contract cutover. The running statement planner and label application read LedgerSourceClaim through booking-lineage checks. Label application also reaches LedgerTransfer through canonical FinancialTransaction read-back. A zero-row result does not establish table independence, so these refresh gates remain until the retained steps are terminal. The release owner
 must wait for the active financial refresh's generation and subsequent statement
 steps to reach terminal outcomes before merging it. No writer hold, branch-copy
 rehearsal or dual writer is required. Parent owns merge sequencing with other
