@@ -173,7 +173,7 @@ describe("hourly deterministic rebuild", () => {
       EXISTS (SELECT 1 FROM "SearchDocument" WHERE "entityId" = ${product.entityId}::uuid AND "deletedAt" IS NULL) AS search`);
     expect(output.rows).toEqual([{ quality: true, search: true }]);
     const later = await getDb(ctx.db).execute(
-      sql`SELECT value FROM "DerivedValue" WHERE "entityId" = ${ids[2]}::uuid AND key = ${"price"}`,
+      sql`SELECT price AS value FROM "ProductReadSnapshot" WHERE "entityId" = ${ids[2]}::uuid`,
     );
     expect(later.rows).toEqual([{ value: 12 }]);
     // A failed completed pass cannot bypass the hourly gate or schedule a new full pass.
