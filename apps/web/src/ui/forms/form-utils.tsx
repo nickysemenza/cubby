@@ -21,6 +21,7 @@ import {
 import { toast } from "sonner";
 
 import { FLAGS } from "~/lib/flags";
+import { NumberInput } from "~/ui/forms/number-input";
 import { QuantityInput } from "~/ui/forms/quantity-input";
 import { Stack } from "~/ui/layout";
 import { Button, type buttonVariants } from "~/ui/primitives/button";
@@ -545,24 +546,19 @@ export function NullableNumericField<
           );
         }
 
-        const inputProps = {
-          id: name,
-          type: "number" as const,
-          // iOS shows its numeric keypad only when inputMode says so — plain
-          // type="number" alone still surfaces the full keyboard on Safari.
-          inputMode: "decimal" as const,
-          step,
-          placeholder,
-          ...field,
-          value: field.value != null ? field.value.toString() : "",
-          onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-            const value = e.target.value;
-            const numberValue = value ? parseFloat(value) : null;
-            field.onChange(numberValue);
-          },
-          "aria-invalid": fieldState.invalid,
-        };
-
+        const input = (
+          <NumberInput
+            id={name}
+            name={field.name}
+            ref={field.ref}
+            onBlur={field.onBlur}
+            step={step === "any" ? "any" : Number(step)}
+            placeholder={placeholder}
+            value={field.value ?? null}
+            onValueChange={field.onChange}
+            aria-invalid={fieldState.invalid}
+          />
+        );
         return (
           <FormFieldGroup
             htmlFor={name}
@@ -571,17 +567,14 @@ export function NullableNumericField<
             error={fieldState.error}
           >
             {prefix ? (
-              <div className="relative">
+              <div className="relative [&_input]:pl-7">
                 <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
                   {prefix}
                 </span>
-                <Input
-                  {...inputProps}
-                  className="pl-7" /* tight: clears absolute prefix */
-                />
+                {input}
               </div>
             ) : (
-              <Input {...inputProps} />
+              input
             )}
           </FormFieldGroup>
         );

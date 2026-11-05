@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import { Picker } from "~/entity/picker/picker";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
-import { Input } from "~/ui/primitives/input";
+import { NumberInput } from "~/ui/forms/number-input";
 
 const CategorySearch = referenceEntitySearch("productCategory");
 
@@ -25,12 +25,11 @@ export function TriageBounds({
   categoryId,
   onChange,
 }: TriageBoundsValue & { onChange: (next: TriageBoundsValue) => void }) {
-  const [draft, setDraft] = useState(minSpend?.toString() ?? "");
+  const [draft, setDraft] = useState<number | null>(minSpend ?? null);
 
-  const commitSpend = () => {
-    const parsed = Number(draft);
-    const next = draft.trim() !== "" && parsed > 0 ? parsed : undefined;
-    setDraft(next?.toString() ?? "");
+  const commitSpend = (value: number | null) => {
+    const next = value != null && value > 0 ? value : undefined;
+    setDraft(next ?? null);
     if (next !== minSpend) onChange({ minSpend: next, categoryId });
   };
 
@@ -38,18 +37,16 @@ export function TriageBounds({
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
       <label htmlFor="triage-min-spend" className="flex items-center gap-2">
         <span className="shrink-0 eyebrow">Spent at least</span>
-        <Input
+        <NumberInput
           id="triage-min-spend"
-          type="number"
-          inputMode="decimal"
           min={0}
           step="any"
           placeholder="Any amount"
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={commitSpend}
+          onValueChange={setDraft}
+          onValueCommitted={commitSpend}
           onKeyDown={(event) => {
-            if (event.key === "Enter") commitSpend();
+            if (event.key === "Enter") commitSpend(draft);
           }}
           className="w-32"
         />

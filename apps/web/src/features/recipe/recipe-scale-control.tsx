@@ -1,17 +1,17 @@
 import { ArrowsOutIcon } from "@phosphor-icons/react/dist/csr/ArrowsOut";
 import { Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { roundTo } from "~/lib/round-to";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { NumberInput } from "~/ui/forms/number-input";
 import { RemoveButton } from "~/ui/forms/remove-button";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
 import {
   Popover,
@@ -79,7 +79,8 @@ export function RecipeScaleControl({
   const hydrated = useHydrated();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<AnchorMode>("multiplier");
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState<number | null>(null);
+  const draftId = useId();
   const [ingredientRowId, setIngredientRowId] = useState<string>("");
 
   // Ingredient rows that carry a numeric primary amount — the candidates the
@@ -115,8 +116,8 @@ export function RecipeScaleControl({
   const selectedRow = ingredientRows.find((r) => r.id === ingredientRowId);
 
   const applyAnchor = () => {
-    const value = Number.parseFloat(draft);
-    if (!Number.isFinite(value) || value <= 0) return;
+    const value = draft;
+    if (value == null || value <= 0) return;
 
     let anchor: ScaleAnchor;
     switch (mode) {
@@ -185,7 +186,7 @@ export function RecipeScaleControl({
                 );
                 if (next) {
                   setMode(next.value);
-                  setDraft("");
+                  setDraft(null);
                 }
               }}
             />
@@ -199,8 +200,8 @@ export function RecipeScaleControl({
                 const nextValue = value ?? "";
                 setIngredientRowId(nextValue);
                 const row = ingredientRows.find((r) => r.id === nextValue);
-                if (row) setDraft(String(row.value));
-                else setDraft("");
+                if (row) setDraft(row.value);
+                else setDraft(null);
               }}
               label="Ingredient to scale by"
               placeholder="Choose an ingredient…"
@@ -219,7 +220,10 @@ export function RecipeScaleControl({
             }}
           >
             <Stack gap="xs" className="flex-1">
-              <Label className="text-2xs text-muted-foreground">
+              <Label
+                htmlFor={draftId}
+                className="text-2xs text-muted-foreground"
+              >
                 {mode === "multiplier" && "Multiplier"}
                 {mode === "totalWeight" && "Target total weight (g)"}
                 {mode === "ingredient" &&
@@ -227,11 +231,10 @@ export function RecipeScaleControl({
                     ? `Target amount (${selectedRow.unit})`
                     : "Target amount")}
               </Label>
-              <Input
-                type="number"
+              <NumberInput
+                id={draftId}
                 step="any"
-                min="0"
-                inputMode="decimal"
+                min={0}
                 value={draft}
                 placeholder={
                   mode === "totalWeight"
@@ -240,7 +243,7 @@ export function RecipeScaleControl({
                       : "—"
                     : undefined
                 }
-                onChange={(e) => setDraft(e.target.value)}
+                onValueChange={setDraft}
                 disabled={mode === "ingredient" && !selectedRow}
               />
             </Stack>

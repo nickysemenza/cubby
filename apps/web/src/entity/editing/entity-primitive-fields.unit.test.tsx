@@ -498,7 +498,7 @@ describe("EntityPrimitiveFields", () => {
           onSubmit={(values) => (submitted = values)}
         />,
       );
-      const input = screen.getByRole("spinbutton", {
+      const input = screen.getByRole("textbox", {
         name: /quantity|amount/i,
       });
       fireEvent.change(input, { target: { value: "" } });
@@ -884,7 +884,7 @@ describe("EntityIntentFields", () => {
       screen.getByRole("textbox", { name: "Order URL template" }),
     );
     expect(details).toContainElement(
-      screen.getByRole("spinbutton", { name: "Return window days" }),
+      screen.getByRole("textbox", { name: "Return window days" }),
     );
     // `name`/`notes` are in the untitled `main` section and render with no
     // section wrapper at all.

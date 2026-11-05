@@ -84,6 +84,6 @@ it("retains a cost draft and explains the missing date before submitting", async
       /A date is required when the cost is known and not \$0/,
     ),
   ).toBeInTheDocument();
-  expect(cost).toHaveValue(12);
+  expect(cost).toHaveValue("12");
   expect(transport).not.toHaveBeenCalled();
 });
