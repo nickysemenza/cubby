@@ -1,5 +1,5 @@
 import { historicalDateRangePresets } from "../date-range";
-import { aliasList, idField, timestampField } from "./field-policy";
+import { aliasList, idField, readOnly, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { vendorSpendingProfile } from "../spending-classification.js";
 import {
@@ -243,11 +243,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "systemKey",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "purchasedCategories",
@@ -266,11 +262,7 @@ export const { definition, readSchemas } = defineEntityModel({
         provenance: { kind: "derived", sources: [{ entity: "expense" }] },
         kind: "number",
         display: { list: false },
-        validation: {
-          read: z.number().int().optional(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().optional()),
       },
       {
         key: "unknownCategoryLineCount",
@@ -280,33 +272,21 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         kind: "number",
         display: { list: false },
-        validation: {
-          read: z.number().int().optional(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().optional()),
       },
       {
         display: { detail: false, list: false },
         key: "defaultSpendingCategoryName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable().optional(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable().optional()),
       },
       {
         display: { detail: false, list: false },
         key: "defaultSpendingCategoryEmoji",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable().optional(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable().optional()),
       },
 
       {
@@ -593,7 +573,7 @@ export const { definition, readSchemas } = defineEntityModel({
           "Normalized statement labels from confirmed purchase allocations across all household members. Labels shared by several Vendors remain ambiguous for matching.",
         control: null,
         display: { columnGroup: "Purchasing" },
-        validation: { read: z.array(z.string()), create: null, update: null },
+        validation: readOnly(z.array(z.string())),
       },
       {
         key: "aliases",
@@ -724,11 +704,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "Seller when referenced by a live Purchase, Brand when referenced as a live Product's brand, Both for both uses, and Unused for neither. Accounts and pending proposals do not assign a role.",
           readPath: "role",
         },
-        validation: {
-          read: z.enum(["seller", "brand", "both", "unused"]),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.enum(["seller", "brand", "both", "unused"])),
       },
       {
         key: "brandCategoryCount",
@@ -748,11 +724,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "Number of distinct live product categories used by live products carrying this vendor as their marketed brand. Uncategorized products are excluded.",
           readPath: "brandCategoryCount",
         },
-        validation: {
-          read: z.number().int().nonnegative(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "purchasedBrandProductCount",
@@ -772,11 +744,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "Number of distinct live branded products linked to live expense lines through live purchases, across all sellers. Refund-linked products remain part of purchase history.",
           readPath: "purchasedBrandProductCount",
         },
-        validation: {
-          read: z.number().int().nonnegative(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "brandSpend",
@@ -798,7 +766,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "Sum of live Expense.cost linked to live products carrying this brand through live purchases, across all sellers, including refunds. Expenses without a linked product cannot be attributed to a brand. This can overlap seller spend and is not additive with it.",
           readPath: "brandSpend",
         },
-        validation: { read: money, create: null, update: null },
+        validation: readOnly(money),
       },
       {
         key: "expenseCount",
@@ -815,11 +783,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "Number of live expense lines belonging to this seller through live purchases, including refunds.",
           readPath: "expenseCount",
         },
-        validation: {
-          read: z.number().int().nonnegative(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "firstPurchaseDate",
@@ -838,11 +802,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "Earliest date among live purchases from this seller. No purchases means no date.",
           readPath: "firstPurchaseDate",
         },
-        validation: {
-          read: plainDate.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(plainDate.nullable()),
       },
       {
         key: "documentedPurchaseCount",
@@ -859,11 +819,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "Number of live purchases from this seller with a retained primary receipt or invoice. Documents are optional: absent documents are not a coverage gap.",
           readPath: "documentedPurchaseCount",
         },
-        validation: {
-          read: z.number().int().nonnegative(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "missingItemizationCount",
@@ -880,11 +836,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "Number of live purchases from this seller whose existing itemization coverage is missing: itemization is required but not present. Unclassified and not-expected policies are excluded; zero does not imply all purchases were assessed.",
           readPath: "missingItemizationCount",
         },
-        validation: {
-          read: z.number().int().nonnegative(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "brandedProductCount",
@@ -904,11 +856,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "Number of live products carrying this vendor as their marketed brand, independently of where those products were purchased.",
           readPath: "brandedProductCount",
         },
-        validation: {
-          read: z.number().int().nonnegative(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "purchaseCount",
@@ -928,11 +876,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "Purchase count is the number of live purchases linked to this vendor.",
           readPath: "purchaseCount",
         },
-        validation: {
-          read: z.number().int().min(0),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().min(0)),
       },
       {
         key: "spend",
@@ -962,11 +906,7 @@ export const { definition, readSchemas } = defineEntityModel({
             { path: "purchaseCount", label: "Live purchase count" },
           ],
         },
-        validation: {
-          read: money,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(money),
       },
       {
         key: "latestPurchaseDate",
@@ -991,11 +931,7 @@ export const { definition, readSchemas } = defineEntityModel({
             { path: "purchaseCount", label: "Live purchase count" },
           ],
         },
-        validation: {
-          read: plainDate.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(plainDate.nullable()),
       },
       {
         key: "mailSearch",
@@ -1035,22 +971,14 @@ export const { definition, readSchemas } = defineEntityModel({
             "Mail search aggregates this vendor's sender and website searches across every connected mailbox: done when each current search has finished in every mailbox, in progress once any has a finished page, not started otherwise, and blank for a vendor with no verified sender or website.",
           readPath: "mailSearch",
         },
-        validation: {
-          read: mailSearchState.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(mailSearchState.nullable()),
       },
       {
         display: { detail: false, list: false },
         key: "logo",
         kind: "json",
         nullable: true,
-        validation: {
-          read: imageOut.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(imageOut.nullable()),
       },
       timestampField("createdAt"),
       timestampField("updatedAt"),

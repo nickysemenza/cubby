@@ -1,9 +1,12 @@
 import { borrowedImagesField } from "./image-fields";
 import { historicalDateRangePresets } from "../date-range";
-import { idField, timestampField } from "./field-policy";
+import { idField, readOnly, timestampField } from "./field-policy";
 import { expenseBeneficiaryResult } from "../expense-beneficiaries";
 import { EXPENSE_BENEFICIARY_INPUTS } from "./beneficiary-inputs";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import { expenseChildren } from "../child-tables/expense.js";
 import { spendingCategoryAllocationsSchema } from "@cubby/schemas/spending-classification";
 import { financialTransactionShortcode } from "../identifier-fields";
@@ -398,11 +401,9 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "bookingTransactionCode",
         kind: "text",
         nullable: true,
-        validation: {
-          read: financialTransactionShortcode.nullable().default(null),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(
+          financialTransactionShortcode.nullable().default(null),
+        ),
       },
       {
         key: "spendingCategoryId",
@@ -461,11 +462,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "spendingCategoryName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "economicRole",
@@ -507,21 +504,13 @@ export const { definition, readSchemas } = defineEntityModel({
         display: { detail: false, list: false },
         key: "spendingCategoryAllocations",
         kind: "json",
-        validation: {
-          read: spendingCategoryAllocationsSchema.optional(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(spendingCategoryAllocationsSchema.optional()),
       },
       {
         display: { detail: false, list: false },
         key: "projectAllocations",
         kind: "json",
-        validation: {
-          read: optionalProjectAllocationsSchema,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(optionalProjectAllocationsSchema),
       },
       {
         key: "name",
@@ -953,11 +942,9 @@ Rules:
             },
           ],
         },
-        validation: {
-          read: expenseBeneficiaryResult.shape.portions.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(
+          expenseBeneficiaryResult.shape.portions.nullable(),
+        ),
       },
       {
         audit: false,
@@ -1048,22 +1035,14 @@ Rules:
         key: "purchaseDate",
         kind: "date",
         nullable: true,
-        validation: {
-          read: plainDate.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(plainDate.nullable()),
       },
       {
         display: {},
         key: "purchaseDisplayLabel",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         display: { detail: false, list: false },
@@ -1071,55 +1050,35 @@ Rules:
         kind: "identifier",
         nullable: true,
         reference: { entity: "vendor" },
-        validation: {
-          read: vendorShortcode.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(vendorShortcode.nullable()),
       },
       {
         display: { detail: false, list: false },
         key: "vendorLogo",
         kind: "json",
         nullable: true,
-        validation: {
-          read: imageUrlSummary.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(imageUrlSummary.nullable()),
       },
       {
         display: { detail: false, list: false },
         key: "orderUrl",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.url().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.url().nullable()),
       },
       {
         display: { detail: false, list: false },
         key: "projectName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         display: { detail: false, list: false },
         key: "productName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       timestampField("createdAt", { detail: false, list: false }),
       timestampField("updatedAt", { detail: false, list: false }),
@@ -1963,60 +1922,20 @@ Rules:
           columns: ["deletedAt", "id"],
           path: [{ table: "Expense", from: "productId", to: "id" }],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            { table: "Expense", from: "productId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            { table: "Expense", from: "productId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          { table: "Expense", from: "productId", to: "id" },
+        ]),
         {
           table: "Purchase",
           match: { id: "id" },
           columns: ["deletedAt", "id"],
           path: [{ table: "Expense", from: "purchaseId", to: "id" }],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Purchase", from: "id", to: "id" },
-            { table: "Expense", from: "purchaseId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Purchase", from: "id", to: "id" },
-            { table: "Expense", from: "purchaseId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Purchase", from: "id", to: "id" },
+          { table: "Expense", from: "purchaseId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -2032,32 +1951,11 @@ Rules:
             { table: "Expense", from: "productId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Expense", from: "productId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Expense", from: "productId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          { table: "Expense", from: "productId", to: "id" },
+        ]),
         {
           table: "Expense",
           match: { purchaseId: "id" },
@@ -2083,34 +1981,12 @@ Rules:
             { table: "Expense", from: "purchaseId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            { table: "Expense", from: "productId", to: "purchaseId" },
-            { table: "Purchase", from: "id", to: "id" },
-            { table: "Expense", from: "purchaseId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            { table: "Expense", from: "productId", to: "purchaseId" },
-            { table: "Purchase", from: "id", to: "id" },
-            { table: "Expense", from: "purchaseId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          { table: "Expense", from: "productId", to: "purchaseId" },
+          { table: "Purchase", from: "id", to: "id" },
+          { table: "Expense", from: "purchaseId", to: "id" },
+        ]),
         {
           table: "Purchase",
           match: { id: "id" },
@@ -2126,32 +2002,11 @@ Rules:
             { table: "Expense", from: "purchaseId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Purchase", from: "vendorId", to: "id" },
-            { table: "Expense", from: "purchaseId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Purchase", from: "vendorId", to: "id" },
-            { table: "Expense", from: "purchaseId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Purchase", from: "vendorId", to: "id" },
+          { table: "Expense", from: "purchaseId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -2173,36 +2028,13 @@ Rules:
             { table: "Expense", from: "purchaseId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Expense", from: "productId", to: "purchaseId" },
-            { table: "Purchase", from: "id", to: "id" },
-            { table: "Expense", from: "purchaseId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Expense", from: "productId", to: "purchaseId" },
-            { table: "Purchase", from: "id", to: "id" },
-            { table: "Expense", from: "purchaseId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          { table: "Expense", from: "productId", to: "purchaseId" },
+          { table: "Purchase", from: "id", to: "id" },
+          { table: "Expense", from: "purchaseId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "productId" },

@@ -1,11 +1,14 @@
 import { galleryImagesField } from "./image-fields";
 import { historicalDateRangePresets } from "../date-range";
 import { MAX_LOCATION_TREE_DEPTH } from "../location-fields";
-import { timestampField, aliasList } from "./field-policy";
+import { aliasList, readOnly, timestampField } from "./field-policy";
 import { PRODUCT_OWNERSHIP_INPUTS } from "./ownership-inputs";
 import { storedProductOwnership } from "@cubby/schemas/inventory-ownership";
 import { PRODUCT_PRICING_INPUTS } from "./product-pricing-inputs";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import {
   productPrimaryPlacement,
   productReadSchemas,
@@ -933,11 +936,7 @@ export const { definition, readSchemas } = defineEntityModel(
             detailLabelPath: "primaryPlacement.path",
             mobile: { slot: "trailing", priority: 6 },
           },
-          validation: {
-            read: productPrimaryPlacement.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(productPrimaryPlacement.nullable()),
         },
         {
           display: { detail: false, list: false },
@@ -1074,11 +1073,7 @@ Rules:
           key: "brandName",
           kind: "text",
           nullable: true,
-          validation: {
-            read: z.string().nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.string().nullable()),
         },
         {
           key: "model",
@@ -1181,11 +1176,7 @@ Rules:
           key: "categoryFeature",
           kind: "text",
           nullable: true,
-          validation: {
-            read: productCategoryFeature.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(productCategoryFeature.nullable()),
           labelOverride: "Category family",
           // Saved views expose this column; use the inherited family matched by its filter.
           display: {
@@ -1203,27 +1194,19 @@ Rules:
           display: { detail: false, list: false },
           key: "classificationEvidence",
           kind: "text",
-          validation: { read: z.string(), create: null, update: null },
+          validation: readOnly(z.string()),
         },
         {
           display: { detail: false, list: false },
           key: "itemImageCount",
           kind: "number",
-          validation: {
-            read: z.number().int().nonnegative(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.number().int().nonnegative()),
         },
         {
           display: { detail: false, list: false },
           key: "labelImageCount",
           kind: "number",
-          validation: {
-            read: z.number().int().nonnegative(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.number().int().nonnegative()),
         },
         {
           output: false,
@@ -1606,11 +1589,7 @@ Rules:
           key: "id",
           kind: "identifier",
           display: { list: false, renderer: { detail: "product-id" } },
-          validation: {
-            read: productShortcode,
-            create: null,
-            update: null,
-          },
+          validation: readOnly(productShortcode),
         },
         {
           key: "primaryGtin",
@@ -1634,21 +1613,13 @@ Rules:
               { path: "externalIds", label: "Product identifiers" },
             ],
           },
-          validation: {
-            read: gtin.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(gtin.nullable()),
         },
         {
           display: { detail: false, list: false },
           key: "labelImages",
           kind: "json",
-          validation: {
-            read: z.array(productAttachmentImageOut),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.array(productAttachmentImageOut)),
         },
         galleryImagesField(
           "product",
@@ -1746,11 +1717,7 @@ Rules:
               { path: "storedEvidence.lookup", label: "Published USDA lookup" },
             ],
           },
-          validation: {
-            read: foodSummary.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(foodSummary.nullable()),
         },
         {
           output: false,
@@ -1893,11 +1860,7 @@ Rules:
               summary: "owners",
             },
           },
-          validation: {
-            read: resolvedListSchema.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(resolvedListSchema.nullable()),
         },
         // Read-only, list-only computed values carried on `ProductListItem`
         // (never a stored `Product` column) — each needs the override
@@ -1929,11 +1892,7 @@ Rules:
               { path: "expenseCount", label: "Live expense count" },
             ],
           },
-          validation: {
-            read: money,
-            create: null,
-            update: null,
-          },
+          validation: readOnly(money),
         },
         {
           output: false,
@@ -1957,11 +1916,7 @@ Rules:
               "The component count is the number of live component relationships for this product.",
             projections: { list: "componentCount", summary: "componentCount" },
           },
-          validation: {
-            read: z.number().int().nonnegative(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.number().int().nonnegative()),
         },
         {
           output: false,
@@ -2037,7 +1992,7 @@ Rules:
               },
             ],
           },
-          validation: { read: z.number(), create: null, update: null },
+          validation: readOnly(z.number()),
         },
         {
           output: false,
@@ -2080,11 +2035,7 @@ Rules:
               },
             ],
           },
-          validation: {
-            read: z.string().nullish(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.string().nullish()),
         },
         {
           output: false,
@@ -2156,11 +2107,7 @@ Rules:
               },
             ],
           },
-          validation: {
-            read: z.number().nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.number().nullable()),
         },
         {
           output: false,
@@ -2188,11 +2135,7 @@ Rules:
               { path: "expenseCount", label: "Live expense count" },
             ],
           },
-          validation: {
-            read: plainDate.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(plainDate.nullable()),
         },
         {
           output: false,
@@ -2214,11 +2157,7 @@ Rules:
               "Expense count is the number of live expenses linked to this product.",
             projections: { list: "expenseCount", summary: "expenseCount" },
           },
-          validation: {
-            read: z.number().int(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.number().int()),
         },
         {
           output: false,
@@ -2262,11 +2201,7 @@ Rules:
               },
             ],
           },
-          validation: {
-            read: z.number().nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.number().nullable()),
         },
         timestampField("createdAt", { detail: false, list: false }),
         timestampField("updatedAt", { detail: false, list: false }),
@@ -3571,30 +3506,10 @@ Rules:
             columns: ["deletedAt", "id"],
             path: [{ table: "Product", from: "brandId", to: "id" }],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Vendor", from: "id", to: "id" },
-              { table: "Product", from: "brandId", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Vendor", from: "id", to: "id" },
-              { table: "Product", from: "brandId", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+          ]),
           {
             table: "Cookbook",
             match: { productId: "id" },

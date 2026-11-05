@@ -1,4 +1,5 @@
-import { aliasList, idField, timestampField } from "./field-policy";
+import { attachedImageInputs } from "./image-description-inputs";
+import { aliasList, idField, readOnly, timestampField } from "./field-policy";
 import { categoryMappingSchema } from "../spending-classification";
 import { recordEmojiField } from "../emoji";
 import { z } from "zod";
@@ -129,11 +130,7 @@ export const { definition, readSchemas } = defineEntityModel({
         display: { detail: false, list: false },
         key: "spendingCategoryMapping",
         kind: "json",
-        validation: {
-          read: categoryMappingSchema.optional(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(categoryMappingSchema.optional()),
       },
       {
         key: "effectiveSpendingCategory",
@@ -161,32 +158,20 @@ export const { definition, readSchemas } = defineEntityModel({
             },
           ],
         },
-        validation: {
-          read: categoryMappingSchema.shape.category.optional(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(categoryMappingSchema.shape.category.optional()),
       },
       {
         key: "spendingCategoryName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable().optional(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable().optional()),
       },
       {
         display: { detail: false, list: false },
         key: "spendingCategoryEmoji",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable().optional(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable().optional()),
       },
 
       {
@@ -577,11 +562,7 @@ Rules:
           ruleId: "productCategory.parentName",
           description: "The current name of this category's immediate parent.",
         },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "effectiveFeature",
@@ -597,11 +578,7 @@ Rules:
           description:
             "The category's permanent feature binding or nearest live ancestor fallback.",
         },
-        validation: {
-          read: productCategoryFeature.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(productCategoryFeature.nullable()),
       },
       {
         key: "path",
@@ -616,11 +593,7 @@ Rules:
           description:
             "The root-to-category classification path, including this category.",
         },
-        validation: {
-          read: rawProductCategorySummary.shape.path,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(rawProductCategorySummary.shape.path),
       },
       {
         key: "productCount",
@@ -641,11 +614,7 @@ Rules:
             "Live products in this category or any category below it.",
           readPath: "productCount",
         },
-        validation: {
-          read: z.number().int().min(0),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().min(0)),
       },
       idField(productCategoryShortcode),
       timestampField("createdAt"),
@@ -838,30 +807,10 @@ Rules:
           columns: ["deletedAt", "id"],
           path: [{ table: "ProductCategory", from: "id", to: "id" }],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "categoryId" },
-            { table: "ProductCategory", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "categoryId" },
-            { table: "ProductCategory", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "categoryId" },
+          { table: "ProductCategory", from: "id", to: "id" },
+        ]),
         {
           table: "Product",
           match: { categoryId: "id" },
@@ -877,32 +826,11 @@ Rules:
             { table: "ProductCategory", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "categoryId" },
-            { table: "ProductCategory", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "categoryId" },
-            { table: "ProductCategory", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "categoryId" },
+          { table: "ProductCategory", from: "id", to: "id" },
+        ]),
         {
           table: "SpendingCategory",
           match: { id: "id" },

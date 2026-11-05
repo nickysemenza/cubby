@@ -1,6 +1,9 @@
 import { galleryImagesField, galleryWriteFields } from "./image-fields";
-import { idField, timestampField } from "./field-policy";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import { idField, readOnly, timestampField } from "./field-policy";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { MAX_PROJECT_TREE_DEPTH } from "../project-fields.js";
@@ -373,11 +376,7 @@ export const { definition, readSchemas } = defineEntityModel({
         display: { detail: false, list: false },
         key: "assigneeName",
         kind: "text",
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "projectId",
@@ -672,64 +671,40 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "projectName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         display: { detail: false, list: false },
         key: "subjectProductName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         display: { detail: false, list: false },
         key: "parentTaskName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "blockingIds",
         kind: "identifier",
         reference: { entity: "task", multiple: true },
         display: { list: false },
-        validation: {
-          read: z.array(taskShortcode),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.array(taskShortcode)),
       },
       {
         display: { detail: false, list: false },
         key: "subtaskCount",
         kind: "number",
-        validation: {
-          read: z.number().int(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int()),
       },
       {
         display: { detail: false, list: false },
         key: "doneSubtaskCount",
         kind: "number",
-        validation: {
-          read: z.number().int(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int()),
       },
       timestampField("createdAt", { detail: false, list: false }),
       timestampField("updatedAt", { detail: false, list: false }),
@@ -1155,32 +1130,11 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "parentTaskId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          { table: "Task", from: "subjectProductId", to: "id" },
+          { table: "Task", from: "parentTaskId", to: "id" },
+        ]),
         {
           table: "Project",
           match: { id: "id" },
@@ -1190,32 +1144,11 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "parentTaskId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+          { table: "Task", from: "parentTaskId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -1235,34 +1168,12 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "parentTaskId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          { table: "Task", from: "subjectProductId", to: "id" },
+          { table: "Task", from: "parentTaskId", to: "id" },
+        ]),
         {
           table: "Task",
           match: { projectId: "id" },
@@ -1284,36 +1195,13 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "parentTaskId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          { table: "Task", from: "subjectProductId", to: "projectId" },
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+          { table: "Task", from: "parentTaskId", to: "id" },
+        ]),
         {
           table: "Expense",
           match: { projectId: "id" },
@@ -1341,36 +1229,13 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "parentTaskId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            { table: "Expense", from: "productId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            { table: "Expense", from: "productId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          { table: "Expense", from: "productId", to: "projectId" },
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+          { table: "Task", from: "parentTaskId", to: "id" },
+        ]),
         {
           table: "EntityLink",
           match: { fromEntityId: "id" },
@@ -1398,46 +1263,18 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "parentTaskId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "projectTool" },
-            },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "projectTool" },
-            },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "projectTool" },
+          },
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+          { table: "Task", from: "parentTaskId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -1461,38 +1298,14 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "parentTaskId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          { table: "Task", from: "subjectProductId", to: "projectId" },
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+          { table: "Task", from: "parentTaskId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -1516,38 +1329,14 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "parentTaskId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Expense", from: "productId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Expense", from: "productId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          { table: "Expense", from: "productId", to: "projectId" },
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+          { table: "Task", from: "parentTaskId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -1581,48 +1370,19 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "parentTaskId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "projectTool" },
-            },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "projectTool" },
-            },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-            { table: "Task", from: "parentTaskId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "projectTool" },
+          },
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+          { table: "Task", from: "parentTaskId", to: "id" },
+        ]),
 
         {
           table: "Task",
@@ -1657,60 +1417,20 @@ export const { definition, readSchemas } = defineEntityModel({
           columns: ["deletedAt", "id"],
           path: [{ table: "Task", from: "subjectProductId", to: "id" }],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          { table: "Task", from: "subjectProductId", to: "id" },
+        ]),
         {
           table: "Project",
           match: { id: "id" },
           columns: ["deletedAt", "id"],
           path: [{ table: "Task", from: "projectId", to: "id" }],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -1726,32 +1446,11 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "subjectProductId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          { table: "Task", from: "subjectProductId", to: "id" },
+        ]),
         {
           table: "Task",
           match: { projectId: "id" },
@@ -1771,34 +1470,12 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "projectId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          { table: "Task", from: "subjectProductId", to: "projectId" },
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+        ]),
         {
           table: "Expense",
           match: { projectId: "id" },
@@ -1824,34 +1501,12 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "projectId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            { table: "Expense", from: "productId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            { table: "Expense", from: "productId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          { table: "Expense", from: "productId", to: "projectId" },
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+        ]),
         {
           table: "EntityLink",
           match: { fromEntityId: "id" },
@@ -1877,44 +1532,17 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "projectId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "projectTool" },
-            },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "projectTool" },
-            },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "projectTool" },
+          },
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -1936,36 +1564,13 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "projectId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          { table: "Task", from: "subjectProductId", to: "projectId" },
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -1987,36 +1592,13 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "projectId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Expense", from: "productId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Expense", from: "productId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          { table: "Expense", from: "productId", to: "projectId" },
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -2048,46 +1630,18 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Task", from: "projectId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "projectTool" },
-            },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "projectTool" },
-            },
-            { table: "Project", from: "id", to: "id" },
-            { table: "Task", from: "projectId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "projectTool" },
+          },
+          { table: "Project", from: "id", to: "id" },
+          { table: "Task", from: "projectId", to: "id" },
+        ]),
       ],
 
       checks: [

@@ -1,6 +1,9 @@
-import { idField, timestampField } from "./field-policy";
+import { idField, readOnly, timestampField } from "./field-policy";
 import { workDiagnosticFacts } from "../work-diagnostic-facts";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import {
   historicalDateRangePresets,
   dateRangeSchema,
@@ -706,11 +709,7 @@ Rules:
         display: { detail: false, list: false },
         key: "assigneeName",
         kind: "text",
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "defaultTrade",
@@ -901,11 +900,7 @@ Rules:
             { path: "parentProjectId", label: "Parent project" },
           ],
         },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "childProjectIds",
@@ -916,22 +911,14 @@ Rules:
           detail: false,
           columnLabel: "Subprojects",
         },
-        validation: {
-          read: z.array(projectShortcode),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.array(projectShortcode)),
       },
       {
         key: "blockingIds",
         kind: "identifier",
         reference: { entity: "project", multiple: true },
         display: { columnGroup: "Dependencies" },
-        validation: {
-          read: z.array(projectShortcode),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.array(projectShortcode)),
       },
       timestampField("createdAt", { detail: false, list: false }),
       timestampField("updatedAt"),
@@ -945,11 +932,7 @@ Rules:
         storedKey: "rollups",
         storedPath: ["rollup"],
         kind: "json",
-        validation: {
-          read: projectRollup.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(projectRollup.nullable()),
       },
       // Preview projections of `rollup`: the numbers a hover asks for.
       {
@@ -965,14 +948,12 @@ Rules:
           preview: true,
           format: "currency",
         },
-        validation: {
-          read: z
+        validation: readOnly(
+          z
             .number()
             .describe("`rollup.spent`: the project's own net spend")
             .nullable(),
-          create: null,
-          update: null,
-        },
+        ),
       },
       {
         key: "taskProgress",
@@ -990,14 +971,12 @@ Rules:
           readFields: ["rollup"],
           renderer: { list: "task-progress" },
         },
-        validation: {
-          read: z
+        validation: readOnly(
+          z
             .string()
             .describe("Done over total own tasks, e.g. `3/5`")
             .nullable(),
-          create: null,
-          update: null,
-        },
+        ),
       },
       {
         display: { detail: false, list: false },
@@ -1009,11 +988,7 @@ Rules:
         storedKey: "rollups",
         storedPath: ["dateWindow"],
         kind: "json",
-        validation: {
-          read: projectDateWindow.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(projectDateWindow.nullable()),
       },
       { output: false, key: "shortcode", kind: "text" },
       { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
@@ -1696,30 +1671,10 @@ Rules:
           columns: ["deletedAt", "id"],
           path: [{ table: "Project", from: "id", to: "id" }],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Task", from: "id", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Task", from: "id", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Task", from: "id", to: "projectId" },
+          { table: "Project", from: "id", to: "id" },
+        ]),
         {
           table: "Task",
           match: { projectId: "id" },
@@ -1735,32 +1690,11 @@ Rules:
             { table: "Project", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          { table: "Task", from: "subjectProductId", to: "projectId" },
+          { table: "Project", from: "id", to: "id" },
+        ]),
         {
           table: "Expense",
           match: { projectId: "id" },
@@ -1782,32 +1716,11 @@ Rules:
             { table: "Project", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            { table: "Expense", from: "productId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            { table: "Expense", from: "productId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          { table: "Expense", from: "productId", to: "projectId" },
+          { table: "Project", from: "id", to: "id" },
+        ]),
         {
           table: "EntityLink",
           match: { fromEntityId: "id" },
@@ -1829,42 +1742,16 @@ Rules:
             { table: "Project", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "projectTool" },
-            },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "projectTool" },
-            },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "projectTool" },
+          },
+          { table: "Project", from: "id", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -1884,34 +1771,12 @@ Rules:
             { table: "Project", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Task", from: "subjectProductId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          { table: "Task", from: "subjectProductId", to: "projectId" },
+          { table: "Project", from: "id", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -1931,34 +1796,12 @@ Rules:
             { table: "Project", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Expense", from: "productId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Expense", from: "productId", to: "projectId" },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          { table: "Expense", from: "productId", to: "projectId" },
+          { table: "Project", from: "id", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -1988,44 +1831,17 @@ Rules:
             { table: "Project", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "projectTool" },
-            },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "projectTool" },
-            },
-            { table: "Project", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "projectTool" },
+          },
+          { table: "Project", from: "id", to: "id" },
+        ]),
       ],
 
       checks: [

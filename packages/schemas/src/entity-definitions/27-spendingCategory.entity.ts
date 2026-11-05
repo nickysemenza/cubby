@@ -1,4 +1,4 @@
-import { aliasList, idField, timestampField } from "./field-policy";
+import { aliasList, idField, readOnly, timestampField } from "./field-policy";
 import { productCategoryShortcode } from "../identifier-fields";
 import { recordEmojiField } from "../emoji";
 import { z } from "zod";
@@ -122,8 +122,8 @@ export const { definition, readSchemas } = defineEntityModel({
           width: "lg",
           referencePreviewLimit: 2,
         },
-        validation: {
-          read: z
+        validation: readOnly(
+          z
             .array(
               z.object({
                 id: productCategoryShortcode,
@@ -133,9 +133,7 @@ export const { definition, readSchemas } = defineEntityModel({
               }),
             )
             .optional(),
-          create: null,
-          update: null,
-        },
+        ),
       },
       {
         audit: false,

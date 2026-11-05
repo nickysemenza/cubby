@@ -1,10 +1,13 @@
 import { borrowedImagesField } from "./image-fields";
 import { historicalDateRangePresets } from "../date-range";
-import { idField, timestampField } from "./field-policy";
+import { idField, readOnly, timestampField } from "./field-policy";
 import { INVENTORY_OWNERSHIP_INPUTS } from "./ownership-inputs";
 import { storedInventoryOwnership } from "@cubby/schemas/inventory-ownership";
 import { productPricingInputsFor } from "./product-pricing-inputs";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import { inventoryReadSchemas } from "../inventory-fields";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { amount, positiveAmount } from "@cubby/schemas/codec";
@@ -469,11 +472,7 @@ export const { definition, readSchemas } = defineEntityModel(
           storedKey: "ownership",
           storedPath: ["ownership"],
           kind: "json",
-          validation: {
-            read: effectiveInventoryOwnership.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(effectiveInventoryOwnership.nullable()),
         },
         idField(inventoryShortcode),
         {
@@ -510,13 +509,11 @@ export const { definition, readSchemas } = defineEntityModel(
               },
             ],
           },
-          validation: {
-            read: inventoryValuation.describe(
+          validation: readOnly(
+            inventoryValuation.describe(
               "Published inventory valuation from the product's price and unit mappings; may be awaiting background recomputation",
             ),
-            create: null,
-            update: null,
-          },
+          ),
         },
         {
           output: false,
@@ -527,7 +524,7 @@ export const { definition, readSchemas } = defineEntityModel(
           // by the list/detail output schemas instead.
           key: "displayName",
           kind: "text",
-          validation: { read: z.string(), create: null, update: null },
+          validation: readOnly(z.string()),
         },
         {
           key: "verifiedAt",
@@ -538,16 +535,14 @@ export const { definition, readSchemas } = defineEntityModel(
             format: "timestamp",
             mobile: { slot: "meta", priority: 60 },
           },
-          validation: {
-            read: z
+          validation: readOnly(
+            z
               .date()
               .nullable()
               .describe(
                 "When last verified in an audit session (null = never)",
               ),
-            create: null,
-            update: null,
-          },
+          ),
         },
         timestampField("createdAt", { detail: false, list: false }),
         timestampField("updatedAt", { detail: false, list: false }),
@@ -1023,60 +1018,20 @@ export const { definition, readSchemas } = defineEntityModel(
             columns: ["deletedAt", "id"],
             path: [{ table: "InventoryEntry", from: "productId", to: "id" }],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Product", from: "id", to: "id" },
-              { table: "InventoryEntry", from: "productId", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Product", from: "id", to: "id" },
-              { table: "InventoryEntry", from: "productId", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Product", from: "id", to: "id" },
+            { table: "InventoryEntry", from: "productId", to: "id" },
+          ]),
           {
             table: "Location",
             match: { id: "id" },
             columns: ["deletedAt", "id"],
             path: [{ table: "InventoryEntry", from: "locationId", to: "id" }],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Location", from: "id", to: "id" },
-              { table: "InventoryEntry", from: "locationId", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Location", from: "id", to: "id" },
-              { table: "InventoryEntry", from: "locationId", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Location", from: "id", to: "id" },
+            { table: "InventoryEntry", from: "locationId", to: "id" },
+          ]),
           {
             table: "Product",
             match: { id: "id" },
@@ -1092,32 +1047,11 @@ export const { definition, readSchemas } = defineEntityModel(
               { table: "InventoryEntry", from: "productId", to: "id" },
             ],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Vendor", from: "id", to: "id" },
-              { table: "Product", from: "brandId", to: "id" },
-              { table: "InventoryEntry", from: "productId", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Vendor", from: "id", to: "id" },
-              { table: "Product", from: "brandId", to: "id" },
-              { table: "InventoryEntry", from: "productId", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "InventoryEntry", from: "productId", to: "id" },
+          ]),
           {
             table: "Location",
             match: { id: "id" },
@@ -1133,32 +1067,11 @@ export const { definition, readSchemas } = defineEntityModel(
               { table: "InventoryEntry", from: "locationId", to: "id" },
             ],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Product", from: "id", to: "id" },
-              { table: "Location", from: "productId", to: "id" },
-              { table: "InventoryEntry", from: "locationId", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Product", from: "id", to: "id" },
-              { table: "Location", from: "productId", to: "id" },
-              { table: "InventoryEntry", from: "locationId", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Product", from: "id", to: "id" },
+            { table: "Location", from: "productId", to: "id" },
+            { table: "InventoryEntry", from: "locationId", to: "id" },
+          ]),
           {
             table: "Product",
             match: { id: "id" },
@@ -1178,34 +1091,12 @@ export const { definition, readSchemas } = defineEntityModel(
               { table: "InventoryEntry", from: "locationId", to: "id" },
             ],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Vendor", from: "id", to: "id" },
-              { table: "Product", from: "brandId", to: "id" },
-              { table: "Location", from: "productId", to: "id" },
-              { table: "InventoryEntry", from: "locationId", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Vendor", from: "id", to: "id" },
-              { table: "Product", from: "brandId", to: "id" },
-              { table: "Location", from: "productId", to: "id" },
-              { table: "InventoryEntry", from: "locationId", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Location", from: "productId", to: "id" },
+            { table: "InventoryEntry", from: "locationId", to: "id" },
+          ]),
           { table: "Location", match: { id: "locationId" } },
         ],
         checks: [

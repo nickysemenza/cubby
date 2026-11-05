@@ -1,5 +1,8 @@
-import { idField, timestampField } from "./field-policy";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import { idField, readOnly, timestampField } from "./field-policy";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { displayItemsField } from "./label-field.js";
 import { productShortcode, wishShortcode } from "../identifier-fields.js";
@@ -185,11 +188,7 @@ export const { definition, readSchemas } = defineEntityModel({
           optionRole: "status",
           optionColor: "neutral-status",
         },
-        validation: {
-          read: dateTime.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(dateTime.nullable()),
       },
       {
         key: "candidates",
@@ -226,11 +225,7 @@ export const { definition, readSchemas } = defineEntityModel({
             { path: "candidates", label: "Candidate products" },
           ],
         },
-        validation: {
-          read: z.array(wishCandidateOut),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.array(wishCandidateOut)),
       },
       {
         display: { detail: false, list: false },
@@ -249,11 +244,7 @@ export const { definition, readSchemas } = defineEntityModel({
             { path: "candidates", label: "Candidate products" },
           ],
         },
-        validation: {
-          read: z.number().int().nonnegative(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().nonnegative()),
       },
       {
         display: { detail: false, list: false },
@@ -276,11 +267,7 @@ export const { definition, readSchemas } = defineEntityModel({
             },
           ],
         },
-        validation: {
-          read: wishPriceRangeOut.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(wishPriceRangeOut.nullable()),
       },
       timestampField("createdAt"),
       timestampField("updatedAt"),
@@ -480,42 +467,16 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Wish", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "wishCandidate" },
-            },
-            { table: "Wish", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "wishCandidate" },
-            },
-            { table: "Wish", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "wishCandidate" },
+          },
+          { table: "Wish", from: "id", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -545,44 +506,17 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Wish", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "wishCandidate" },
-            },
-            { table: "Wish", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            {
-              table: "EntityLink",
-              from: "toEntityId",
-              to: "fromEntityId",
-              where: { kind: "wishCandidate" },
-            },
-            { table: "Wish", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "wishCandidate" },
+          },
+          { table: "Wish", from: "id", to: "id" },
+        ]),
       ],
 
       checks: [

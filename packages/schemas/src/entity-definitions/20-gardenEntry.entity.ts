@@ -1,5 +1,5 @@
 import { galleryImagesField, galleryWriteFields } from "./image-fields";
-import { idField, timestampField } from "./field-policy";
+import { idField, readOnly, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -227,18 +227,16 @@ export const { definition, readSchemas } = defineEntityModel({
         display: { detail: false, list: false },
         key: "locationName",
         kind: "text",
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         key: "plantings",
         kind: "identifier",
         reference: { entity: "planting", multiple: true },
         display: { columnGroup: "Plantings & harvest" },
-        validation: {
-          read: z.array(z.object({ id: plantingShortcode, name: z.string() })),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(
+          z.array(z.object({ id: plantingShortcode, name: z.string() })),
+        ),
       },
       {
         display: { detail: false, list: false },
@@ -247,7 +245,7 @@ export const { definition, readSchemas } = defineEntityModel({
         // non-null title.
         key: "displayName",
         kind: "text",
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       idField(gardenEntryShortcode),
       timestampField("createdAt", { detail: false, list: false }),

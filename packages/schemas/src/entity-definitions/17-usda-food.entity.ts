@@ -1,3 +1,4 @@
+import { readOnly } from "./field-policy";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import {
@@ -112,11 +113,7 @@ export const { definition, readSchemas } = defineEntityModel(
               { path: "fdc_id", label: "USDA food identifier" },
             ],
           },
-          validation: {
-            read: fdcId,
-            create: null,
-            update: null,
-          },
+          validation: readOnly(fdcId),
         },
         {
           display: { detail: false, list: false },
@@ -125,11 +122,7 @@ export const { definition, readSchemas } = defineEntityModel(
           // `description` sort) can read it without knowing the JSON shape.
           key: "description",
           kind: "text",
-          validation: {
-            read: z.string(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.string()),
         },
         {
           key: "brandedFoodInfo",
@@ -152,11 +145,7 @@ export const { definition, readSchemas } = defineEntityModel(
               },
             ],
           },
-          validation: {
-            read: brandedFoodInfo.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(brandedFoodInfo.nullable()),
         },
         {
           key: "foodInfo",
@@ -175,11 +164,7 @@ export const { definition, readSchemas } = defineEntityModel(
               { path: "foodInfo", label: "Current USDA food record" },
             ],
           },
-          validation: {
-            read: foodInfo,
-            create: null,
-            update: null,
-          },
+          validation: readOnly(foodInfo),
         },
         {
           key: "legacyFoodInfo",
@@ -202,11 +187,7 @@ export const { definition, readSchemas } = defineEntityModel(
               },
             ],
           },
-          validation: {
-            read: legacyFoodInfo.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(legacyFoodInfo.nullable()),
         },
         {
           key: "nutritionInfo",
@@ -225,11 +206,7 @@ export const { definition, readSchemas } = defineEntityModel(
               { path: "nutritionInfo", label: "Current USDA nutrient values" },
             ],
           },
-          validation: {
-            read: nutritionInfo,
-            create: null,
-            update: null,
-          },
+          validation: readOnly(nutritionInfo),
         },
         {
           key: "portionInfoRaw",
@@ -248,11 +225,7 @@ export const { definition, readSchemas } = defineEntityModel(
               { path: "portionInfoRaw", label: "Current USDA portions" },
             ],
           },
-          validation: {
-            read: z.array(foodPortion),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.array(foodPortion)),
         },
         {
           key: "inferredUnitMappings",
@@ -271,11 +244,7 @@ export const { definition, readSchemas } = defineEntityModel(
               { path: "portionInfoRaw", label: "USDA portions" },
             ],
           },
-          validation: {
-            read: z.array(unitMappingWithMetadata),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.array(unitMappingWithMetadata)),
         },
         {
           key: "linkedProducts",
@@ -291,11 +260,7 @@ export const { definition, readSchemas } = defineEntityModel(
               { path: "linkedProducts", label: "Linked Cubby products" },
             ],
           },
-          validation: {
-            read: z.array(productTopLevelOut),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.array(productTopLevelOut)),
         },
       ],
       storage: [],

@@ -1,4 +1,4 @@
-import { idField, timestampField } from "./field-policy";
+import { idField, readOnly, timestampField } from "./field-policy";
 import { z } from "zod";
 import { dateTime } from "../codec";
 import {
@@ -126,7 +126,7 @@ export const { definition, readSchemas } = defineEntityModel({
           ],
         },
         display: {},
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         key: "vendorId",
@@ -171,11 +171,7 @@ export const { definition, readSchemas } = defineEntityModel({
         display: { detail: false, list: false },
         key: "cursor",
         kind: "json",
-        validation: {
-          read: vendorAccountCursor,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(vendorAccountCursor),
       },
       {
         key: "lastRunAt",
@@ -186,11 +182,7 @@ export const { definition, readSchemas } = defineEntityModel({
           sources: [{ label: "Latest Run start for this account" }],
         },
         display: { columnGroup: "Imports", format: "timestamp" },
-        validation: {
-          read: dateTime.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(dateTime.nullable()),
       },
       {
         key: "lastSuccessAt",
@@ -205,11 +197,7 @@ export const { definition, readSchemas } = defineEntityModel({
           columnLabel: "Last success",
           format: "timestamp",
         },
-        validation: {
-          read: dateTime.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(dateTime.nullable()),
       },
       {
         key: "purchaseCount",
@@ -225,21 +213,17 @@ export const { definition, readSchemas } = defineEntityModel({
             "Number of live purchases assigned to this vendor account.",
           readPath: "purchaseCount",
         },
-        validation: {
-          read: z.number().int().nonnegative(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "vendorName",
         kind: "text",
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         key: "ledgerPartyName",
         kind: "text",
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       idField(vendorAccountShortcode),
       timestampField("createdAt"),

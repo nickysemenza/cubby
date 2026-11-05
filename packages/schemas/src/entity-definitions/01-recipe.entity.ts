@@ -1,6 +1,9 @@
 import { galleryImagesField, galleryWriteFields } from "./image-fields";
-import { idField, timestampField } from "./field-policy";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import { idField, readOnly, timestampField } from "./field-policy";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import { recipeReadSchemas } from "../recipe-fields";
 import { recipeChildren } from "../child-tables/recipe.js";
 import { defineEntity, defineEntityModel } from "./definition.js";
@@ -372,11 +375,7 @@ export const { definition, readSchemas } = defineEntityModel(
             format: "count",
             mobile: { slot: "meta", priority: 40 },
           },
-          validation: {
-            read: z.number().int(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.number().int()),
           explanation: {
             ruleId: "recipe.meal-count",
             description:
@@ -442,11 +441,7 @@ export const { definition, readSchemas } = defineEntityModel(
               { path: "source", label: "Normalized recipe source" },
             ],
           },
-          validation: {
-            read: rawRecipeTopLevelFields.source,
-            create: null,
-            update: null,
-          },
+          validation: readOnly(rawRecipeTopLevelFields.source),
         },
         {
           key: "totals",
@@ -465,11 +460,7 @@ export const { definition, readSchemas } = defineEntityModel(
               { path: "storedResult", label: "Published recipe totals" },
             ],
           },
-          validation: {
-            read: recipeTotals.nullable().optional(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(recipeTotals.nullable().optional()),
         },
         // Flat preview projections of `totals` (`totalsPreview`): a partial
         // estimate shows what is known, anything else reads as absent.
@@ -483,30 +474,26 @@ export const { definition, readSchemas } = defineEntityModel(
             preview: true,
             format: "currency",
           },
-          validation: {
-            read: z
+          validation: readOnly(
+            z
               .number()
               .nullable()
               .default(null)
               .describe("Known cost of the totals, in dollars"),
-            create: null,
-            update: null,
-          },
+          ),
         },
         {
           key: "calories",
           kind: "number",
           nullable: true,
           display: { detail: false, list: false, preview: true },
-          validation: {
-            read: z
+          validation: readOnly(
+            z
               .number()
               .nullable()
               .default(null)
               .describe("Known kilocalories of the totals"),
-            create: null,
-            update: null,
-          },
+          ),
         },
         {
           key: "protein",
@@ -514,15 +501,13 @@ export const { definition, readSchemas } = defineEntityModel(
           kind: "number",
           nullable: true,
           display: { detail: false, list: false, preview: true },
-          validation: {
-            read: z
+          validation: readOnly(
+            z
               .number()
               .nullable()
               .default(null)
               .describe("Known grams of protein"),
-            create: null,
-            update: null,
-          },
+          ),
         },
         {
           key: "carbs",
@@ -530,15 +515,13 @@ export const { definition, readSchemas } = defineEntityModel(
           kind: "number",
           nullable: true,
           display: { detail: false, list: false, preview: true },
-          validation: {
-            read: z
+          validation: readOnly(
+            z
               .number()
               .nullable()
               .default(null)
               .describe("Known grams of carbohydrate"),
-            create: null,
-            update: null,
-          },
+          ),
         },
         {
           key: "fat",
@@ -546,15 +529,9 @@ export const { definition, readSchemas } = defineEntityModel(
           kind: "number",
           nullable: true,
           display: { detail: false, list: false, preview: true },
-          validation: {
-            read: z
-              .number()
-              .nullable()
-              .default(null)
-              .describe("Known grams of fat"),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(
+            z.number().nullable().default(null).describe("Known grams of fat"),
+          ),
         },
         galleryImagesField("recipe", "Recipe", z.array(imageOut)),
         { output: false, key: "shortcode", kind: "text" },
@@ -623,11 +600,7 @@ export const { definition, readSchemas } = defineEntityModel(
           key: "forkedFromRecipeName",
           kind: "text",
           nullable: true,
-          validation: {
-            read: rawRecipeTopLevelFields.forkedFromRecipeName,
-            create: null,
-            update: null,
-          },
+          validation: readOnly(rawRecipeTopLevelFields.forkedFromRecipeName),
         },
         {
           output: false,
@@ -1302,32 +1275,11 @@ export const { definition, readSchemas } = defineEntityModel(
               { table: "Recipe", from: "id", to: "id" },
             ],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Meal", from: "id", to: "id" },
-              { table: "MealRecipe", from: "mealId", to: "recipeId" },
-              { table: "Recipe", from: "id", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Meal", from: "id", to: "id" },
-              { table: "MealRecipe", from: "mealId", to: "recipeId" },
-              { table: "Recipe", from: "id", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Meal", from: "id", to: "id" },
+            { table: "MealRecipe", from: "mealId", to: "recipeId" },
+            { table: "Recipe", from: "id", to: "id" },
+          ]),
           {
             table: "RecipeSection",
             match: { recipeId: "id" },

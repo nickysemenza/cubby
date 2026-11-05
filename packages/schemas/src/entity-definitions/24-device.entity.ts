@@ -1,4 +1,5 @@
-import { idField, timestampField } from "./field-policy";
+import { attachedImageInputs } from "./image-description-inputs";
+import { idField, readOnly, timestampField } from "./field-policy";
 import { z } from "zod";
 import { dateTime } from "../codec";
 import { devicePlatform } from "../device-fields.js";
@@ -224,11 +225,7 @@ export const { definition, readSchemas } = defineEntityModel({
         nullable: true,
         labelOverride: "Apple Intelligence",
         display: { columnGroup: "Background work" },
-        validation: {
-          read: z.boolean().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.boolean().nullable()),
       },
       {
         key: "updateRequired",
@@ -243,11 +240,7 @@ export const { definition, readSchemas } = defineEntityModel({
           description:
             "The install's app version is older than the oldest build Cubby accepts writes from, so it cannot process images until it updates.",
         },
-        validation: {
-          read: z.boolean().default(false),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.boolean().default(false)),
       },
       {
         key: "inactive",
@@ -262,11 +255,7 @@ export const { definition, readSchemas } = defineEntityModel({
           description:
             "Not seen for 7 days, or never. Inactive installs are left out of Apple queue device counts.",
         },
-        validation: {
-          read: z.boolean().default(false),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.boolean().default(false)),
       },
       {
         key: "ledgerPartyId",
@@ -311,11 +300,7 @@ export const { definition, readSchemas } = defineEntityModel({
           ruleId: "device.ledgerPartyName",
           description: "The current name of this device's owner, if set.",
         },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "productName",
@@ -330,11 +315,7 @@ export const { definition, readSchemas } = defineEntityModel({
           description:
             "The current name of this device's linked hardware Product, if set.",
         },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       idField(deviceShortcode),
       timestampField("createdAt"),
@@ -473,30 +454,10 @@ export const { definition, readSchemas } = defineEntityModel({
           columns: ["deletedAt", "id"],
           path: [{ table: "Device", from: "productId", to: "id" }],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            { table: "Device", from: "productId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            { table: "Device", from: "productId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          { table: "Device", from: "productId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -512,32 +473,11 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Device", from: "productId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Device", from: "productId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Device", from: "productId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          { table: "Device", from: "productId", to: "id" },
+        ]),
       ],
 
       checks: [

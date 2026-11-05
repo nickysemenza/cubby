@@ -1,3 +1,4 @@
+import { attachedImageInputs } from "./image-description-inputs";
 import { timestampField, readOnly } from "./field-policy";
 import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { runChildren } from "../child-tables/run.js";
@@ -1335,30 +1336,10 @@ export const { definition, readSchemas } = defineEntityModel({
           columns: ["deletedAt", "id"],
           path: [{ table: "Run", from: "vendorId", to: "id" }],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Run", from: "vendorId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Run", from: "vendorId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Run", from: "vendorId", to: "id" },
+        ]),
         { table: "PhotoRunImage", match: { runId: "id" } },
         { table: "RunOperation", match: { runId: "id" } },
       ],

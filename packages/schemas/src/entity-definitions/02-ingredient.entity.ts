@@ -1,6 +1,9 @@
 import { borrowedImagesField } from "./image-fields";
-import { aliasList, idField, timestampField } from "./field-policy";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import { aliasList, idField, readOnly, timestampField } from "./field-policy";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import { ingredientReadSchemas } from "../ingredient-read-fields";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { ingredientShortcode, productShortcode } from "../identifier-fields.js";
@@ -192,11 +195,7 @@ export const { definition, readSchemas } = defineEntityModel(
             readPath: "nutritionProduct.productId",
             detailLabelPath: "nutritionProduct.name",
           },
-          validation: {
-            read: productShortcode.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(productShortcode.nullable()),
         },
         {
           key: "name",
@@ -568,30 +567,10 @@ export const { definition, readSchemas } = defineEntityModel(
             columns: ["deletedAt", "id"],
             path: [{ table: "Ingredient", from: "id", to: "id" }],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Product", from: "id", to: "ingredientId" },
-              { table: "Ingredient", from: "id", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Product", from: "id", to: "ingredientId" },
-              { table: "Ingredient", from: "id", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Product", from: "id", to: "ingredientId" },
+            { table: "Ingredient", from: "id", to: "id" },
+          ]),
           {
             table: "Product",
             match: { ingredientId: "id" },
@@ -607,32 +586,11 @@ export const { definition, readSchemas } = defineEntityModel(
               { table: "Ingredient", from: "id", to: "id" },
             ],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Vendor", from: "id", to: "id" },
-              { table: "Product", from: "brandId", to: "ingredientId" },
-              { table: "Ingredient", from: "id", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Vendor", from: "id", to: "id" },
-              { table: "Product", from: "brandId", to: "ingredientId" },
-              { table: "Ingredient", from: "id", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "ingredientId" },
+            { table: "Ingredient", from: "id", to: "id" },
+          ]),
           {
             table: "Recipe",
             match: { id: "recipeId" },
