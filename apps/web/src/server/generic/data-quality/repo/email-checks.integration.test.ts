@@ -2,6 +2,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { workQueueInput } from "@cubby/schemas/work-queue";
 import { eq, sql } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
+import { seedEmailClassificationFeedback } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -24,8 +25,6 @@ import {
 } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
-import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
-import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   derivedMarkTickets,
@@ -316,16 +315,12 @@ describe("Email data quality", () => {
         classificationVersion: "synthetic-v1",
       }),
     );
-    const assessment = await ensureEmailAssessment(ctx.db, prediction.id);
     await enrolled(() =>
-      recordFeedback(ctx.db, {
-        assessmentId: assessment.id,
-        operationId: "synthetic-member-review",
-        verdict: "correct",
-        authority: "member",
+      seedEmailClassificationFeedback(ctx.db, {
+        predictionId: prediction.id,
+        classification: "related",
+        reason: null,
         actorUserId: ctx.actor.userId,
-        intent: "history",
-        correction: { present: false },
       }),
     );
     await refresh();

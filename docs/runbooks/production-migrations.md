@@ -94,6 +94,62 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Mail decision owners (0074)
+
+`0074_mail_decision_owners` moves `email_link`, `email_relevance`,
+`mail_import_outcome` and `run_finding` out of the Assessment ledgers. It runs in
+one transaction with `lock_timeout` 10s per lock. It first takes the
+`email-evidence-write` gate, then locks, in order: Run, LedgerParty, OrderMail,
+OrderMailEvent, Email, EmailClassificationObservation (ACCESS EXCLUSIVE, for its
+new columns), RunOperation, Assessment, AssessmentState, Feedback. Those are held
+through commit and block their writers; only the observation table also blocks
+reads. Each LOCK is a separate acquisition, and deployed mail writers touch
+Assessment and Email in both orders, so a deadlock or timeout is possible. The
+runner makes up to six attempts on `40P01` and `55P03`, 15 seconds apart; each
+attempt rolls back whole, including other pending migrations in that transaction.
+Any other error, or a sixth failure, stops the Deploy with this migration unapplied. Use the normal Actions
+migration-before-deploy sequence: no environment boundary, writer hold or waiting
+period. Production duration at 2 CU is unmeasured.
+
+It creates `EmailPurchaseDecision`, `EmailReview` and `RunFinding`, keeping old
+ids, and adds `mailOutcome` to each outcome's `target_outcome` receipt plus
+`application` and `publication` to EmailClassificationObservation. An outcome pairs
+with the receipt its settling transaction wrote: same Run, Email, checksum and
+transaction timestamp. No match or two matches abort. Pending `email_relevance`
+State rows carry no member input and do not migrate. Those updates disable the two
+derived capture triggers, so they enroll nothing. It compares row-hash multisets
+for every copied review, decisions, Emails with an accepted association, member
+labels, current member classification, protecting events per Email, findings,
+finding resolutions with payloads, outcomes with their operation, and prediction
+application, and raises on any difference. Every Feedback row of the four families
+must be copied or fall in a named category, or the migration aborts: projection
+events, independent `email_accuracy` grades and prediction routing receipts stay
+in the ledger.
+
+The unknown-authority `legacy-decision` link apply events (750 on 2026-11-05) are
+not proven to be member decisions. Their current values and `unknown` authority
+are copied to `EmailPurchaseDecision`; the events are excluded from `EmailReview`,
+stay in Feedback for the later archive, and must never be discarded.
+
+Ledger rows stay untouched; a later migration archives them. New triggers refuse
+new Assessment, State and Feedback rows in these families, so a stale Worker's
+write fails instead of committing where nothing reads it. A stale read of
+`AssessmentEmailLink` also fails until the matching Worker serves.
+
+After release, read back the row counts below. A difference from the pre-release
+source aggregate is a blocker: the migration should already have refused it.
+
+```sql
+SELECT count(*), count(*) FILTER (WHERE active) FROM "EmailPurchaseDecision";
+SELECT authority, verdict, count(*) FROM "EmailReview" GROUP BY 1, 2;
+SELECT status, count(*) FROM "RunFinding" GROUP BY 1;
+SELECT count(*) FROM "RunOperation" WHERE (result->'mailOutcome') IS NOT NULL;
+SELECT application, count(*) FROM "EmailClassificationObservation" GROUP BY 1;
+```
+
+The synthetic predecessor fixture is
+`apps/web/tooling/mail-decision-owners-migration.integration.test.ts`.
+
 ## Assessment read publication storage (0072)
 
 `0072_assessment_read_publications` adds four tables: revisioned publication

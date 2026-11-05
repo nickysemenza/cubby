@@ -135,6 +135,7 @@ export const ENTITY_EDGE_OWNERS = {
   },
   AuditLog: { excluded: "History attribution." },
   AssessmentState: { excluded: WORKFLOW },
+  RunFinding: { excluded: WORKFLOW },
   ImportPreparedOrder: { excluded: WORKFLOW },
   SourceOrderObservation: { excluded: "Immutable source extraction history." },
   EmailCandidateObservation: { excluded: "Immutable Email candidate history." },

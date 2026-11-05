@@ -1,5 +1,6 @@
 import { assessmentChildren } from "./assessment.js";
 import { emailObservationChildren } from "./email-observations.js";
+import { mailDecisionChildren } from "./mail-decisions.js";
 import { emailFinancialAssociationChildren } from "./email-financial-associations.js";
 import { importObservationChildren } from "./import-observations.js";
 import { imageProcessingChildren } from "./image-processing.js";
@@ -9,6 +10,7 @@ export const modulesChildren = [
   ...assessmentChildren,
   ...importObservationChildren,
   ...emailObservationChildren,
+  ...mailDecisionChildren,
   ...emailFinancialAssociationChildren,
   ...imageProcessingChildren,
   defineChildTable({

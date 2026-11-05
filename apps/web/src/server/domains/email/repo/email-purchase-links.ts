@@ -86,7 +86,7 @@ export const emailPurchaseEvidenceSql = (
     decision."evidenceChecksum" <> original."rawChecksum", decision."proposedBy"
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
-  INNER JOIN "AssessmentEmailLink" decision ON decision."eventId" = event."id"
+  INNER JOIN "EmailPurchaseDecision" decision ON decision."eventId" = event."id" AND decision.active
   INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND ${notDeleted(livePurchase)}
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted(liveAccount)}
   WHERE original."id" = "Email"."orderMailId"
@@ -122,8 +122,8 @@ export const emailPurchaseEvidenceSql = (
     AND event."supersededAt" IS NULL
     AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
     AND NOT EXISTS (
-      SELECT 1 FROM "AssessmentEmailLink" decided
-      WHERE decided."eventId" = event."id" AND decided."purchaseId" = p."id"
+      SELECT 1 FROM "EmailPurchaseDecision" decided
+      WHERE decided."eventId" = event."id" AND decided."purchaseId" = p."id" AND decided.active
     )
 `;
 

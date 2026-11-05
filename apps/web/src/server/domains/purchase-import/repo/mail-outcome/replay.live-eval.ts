@@ -19,7 +19,8 @@ import { z } from "zod";
 
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { aiUsage, assessment, run as runTable } from "~/server/db/schema";
+import { aiUsage, runOperation, run as runTable } from "~/server/db/schema";
+import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
@@ -304,10 +305,15 @@ describe("isolated Mail coordinator replay", () => {
               run,
               read: async () => {
                 const [outcome] = await getDb(ctx.db)
-                  .select({ judgment: assessment.judgment })
-                  .from(assessment)
-                  .where(eq(assessment.family, "mail_import_outcome"))
-                  .orderBy(desc(assessment.createdAt), desc(assessment.id))
+                  .select({ result: runOperation.result })
+                  .from(runOperation)
+                  .where(
+                    and(
+                      eq(runOperation.runId, runId),
+                      eq(runOperation.kind, "target_outcome"),
+                    ),
+                  )
+                  .orderBy(desc(runOperation.completedAt))
                   .limit(1);
                 const usage = await getDb(ctx.db)
                   .select({
@@ -339,7 +345,8 @@ describe("isolated Mail coordinator replay", () => {
                       ? [failed.code, failed.detail].filter(Boolean).join(": ")
                       : null,
                   outcome: outcome
-                    ? mailImportOutcome.parse(outcome.judgment)
+                    ? (storedMailOutcome.safeParse(outcome.result).data
+                        ?.mailOutcome.judgment ?? null)
                     : null,
                   actualModels: usage
                     .filter((row) => row.status === "succeeded")

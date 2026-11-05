@@ -21,8 +21,6 @@ import { describe, expect, it, vi } from "vitest";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb } from "~/server/db/helpers";
 import {
-  assessment,
-  assessmentEmailLink,
   emailClassificationObservation,
   email as emailTable,
   importSourceClaim,
@@ -33,6 +31,7 @@ import {
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 
 import { MAIL_IMPORT_RULE_REVISION } from "../service/mail-import-rule";
 import { claimMailImportWork } from "./mail-import-claim";
@@ -186,14 +185,14 @@ describe("Mail import claim", () => {
     const links = events.length
       ? await getDb(ctx.db)
           .select({
-            decision: assessmentEmailLink.decision,
-            evidenceChecksum: assessmentEmailLink.evidenceChecksum,
-            proposedBy: assessmentEmailLink.proposedBy,
+            decision: activeEmailPurchaseDecision.decision,
+            evidenceChecksum: activeEmailPurchaseDecision.evidenceChecksum,
+            proposedBy: activeEmailPurchaseDecision.proposedBy,
           })
-          .from(assessmentEmailLink)
+          .from(activeEmailPurchaseDecision)
           .where(
             inArray(
-              assessmentEmailLink.eventId,
+              activeEmailPurchaseDecision.eventId,
               events.map((event) => event.id),
             ),
           )
@@ -384,19 +383,6 @@ describe("Mail import claim", () => {
         ),
       );
     expect(resolution?.promptVersion).toBe(MAIL_IMPORT_RULE_REVISION);
-    const [relevance] = await getDb(ctx.db)
-      .select({ producer: assessment.producer })
-      .from(assessment)
-      .where(
-        eq(assessment.publicationKey, `email-observation:${resolution?.id}`),
-      );
-    expect(relevance?.producer).toEqual({
-      kind: "rule",
-      model: null,
-      revision: MAIL_IMPORT_RULE_REVISION,
-      runId: owner.id,
-      evaluationId: null,
-    });
 
     // A later claim finds nothing and repeats no rule outcome.
     const before = await Promise.all(

@@ -9,39 +9,55 @@ import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import { and, asc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb, withTransaction } from "~/server/db/helpers";
+import {
+  databaseForTransaction,
+  getDb,
+  withTransaction,
+} from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
-import { assessmentState, run as runTable } from "~/server/db/schema";
+import { run as runTable, runFinding } from "~/server/db/schema";
 import type { PurchaseImportRunAgentRpc } from "~/server/domains/purchase-agent/service/environment";
-import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
 // includes-deleted: retirement closes obsolete execution alerts even on retained deleted Run identities.
 /** Legacy coordinator alerts have exact machine-written summaries; source review stays open. */
 export const obsoleteExecutionFindingSql = (findingAlias: string) =>
   sql.raw(`(
-  ${findingAlias}.family = 'run_finding'
-  AND ${findingAlias}.entity = 'run'
-  AND ${findingAlias}."recordId" = ${findingAlias}."runId"
-  AND ${findingAlias}.data->>'kind' = 'other'
-  AND jsonb_typeof(${findingAlias}.data->'proposedFix') IS DISTINCT FROM 'object'
-  AND ${findingAlias}.data->>'summary' IN ('No coordinator activity for two hours', 'Coordinator ended without finishing the run')
+  ${findingAlias}."entityKind" = 'run'
+  AND ${findingAlias}."entityId" = ${findingAlias}."runId"
+  AND ${findingAlias}.kind = 'other'
+  AND jsonb_typeof(${findingAlias}."proposedFix") IS DISTINCT FROM 'object'
+  AND ${findingAlias}.summary IN ('No coordinator activity for two hours', 'Coordinator ended without finishing the run')
   /* includes-deleted: retired identity history still owns obsolete execution alerts. */
   AND EXISTS (SELECT 1 FROM "Run" retired WHERE retired.id = ${findingAlias}."runId" AND retired."retiredAt" IS NOT NULL)
 )`);
 
 const openFinding = and(
-  eq(assessmentState.active, true),
-  eq(assessmentState.status, suggestionStatus.enum.pending),
+  eq(runFinding.active, true),
+  eq(runFinding.status, suggestionStatus.enum.pending),
 );
 
-/** Retired coordinators' execution alerts close as system projection events. */
-async function closeRetiredExecutionFindings(db: Database) {
-  await transitionAssessmentStates(
-    db,
-    and(openFinding, obsoleteExecutionFindingSql(quotedTable(assessmentState))),
-    { status: suggestionStatus.enum.rejected },
-    { kind: "coordinator_retired" },
-  );
+/** Retired coordinators' execution alerts close without a member resolution. */
+async function closeExecutionFindings(
+  db: Parameters<typeof getDb>[0],
+  runId?: typeof runFinding.$inferSelect.runId,
+) {
+  const closed = await getDb(db)
+    .update(runFinding)
+    .set({ status: suggestionStatus.enum.rejected })
+    .where(
+      and(
+        runId ? eq(runFinding.runId, runId) : undefined,
+        openFinding,
+        obsoleteExecutionFindingSql(quotedTable(runFinding)),
+      ),
+    )
+    .returning({ id: runFinding.id });
+  if (closed.length)
+    await recordChange(db, {
+      kind: "projection",
+      categories: ["ai", "suggestions", "problems", "run"],
+    });
 }
 
 const TERMINAL = ["completed", "failed", "needs_review"] as const;
@@ -114,7 +130,7 @@ export async function retireSettledCoordinators(
   before: Date,
   limit = 200,
 ) {
-  await closeRetiredExecutionFindings(db);
+  await closeExecutionFindings(db);
   const rows = await getDb(db)
     .select({
       id: runTable.id,
@@ -158,16 +174,7 @@ export async function retireSettledCoordinators(
           )
           .returning({ id: runTable.id });
         if (!retiredRun) return false;
-        await transitionAssessmentStates(
-          tx,
-          and(
-            eq(assessmentState.runId, id),
-            openFinding,
-            obsoleteExecutionFindingSql(quotedTable(assessmentState)),
-          ),
-          { status: suggestionStatus.enum.rejected },
-          { kind: "coordinator_retired" },
-        );
+        await closeExecutionFindings(databaseForTransaction(tx), id);
         return true;
       });
       if (stamped) retired += 1;

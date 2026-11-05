@@ -89,6 +89,15 @@ export type EmailProtectingIntentFrontier = z.infer<
   typeof emailProtectingIntentFrontier
 >;
 
+/**
+ * Whether routing used a prediction: `applied` was published as the Email's
+ * routing, `observed` was not, and `unverified` predates that record.
+ */
+export type EmailClassificationApplication =
+  | "observed"
+  | "applied"
+  | "unverified";
+
 export const emailClassificationOperation = z.enum([
   "mailbox-triage",
   "mailbox-relevance",

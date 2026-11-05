@@ -359,11 +359,115 @@ export const runChildren = [
         name: "RunOperation_run_state_idx",
         on: ["runId", "state", "id"],
       },
+      {
+        // A mail import outcome is read by Email and resolved by its handle.
+        name: "RunOperation_mail_outcome_email_idx",
+        on: [
+          { sql: "({result} #>> '{target,entityId}')" },
+          { column: "completedAt", desc: true },
+        ],
+        where:
+          "{kind} = 'target_outcome' AND ({result}->'mailOutcome') IS NOT NULL",
+      },
+      {
+        name: "RunOperation_mail_outcome_id_key",
+        unique: true,
+        on: [{ sql: "({result} #>> '{mailOutcome,id}')" }],
+        where:
+          "{kind} = 'target_outcome' AND ({result}->'mailOutcome') IS NOT NULL",
+      },
     ],
     checks: [
       {
         name: "RunOperation_state_check",
         sql: "{state} IN ('started', 'completed', 'failed')",
+      },
+    ],
+  }),
+  /**
+   * One import finding about a record, scoped to the member's ledger. The
+   * publication key names its evidence, so a resolved finding stays resolved
+   * when the same evidence is detected again.
+   */
+  defineChildTable({
+    name: "RunFinding",
+    exportName: "runFinding",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      { key: "publicationKey", kind: "text", notNull: true },
+      {
+        key: "runId",
+        kind: "uuid",
+        reference: { table: "run", column: "id", onDelete: "set null" },
+      },
+      {
+        key: "ledgerPartyId",
+        kind: "uuid",
+        notNull: true,
+        type: "LedgerPartyId",
+        reference: { table: "ledgerParty", column: "id" },
+      },
+      { key: "entityKind", kind: "text", notNull: true },
+      { key: "entityId", kind: "uuid", notNull: true },
+      { key: "kind", kind: "text", notNull: true },
+      { key: "summary", kind: "text", notNull: true },
+      { key: "proposedFix", kind: "jsonb" },
+      { key: "probability", kind: "real" },
+      { key: "expiresAt", kind: "timestamp" },
+      { key: "evidenceFingerprint", kind: "text", notNull: true },
+      /** The original judgment; a review preview only changes the current fix. */
+      { key: "judgment", kind: "jsonb", notNull: true },
+      { key: "status", kind: "text", notNull: true, default: "pending" },
+      { key: "active", kind: "boolean", notNull: true, default: true },
+      { key: "autoApplied", kind: "boolean", notNull: true, default: false },
+      /** Every member, automatic or unknown-authority resolution, in order. */
+      {
+        key: "resolutions",
+        kind: "jsonb",
+        notNull: true,
+        default: { sql: "'[]'::jsonb" },
+      },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+        onUpdateNow: true,
+      },
+    ],
+    types: [
+      { module: "@cubby/schemas/identifiers", exports: ["LedgerPartyId"] },
+    ],
+    indexes: [
+      {
+        name: "RunFinding_publication_key",
+        unique: true,
+        on: ["publicationKey"],
+      },
+      { name: "RunFinding_run_idx", on: ["runId"] },
+      { name: "RunFinding_ledger_party_idx", on: ["ledgerPartyId"] },
+      { name: "RunFinding_target_idx", on: ["entityKind", "entityId"] },
+      {
+        name: "RunFinding_open_idx",
+        on: ["createdAt", "id"],
+        where: "{active} AND {status} = 'pending'",
+      },
+    ],
+    checks: [
+      {
+        name: "RunFinding_status_check",
+        sql: "{status} IN ('pending', 'applied', 'rejected', 'superseded', 'resolved')",
       },
     ],
   }),

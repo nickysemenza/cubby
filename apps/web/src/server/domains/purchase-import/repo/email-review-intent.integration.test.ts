@@ -8,7 +8,8 @@ import { z } from "zod";
 
 import { withConnection } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { assessmentState, feedback, ledgerParty } from "~/server/db/schema";
+import { emailReview, ledgerParty } from "~/server/db/schema";
+import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import {
   publishAssessment,
@@ -19,6 +20,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 
 import { withEmailEvidenceWrite } from "./email-evidence-write-scope";
 import { readEmailProtectingIntent } from "./email-review-intent";
+import { recordEmailClassificationObservation } from "./gmail/observations";
 
 describe("command-bound Email intent frontier", () => {
   const ctx = withTestDb();
@@ -40,20 +42,13 @@ describe("command-bound Email intent frontier", () => {
       status: "pending",
     });
     const publish = (checksum: string) =>
-      publishAssessment(ctx.db, {
-        publicationKey: `synthetic-email-intent:${crypto.randomUUID()}`,
-        family: "email_relevance",
-        subject: {
-          kind: "email_relevance",
-          entity: "email",
-          recordId: mail.id,
-          checksum,
-          observationId: crypto.randomUUID(),
-        },
-        judgment: { classification: "uncertain", stage: "decision" },
-        producer: null,
-        fingerprint: checksum,
-        evidence: null,
+      recordEmailClassificationObservation(ctx.db, {
+        emailId: mail.id,
+        checksum,
+        classification: "uncertain",
+        stage: "decision",
+        reason: `Synthetic prediction ${checksum}`,
+        classificationVersion: "synthetic-v1",
       });
     const prediction = await publish(mail.checksum ?? "synthetic-current");
     const input = {
@@ -64,6 +59,45 @@ describe("command-bound Email intent frontier", () => {
     } as const;
     return { mail, prediction, publish, input };
   }
+  const reviewsOf = (subjectId: string) =>
+    getDb(ctx.db)
+      .select()
+      .from(emailReview)
+      .where(eq(emailReview.subjectId, subjectId));
+  const retained = (
+    mail: { id: string },
+    subjectId: string,
+    input: {
+      operationId: string;
+      authority: "member" | "automatic";
+      actorUserId: string | null;
+      metadata?: unknown;
+      family?: "email_relevance" | "email_link";
+      subject?: unknown;
+    },
+  ) =>
+    appendEmailReview(ctx.db, {
+      family: input.family ?? "email_relevance",
+      subjectId,
+      emailId: mail.id,
+      originalId: null,
+      checksum: null,
+      operationId: input.operationId,
+      verdict: "wrong",
+      intent: "history",
+      authority: input.authority,
+      actorUserId: input.actorUserId,
+      subject: z.json().parse(
+        input.subject ?? {
+          kind: "email_relevance",
+          entity: "email",
+          recordId: mail.id,
+          checksum: "synthetic-old-checksum",
+          observationId: subjectId,
+        },
+      ),
+      metadata: input.metadata,
+    });
 
   it("refuses member Email review inside an unscoped transaction before retaining intent", async () => {
     const f = await fixture();
@@ -72,10 +106,10 @@ describe("command-bound Email intent frontier", () => {
         reviewAssessment(db, kernelCtx(ctx), f.input),
       ).rejects.toThrow("root Database");
     });
-    expect(await getDb(ctx.db).select().from(feedback)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(emailReview)).toEqual([]);
   });
 
-  it("serializes concurrent member command frontiers before Feedback insertion", async () => {
+  it("serializes concurrent member command frontiers before review insertion", async () => {
     const f = await fixture();
     const newer = await f.publish("synthetic-other-checksum");
     const entered = Promise.withResolvers<void>();
@@ -125,17 +159,12 @@ describe("command-bound Email intent frontier", () => {
           { timeout: 2000 },
         )
         .toBe(true);
-      expect(
-        await getDb(ctx.db)
-          .select()
-          .from(feedback)
-          .where(eq(feedback.assessmentId, newer.id)),
-      ).toEqual([]);
+      expect(await reviewsOf(newer.id)).toEqual([]);
     } finally {
       release.resolve();
     }
     const [a, b] = await Promise.all([first, second]);
-    const events = await getDb(ctx.db).select().from(feedback);
+    const events = await getDb(ctx.db).select().from(emailReview);
     const capture = (id: string) =>
       emailReviewFrontierReceipt.parse(
         events.find(
@@ -155,40 +184,24 @@ describe("command-bound Email intent frontier", () => {
   it("captures retained history with the new command and preserves its exact baseline on replay", async () => {
     const f = await fixture();
     const previous = await f.publish("synthetic-old-checksum");
-    const old = await recordFeedback(ctx.db, {
-      assessmentId: previous.id,
+    const old = await retained(f.mail, previous.id, {
       operationId: "synthetic-old-review",
-      verdict: "wrong",
       authority: "member",
       actorUserId: ctx.actor.userId,
-      intent: "history",
     });
-    await getDb(ctx.db)
-      .update(assessmentState)
-      .set({ active: false })
-      .where(eq(assessmentState.id, previous.id));
-    const resolution = await recordFeedback(ctx.db, {
-      assessmentId: previous.id,
+    const resolution = await retained(f.mail, previous.id, {
       operationId: "resolution",
-      verdict: "correct",
       authority: "automatic",
       actorUserId: null,
-      intent: "apply",
       metadata: { kind: "email_resolution" },
     });
-    const model = await recordFeedback(ctx.db, {
-      assessmentId: previous.id,
+    const model = await retained(f.mail, previous.id, {
       operationId: "classification-observed",
-      verdict: "ungraded",
       authority: "automatic",
       actorUserId: null,
-      intent: "history",
     });
     const result = await reviewAssessment(ctx.db, kernelCtx(ctx), f.input);
-    const events = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, f.prediction.id));
+    const events = await reviewsOf(f.prediction.id);
     const capture = events.find(
       (row) => row.operationId === `email-review-frontier:${result.feedbackId}`,
     );
@@ -214,12 +227,7 @@ describe("command-bound Email intent frontier", () => {
     expect(await reviewAssessment(ctx.db, kernelCtx(ctx), f.input)).toEqual(
       result,
     );
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(feedback)
-        .where(eq(feedback.assessmentId, f.prediction.id)),
-    ).toEqual(events);
+    expect(await reviewsOf(f.prediction.id)).toEqual(events);
     expect(JSON.stringify(proof)).not.toContain(newer.feedbackId);
     const current = await readEmailProtectingIntent(
       ctx.db,
@@ -234,14 +242,17 @@ describe("command-bound Email intent frontier", () => {
         ...f.input,
         verdict: "correct",
       }),
-    ).rejects.toThrow("Immutable Feedback retry");
+    ).rejects.toThrow("Immutable Email review retry");
   });
 
   it("retains link decisions and validates Email/Purchase connection endpoints", async () => {
     const f = await fixture();
-    const link = await publishAssessment(ctx.db, {
-      publicationKey: "synthetic-intent-link",
+    const decision = await retained(f.mail, crypto.randomUUID(), {
+      operationId: "decision",
       family: "email_link",
+      authority: "member",
+      actorUserId: ctx.actor.userId,
+      metadata: { kind: "email_link" },
       subject: {
         kind: "email_link",
         entity: "email",
@@ -251,19 +262,6 @@ describe("command-bound Email intent frontier", () => {
         purchaseId: crypto.randomUUID(),
         checksum: "synthetic-old-checksum",
       },
-      judgment: { decision: "dismissed" },
-      producer: null,
-      fingerprint: "synthetic-link",
-      evidence: null,
-    });
-    const decision = await recordFeedback(ctx.db, {
-      assessmentId: link.id,
-      operationId: "decision",
-      verdict: "dismissed",
-      authority: "member",
-      actorUserId: ctx.actor.userId,
-      intent: "history",
-      metadata: { kind: "email_link" },
     });
     const publishConnection = (source: string) =>
       publishAssessment(ctx.db, {
@@ -317,29 +315,10 @@ describe("command-bound Email intent frontier", () => {
     });
   });
 
-  it("never reconstructs a legacy command baseline and commits capture atomically", async () => {
+  it("commits a review and its frontier capture atomically", async () => {
     const f = await fixture();
-    const old = await recordFeedback(ctx.db, {
-      ...f.input,
-      authority: "member",
-      actorUserId: ctx.actor.userId,
-      metadata: {
-        kind: "assessment_review",
-        application: null,
-        expectedFingerprint: null,
-      },
-    });
     await reviewAssessment(ctx.db, kernelCtx(ctx), f.input);
-    const before = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, f.prediction.id));
-    expect(before.some((row) => row.id === old.id)).toBe(true);
-    expect(
-      before.find(
-        (row) => row.operationId === `email-review-frontier:${old.id}`,
-      ),
-    ).toBeUndefined();
+    const before = await reviewsOf(f.prediction.id);
     await expect(
       withEmailEvidenceWrite(ctx.db, async (db, scope) => {
         await reviewAssessment(
@@ -355,11 +334,6 @@ describe("command-bound Email intent frontier", () => {
         throw new Error("Synthetic abort after capture");
       }),
     ).rejects.toThrow("Synthetic abort after capture");
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(feedback)
-        .where(eq(feedback.assessmentId, f.prediction.id)),
-    ).toEqual(before);
+    expect(await reviewsOf(f.prediction.id)).toEqual(before);
   });
 });

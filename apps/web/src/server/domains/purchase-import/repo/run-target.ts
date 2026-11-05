@@ -30,7 +30,7 @@ import {
   auditLog,
   run as runTable,
   photoRunImage,
-  assessmentState,
+  runFinding,
   runOperation,
   vendor,
   vendorAccount,
@@ -39,8 +39,6 @@ import {
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-
-import { isRunFinding } from "./run-finding";
 
 /** Resolve the public Purchase id a Run's AuditLog rows name. */
 export async function resolvePurchaseImportTarget(
@@ -164,14 +162,13 @@ const runSubjectHistory = (
     ),
     exists(
       getDb(db)
-        .select({ id: assessmentState.id })
-        .from(assessmentState)
+        .select({ id: runFinding.id })
+        .from(runFinding)
         .where(
           and(
-            isRunFinding,
-            eq(assessmentState.runId, runTable.id),
-            eq(assessmentState.entity, subject.entity),
-            eq(assessmentState.recordId, subject.id),
+            eq(runFinding.runId, runTable.id),
+            eq(runFinding.entityKind, subject.entity),
+            eq(runFinding.entityId, subject.id),
           ),
         ),
     ),

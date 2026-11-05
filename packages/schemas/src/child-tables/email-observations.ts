@@ -86,6 +86,20 @@ export const emailObservationChildren = [
         reference: { table: "aiEvaluation", column: "id" },
       },
       { key: "conflict", kind: "jsonb", type: "EmailClassificationConflict" },
+      /** Whether routing used this prediction, which automation history reports. */
+      {
+        key: "application",
+        kind: "text",
+        notNull: true,
+        default: "observed",
+        type: "EmailClassificationApplication",
+      },
+      /** Original and logical input proof; a new capture is a new observation. */
+      {
+        key: "publication",
+        kind: "jsonb",
+        type: "EmailClassificationPublicationEvidence",
+      },
       {
         key: "createdAt",
         kind: "timestamp",
@@ -102,8 +116,10 @@ export const emailObservationChildren = [
       {
         module: "@cubby/schemas/email-observations",
         exports: [
+          "EmailClassificationApplication",
           "EmailClassificationConflict",
           "EmailClassificationOperation",
+          "EmailClassificationPublicationEvidence",
         ],
       },
     ],
@@ -126,6 +142,10 @@ export const emailObservationChildren = [
       {
         name: "EmailClassificationObservation_stage_check",
         sql: "{stage} IN ('rule', 'decision', 'model', 'resolution')",
+      },
+      {
+        name: "EmailClassificationObservation_application_check",
+        sql: "{application} IN ('observed', 'applied', 'unverified')",
       },
     ],
   }),

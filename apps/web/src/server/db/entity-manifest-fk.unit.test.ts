@@ -341,6 +341,14 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "scopes an operational review finding to a household member",
   },
+  "RunFinding.ledgerPartyId": {
+    classification: "metadata",
+    reason: "scopes an import finding to a household member",
+  },
+  "RunFinding.runId": {
+    classification: "metadata",
+    reason: "records the Run that detected an import finding",
+  },
   "MailboxCursor.ledgerPartyId": {
     classification: "metadata",
     reason: "member-scoped mailbox synchronization checkpoint",

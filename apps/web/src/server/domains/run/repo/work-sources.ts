@@ -92,7 +92,7 @@ const account: WorkSource = {
         and(
           sql`${notDeleted(alias(run, "Run"))} AND "Run"."failureCode" IS DISTINCT FROM 'user_cancelled' AND "Run"."failureCode" IS DISTINCT FROM 'dispatch_aborted' AND (
         (${attentionStatePredicate(sql`"Run".status`)} AND NOT ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IS NOT DISTINCT FROM 'execution_limit')
-          AND NOT EXISTS (SELECT 1 FROM "AssessmentState" finding WHERE finding."runId" = "Run".id AND ${activeFindingSql("finding")}))
+          AND NOT EXISTS (SELECT 1 FROM "RunFinding" finding WHERE finding."runId" = "Run".id AND ${activeFindingSql("finding")}))
         OR ("Run".purpose = ${runPurpose.enum.photo_inventory} AND EXISTS (
           SELECT 1 FROM "PhotoGroupProposal" proposal WHERE proposal."runId" = "Run".id AND proposal.state = ${photoGroupProposalState.enum.proposed}
         ))

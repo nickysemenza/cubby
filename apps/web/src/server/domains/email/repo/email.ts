@@ -1,4 +1,3 @@
-import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   emailFiltersSchema,
@@ -14,7 +13,16 @@ import {
   relevanceLabel,
 } from "@cubby/schemas/mailbox-research";
 import { oneOrManyValues } from "@cubby/schemas/pagination";
-import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  sql,
+} from "drizzle-orm";
 
 import { senderAddress, distinctSenderDomain } from "~/lib/vendor/domains";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -22,9 +30,7 @@ import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import {
   expense,
   product,
-  feedback,
-  assessment,
-  emailClassificationObservation,
+  emailReview,
   ledgerParty,
   email as emailTable,
   emailFinancialAssociation,
@@ -46,9 +52,6 @@ import {
   type EmailPurchaseScope,
 } from "~/server/domains/email/repo/email-purchase-links";
 import {
-  EMAIL_OBSERVATION_PUBLICATION_PREFIX,
-  emailFeedbackClassificationSql,
-  emailFeedbackHasClassificationSql,
   emailLinkedSql,
   emailPurchaseAssociationsSql,
   emailReviewConflictSql,
@@ -314,11 +317,8 @@ const emailRead: ListReadOptions<EmailRow> = {
           : unwrapDb(db)
               .select({
                 emailId: emailTable.id,
-                classification: emailFeedbackClassificationSql(
-                  sql`${feedback}`,
-                  sql`${assessment}`,
-                ),
-                reason: feedback.reason,
+                classification: emailReview.classification,
+                reason: emailReview.reason,
               })
               .from(emailTable)
               .innerJoin(
@@ -326,40 +326,13 @@ const emailRead: ListReadOptions<EmailRow> = {
                 eq(ledgerParty.id, emailTable.ledgerPartyId),
               )
               .innerJoin(
-                emailClassificationObservation,
+                emailReview,
                 and(
-                  eq(emailClassificationObservation.emailId, emailTable.id),
-                  eq(
-                    emailClassificationObservation.checksum,
-                    emailTable.checksum,
-                  ),
-                ),
-              )
-              .innerJoin(
-                assessment,
-                and(
-                  eq(assessment.family, assessmentFamily.enum.email_relevance),
-                  eq(
-                    assessment.publicationKey,
-                    sql`${EMAIL_OBSERVATION_PUBLICATION_PREFIX} || ${emailClassificationObservation.id}::text`,
-                  ),
-                  // The key finds the row; its subject remains the lineage authority.
-                  eq(
-                    sql`${assessment.subject}->>'observationId'`,
-                    sql`${emailClassificationObservation.id}::text`,
-                  ),
-                ),
-              )
-              .innerJoin(
-                feedback,
-                and(
-                  eq(feedback.assessmentId, assessment.id),
-                  eq(feedback.authority, "member"),
-                  eq(feedback.actorUserId, ledgerParty.userId),
-                  emailFeedbackHasClassificationSql(
-                    sql`${feedback}`,
-                    sql`${assessment}`,
-                  ),
+                  eq(emailReview.emailId, emailTable.id),
+                  eq(emailReview.checksum, emailTable.checksum),
+                  eq(emailReview.authority, "member"),
+                  eq(emailReview.actorUserId, ledgerParty.userId),
+                  isNotNull(emailReview.classification),
                 ),
               )
               .where(
@@ -372,7 +345,7 @@ const emailRead: ListReadOptions<EmailRow> = {
                   notDeleted(ledgerParty),
                 ),
               )
-              .orderBy(desc(feedback.createdAt), desc(feedback.id)),
+              .orderBy(desc(emailReview.createdAt), desc(emailReview.id)),
         readCachedEmailPurchaseLinks(db, rows, scope, idPage.stored),
         viewer === null || rows.length === 0
           ? []

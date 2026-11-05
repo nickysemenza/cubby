@@ -48,11 +48,16 @@ export const EXPENSE_BENEFICIARY_INPUTS: DerivedStoredInput[] = [
     columns: ["sourceClaimId", "purchaseId"],
   },
   {
-    table: "AssessmentState",
-    match: { data: "purchaseId" },
-    json: { key: "purchaseId" },
-    where: { family: "email_link" },
-    columns: ["data", "active", "family"],
+    table: "EmailPurchaseDecision",
+    match: { purchaseId: "purchaseId" },
+    columns: [
+      "eventId",
+      "purchaseId",
+      "decision",
+      "evidenceChecksum",
+      "proposedBy",
+      "active",
+    ],
   },
   // Household creation and accepted-mail identity changes can introduce a new
   // fallback without an existing cached relationship. Expand conservatively

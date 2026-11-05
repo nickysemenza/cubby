@@ -20,20 +20,19 @@ import {
 } from "~/server/db/helpers";
 import {
   aiUsage,
-  assessment,
-  feedback,
   orderMail,
   email as emailTable,
   run,
   runOperation,
+  emailReview,
 } from "~/server/db/schema";
+import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { paidRunPreflight } from "~/server/domains/run/service/execution-transport";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -618,20 +617,13 @@ describe("mail research admission", () => {
       )[0]?.runId,
     ).toBe(alternateEmail.runId);
     // History-only reviews protect retained intent without changing Email.updatedAt.
-    const prediction = await publishAssessment(ctx.db, {
-      publicationKey: `synthetic-retained-review:${crypto.randomUUID()}`,
-      family: "email_relevance",
-      subject: {
-        kind: "email_relevance",
-        entity: "email",
-        recordId: alternateEmail.id,
-        checksum: mail.rawChecksum,
-        observationId: crypto.randomUUID(),
-      },
-      judgment: { classification: "uncertain", stage: "decision" },
-      producer: null,
-      fingerprint: mail.rawChecksum,
-      evidence: null,
+    const prediction = await recordEmailClassificationObservation(ctx.db, {
+      emailId: alternateEmail.id,
+      checksum: mail.rawChecksum,
+      classification: "uncertain",
+      stage: "decision",
+      reason: "Synthetic retained prediction",
+      classificationVersion: "synthetic-v1",
     });
     await reviewAssessment(ctx.db, kernelCtx(ctx), {
       assessmentId: prediction.id,
@@ -841,22 +833,6 @@ describe("mail research admission", () => {
     };
     await settleMail(ctx.db, input);
     await settleMail(ctx.db, input);
-    const rows = await getDb(ctx.db)
-      .select()
-      .from(assessment)
-      .where(eq(assessment.family, "mail_import_outcome"));
-    expect(rows).toMatchObject([
-      {
-        subject: {
-          kind: "mail_import_outcome",
-          checksum: mail.rawChecksum,
-          runId: admitted.runId,
-        },
-        judgment: { kind: "unrelated", reason: "Synthetic newsletter" },
-        producer: { kind: "rule", model: null, revision: "synthetic-rule-v1" },
-      },
-    ]);
-    const prediction = rows[0]!;
     const history = await readMailImportOutcomes(
       ctx.db,
       {
@@ -865,9 +841,14 @@ describe("mail research admission", () => {
       },
       ctx.actor,
     );
-    expect(history.items.map((item) => item.assessmentId)).toEqual([
-      prediction.id,
+    expect(history.items).toMatchObject([
+      {
+        checksum: mail.rawChecksum,
+        judgment: { kind: "unrelated", reason: "Synthetic newsletter" },
+        producer: { kind: "rule", model: null, revision: "synthetic-rule-v1" },
+      },
     ]);
+    const prediction = { id: history.items[0]!.assessmentId };
     expect(history.nextOffset).toBeNull();
     expect(history.items[0]?.producer?.runId).toMatch(/^RUN-/);
     await expect(
@@ -905,20 +886,15 @@ describe("mail research admission", () => {
     ).rejects.toThrow(/history only/);
     expect(
       await getDb(ctx.db)
-        .select({ operationId: feedback.operationId })
-        .from(feedback)
+        .select({ operationId: emailReview.operationId })
+        .from(emailReview)
         .where(
           and(
-            eq(feedback.assessmentId, prediction.id),
-            eq(feedback.authority, "member"),
+            eq(emailReview.subjectId, prediction.id),
+            eq(emailReview.authority, "member"),
           ),
         ),
     ).toEqual([{ operationId: "synthetic-member-grade" }]);
-    const [unchanged] = await getDb(ctx.db)
-      .select()
-      .from(assessment)
-      .where(eq(assessment.id, prediction.id));
-    expect(unchanged?.judgment).toEqual(prediction.judgment);
   });
 
   it("preserves the parent Email outcome after a retry transfers its live assignment", async () => {

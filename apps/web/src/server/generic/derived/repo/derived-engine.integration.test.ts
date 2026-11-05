@@ -30,6 +30,7 @@ import {
   recipe as recipeTable,
   task as taskTable,
 } from "~/server/db/schema";
+import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLocation } from "~/server/domains/location/repo/crud";
@@ -39,10 +40,6 @@ import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/
 import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
 import { getEntityDetailOutputSchema } from "~/server/generated/entity-details.server.gen";
-import {
-  publishAssessment,
-  recordFeedback,
-} from "~/server/generic/assessment/repo/assessment";
 import * as changes from "~/server/generic/changes/repo/change";
 import { derivedSink } from "~/server/generic/derived/repo/compute";
 import * as derivedDrainRepo from "~/server/generic/derived/repo/drain";
@@ -1374,60 +1371,27 @@ describe("stored derived values", () => {
     if (!email) throw new Error("Synthetic Email was not created");
     const emailId = email.id;
     await drain();
-    const assessment = await publishAssessment(ctx.db, {
-      publicationKey: `synthetic-review:${crypto.randomUUID()}`,
+    await appendEmailReview(ctx.db, {
       family: "email_relevance",
-      subject: {
-        kind: "email_relevance",
-        entity: "email",
-        recordId: emailId,
-        checksum: null,
-        observationId: null,
-      },
-      judgment: { classification: "related", stage: "model" },
-      fingerprint: null,
-      producer: null,
-      evidence: null,
-    });
-    expect(
-      (await fanoutMarks("email.dataQuality")).map((mark) => mark.ref),
-    ).toContain(emailId);
-    await drain();
-    await recordFeedback(ctx.db, {
-      assessmentId: assessment.id,
+      subjectId: crypto.randomUUID(),
+      emailId,
+      originalId: null,
+      checksum: null,
       operationId: "synthetic-review",
       verdict: "correct",
-      correction: { present: false },
       authority: "member",
       actorUserId: TEST_ACTOR.userId,
       intent: "history",
+      subject: { kind: "email_relevance" },
     });
-    expect(
-      (await fanoutMarks("email.dataQuality")).map((mark) => mark.ref),
-    ).toContain(assessment.id);
-    await drainDerivedPage(ctx.db, {
-      only: (mark) => mark.target.startsWith("email.dataQuality@"),
-    });
+    expect(await marks("email.dataQuality")).toContain(emailId);
+    await drain();
     expect(await marks("email.dataQuality")).not.toContain(emailId);
     expect(
       (await loadStoredDerived(ctx.db, "email", [emailId], ["dataQuality"]))
         .get(emailId)
         ?.get("dataQuality"),
     ).toMatchObject({ resultExists: true });
-
-    // Historical evidence can be malformed; extraction must skip it without
-    // failing the member save or the rest of a fanout page.
-    await drain();
-    await getDb(ctx.db).execute(sql`
-      UPDATE "Assessment" SET subject = '{"recordId":"invalid"}'::jsonb
-      WHERE id = ${assessment.id}
-    `);
-    await getDb(ctx.db).execute(sql`
-      UPDATE "Feedback" SET reason = 'Synthetic historical evidence'
-      WHERE "assessmentId" = ${assessment.id}
-    `);
-    await drain();
-    expect(await marks("email.dataQuality")).toEqual([]);
   });
 
   it("refreshes Wish text when a candidate changes, then detaches it", async () => {

@@ -1,12 +1,7 @@
-import {
-  feedbackAuthority,
-  assessmentFamily,
-  feedbackVerdict,
-} from "@cubby/schemas/assessment";
+import { feedbackAuthority } from "@cubby/schemas/assessment";
 import { emailPurchaseLinkState } from "@cubby/schemas/email-fields";
 import {
   mailboxClassificationStage,
-  mailboxClassification,
   type MailboxClassification,
 } from "@cubby/schemas/mailbox-research";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
@@ -19,34 +14,6 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 
 const { rule, decision, model, resolution } = mailboxClassificationStage.enum;
 
-/** `email-observation:<observation id>`, the email_relevance Assessment key. */
-export const EMAIL_OBSERVATION_PUBLICATION_PREFIX = "email-observation:";
-
-/** Assessment subjects own observation lineage; caller metadata is not a second join key. */
-export const emailFeedbackObservationIdSql = (label: SQL) => sql<
-  string | null
->`(
- SELECT a.subject->>'observationId' FROM "Assessment" a
- WHERE a.id = ${label}."assessmentId" AND a.family = ${assessmentFamily.enum.email_relevance}
-)`;
-/** A supplied Assessment alias must already join this Feedback by id and
- * restrict its family to email_relevance. */
-export const emailFeedbackClassificationSql = (
-  label: SQL,
-  assessment?: SQL,
-) => sql<MailboxClassification | null>`
- CASE WHEN ${label}.correction @> ${JSON.stringify({ present: true })}::jsonb THEN ${label}.correction->>'value'
- WHEN ${label}.verdict = ${feedbackVerdict.enum.correct} THEN ${
-   assessment
-     ? sql`${assessment}.judgment->>'classification'`
-     : sql`(SELECT a.judgment->>'classification' FROM "Assessment" a
-     WHERE a.id = ${label}."assessmentId" AND a.family = ${assessmentFamily.enum.email_relevance})`
- } END`;
-export const emailFeedbackHasClassificationSql = (
-  label: SQL,
-  assessment?: SQL,
-) => sql`
- (${emailFeedbackClassificationSql(label, assessment)}) IN (${mailboxClassification.enum.related},${mailboxClassification.enum.unrelated},${mailboxClassification.enum.uncertain})`;
 /** The stages a member's review can disagree with. */
 const automatedStagesSql = sql`(${rule}, ${decision}, ${model})`;
 
@@ -121,7 +88,7 @@ const emailLinkedDecisionPurchasesSql = (
   SELECT decision."purchaseId"
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
-  INNER JOIN "AssessmentEmailLink" decision ON decision."eventId" = event."id"
+  INNER JOIN "EmailPurchaseDecision" decision ON decision."eventId" = event."id" AND decision.active
   INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND ${includeDeleted ? sql`true` : sql`${notDeleted("p")}`}
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted("account")}
   WHERE original."id" = "Email"."orderMailId"
@@ -178,10 +145,10 @@ export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
       AND starts_with(identity."externalKey", candidate."provider" || ':' || candidate."mailboxId" || ':' || candidate."messageId" || ':attachment:')
     UNION
     SELECT candidate."id"
-    FROM "AssessmentEmailLink" decision
+    FROM "EmailPurchaseDecision" decision
     JOIN "OrderMailEvent" event ON event."id" = decision."eventId"
     JOIN "Email" candidate ON candidate."orderMailId" = event."orderMailId" AND ${notDeleted("candidate")}
-    WHERE decision."purchaseId" = ${purchaseId}
+    WHERE decision."purchaseId" = ${purchaseId} AND decision.active
   ), eligible AS MATERIALIZED (
     SELECT candidate."id", candidate."shortcode", candidate."subject", candidate."deletedAt",
       candidate."ledgerPartyId", candidate."provider", candidate."mailboxId", candidate."messageId",
@@ -246,12 +213,8 @@ export const purchaseMailPartiesSql = (purchases: SQL): SQL => {
   UNION
   SELECT decision."purchaseId", "Email"."ledgerPartyId"
   FROM (${purchases}) purchase
-  -- The purchase's decisions by "AssessmentState_email_purchase_uuid_idx",
-  -- then the linked state by id: a "decision" predicate beside the purchase
-  -- lets the planner full-scan the linked-event partial index instead.
-  JOIN "AssessmentEmailLink" decision ON decision."purchaseId" = purchase."id"
-  JOIN "AssessmentEmailLink" linked ON linked."id" = decision."id"
-    AND linked."decision" = ${emailPurchaseLinkState.enum.linked}
+  JOIN "EmailPurchaseDecision" decision ON decision."purchaseId" = purchase."id"
+    AND decision.active AND decision."decision" = ${emailPurchaseLinkState.enum.linked}
   JOIN "OrderMailEvent" event ON event."id" = decision."eventId" AND event."supersededAt" IS NULL
   JOIN "OrderMail" original ON original."id" = event."orderMailId"
   JOIN "Email" ON "Email"."orderMailId" = original."id"
@@ -272,22 +235,14 @@ const memberClassificationWithResolutionSql = (email: SQL, reviewed: SQL) =>
 export const emailMemberClassificationSql = () =>
   memberClassificationWithResolutionSql(
     sql`"Email"`,
-    // Drive from this Email's predictions to their Assessments by the unique
-    // publication key (`publishEmailClassificationAssessment` writes it with
-    // `subject.observationId`), then Feedback by assessment. Matching Feedback
-    // to a prediction through `subject->>'observationId'` scanned all Feedback
-    // per Email (~60 ms each, 1.5 s per list page).
     sql`(
-    SELECT ${emailFeedbackClassificationSql(sql`label`, sql`a`)}
-    FROM "EmailClassificationObservation" prediction
-    INNER JOIN "Assessment" a ON a."publicationKey" = ${EMAIL_OBSERVATION_PUBLICATION_PREFIX} || prediction."id"::text
-      AND a.family = ${assessmentFamily.enum.email_relevance}
-    INNER JOIN "Feedback" label ON label."assessmentId" = a."id"
+    SELECT label.classification
+    FROM "EmailReview" label
     INNER JOIN "LedgerParty" owner ON owner."id" = "Email"."ledgerPartyId"
-    WHERE prediction."emailId" = "Email"."id"
-      AND prediction."checksum" = "Email"."checksum"
+    WHERE label."emailId" = "Email"."id"
+      AND label."checksum" = "Email"."checksum"
       AND label."actorUserId" = owner."userId" AND label.authority = ${feedbackAuthority.enum.member}
-      AND ${emailFeedbackHasClassificationSql(sql`label`, sql`a`)}
+      AND label.classification IS NOT NULL
     ORDER BY label."createdAt" DESC, label."id" DESC
     LIMIT 1
   )`,

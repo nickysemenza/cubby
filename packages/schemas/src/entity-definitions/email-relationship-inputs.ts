@@ -49,11 +49,16 @@ export const EMAIL_RELATIONSHIP_INPUTS: DerivedStoredInput[] = [
     columns: ["orderMailId", "providerAttachmentId", "checksum"],
   },
   {
-    table: "AssessmentState",
-    match: { data: "id" },
-    json: { key: "eventId" },
-    where: { family: "email_link" },
-    columns: ["data", "active", "family"],
+    table: "EmailPurchaseDecision",
+    match: { eventId: "id" },
+    columns: [
+      "eventId",
+      "purchaseId",
+      "decision",
+      "evidenceChecksum",
+      "proposedBy",
+      "active",
+    ],
     path: [
       { table: "OrderMailEvent", from: "id", to: "orderMailId" },
       { table: "Email", from: "orderMailId", to: "id" },

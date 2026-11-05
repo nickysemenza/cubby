@@ -1,5 +1,4 @@
 export { derivedValue } from "./derived-value-schema";
-export { assessmentEmailLink } from "./assessment-email-link-schema";
 export { assessmentCorrectionLock } from "./assessment-correction-lock-schema";
 export {
   job,

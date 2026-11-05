@@ -28,13 +28,13 @@ import {
   purchase,
   vendorAccount,
 } from "~/server/db/schema";
+import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
 import {
   foldPurchaseLinks,
   readEmailPurchaseEvidence,
 } from "~/server/domains/email/repo/email-purchase-links";
 import { createAppError } from "~/server/errors/app-error";
 import { isUniqueViolation } from "~/server/errors/db-errors";
-import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { ensureMailVendorAccount } from "./gmail/mail-account";
@@ -56,7 +56,7 @@ export async function decideEmailPurchase(
   options: {
     eventId?: string;
     originalId?: string;
-    expectedAssessmentId?: string;
+    expectedDecisionId?: string;
   } = {},
 ) {
   const input = emailPurchaseDecisionInput.parse(rawInput);
@@ -65,7 +65,7 @@ export async function decideEmailPurchase(
   } catch (error) {
     if (
       input.decision !== "linked" ||
-      !isUniqueViolation(error, "AssessmentState_email_one_link_key")
+      !isUniqueViolation(error, "EmailPurchaseDecision_one_link_key")
     )
       throw error;
     return decideOnce(db, input, actor, options);
@@ -257,8 +257,8 @@ async function decideOnce(
           proposedBy: row.kind === "suggested" ? "heuristic" : row.proposedBy,
         },
         "member",
-        options.expectedAssessmentId
-          ? { assessmentId: options.expectedAssessmentId, emailId: email.id }
+        options.expectedDecisionId
+          ? { decisionId: options.expectedDecisionId, emailId: email.id }
           : undefined,
       );
 

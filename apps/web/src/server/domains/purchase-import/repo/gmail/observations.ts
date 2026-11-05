@@ -19,7 +19,7 @@ import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { databaseForTransaction } from "~/server/db/helpers";
+import { databaseForTransaction, getDb } from "~/server/db/helpers";
 import { withTransaction } from "~/server/db/helpers";
 import {
   emailClassificationObservation,
@@ -28,13 +28,9 @@ import {
   email as emailTable,
   run,
 } from "~/server/db/schema";
+import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { publishRunFinding } from "~/server/domains/purchase-import/repo/run-finding";
-import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
-import {
-  ensureEmailAssessment,
-  EMAIL_OBSERVATION_RECEIPT,
-} from "~/server/generic/assessment/repo/assessment-email";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -180,21 +176,30 @@ export async function recordEmailClassificationObservation(
       )
       .limit(1);
     if (previous && sameClassificationObservation(previous, parsed)) {
-      const retained = await ensureEmailAssessment(
-        databaseForTransaction(tx),
-        previous.id,
-      );
       const evidence = emailClassificationPublicationEvidence.safeParse(
-        retained.evidence,
+        previous.publication ?? {},
       );
       if (evidence.success && isEqual(evidence.data, suppliedEvidence))
         return previous;
       // A new capture is a new immutable observation, never a retrofit of historical proof.
     }
+    const resolutionAuthority: "member" | "automatic" | "unknown" = actor
+      ? actor.runId
+        ? "automatic"
+        : "member"
+      : parsed.runId
+        ? "automatic"
+        : "unknown";
     const [observation] = await tx
       .insert(emailClassificationObservation)
       .values({
         ...parsed,
+        publication: suppliedEvidence,
+        // An automatic resolution is itself the routing it decided.
+        application:
+          parsed.stage === "resolution" && resolutionAuthority === "automatic"
+            ? "applied"
+            : "observed",
         createdAt: new Date(
           Math.max(Date.now(), (previous?.createdAt.getTime() ?? 0) + 1),
         ),
@@ -204,40 +209,28 @@ export async function recordEmailClassificationObservation(
       throw new Error(
         "Email classification observation insert returned no row",
       );
-    const assessment = await ensureEmailAssessment(
-      databaseForTransaction(tx),
-      observation.id,
-      suppliedEvidence,
-    );
-    await recordFeedback(databaseForTransaction(tx), {
-      assessmentId: assessment.id,
-      operationId: "classification-observed",
-      authority: "automatic",
-      actorUserId: null,
-      verdict: "ungraded",
-      intent: "history",
-      correction: { present: false },
-      metadata: {
-        kind: EMAIL_OBSERVATION_RECEIPT,
-        predictionId: observation.id,
-      },
-    });
     if (parsed.stage === "resolution")
-      await recordFeedback(databaseForTransaction(tx), {
-        assessmentId: assessment.id,
+      await appendEmailReview(databaseForTransaction(tx), {
+        family: "email_relevance",
+        subjectId: observation.id,
+        emailId: observation.emailId,
+        originalId: email.orderMailId,
+        checksum: observation.checksum,
+        classification: parsed.classification,
         operationId: "resolution",
         verdict: "correct",
-        authority: actor
-          ? actor.runId
-            ? "automatic"
-            : "member"
-          : parsed.runId
-            ? "automatic"
-            : "unknown",
+        authority: resolutionAuthority,
         actorUserId: actor?.userId ?? null,
         intent: "apply",
         correction: { present: true, value: parsed.classification },
         reason: parsed.reason,
+        subject: {
+          kind: "email_relevance",
+          entity: "email",
+          recordId: observation.emailId,
+          checksum: observation.checksum,
+          observationId: observation.id,
+        },
         metadata: { kind: "email_resolution", predictionId: observation.id },
       });
     // A review conflict is a worklist filter, not a Run finding.
@@ -260,6 +253,17 @@ export async function recordEmailClassificationObservation(
     await recordChange(tx, { kind: "source", categories: ["email"] });
     return observation;
   });
+}
+
+/** Called inside the transaction that publishes the effective Email routing. */
+export async function recordEmailClassificationApplication(
+  db: Database,
+  predictionId: string,
+) {
+  await getDb(db)
+    .update(emailClassificationObservation)
+    .set({ application: "applied" })
+    .where(eq(emailClassificationObservation.id, predictionId));
 }
 
 /** Missing originals retain raw provider diagnostics without inventing a prediction. */

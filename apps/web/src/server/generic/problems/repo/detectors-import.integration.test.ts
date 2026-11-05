@@ -1,11 +1,7 @@
-import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { assessmentState } from "~/server/db/schema";
-import { runFindingData } from "~/server/domains/purchase-import/repo/run-finding";
-import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { findProblemByType } from "~/server/generic/problems/service/problem-execution.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -14,7 +10,10 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { seedRunFindings } from "~/server/testing/run-finding.fixtures";
+import {
+  patchRunFindingData,
+  seedRunFindings,
+} from "~/server/testing/run-finding.fixtures";
 
 import { findOpenRunFindings } from "./detectors-import";
 
@@ -70,17 +69,9 @@ describe("SQL-backed finding diagnostic intent", () => {
     });
     const last = rows.at(-1);
     if (!last) throw new Error("Synthetic finding fixture is empty");
-    await transitionAssessmentStates(
-      ctx.db,
-      eq(assessmentState.id, last.id),
-      (row) => ({
-        data: {
-          ...runFindingData.parse(row.data),
-          proposedFix: { syntheticInvalidFix: true },
-        },
-      }),
-      { kind: "synthetic_invalid_fix" },
-    );
+    await patchRunFindingData(ctx.db, last.id, {
+      proposedFix: { syntheticInvalidFix: true },
+    });
 
     const count = await runDiagnostic(
       ctx.db,

@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,8 +7,7 @@ import {
   getDb,
   withTransaction,
 } from "~/server/db/helpers";
-import { assessmentState, auditLog, expense } from "~/server/db/schema";
-import { rebuildAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import { auditLog, expense } from "~/server/db/schema";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -249,11 +248,5 @@ describe("finding expiry", () => {
         resolvedByUserId: ctx.actor.userId,
       },
     ]);
-    const ids = [open.id, dismissed.id];
-    await getDb(ctx.db)
-      .delete(assessmentState)
-      .where(inArray(assessmentState.id, ids));
-    await rebuildAssessmentStates(ctx.db, ids);
-    expect(await read()).toEqual(live);
   });
 });

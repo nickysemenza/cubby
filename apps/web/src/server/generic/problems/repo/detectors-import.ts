@@ -4,21 +4,21 @@ import { and, count, eq, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
-import { assessmentState, entityIdentity } from "~/server/db/schema";
+import { entityIdentity, runFinding } from "~/server/db/schema";
 import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
 import { runFindingColumns } from "~/server/domains/purchase-import/repo/run-finding";
 import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
 
 const openFindingWhere = (now: Date) =>
   and(
-    activeFindingSql("AssessmentState", now),
-    sql`NOT ${obsoleteExecutionFindingSql(quotedTable(assessmentState))}`,
+    activeFindingSql("RunFinding", now),
+    sql`NOT ${obsoleteExecutionFindingSql(quotedTable(runFinding))}`,
   );
 
 export async function countOpenRunFindings(db: Database) {
   const [row] = await getDb(db)
     .select({ count: count() })
-    .from(assessmentState)
+    .from(runFinding)
     .where(openFindingWhere(new Date()));
   return row?.count ?? 0;
 }
@@ -37,10 +37,10 @@ export async function findOpenRunFindingsPage(db: Database, limit?: number) {
       createdAt: runFindingColumns.createdAt,
       totalCount: sql<number>`count(*) over()::int`,
     })
-    .from(assessmentState)
-    .leftJoin(entityIdentity, eq(assessmentState.recordId, entityIdentity.id))
+    .from(runFinding)
+    .leftJoin(entityIdentity, eq(runFinding.entityId, entityIdentity.id))
     .where(openFindingWhere(new Date()))
-    .orderBy(assessmentState.createdAt, assessmentState.id);
+    .orderBy(runFinding.createdAt, runFinding.id);
   const rows = await (limit === undefined || limit === Number.POSITIVE_INFINITY
     ? query
     : query.limit(limit));

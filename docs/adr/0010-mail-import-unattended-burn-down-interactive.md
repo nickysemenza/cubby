@@ -46,8 +46,9 @@ flows.
 
 ## Mail import outcome measurement
 
-Each delegated Email settlement publishes an immutable `mail_import_outcome`
-Assessment with its checksum, Run, producer and terminal disposition. Imported
+Each delegated Email settlement stores an immutable `mailOutcome` on its
+`target_outcome` RunOperation with its checksum, Run, producer and terminal
+disposition. Imported
 lines and totals freeze the actual Expense ledger, including credits, across
 all Purchases reached for that Email by the commit. A multi-order commit links
 each Purchase, then publishes one complete Email outcome; operation replay
@@ -59,10 +60,10 @@ infer it from the latest Run usage: asynchronous telemetry or an earlier turn
 can name the wrong model after escalation or funding recovery. Evaluator reports
 show observed Run-level model usage separately, including parity cases; that is
 routing evidence rather than per-outcome producer attribution. Retries reuse
-the first producer and evidence. Feedback
+the first producer and evidence. `EmailReview`
 records history-only grades and never rewrites the ledger or Email disposition.
-The outcome read exposes its producing Run as a shortcode; Assessment and
-evaluation IDs remain opaque grading and receipt handles.
+The outcome read exposes its producing Run as a shortcode; its handle stays an
+opaque grading id.
 
 The local Mail replay evaluator copies supplied retained originals into a fresh
 throwaway database per case and runs the real coordinator and public writers.

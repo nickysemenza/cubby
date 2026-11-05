@@ -7,14 +7,13 @@ import {
   assessmentJudgments,
   assessmentProjectionTargets,
   assessmentReviewOut,
+  mailDecisionFamily,
   type AssessmentFamily,
 } from "@cubby/schemas/assessment";
 import {
   AUTOMATIC_RULE_FAMILIES,
   type AutomaticRuleKey,
 } from "@cubby/schemas/automatic-rule";
-import { correctEmailRelevanceInput } from "@cubby/schemas/email-actions";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import { getErrorMessage } from "@cubby/shared";
 import { and, eq, or, sql } from "drizzle-orm";
@@ -32,8 +31,6 @@ import {
   assessment,
   assessmentState,
   feedback,
-  email,
-  purchase,
   image,
 } from "~/server/db/schema";
 import {
@@ -46,7 +43,10 @@ import {
   withEmailReviewFrontier,
   withEmailReviewBoundary,
 } from "~/server/domains/purchase-import/repo/email-review-intent";
-import type { PreparedEmailRelevanceCorrection } from "~/server/domains/purchase-import/repo/gmail/relevance-correction";
+import {
+  resolveMailDecisionHandle,
+  settleMailDecisionReview,
+} from "~/server/domains/purchase-import/repo/mail-decision-review";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
@@ -89,78 +89,6 @@ export type AutomaticReview = {
 const automaticReviewInput = assessmentReviewInput.extend({
   operationId: z.string().regex(/^automatic:/),
 });
-function emailRelevanceApplication(
-  subject: z.infer<typeof assessmentSubjects.email_relevance>,
-  input: Review,
-) {
-  if (!input.correction.present)
-    throw new Error(
-      "Email relevance application requires a current checksum and correction",
-    );
-  return correctEmailRelevanceInput.omit({ id: true }).parse({
-    expectedChecksum: subject.checksum,
-    reviewedChecksum: subject.checksum,
-    classification: input.correction.value,
-    reason: input.reason ?? "Member reviewed the Assessment",
-  });
-}
-
-/** Command Feedback is durable before this provider-preparation boundary. */
-async function prepareAndApplyEmailReview(
-  db: Database,
-  context: EntityKernelContext,
-  prediction: Pick<typeof assessment.$inferSelect, "id" | "subject">,
-  input: Review,
-  executeApplication: (
-    prepared: PreparedEmailRelevanceCorrection | null,
-  ) => Promise<z.infer<typeof assessmentReviewOut>>,
-) {
-  // Preserve command Feedback first, then replay before any external preparation.
-  const hasReceipt = async () => {
-    const [receipt] = await getDb(db)
-      .select({ id: feedback.id })
-      .from(feedback)
-      .where(
-        and(
-          eq(feedback.assessmentId, prediction.id),
-          eq(feedback.operationId, `command-application:${input.operationId}`),
-        ),
-      )
-      .limit(1);
-    return Boolean(receipt);
-  };
-  if (await hasReceipt()) return executeApplication(null);
-  const subject = assessmentSubjects.email_relevance.parse(prediction.subject);
-  const correction = emailRelevanceApplication(subject, input);
-  const [source] = await getDb(db)
-    .select({ code: email.shortcode })
-    .from(email)
-    .where(eq(email.id, parseEntityId("email", subject.recordId)))
-    .limit(1);
-  if (!source) throw new Error("Email no longer exists");
-  const {
-    prepareEmailRelevanceCorrection,
-    withEmailRelevancePreparation,
-    EmailCorrectionCleanupError,
-  } =
-    await import("~/server/domains/purchase-import/repo/gmail/relevance-correction");
-  let prepared: PreparedEmailRelevanceCorrection;
-  try {
-    prepared = await prepareEmailRelevanceCorrection(
-      db,
-      { id: parseShortcodeFor("email", source.code), ...correction },
-      context.actorContext,
-    );
-  } catch (error) {
-    // A committed receipt cannot conceal a failed cleanup from this invocation.
-    if (error instanceof EmailCorrectionCleanupError) throw error;
-    // Another invocation may have committed while this one's provider preparation failed.
-    if (await hasReceipt()) return executeApplication(null);
-    throw error;
-  }
-  return withEmailRelevancePreparation(db, prepared, executeApplication);
-}
-
 type Handler = {
   subject: z.ZodType;
   target: z.ZodType;
@@ -184,8 +112,6 @@ type Handler = {
     state: typeof assessmentState.$inferSelect,
     input: Review,
     automatic: AutomaticReview | null,
-    preparedEmail: PreparedEmailRelevanceCorrection | null,
-    emailScope: EmailEvidenceWriteScope | null,
   ) => Promise<z.infer<typeof assessmentReviewOut>["applicationResult"] | void>;
 };
 /** Each family validates its own subject and uses its transaction-bound domain mutation. */
@@ -215,106 +141,6 @@ const assessmentFamilies = {
         throw new Error(
           "Applying field Feedback requires acceptance or a correction",
         );
-    },
-  },
-  email_relevance: {
-    subject: assessmentSubjects.email_relevance,
-    target: assessmentProjectionTargets.email_relevance,
-    transactionBound: false,
-    actions: ["correct", "wrong", "uncertain"],
-    apply: async (
-      db,
-      context,
-      state,
-      _input,
-      _automatic,
-      preparedEmail,
-      emailScope,
-    ) => {
-      if (!emailScope)
-        throw new Error("Email application requires its outer write scope");
-      if (!preparedEmail || preparedEmail.emailId !== state.recordId)
-        throw new Error("Email review requires its source-bound preparation");
-      const { publishPreparedEmailRelevanceCorrection } =
-        await import("~/server/domains/purchase-import/repo/gmail/relevance-correction");
-      await publishPreparedEmailRelevanceCorrection(
-        db,
-        preparedEmail,
-        context.actorContext,
-        emailScope,
-      );
-    },
-  },
-  mail_import_outcome: {
-    subject: assessmentSubjects.mail_import_outcome,
-    target: assessmentProjectionTargets.mail_import_outcome,
-    transactionBound: true,
-    actions: ["correct", "wrong", "uncertain", "ungraded"],
-    apply: async () => {
-      throw new Error(
-        "Mail import outcome grades are history only; use the domain tools to correct a Purchase or Email",
-      );
-    },
-  },
-  email_link: {
-    subject: assessmentSubjects.email_link,
-    target: assessmentProjectionTargets.email_link,
-    transactionBound: false,
-    actions: ["correct", "wrong", "dismissed"],
-    apply: async (db, context, state, input) => {
-      const [prediction] = await getDb(db)
-        .select()
-        .from(assessment)
-        .where(eq(assessment.id, state.id))
-        .limit(1);
-      const subject = assessmentSubjects.email_link.parse(prediction?.subject);
-      if (!subject.recordId)
-        throw new Error("Historical Email event has no current Email target");
-      const [mail] = await getDb(db)
-        .select({ code: email.shortcode })
-        .from(email)
-        .where(eq(email.id, parseEntityId("email", subject.recordId)))
-        .limit(1);
-      const currentTarget = z
-        .object({ purchaseId: z.uuid() })
-        .parse(state.data);
-      const decision = assessmentJudgments.email_link.parse(
-        input.correction.present
-          ? input.correction.value
-          : prediction?.judgment,
-      ).decision;
-      const [target] = await getDb(db)
-        .select({ code: purchase.shortcode })
-        .from(purchase)
-        .where(
-          and(
-            eq(
-              purchase.id,
-              parseEntityId("purchase", currentTarget.purchaseId),
-            ),
-            notDeleted(purchase),
-          ),
-        )
-        .limit(1);
-      if (!mail || !target)
-        throw new Error("Email link target no longer exists");
-      const { decideEmailPurchase } =
-        await import("~/server/domains/purchase-import/repo/email-purchase-decision");
-      await decideEmailPurchase(
-        db,
-        {
-          id: parseShortcodeFor("email", mail.code),
-          purchaseId: parseShortcodeFor("purchase", target.code),
-          expectedChecksum: subject.checksum,
-          decision,
-        },
-        context.actorContext,
-        {
-          eventId: subject.eventId,
-          originalId: subject.originalId,
-          expectedAssessmentId: state.id,
-        },
-      );
     },
   },
   image_description: {
@@ -606,7 +432,7 @@ async function settleReview(
         "id" | "family" | "subject" | "judgment" | "producer" | "evidence"
       >
     | undefined;
-  if (input.assessmentId)
+  if (input.assessmentId) {
     [prediction] = await getDb(db)
       .select({
         id: assessment.id,
@@ -620,7 +446,23 @@ async function settleReview(
       .from(assessment)
       .where(eq(assessment.id, input.assessmentId))
       .limit(1);
-  else {
+    // A mail decision's owner answers for its handle; carried rows kept their id.
+    if (
+      !prediction ||
+      mailDecisionFamily.safeParse(prediction.family).success
+    ) {
+      const mail = await resolveMailDecisionHandle(db, input.assessmentId);
+      if (mail) {
+        if (automatic)
+          throw new Error(
+            `${mail.family} Assessments have no Automatic rule; review them`,
+          );
+        assertApplicationFamily(mail.family, input.application);
+        return settleMailDecisionReview(db, context, input, mail, emailScope);
+      }
+      prediction = undefined;
+    }
+  } else {
     if (
       !input.standalone ||
       !input.correction.present ||
@@ -708,26 +550,10 @@ async function settleReview(
     throw new Error(
       "Applying Feedback requires acceptance or an explicit correction",
     );
-  if (input.intent !== "history" && prediction.family === "mail_import_outcome")
-    throw new Error("Mail import outcome grades are history only");
   if (input.intent === "draft" && prediction.family !== "field")
     throw new Error("Only field Assessments support draft acceptance");
   assertApplicationFamily(prediction.family, input.application);
-  if (input.intent === "apply" && prediction.family === "email_relevance") {
-    const subject = assessmentSubjects.email_relevance.parse(
-      prediction.subject,
-    );
-    emailRelevanceApplication(subject, input);
-  }
   if (input.correction.present) {
-    if (prediction.family === "mail_import_outcome")
-      assessmentJudgments.mail_import_outcome.parse(input.correction.value);
-    if (prediction.family === "email_link")
-      assessmentJudgments.email_link.parse(input.correction.value);
-    if (prediction.family === "email_relevance")
-      z.enum(["related", "unrelated", "uncertain"]).parse(
-        input.correction.value,
-      );
     if (prediction.family === "image_description")
       z.string().parse(input.correction.value);
     // A different choice is a Wrong verdict whose correction is that choice.
@@ -772,13 +598,8 @@ async function settleReview(
     };
   }
   if (input.intent === "apply") {
-    const executeApplication = (
-      preparedEmail: PreparedEmailRelevanceCorrection | null,
-    ) => {
-      const apply = async (
-        transactionDb: Database,
-        applicationScope: EmailEvidenceWriteScope | null,
-      ) => {
+    const executeApplication = () => {
+      const apply = async (transactionDb: Database) => {
         const outcome: z.infer<typeof assessmentReviewOut> = {
           assessmentId: prediction.id,
           feedbackId: event.id,
@@ -896,8 +717,6 @@ async function settleReview(
             state,
             input,
             automatic,
-            preparedEmail,
-            applicationScope,
           );
           if (applicationResult) outcome.applicationResult = applicationResult;
           if (!family.transactionBound)
@@ -956,28 +775,16 @@ async function settleReview(
       return withEmailReviewBoundary(
         db,
         prediction,
-        (scopedDb, scope) => {
-          const attempt = (transactionDb: Database) =>
-            apply(transactionDb, scope);
-          return "isolationLevel" in family &&
-            family.isolationLevel === "serializable"
-            ? withSnapshotWriteDatabase(scopedDb, attempt, {
+        (scopedDb) =>
+          "isolationLevel" in family && family.isolationLevel === "serializable"
+            ? withSnapshotWriteDatabase(scopedDb, apply, {
                 isolationLevel: "serializable",
               })
-            : withTransactionDatabase(scopedDb, attempt);
-        },
+            : withTransactionDatabase(scopedDb, apply),
         emailScope,
       );
     };
-    if (prediction.family !== "email_relevance")
-      return executeApplication(null);
-    return prepareAndApplyEmailReview(
-      db,
-      context,
-      prediction,
-      input,
-      executeApplication,
-    );
+    return executeApplication();
   }
   const writeHistory = async (transactionDb: Database) => {
     const [state] = await getDb(transactionDb)

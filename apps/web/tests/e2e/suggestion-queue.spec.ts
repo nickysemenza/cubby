@@ -5,7 +5,9 @@ import { assessmentReviewBatchOut } from "@cubby/schemas/assessment";
 
 import { getDb } from "~/server/db/helpers";
 import {
+  emailReview,
   feedback,
+  runOperation,
   product as productTable,
   assessmentState,
   expense as expenseTable,
@@ -122,31 +124,49 @@ test("one queue confirms proposals and records automatic-history feedback", asyn
   const source = mail.events[0];
   if (!source) throw new Error("Synthetic Email missing");
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
-  const decision = await publishAssessment(db, {
-    publicationKey: `synthetic-outcome:${source.emailId}`,
-    family: "mail_import_outcome",
-    subject: {
-      kind: "mail_import_outcome",
-      entity: "email",
-      recordId: await resolveOrThrow(db, "email", source.emailId),
-      checksum: source.checksum,
+  const decision = { id: crypto.randomUUID() };
+  const outcomeAt = new Date().toISOString();
+  await getDb(db)
+    .insert(runOperation)
+    .values({
       runId,
-    },
-    judgment: {
-      kind: "imported",
-      lines: [{ name: "Synthetic packet", cost: 5 }],
-      total: 5,
-    },
-    producer: {
-      kind: "rule",
-      model: null,
-      revision: "synthetic/v1",
-      runId,
-      evaluationId: null,
-    },
-    fingerprint: source.checksum,
-    evidence: null,
-  });
+      operationId: `synthetic-outcome:${source.emailId}`,
+      kind: "target_outcome",
+      state: "completed",
+      inputFingerprint: "synthetic",
+      completedAt: new Date(outcomeAt),
+      result: {
+        mailOutcome: {
+          id: decision.id,
+          judgment: {
+            kind: "imported",
+            lines: [{ name: "Synthetic packet", cost: 5 }],
+            total: 5,
+          },
+          producer: {
+            kind: "rule",
+            model: null,
+            revision: "synthetic/v1",
+            runId,
+            evaluationId: null,
+          },
+          checksum: source.checksum,
+          fingerprint: source.checksum,
+          createdAt: outcomeAt,
+        },
+        target: {
+          entityKind: "email",
+          entityId: await resolveOrThrow(db, "email", source.emailId),
+          workKey: source.emailId,
+          state: "completed",
+          outcome: "verified",
+          warning: null,
+          diff: null,
+          completedAt: outcomeAt,
+          targetFingerprint: source.checksum,
+        },
+      },
+    });
   await gotoAuthenticatedPage(page, "/suggestions");
   const queue = page.getByRole("table", { name: "Suggestions", exact: true });
   const proposal = queue
@@ -213,8 +233,8 @@ test("one queue confirms proposals and records automatic-history feedback", asyn
       (
         await getDb(db)
           .select()
-          .from(feedback)
-          .where(eq(feedback.assessmentId, decision.id))
+          .from(emailReview)
+          .where(eq(emailReview.subjectId, decision.id))
       ).some((row) => row.verdict === "wrong" && row.intent === "history"),
     )
     .toBe(true);

@@ -1769,12 +1769,9 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Email", from: "id", to: "orderMailId" },
             { table: "OrderMailEvent", from: "orderMailId", to: "id" },
             {
-              table: "AssessmentState",
-              from: "data",
-              to: "data",
-              where: { family: "email_link" },
-              fromJsonKey: "eventId",
-              jsonKey: "purchaseId",
+              table: "EmailPurchaseDecision",
+              from: "eventId",
+              to: "purchaseId",
             },
           ],
         },
@@ -1784,12 +1781,9 @@ export const { definition, readSchemas } = defineEntityModel({
           path: [
             { table: "OrderMailEvent", from: "orderMailId", to: "id" },
             {
-              table: "AssessmentState",
-              from: "data",
-              to: "data",
-              where: { family: "email_link" },
-              fromJsonKey: "eventId",
-              jsonKey: "purchaseId",
+              table: "EmailPurchaseDecision",
+              from: "eventId",
+              to: "purchaseId",
             },
           ],
         },
@@ -1798,12 +1792,9 @@ export const { definition, readSchemas } = defineEntityModel({
           match: { id: "id" },
           path: [
             {
-              table: "AssessmentState",
-              from: "data",
-              to: "data",
-              where: { family: "email_link" },
-              fromJsonKey: "eventId",
-              jsonKey: "purchaseId",
+              table: "EmailPurchaseDecision",
+              from: "eventId",
+              to: "purchaseId",
             },
           ],
         },
@@ -1813,12 +1804,9 @@ export const { definition, readSchemas } = defineEntityModel({
           path: [
             { table: "OrderMailEvent", from: "orderMailId", to: "id" },
             {
-              table: "AssessmentState",
-              from: "data",
-              to: "data",
-              where: { family: "email_link" },
-              fromJsonKey: "eventId",
-              jsonKey: "purchaseId",
+              table: "EmailPurchaseDecision",
+              from: "eventId",
+              to: "purchaseId",
             },
           ],
         },
@@ -1843,10 +1831,10 @@ export const { definition, readSchemas } = defineEntityModel({
         },
 
         {
-          table: "AssessmentState",
-          match: { data: "id" },
-          where: { family: "email_link" },
-          json: { key: "purchaseId" },
+          // An explicit path keeps this a fanout input: pending tickets name it.
+          table: "EmailPurchaseDecision",
+          match: { purchaseId: "id" },
+          path: [{ table: "Purchase", from: "id", to: "id" }],
         },
         {
           table: "AssessmentState",
@@ -2347,7 +2335,7 @@ export default defineEntity(
     r
       .derived("email", "many", "purchaseId", [
         "ImportSourceOrder",
-        "AssessmentState",
+        "EmailPurchaseDecision",
         "OrderMailEvent",
       ])
       .named("emails", "Emails", {

@@ -20,7 +20,7 @@ import {
   mailboxClassification,
 } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput, runWorkLabel } from "@cubby/schemas/run-fields";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
 import { operationCommandRequest } from "~/contracts/define";
@@ -38,7 +38,7 @@ import {
   aiEvaluationRequest,
   emailCandidateObservation,
   emailClassificationObservation,
-  feedback,
+  emailReview,
   emailRetrievalFailure,
   ledgerParty,
   email as emailTable,
@@ -48,10 +48,6 @@ import {
 } from "~/server/db/schema";
 import { readEmailAssociations } from "~/server/domains/email/repo/email";
 import { readEmailPurchaseLinks } from "~/server/domains/email/repo/email-purchase-links";
-import {
-  emailFeedbackObservationIdSql,
-  emailFeedbackHasClassificationSql,
-} from "~/server/domains/email/repo/email-sql";
 import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
 import { mailImportEnabled } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { runRowState } from "~/server/generic/entity-report/repo/record-items";
@@ -458,7 +454,7 @@ function memberRow(
   email: EmailRow,
   review:
     | {
-        label: typeof feedback.$inferSelect;
+        label: typeof emailReview.$inferSelect;
         prediction: typeof emailClassificationObservation.$inferSelect;
       }
     | undefined,
@@ -901,26 +897,23 @@ export async function emailReviewReport(
       .limit(5),
     client
       .select({
-        label: feedback,
+        label: emailReview,
         prediction: emailClassificationObservation,
       })
-      .from(feedback)
+      .from(emailReview)
       .innerJoin(
         emailClassificationObservation,
-        eq(
-          sql`${emailClassificationObservation.id}::text`,
-          emailFeedbackObservationIdSql(sql`${feedback}`),
-        ),
+        eq(emailClassificationObservation.id, emailReview.subjectId),
       )
       .where(
         and(
           eq(emailClassificationObservation.emailId, id),
-          eq(feedback.actorUserId, actor.userId),
-          eq(feedback.authority, "member"),
-          emailFeedbackHasClassificationSql(sql`${feedback}`),
+          eq(emailReview.actorUserId, actor.userId),
+          eq(emailReview.authority, "member"),
+          isNotNull(emailReview.classification),
         ),
       )
-      .orderBy(desc(feedback.createdAt), desc(feedback.id))
+      .orderBy(desc(emailReview.createdAt), desc(emailReview.id))
       .limit(20),
   ]);
   const retained = await hasRetainedEmailImportContent(

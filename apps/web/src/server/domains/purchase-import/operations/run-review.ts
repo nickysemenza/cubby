@@ -45,7 +45,7 @@ import {
   ledgerParty,
   photoGroupProposal,
   run as runTable,
-  assessmentState,
+  runFinding,
   runOperation,
   photoRunImage,
 } from "~/server/db/schema";
@@ -55,17 +55,15 @@ import {
   releaseUnsettledMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
-import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 
 import { loadPurchaseAuditBatch } from "../repo/audit-batch";
 import { resolveRunFinding } from "../repo/findings";
 import {
-  isRunFinding,
   publishRunFinding,
   runFindingColumns,
-  runFindingData,
+  updateRunFinding,
 } from "../repo/run-finding";
 import {
   loadRunScope,
@@ -292,11 +290,10 @@ async function reconcileSettledRunOnce(
           kind: runFindingColumns.kind,
           summary: runFindingColumns.summary,
         })
-        .from(assessmentState)
+        .from(runFinding)
         .where(
           and(
-            isRunFinding,
-            eq(assessmentState.runId, scope.public.runId),
+            eq(runFinding.runId, scope.public.runId),
             eq(runFindingColumns.status, "open"),
           ),
         );
@@ -587,21 +584,13 @@ export async function auditImportBatch(
       } catch (error) {
         const detail =
           error instanceof Error ? error.message : "Automated fix was refused";
-        await transitionAssessmentStates(
-          db,
-          eq(assessmentState.id, inserted.id),
-          (row) => ({
-            data: {
-              ...runFindingData.parse(row.data),
-              summary: `${finding.summary} Auto-fix refused: ${detail}`.slice(
-                0,
-                1_000,
-              ),
-              proposedFix: null,
-            },
-          }),
-          { kind: "run_finding_auto_fix_refused" },
-        );
+        await updateRunFinding(db, inserted.id, {
+          summary: `${finding.summary} Auto-fix refused: ${detail}`.slice(
+            0,
+            1_000,
+          ),
+          proposedFix: null,
+        });
       }
     }
   }

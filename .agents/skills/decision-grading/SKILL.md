@@ -94,19 +94,19 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    `suggestions_read.automatic_decisions` or the Emails list's Accuracy view.
    Keep those historical outcomes separate from fresh triage previews. Member-
    confirmed Feedback uses `suggestions.review_batch` with the recorded
-   Assessment handle and `intent: "history"`; a session grade or fresh preview
-   alone supplies no durable Assessment handle and changes no operational state.
+   decision handle and `intent: "history"`; a session grade or fresh preview
+   alone supplies no durable handle and changes no operational state.
 
 ## Mail import outcomes
 
 1. Read the sampled Email's retained original through `purchase_import_read.mail_read` before
-   revealing its `mail_import_outcome` Assessment. Lock a session-only judgment:
+   revealing its recorded outcome. Lock a session-only judgment:
    imported lines and signed total, linked lifecycle event and order/vendor targets, unrelated with reason,
    or unresolved with the missing evidence. Missing original/attachments or
    unavailable Purchase context stays unavailable; a body-only replay cannot
    establish full-context parity.
-2. Read the Email's Assessment history through `purchase_import_read.mail_import_outcomes`
-   and retain its Assessment handle and producer in session memory. Rule and
+2. Read the Email's outcome history through `purchase_import_read.mail_import_outcomes`
+   and retain its handle and producer in session memory. Rule and
    coordinator outcomes are separate evidence; do not attribute a rule result
    to the coordinator model. Agent producer model is null until a causal settling
    call receipt exists; latest Run-level usage cannot establish that attribution.

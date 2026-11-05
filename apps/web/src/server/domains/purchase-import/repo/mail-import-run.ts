@@ -162,9 +162,9 @@ const untouchedAutomaticUnresolved = () => sql`EXISTS (
         AND newer.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'entityId' = ${emailTable.id}::text
         AND newer."completedAt" > outcome."completedAt")
 ) AND NOT EXISTS (
-  SELECT 1 FROM "Feedback" reviewed JOIN "AssessmentState" state ON state.id = reviewed."assessmentId"
-  WHERE state.family = ${assessmentFamily.enum.mail_import_outcome}
-    AND state."recordId" = ${emailTable.id} AND reviewed.authority = ${feedbackAuthority.enum.member}
+  SELECT 1 FROM "EmailReview" reviewed
+  WHERE reviewed.family = ${assessmentFamily.enum.mail_import_outcome}
+    AND reviewed."emailId" = ${emailTable.id} AND reviewed.authority = ${feedbackAuthority.enum.member}
 ) AND NOT ${emailHasProtectingIntentSql(sql`${emailTable.id}`, sql`${emailTable.orderMailId}`)}`;
 
 /** Frozen inputs retain attempted source/mapping pairs even after ownership moves. */

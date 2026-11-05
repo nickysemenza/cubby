@@ -63,6 +63,7 @@ export const emailLinkProposer = z.enum([
   "heuristic",
 ]);
 export type EmailLinkProposer = z.infer<typeof emailLinkProposer>;
+export type EmailPurchaseDecisionValue = "linked" | "dismissed";
 
 /**
  * Whether the Email's order was imported: `imported` once an import accepted
