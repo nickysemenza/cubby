@@ -978,7 +978,7 @@ export const { definition, readSchemas } = defineEntityModel(
           {
             table: "ImageSighting",
             match: { imageId: "id" },
-            columns: ["deletedAt"],
+            columns: ["imageId"],
           },
           { table: "EntityAttachment", match: { imageId: "id" } },
         ],

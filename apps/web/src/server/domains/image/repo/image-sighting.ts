@@ -220,8 +220,6 @@ async function upsertImageSightingInTransaction(
         imageSighting.ledgerPartyId,
         imageSighting.assetKey,
       ],
-      // The unique index is partial: a tombstoned row never conflicts.
-      targetWhere: sql`${imageSighting.deletedAt} IS NULL`,
       set: { ...observation, updatedAt: now },
     })
     // `xmax = 0` is true only for a row this statement inserted.

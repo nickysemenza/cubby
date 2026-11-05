@@ -89,7 +89,6 @@ export const modulesChildren = [
         reference: { table: "vendor", column: "id" },
       },
       { key: "rawChecksum", kind: "text", notNull: true },
-      { key: "classifiedChecksum", kind: "text" },
       {
         key: "content",
         kind: "jsonb",
