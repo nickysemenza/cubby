@@ -229,7 +229,6 @@ Old quality rows stay until deployed all-reader removal and the separate
 DerivedValue drop. This is not permission to retire tickets before the hourly
 pass proves replacement output.
 
-
 ## Unified Job cutover
 
 This migration replaces the old job tables and removes business triggers. Use
