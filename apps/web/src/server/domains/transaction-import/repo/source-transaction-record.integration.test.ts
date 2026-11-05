@@ -1,3 +1,8 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  sourceIdentityResolution,
+  type SourceIdentityResolution,
+} from "@cubby/schemas/source-occurrence-fields";
 import {
   recordSourceTransactionRecordsInput,
   type TransactionImportInput,
@@ -243,7 +248,7 @@ describe("statement row ledger", () => {
         dispositionReason: "not_modeled",
         dispositionNote: "Explicit synthetic member ignore",
       },
-    };
+    } satisfies SourceIdentityResolution;
     const other = (await listSourceTransactionRecords(ctx.db, {})).data.find(
       (row) => row.id !== unresolved.id,
     );
@@ -297,15 +302,17 @@ describe("statement row ledger", () => {
         "sourceTransactionRecord",
         other.id,
         {
-          identityResolution: {
+          identityResolution: sourceIdentityResolution.parse({
             ...review,
             decision: "assign",
             expectedDisposition: "ignored",
             expectedFactFingerprint: other.factFingerprint,
-            occurrenceId: acceptedOwner.shortcode,
+            occurrenceId: parseShortcodeFor(
+              "sourceOccurrence",
+              acceptedOwner.shortcode,
+            ),
             expectedTargetVersion: acceptedOwner.version,
-            transactionId: undefined,
-          },
+          }),
         },
       ),
     ).rejects.toThrow(/account or disposition differs/);
@@ -757,7 +764,7 @@ describe("statement row ledger", () => {
       accountId: account.output.id,
       note: "Member confirmed source reappearance",
       judgment: { disposition: "open" as const },
-    };
+    } satisfies SourceIdentityResolution;
     await expect(
       updateThroughKernel(
         ctx.db,

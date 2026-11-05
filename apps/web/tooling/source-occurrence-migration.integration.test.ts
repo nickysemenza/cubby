@@ -9,7 +9,7 @@ import { withMigrationDatabase } from "./test-database-lease";
 it("promotes only proven occurrence identity and retains unresolved history without money effects", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
-    await migrateDatabase(db, { through: "0094_ledger_transfer_minor_units" });
+    await migrateDatabase(db, { through: "0097_ledger_transfer_minor_units" });
     await client.query(
       `INSERT INTO "ExternalSource" (slug,label) VALUES ('monarch','Synthetic bank')`,
     );
@@ -184,11 +184,37 @@ it("promotes only proven occurrence identity and retains unresolved history with
         `SELECT jsonb_agg(to_jsonb(r) ORDER BY id) AS rows FROM "FinancialTransaction" r`,
       )
     ).rows[0].rows;
+    const cancelledRun = "00000000-0000-4000-8000-000000000301";
+    await client.query(
+      `INSERT INTO "user" (id,name,email) VALUES ('occurrence-migration','Synthetic member','occurrence@example.test')`,
+    );
+    await client.query(
+      `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'run','RUN-SYNOCCURRENCE')`,
+      [cancelledRun],
+    );
+    await client.query(
+      `INSERT INTO "Run" (id,shortcode,"actorName",trigger,purpose,"actorUserId","actorEmail",status,"failureCode","endedAt") VALUES ($1,'RUN-SYNOCCURRENCE','Synthetic member','manual','sweep','occurrence-migration','occurrence@example.test','failed','user_cancelled',now())`,
+      [cancelledRun],
+    );
+    await client.query(
+      `INSERT INTO "RunStep" ("runId",key,label,position,state,cursor,done,skipped,failed,errors) VALUES ($1,'statement_generate','Synthetic cancelled scan',0,'running','{"after":"legacy-machine"}',1,2,1,'[{"ref":"legacy-machine","message":"Synthetic retained failure"}]')`,
+      [cancelledRun],
+    );
+    await client.query(
+      `INSERT INTO "Job" (key,kind,state,"runId",input) VALUES ('synthetic-occurrence-cancel','run.execute','queued',$1,'{}')`,
+      [cancelledRun],
+    );
+    await expect(
+      migrateDatabase(db, { through: "0098_source_occurrence_ownership" }),
+    ).rejects.toThrow("Financial refresh has unfinished steps");
+    await client.query(
+      `UPDATE "Job" SET state='cancelled' WHERE key='synthetic-occurrence-cancel'`,
+    );
     await client.query(
       `UPDATE "SourceTransactionRecord" SET amount=10.010000000000002,"providerAmount"=-10.010000000000002 WHERE "rowPosition"=1`,
     );
     await expect(
-      migrateDatabase(db, { through: "0095_source_occurrence_ownership" }),
+      migrateDatabase(db, { through: "0098_source_occurrence_ownership" }),
     ).rejects.toThrow("independent IEEE");
     expect(
       (
@@ -205,7 +231,33 @@ it("promotes only proven occurrence identity and retains unresolved history with
         `SELECT jsonb_agg(to_jsonb(r) ORDER BY id) AS rows FROM "SourceTransactionRecord" r`,
       )
     ).rows[0].rows;
-    await migrateDatabase(db, { through: "0095_source_occurrence_ownership" });
+    await migrateDatabase(db, { through: "0098_source_occurrence_ownership" });
+    expect(
+      (
+        await client.query(
+          `SELECT state,cursor,done,skipped,failed,errors FROM "RunStep" WHERE "runId"=$1`,
+          [cancelledRun],
+        )
+      ).rows[0],
+    ).toEqual({
+      state: "running",
+      cursor: null,
+      done: 1,
+      skipped: 2,
+      failed: 1,
+      errors: [
+        { ref: "legacy-machine", message: "Synthetic retained failure" },
+      ],
+    });
+    expect(
+      (
+        await client.query(
+          `SELECT cursor FROM archive."RunStep_occurrence_cursor_preimage" WHERE "runId"=$1`,
+          [cancelledRun],
+        )
+      ).rows[0],
+    ).toEqual({ cursor: { after: "legacy-machine" } });
+
     expect(
       (
         await client.query(

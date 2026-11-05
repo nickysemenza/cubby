@@ -11,13 +11,17 @@ DECLARE
   original_oids oid[] := ARRAY['public."SourceTransactionRecord"'::regclass::oid,
     'public."TransactionImportRecord"'::regclass::oid, 'public."EntityExternalId"'::regclass::oid];
 BEGIN
-  LOCK TABLE public."RunStep" IN SHARE MODE;
+  LOCK TABLE public."Run", public."Job", public."RunStep" IN SHARE MODE;
   IF EXISTS (
     SELECT 1 FROM public."RunStep" step JOIN public."Run" run ON run.id=step."runId"
     WHERE (step.key LIKE 'statement\_%' ESCAPE '\' OR step.key LIKE 'transfer\_pair\_%' ESCAPE '\')
-      AND step.state NOT IN ('done','skipped','cancelled')
+      AND step.state <> 'done'
       AND (run.status='running' OR step."runId"=(SELECT latest."runId" FROM public."RunStep" latest
         WHERE latest.key='statement_generate' ORDER BY latest."createdAt" DESC,latest.id DESC LIMIT 1))
+      -- A cancelled Job cannot execute the retained cursor. Other failed parents remain fenced.
+      AND NOT (run.status = 'failed' AND run."failureCode" IS NOT DISTINCT FROM 'user_cancelled' AND run."endedAt" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM public."Job" execution WHERE execution."runId" = run.id
+          AND execution.state NOT IN ('completed', 'failed', 'cancelled')))
   ) THEN RAISE EXCEPTION 'Financial refresh has unfinished steps; complete or explicitly cancel retained work before the occurrence cutover'; END IF;
   SELECT string_agg(format('%I.%I',n.nspname,c.relname),', ' ORDER BY n.nspname,c.relname) INTO locks
   FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -451,7 +455,7 @@ ALTER TABLE "TransactionImportRecord" ADD CONSTRAINT "TransactionImportRecord_st
   -- charge-key cursor against SOC handles. Preserve its complete cursor preimage.
   CREATE TABLE archive."RunStep_occurrence_cursor_preimage" AS
     SELECT * FROM public."RunStep" WHERE (key LIKE 'statement\_%' ESCAPE '\' OR key LIKE 'transfer\_pair\_%' ESCAPE '\')
-      AND state NOT IN ('done','skipped','cancelled') AND cursor IS NOT NULL;
+      AND state <> 'done' AND cursor IS NOT NULL;
   UPDATE public."RunStep" step SET cursor=NULL
     FROM archive."RunStep_occurrence_cursor_preimage" old WHERE step.id=old.id;
   IF EXISTS(SELECT 1 FROM archive."RunStep_occurrence_cursor_preimage" old JOIN public."RunStep" step USING(id)
