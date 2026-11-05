@@ -744,7 +744,7 @@ describe("connection preparation and publication authority", () => {
     ).toEqual([]);
   });
 
-  it("rejects stale field evidence on read while retained household counts may lag", async () => {
+  it("rejects stale field evidence on both connection and Work reads", async () => {
     const { source, item } = await fixture();
     const publish = await prepareCombinedConnections(
       ctx.db,
@@ -797,7 +797,7 @@ describe("connection preparation and publication authority", () => {
       memberPartyId: null,
       memberOnly: false,
     });
-    expect(after.items).toContainEqual(
+    expect(after.items).not.toContainEqual(
       expect.objectContaining({
         reasonKeys: ["suggestions:field"],
       }),
