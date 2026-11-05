@@ -1,3 +1,4 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { FinancialSpendingPlan } from "@cubby/schemas/financial-booking";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
@@ -83,7 +84,86 @@ const FIRST_CANDIDATE = sql`LEFT JOIN LATERAL (
       ORDER BY position LIMIT 1
     ) first_candidate ON true`;
 
-/** Every pending suggestion in scope with its list columns, before hydration. */
+/**
+ * Browse columns over AssessmentState. Assessment, the source record and the
+ * account are joined only when a filter or sort reads them, and current
+ * evidence is rechecked for page rows rather than for the whole family.
+ */
+export function statementSuggestionFacts(
+  filters: StatementSuggestionScope,
+  needs: ReadonlySet<string>,
+) {
+  const has = (...names: string[]) => names.some((name) => needs.has(name));
+  const exactStrength = has("exactStrength");
+  const judged =
+    exactStrength ||
+    has("kind", "kindSource", "providerStatus", "candidate", "modelLabel");
+  const firstCandidate = exactStrength || has("candidate", "modelLabel");
+  const stateFilters: SQL[] = [
+    filters.status === "applied"
+      ? sql`s.family = ${assessmentFamily.enum.statement_transaction} AND s.status = ${filters.status}`
+      : sql`s.family = ${assessmentFamily.enum.statement_transaction} AND s.active AND s.status = ${suggestionStatus.enum.pending}`,
+  ];
+  if (filters.assessmentIds)
+    stateFilters.push(
+      sql`s.id = ANY(${uuidArrayParam(filters.assessmentIds)})`,
+    );
+  if (filters.runCode)
+    stateFilters.push(
+      sql`s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runCode})`,
+    );
+  const clean = sql`CASE WHEN (${suggestionField("clean")})::boolean
+    THEN (SELECT ${currentClean} FROM "Assessment" a WHERE a.id = s.id)
+    ELSE false END`;
+  const labelSame = sql`first_candidate.label->>${"same"}`;
+  const labelConfidence = sql`first_candidate.label->>${"confidence"}`;
+  const strength = exactStrength
+    ? sql`CASE WHEN ${clean} OR (${labelSame} = ${"same"} AND ${labelConfidence} = ${"high"}) THEN ${"strong"}
+        WHEN ${labelConfidence} = ${"medium"} THEN ${"medium"} ELSE ${"weak"} END`
+    : // Label confidence lives in the judgment; default ordering stays State-only.
+      sql`CASE WHEN ${clean} THEN ${"strong"} ELSE ${"weak"} END`;
+  const statementDate = suggestionField("statementDate");
+  return {
+    columns: {
+      clean,
+      strength,
+      createdAt: sql`to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+      date: statementDate,
+      month: sql`left(${statementDate}, 7)`,
+      account: sql`ARRAY[fa.shortcode]`,
+      owner: sql`array_remove(ARRAY[account_owner.shortcode], NULL)`,
+      merchant: sql`ARRAY[concat_ws(' ', r.merchant, r."rawDescription")]`,
+      amount: sql`coalesce((${suggestionField("amount")})::numeric, 0)`,
+      action: suggestionField("recommended"),
+      kind: sql`a.judgment->${"create"}->>${"kind"}`,
+      kindSource: sql`a.judgment->${"create"}->>${"kindSource"}`,
+      providerCategory: sql`r."sourceCategory"`,
+      providerStatus: sql`a.judgment->>'providerStatus'`,
+      candidate: sql`first_candidate.shortcode`,
+      modelLabel: sql`${labelSame} || ':' || ${labelConfidence}`,
+    } satisfies Record<string, SQL>,
+    from: sql.join(
+      [
+        sql`"AssessmentState" s`,
+        ...(judged ? [sql`JOIN "Assessment" a ON a.id = s.id`] : []),
+        ...(has("account", "owner")
+          ? [
+              sql`JOIN "FinancialAccount" fa ON fa.id = (${suggestionField("accountId")})::uuid AND ${notDeleted("fa")}`,
+              sql`LEFT JOIN "LedgerParty" account_owner ON account_owner.id = fa."ledgerPartyId"`,
+            ]
+          : []),
+        ...(has("merchant", "providerCategory")
+          ? [sql`JOIN "SourceTransactionRecord" r ON r.id = s."recordId"`]
+          : []),
+        ...(firstCandidate ? [FIRST_CANDIDATE] : []),
+      ],
+      sql` `,
+    ),
+    where: sql.join(stateFilters, sql` AND `),
+  };
+}
+
+/** Listed suggestions by id with their columns, before hydration. */
 export async function statementSuggestionKeys(
   db: Database,
   filters: StatementSuggestionScope,
