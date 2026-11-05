@@ -47,6 +47,7 @@ import {
 import type { AiCostEvidence } from "@cubby/shared/ai/pricing";
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   customType,
@@ -511,7 +512,9 @@ export const ledgerSourceClaim = pgTable(
     normalizedEvidence: jsonb("normalizedEvidence")
       .notNull()
       .$type<LedgerSourceClaimNormalizedEvidence>(),
-    targetAmountAtClaim: doublePrecision("targetAmountAtClaim").notNull(),
+    targetAmountMinor: bigint("targetAmountMinor", {
+      mode: "bigint",
+    }).notNull(),
     reconciliationDecision: text("reconciliationDecision")
       .notNull()
       .$type<"amounts_match" | "accept_target_amount">(),
@@ -540,14 +543,17 @@ export const ledgerSourceClaim = pgTable(
     ),
     check(
       "LedgerSourceClaim_reconciliation_check",
-      sql`abs(${table.targetAmountAtClaim} * 100 - round(${table.targetAmountAtClaim} * 100)) < 0.0000001
-          AND abs(((${table.normalizedEvidence}->>'amount')::double precision) * 100 - round(((${table.normalizedEvidence}->>'amount')::double precision) * 100)) < 0.0000001
+      // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- number is a PostgreSQL JSON scalar type, not Cubby vocabulary.
+      sql`abs(${table.targetAmountMinor}) <= 100000000000000
+          AND coalesce(jsonb_typeof(${table.normalizedEvidence}->'amount') = 'number', false)
+          AND (${table.normalizedEvidence}->>'amount')::numeric * 100 = trunc((${table.normalizedEvidence}->>'amount')::numeric * 100)
+          AND abs((${table.normalizedEvidence}->>'amount')::numeric * 100) <= 100000000000000
           AND ((${table.reconciliationDecision} = 'amounts_match'
             AND ${table.reconciliationNote} IS NULL
-            AND abs(((${table.normalizedEvidence}->>'amount')::double precision) - ${table.targetAmountAtClaim}) < 0.0000001)
+            AND (${table.normalizedEvidence}->>'amount')::numeric * 100 = ${table.targetAmountMinor})
           OR (${table.reconciliationDecision} = 'accept_target_amount'
             AND length(trim(${table.reconciliationNote})) > 0
-            AND abs(((${table.normalizedEvidence}->>'amount')::double precision) - ${table.targetAmountAtClaim}) >= 0.0000001))`,
+            AND (${table.normalizedEvidence}->>'amount')::numeric * 100 <> ${table.targetAmountMinor}))`,
     ),
   ],
 );

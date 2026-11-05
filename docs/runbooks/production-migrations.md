@@ -457,3 +457,45 @@ neon snapshots restore <id> --name verify-<table>
 
 Never pass `--finalize`, never run `snapshots finalize`, and never reset or restore onto
 the production branch. If table-level recovery would not be enough, stop and report.
+
+## Source-claim minor units
+
+`0096_source_claim_minor_units` is a direct contract cutover. The running statement planner and label application read LedgerSourceClaim through booking-lineage checks. Label application also reaches LedgerTransfer through canonical FinancialTransaction read-back. A zero-row result does not establish table independence, so these refresh gates remain until the retained steps are terminal. The release owner
+must wait for the active financial refresh's generation and subsequent statement
+steps to reach terminal outcomes before merging it. No writer hold, branch-copy
+rehearsal or dual writer is required. Parent owns merge sequencing with other
+migration lanes; regenerate its journal position on current main before release.
+The migration takes a short `RunStep` share lock and refuses unfinished financial
+steps in any running Run or the latest statement Run, including a failed Run
+awaiting recovery. A failed parent status does not prove its continuation finished.
+
+The migration locks the claim table and its FK endpoints with a two-second lock
+timeout. It refuses unrepresentable money and unhandled view dependencies before
+changing storage. It moves the complete original table to
+`archive.LedgerSourceClaim_dollar_preimage`, creates the replacement with signed
+bigint `targetAmountMinor`, and compares complete row-level hash multisets, including nulls
+and tombstones, against the exact allowed conversion. Original rows are checked
+again unchanged. An independent ID join also requires every archived dollar
+double to equal converted cents divided by 100 in IEEE arithmetic; this catches
+noise hidden by PostgreSQL's rounded `float8::numeric` cast. It rebinds incoming/outgoing FKs and current triggers, then
+removes archived outgoing FKs, triggers and nonessential indexes. The archive is
+retained indefinitely in this goal; no table or original source JSON is dropped.
+
+Run the populated-predecessor source-claim migration regression and `db:check`
+before merge. Parent's independent reviewer must examine signed conversion,
+full-row preservation, FK/trigger rebinding, archive inertness and the unchanged
+native dollar-number boundary. After deployment, independently compare retained
+claim IDs, source keys, decisions, normalized evidence and timestamps; verify
+target cents exactly match archived dollars × 100 and that Expense/transfer
+reads still return dollar numbers. Verify live source-claim replacement and
+exact replay through supported commands. A successful migration alone proves
+neither runtime acceptance nor completed historical reconciliation.
+
+When a monetary column changes units, give the physical minor-unit column a
+new name. Keeping a numeric predecessor column name can silently accept an old
+Worker's whole-dollar integer as cents, especially on a reviewed mismatch.
+Old writers must fail at the database boundary; downtime does not authorize
+wrong-unit writes. Keep client dollar-number fields at the checked output
+boundary. Verify a predecessor write refuses after the cutover.
+
+Financial cutover gates recognize only done steps or an ended failed Run with failureCode user_cancelled and no nonterminal Job. Run, Job and RunStep share locks close admission races. A cancelled parent with queued, running, retry_wait or paused execution remains blocked; every other failure still blocks the existing active/latest-refresh scope. Old running step cursors and counters remain unchanged by the gate exception. No nonexistent RunStep cancelled state is assumed.

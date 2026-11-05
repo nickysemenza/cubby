@@ -136,7 +136,7 @@ const withProjectAndProductNameOnly = {
         sourceKey: true,
         sourceKeyVersion: true,
         normalizedEvidence: true,
-        targetAmountAtClaim: true,
+        targetAmountMinor: true,
         reconciliationDecision: true,
         reconciliationNote: true,
         createdAt: true,

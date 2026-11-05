@@ -95,6 +95,23 @@ the common field explanation for each contributing Expense. Contributor evidence
 is retained with the result and loaded on demand, separately from the live
 comparison; ordinary list payloads contain only compact portions.
 
+### Exact source-claim amounts
+
+A source claim captures its reviewed target amount in `targetAmountMinor` as
+signed bigint cents.
+Source-claim amount comparisons use exact minor units; the normalized source
+JSON and its frozen identity remain original evidence. Dollar-number HTTP,
+MCP and native shapes remain unchanged. Their checked conversion requires exact
+whole cents within USD ±1 trillion and rejects sub-cent, non-finite or
+out-of-range values rather than rounding them. This bound is a numeric-wire
+contract, not an increase in household scale.
+
+Expense and LedgerTransfer reads convert claim targets at the output boundary.
+A target change still requires explicit replacement or removal of claims;
+reviewed mismatches, source keys, tombstones and recorded attribution keep their
+existing meaning. This boundary does not yet convert other money fields,
+unit prices, quantities, attribution weights or provider usage costs.
+
 ## Import boundary
 
 Clients orchestrate provider reads from Splitwise, Gmail, Monarch, or local exports and send normalized reviewed changes through the standard mutations. The import recipe, including which record a repayment becomes, is the purchase-import [household-ledger guide](../.agents/skills/purchase-import/references/household-ledger.md). Cubby receives no provider credentials, raw emails, file paths, or whole exports. There is no global transaction across providers or independent records. Each record can be resumed from durable Source Claims and evidence, so a partial import does not require a global rollback or batch receipt.

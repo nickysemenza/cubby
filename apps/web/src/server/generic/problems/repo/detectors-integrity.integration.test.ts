@@ -965,7 +965,7 @@ const SOURCE_FACTORIES = {
         context: null,
         disambiguator: null,
       },
-      targetAmountAtClaim: 1,
+      targetAmountMinor: 100n,
       reconciliationDecision: "amounts_match",
     }),
 
@@ -982,7 +982,7 @@ const SOURCE_FACTORIES = {
         context: null,
         disambiguator: null,
       },
-      targetAmountAtClaim: 1,
+      targetAmountMinor: 100n,
       reconciliationDecision: "amounts_match",
     }),
 

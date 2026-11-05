@@ -1,4 +1,4 @@
-import { wholeCentAmount } from "./money";
+import { settledMoney, wholeCentAmount } from "./money";
 import { plainDate, uniqueBy } from "./base-entity";
 import { financialTransactionShortcode } from "./identifier-fields";
 import { z } from "zod";
@@ -13,7 +13,7 @@ export const ledgerSource = z
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "expected a lowercase source slug")
   .meta({ mockValue: "synthetic-source" });
 export const ledgerSourceClaimNormalizedEvidence = z.strictObject({
-  amount: wholeCentAmount,
+  amount: settledMoney,
   occurredOn: plainDate.nullable().default(null),
   description: z.string().trim().min(1).nullable().default(null),
   context: z.string().trim().min(1).nullable().default(null),
