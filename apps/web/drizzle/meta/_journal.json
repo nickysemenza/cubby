@@ -610,6 +610,13 @@
       "when": 1793881502139,
       "tag": "0086_derived_read_views",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1793878655982,
+      "tag": "0086_typed_read_snapshots",
+      "breakpoints": true
     }
   ]
 }
