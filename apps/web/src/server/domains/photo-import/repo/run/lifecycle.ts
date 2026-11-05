@@ -358,7 +358,13 @@ async function updatePhotoRunInput<T>(
         .returning({ id: runTable.id });
       if (!won) return false;
       await changed.after?.(tx);
-      await recordChange(tx, { kind: "source", categories: ["run"] });
+      await recordChange(tx, {
+        kind: "source",
+        categories: ["run"],
+        // Photo Runs are member-started.
+        ringFromBackground:
+          changed.set !== undefined && "status" in changed.set,
+      });
       return true;
     });
     if (swapped) return changed.result;

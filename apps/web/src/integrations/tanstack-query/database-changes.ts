@@ -30,6 +30,13 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
 
   async function refresh() {
     if (refreshing || stopped) return;
+    // A hidden tab spends no reads; `resume` rereads everything it shows on return.
+    if (document.visibilityState === "hidden") {
+      pending = {};
+      fullRing = false;
+      resync = false;
+      return;
+    }
     const recovery = resync;
     const full = recovery || fullRing;
     if (!full && !Object.keys(pending).length) return;

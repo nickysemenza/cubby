@@ -9,7 +9,12 @@ import type { MailReclassificationCheckpoint } from "./email-actions.js";
 import { z } from "zod";
 import { entityIdSchema } from "./identifier-fields";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
-import { RUN_KINDS, RUN_PURPOSE_LABEL, runPurpose } from "./activity-fields";
+import {
+  ATTENTION_RUN_PURPOSES,
+  RUN_KINDS,
+  RUN_PURPOSE_LABEL,
+  runPurpose,
+} from "./activity-fields";
 export {
   EXECUTED_RUN_PURPOSES,
   isExecutedRunPurpose,
@@ -63,6 +68,11 @@ export const runTrigger = z.enum([
   // and never blocks ledger-party delete/merge.
   "ephemeral",
 ]);
+const MEMBER_FACING_PURPOSES = new Set<string>(ATTENTION_RUN_PURPOSES);
+/** A Run a member or their agent started; its transitions ring open tabs. */
+export const isMemberStartedRun = (run: { purpose: string; trigger: string }) =>
+  MEMBER_FACING_PURPOSES.has(run.purpose) &&
+  (run.trigger === "foreground" || run.trigger === "manual");
 export const runStatus = z.enum([
   "running",
   "paused",

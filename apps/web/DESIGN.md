@@ -595,7 +595,6 @@ source header and the chosen cover outlined. Header and table thumbnails open
 the chain; the Images section also renders it. Both read the record-level
 `fieldExplanation.imageChain` query and preserve its precedence order. Editing
 remains #3310.
-The sidebar shows remaining refreshes only with a nonempty backlog.
 Work shows outstanding entity-field work as a record type x derived value cross-tab:
 fields shared by the most types lead, `·` marks a value the type does not
 declare, idle declared cells read a muted 0, and counts take the shared heat

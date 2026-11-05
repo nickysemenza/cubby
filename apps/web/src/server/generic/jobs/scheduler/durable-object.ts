@@ -13,7 +13,6 @@ import {
   scrubErrorMessage,
 } from "~/lib/error-diagnostics";
 import { withCfEnv } from "~/server/cf-env";
-import { notifyDatabaseChanges } from "~/server/db/freshness/client";
 
 import type { JobSchedulerRpc } from "./rpc";
 
@@ -76,8 +75,6 @@ export class JobSchedulerDurableObject
     ].slice(-100);
     await this.ctx.storage.put("scheduler", this.state);
     log.info(event, { cause, error, job });
-    // Ring existing subscribers only for transitions; no SQL or idle heartbeat.
-    await withCfEnv(this.env, () => notifyDatabaseChanges({ run: null }));
   }
 
   async snapshot(): Promise<SchedulerSnapshot> {

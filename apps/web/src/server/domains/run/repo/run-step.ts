@@ -1,5 +1,6 @@
 import { type RunId } from "@cubby/schemas/identifiers";
 import { jobState } from "@cubby/schemas/job";
+import { isMemberStartedRun } from "@cubby/schemas/run-fields";
 import {
   RUN_STEP_ERROR_SAMPLE,
   runStepErrors,
@@ -302,11 +303,12 @@ export async function finishStepRunRow(
       .where(
         and(eq(run.id, runId), eq(run.status, "running"), attemptIs(attempt)),
       )
-      .returning({ id: run.id, purpose: run.purpose });
+      .returning({ id: run.id, purpose: run.purpose, trigger: run.trigger });
     if (finished)
       await recordChange(tx, {
         kind: finished.purpose === "derived_refresh" ? "projection" : "source",
         categories: ["run"],
+        ringFromBackground: isMemberStartedRun(finished),
       });
     return Boolean(finished);
   });

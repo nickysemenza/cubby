@@ -10,14 +10,15 @@ import { StatusText } from "~/ui/primitives/status-text";
 import { Switch } from "~/ui/primitives/switch";
 
 const MAIL_IMPORT_REFRESH_MS = 30_000;
-/** Poll only while a switched-on mailbox still has searches to run. */
+/**
+ * Poll only while a switched-on mailbox is part-way through a search. Untouched
+ * searches wait for the next daily pass, which can be a long idle wait.
+ */
 export const mailImportRefetchInterval = (
   status: MailImportStatus | undefined,
 ): number | false =>
   status?.mailboxes.some(
-    ({ enabled, searches }) =>
-      enabled &&
-      (searches.inProgress !== null || searches.nextPending.length > 0),
+    ({ enabled, searches }) => enabled && searches.inProgress !== null,
   )
     ? MAIL_IMPORT_REFRESH_MS
     : false;

@@ -43,6 +43,21 @@ import { StatusText } from "~/ui/primitives/status-text";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/ui/primitives/tabs";
 
 const activeRunStatuses = new Set<string>(ACTIVE_RUN_STATUSES);
+/**
+ * Poll only while work runs. An enabled mailbox, a resumable search position, a
+ * query queued for the next daily pass and a paused Run all sit still for days,
+ * and a member's own control rings this view.
+ */
+const mailCoverageRefetchInterval = (coverage: MailCoverage | undefined) =>
+  coverage?.discovery.some((row) => row.runStatus === "running") ||
+  coverage?.rows.some(
+    (row) =>
+      row.queue.state === "running" ||
+      row.controlledRun?.status === "running" ||
+      (row.controlledRun?.imports.running ?? 0) > 0,
+  )
+    ? 30_000
+    : false;
 const helper = createCubbyColumnHelper<MailCoverageRow>();
 const rowId = (row: MailCoverageRow) => row.key;
 const discoveryHelper =
@@ -1789,22 +1804,7 @@ export function MailCoveragePage({
   const query = useQuery({
     ...run.mailCoverage.queryOptions({}),
     refetchInterval: (current) =>
-      current.state.data?.mailboxes.some((mailbox) => mailbox.enabled) ||
-      current.state.data?.discovery.some(
-        (row) => row.runStatus !== null && activeRunStatuses.has(row.runStatus),
-      ) ||
-      current.state.data?.rows.some(
-        (row) =>
-          row.queue.state === "running" ||
-          row.queue.state === "queued" ||
-          row.state === "in_progress" ||
-          (row.controlledRun !== null &&
-            (activeRunStatuses.has(row.controlledRun.status) ||
-              row.controlledRun.imports.running > 0 ||
-              row.controlledRun.imports.paused > 0)),
-      )
-        ? 30_000
-        : false,
+      mailCoverageRefetchInterval(current.state.data),
   });
   const loading = useHydratedLoading(query.isPending);
   return (

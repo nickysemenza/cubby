@@ -17,7 +17,7 @@ function useDelayedRefresh(active: boolean) {
   return active && visible;
 }
 
-/** Reserved sidebar space shared by refresh feedback and future shell work status. */
+/** Reserved sidebar space for refresh feedback. */
 export function ShellStatusSlot({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-6 shrink-0 items-center justify-center px-2 text-xs text-muted-foreground">
@@ -28,32 +28,22 @@ export function ShellStatusSlot({ children }: { children: ReactNode }) {
 
 export function BackgroundRefreshStatus({
   compact = false,
-  idle = null,
 }: {
   compact?: boolean;
-  /** Shell work status shown in the same slot while nothing is syncing. */
-  idle?: ReactNode;
 }) {
   const fetching = useIsFetching({
     predicate: (query) =>
       query.state.data !== undefined && Boolean(query.meta?.cacheTags?.length),
   });
   const visible = useDelayedRefresh(fetching > 0);
+  if (!visible) return null;
   return (
-    <>
-      {/* Keep view-local backlog observations alive while refresh feedback wins the slot. */}
-      <div hidden={visible} className="w-full min-w-0">
-        {idle}
-      </div>
-      {visible && (
-        <output
-          aria-label="Syncing"
-          className="flex items-center gap-1.5 text-xs text-muted-foreground"
-        >
-          <Spinner size="sm" aria-hidden="true" />
-          {!compact && <span>Syncing…</span>}
-        </output>
-      )}
-    </>
+    <output
+      aria-label="Syncing"
+      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+    >
+      <Spinner size="sm" aria-hidden="true" />
+      {!compact && <span>Syncing…</span>}
+    </output>
   );
 }

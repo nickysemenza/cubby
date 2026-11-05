@@ -914,8 +914,8 @@ financial proposals and concrete blockers from optional enrichment. Improvements
 retains optional suggestions, agent research and declared missing-fact views.
 Normal retries, dependencies and external waits remain in Automatic work;
 external waits are explicitly labelled. These views add no alert engine,
-scheduler or stored lanes and do not change retry policy. Field refresh and
-shell backlog links retain `tab=now` and the Derived values anchor. Existing
+scheduler or stored lanes and do not change retry policy. Field refresh links
+retain `tab=now` and the Derived values anchor. Existing
 Work queue filters, Suggestions, automatic rules and audit remain usable.
 
 `RUN_KINDS` owns Run purpose, triggers, effects and declared steps.

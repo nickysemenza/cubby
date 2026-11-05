@@ -1,8 +1,11 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { subscribeDatabaseChanges } from "./database-changes";
-import { matchesDatabaseChanges } from "./operation-cache";
+import {
+  invalidateDatabaseChanges,
+  matchesDatabaseChanges,
+} from "./operation-cache";
 import type { OperationCacheTag } from "./operation-meta";
 
 function cached(
@@ -45,6 +48,19 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+
+function stubBrowser(visibilityState: DocumentVisibilityState) {
+  vi.stubGlobal("WebSocket", Socket);
+  vi.stubGlobal("window", new EventTarget());
+  Object.defineProperty(window, "location", {
+    value: { origin: "https://example.test" },
+  });
+  vi.stubGlobal(
+    "document",
+    Object.assign(new EventTarget(), { visibilityState }),
+  );
+  vi.stubGlobal("navigator", { onLine: true });
+}
 
 describe("household change invalidation", () => {
   it("narrows detail, report and connection reads while retaining lists, counts and null ripples", () => {
@@ -132,16 +148,7 @@ describe("household change invalidation", () => {
 
   it("refreshes at the leading edge, at most every five seconds, and once after the final ring", async () => {
     vi.useFakeTimers();
-    vi.stubGlobal("WebSocket", Socket);
-    vi.stubGlobal("window", new EventTarget());
-    Object.defineProperty(window, "location", {
-      value: { origin: "https://example.test" },
-    });
-    vi.stubGlobal(
-      "document",
-      Object.assign(new EventTarget(), { visibilityState: "visible" }),
-    );
-    vi.stubGlobal("navigator", { onLine: true });
+    stubBrowser("visible");
     const client = new QueryClient();
     const queryA = cached(
       client,
@@ -206,6 +213,57 @@ describe("household change invalidation", () => {
     stop();
     await vi.advanceTimersByTimeAsync(5000);
     expect(invalidate).toHaveBeenCalledTimes(6);
+    client.clear();
+  });
+
+  it("spends no reads in a hidden tab and rereads what it shows on return", async () => {
+    vi.useFakeTimers();
+    stubBrowser("hidden");
+    const client = new QueryClient();
+    const list = cached(client, "entity.list", {}, [["task"]]);
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    const stop = subscribeDatabaseChanges(client);
+    Socket.current.dispatchEvent(new Event("open"));
+    Socket.current.ring({ task: ["TSK-A3F2"] });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(invalidate).not.toHaveBeenCalled();
+    vi.stubGlobal(
+      "document",
+      Object.assign(document, { visibilityState: "visible" }),
+    );
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(list.state.isInvalidated).toBe(true);
+    stop();
+    client.clear();
+  });
+
+  it("lets a first load finish, then rereads it once, instead of restarting it", async () => {
+    const client = new QueryClient();
+    const queryKey = ["operation", "entity.detail", { input: {} }];
+    client.setQueryDefaults(queryKey, {
+      meta: { operation: "entity.detail", cacheTags: [["task"]] },
+    });
+    const reads: PromiseWithResolvers<string>[] = [];
+    const observer = new QueryObserver(client, {
+      queryKey,
+      queryFn: () => {
+        const read = Promise.withResolvers<string>();
+        reads.push(read);
+        return read.promise;
+      },
+    });
+    const stop = observer.subscribe(() => undefined);
+    const ring = invalidateDatabaseChanges(client, { task: null });
+    await vi.waitFor(() => expect(reads).toHaveLength(1));
+    reads[0]!.resolve("first");
+    await vi.waitFor(() => expect(reads).toHaveLength(2));
+    expect(observer.getCurrentResult().data).toBe("first");
+    reads[1]!.resolve("second");
+    await ring;
+    expect(observer.getCurrentResult().data).toBe("second");
+    stop();
     client.clear();
   });
 });

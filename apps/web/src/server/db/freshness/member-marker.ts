@@ -46,6 +46,9 @@ const markerCookie = () => {
 export const withMemberFreshness = <T>(run: () => Promise<T>): Promise<T> =>
   scope.run({}, run);
 
+/** Queue, cron and Durable Object invocations run outside any HTTP request. */
+export const inHttpRequest = (): boolean => scope.getStore() !== undefined;
+
 export function registerFreshnessMember(member: FreshnessMember): void {
   const current = scope.getStore();
   if (current) current.member = member;

@@ -31,7 +31,6 @@ export function useRunningSweep(enabled: boolean): string | null {
   const running = useQuery({
     ...list.queryOptions(input),
     enabled,
-    refetchInterval: POLL_MS * 4,
   });
   return runShortcode.safeParse(running.data?.items[0]?.id).data ?? null;
 }

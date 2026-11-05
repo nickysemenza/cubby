@@ -53,6 +53,7 @@ import {
   orderBackfillRunInput,
   orderMailImportRunInput,
   orderMailImportRunOrders,
+  isMemberStartedRun,
   type RunRestartInput,
   runInputsErased,
   runRetirementReason,
@@ -1232,8 +1233,13 @@ export async function markRunFailed(
               : eq(runTable.dispatchEventId, input.dispatchEventId),
         ),
       )
-      .returning({ purpose: runTable.purpose });
-    if (failed) await recordChange(tx, { kind: "source", categories: ["run"] });
+      .returning({ purpose: runTable.purpose, trigger: runTable.trigger });
+    if (failed)
+      await recordChange(tx, {
+        kind: "source",
+        categories: ["run"],
+        ringFromBackground: isMemberStartedRun(failed),
+      });
     if (failed?.purpose === "mail_import")
       await releaseUnsettledMailRunSources(tx, runId);
     return failed;

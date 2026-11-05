@@ -5,7 +5,8 @@ import { mailImportRefetchInterval } from "./mail-import-card";
 
 const status = (
   enabled: boolean,
-  pending: MailImportStatus["mailboxes"][number]["searches"]["nextPending"],
+  inProgress: MailImportStatus["mailboxes"][number]["searches"]["inProgress"],
+  pending: MailImportStatus["mailboxes"][number]["searches"]["nextPending"] = [],
 ): MailImportStatus => ({
   mailboxes: [
     {
@@ -16,7 +17,7 @@ const status = (
         vendors: { completed: 0, total: pending.length },
         charges: { completed: 0, total: 0 },
         senders: { completed: 0, total: 0 },
-        inProgress: null,
+        inProgress,
         nextPending: pending,
       },
     },
@@ -25,12 +26,13 @@ const status = (
 const query = { key: "merchant:synthetic shop", query: '"synthetic shop"' };
 
 // Failures: a card frozen at its first load while searches run; a card that
-// keeps polling with nothing left to search or with Mail import off.
+// keeps polling while searches wait for the next pass or with Mail import off.
 describe("Mail import card refresh", () => {
-  it("polls only while a switched-on mailbox has searches left", () => {
-    expect(mailImportRefetchInterval(status(true, [query]))).toBe(30_000);
-    expect(mailImportRefetchInterval(status(true, []))).toBe(false);
-    expect(mailImportRefetchInterval(status(false, [query]))).toBe(false);
+  it("polls only while a switched-on mailbox is part-way through a search", () => {
+    expect(mailImportRefetchInterval(status(true, query))).toBe(30_000);
+    expect(mailImportRefetchInterval(status(true, null, [query]))).toBe(false);
+    expect(mailImportRefetchInterval(status(true, null))).toBe(false);
+    expect(mailImportRefetchInterval(status(false, query))).toBe(false);
     expect(mailImportRefetchInterval(undefined)).toBe(false);
   });
 });

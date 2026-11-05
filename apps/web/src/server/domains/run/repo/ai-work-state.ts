@@ -1,4 +1,5 @@
 import { aiRefreshProgress } from "@cubby/schemas/ai-evaluation";
+import { isMemberStartedRun } from "@cubby/schemas/run-fields";
 import { and, eq, inArray, lt, notExists, or, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
@@ -80,18 +81,27 @@ export async function writeRunningAttemptProgress(
             : undefined,
         ),
       )
-      .returning({ id: run.id, shortcode: run.shortcode });
+      .returning({
+        id: run.id,
+        shortcode: run.shortcode,
+        purpose: run.purpose,
+        trigger: run.trigger,
+      });
     if (written[0])
       await (
         await import("./work-progress")
       ).checkpointRunWorkProgress(target, written[0].shortcode);
     if (
-      written.length &&
+      written[0] &&
       (set.status !== undefined ||
         set.endedAt !== undefined ||
         set.startedAt !== undefined)
     )
-      await recordChange(target, { kind: "source", categories: ["run"] });
+      await recordChange(target, {
+        kind: "source",
+        categories: ["run"],
+        ringFromBackground: isMemberStartedRun(written[0]),
+      });
     return written.length > 0;
   };
   return withTransactionDatabase(db, async (tx) => {
