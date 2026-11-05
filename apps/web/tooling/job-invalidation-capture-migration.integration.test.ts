@@ -65,3 +65,86 @@ it("keeps the pending start of markers already ahead of their Job at the cutover
     expect(pending.rows[0]?.minutes).toBe(45);
   });
 });
+
+it("retires late catalog wrappers per table and keeps the no-op if another function still references it", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle(client);
+    await migrateDatabase(db, { through: "0095_noop_derived_marker" });
+    await client.query(`
+      CREATE TABLE "SyntheticLateEvidence" (value text);
+      CREATE TABLE "SyntheticEmptyEvidence" (value text);
+      INSERT INTO "SyntheticLateEvidence" VALUES ('Synthetic retained evidence');
+      INSERT INTO "SyntheticEmptyEvidence" VALUES ('Synthetic empty-wrapper evidence');
+      CREATE FUNCTION derived_mark_synthetic_late() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN PERFORM derived_mark('synthetic.late', ARRAY[]::uuid[], 'Synthetic'); RETURN NULL; END $$;
+      CREATE FUNCTION derived_mark_synthetic_empty() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RETURN NULL; END $$;
+      CREATE TRIGGER "SyntheticLateEvidence_derived_mark" AFTER INSERT ON "SyntheticLateEvidence"
+        FOR EACH ROW EXECUTE FUNCTION derived_mark_synthetic_late();
+      CREATE TRIGGER "SyntheticEmptyEvidence_derived_mark" AFTER INSERT ON "SyntheticEmptyEvidence"
+        FOR EACH ROW EXECUTE FUNCTION derived_mark_synthetic_empty();
+      CREATE FUNCTION synthetic_unrelated_trigger() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RETURN NULL; END $$;
+      CREATE TRIGGER synthetic_unrelated AFTER INSERT ON "SyntheticLateEvidence"
+        FOR EACH ROW EXECUTE FUNCTION synthetic_unrelated_trigger();
+      CREATE FUNCTION synthetic_marker_caller() RETURNS void LANGUAGE plpgsql AS $$
+      BEGIN PERFORM derived_mark('synthetic.caller', ARRAY[]::uuid[], 'Synthetic'); END $$;
+    `);
+    const preserved = async () =>
+      (
+        await client.query(`SELECT jsonb_build_object(
+      'late', (SELECT jsonb_agg(to_jsonb(e)) FROM "SyntheticLateEvidence" e),
+      'empty', (SELECT jsonb_agg(to_jsonb(e)) FROM "SyntheticEmptyEvidence" e),
+      'conversion', (SELECT count(*) FROM "ProductConversionCoverage"),
+      'work', (SELECT count(*) FROM "WorkItem")) AS value`)
+      ).rows;
+    const before = await preserved();
+    await expect(
+      migrateDatabase(db, { through: "0096_retire_derived_source_triggers" }),
+    ).rejects.toMatchObject({
+      cause: {
+        code: "P0001",
+        message:
+          "Other functions reference shared marker; all functions retained",
+      },
+    });
+    expect(await preserved()).toEqual(before);
+    expect(
+      (
+        await client.query(`SELECT
+      to_regprocedure('public.derived_mark(text,uuid[],text)') IS NOT NULL AS retained,
+      (SELECT count(*)::int FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid
+        WHERE p.proname LIKE 'derived\\_mark\\_%' ESCAPE '\\') AS triggers,
+      (SELECT count(*)::int FROM pg_trigger WHERE tgname='synthetic_unrelated') AS unrelated`)
+      ).rows,
+    ).toEqual([{ retained: true, triggers: 0, unrelated: 1 }]);
+    await client.query(
+      "SELECT synthetic_marker_caller(); DROP FUNCTION synthetic_marker_caller()",
+    );
+    // Replay after committed table drops, with the shared no-op still present.
+    await migrateDatabase(db, {
+      through: "0096_retire_derived_source_triggers",
+    });
+    expect(await preserved()).toEqual(before);
+    expect(
+      (
+        await client.query(`SELECT
+      to_regprocedure('public.derived_mark(text,uuid[],text)') IS NULL AS retired,
+      to_regprocedure('public.cubby_retire_marker_table()') IS NULL AS helper_removed,
+      to_regclass('public."ProductConversionCoverage"') IS NOT NULL AS snapshot_retained`)
+      ).rows,
+    ).toEqual([
+      { retired: true, helper_removed: true, snapshot_retained: true },
+    ]);
+    await client.query(
+      `INSERT INTO "SyntheticLateEvidence" VALUES ('Synthetic post-retirement write')`,
+    );
+    expect(
+      (
+        await client.query(
+          'SELECT count(*)::int AS count FROM "SyntheticLateEvidence"',
+        )
+      ).rows,
+    ).toEqual([{ count: 2 }]);
+  });
+});
