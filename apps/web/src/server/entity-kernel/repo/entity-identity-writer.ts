@@ -6,12 +6,14 @@ import {
   type InferInsertModel,
   type InferSelectModel,
   isNull,
+  sql,
 } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
 import { derivedValue } from "~/server/db/derived-value-schema";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
-import { qualitySnapshot } from "~/server/db/quality-snapshot-schema";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import type { RepositoryQueryTransaction } from "~/server/db/repository-access.boundary";
 import {
   findPgError,
@@ -92,9 +94,17 @@ export async function tombstoneEntityIdentities(
   // Publication locks its Job before projection rows; removal uses that order too.
   // A tombstone has no derived values; the drain never republishes one.
   await tx.delete(derivedValue).where(inArray(derivedValue.entityId, [...ids]));
-  await tx
-    .delete(qualitySnapshot)
-    .where(inArray(qualitySnapshot.entityId, [...ids]));
+  const snapshots = new Set(
+    entityStoredDerivedDeclarations().flatMap((entry) =>
+      entry.snapshotSource && !entry.snapshotSource.view
+        ? [entry.snapshotSource.table]
+        : [],
+    ),
+  );
+  for (const table of snapshots)
+    await tx.execute(
+      sql`DELETE FROM ${sql.identifier(table)} WHERE "entityId" = ANY(${uuidArrayParam(ids)})`,
+    );
   await tx
     .update(entityIdentity)
     .set({ deletedAt: at })

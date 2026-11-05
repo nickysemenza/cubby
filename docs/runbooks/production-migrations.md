@@ -234,6 +234,25 @@ or memory-limit terminations. A target miss is reported, never hidden by clearin
 retained work. Trigger retirement, catalog checks and DerivedValue drop remain
 separate deployed-reader-first steps under ADR 0025.
 
+## Typed domain read snapshots
+
+The read snapshot cutover copies each declared result into named, typed columns
+on ProductReadSnapshot, InventoryReadSnapshot, LocationReadSnapshot,
+ProjectReadSnapshot, ExpenseReadSnapshot, EmailReadSnapshot and
+ShipmentReadSnapshot. It preserves the complete decision/evidence JSON, scalar
+sort and publication time. A frozen bidirectional EXCEPT ALL comparison aborts
+on any mismatch; it is copy evidence, not a production rebuild timing. Foreign
+keys are validated after the copy. The 2-second lock timeout rolls back on
+contention. Retain DerivedValue and tickets until the replacement Worker has
+rebuilt every kind and production coverage is verified.
+
+After deployment, request a Worker rebuild and require all live legacy identities
+for each converted key to have a replacement publication (including successful
+empty output). Investigate missing rows against current sources: deleted or
+inapplicable results may correctly disappear. Keep the scoped 16-minute repair
+procedure below for predecessor invocations. No broad WorkItem retirement is
+part of this migration. ProductConversionCoverage is unchanged.
+
 ## Quality snapshot cutover
 
 The quality cutover adds `QualitySnapshot` and copies every `dataQuality` row's

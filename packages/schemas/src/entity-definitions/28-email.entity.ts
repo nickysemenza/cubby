@@ -656,6 +656,14 @@ export const { definition, readSchemas } = defineEntityModel({
     stored: {
       relationshipFacts: {
         compute: "email.relationshipFacts",
+        snapshotSource: {
+          table: "EmailReadSnapshot",
+          value: "relationshipFacts",
+          computedAt: "relationshipFactsComputedAt",
+          decidedBy: "relationshipFactsDecision",
+          storage: "json",
+          sort: "relationshipFactsSort",
+        },
         publishes: "derivedValue",
         resultSchema: emailRelationshipResult,
         inputs: EMAIL_RELATIONSHIP_INPUTS,

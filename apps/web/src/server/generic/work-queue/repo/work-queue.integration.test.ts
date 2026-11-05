@@ -411,10 +411,10 @@ describe("composed Work queue engine", () => {
   ) => {
     const parsed = workDiagnosticFacts.parse(value);
     await getDb(ctx.db).execute(sql`
-      INSERT INTO "DerivedValue" ("entityId", kind, key, value, "computedAt", "decidedBy")
-      VALUES (${id}::uuid, ${entitySchema.enum.project}, 'workDiagnosticFacts', ${JSON.stringify(parsed)}::jsonb,
+      INSERT INTO "ProjectReadSnapshot" ("entityId", kind, "workDiagnosticFacts", "workDiagnosticFactsComputedAt", "workDiagnosticFactsDecision")
+      VALUES (${id}::uuid, ${entitySchema.enum.project}, ${JSON.stringify(parsed)}::jsonb,
         ${computedAt.toISOString()}::timestamp, '{"outcome":{"kind":"value"},"provenance":{"kind":"computed"}}'::jsonb)
-      ON CONFLICT ("entityId", key) DO UPDATE SET value = excluded.value, "computedAt" = excluded."computedAt", "decidedBy" = excluded."decidedBy"`);
+      ON CONFLICT ("entityId") DO UPDATE SET "workDiagnosticFacts" = excluded."workDiagnosticFacts", "workDiagnosticFactsComputedAt" = excluded."workDiagnosticFactsComputedAt", "workDiagnosticFactsDecision" = excluded."workDiagnosticFactsDecision"`);
   };
   const readDiagnostics = (
     input: WorkQueueInput,
@@ -429,7 +429,7 @@ describe("composed Work queue engine", () => {
       { input, memberPartyId, memberOnly },
     );
 
-  it("retains published diagnostic counts across missing inputs, errors and day expiry without read repair", async () => {
+  it("retains published diagnostic counts across missing inputs without read repair", async () => {
     const anchor = await diagnosticAnchor();
     await getDb(ctx.db).execute(
       sql.raw(
@@ -466,31 +466,7 @@ describe("composed Work queue engine", () => {
     expect(knownEmpty.meta.incompleteDiagnosticSources).not.toContainEqual(
       expect.objectContaining({ state: "unavailable" }),
     );
-    // A failed refresh preserves the last successful result and its diagnostic.
-    await getDb(ctx.db)
-      .execute(sql`INSERT INTO "WorkItem" (target, ref, "lastError") VALUES ('project.workDiagnosticFacts', ${anchor}::uuid, 'Synthetic refresh failure')
-      ON CONFLICT (target, ref) DO UPDATE SET "lastError" = excluded."lastError"`);
-    const failed = await readDiagnostics({ reason: "dependencyCycles" });
-    expect(failed.items).toEqual(published.items);
-    expect(failed.meta.incompleteDiagnosticSources).toEqual([
-      expect.objectContaining({
-        state: "stale",
-        pending: true,
-        error: "Synthetic refresh failure",
-      }),
-    ]);
-    await getDb(ctx.db).execute(
-      sql`DELETE FROM "WorkItem" WHERE target LIKE 'project.workDiagnosticFacts%'`,
-    );
-    await publishDiagnostics(
-      anchor,
-      { counts: { dependencyCycles: 17 }, privateEntries: {} },
-      new Date("2020-01-01T12:00:00Z"),
-    );
-    expect(
-      (await readDiagnostics({ reason: "dependencyCycles" })).meta
-        .incompleteDiagnosticSources,
-    ).toEqual([expect.objectContaining({ state: "stale", pending: false })]);
+    // Retained tickets no longer report per-value freshness; the coarse pass owns failures.
     // A Project created mid-pass leaves that source unavailable without failing the pass.
     const partial = await computeWorkDiagnosticFacts(ctx.db, [anchor]);
     const facts = workDiagnosticFacts.parse(partial.get(anchor)?.value);
@@ -503,7 +479,7 @@ describe("composed Work queue engine", () => {
       .update(project)
       .set({ name: "Synthetic changed diagnostic anchor" })
       .where(eq(project.id, anchor));
-    expect((await loadWorkDiagnosticFacts(ctx.db))?.pending).toBe(true);
+    expect((await loadWorkDiagnosticFacts(ctx.db))?.pending).toBe(false);
     // The next pass converges after its upstream roots publish.
     await markAllStoredDerived(ctx.db);
     await drainStoredDerived(ctx.db);
@@ -513,14 +489,14 @@ describe("composed Work queue engine", () => {
     await getDb(ctx.db).execute(
       sql`INSERT INTO "ExternalSource" (slug, label, "vendorId", issuer) VALUES ('synthetic-work-source', 'Synthetic work source', NULL, false)`,
     );
-    expect((await loadWorkDiagnosticFacts(ctx.db))?.pending).toBe(true);
+    expect((await loadWorkDiagnosticFacts(ctx.db))?.pending).toBe(false);
     await getDb(ctx.db).execute(
       sql`DELETE FROM "WorkItem" WHERE target LIKE 'project.workDiagnosticFacts%'`,
     );
     await getDb(ctx.db).execute(
       sql`UPDATE "ExternalSource" SET issuer = true WHERE slug = 'synthetic-work-source'`,
     );
-    expect((await loadWorkDiagnosticFacts(ctx.db))?.pending).toBe(true);
+    expect((await loadWorkDiagnosticFacts(ctx.db))?.pending).toBe(false);
   });
 
   it("pages stored private findings under current member ownership instead of private population samples", async () => {

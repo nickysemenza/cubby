@@ -22,8 +22,8 @@ import {
   storedDerivedDeclarations,
   type StoredDerivedDeclaration,
 } from "~/server/db/derived-declarations";
+import { storedSourceSql } from "~/server/db/derived-source-sql";
 import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
-import { derivedValue } from "~/server/db/derived-value-schema";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -40,6 +40,7 @@ import {
   isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
 import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
+import { publishRebuiltValues } from "~/server/generic/derived/repo/rebuild";
 import {
   type Drain,
   advanceWorkFanouts,
@@ -385,10 +386,10 @@ function selectedTargetRows(
       WITH derived_fanout_refs(id) AS MATERIALIZED (${sourceRefs})
       SELECT current_targets.id FROM (${select(sql`SELECT id FROM derived_fanout_refs`)}) current_targets
       UNION
-      SELECT v."entityId" FROM ${derivedValue} v
+      SELECT retained.id FROM "Entity" retained CROSS JOIN LATERAL (${storedSourceSql(declaration, sql`retained.id`)}) v
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(${retainedArray}) = 'array'
         THEN ${retainedArray} ELSE '[]'::jsonb END) element(value)
-      WHERE v.kind = ${declaration.entity} AND v.key = ${declaration.key}
+      WHERE retained.kind = ${declaration.entity}
         AND element.value ->> ${selection.retained.key} IN (SELECT id::text FROM derived_fanout_refs)
     )`;
 }
@@ -702,6 +703,35 @@ async function publishValues(
   groups: readonly ValueGroup[],
   plan: DerivedPagePlan,
 ) {
+  const snapshots = groups.filter(
+    ({ declaration }) => declaration.snapshotSource !== undefined,
+  );
+  if (snapshots.length) {
+    const legacy = await publishValues(
+      tx,
+      groups.filter(({ declaration }) => !declaration.snapshotSource),
+      plan,
+    );
+    for (const { declaration, items, values } of snapshots) {
+      if (await blockedSnapshot(declaration.target)) continue;
+      const ids = items.map((item) => item.ref);
+      await publishRebuiltValues(tx, declaration, ids, values);
+      legacy.changed.set(declaration.target, ids);
+      legacy.published.set(declaration.target, ids);
+    }
+    return legacy;
+  }
+  async function blockedSnapshot(target: string): Promise<boolean> {
+    return (
+      (await tx.execute(sql`SELECT 1 WHERE ${blockedByFanout(target, plan)}`))
+        .rows.length > 0
+    );
+  }
+  if (!groups.length)
+    return {
+      changed: new Map<string, string[]>(),
+      published: new Map<string, string[]>(),
+    };
   const rows = groups.flatMap(({ declaration, items, values }) =>
     items.map((item) => {
       const computed = values.get(item.ref);

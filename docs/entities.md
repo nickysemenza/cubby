@@ -2699,7 +2699,11 @@ ProductCostView, so charge edits affect display, filters and ordering immediatel
 The view preserves the existing positive actual-charge selection, averaging,
 rounding and latest-charge evidence; it adds no financial judgment.
 
-The pass skips declared views. Entity
+The pass skips declared views. Named read snapshots hold Product, Inventory,
+Location, Project, Expense, Email and Shipment results. Each manifest declaration
+names its typed value, decision, sort and publication-time columns; there is no
+per-value execution row. SQL null without a publication time is missing, while
+an explicit empty decision is a successful empty result. Entity
 stored declarations own their compute adapters and dependencies; the data-quality
 and search capabilities declare their phases. `rebuildPhase` orders facts,
 quality, search and household diagnostics. Self-dependencies describe domain

@@ -17,6 +17,7 @@ import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
   repositoryQueries as getDb,
   repositoryTransactionDatabase,
+  type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
 import {
   computedDecision,
@@ -179,7 +180,7 @@ export async function releaseRebuild(
 
 /** Transitional publication for kinds whose typed snapshot cutover has not shipped yet. */
 export async function publishRebuiltValues(
-  db: Database,
+  db: RepositoryQueryInput,
   declaration: EntityStoredDerivedDeclaration,
   ids: readonly string[],
   values: ReadonlyMap<string, DerivedComputed>,
@@ -202,6 +203,46 @@ export async function publishRebuiltValues(
       },
     ];
   });
+  const source = declaration.snapshotSource;
+  if (source && !source.view) {
+    if (typeof source.value !== "string" || !source.decidedBy || !source.sort)
+      throw new Error(
+        `Incomplete writable snapshot declaration: ${declaration.target}`,
+      );
+    const valueColumn = sql.identifier(source.value);
+    const decisionColumn = sql.identifier(source.decidedBy);
+    const sortColumn = sql.identifier(source.sort);
+    const computedColumn = sql.identifier(source.computedAt);
+    const table = sql.identifier(source.table);
+    const valueSql =
+      source.storage === "number"
+        ? sql`(r.value #>> '{}')::double precision`
+        : source.storage === "text"
+          ? sql`r.value #>> '{}'`
+          : sql`r.value`;
+    const sortSql =
+      declaration.sort === "number"
+        ? sql`r."sortNumber"`
+        : declaration.sort === "date"
+          ? sql`r."sortDate"`
+          : sql`r."sortText"`;
+    await getDb(db).execute(sql`
+      INSERT INTO ${table} ("entityId", kind, ${valueColumn}, ${decisionColumn}, ${sortColumn}, ${computedColumn})
+      SELECT r."entityId", ${declaration.entity}, ${valueSql}, r."decidedBy", ${sortSql}, now() AT TIME ZONE 'UTC'
+      FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) r("entityId" uuid, value jsonb, "decidedBy" jsonb, "sortNumber" double precision, "sortText" text, "sortDate" timestamp)
+      JOIN "Entity" e ON e.id = r."entityId" AND e.kind = ${declaration.entity} AND ${notDeleted("e")}
+      ON CONFLICT ("entityId") DO UPDATE SET ${valueColumn} = EXCLUDED.${valueColumn}, ${decisionColumn} = EXCLUDED.${decisionColumn},
+        ${sortColumn} = EXCLUDED.${sortColumn}, ${computedColumn} = EXCLUDED.${computedColumn}
+      WHERE (${table}.${valueColumn}, ${table}.${decisionColumn}, ${table}.${sortColumn})
+        IS DISTINCT FROM (EXCLUDED.${valueColumn}, EXCLUDED.${decisionColumn}, EXCLUDED.${sortColumn})`);
+    const missing = ids.filter((id) => !values.has(id));
+    if (missing.length)
+      await getDb(db)
+        .execute(sql`UPDATE ${table} SET ${valueColumn} = NULL, ${decisionColumn} = NULL, ${sortColumn} = NULL, ${computedColumn} = NULL
+      WHERE "entityId" = ANY(${uuidArrayParam(missing)})`);
+    return;
+  }
+  if (source?.view) return;
   await getDb(db).execute(sql`
     INSERT INTO "DerivedValue" ("entityId", kind, key, value, "decidedBy", "sortNumber", "sortText", "sortDate", "computedAt")
     SELECT r."entityId", ${declaration.entity}, ${declaration.key}, r.value, r."decidedBy", r."sortNumber", r."sortText", r."sortDate", now() AT TIME ZONE 'UTC'

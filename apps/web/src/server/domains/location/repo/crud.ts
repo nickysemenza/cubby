@@ -37,6 +37,7 @@ import {
   LOCATION_DESCRIPTION_FEATURE_ID,
   locationAiDescriptionSql,
 } from "~/server/db/computed/location-ai-description";
+import { declaredStoredSourceSql } from "~/server/db/derived-source-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   associatePendingImages,
@@ -55,7 +56,7 @@ import {
 import { outer } from "~/server/db/helpers/related";
 import {
   aiAnalysis,
-  derivedValue,
+  inventoryReadSnapshot,
   entityAttachment,
   image,
   inventoryEntry,
@@ -636,21 +637,18 @@ const qbDirect = new QueryBuilder();
  * whole inventory before the query.
  */
 const directValuation = sql<number>`COALESCE((${qbDirect
-  .select({ total: sql`sum(${derivedValue.sortNumber})` })
+  .select({ total: sql`sum(${inventoryReadSnapshot.valuation})` })
   .from(inventoryEntry)
   .innerJoin(
-    derivedValue,
-    and(
-      eq(derivedValue.entityId, inventoryEntry.id),
-      eq(derivedValue.key, "valuation"),
-    ),
+    inventoryReadSnapshot,
+    and(eq(inventoryReadSnapshot.entityId, inventoryEntry.id)),
   )
   .where(
     and(
       eq(inventoryEntry.locationId, location.id),
       notDeleted(inventoryEntry),
       stockOnly(),
-      gt(derivedValue.sortNumber, 0),
+      gt(inventoryReadSnapshot.valuation, 0),
     ),
   )}), 0)`;
 
@@ -766,7 +764,7 @@ export const locationScaffold = listScaffold("location", location, {
       aiDescription: locationAiDescriptionSql(outer(location.id)),
       // The rolled-up valuation the list cell and record read show; the
       // derived `valuation` is the direct value filters and sorts read.
-      valuationRollup: sql`(SELECT value FROM "DerivedValue" WHERE "entityId" = ${outer(location.id)} AND key = 'valuationRollup')`,
+      valuationRollup: sql`(SELECT value FROM (${declaredStoredSourceSql("location", "valuationRollup", outer(location.id))}) projected)`,
     },
     media: true,
     bindings: (bind) => {

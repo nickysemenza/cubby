@@ -30,6 +30,7 @@ import {
   expenseAcquisitionSql,
   actualExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
+import { declaredStoredSourceSql } from "~/server/db/derived-source-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
 import {
@@ -1258,8 +1259,7 @@ export const inventoryOwnerFilterSql = () => sql`CASE
   WHEN ${inventoryEntry.ownershipMode} = ${inventoryOwnershipMode.enum.explicit} THEN COALESCE(
     (SELECT lp.shortcode FROM "LedgerParty" lp WHERE lp.id = ${inventoryEntry.ownerLedgerPartyId}
       AND ${notDeleted(alias(ledgerParty, "lp"))} AND lp.kind IN (${ledgerPartyKind.enum.member}, ${ledgerPartyKind.enum.guest})), ${OWNER_FILTER_HOUSEHOLD})
-  ELSE (SELECT value->>'inheritedFilter' FROM "DerivedValue" WHERE "entityId" = ${inventoryEntry.id}
-    AND key = 'ownership' AND "decidedBy"#>>'{outcome,kind}' = 'value'
+  ELSE (SELECT value->>'inheritedFilter' FROM (${declaredStoredSourceSql("inventory", "ownership", sql`${inventoryEntry.id}`)}) projected WHERE "decidedBy"#>>'{outcome,kind}' = 'value'
     AND "decidedBy"#>>'{provenance,kind}' <> ${fieldProvenance.options[0].shape.kind.value}) END`;
 
 /** NULL means membership awaits a publication; false is a known nonmatch. */
@@ -1277,5 +1277,4 @@ export const productOwnerFilterSql = (
           : sql`false`
       }
       OR ${presence === "has" ? sql`jsonb_array_length(ov.value->'owners') > 0` : presence === "none" ? sql`jsonb_array_length(ov.value->'owners') = 0` : sql`false`})
-    FROM "DerivedValue" ov WHERE ov."entityId" = ${product.id} AND ov.key = 'ownership'
-      AND ov."decidedBy"#>>'{outcome,kind}' = 'value')`;
+    FROM (${declaredStoredSourceSql("product", "ownership", sql`${product.id}`)}) ov WHERE ov."decidedBy"#>>'{outcome,kind}' = 'value')`;

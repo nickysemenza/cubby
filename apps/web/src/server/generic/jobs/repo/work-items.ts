@@ -407,6 +407,7 @@ export const owedWorkItem = (target: SQL, ref: SQL) =>
   sql`(SELECT ${workItem.ref} AS ref, CASE WHEN ${workItem.waitCause} IS NULL THEN ${workItem.lastError} END AS "lastError", ${workItem.readyAt} AS "readyAt"
     FROM ${workItem} WHERE ${workItem.target} = ${target} AND ${workItem.ref} = ${ref})`;
 
+
 /** Fenced caller only. An observation grants no authority over a work ticket. */
 export async function observeWorkExecution(
   tx: RepositoryQueryInput,

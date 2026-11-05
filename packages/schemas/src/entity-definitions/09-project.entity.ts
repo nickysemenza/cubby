@@ -1068,6 +1068,14 @@ Rules:
     stored: {
       workDiagnosticFacts: {
         compute: "project.workDiagnosticFacts",
+        snapshotSource: {
+          table: "ProjectReadSnapshot",
+          value: "workDiagnosticFacts",
+          computedAt: "workDiagnosticFactsComputedAt",
+          decidedBy: "workDiagnosticFactsDecision",
+          storage: "json",
+          sort: "workDiagnosticFactsSort",
+        },
         rebuildPhase: "diagnostics",
         publishes: "derivedValue",
         resultSchema: workDiagnosticFacts,
@@ -1179,6 +1187,14 @@ Rules:
       },
       rollups: {
         compute: "project.rollups",
+        snapshotSource: {
+          table: "ProjectReadSnapshot",
+          value: "rollups",
+          computedAt: "rollupsComputedAt",
+          decidedBy: "rollupsDecision",
+          storage: "json",
+          sort: "rollupsSort",
+        },
         publishes: "derivedValue",
         resultSchema: projectRollupResult,
         inputs: PROJECT_ROLLUP_INPUTS,
@@ -1210,6 +1226,14 @@ Rules:
         type: "date",
         stored: {
           compute: "project.startDate",
+          snapshotSource: {
+            table: "ProjectReadSnapshot",
+            value: "startDate",
+            computedAt: "startDateComputedAt",
+            decidedBy: "startDateDecision",
+            storage: "text",
+            sort: "startDateSort",
+          },
           inputs: PROJECT_DATE_INPUTS,
           dependsOn: [
             {
@@ -1234,6 +1258,14 @@ Rules:
         type: "text",
         stored: {
           compute: "project.completionYear",
+          snapshotSource: {
+            table: "ProjectReadSnapshot",
+            value: "completionYear",
+            computedAt: "completionYearComputedAt",
+            decidedBy: "completionYearDecision",
+            storage: "text",
+            sort: "completionYearSort",
+          },
           inputs: PROJECT_DATE_INPUTS,
           dependsOn: [
             {

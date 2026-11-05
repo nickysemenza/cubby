@@ -1173,6 +1173,14 @@ Rules:
     stored: {
       beneficiaryResult: {
         compute: "expense.beneficiaries",
+        snapshotSource: {
+          table: "ExpenseReadSnapshot",
+          value: "beneficiaryResult",
+          computedAt: "beneficiaryResultComputedAt",
+          decidedBy: "beneficiaryResultDecision",
+          storage: "json",
+          sort: "beneficiaryResultSort",
+        },
         publishes: "derivedValue",
         resultSchema: expenseBeneficiaryResult,
         inputs: EXPENSE_BENEFICIARY_INPUTS,

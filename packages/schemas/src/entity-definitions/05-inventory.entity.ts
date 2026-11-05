@@ -585,6 +585,14 @@ export const { definition, readSchemas } = defineEntityModel(
       stored: {
         ownership: {
           compute: "inventory.ownership",
+          snapshotSource: {
+            table: "InventoryReadSnapshot",
+            value: "ownership",
+            computedAt: "ownershipComputedAt",
+            decidedBy: "ownershipDecision",
+            storage: "json",
+            sort: "ownershipSort",
+          },
           clock: "householdDay",
           publishes: "derivedValue",
           resultSchema: storedInventoryOwnership,
@@ -603,6 +611,14 @@ export const { definition, readSchemas } = defineEntityModel(
           type: "number",
           stored: {
             compute: "inventory.valuation",
+            snapshotSource: {
+              table: "InventoryReadSnapshot",
+              value: "valuation",
+              computedAt: "valuationComputedAt",
+              decidedBy: "valuationDecision",
+              storage: "number",
+              sort: "valuationSort",
+            },
             inputs: [
               ...productPricingInputsFor([
                 { table: "InventoryEntry", from: "productId", to: "id" },

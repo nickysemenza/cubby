@@ -599,6 +599,14 @@ Rules:
           type: "number",
           stored: {
             compute: "location.valuationRollup",
+            snapshotSource: {
+              table: "LocationReadSnapshot",
+              value: "valuationRollup",
+              computedAt: "valuationRollupComputedAt",
+              decidedBy: "valuationRollupDecision",
+              storage: "json",
+              sort: "valuationRollupSort",
+            },
             inputs: [
               {
                 table: "Product",

@@ -2338,6 +2338,14 @@ Rules:
       stored: {
         readFacts: {
           compute: "product.readFacts",
+          snapshotSource: {
+            table: "ProductReadSnapshot",
+            value: "readFacts",
+            computedAt: "readFactsComputedAt",
+            decidedBy: "readFactsDecision",
+            storage: "json",
+            sort: "readFactsSort",
+          },
           publishes: "derivedValue",
           clock: "householdDay",
           resultSchema: productReadFacts,
@@ -2399,6 +2407,14 @@ Rules:
         },
         food: {
           compute: "product.food",
+          snapshotSource: {
+            table: "ProductReadSnapshot",
+            value: "food",
+            computedAt: "foodComputedAt",
+            decidedBy: "foodDecision",
+            storage: "json",
+            sort: "foodSort",
+          },
           publishes: "derivedValue",
           resultSchema: foodSummary.nullable(),
           inputs: [
@@ -2416,6 +2432,14 @@ Rules:
         },
         ownership: {
           compute: "product.ownership",
+          snapshotSource: {
+            table: "ProductReadSnapshot",
+            value: "ownership",
+            computedAt: "ownershipComputedAt",
+            decidedBy: "ownershipDecision",
+            storage: "json",
+            sort: "ownershipSort",
+          },
           clock: "householdDay",
           publishes: "derivedValue",
           resultSchema: storedProductOwnership,
@@ -2515,6 +2539,14 @@ Rules:
           type: "number",
           stored: {
             compute: "product.price",
+            snapshotSource: {
+              table: "ProductReadSnapshot",
+              value: "price",
+              computedAt: "priceComputedAt",
+              decidedBy: "priceDecision",
+              storage: "number",
+              sort: "priceSort",
+            },
             inputs: PRODUCT_PRICING_INPUTS,
             dependsOn: [
               { entity: "product", key: "price", through: KIT_COMPONENT_LINK },
@@ -2544,6 +2576,14 @@ Rules:
           type: "number",
           stored: {
             compute: "product.ledgerExpectedQuantity",
+            snapshotSource: {
+              table: "ProductReadSnapshot",
+              value: "ledgerExpectedQuantity",
+              computedAt: "ledgerExpectedQuantityComputedAt",
+              decidedBy: "ledgerExpectedQuantityDecision",
+              storage: "number",
+              sort: "ledgerExpectedQuantitySort",
+            },
             inputs: QUANTITY_INPUTS,
             dependsOn: [
               {
@@ -2558,6 +2598,14 @@ Rules:
           type: "number",
           stored: {
             compute: "product.quantityVariance",
+            snapshotSource: {
+              table: "ProductReadSnapshot",
+              value: "quantityVariance",
+              computedAt: "quantityVarianceComputedAt",
+              decidedBy: "quantityVarianceDecision",
+              storage: "number",
+              sort: "quantityVarianceSort",
+            },
             inputs: QUANTITY_INPUTS,
             dependsOn: [
               {

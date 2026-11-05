@@ -15,6 +15,7 @@ const snapshotSource = z.object({
   computedAt: z.string(),
   decidedBy: z.string().optional(),
   sort: z.string().optional(),
+  storage: z.enum(["json", "number", "text"]).optional(),
   view: z.boolean().optional(),
 });
 

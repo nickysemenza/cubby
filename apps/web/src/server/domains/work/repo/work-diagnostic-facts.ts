@@ -5,16 +5,10 @@ import { workDiagnosticCounts } from "@cubby/schemas/work-diagnostic-facts";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { declaredStoredSourceSql } from "~/server/db/derived-source-sql";
 import { getDb, isTransaction, notDeleted } from "~/server/db/helpers";
-import { householdDaySql } from "~/server/db/helpers/query";
 import { project } from "~/server/db/schema";
-import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
-import {
-  owedWorkItem,
-  workPendingWhere,
-} from "~/server/generic/jobs/repo/work-items";
 
 const publicationRow = workDiagnosticCounts.extend({
   counts: workDiagnosticCounts.shape.counts.nullable(),
@@ -28,19 +22,11 @@ const publicationRow = workDiagnosticCounts.extend({
 
 /** Keep the unbounded finding payload inside SQL; only compact publication metadata crosses here. */
 export const loadWorkDiagnosticFacts = async (db: Database) => {
-  const target = sql`${"project.workDiagnosticFacts"}::text`;
-  const pending = workPendingWhere((column) =>
-    fanoutTargetMatches(column, target),
-  );
   const result = await getDb(db).execute(sql`
     SELECT p.id, v.value->'counts' AS counts, v."computedAt", v."decidedBy",
-      (w.ref IS NOT NULL OR ${pending}) AS pending,
-      (w.ref IS NOT NULL OR ${pending} OR
-        ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate()}::date) IS TRUE AS stale,
-      w."lastError" AS error
+      false AS pending, false AS stale, NULL::text AS error
     FROM "Project" p
-    LEFT JOIN "DerivedValue" v ON v."entityId" = p.id AND v.key = 'workDiagnosticFacts'
-    LEFT JOIN LATERAL ${owedWorkItem(target, sql`p.id`)} w ON true
+    LEFT JOIN LATERAL (${declaredStoredSourceSql("project", "workDiagnosticFacts", sql`p.id`)}) v ON true
     WHERE p.shortcode = ${HOUSEHOLD_PROJECT_SHORTCODE} AND ${notDeleted("p")}
     LIMIT 1`);
   const row = z.array(publicationRow).parse(result.rows)[0];
