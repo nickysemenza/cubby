@@ -460,7 +460,7 @@ the production branch. If table-level recovery would not be enough, stop and rep
 
 ## Source-claim minor units
 
-`0084_source_claim_minor_units` is a direct contract cutover. The release owner
+`0087_source_claim_minor_units` is a direct contract cutover. The release owner
 must wait for the active financial refresh's generation and subsequent statement
 steps to reach terminal outcomes before merging it. No writer hold, branch-copy
 rehearsal or dual writer is required. Parent owns merge sequencing with other
