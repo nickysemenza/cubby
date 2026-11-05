@@ -32,3 +32,4 @@ rewriting its decision.
 | [0022](0022-named-groupings-are-saved-views.md)               | Named groupings use saved views and Locations                          |
 | [0023](0023-lists-are-declared-over-a-relation.md)            | Lists are declared over a relation                                     |
 | [0024](0024-repository-read-declaration.md)                   | Every entity reads through one declared scaffold port                  |
+| [0025](0025-radical-simplification-of-background-work.md)     | Shrink Cubby's machinery in place on Workers and Neon                  |
