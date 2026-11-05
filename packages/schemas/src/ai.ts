@@ -531,12 +531,7 @@ export const fieldSuggestionsInput = z.object({
   entity: z.enum(shortcodeEntities),
   targets: z.array(z.string().min(1)).min(1),
   basis: z.record(z.string(), z.string().nullable()),
-  /**
-   * One id per page mount, minted client-side and reused across every
-   * `suggestFields` call that page makes — groups them into one `ai_suggest`
-   * run instead of a run per field. Omitted shares the actor's run for the
-   * UTC hour.
-   */
+  /** Accepted and ignored: installed apps still send it. */
   runKey: z.string().uuid().optional(),
   /** Pins the decision model so a session can replay one record through
    * each trial model; omitted samples the live traffic split. */
@@ -834,7 +829,7 @@ export const externalIdKindSuggestionInput = z.object({
   url: z.string().nullable().default(null),
   productName: z.string().nullable().default(null),
   brandName: z.string().nullable().default(null),
-  /** Same page-mount id `ai.suggestFields` groups under; see there. */
+  /** Accepted and ignored: installed apps still send it. */
   runKey: z.string().uuid().optional(),
 });
 /** A `FieldSuggestion` over the six non-legacy `ExternalIdKind` values, so

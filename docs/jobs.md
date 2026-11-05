@@ -924,10 +924,12 @@ App-open coalesces recovery and mail discovery. Gmail provider push is not imple
 
 ### Routine Run history
 
-Default Run lists and counts omit `ai_suggest` and `background`. An explicit
-purpose filter includes them, and direct record reads still work. Creation stays:
-AI usage and evaluations require their Run reference, and automatic funding uses
-that Run to enforce the existing background budget. Executed workflow retries can
+Default Run lists and counts omit `ai_suggest` and `background`, omit `ai_refresh`,
+`connection_discovery` and `derived_refresh` once they ended, and omit `mail_discovery`
+once it completed. An explicit purpose filter includes them, and direct record reads
+still work. Automatic work no longer creates `background` or `ai_suggest` Runs: AI usage
+and evaluations can have no Run, and only a published connection suggestion still opens
+an `ai_suggest` Run because its Suggestion slot is scoped by that Run. Executed workflow retries can
 resume the same Run and its committed steps; a retry does not universally create
 a successor. Queue runtime failures receive three delivery retries in addition to
 the durable Job's execution retry policy.
