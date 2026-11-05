@@ -48,6 +48,7 @@ import {
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   makeCookbookExtraction,
   insertEntityAttachments,
@@ -377,6 +378,7 @@ describe("image repository", () => {
       .update(image)
       .set({ sourceEvidence: evidence })
       .where(eq(image.id, pending.id));
+    await publishQualityFixtures(ctx.db, "image");
     const readStored = vi
       .spyOn(s3, "getS3Object")
       .mockImplementation(stored(ONE_PIXEL_PNG, "image/png"));
@@ -406,6 +408,8 @@ describe("image repository", () => {
         raw.representations,
       );
       expect(fieldValueOf(row.fields.sightings)).toEqual(raw.sightings);
+      expect(row.fields.dataQuality.result.kind).toBe("cached");
+      expect(row.fields.dataQuality.work.kind).toBe("pending");
       expect(row.fields.dataQuality.current).toMatchObject({
         assignment: null,
         controls: { kind: "readonly", reason: "computed" },

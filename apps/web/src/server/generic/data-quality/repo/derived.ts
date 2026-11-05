@@ -15,11 +15,11 @@ export const qualityDerivedComputes: Record<string, DerivedAdapter> =
           prepare: (db, ids) => prepareQualityPublications(db, kind, ids),
           publish: async (tx, ids, rows) => {
             const keep = new Set(ids);
-            await publishQualitySnapshots(
-              tx,
-              rows.filter((row) => keep.has(row.entityId)),
-            );
-            return ids;
+            return publishQualitySnapshots(tx, {
+              kind,
+              ids,
+              rows: rows.filter((row) => keep.has(row.entityId)),
+            });
           },
         }),
         { preparationBatchSize: 200 },

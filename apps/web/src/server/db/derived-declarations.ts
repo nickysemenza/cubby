@@ -17,6 +17,13 @@ import { storedDerivedManifest } from "@cubby/schemas/entity-stored-derived";
 import { imageDescriptionReceiptWhere } from "@cubby/schemas/image-capture-fields";
 import { z } from "zod";
 
+const snapshotSource = z.object({
+  table: z.string(),
+  value: z.union([z.string(), z.record(z.string(), z.string())]),
+  computedAt: z.string(),
+  decidedBy: z.string().optional(),
+});
+
 /** One input: changes to `table` rows whose `tableColumn` equals the value's `entityColumn`. */
 export interface DerivedInput {
   readonly table: string;
@@ -115,6 +122,7 @@ export interface EntityStoredDerivedDeclaration extends StoredDerivedWork {
    * recipe totals), so readers read that table.
    */
   readonly publishes: "derivedValue" | "ownTable";
+  readonly snapshotSource?: z.infer<typeof snapshotSource>;
   readonly recordSource: {
     readonly value: string;
     readonly computedAt: string;
@@ -221,6 +229,7 @@ const storedEntry = z.object({
   publishes: z.enum(["derivedValue", "ownTable"]),
   stored: z.object({
     compute: z.string(),
+    snapshotSource: snapshotSource.optional(),
     recordSource: z
       .object({
         value: z.string(),
@@ -593,9 +602,9 @@ const internalRecordSpecs: readonly InternalRecordSpec[] = [
       ...recordIdentityInputs("wish"),
       ...recordIdentityInputs("ledgerTransfer"),
       {
-        table: "DerivedValue",
+        table: "QualitySnapshot",
         match: { entityId: "id" },
-        where: { kind: "product", key: "dataQuality" },
+        where: { kind: "product" },
         selection: { key: "productQuality" },
       },
       {
@@ -1512,6 +1521,7 @@ const manifestDeclarations = (): EntityStoredDerivedDeclaration[] =>
           clock: entry.stored.clock ?? null,
           publishes: entry.publishes,
           recordSource: entry.stored.recordSource ?? null,
+          snapshotSource: entry.stored.snapshotSource,
           sort: sortTypeOf(entry.type),
           inputs: entry.stored.inputs.map(declaredInput),
           dependsOn: (entry.stored.dependsOn ?? []).map(declaredDependency),

@@ -181,6 +181,55 @@ deployment. Everything committed so far must stay compatible with the running Wo
 because the next Deploy resumes from there. One statement can hold several commands
 in one transaction, so a cutover's copy and retirement stay atomic.
 
+## Quality snapshot cutover
+
+The quality cutover adds `QualitySnapshot` and copies every `dataQuality` row's
+identity, kind, rules version, check states and publication time from
+`DerivedValue`. It takes a source SHARE lock with a 2-second lock timeout. The
+foreign key is validated **after** the copy/comparison, taking a short
+SHARE ROW EXCLUSIVE lock on `Entity` at the end of the transaction. A lock
+failure rolls everything back; one rerun after checking contention is reasonable.
+The `EXCEPT ALL` assertion verifies the frozen copy, not live state after commit.
+No legacy rows or waivers are deleted. The matching Worker publishes only the
+typed snapshot and reads it for browse, gap filters/sorts, Work admission and
+field explanations. Quality's snapshot source is declared on its capability,
+so its field envelope retains cached revision, missing and pending states.
+
+Freeze other migration merges from this migration's merge through its deploy.
+The old Worker can publish only to DerivedValue between migration and deploy,
+including in-flight invocations. At least 16 minutes after the deployed Worker
+is verified (past the 15-minute consumer wall limit), admit the scoped cutover
+repair through the authorized production maintenance procedure:
+
+```sql
+SELECT derived_mark(d.kind || '.dataQuality', array_agg(d."entityId"), 'Quality cutover repair')
+FROM "DerivedValue" d LEFT JOIN "QualitySnapshot" q USING ("entityId")
+WHERE d.key = 'dataQuality' AND (q."entityId" IS NULL OR
+  (d."computedAt" > q."computedAt" AND
+   (d.value->'checks', (d.value->>'rulesVersion')::integer)
+     IS DISTINCT FROM (q.checks, q."rulesVersion")))
+GROUP BY d.kind;
+```
+
+Read back that the same missing-or-different predicate reaches zero after the
+drain, and verify the quality journey. Stable snapshots deliberately retain
+their last content-publication time: a newer legacy timestamp with identical
+checks/version needs no repair and cannot reach timestamp-only equality under
+`IS DISTINCT FROM` publication. Repair never copies old output over new output;
+it recomputes current evidence and waivers. If current source changes produce a
+different result from the old publication, verify it against the current live
+calculation rather than repeatedly re-enrolling the old value. Record aggregates
+and any unresolved difference. Do not infer production preservation from the
+migration comparison alone.
+
+The pair-review input keeps its existing fanout index, now watching
+QualitySnapshot. Its new trigger is installed **after** the bulk copy. The old
+DerivedValue source trigger becomes a no-op until its separate retirement.
+Old quality rows stay until deployed all-reader removal and the separate
+DerivedValue drop. This is not permission to retire tickets before the hourly
+pass proves replacement output.
+
+
 ## Unified Job cutover
 
 This migration replaces the old job tables and removes business triggers. Use
