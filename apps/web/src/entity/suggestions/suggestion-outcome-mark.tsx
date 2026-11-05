@@ -192,18 +192,6 @@ function headlineSegments({
       suffix: " — this answer was rejected for these inputs",
     };
   if (outcome.kind === "skipped") return skippedSegments(outcome.reason);
-  if (outcome.kind === "correction")
-    return {
-      prefix:
-        outcome.decision.status === "confirmed"
-          ? "Uses your correction"
-          : "Conflicting corrections",
-      bold: null,
-      suffix:
-        outcome.decision.status === "confirmed"
-          ? " — automatic checks pending"
-          : " — held for review",
-    };
   if (outcome.answer === "none") return declinedSegments(outcome, prune);
   return pickSegments(outcome, {
     suggestion,
@@ -526,13 +514,9 @@ export function SuggestionOutcomeMark({
                   ? resolvedOutcome.reason === "no_signal"
                     ? "No evidence"
                     : "Not checked"
-                  : resolvedOutcome.kind === "correction"
-                    ? resolvedOutcome.decision.status === "confirmed"
-                      ? "Your correction"
-                      : "Correction held"
-                    : resolvedOutcome.answer === "none"
-                      ? "No good fit"
-                      : "Below threshold"
+                  : resolvedOutcome.answer === "none"
+                    ? "No good fit"
+                    : "Below threshold"
           : undefined
       }
       surface={surface}

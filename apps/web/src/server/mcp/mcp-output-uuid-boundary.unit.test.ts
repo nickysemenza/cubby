@@ -126,13 +126,6 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "image_read.correction.owner.targetAssessmentId",
   "image_read.correction.owner.originalApplicationFeedbackId",
   "image_read.correction.owner.priorCorrectionApplicationFeedbackId",
-  "suggestions_read.items[].correctionAttempt.receiptId",
-  "suggestions_read.items[].correctionAttempt.sourceFeedbackId",
-  "suggestions_read.items[].correctionAttempt.sourceApplicationFeedbackId",
-  "suggestions_read.items[].evidence.correctionAuthority.sourceFeedbackId",
-  "suggestions_read.items[].evidence.correctionAuthority.sourceApplicationFeedbackId",
-  "suggestions_read.items[].evidence.correctionAuthority.sources[].sourceFeedbackId",
-  "suggestions_read.items[].evidence.correctionAuthority.sources[].sourceApplicationFeedbackId",
   "suggestions_read.items[].id",
   "suggestions_read.items[].assessmentId",
   "suggestions_read.items[].evidence.assessmentId",
@@ -144,7 +137,6 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "suggestions.assessmentId",
   "suggestions.items[].assessmentId",
   // Historical enrollment advances over opaque Feedback rows, not entities.
-  "suggestions.after",
   "suggestions.feedbackId",
   "suggestions.items[].feedbackId",
 ]);

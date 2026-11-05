@@ -12,10 +12,7 @@ import { image } from "~/server/db/schema";
 import { lockCorrectionKey } from "~/server/generic/assessment/repo/correction-lock";
 
 /** Shared content fence precedes every Image and AssessmentState lock. */
-export async function lockImageCorrectionContent(
-  db: Database,
-  contentHash: string,
-) {
+async function lockImageCorrectionContent(db: Database, contentHash: string) {
   await lockCorrectionKey(db, `image-description:${contentHash}`);
 }
 
@@ -25,7 +22,7 @@ type ImageDescriptionSubject = Pick<
 >;
 
 /** Record intent also protects later content from review of an older publication. */
-export async function lockImageCorrectionRecord(
+async function lockImageCorrectionRecord(
   db: Database,
   recordId: ImageDescriptionSubject["recordId"],
 ) {

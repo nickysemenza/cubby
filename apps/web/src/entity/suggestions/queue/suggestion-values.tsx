@@ -267,17 +267,13 @@ export function WhatChanges({ row }: { row: SuggestionListRow }) {
             </span>
           </>
         ) : null}
-        {evidence.correctionAuthority?.status === "conflict" ? (
-          <span>Conflicting corrections</span>
-        ) : (
-          <FieldValue
-            entity={evidence.entity}
-            recordId={evidence.recordId}
-            field={evidence.field}
-            value={evidence.suggestedValue}
-            suggested
-          />
-        )}
+        <FieldValue
+          entity={evidence.entity}
+          recordId={evidence.recordId}
+          field={evidence.field}
+          value={evidence.suggestedValue}
+          suggested
+        />
       </span>
     ))
     .with({ family: "statement_transaction" }, ({ evidence }) => (

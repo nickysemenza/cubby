@@ -16,7 +16,6 @@ import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
-import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
 import {
   runDrains,
   type BackgroundDrain,
@@ -77,7 +76,6 @@ const backgroundHandlers = {
 
 export const productionJobHandlers: JobHandlers = {
   ...backgroundHandlers,
-  "assessment.correction": correctionPropagationHandler,
   "derived.drain": derivedDrainHandler(derivedComputes),
   "derived.reconcile": derivedReconcileHandler,
   "discovery.connections": connectionDiscoveryJobHandler,
@@ -128,7 +126,11 @@ export const productionJobHandlers: JobHandlers = {
       return { page: { done: true } };
     },
   ),
-} satisfies Record<keyof typeof JOB_KIND_POLICY, JobHandler>;
+} satisfies Record<
+  // Completed correction Jobs stay readable; none can be claimed.
+  Exclude<keyof typeof JOB_KIND_POLICY, "assessment.correction">,
+  JobHandler
+>;
 
 /** Work owned by its domain's rows: no Job row, one registration here. */
 // Built per round, not at import: these read production ports that sit in an import

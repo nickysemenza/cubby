@@ -60,10 +60,6 @@ import {
   transitionAssessmentState,
   transitionAssessmentStates,
 } from "~/server/generic/assessment/repo/assessment-state";
-import { readFieldCorrectionIdentity } from "~/server/generic/assessment/repo/correction-sources";
-import { fieldCorrectionIdentityKeys } from "~/server/generic/assessment/repo/field-assessment-review";
-import { lockFieldCorrectionIdentities } from "~/server/generic/assessment/repo/field-correction-lock";
-import { resolveFieldCorrection } from "~/server/generic/assessment/repo/field-correction-resolver";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import {
   acceptSuggestion,
@@ -637,36 +633,6 @@ async function settleReview(
               "Application receipt does not match this command outcome",
             );
           return priorOutcome;
-        }
-        const identity =
-          prediction.family === "field"
-            ? await readFieldCorrectionIdentity(
-                transactionDb,
-                prediction.subject,
-                prediction.evidence,
-              )
-            : null;
-        const correctionKey =
-          identity && (identity.canonicalKey ?? identity.storedKey);
-        if (correctionKey) {
-          await lockFieldCorrectionIdentities(
-            transactionDb,
-            assessmentSubjects.field.parse(prediction.subject),
-            identity ? fieldCorrectionIdentityKeys(identity) : [],
-          );
-          if (
-            automatic &&
-            (
-              await resolveFieldCorrection(
-                transactionDb,
-                identity ? fieldCorrectionIdentityKeys(identity) : [],
-                assessmentSubjects.field.parse(prediction.subject),
-              )
-            ).kind !== "none"
-          )
-            throw new Error(
-              "A confirmed member correction requires correction propagation",
-            );
         }
         if (input.application?.kind === "saved_field") {
           await acknowledgeSavedField(transactionDb, context, prediction, {

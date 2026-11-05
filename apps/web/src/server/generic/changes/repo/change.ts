@@ -1,5 +1,4 @@
 import type { DatabaseChanges } from "~/lib/doorbell";
-import type { Database } from "~/server/db/database";
 import { inHttpRequest } from "~/server/db/freshness/member-marker";
 import { recordCommittedChanges } from "~/server/db/helpers/core";
 import {
@@ -9,18 +8,6 @@ import {
   repositoryTransaction,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
-
-/** Assessment saves register durable correction intent through the same composition boundary. */
-export async function recordAssessmentChange(
-  db: Database,
-  change:
-    | { kind: "publications"; ids: readonly string[] }
-    | { kind: "application"; receiptId: string },
-): Promise<void> {
-  const { recordCorrectionWork } =
-    await import("~/server/generic/assessment/repo/correction-work");
-  await recordCorrectionWork(db, change);
-}
 
 /**
  * Reader notifications. Derived work needs no registration here: generated

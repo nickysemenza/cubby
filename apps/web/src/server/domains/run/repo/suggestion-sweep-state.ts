@@ -18,8 +18,6 @@ import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read"
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
-import { fieldCorrectionRecipe } from "~/server/generic/assessment/repo/field-assessment-review";
-import { lockFieldCorrectionKeysForField } from "~/server/generic/assessment/repo/field-correction-lock";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
@@ -50,8 +48,6 @@ export const jsonValue = (value: unknown): SuggestionValue =>
   suggestionValueSchema.parse(value);
 export const sweepSuggestionSchema = z.object({
   reviewKey: z.string().nullable().optional(),
-  correctionKey: z.string().nullable().optional(),
-  correctionRecipe: fieldCorrectionRecipe.optional(),
   kind: z.enum(["addition", "correction"]),
   currentValue: suggestionValueSchema,
   suggestedValue: suggestionValueSchema,
@@ -116,10 +112,6 @@ export async function saveSweepSuggestions(
     db,
     async (tx) => {
       const typedRecordId = parseEntityId(input.entity, input.recordId);
-      await lockFieldCorrectionKeysForField(tx, {
-        ...input,
-        keys: entries.map((entry) => entry.correctionKey ?? null),
-      });
       const liveInputFingerprint = await fieldInputFingerprint(
         tx,
         input.entity,
@@ -336,10 +328,6 @@ export async function saveSweepSuggestions(
               served: entry.served,
               liveInputFingerprint,
               reviewKey: entry.reviewKey ?? null,
-              correctionKey: entry.correctionKey ?? null,
-              ...(entry.correctionRecipe
-                ? { correctionRecipe: entry.correctionRecipe }
-                : {}),
             },
             status: "pending",
           },
