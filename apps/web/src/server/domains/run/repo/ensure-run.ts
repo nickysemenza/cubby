@@ -12,6 +12,7 @@ import type { RunTrigger } from "@cubby/schemas/purchase-import";
 import {
   type RunInput,
   type RunCause,
+  isMemberStartedRun,
   type RunProgress,
   type RunPurpose,
   runStatus,
@@ -166,6 +167,7 @@ export async function ensureRun(
     await recordChange(tx, {
       kind: row.purpose === "derived_refresh" ? "projection" : "source",
       categories: ["run"],
+      ringFromBackground: isMemberStartedRun(row),
     });
     if (row.purpose === "mail_import")
       await recordChange(tx, { kind: "source", categories: ["email"] });

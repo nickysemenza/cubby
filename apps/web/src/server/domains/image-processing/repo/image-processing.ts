@@ -906,6 +906,7 @@ export async function claimImageProcessingJob(
         await recordChange(tx, {
           kind: "projection",
           categories: ["image", "imageJob"],
+          ringFromBackground: true,
           changes: await imageProcessingRecordChanges(
             tx,
             [candidate.id],
@@ -1332,6 +1333,7 @@ async function settleRetainedNegativeSubjectLifts(
     await recordChange(tx, {
       kind: "projection",
       categories: ["image", "imageJob", "relatedData"],
+      ringFromBackground: true,
       changes: await imageProcessingRecordChanges(
         tx,
         ids,
@@ -1866,6 +1868,7 @@ export async function completeImageProcessingJob(
     await recordChange(tx, {
       kind: "projection",
       categories: ["image", "imageJob", "relatedData"],
+      ringFromBackground: true,
       changes: await imageProcessingRecordChanges(tx, [job.id], [job.imageId]),
     });
     // A selected description is search text of the image and every record it
@@ -1997,6 +2000,7 @@ export async function saveImageDescriptionAnalysis(
   await recordChange(db, {
     kind: "projection",
     categories: ["image"],
+    ringFromBackground: true,
     changes: await imageProcessingRecordChanges(db, [], [input.imageId]),
   });
 }

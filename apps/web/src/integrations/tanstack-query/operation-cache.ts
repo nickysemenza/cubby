@@ -60,14 +60,38 @@ export const cancelQueriesByTags = (
     ? Promise.resolve()
     : queryClient.cancelQueries({ predicate: matchesTags(tags) });
 
-/** Subscription establishment/resume cannot know which hints were missed. */
-export async function resyncOperationQueries(queryClient: QueryClient) {
-  const predicate = (query: Query) => Boolean(query.meta?.cacheTags?.length);
-  await queryClient.cancelQueries({ predicate });
-  // Inactive queries can still own streamed markup awaiting hydration.
-  // Preserve that baseline; mount and detail loaders refetch invalidated data.
-  await queryClient.invalidateQueries({ predicate });
+/**
+ * Retire loaded reads and refetch. A first load has nothing to fall back on, and
+ * cancelling it restarts the read and re-suspends its section, so a slow read
+ * under repeated rings might never land. It finishes, then rereads once.
+ * Inactive queries can still own streamed markup awaiting hydration: invalidation
+ * preserves that baseline, and mount and detail loaders refetch it before reuse.
+ */
+async function rereadQueries(
+  queryClient: QueryClient,
+  predicate: (query: Query) => boolean,
+) {
+  const firstLoads = new Set(
+    queryClient.getQueryCache().findAll({
+      predicate: (query) =>
+        predicate(query) &&
+        query.state.data === undefined &&
+        query.state.fetchStatus === "fetching",
+    }),
+  );
+  const loaded = (query: Query) => predicate(query) && !firstLoads.has(query);
+  await queryClient.cancelQueries({ predicate: loaded });
+  await queryClient.invalidateQueries({ predicate: loaded });
+  if (!firstLoads.size) return;
+  await Promise.allSettled([...firstLoads].map((query) => query.promise));
+  await queryClient.invalidateQueries({
+    predicate: (query) => firstLoads.has(query),
+  });
 }
+
+/** Subscription establishment/resume cannot know which hints were missed. */
+export const resyncOperationQueries = (queryClient: QueryClient) =>
+  rereadQueries(queryClient, (query) => Boolean(query.meta?.cacheTags?.length));
 
 const operationKeyPayload = z.object({ input: z.unknown() });
 const detailRecordInput = z.object({ shortcode: z.string() });
@@ -133,11 +157,7 @@ export function matchesDatabaseChanges(changes: DatabaseChanges) {
   };
 }
 
-export async function invalidateDatabaseChanges(
+export const invalidateDatabaseChanges = (
   client: QueryClient,
   changes: DatabaseChanges,
-) {
-  const predicate = matchesDatabaseChanges(changes);
-  await client.cancelQueries({ predicate });
-  await client.invalidateQueries({ predicate });
-}
+) => rereadQueries(client, matchesDatabaseChanges(changes));

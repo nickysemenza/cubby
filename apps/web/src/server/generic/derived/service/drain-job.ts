@@ -118,6 +118,8 @@ const derivedDrain = (
           kind: "projection",
           categories: publication.categories,
           changes: publication.changes,
+          // Priority 0 marks come from a member's write; that tab is waiting.
+          ringFromBackground: items.some((item) => item.priority === 0),
         });
       return { retain: publication.retain, covered: publication.covered };
     },

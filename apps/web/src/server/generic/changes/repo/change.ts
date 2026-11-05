@@ -1,5 +1,6 @@
 import type { DatabaseChanges } from "~/lib/doorbell";
 import type { Database } from "~/server/db/database";
+import { inHttpRequest } from "~/server/db/freshness/member-marker";
 import { recordCommittedChanges } from "~/server/db/helpers/core";
 import {
   repositoryBeforeCommit,
@@ -30,11 +31,18 @@ export type RepositoryChange = {
   categories: readonly string[];
   /** Public shortcodes for categories whose affected records are known. */
   changes?: DatabaseChanges;
+  /**
+   * Requests always ring open tabs. A queue, cron or Durable Object commit
+   * rings only when a member is waiting on it: a member-started Run transition,
+   * image completion or priority-0 derived publication.
+   */
+  ringFromBackground?: boolean;
 };
 
 /**
- * Notify readers of committed categories, and wake the Job drain after a
- * source write commits so derived marks are worked promptly.
+ * Notify readers of committed categories when a member is waiting on them, and
+ * wake the Job drain after a source write commits so derived marks are worked
+ * promptly.
  */
 export async function recordChange(
   db: RepositoryQueryInput,
@@ -48,15 +56,16 @@ export async function recordChange(
     await repositoryTransaction(db, (tx) => recordChange(tx, change));
     return;
   }
-  await recordCommittedChanges(
-    db,
-    Object.fromEntries(
-      change.categories.map((category) => [
-        category,
-        change.changes?.[category] ?? null,
-      ]),
-    ),
-  );
+  if (change.ringFromBackground || inHttpRequest())
+    await recordCommittedChanges(
+      db,
+      Object.fromEntries(
+        change.categories.map((category) => [
+          category,
+          change.changes?.[category] ?? null,
+        ]),
+      ),
+    );
   if (change.kind !== "source") return;
   await repositoryBeforeCommit(
     db,

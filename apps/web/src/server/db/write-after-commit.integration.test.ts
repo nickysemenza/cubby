@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { DatabaseChanges } from "~/lib/doorbell";
 import { setCfEnv } from "~/server/cf-env";
+import { withMemberFreshness } from "~/server/db/freshness/member-marker";
 import {
   recordCommittedChanges,
   withTransactionDatabase,
@@ -87,6 +88,32 @@ describe("repository writes publish after their commit", () => {
     expect(messages).toEqual([
       { task: ["TSK-A3F2", "TSK-B4G3"], project: null },
     ]);
+  });
+
+  it("rings for requests and for background commits a member waits on", async () => {
+    const messages: DatabaseChanges[] = [];
+    setCfEnv(
+      fromPartial<Env>({
+        DB_FRESHNESS: {
+          getByName: () => ({
+            publishChanges: async (changes: DatabaseChanges) => {
+              messages.push(changes);
+            },
+          }),
+        },
+      }),
+    );
+    await recordChange(ctx.db, { kind: "projection", categories: ["search"] });
+    expect(messages).toEqual([]);
+    await recordChange(ctx.db, {
+      kind: "projection",
+      categories: ["imageJob"],
+      ringFromBackground: true,
+    });
+    await withMemberFreshness(() =>
+      recordChange(ctx.db, { kind: "projection", categories: ["task"] }),
+    );
+    expect(messages).toEqual([{ imageJob: null }, { task: null }]);
   });
 
   const recordingQueue = (observe: () => Promise<void> = async () => {}) => {

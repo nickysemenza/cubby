@@ -1033,13 +1033,23 @@ function settledQuestionTags(
 }
 const SETTLED_QUESTION_TAG: CacheTag = ["ai", "settledSuggestionQuestion"];
 const SETTLED_FRESHNESS = operationCachePolicy("stable").freshness;
+/**
+ * Only a question's first ask is "checking". Rereading an answer or a failure on
+ * a change notification stays quiet: it would otherwise swap the status line and
+ * field glyphs and collapse the Needs-you row on every ring.
+ */
+const firstAsk = ({
+  data,
+  isFetched,
+}: Pick<UseQueryResult, "data" | "isFetched">) =>
+  data === undefined && !isFetched;
 const combineSettledQueries = (
   results: UseQueryResult<SettledSuggestionAnswer>[],
 ) =>
-  results.map(({ data, isError, isFetching }) => ({
-    data,
-    isError,
-    isFetching,
+  results.map((result) => ({
+    data: result.data,
+    isError: result.isError,
+    isFetching: result.isFetching && firstAsk(result),
   }));
 const SETTLED_IDLE = {
   isFetching: false,
@@ -1063,16 +1073,21 @@ const previewQuery = (field: string, preview: SettledSuggestionPreview) => ({
   preview: true,
 });
 const combineFieldQueries = (results: UseQueryResult<FieldSuggestionsOut>[]) =>
-  results.map(({ data, isFetching, isPending, isError, error, refetch }) => ({
-    data,
-    isFetching,
-    isPending,
-    isError,
-    error,
-    refetch,
+  results.map((result) => ({
+    data: result.data,
+    isFetching: result.isFetching && firstAsk(result),
+    isPending: result.isPending && firstAsk(result),
+    isError: result.isError,
+    error: result.error,
+    refetch: result.refetch,
   }));
 
 const NO_RECORDS: readonly unknown[] = [];
+/** A refresh keeps the "not checked" status it already shows. */
+const isFirstStoredRead = (
+  query: { isFetching: boolean } | undefined,
+  data: unknown,
+) => data === undefined && (query?.isFetching ?? false);
 
 type PageRequest = Omit<
   ReturnType<typeof requestsForRecords>[number],
@@ -1919,7 +1934,7 @@ function BoundRecordSuggestions({
     targets.targets.length > 0 &&
     stored.size === 0 &&
     accepted.size === 0 &&
-    !storedQuery?.isFetching
+    !isFirstStoredRead(storedQuery, storedData)
       ? firstBasisFieldLabel(queryClient, entity, targets, !publishedOnly)
       : null;
   const status = (

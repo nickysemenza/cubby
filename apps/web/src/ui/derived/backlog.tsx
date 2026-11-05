@@ -3,7 +3,6 @@ import { entityRoster } from "@cubby/schemas/entity-roster";
 import { humanize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { derived } from "~/integrations/tanstack-query/generated/domains/derived.gen";
@@ -24,34 +23,6 @@ import {
   backlogStates,
   refreshStateSummary,
 } from "./backlog-summary";
-
-/** The shell status slot's derived backlog: shown only while values are updating. */
-export function DerivedBacklogStatus({
-  compact = false,
-}: {
-  compact?: boolean;
-}) {
-  const { data } = useQuery({
-    ...derived.backlog.queryOptions({}),
-  });
-  if (!data?.total) return null;
-  const label = `${countLabel(data.total, "refresh")} pending`;
-  return (
-    <Link
-      to="/activity"
-      search={{ tab: "now" }}
-      hash="derived-values"
-      aria-label={compact ? label : undefined}
-      className="grid w-full min-w-0 gap-1 text-xs text-muted-foreground hover:text-foreground"
-    >
-      {compact ? (
-        <span aria-hidden="true" className="size-1.5 rounded-full bg-info" />
-      ) : (
-        <span>{label}</span>
-      )}
-    </Link>
-  );
-}
 
 export function DerivedBacklogOverview() {
   const result = useQuery({

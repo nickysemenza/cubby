@@ -311,11 +311,18 @@ A ring without `changes` rereads every loaded view. Writers enroll changes in
 their transaction; successful savepoints union ids (`null` absorbs ids), while
 rollback discards them.
 After the outer commit, one best-effort hint broadcasts the affected categories.
-Notifications never advance a household or member strong-read window. Audit writes cover ordinary entity edits across transports;
-non-audited recipe totals, conversion coverage, assessments, saved AI analyses and search/embedding
-publication enroll at their saved projection owners. Image-processing completion, retry, retirement and subject-lift claims publish record-scoped hints; other claims, ordinary Job heartbeats and
-cursor-only advances do not publish hints. Unchanged periodic projections do not
-trigger refreshes merely to update a computation timestamp.
+Notifications never advance a household or member strong-read window.
+
+Rings exist for what a member is waiting on. Every `recordChange` inside an HTTP
+request (member browser, MCP or native) rings. A queue, cron or Durable Object
+commit stays silent unless its `recordChange` passes `ringFromBackground`, which
+only these pass: transitions of a member-started Run (`isMemberStartedRun`), image
+processing completion and subject-lift claims, and derived publication containing
+a priority-0 mark, which is what a member's own edit enrolls. Propagated values
+are priority 1 and appear on the next read. Everything else in the background,
+including Job heartbeats, search and embedding publication, routine Runs and the
+scheduler, leaves open tabs quiet: background totals and search may lag, and a
+view that polls an active Run reads its own progress.
 
 Hints invalidate the existing cache ripples. Within an explicitly record-scoped
 category, `entity.detail` and record-scoped `entityReport.get`/`getMany`
@@ -326,31 +333,40 @@ Image job. `entityGraph.connectedRecords` lists other records and keeps its
 ripple, as do lists and dashboard/nav counts; a `null` category keeps full
 invalidation. Hints
 never carry record values or
-replace receipt reconciliation. Reads already in flight are retired and loaded
-views retain their ordinary refresh/error UI. Notification invalidation retains
+replace receipt reconciliation. A loaded query's read in flight is retired, and the
+view retains its ordinary refresh/error UI. A first load has nothing to retain:
+cancelling it restarts the read and re-suspends its section, so it finishes and
+then rereads once. Notification invalidation retains
 inactive baselines because streamed sections may still need them to hydrate;
 mount and detail loaders refetch those invalidated baselines before reuse.
 The first ring refreshes immediately; further rings accumulate into at most one
 refresh every five seconds, with a final trailing refresh. A slow read completes
 before starting another. Own mutations retain their immediate local invalidation.
-Subscription recovery on reconnect/resume bypasses the ring throttle. Background
-refetch feedback appears in the reserved sidebar status slot (or a BottomNav
-spinner on mobile) only after 300ms; it never inserts a row into page content.
+A hidden tab keeps its socket and drops rings without reading; returning to it
+resynchronizes everything it shows. Subscription recovery on reconnect/resume
+bypasses the ring throttle. Background refetch feedback appears in the reserved
+sidebar status slot (or a BottomNav spinner on mobile) only after 300ms; it never
+inserts a row into page content. A refetch must not read as a first load: record
+suggestion status shows "Checking suggestions…" only for a question's first ask,
+so a ring cannot flip the line or collapse the Needs-you row.
 Inline refresh errors retain their data and Retry. Native workspace routes have
 no shell indicator.
 Declared reference and projection-path consumers add their own cache roots to
 the hint's ripple. This uses generated read dependencies without recursively
-expanding mutation ripples. Projection completion uses the same notification
-path as edits; timestamp-only periodic updates do not imply changed output.
+expanding mutation ripples. Timestamp-only periodic updates do not imply changed
+output.
 Initial subscription reuses the SSR/cache baseline without a blanket refetch.
 Reconnect and app resume resync cache-backed queries to recover missed hints.
 Logout unmounts the subscription; delivery requires
 reauthentication after its five-minute lease expires.
+A quiet socket outlives that lease, and the next ring closes it instead of
+delivering. The tab reconnects within seconds and resynchronizes, so the first ring
+after five idle minutes costs one full reread rather than a scoped one.
 
-The derived backlog badge and its overview consume these change notifications,
-including reconnect/resume resync, without a fixed polling interval. Workflow
-progress polling stays local to its workflow; query defaults pause intervals
-while the browser tab is hidden.
+Workflow progress polling stays local to its workflow and runs only while that
+work is active; query defaults pause intervals while the browser tab is hidden.
+Idle shell, dashboard, list and detail views make no requests. The one
+unconditional poll is AI funding on Settings, every 60 seconds.
 
 This replaces fixed post-mutation refresh timers. Delivery is best-effort: a Worker
 can die after commit but before publishing, or a change can precede subscription.
