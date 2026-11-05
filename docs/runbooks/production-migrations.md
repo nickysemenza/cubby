@@ -241,7 +241,10 @@ on ProductReadSnapshot, InventoryReadSnapshot, LocationReadSnapshot,
 ProjectReadSnapshot, ExpenseReadSnapshot, EmailReadSnapshot and
 ShipmentReadSnapshot. It preserves the complete decision/evidence JSON, scalar
 sort and publication time. A frozen bidirectional EXCEPT ALL comparison aborts
-on any mismatch; it is copy evidence, not a production rebuild timing. Foreign
+on any mismatch; it is copy evidence, not a production rebuild timing. SQL NULL
+publication payloads normalize to JSON null in that comparison, matching the
+reader contract while retaining decisions and publication presence. The populated
+predecessor fixture is `apps/web/tooling/typed-read-snapshots-migration.integration.test.ts`. Foreign
 keys are validated after the copy. The 2-second lock timeout rolls back on
 contention. Retain DerivedValue and tickets until the replacement Worker has
 rebuilt every kind and production coverage is verified.
