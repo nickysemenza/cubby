@@ -235,13 +235,6 @@ function factNeeds(
     needs.add(name === "strengthRank" ? "strength" : name);
     needs.add(name);
   }
-  // An explicit Strength filter or sort reads judged labels; default order need not.
-  if (
-    values.get("strength") !== undefined ||
-    values.get("strengthExclude") !== undefined ||
-    order.some((term) => term.by === "strength")
-  )
-    needs.add("exactStrength");
   return needs;
 }
 

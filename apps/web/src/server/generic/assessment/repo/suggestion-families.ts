@@ -627,12 +627,17 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
     const target = (key: "entityKind" | "entityId") =>
       sql`s.data->'connectionTarget'->>${key}`;
     const { recordEntity, runId } = query.filters;
+    const reasons = sql`s.evidence#>'{candidate,evidence,reasons}'`;
+    const retrieved = sql`EXISTS (SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(${reasons}) = 'array' THEN ${reasons} ELSE '[]'::jsonb END) reason(value)
+      WHERE starts_with(reason.value, ${RETRIEVED_REASON}))`;
+    const contradicted = sql`coalesce(jsonb_array_length(CASE WHEN jsonb_typeof(s.evidence#>'{candidate,evidence,contradictions}') = 'array' THEN s.evidence#>'{candidate,evidence,contradictions}' END), 0) > 0`;
     return {
       columns: {
         clean: sql`false`,
-        // Connection evidence averages hundreds of kB per row, so browse order
-        // cannot read Strength from it. The hydrated row reports the real one.
-        strength: sql`${"medium"}`,
+        // `connectionStrength` over the slim candidate; tag additions are medium.
+        strength: sql`CASE WHEN s.evidence->'candidate' IS NULL THEN ${"medium"}
+          WHEN ${retrieved} THEN CASE WHEN ${contradicted} THEN ${"weak"} ELSE ${"medium"} END
+          WHEN ${contradicted} THEN ${"medium"} ELSE ${"strong"} END`,
         createdAt: sql`to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
         impact: sql`CASE s.subject->>'scope' ${connectionImpactCount} ELSE 0 END`,
         relation: sql`substr(s.subject->>'scope', ${"connection.".length + 1})`,

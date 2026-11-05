@@ -93,8 +93,7 @@ export function statementSuggestionFacts(
   needs: ReadonlySet<string>,
 ) {
   const has = (...names: string[]) => names.some((name) => needs.has(name));
-  const exactStrength = has("exactStrength");
-  const firstCandidate = exactStrength || has("candidate", "modelLabel");
+  const firstCandidate = has("candidate", "modelLabel");
   const stateFilters: SQL[] = [
     filters.status === "applied"
       ? sql`s.family = ${assessmentFamily.enum.statement_transaction} AND s.status = ${filters.status}`
@@ -111,13 +110,11 @@ export function statementSuggestionFacts(
   const clean = sql`CASE WHEN (${suggestionField("clean")})::boolean
     THEN ${currentClean}
     ELSE false END`;
-  const labelSame = sql`first_candidate.label->>${"same"}`;
-  const labelConfidence = sql`first_candidate.label->>${"confidence"}`;
-  const strength = exactStrength
-    ? sql`CASE WHEN ${clean} OR (${labelSame} = ${"same"} AND ${labelConfidence} = ${"high"}) THEN ${"strong"}
-        WHEN ${labelConfidence} = ${"medium"} THEN ${"medium"} ELSE ${"weak"} END`
-    : // Label confidence lives in the judgment; default ordering stays State-only.
-      sql`CASE WHEN ${clean} THEN ${"strong"} ELSE ${"weak"} END`;
+  const firstLabel = sql`s.judgment->'candidates'->0->'label'`;
+  const labelSame = sql`${firstLabel}->>${"same"}`;
+  const labelConfidence = sql`${firstLabel}->>${"confidence"}`;
+  const strength = sql`CASE WHEN ${clean} OR (${labelSame} = ${"same"} AND ${labelConfidence} = ${"high"}) THEN ${"strong"}
+    WHEN ${labelConfidence} = ${"medium"} THEN ${"medium"} ELSE ${"weak"} END`;
   const statementDate = suggestionField("statementDate");
   return {
     columns: {
@@ -136,7 +133,7 @@ export function statementSuggestionFacts(
       providerCategory: sql`r."sourceCategory"`,
       providerStatus: sql`s.judgment->>'providerStatus'`,
       candidate: sql`first_candidate.shortcode`,
-      modelLabel: sql`${labelSame} || ':' || ${labelConfidence}`,
+      modelLabel: sql`first_candidate.label->>${"same"} || ':' || first_candidate.label->>${"confidence"}`,
     } satisfies Record<string, SQL>,
     from: sql.join(
       [
