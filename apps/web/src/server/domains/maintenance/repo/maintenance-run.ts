@@ -1,9 +1,11 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
 /** The statuses `Run_one_active_maintenance` allows only one pass to hold. */
 export const ACTIVE_MAINTENANCE_STATUSES = ["running", "paused_auth"] as const;
@@ -40,7 +42,7 @@ export async function readRunShortcode(db: Database, runId: RunId) {
  * nightly pass can start; its free backlogs would otherwise wait behind paid
  * image work for as long as that backlog lasts.
  */
-export async function endBudgetPausedPass(db: Database, runId: RunId) {
+async function endBudgetPausedPass(db: Database, runId: RunId) {
   const [ended] = await getDb(db)
     .update(run)
     .set({
@@ -59,4 +61,44 @@ export async function endBudgetPausedPass(db: Database, runId: RunId) {
     )
     .returning({ id: run.id });
   return Boolean(ended);
+}
+
+/**
+ * Admit a pass in one transaction, or find what stands in its way. A nightly admission
+ * names its household date, which admits one pass: an advisory lock serializes that date's
+ * check with its insert across overlapping invocations. `status` is null for a new pass.
+ */
+export async function admitMaintenancePass(
+  db: Database,
+  actor: ActorContext,
+  admission: "manual" | { householdDate: string },
+): Promise<{ id: RunId; status: string | null } | { active: true }> {
+  const manual = admission === "manual";
+  const clientKey = manual
+    ? undefined
+    : `maintenance:nightly:${admission.householdDate}`;
+  return withTransactionDatabase(db, async (tx) => {
+    if (clientKey) {
+      await getDb(tx).execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${clientKey}, 0))`,
+      );
+      const [already] = await getDb(tx)
+        .select({ id: run.id, status: run.status })
+        .from(run)
+        .where(eq(run.clientKey, clientKey));
+      if (already) return already;
+    }
+    let active = await latestMaintenanceRun(tx, true);
+    if (active && !manual && (await endBudgetPausedPass(tx, active.id)))
+      active = await latestMaintenanceRun(tx, true);
+    if (active) return { active: true };
+    const id = await ensureRun(tx, actor, {
+      purpose: "maintenance",
+      trigger: manual ? "manual" : "scheduled",
+      status: "running",
+      ...(clientKey ? { clientKey } : {}),
+      notes: manual ? "Maintenance run now" : "Nightly maintenance",
+    });
+    return { id, status: null };
+  });
 }

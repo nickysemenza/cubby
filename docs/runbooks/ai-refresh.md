@@ -2,7 +2,7 @@
 
 The [entity contract](../entities.md) owns refresh eligibility, history and
 acceptance semantics. Refresh is always enabled; the existing
-minute cron activates the current compiled feature policy through a Job. Gateway coordination
+the hourly cron activates the current compiled feature policy through a Job. Gateway coordination
 applies to production paid inference independently.
 
 ## Rollout
@@ -25,7 +25,7 @@ applies to production paid inference independently.
    legacy work, repeated activation, no-proposal completion and member decisions
    during inference. No live source belongs in repository fixtures, reports or
    PR text.
-4. Minute cron admits `ai-refresh.activate` under the current deployment version
+4. The hourly cron admits `ai-refresh.activate` under the current deployment version
    and a transactionally recorded occurrence. The gateway DO supplies its running
    version; a stale publisher or Job cannot replace a later occurrence. A rollback
    A → B → A gets a new occurrence. Policy fingerprints preserve existing feature
@@ -92,7 +92,7 @@ bounded pages until both independent streams finish. Cursor writes are fenced
 by activation revision, so an old page cannot overwrite a newer reset. During
 deploy overlap a discovery page whose Worker policy differs from the activation
 sleeps and retries (up to 30 minutes) instead of failing the Run.
-The minute cron and app-open catch-up inspect durable Jobs. Failed startup
+The hourly cron and app-open catch-up inspect durable Jobs. Failed startup
 activation uses Job retries; exhausted failures remain stopped for explicit
 retry. Activation does not block interactive Gateway admission.
 The Run executor's preliminary guard selects only its identity under the running

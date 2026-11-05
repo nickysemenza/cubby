@@ -291,14 +291,6 @@ export async function handleHttpRequest(
           "cf.app.entry",
           (entrySpan) =>
             withDatabaseRequestMetrics(entrySpan, async () => {
-              if (!isMaintenanceMode(env))
-                ctx.waitUntil(
-                  import("~/server/generic/jobs/scheduler/client")
-                    .then(({ bootstrapJobSchedule }) =>
-                      bootstrapJobSchedule(env),
-                    )
-                    .catch((error: unknown) => Sentry.captureException(error)),
-                );
               Sentry.setTag("request_id", ray);
               const readyResponse = await withErrorReporting(async () => {
                 try {

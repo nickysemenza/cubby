@@ -8,8 +8,8 @@ import { job, workItem } from "~/server/db/retained-tables";
 
 import { defineDrain } from "../service/drain";
 import { advanceJob } from "../service/jobs";
-import { jobDeadlines } from "./deadlines";
 import { enqueueJob } from "./producer";
+import { nextJobDue } from "./queue";
 import { claimWork } from "./work-claims";
 import {
   advanceWorkFanouts,
@@ -255,17 +255,7 @@ describe("generic WorkItems", () => {
 
     // An empty ready page must retain the item retry deadline without cron enrollment.
     await advanceJob(ctx.db, jobId, handlers);
-    const [waiting] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.id, jobId));
-    expect(await jobDeadlines(ctx.db)).toContainEqual(
-      expect.objectContaining({
-        job: waiting!.shortcode,
-        at: retried[0]!.readyAt.toISOString(),
-        reason: "available",
-      }),
-    );
+    expect(await nextJobDue(ctx.db)).toEqual(retried[0]!.readyAt);
     expect(await advanceJob(ctx.db, jobId, handlers)).toBe("skipped");
 
     await getDb(ctx.db)

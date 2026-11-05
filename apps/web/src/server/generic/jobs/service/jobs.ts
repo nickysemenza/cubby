@@ -1,4 +1,3 @@
-import { jobShortcode } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
@@ -17,6 +16,8 @@ import {
   fenceJob,
   failJob,
   fencedJobTransaction,
+  JOB_LEASE_MS,
+  nextJobDue,
   pauseClaimedJob,
   publishJobPage,
   renewJob,
@@ -126,25 +127,12 @@ async function executeClaim(
       waitReason: null,
     });
   entry().info("claim");
-  const { reconcileJobSchedule } =
-    await import("~/server/generic/jobs/scheduler/client");
-  // Arm crash recovery before entering potentially long provider execution.
-  await reconcileJobSchedule(
-    "job.claim",
-    jobShortcode.parse(claimed.shortcode),
-  );
   const lease = new AbortController();
   let renewing: Promise<unknown> | undefined;
   const heartbeat = setInterval(() => {
     renewing ??= renewJob(db, claimed)
-      .then(async (renewed) => {
-        if (renewed) {
-          await reconcileJobSchedule(
-            "job.renew",
-            jobShortcode.parse(claimed.shortcode),
-          );
-          return entry().info("lease renewed");
-        }
+      .then((renewed) => {
+        if (renewed) return entry().info("lease renewed");
         entry().warn("lease lost");
         lease.abort(new JobSupersededError());
       })
@@ -229,10 +217,6 @@ async function executeClaim(
   } finally {
     clearInterval(heartbeat);
     await renewing;
-    await reconcileJobSchedule(
-      "job.settled",
-      jobShortcode.parse(claimed.shortcode),
-    );
   }
 }
 
@@ -294,10 +278,21 @@ export async function drainDueJobs(
     }
     return undefined;
   };
+  let armed = false;
   const lane = async () => {
     for (;;) {
       const candidate = await next();
       if (!candidate) return;
+      if (!armed) {
+        armed = true;
+        // A killed invocation leaves its leases behind and settles nothing, so
+        // arm the wake for them before the first page. Heartbeats may outlive it.
+        const { wakeAt } =
+          await import("~/server/workflows/background-tasks/publish");
+        await wakeAt(new Date(Date.now() + JOB_LEASE_MS + 5_000), {
+          source: "job.lease-recovery",
+        });
+      }
       const progressBefore = progressed;
       try {
         const outcome = await advanceJob(db, candidate.id, handlers);
@@ -325,13 +320,13 @@ export async function drainDueJobs(
     ),
   );
   if (failure) throw failure.reason;
-  await (
-    await import("~/server/generic/jobs/scheduler/client")
-  ).reconcileJobSchedule("drain.finished");
-  if ((await dueJobs(db, 1, { excludeIds: [...busy] })).length) {
-    await (
-      await import("~/server/workflows/background-tasks/publish")
-    ).wakeJobs({ source: "job.drain-budget" });
+  const { wakeAt, wakeJobs } =
+    await import("~/server/workflows/background-tasks/publish");
+  if ((await dueJobs(db, 1, { excludeIds: [...busy] })).length)
+    await wakeJobs({ source: "job.drain-budget" });
+  else {
+    const next = await nextJobDue(db);
+    if (next) await wakeAt(next, { source: "job.next-due" });
   }
   return outcomes;
 }

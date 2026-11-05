@@ -11,7 +11,6 @@ import {
   jobWaitReason,
 } from "@cubby/schemas/job";
 import { jobFilters } from "@cubby/schemas/job-entity";
-import { schedulerSnapshot } from "@cubby/schemas/job-scheduler";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
@@ -251,17 +250,6 @@ export const jobContract = defineContract(
       input: jobListInput,
       output: jobListOut,
       // Job state moves while a Run executes; Run writes refresh it.
-      cache: { tags: [["run"]], profile: "live-status" },
-    }),
-    schedule: query({
-      description:
-        "Observed scheduler deadlines, delivery and recovery history; reading does not reschedule work.",
-      input: z.strictObject({}),
-      output: schedulerSnapshot.extend({
-        readAt: z.iso.datetime(),
-        running: z.number(),
-        waiting: z.number(),
-      }),
       cache: { tags: [["run"]], profile: "live-status" },
     }),
     queue: query({

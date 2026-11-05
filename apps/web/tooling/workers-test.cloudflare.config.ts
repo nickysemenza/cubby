@@ -6,10 +6,6 @@ export const testWorker = defineWorker({
   compatibilityDate: "2026-09-19",
   compatibilityFlags: ["nodejs_compat"],
   env: {
-    JOB_SCHEDULER: bindings.durableObject({
-      worker: "cubby-calendar-test",
-      exportName: "JobSchedulerDurableObject",
-    }),
     BACKGROUND_QUEUE: bindings.queue({ name: "cubby-scheduler-test" }),
     // Hermetic Durable Object failures must not become production issues.
     SENTRY_ENVIRONMENT: bindings.text("test"),
@@ -47,7 +43,6 @@ export const testWorker = defineWorker({
     }),
   },
   exports: {
-    JobSchedulerDurableObject: { type: "durable-object", storage: "sqlite" },
     AiGatewayEgressDurableObject: { type: "durable-object", storage: "sqlite" },
     DatabaseFreshnessDurableObject: {
       type: "durable-object",

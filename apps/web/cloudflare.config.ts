@@ -164,10 +164,6 @@ export const productionWorker = defineWorker({
       worker: "cubby",
       exportName: "AiGatewayEgressDurableObject",
     }),
-    JOB_SCHEDULER: bindings.durableObject({
-      worker: "cubby",
-      exportName: "JobSchedulerDurableObject",
-    }),
     DB_FRESHNESS: bindings.durableObject({
       worker: "cubby",
       exportName: "DatabaseFreshnessDurableObject",
@@ -200,7 +196,8 @@ export const productionWorker = defineWorker({
     CF_VERSION_METADATA: bindings.versionMetadata(),
   },
   exports: {
-    JobSchedulerDurableObject: exports.durableObject({ storage: "sqlite" }),
+    // Retired: its storage held only wake deadlines and event history.
+    JobSchedulerDurableObject: exports.durableObject({ state: "deleted" }),
     AiGatewayEgressDurableObject: exports.durableObject({
       storage: "sqlite",
     }),
