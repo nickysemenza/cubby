@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { anyShortcodeSchema, projectShortcode } from "./identifier-fields";
+import {
+  anyShortcodeSchema,
+  nonEmptyTuple,
+  projectShortcode,
+} from "./identifier-fields";
 import { fieldEmptyReason } from "./field-outcome";
 
 export const fieldResolutionSourceSchema = z.object({
@@ -80,7 +84,7 @@ export const optionalProjectAllocationsSchema =
 /** Public review snapshots carry source shortcodes; internal resolution may still use UUIDs. */
 const publicResolutionSource = fieldResolutionSourceSchema.extend({
   entityId: anyShortcodeSchema(
-    fieldResolutionSourceSchema.shape.entityKind.options,
+    nonEmptyTuple(fieldResolutionSourceSchema.shape.entityKind.options),
   ),
 });
 export const publicFieldResolutionSchema = fieldResolutionSchema.extend({
