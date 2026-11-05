@@ -34,7 +34,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
 } from "~/ui/primitives/dropdown-menu";
-import { Skeleton } from "~/ui/primitives/skeleton";
 import {
   Table,
   TableBody,
@@ -602,7 +601,7 @@ function PinnedTableFooter<TItem extends RowData>({
   return (
     <TableFooter className="border-t border-hairline-strong bg-card text-sm font-semibold">
       {footerGroups.map((group) => (
-        <TableRow key={group.id} className="hover:bg-muted/50">
+        <TableRow key={group.id} className="hover:bg-card">
           {group.leading.map((header) => (
             <PinnedFooterCell key={header.id} header={header} table={table} />
           ))}
@@ -1051,13 +1050,14 @@ function DesktopTableView<TItem extends RowData>({
   return (
     <>
       {externalToolbar && desktopToolbar ? (
-        <div className="hidden shrink-0 border-b border-border bg-background md:block [&:empty]:hidden">
+        <div className="hidden shrink-0 border-b border-hairline-soft bg-card md:block [&:empty]:hidden">
           {desktopToolbar}
         </div>
       ) : null}
       <CellSelectionContext.Provider value={cellSelectionEnabled}>
         <div
           ref={paneWrapperRef}
+          data-slot="table-pane"
           className={cn(
             "relative hidden flex-col md:flex",
             !embedded && "border-r border-b border-[var(--border)]",
@@ -1066,7 +1066,7 @@ function DesktopTableView<TItem extends RowData>({
           style={paneStyle}
         >
           {showToolbar && !externalToolbar ? (
-            <div className="shrink-0 border-b border-border bg-background">
+            <div className="shrink-0 border-b border-hairline-soft bg-card">
               {desktopToolbar}
             </div>
           ) : null}
@@ -1094,7 +1094,7 @@ function DesktopTableView<TItem extends RowData>({
               containerClassName="overflow-visible"
               style={columnSizeVars}
             >
-              <TableHeader className="sticky top-0 z-30 border-b border-border bg-card [&_th]:bg-card [&_tr]:border-b-0">
+              <TableHeader className="sticky top-0 z-30 border-b border-border bg-card [&_tr]:border-b-0">
                 <TableHeaderLayout
                   table={table}
                   unpaintedColumns={unpaintedColumns}
@@ -1108,7 +1108,7 @@ function DesktopTableView<TItem extends RowData>({
                 className={cn(
                   "transition-opacity duration-(--brand-motion-fast) ease-cozy",
                   // Delayed so a fast sort or filter never flickers.
-                  isTransitioning && "opacity-60 delay-120",
+                  isTransitioning && "opacity-55 delay-120",
                 )}
               >
                 {tableBody}
@@ -1451,11 +1451,13 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
                     maxWidth: columnWidthValue(column.id),
                   }}
                 >
-                  <Skeleton
+                  <div
                     className={
-                      column.columnDef.meta?.entityColumnRole === "selection"
-                        ? "size-3.5"
-                        : "h-3 w-2/3 max-w-32"
+                      ["identity", "image", "selection"].includes(
+                        column.columnDef.meta?.entityColumnRole ?? "",
+                      )
+                        ? "size-3.5 rounded-xs bg-[#EFEFEF]"
+                        : "h-2 w-2/3 rounded-xs bg-[#EFEFEF]"
                     }
                   />
                 </TableCell>
@@ -1496,14 +1498,14 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
         return (
           <TableRow
             key="infinite-sentinel"
-            className="border-b border-border bg-background"
+            className="border-b border-hairline-soft bg-card hover:bg-card"
             style={{ height: `${virtualRow.size}px` }}
           >
             <TableCell
               colSpan={colSpan}
               className="text-center text-xs text-muted-foreground"
             >
-              {isFetchingNextPage ? "Loading more..." : null}
+              {isFetchingNextPage ? "Loading more…" : null}
             </TableCell>
           </TableRow>
         );
@@ -1549,7 +1551,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
             key={`detail-${item.occurrenceKey ?? detailRow.id}`}
             ref={measureElement}
             data-index={virtualRow.index}
-            className="border-b border-border bg-muted/40 hover:bg-muted/40"
+            className="border-b border-hairline-soft bg-card hover:bg-card"
           >
             <TableCell colSpan={colSpan} className="p-0">
               {/* Pinned to the pane's left edge so a wide table's detail

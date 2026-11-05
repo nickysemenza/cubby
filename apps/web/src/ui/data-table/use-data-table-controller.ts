@@ -35,9 +35,16 @@ function useScrollEdges(
     const element = pane.current;
     if (!enabled || !element) return;
     const update = () => {
+      element.parentElement?.style.setProperty(
+        "--table-fade-top",
+        `${element.offsetTop + ROW_DENSITY.rowHeight}px`,
+      );
       const start = element.scrollLeft > 0;
       const end =
         element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+      element.toggleAttribute("data-scroll-top", element.scrollTop > 0);
+      element.parentElement?.toggleAttribute("data-scroll-edge-start", start);
+      element.parentElement?.toggleAttribute("data-scroll-edge-end", end);
       element.toggleAttribute("data-scroll-edge-start", start);
       element.toggleAttribute("data-scroll-edge-end", end);
     };
@@ -238,7 +245,7 @@ export function useDataTableController<TItem extends RowData>({
     table:
       "border-separate border-spacing-0 text-sm leading-(--table-cell-leading) tabular-nums",
     header:
-      "h-(--table-header-height) overflow-hidden border-hairline-strong border-b bg-card px-2 py-0 font-medium text-xs text-muted-foreground",
+      "h-(--table-header-height) border-hairline-strong border-b bg-card px-2 py-0 font-medium text-xs text-muted-foreground",
 
     cell: cn(
       dConfig.cellClass,

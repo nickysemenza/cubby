@@ -1,6 +1,6 @@
 import { render, waitFor } from "@testing-library/react";
 import { type ReactNode, useRef } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
 import {
@@ -331,6 +331,7 @@ describe("table density", () => {
 
   it("never paints the ⓘ over clipped text; the spill carries it", async () => {
     await page.viewport(1440, 900);
+    const explain = vi.fn();
     const view = render(
       <Fixture
         cells={[
@@ -344,6 +345,7 @@ describe("table density", () => {
                   <button
                     type="button"
                     aria-label="Explain"
+                    onClick={explain}
                     className={CELL_RAIL_BUTTON_CLASS}
                   >
                     i
@@ -370,6 +372,17 @@ describe("table density", () => {
       "[data-cell-spill-rail]",
     );
     expect(copy && getComputedStyle(copy).opacity).toBe("1");
+    const button = copy?.querySelector<HTMLElement>("button");
+    if (!button) throw new Error("missing copied rail control");
+    expect(button.getBoundingClientRect().right).toBeGreaterThan(
+      view.getByTestId("cell-0").getBoundingClientRect().right,
+    );
+    await userEvent.hover(button);
+    expect(overlay()).not.toBeNull();
+    expect(getComputedStyle(button).pointerEvents).toBe("auto");
+    await userEvent.click(button);
+    expect(overlay()).toBeNull();
+    expect(explain).toHaveBeenCalledOnce();
   });
 
   // Regression: 20px pills wrapped to a second line the 32px cell clipped

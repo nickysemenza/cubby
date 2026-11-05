@@ -179,6 +179,7 @@ function DesktopDataCell<TItem extends RowData>({
     cell.column.columnDef.meta,
   );
   const explained = explainedCellContent(queryClient, cell, content);
+  const edges = cell.getSelectionEdges();
   const activity = useContext(RowActivityStoreContext);
   const cellKey = tableCellKey(cell.row.id, cell.column.id);
   return (
@@ -189,6 +190,10 @@ function DesktopDataCell<TItem extends RowData>({
       data-cell-col={selectable ? cell.column.id : undefined}
       data-cell-selected={selected ? "" : undefined}
       data-cell-anchor={anchor ? "" : undefined}
+      data-range-top={selected && edges.top ? "" : undefined}
+      data-range-bottom={selected && edges.bottom ? "" : undefined}
+      data-range-left={selected && edges.left ? "" : undefined}
+      data-range-right={selected && edges.right ? "" : undefined}
       tabIndex={selectable ? cell.getTabIndex() : undefined}
       onMouseDown={selectable ? cell.getSelectionStartHandler() : undefined}
       onMouseEnter={selectable ? cell.getSelectionExtendHandler() : undefined}
@@ -203,8 +208,6 @@ function DesktopDataCell<TItem extends RowData>({
         cell.column.columnDef.meta?.numeric && NUMERIC_CELL,
         cell.column.columnDef.meta?.mono && MONO_CELL,
         cell.column.columnDef.meta?.className,
-        selected && !pinned && "bg-primary/10",
-        anchor && "ring-2 ring-ring ring-inset",
         // Pinned cells need an opaque surface to cover scrolled content, and
         // must still take the row's hover wash like their neighbours.
         pinned && "table-pinned-cell sticky z-10",
@@ -351,6 +354,7 @@ function DesktopDataRowInner<TItem extends RowData>({
   return (
     <TableRow
       data-cell-row={rowIndex}
+      data-row-focused={isFocused ? "" : undefined}
       data-state={isSelected && "selected"}
       // Inspection is independent of batch selection.
       data-current={isCurrent ? "true" : undefined}
@@ -361,7 +365,6 @@ function DesktopDataRowInner<TItem extends RowData>({
         // The keyboard outruns motion: J/K never retargets a color transition.
         "transition-none",
         onRowClick && "cursor-pointer",
-        isFocused && "ring-2 ring-primary/30 ring-inset",
       )}
       onClick={handleRowClick}
       onClickCapture={(event) => {

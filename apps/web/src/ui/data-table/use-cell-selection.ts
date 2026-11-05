@@ -36,6 +36,7 @@ import {
   type CellEditEventDetail,
   NON_SELECTABLE_COLUMN_IDS,
 } from "./cell-selection-context";
+import { ROW_DENSITY } from "./density";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
 
 interface UseCellSelectionArgs<TItem extends RowData> {
@@ -150,24 +151,72 @@ function handleArrowKey<TItem extends RowData>(
   context: CellKeyContext<TItem>,
 ) {
   const direction = ARROW_DIRECTION.get(event.key);
-  if (!direction || event.metaKey || event.ctrlKey) return false;
+  const mod = event.metaKey || event.ctrlKey;
+  const special = ["Home", "End", "PageUp", "PageDown", "Tab"].includes(
+    event.key,
+  );
+  if (!direction && !special) return false;
   event.preventDefault();
-  if (!context.getSelection()) {
-    const firstRow = context.rows[0];
-    const firstColumnId = context.selectableColumnIds.current[0];
-    if (firstRow && firstColumnId) {
-      context.table.setFocusedCell(firstRow.id, firstColumnId);
+  const selection = context.getSelection();
+  const lastRow = context.rows.length - 1;
+  const lastCol = context.selectableColumnIds.current.length - 1;
+  let { row, col } = selection?.focus ?? { row: 0, col: 0 };
+  if (special || mod) {
+    if (direction === "up") row = 0;
+    if (direction === "down") row = lastRow;
+    if (direction === "left") col = 0;
+    if (direction === "right") col = lastCol;
+    if (event.key === "Home") {
+      col = 0;
+      if (mod) row = 0;
     }
+    if (event.key === "End") {
+      col = lastCol;
+      if (mod) row = lastRow;
+    }
+    if (event.key === "PageUp" || event.key === "PageDown") {
+      const page = Math.max(
+        1,
+        Math.floor(event.currentTarget.clientHeight / ROW_DENSITY.rowHeight),
+      );
+      row = Math.max(
+        0,
+        Math.min(lastRow, row + (event.key === "PageUp" ? -page : page)),
+      );
+    }
+    if (event.key === "Tab") {
+      const index = Math.max(
+        0,
+        Math.min(
+          (lastRow + 1) * (lastCol + 1) - 1,
+          row * (lastCol + 1) + col + (event.shiftKey ? -1 : 1),
+        ),
+      );
+      row = Math.floor(index / (lastCol + 1));
+      col = index % (lastCol + 1);
+    }
+    const anchor =
+      event.shiftKey && event.key !== "Tab" && selection
+        ? selection.anchor
+        : { row, col };
+    context.table.selectCellRange({
+      anchorRowId: context.rows[anchor.row]!.id,
+      anchorColumnId: context.selectableColumnIds.current[anchor.col]!,
+      focusRowId: context.rows[row]!.id,
+      focusColumnId: context.selectableColumnIds.current[col]!,
+    });
+  } else if (!selection) {
+    context.table.setFocusedCell(
+      context.rows[0]!.id,
+      context.selectableColumnIds.current[0]!,
+    );
   } else if (event.shiftKey) {
-    context.table.extendCellSelection(direction);
+    context.table.extendCellSelection(direction!);
   } else {
-    context.table.moveCellSelection(direction);
+    context.table.moveCellSelection(direction!);
   }
-  const focused = context.table.getFocusedCell();
-  if (focused) {
-    const nextRow = context.rows.findIndex((row) => row.id === focused.row.id);
-    if (nextRow >= 0) context.scrollToFlatRow(nextRow);
-  }
+  const focus = context.getSelection()?.focus;
+  if (focus) context.scrollToFlatRow(focus.row);
   return true;
 }
 

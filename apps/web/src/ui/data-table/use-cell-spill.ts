@@ -195,15 +195,17 @@ function railCopy(
       controls[index]?.click();
     });
   });
+  clone.addEventListener("pointerdown", (event) => event.preventDefault());
   overlay.append(clone);
 }
 
 /**
  * Lifts a clipped table value over its neighbours at the same row height
  * while the pointer (after a short delay) or keyboard focus is on its cell,
- * so a narrow column never hides a value. The overlay is pointer-transparent
- * apart from its rail copy: clicks still reach the cell beneath, and leaving
- * the cell removes it. Near the pane's end edge it grows toward the start.
+ * so a narrow column never hides a value. The whole overlay belongs to the
+ * source cell: presses forward there, and its copied rail forwards to the
+ * real controls. Leaving both the cell and overlay removes it. Near the pane's
+ * end edge it grows toward the start.
  */
 export function useCellSpill(
   pane: RefObject<HTMLElement | null>,
@@ -251,7 +253,7 @@ export function useCellSpill(
         overflow: "hidden",
         whiteSpace: "nowrap",
         boxSizing: "border-box",
-        pointerEvents: "none",
+        pointerEvents: "auto",
         background: "var(--popover, var(--card))",
         borderRadius: "4px",
         boxShadow:
@@ -276,6 +278,27 @@ export function useCellSpill(
       if (box.right > limit)
         element.style.left = `${Math.max(EDGE_PX, limit - box.width)}px`;
       if (rail) railCopy(rail, start, element, hide);
+      // Preserve the source's selection and row/edit click semantics even where
+      // the spill paints over a neighbouring cell.
+      for (const type of ["pointerdown", "mousedown", "click"] as const) {
+        element.addEventListener(type, (event) => {
+          if (
+            event.target instanceof Element &&
+            event.target.closest(
+              "[data-cell-spill-rail] button, [data-cell-spill-rail] a",
+            )
+          )
+            return;
+          event.preventDefault();
+          event.stopPropagation();
+          const target =
+            source.closest<HTMLElement>(
+              "button, a, [data-cell-edit-trigger]",
+            ) ?? cell;
+          const EventClass = type === "pointerdown" ? PointerEvent : MouseEvent;
+          target.dispatchEvent(new EventClass(type, event));
+        });
+      }
       element.addEventListener("pointerleave", (event) => {
         if (
           !(
@@ -331,7 +354,7 @@ export function useCellSpill(
     root.addEventListener("pointerleave", onPointerLeave);
     root.addEventListener("focusin", onFocusIn);
     root.addEventListener("focusout", hide);
-    root.addEventListener("pointerdown", hide);
+
     window.addEventListener("scroll", hide, true);
     window.addEventListener("wheel", hide, { passive: true });
     return () => {
@@ -340,7 +363,7 @@ export function useCellSpill(
       root.removeEventListener("pointerleave", onPointerLeave);
       root.removeEventListener("focusin", onFocusIn);
       root.removeEventListener("focusout", hide);
-      root.removeEventListener("pointerdown", hide);
+
       window.removeEventListener("scroll", hide, true);
       window.removeEventListener("wheel", hide);
     };

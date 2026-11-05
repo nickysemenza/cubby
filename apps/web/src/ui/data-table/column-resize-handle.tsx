@@ -1,5 +1,6 @@
 "use client";
 
+import type * as React from "react";
 import type { MouseEvent, TouchEvent } from "react";
 
 type ResizeStartEvent = MouseEvent<HTMLDivElement> | TouchEvent<HTMLDivElement>;
@@ -12,7 +13,11 @@ type ResizeStartEvent = MouseEvent<HTMLDivElement> | TouchEvent<HTMLDivElement>;
 export function ColumnResizeHandle({
   onResizeStart,
   onReset,
+  dragging,
+  deltaOffset,
 }: {
+  dragging: boolean;
+  deltaOffset: number;
   /**
    * Must be the handler returned by `header.getResizeHandler()`, not the
    * method itself. v9's header method reads `this`, so passing the bare
@@ -21,11 +26,15 @@ export function ColumnResizeHandle({
   onResizeStart: (event: ResizeStartEvent) => void;
   onReset: () => void;
 }) {
+  // SAFETY: React CSSProperties omits custom properties; this value is a CSS pixel length.
+  const style = { "--resize-delta": `${deltaOffset}px` } as React.CSSProperties;
   return (
     <div
       aria-hidden="true"
       title="Drag to resize · double-click to reset"
-      className="absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize touch-none bg-transparent transition-colors select-none group-hover/th:bg-border hover:bg-primary/50 data-[dragging]:bg-primary"
+      data-dragging={dragging ? "" : undefined}
+      className="table-resize-handle absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none"
+      style={style}
       onMouseDown={(event) => {
         event.preventDefault();
         event.stopPropagation();

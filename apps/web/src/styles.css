@@ -580,15 +580,28 @@
     --table-row-surface: var(--row-selected);
     background: var(--table-row-surface);
   }
+  .table-record-row[data-state="selected"]:hover {
+    --table-row-surface: color-mix(in srgb, var(--link) 12%, var(--card));
+  }
+  .table-record-row[data-current="true"][data-state="selected"] {
+    --table-row-surface: color-mix(
+      in srgb,
+      var(--link) 10%,
+      var(--row-current)
+    );
+  }
+  .table-record-row[data-current="true"][data-state="selected"]:hover {
+    --table-row-surface: color-mix(
+      in srgb,
+      var(--link) 14%,
+      var(--row-current)
+    );
+  }
   .table-record-row .table-pinned-cell {
     background: var(--table-row-surface);
   }
   .table-record-row .table-pinned-cell[data-cell-selected] {
-    background: color-mix(
-      in oklab,
-      var(--primary) 10%,
-      var(--table-row-surface)
-    );
+    background: color-mix(in oklab, var(--link) 8%, var(--table-row-surface));
   }
 
   /* Amounts in table cells read in mono so columns of money align by digit. */
@@ -713,7 +726,7 @@
     --table-cell-leading: 1rem;
     --table-checkbox-size: 0.875rem;
     --table-checkbox-glyph: 0.75rem;
-    --table-section-surface: var(--muted);
+    --table-section-surface: var(--brand-paper);
     --nav-row-height: 22px;
     --pill-height: 18px;
     --pill-font-size: 0.6875rem; /* 11px */
