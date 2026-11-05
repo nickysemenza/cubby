@@ -145,6 +145,9 @@ it("refuses legacy derived decisions and drops only the retired cache on replay"
       `UPDATE "DerivedValue" SET "decidedBy"='{"outcome":{"kind":"value"},"provenance":{"kind":"computed"}}'`,
     );
     await migrateDatabase(db, { through: "0097_drop_legacy_derived_values" });
+    // Simulate a committed DROP whose journal receipt was lost, so the SQL itself replays.
+    await client.query(`DELETE FROM drizzle.__drizzle_migrations
+      WHERE created_at = (SELECT max(created_at) FROM drizzle.__drizzle_migrations)`);
     await migrateDatabase(db, { through: "0097_drop_legacy_derived_values" });
     expect(
       (
