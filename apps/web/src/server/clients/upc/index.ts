@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { RunId } from "@cubby/schemas/identifiers";
 /**
  * UPC identity lookups served from Postgres `UpcLookupCache`, with upcitemdb
  * as the upstream fallback. Replaces the retired `upc-lookup` Worker.
@@ -32,11 +31,7 @@ import {
   UpcBatchDeferredError,
   UpcLookupUnavailableError,
 } from "~/server/domains/product/repo/upc-lookup-cache";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
-import {
-  ensureRun,
-  aiCallRunInput,
-} from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import type { DecideOfferComparability } from "./price";
@@ -79,7 +74,6 @@ const toResponse = (
 
 export class UpcLookupService {
   private actorContext: ActorContext = systemActor();
-  private runId: Promise<RunId> | null = null;
   private decisionUsage: AiRunContext | null = null;
 
   constructor(
@@ -92,7 +86,6 @@ export class UpcLookupService {
   /** Bind the authenticated request actor before exposing this request-scoped service. */
   bindActorContext(actor: ActorContext): this {
     this.actorContext = actor;
-    this.runId = actor.runId ? Promise.resolve(actor.runId) : null;
     this.decisionUsage = null;
     return this;
   }
@@ -101,15 +94,9 @@ export class UpcLookupService {
     itemTitle: string;
     offerTitle: string;
   }): Promise<"comparable" | "incomparable" | "unknown"> {
-    this.runId ??= ensureRun(
-      this.db,
-      this.actorContext,
-      aiCallRunInput(this.actorContext),
-    );
-    const runId = await this.runId;
     this.decisionUsage ??= {
       db: this.db,
-      runId,
+      ...aiCallOwner(this.actorContext),
       operation: "upc.lookup.offer-comparability",
     };
     // Every browser request constructs this service; load AI only for an

@@ -197,6 +197,16 @@ export async function escalationFundingRefusal(
   return creditUnavailable ? freeBudgetRefusal(db, "subscription") : null;
 }
 
+/**
+ * Whether this call stops at its window budget. It fails closed: a call with no Run
+ * is automatic unless it says a member is waiting, so a caller that forgets the
+ * signal can never spend past the budget.
+ */
+export const isAutomaticAiCall = async (
+  db: Database,
+  call: { runId?: RunId; interactive?: boolean },
+) => (call.runId ? isBackgroundRun(db, call.runId) : !call.interactive);
+
 const BACKGROUND_TRIGGERS: readonly string[] = [
   "scheduled",
   "discovery",

@@ -133,7 +133,7 @@ export interface SuggestFieldsPorts {
 
 function suggestionUsage(
   db: Database,
-  runId: RunId,
+  runId: RunId | undefined,
   operation: string,
   ports: SuggestFieldsPorts | undefined,
 ): AiSelectionUsage {
@@ -1018,7 +1018,7 @@ function reviewedSuggestion(
 
 export async function suggestFields(
   db: Database,
-  runId: RunId,
+  runId: RunId | undefined,
   rawInput: FieldSuggestionsInput,
   ports?: SuggestFieldsPorts,
 ): Promise<FieldSuggestionsOut> {

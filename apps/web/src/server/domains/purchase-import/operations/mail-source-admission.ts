@@ -23,10 +23,7 @@ import {
   admitSupportingMailSource,
   readMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
-import {
-  aiCallRunInput,
-  ensureRun,
-} from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner } from "~/server/domains/run/repo/ensure-run";
 import { createAppError } from "~/server/errors/app-error";
 
 import { readMailOwnerEvidence } from "../repo/mail-owner";
@@ -162,7 +159,7 @@ export async function prepareMailSourceAdmissions(
   const usage = judged.length
     ? {
         db,
-        runId: await ensureRun(db, actor, aiCallRunInput(actor)),
+        ...aiCallOwner(actor),
         operation: "mail-source-admission",
       }
     : undefined;

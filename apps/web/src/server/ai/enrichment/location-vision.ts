@@ -233,7 +233,7 @@ async function recordLocationAiUsage(
     cacheStatus: "hit";
     durationMs: number;
     locationId: LocationId;
-    runId: RunId;
+    runId: RunId | undefined;
   },
 ): Promise<void> {
   await recordFeatureUsage(
@@ -330,7 +330,7 @@ async function publishLocationAnalysis(
 export async function describeLocation(
   db: Database,
   locationId: LocationId,
-  runId: RunId,
+  runId: RunId | undefined,
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
   /** The executing Job's fence; a member request owns no Job. */
   fenced: Fenced = outsideJob(db),
@@ -432,7 +432,7 @@ async function matchDetectedItems(
   db: Database,
   locationId: LocationId,
   items: DetectedInventoryItem[],
-  runId: RunId,
+  runId: RunId | undefined,
 ): Promise<DetectedItem[]> {
   const existingInventory = await getInventoryByLocationIds(db, [locationId]);
   const existingProductIds = new Set(
@@ -548,7 +548,7 @@ async function matchDetectedItems(
 async function semanticProductCandidatesBestEffort(
   db: Database,
   query: string,
-  runId: RunId,
+  runId: RunId | undefined,
 ): ReturnType<typeof semanticProductCandidates> {
   try {
     return await semanticProductCandidates(db, query, 3, runId);
@@ -580,7 +580,7 @@ export interface DetectedInventoryResult extends DetectedInventory {
 export async function detectInventoryItems(
   db: Database,
   locationId: LocationId,
-  runId: RunId,
+  runId: RunId | undefined,
   imageIds?: readonly string[],
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
   /** The executing Job's fence; a member request owns no Job. */

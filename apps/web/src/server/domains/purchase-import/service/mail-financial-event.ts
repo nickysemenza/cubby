@@ -29,10 +29,7 @@ import {
   type PreparedMailFinancialEvent,
 } from "~/server/domains/purchase-import/repo/mail-financial-event";
 import { readMailOwnerEvidence } from "~/server/domains/purchase-import/repo/mail-owner";
-import {
-  aiCallRunInput,
-  ensureRun,
-} from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner } from "~/server/domains/run/repo/ensure-run";
 
 import {
   describeMailAttribution,
@@ -105,7 +102,7 @@ export async function prepareMailFinancialEvent(
   const { mail } = source;
   const usage: AiRunContext = {
     db,
-    runId: await ensureRun(db, actor, aiCallRunInput(actor)),
+    ...aiCallOwner(actor),
     operation: "mail-financial-event",
   };
   const [attribution] = await judgeMailAttributions(

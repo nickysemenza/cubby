@@ -16,10 +16,7 @@ import type {
   ExpenseLineRoleClassifier,
   ExpenseLineRoleEvidence,
 } from "~/server/domains/expense/repo/line-role-classifier";
-import {
-  aiCallRunInput,
-  ensureRun,
-} from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner } from "~/server/domains/run/repo/ensure-run";
 
 const roleChoices = expenseLineKindValues.filter(
   (lineKind): lineKind is Exclude<ExpenseLineKind, "unclassified"> =>
@@ -48,12 +45,11 @@ async function classifyExpenseLineRole(
   evidence: RoleEvidence,
   port?: DecisionPort,
 ): Promise<ExpenseLineKind> {
-  const runId = await ensureRun(db, actor, aiCallRunInput(actor));
   return decideExpenseLineRole(
     evidence,
     {
       db,
-      runId,
+      ...aiCallOwner(actor),
       operation: "expense.create.line-role",
     },
     port,

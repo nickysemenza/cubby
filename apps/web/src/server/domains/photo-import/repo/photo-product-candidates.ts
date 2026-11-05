@@ -54,10 +54,7 @@ import {
 import { unknownProductVariantComparison } from "~/server/domains/product/repo/product-variant-comparison";
 import { loadProductQuantitySummaries } from "~/server/domains/product/repo/quantity-ledger";
 import { sourceObservationIdentitySql } from "~/server/domains/purchase-import/repo/reconciliation-observations";
-import {
-  ensureRun,
-  aiCallRunInput,
-} from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner } from "~/server/domains/run/repo/ensure-run";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { liveAliasSqlText } from "~/server/lib/live-row";
@@ -399,7 +396,6 @@ export async function selectedPhotoProductComparison(
         : [],
     );
   const name = proposal.review?.observedName ?? proposal.product.existing.name;
-  const runId = await ensureRun(db, actor, aiCallRunInput(actor));
   const [variant] = await compareVariants({
     comparisons: [
       {
@@ -407,7 +403,11 @@ export async function selectedPhotoProductComparison(
         secondTitle: [selected.name, selected.model].filter(Boolean).join("\n"),
       },
     ],
-    usage: { db, runId, operation: "photo-import.product-variant-comparison" },
+    usage: {
+      db,
+      ...aiCallOwner(actor),
+      operation: "photo-import.product-variant-comparison",
+    },
   });
   if (!variant)
     throw new Error(
@@ -551,10 +551,9 @@ export async function findPhotoProductCandidates(
   );
   const variantComparisons = new Map<ProductId, ProductVariantComparison>();
   if (preliminary.length > 0) {
-    const runId = await ensureRun(db, actor, aiCallRunInput(actor));
     const usage: AiRunContext = {
       db,
-      runId,
+      ...aiCallOwner(actor),
       operation: "photo-import.product-variant-comparison",
     };
     const comparisons = await compareVariants({

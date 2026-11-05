@@ -167,7 +167,7 @@ export function withAiBudget<R>(
 /** Free-rung admission: background work stops drawing credit or plan once that window budget is spent. */
 export function withFreeBudget<R>(
   db: Database | undefined,
-  call: { model: string; runId?: RunId },
+  call: { model: string; runId?: RunId; interactive?: boolean },
   preflight:
     | ((
         request: R,
@@ -180,12 +180,10 @@ export function withFreeBudget<R>(
       funding: "subscriber_credit" | "openai_credit" | "subscription",
     ) => Promise<string | null>)
   | undefined {
-  if (preflight || !db || !call.runId || !aiBudgetCovers(call.model))
-    return preflight;
-  const runId = call.runId;
+  if (preflight || !db || !aiBudgetCovers(call.model)) return preflight;
   return async (_request, funding) => {
-    const { isBackgroundRun, freeBudgetRefusal } = await import("./funding");
-    return (await isBackgroundRun(db, runId))
+    const { isAutomaticAiCall, freeBudgetRefusal } = await import("./funding");
+    return (await isAutomaticAiCall(db, call))
       ? freeBudgetRefusal(db, funding)
       : null;
   };

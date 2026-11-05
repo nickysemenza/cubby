@@ -34,10 +34,7 @@ import { checkSettlementAllocationDraft } from "~/server/domains/purchase/repo/p
 import { listPurchaseSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
 import { composeSettlementReview } from "~/server/domains/purchase/repo/purchase-settlement-review";
 import { startSplitDraft } from "~/server/domains/purchase/repo/purchase-split-draft";
-import {
-  aiCallRunInput,
-  ensureRun,
-} from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
@@ -199,11 +196,7 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
       loadTransaction: (id) => loadSettlementTransaction(context, id),
       openUsage: async () => ({
         db: context.db,
-        runId: await ensureRun(
-          context.db,
-          context.actorContext,
-          aiCallRunInput(context.actorContext),
-        ),
+        ...aiCallOwner(context.actorContext),
         operation: "purchase.suggestSettlementMatch",
         entity: { entityKind: "purchase", entityId: input.purchaseId },
         cacheStatus: "none",
