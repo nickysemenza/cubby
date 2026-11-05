@@ -101,7 +101,6 @@ import {
   ledgerParty,
   purchase,
   run as runTable,
-  runApproval,
   runControlEvent,
   runOperation,
   photoRunImage,
@@ -1520,7 +1519,6 @@ export async function loadRunDetail(
         and(
           eq(aiUsage.runId, run.id),
           eq(aiUsage.feature, "purchase_import_agent"),
-          notDeleted(aiUsage),
         ),
       ),
     run.purpose === "photo_inventory"
@@ -2255,15 +2253,6 @@ export async function controlRun(
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.runId));
-      await tx
-        .update(runApproval)
-        .set({ state: "invalidated", invalidatedAt: new Date() })
-        .where(
-          and(
-            eq(runApproval.runId, scope.runId),
-            inArray(runApproval.state, ["pending", "granted"]),
-          ),
-        );
       await failOperationsForRun(
         tx,
         scope.runId,

@@ -649,7 +649,6 @@ async function resolveRankedDisplayImages(
        AND derivative."sourceContentHash" = selected_image.sha256
        AND derivative."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION}
        AND derivative.status = 'ready'
-       AND ${notDeleted("derivative")}
     ) AS images ${
       includeAttachments
         ? sql`, (

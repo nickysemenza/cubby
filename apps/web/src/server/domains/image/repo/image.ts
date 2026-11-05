@@ -742,12 +742,7 @@ export async function listImageSightings(
   const rows = await unwrapDb(db)
     .select()
     .from(imageSighting)
-    .where(
-      and(
-        inArray(imageSighting.imageId, [...imageIds]),
-        notDeleted(imageSighting),
-      ),
-    )
+    .where(and(inArray(imageSighting.imageId, [...imageIds])))
     .orderBy(sql`${imageSighting.observedAt} DESC`, imageSighting.id);
   const [owners, devices] = await Promise.all([
     lookupEntityReferences(
@@ -800,7 +795,7 @@ export async function getLiveSightingsForCapture(
   imageId: ImageId,
 ): Promise<SightingCaptureRow[]> {
   return unwrapDb(db).query.imageSighting.findMany({
-    where: and(eq(imageSighting.imageId, imageId), notDeleted(imageSighting)),
+    where: and(eq(imageSighting.imageId, imageId)),
     columns: {
       ledgerPartyId: true,
       sourceType: true,

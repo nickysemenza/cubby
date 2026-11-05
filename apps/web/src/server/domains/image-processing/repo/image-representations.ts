@@ -43,7 +43,6 @@ export function imageRepresentationRowsSql(
       eq(imageDerivative.sourceContentHash, image.sha256),
       inArray(imageDerivative.processorRevision, [...revisions]),
       eq(imageDerivative.status, "ready"),
-      notDeleted(imageDerivative),
     )}
     WHERE ${and(matching, notDeleted(image))}
     ORDER BY ${asc(imageDerivative.processorRevision)}, ${asc(imageDerivative.createdAt)}`;

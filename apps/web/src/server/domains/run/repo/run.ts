@@ -98,7 +98,6 @@ const runRead = {
                   aiUsage.runId,
                   rows.map((row) => row.id),
                 ),
-                notDeleted(aiUsage),
               ),
             )
             .groupBy(aiUsage.runId)

@@ -481,7 +481,6 @@ export async function createTransparentDerivativeAndJob(
           imageDerivative.processorRevision,
           IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
         ),
-        notDeleted(imageDerivative),
       ),
       columns: { id: true, status: true, failureReason: true },
     });
@@ -582,7 +581,6 @@ async function rebuildTransparentDerivative(
           imageDerivative.processorRevision,
           IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
         ),
-        notDeleted(imageDerivative),
       ),
     );
   if (!live) throw new Error("Transparent derivative was not rebuilt");
@@ -747,10 +745,7 @@ export async function claimImageProcessingJob(
           )
           .leftJoin(
             imageDerivative,
-            and(
-              eq(imageDerivative.id, imageProcessingJob.derivativeId),
-              notDeleted(imageDerivative),
-            ),
+            and(eq(imageDerivative.id, imageProcessingJob.derivativeId)),
           )
           .where(
             and(
@@ -954,10 +949,7 @@ export async function getLeasedImageProcessingOutputKey(
     .from(imageProcessingJob)
     .innerJoin(
       imageDerivative,
-      and(
-        eq(imageDerivative.id, imageProcessingJob.derivativeId),
-        notDeleted(imageDerivative),
-      ),
+      and(eq(imageDerivative.id, imageProcessingJob.derivativeId)),
     )
     .where(
       and(
@@ -1265,7 +1257,6 @@ async function settleRetainedNegativeSubjectLifts(
             imageDerivative.sourceContentHash,
             imageProcessingJob.sourceContentHash,
           ),
-          notDeleted(imageDerivative),
           ne(imageDerivative.status, "ready"),
         ),
       );
@@ -1559,7 +1550,6 @@ async function adoptNegativeSubjectLiftCompletion(
         and(
           eq(imageDerivative.id, job.derivativeId),
           eq(imageDerivative.sourceContentHash, job.sourceContentHash),
-          notDeleted(imageDerivative),
           ne(imageDerivative.status, "ready"),
         ),
       );
@@ -1603,7 +1593,6 @@ async function adoptSuccessfulCompletion(
         and(
           eq(imageDerivative.id, job.derivativeId),
           eq(imageDerivative.sourceContentHash, job.sourceContentHash),
-          notDeleted(imageDerivative),
         ),
       );
   }
@@ -1697,10 +1686,7 @@ export async function completeImageProcessingJob(
       )
       .leftJoin(
         imageDerivative,
-        and(
-          eq(imageDerivative.id, imageProcessingJob.derivativeId),
-          notDeleted(imageDerivative),
-        ),
+        and(eq(imageDerivative.id, imageProcessingJob.derivativeId)),
       )
       .where(eq(imageProcessingJob.id, input.result.jobId))
       .for("update", { of: [imageProcessingJob, image] });
@@ -1973,7 +1959,6 @@ export async function getImageProcessingReadProjection(
           imageDerivative.processorRevision,
           compatibleSubjectLiftOutputs,
         ),
-        notDeleted(imageDerivative),
       ),
     )
     .orderBy(

@@ -60,7 +60,7 @@ describe("image job cost", () => {
   // Regression: the per-attempt and per-kind usage sources were one OR whose
   // attempt-id IN list could not use the (jobKind, jobId) index. The rewrite
   // must still count both sources, once each, and skip deleted usage.
-  it("sums attempt and job-kind usage once each, excluding deleted and other jobs' usage", async () => {
+  it("sums attempt and job-kind usage once each, excluding other jobs' usage", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const target = await job();
     const other = await job();
@@ -75,12 +75,7 @@ describe("image job cost", () => {
           state: "ready",
         })),
       );
-    const usage = (
-      jobKind: string,
-      jobId: string,
-      chargedCost: number,
-      deletedAt: Date | null = null,
-    ) => ({
+    const usage = (jobKind: string, jobId: string, chargedCost: number) => ({
       runId,
       jobKind,
       jobId,
@@ -92,7 +87,6 @@ describe("image job cost", () => {
       standardCost: chargedCost * 2,
       status: "succeeded" as const,
       durationMs: 1,
-      deletedAt,
     });
     await getDb(ctx.db)
       .insert(aiUsage)
@@ -100,7 +94,6 @@ describe("image job cost", () => {
         usage("image_processing_attempt", attempts[0]!, 0.25),
         usage("image_processing_attempt", attempts[1]!, 0.5),
         usage("describe_image", target.id, 1),
-        usage("describe_image", target.id, 8, new Date()),
         usage("describe_image", other.id, 16),
       ]);
     const read = await executeEntity(

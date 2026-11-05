@@ -13,7 +13,6 @@ export const retainedMailProjection = {
   ledgerPartyId: orderMail.ledgerPartyId,
   vendorId: orderMail.vendorId,
   rawChecksum: orderMail.rawChecksum,
-  classifiedChecksum: orderMail.classifiedChecksum,
   content: orderMail.content,
   createdAt: orderMail.createdAt,
   updatedAt: orderMail.updatedAt,

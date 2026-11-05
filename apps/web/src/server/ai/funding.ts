@@ -8,7 +8,7 @@ import {
   getChatModelConfig,
   type SupportedChatModel,
 } from "@cubby/shared/ai/models";
-import { and, desc, eq, gte, isNull } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 
 import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
@@ -111,7 +111,6 @@ export async function readChatGptPlanAvailability(
       and(
         eq(aiUsage.transport, "chatgpt"),
         gte(aiUsage.createdAt, new Date(now.getTime() - RECENT_MS)),
-        isNull(aiUsage.deletedAt),
       ),
     )
     .orderBy(desc(aiUsage.createdAt))

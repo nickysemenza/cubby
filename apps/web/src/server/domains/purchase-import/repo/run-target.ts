@@ -96,7 +96,7 @@ function runSummaryQuery(
       vendor,
       and(eq(vendor.id, vendorAccount.vendorId), notDeleted(vendor)),
     )
-    .leftJoin(aiUsage, and(eq(aiUsage.runId, runTable.id), notDeleted(aiUsage)))
+    .leftJoin(aiUsage, and(eq(aiUsage.runId, runTable.id)))
     .where(and(eq(runTable.ledgerPartyId, ledgerPartyId), where))
     .groupBy(runTable.id, vendorAccount.id, vendor.name)
     .orderBy(desc(runTable.startedAt));
