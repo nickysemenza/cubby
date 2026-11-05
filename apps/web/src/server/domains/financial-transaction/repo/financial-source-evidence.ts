@@ -258,7 +258,8 @@ export async function replaceFinancialSourceRefs(
     .where(
       and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
     );
-  if (!transaction) refuse("The accepted transaction is no longer live.");
+  if (!transaction)
+    return refuse("The accepted transaction is no longer live.");
   const current =
     (await financialSourceRefsFor(tx, [transactionId])).get(transactionId) ??
     [];
