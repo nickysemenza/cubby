@@ -2085,8 +2085,6 @@ export const { definition, readSchemas } = defineEntityModel(
             placement: { field: "allocations" },
             facet: "integrity",
             kind: "defect",
-            weight: 3,
-            scoreCap: 49,
             exceptions: "forbidden",
             label: "Allocation integrity",
             message: "Allocated totals or signs conflict with this settlement.",
@@ -2097,7 +2095,6 @@ export const { definition, readSchemas } = defineEntityModel(
             placement: { field: "kind" },
             facet: "identity",
             exceptions: "forbidden",
-            weight: 1,
             label: "Transaction classification",
             message:
               "Review whether this transaction is spending, income, or a transfer.",
@@ -2107,7 +2104,6 @@ export const { definition, readSchemas } = defineEntityModel(
             satisfiedLabel: "Allocation recorded",
             placement: { field: "allocations" },
             facet: "ledger",
-            weight: 2,
             label: "Allocation",
             message: "No purchase allocation is recorded for this settlement.",
           },
@@ -2116,7 +2112,6 @@ export const { definition, readSchemas } = defineEntityModel(
             satisfiedLabel: "Merchant recorded",
             placement: { field: "merchant" },
             facet: "identity",
-            weight: 1,
             label: "Merchant",
             message: "No merchant is recorded for this transaction.",
           },
@@ -2126,7 +2121,6 @@ export const { definition, readSchemas } = defineEntityModel(
             placement: { field: "itemizationExpectation" },
             facet: "paperwork",
             exceptions: "forbidden",
-            weight: 1,
             label: "Itemization expectation",
             message:
               "Whether this transaction's purchases should be itemized is unclassified.",
@@ -2136,7 +2130,6 @@ export const { definition, readSchemas } = defineEntityModel(
             satisfiedLabel: "Expenses booked",
             placement: { field: "bookingCoverage" },
             facet: "ledger",
-            weight: 2,
             label: "Expense booking",
             message:
               "This spending transaction has missing or unpriced Expense booking.",

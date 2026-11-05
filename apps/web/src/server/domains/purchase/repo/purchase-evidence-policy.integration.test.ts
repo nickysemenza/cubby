@@ -415,7 +415,6 @@ describe("purchase evidence policy", () => {
       "financial_transaction_products",
       "financialtransaction_display_image",
     ]);
-    expect(required?.score).toBeLessThan(100);
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "Purchase" SET "itemizationExpectation" = 'not_expected' WHERE id = ${purchase.id}`,
     );
@@ -423,7 +422,6 @@ describe("purchase evidence policy", () => {
       sql`UPDATE "SpendingCategory" SET "productExpectation" = 'not_expected' WHERE id = ${category.id}`,
     );
     expect(await quality()).toMatchObject({
-      score: 99,
       gaps: [{ check: "financialtransaction_display_image" }],
     });
     await unwrapDb(ctx.db).execute(
@@ -431,7 +429,6 @@ describe("purchase evidence policy", () => {
     );
     const transferQuality = await quality();
     expect(transferQuality).toMatchObject({ status: "defect" });
-    expect(transferQuality?.score).toBeLessThanOrEqual(49);
     expect(transferQuality?.gaps.map((gap) => gap.check)).toEqual([
       "financial_transaction_allocation_integrity",
       "financialtransaction_display_image",
@@ -523,7 +520,6 @@ describe("purchase evidence policy", () => {
       expect(quality).toMatchObject(
         role === "reimbursement"
           ? {
-              score: 99,
               gaps: [{ check: "financialtransaction_display_image" }],
             }
           : { status: "needs_data" },

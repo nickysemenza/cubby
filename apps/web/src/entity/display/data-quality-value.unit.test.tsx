@@ -12,51 +12,43 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { DenseCellContext } from "~/ui/common/stacked-value";
 
 import { compactFieldRendererFor } from "./compact-field-renderers";
-import { DataQualityValue, qualityMeterFill } from "./data-quality-value";
+import { DataQualityValue } from "./data-quality-value";
 
 afterEach(cleanup);
 
 describe("quality cell", () => {
-  // Regression: complete scores disappeared instead of remaining visible.
-  it.each([false, true])(
-    "shows a complete score (dense: %s) and retains its spoken status",
-    (dense) => {
+  it("states a complete record without a number", () => {
+    render(<DataQualityValue quality={{ status: "complete", missing: 0 }} />);
+    expect(screen.getByText("Complete")).toBeVisible();
+  });
+
+  it.each([
+    ["needs_data", "text-warning-ink"],
+    ["defect", "text-destructive"],
+  ] as const)(
+    "counts what a %s record is missing in its tone",
+    (status, tone) => {
       const { container } = render(
-        <DenseCellContext.Provider value={dense ? { linksTo: null } : null}>
-          <DataQualityValue quality={{ status: "complete", score: 100 }} />
-        </DenseCellContext.Provider>,
+        <DataQualityValue quality={{ status, missing: 3 }} />,
       );
-      expect(screen.getByText(dense ? "100" : "100/100")).toBeVisible();
-      expect(container).toHaveTextContent("Complete");
-      expect(screen.getByText(", Complete")).toHaveClass("sr-only");
-      expect(container.querySelector("[data-quality-meter]")).toBeNull();
+      const cell = container.querySelector("[data-quality-status]");
+      expect(cell).toHaveTextContent("3 missing");
+      expect(cell).toHaveClass(tone);
     },
   );
 
-  it.each([
-    ["needs_data", "bg-warning"],
-    ["defect", "bg-destructive"],
-  ] as const)("meters a %s gap in its condition tone", (status, tone) => {
-    const { container } = render(
-      <DataQualityValue quality={{ status, score: 72 }} />,
+  it("keeps only the count in a dense cell", () => {
+    render(
+      <DenseCellContext.Provider value={{ linksTo: null }}>
+        <DataQualityValue quality={{ status: "needs_data", missing: 2 }} />
+      </DenseCellContext.Provider>,
     );
-    const meter = container.querySelector("[data-quality-meter]");
-    expect(meter).toHaveTextContent("72");
-    const bars = [...(meter?.querySelectorAll("i") ?? [])];
-    expect(bars).toHaveLength(5);
-    expect(bars.filter((bar) => bar.classList.contains(tone))).toHaveLength(
-      qualityMeterFill(72),
-    );
-  });
-
-  it("never fills the meter for a gap", () => {
-    expect(qualityMeterFill(99)).toBe(4);
-    expect(qualityMeterFill(3)).toBe(1);
+    expect(screen.queryByText(/missing/)).toBeNull();
   });
 });
 
 describe("compact quality reads", () => {
-  it("renders the published envelope score instead of a retired scalar", () => {
+  it("renders the published envelope instead of a retired scalar", () => {
     const harness = createBrowserTestHarness();
     try {
       const renderer = compactFieldRendererFor("task", "dataQuality");
@@ -74,7 +66,7 @@ describe("compact quality reads", () => {
         }),
         { wrapper: harness.wrapper },
       );
-      expect(screen.getByText("100/100")).toBeVisible();
+      expect(screen.getByText("Complete")).toBeVisible();
       expect(
         screen.queryByLabelText("Quality unavailable"),
       ).not.toBeInTheDocument();
@@ -116,7 +108,7 @@ describe("compact quality reads", () => {
         }),
         { wrapper: harness.wrapper },
       );
-      expect(screen.getByText("100/100")).toBeVisible();
+      expect(screen.getByText("Complete")).toBeVisible();
       expect(
         screen.getByRole("button", {
           name: "Synthetic quality refresh failed",

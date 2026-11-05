@@ -1084,7 +1084,6 @@ export const { definition, readSchemas } = defineEntityModel(
             satisfiedLabel: "Source recorded",
             placement: { field: "source" },
             facet: "provenance",
-            weight: 3,
             label: "Source",
             message: "This image's origin is unknown.",
           },
@@ -1094,7 +1093,6 @@ export const { definition, readSchemas } = defineEntityModel(
             placement: { field: "captureAttribution" },
             facet: "provenance",
             kind: "defect",
-            weight: 2,
             label: "Capture attribution",
             message:
               "Multiple household members could be the photographer; confirm who captured this.",
@@ -1104,7 +1102,6 @@ export const { definition, readSchemas } = defineEntityModel(
             satisfiedLabel: "Capture date recorded",
             placement: { field: "capturedAt" },
             facet: "content",
-            weight: 1,
             label: "Capture date",
             message: "No capture date is recorded for this image.",
           },
@@ -1113,7 +1110,6 @@ export const { definition, readSchemas } = defineEntityModel(
             satisfiedLabel: "Dimensions recorded",
             placement: { field: "width" },
             facet: "integrity",
-            weight: 1,
             label: "Dimensions",
             message: "Raster image width or height is missing or not positive.",
           },
@@ -1123,8 +1119,6 @@ export const { definition, readSchemas } = defineEntityModel(
             placement: { field: "storageStatus" },
             facet: "integrity",
             kind: "defect",
-            weight: 3,
-            scoreCap: 49,
             label: "Unusable file",
             message:
               "The stored file is missing, mismatched, or failed to render.",
@@ -1134,7 +1128,6 @@ export const { definition, readSchemas } = defineEntityModel(
             satisfiedLabel: "Sightings recorded",
             placement: { field: "sightings" },
             facet: "provenance",
-            weight: 1,
             label: "Sightings",
             message:
               "No live photo-library sighting is recorded for this own-sourced image.",

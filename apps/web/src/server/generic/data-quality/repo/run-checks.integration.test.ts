@@ -20,7 +20,7 @@ import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 
 import { loadDataQualities } from "./hydrate";
-import { scoreSql, statusCondition } from "./sql";
+import { statusCondition } from "./sql";
 
 // A complete outcome must not hide unfinished targets, missing skip reasons,
 // or an impossible timeline. Active work and non-browser work remain valid.
@@ -103,7 +103,6 @@ describe("Run data quality", () => {
     ]);
     for (const run of [completed, skipped, active])
       expect(qualities.get(run.id)).toMatchObject({
-        score: 99,
         status: "needs_data",
         gaps: [{ check: "run_display_image" }],
       });
@@ -148,7 +147,6 @@ describe("Run data quality", () => {
           expect.objectContaining({ check: "run_target_outcomes" }),
         ]),
       );
-      expect(qualities.get(run.id)?.score).toBeLessThan(100);
     }
     expect(qualities.get(badClock.id)?.gaps).toEqual(
       expect.arrayContaining([
@@ -158,15 +156,12 @@ describe("Run data quality", () => {
     expect(qualities.get(badClock.id)?.status).toBe("defect");
     await publishQualityFixtures(ctx.db, "run");
     const filtered = await unwrapDb(ctx.db)
-      .select({ id: runTable.id, score: scoreSql("run", runTable) })
+      .select({ id: runTable.id })
       .from(runTable)
       .where(statusCondition("run", "defect", runTable));
     expect(filtered.map((row) => row.id)).toEqual(
       expect.arrayContaining([unfinished.id, badClock.id]),
     );
-    expect(
-      Number(filtered.find((row) => row.id === unfinished.id)?.score),
-    ).toBe(qualities.get(unfinished.id)?.score);
   });
   it("checks the live photo roster and requires an explanation for skipped images", async () => {
     const run = await makeRun("completed", end, "photo_inventory");
@@ -256,6 +251,6 @@ describe("Run data quality", () => {
     ).toBeUndefined();
     expect(
       enriched.data.find((row) => row.id === run.shortcode)?.dataQuality,
-    ).toMatchObject({ score: 99, status: "needs_data" });
+    ).toMatchObject({ status: "needs_data" });
   });
 });

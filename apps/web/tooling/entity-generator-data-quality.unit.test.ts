@@ -15,7 +15,6 @@ const scored = (key: string, related: string[]): CompiledEntity =>
           id: `${key}_check`,
           facet: "identity",
           kind: "missing",
-          weight: 1,
           scoring: "weighted",
           exceptions: "inherit",
           label: "Check",

@@ -46,12 +46,12 @@ import { storedEntryFor } from "./entry";
 import { clearDataException, setDataException } from "./exceptions";
 import { loadDataQualities } from "./hydrate";
 import type { ScoredTable } from "./registry";
-import { scoreSql, statusSql } from "./sql";
+import { gapCountSql, statusSql } from "./sql";
 
 const page = { pageIndex: 0, pageSize: 50 };
 
 /**
- * The list filters, the score sort and the hydrated `dataQuality` all derive
+ * The list filters, the missing-count sort and the hydrated `dataQuality` all derive
  * from the one registry binding per check. This asserts they agree on real
  * rows — the historical regression class was SQL predicates and JS
  * predicates drifting apart (a `dataGap` filter that disagreed with the
@@ -125,14 +125,9 @@ describe("data quality: list filters, sort and hydration agree", () => {
     const quality = (
       await publishedQualities(ctx.db, "product", [row.entityId])
     ).get(row.entityId)!;
-    expect(quality.score).toBeLessThan(100);
     expect(quality.gaps.map((gap) => gap.check)).toContain(
       "product_display_image",
     );
-    const scores = await unwrapDb(ctx.db)
-      .execute(sql`SELECT ${scoreSql("product")} AS score
-      FROM ${storedEntryFor("product").table} WHERE ${storedEntryFor("product").table.id} = ${row.entityId}`);
-    expect(Number(scores.rows[0]?.score)).toBe(quality.score);
     await expect(
       setDataException(
         ctx.db,
@@ -155,7 +150,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
       await publishedQualities(ctx.db, "product", [row.entityId])
     ).get(row.entityId)!;
     expect(complete).toMatchObject({
-      score: 100,
       status: "complete",
       gaps: [],
     });
@@ -225,7 +219,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(hydrated.get(middling.entityId)?.status).toBe("needs_data");
     expect(hydrated.get(catalogOnly.entityId)).toMatchObject({
       status: "defect",
-      score: 30,
     });
     expect(
       hydrated.get(catalogOnly.entityId)?.gaps.map((gap) => gap.check),
@@ -272,35 +265,32 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(noMaker.has(catalogOnly.id)).toBe(true);
   });
 
-  it("sorts by the same score the hydrated object carries", async () => {
+  it("sorts by how many checks the hydrated object lists as missing", async () => {
     const { weak, middling, catalogOnly } = await seedProducts();
     const hydrated = await publishedQualities(ctx.db, "product", [
       weak.entityId,
       middling.entityId,
       catalogOnly.entityId,
     ]);
-    const score = (row: typeof weak) => hydrated.get(row.entityId)!.score!;
-    expect(score(weak)).toBeLessThan(score(catalogOnly));
-    expect(score(catalogOnly)).toBeLessThan(score(middling));
-
+    const missing = (row: typeof weak) =>
+      hydrated.get(row.entityId)!.gaps.length;
     const { data } = await publishedProductList(
       ctx.db,
       { nameFilter: "DQ " },
       [{ orderBy: "dataQuality", direction: "asc" }],
       page,
     );
-    const ordered = [weak, catalogOnly, middling];
-    expect(data.map((row) => row.id)).toEqual(ordered.map((row) => row.id));
-    expect(data.map((row) => row.dataQuality.score)).toEqual(
-      ordered.map(score),
+    const counts = data.map((row) => row.dataQuality.gaps.length);
+    expect(counts).toEqual([...counts].sort((left, right) => right - left));
+    expect(new Set(data.map((row) => row.id))).toEqual(
+      new Set([weak, catalogOnly, middling].map((row) => row.id)),
     );
+    expect(missing(weak)).toBeGreaterThan(missing(middling));
+    expect(data.every((row) => row.dataQuality.score === null)).toBe(true);
   });
 
   it("counts a durable waiver as satisfied until explicitly cleared", async () => {
     const { weak } = await seedProducts();
-    const before = (
-      await publishedQualities(ctx.db, "product", [weak.entityId])
-    ).get(weak.entityId)!;
 
     const excepted = await setDataException(
       ctx.db,
@@ -321,7 +311,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(excepted.gaps.map((gap) => gap.check)).not.toContain(
       "product_brand",
     );
-    expect(excepted.score).toBeGreaterThan(before.score!);
     const noMaker = new Set(
       (
         await publishedProductList(
@@ -340,7 +329,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
       TEST_ACTOR,
     );
     expect(cleared.exceptions).toEqual([]);
-    expect(cleared.score).toBe(before.score);
   });
 
   // Failure modes: a sale/discard Expense passing as purchase evidence; a
@@ -429,7 +417,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(soldGaps).toContain("product_category");
     expect(soldGaps).toContain("product_external_id");
     // A missing category is indispensable identity: capped at 69.
-    expect(soldQuality.score).toBeLessThanOrEqual(69);
     expect(
       hydrated.get(bought.entityId)?.gaps.map((gap) => gap.check),
     ).not.toContain("product_unpurchased");
@@ -533,26 +520,19 @@ describe("data quality: list filters, sort and hydration agree", () => {
 
     // Weights: name 3, brandName 2, external id 2, category 3, price 3.
     // Name + maker + category of name + maker + external id + category.
-    expect(quality(catalog).score).toBe(80);
     expect(gaps(catalog)).not.toContain("product_price");
     // Name + maker + price of those plus external id + category.
-    expect(quality(priced).score).toBe(61.54);
-    expect(quality(zero).score).toBe(84.62);
     expect(gaps(zero)).not.toContain("product_price");
-    expect(quality(refunded).score).toBe(80);
     expect(gaps(refunded)).not.toContain("product_price");
     // Stock adds the price gap plus the weight-1 image and purchase checks.
     expect(gaps(stocked)).toContain("product_price");
-    expect(quality(stocked).score).toBe(53.33);
     // 10/13 weighted, but a missing category caps at 69.
     expect(gaps(uncategorized)).toEqual([
       "product_orphaned",
       "product_category",
       "product_display_image",
     ]);
-    expect(quality(uncategorized).score).toBe(69);
     expect(gaps(blank)).toContain("product_name");
-    expect(quality(blank).score).toBe(50);
 
     const { data } = await publishedProductList(
       ctx.db,
@@ -560,9 +540,9 @@ describe("data quality: list filters, sort and hydration agree", () => {
       [],
       page,
     );
-    const listed = new Map(data.map((row) => [row.id, row.dataQuality.score]));
+    const listed = new Map(data.map((row) => [row.id, row.dataQuality.gaps]));
     for (const row of rows.filter((row) => row !== blank))
-      expect(listed.get(row.id)).toBe(quality(row).score);
+      expect(listed.get(row.id)).toEqual(quality(row).gaps);
   });
 
   // Failure modes: model-only or external-ID-only records stay in Research,
@@ -636,12 +616,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(gaps(both)).not.toContain("product_external_id");
     expect(gaps(neither)).toContain("product_external_id");
     expect(gaps(deleted)).toContain("product_external_id");
-    expect(hydrated.get(modelOnly.entityId)?.score).toBe(
-      hydrated.get(both.entityId)?.score,
-    );
-    expect(hydrated.get(externalOnly.entityId)?.score).toBe(
-      hydrated.get(both.entityId)?.score,
-    );
     const filtered = await publishedProductList(
       ctx.db,
       { nameFilter: "DQ identifier", dataGap: ["product_external_id"] },
@@ -949,7 +923,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
         targetId: parseShortcodeFor("product", weak.id),
       }),
     );
-    // The purchase's own score ignores the related product's gaps.
+    // The purchase's own status ignores the related product's gaps.
     expect(quality?.gaps.map((gap) => gap.check)).not.toContain(
       "product_image",
     );
@@ -965,14 +939,14 @@ describe("data quality: list filters, sort and hydration agree", () => {
  * list-smoke probes and costs the same on every production list request.
  * Planning cost is independent of row count, so an empty table measures it.
  */
-describe("data quality: score and status SQL planning", () => {
+describe("data quality: gap count and status SQL planning", () => {
   const ctx = withTestDb();
   const PLANNER_BUDGET_KB = 128 * 1024;
   const explained = z.tuple([
     z.object({ Planning: z.object({ "Memory Used": z.number() }) }),
   ]);
 
-  it("plans every scored entity's score and status within the budget", async () => {
+  it("plans every scored entity's gap count and status within the budget", async () => {
     const plannerKb = async (expression: SQL, t: ScoredTable) => {
       const result = await unwrapDb(ctx.db).execute(
         sql`EXPLAIN (MEMORY, FORMAT JSON) SELECT ${expression} FROM ${t}`,
@@ -984,7 +958,7 @@ describe("data quality: score and status SQL planning", () => {
     const used: Record<string, number> = {};
     for (const entity of scoredEntities) {
       const t = storedEntryFor(entity).table;
-      used[`${entity} score`] = await plannerKb(scoreSql(entity, t), t);
+      used[`${entity} gaps`] = await plannerKb(gapCountSql(entity, t), t);
       used[`${entity} status`] = await plannerKb(statusSql(entity, t), t);
     }
     // Names each statement over budget with its planner kB.

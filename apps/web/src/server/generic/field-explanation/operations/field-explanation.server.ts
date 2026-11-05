@@ -923,39 +923,27 @@ function explanationActions(
   ];
 }
 
-function qualityGapSummary(
-  breakdown: z.infer<typeof fieldExplanationOutput>["qualityBreakdown"],
-): string {
-  const weightedGaps = breakdown?.checks.filter(
-    (check) => check.state === "gap" && check.weight > 0,
-  ).length;
-  const unscoredGaps = breakdown?.checks.filter(
-    (check) => check.state === "gap" && check.weight === 0,
-  ).length;
-  return [
-    weightedGaps
-      ? `${weightedGaps} unresolved ${weightedGaps === 1 ? "check reduces" : "checks reduce"} this record's score.`
-      : null,
-    unscoredGaps
-      ? `${unscoredGaps} unresolved ${unscoredGaps === 1 ? "diagnostic carries" : "diagnostics carry"} no weight but ${unscoredGaps === 1 ? "caps" : "cap"} this record's score below 100.`
-      : null,
-    "Missing information and detected defects are shown separately below.",
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
 function qualitySummary(
   quality: DataQuality,
   breakdown: z.infer<typeof fieldExplanationOutput>["qualityBreakdown"],
 ): string {
   if (quality.status === "not_assessed")
-    return "No weighted check applies to this record and nothing is unresolved, so its quality is not assessed. Not assessed is not a score of zero or a guarantee of completeness.";
-  if (quality.gaps.length > 0) return qualityGapSummary(breakdown);
+    return "No assessed check applies to this record and nothing is unresolved, so its quality is not assessed. Not assessed does not mean complete.";
+  if (quality.gaps.length > 0) {
+    const gaps = breakdown?.checks.filter((check) => check.state === "gap");
+    return `${gaps?.length ?? quality.gaps.length} unresolved. Missing information and detected defects are shown separately below.`;
+  }
   return quality.status === "complete_with_exceptions"
-    ? "Every applicable check passes, at least one only through an accepted exception. This score describes the checks defined for this record; it does not guarantee that every possible detail is correct."
-    : "All applicable checks are satisfied. This score describes the checks defined for this record; it does not guarantee that every possible detail is correct.";
+    ? "Every applicable check passes, at least one only through an accepted exception. This covers the checks defined for this record; it does not guarantee that every possible detail is present."
+    : "All applicable checks are satisfied. This covers the checks defined for this record; it does not guarantee that every possible detail is present.";
 }
+
+const dataQualityStatusResult = (quality: DataQuality) =>
+  quality.status === "not_assessed"
+    ? "Not assessed"
+    : quality.gaps.length > 0
+      ? `${quality.gaps.length} missing`
+      : "Nothing missing";
 
 export function explainInterpretation(
   field: (typeof entityFieldModels)[Entity]["fields"][number],
@@ -982,16 +970,8 @@ export function explainInterpretation(
     nextSteps.length = 0;
     const q = quality.data;
     summary = qualitySummary(q, qualityBreakdown);
-    if (qualityBreakdown?.expectedWeight === 0)
-      caveats.push(
-        "No weighted checks apply to this record. Without an unresolved check it is not assessed; an unresolved diagnostic sets the score to its cap.",
-      );
-    if (q.gaps.length > 0)
-      caveats.push(
-        "Every unresolved check caps the score at 99, or lower where the check declares a cap, so a record with a gap never reads 100.",
-      );
     caveats.push(
-      "Only this record's applicable weighted checks affect its score. Related records' gaps are reported separately.",
+      "Only this record's applicable checks count. Related records' gaps are reported separately.",
     );
     if (q.exceptions.length > 0)
       caveats.push(
@@ -1028,9 +1008,7 @@ export function explainInterpretation(
   return {
     interpretation: {
       result: quality?.success
-        ? quality.data.score === null
-          ? "Not assessed"
-          : `${Math.round(quality.data.score)}/100`
+        ? dataQualityStatusResult(quality.data)
         : resultLabel,
       summary,
       caveats,

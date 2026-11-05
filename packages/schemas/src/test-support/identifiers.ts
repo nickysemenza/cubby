@@ -114,7 +114,7 @@ export function testShortcode<E extends ShortcodeEntity>(
 export function testCompleteDataQuality(): DataQuality {
   return {
     status: "complete",
-    score: 100,
+    score: null,
     facets: [],
     gaps: [],
     exceptions: [],

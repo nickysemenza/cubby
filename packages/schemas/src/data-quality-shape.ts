@@ -12,9 +12,9 @@ import {
  * input schemas (filters, exceptions) from the generated enums.
  */
 /**
- * `not_assessed`: no applicable check holds a gap and none carries weight, so
- * the score is null. `complete_with_exceptions`: no unresolved gap, but at
- * least one is satisfied only by an accepted exception.
+ * `not_assessed`: no applicable check holds a gap and none counts toward
+ * assessment. `complete_with_exceptions`: no unresolved gap, but at least one is
+ * satisfied only by an accepted exception.
  */
 /** Persisted check outcomes; waivers apply only while a check has a gap. */
 export const entityQualityCheckState = z.enum([
@@ -92,7 +92,7 @@ export type DataQualityFacet = z.infer<typeof dataQualityFacet>;
 
 export const dataQuality = z.object({
   status: dataQualityStatus,
-  /** Null exactly when `status` is `not_assessed`. */
+  /** Always null. Shipped native builds decode this key; `gaps` is the content. */
   score: z.number().min(0).max(100).nullable(),
   facets: z.array(dataQualityFacet),
   gaps: z.array(dataQualityGap),

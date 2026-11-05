@@ -136,7 +136,9 @@ export const workQueueRowSchema = z
     shared: z.boolean(),
     /** The saved view's checks this record currently fails. */
     gaps: z.array(workQueueGapSchema),
-    dataQuality: dataQuality.pick({ status: true, score: true }).nullable(),
+    dataQuality: dataQuality
+      .pick({ status: true, score: true, gaps: true })
+      .nullable(),
     /** The record's own money (a Purchase's SUM(Expense.cost)); null when
      * it has none. */
     amount: z.number().nullable(),

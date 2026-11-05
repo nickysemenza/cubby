@@ -422,7 +422,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Transaction evidence linked",
           placement: { section: "evidence-transactions" },
           facet: "settlement",
-          weight: 1,
           label: "Transaction",
           message:
             "No live, non-void financial transaction evidences this transfer.",

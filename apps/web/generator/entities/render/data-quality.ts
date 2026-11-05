@@ -81,19 +81,11 @@ export const renderDataQualityArtifacts = (
       byCheck((check) => JSON.stringify(check.kind)),
     ) +
     "\n" +
+    "/** Whether a check counts toward a record being assessed; diagnostics do not. */\n" +
     record(
-      "dataCheckWeight",
-      "Record<DataCheck, number>",
-      byCheck((check) =>
-        String(check.scoring === "unscored" ? 0 : check.weight),
-      ),
-    ) +
-    "\n" +
-    "/** A declared `scoreCap`, or null for the default unresolved-gap cap. */\n" +
-    record(
-      "dataCheckScoreCap",
-      "Record<DataCheck, number | null>",
-      byCheck((check) => String(check.scoreCap ?? null)),
+      "dataCheckAssessed",
+      "Record<DataCheck, boolean>",
+      byCheck((check) => String(check.scoring !== "unscored")),
     ) +
     "\n" +
     record(

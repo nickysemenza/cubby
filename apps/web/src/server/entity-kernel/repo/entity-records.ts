@@ -24,7 +24,7 @@ import {
 } from "~/server/entity-kernel/repo/entity-display-image";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { storedEntryFor } from "~/server/generic/data-quality/repo/entry";
-import { scoreSql, statusSql } from "~/server/generic/data-quality/repo/sql";
+import { gapCountSql, statusSql } from "~/server/generic/data-quality/repo/sql";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 
 const scored = (kind: Entity): kind is (typeof scoredEntities)[number] =>
@@ -34,7 +34,7 @@ const privateRowSchema = entityRecordSchema
   .omit({ displayImages: true })
   .extend({
     dbId: z.string(),
-    quality: z.coerce.number().min(0).max(100).nullable(),
+    missing: z.coerce.number().int().min(0).nullable(),
   });
 
 /** Compute costly display fields before paging only when query semantics need them. */
@@ -46,14 +46,14 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
     return sql`SELECT 0 AS "totalCount", '[]'::json AS items`;
   const earlyName = Boolean(input.q) || input.orderBy === "name";
   const earlyQuality =
-    input.orderBy === "quality" ||
-    input.qualityMin !== undefined ||
-    input.qualityMax !== undefined;
+    input.orderBy === "missing" ||
+    input.missingMin !== undefined ||
+    input.missingMax !== undefined;
   const earlyImage = input.orderBy === "hasImage" || Boolean(input.image);
-  const qualityFor = (kind: Entity) =>
+  const missingFor = (kind: Entity) =>
     scored(kind)
-      ? scoreSql(kind, storedEntryFor(kind).table)
-      : sql`NULL::numeric`;
+      ? gapCountSql(kind, storedEntryFor(kind).table)
+      : sql`NULL::bigint`;
   const pageBranches: SQL[] = [];
   const branches = kinds.map((kind) => {
     const table = entityManifest[kind].dbTable;
@@ -63,7 +63,7 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
     const id = sql`${payload}."id"`;
     const fields = {
       name: sql`${labelSql(kind, `"${table}"`)} AS name`,
-      quality: sql`${qualityFor(kind)} AS quality`,
+      missing: sql`${missingFor(kind)} AS missing`,
       image: sql`${entityDisplayImagePresenceSql(kind, id)} AS "hasImage"`,
     };
     const early: SQL[] = [];
@@ -73,7 +73,7 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
     ];
     for (const [field, needed] of [
       [fields.name, earlyName],
-      [fields.quality, earlyQuality],
+      [fields.missing, earlyQuality],
       [fields.image, earlyImage],
     ] as const) {
       (needed ? early : late).push(sql`, ${field}`);
@@ -99,10 +99,10 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
     predicates.push(sql`(name ILIKE ${pattern} OR id ILIKE ${pattern})`);
   }
   if (input.image) predicates.push(sql`"hasImage" = ${input.image === "has"}`);
-  if (input.qualityMin !== undefined)
-    predicates.push(sql`quality >= ${input.qualityMin}`);
-  if (input.qualityMax !== undefined)
-    predicates.push(sql`quality <= ${input.qualityMax}`);
+  if (input.missingMin !== undefined)
+    predicates.push(sql`missing >= ${input.missingMin}`);
+  if (input.missingMax !== undefined)
+    predicates.push(sql`missing <= ${input.missingMax}`);
   for (const [column, from, to] of [
     ["createdAt", input.createdFrom, input.createdTo],
     ["updatedAt", input.updatedFrom, input.updatedTo],

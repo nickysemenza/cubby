@@ -882,7 +882,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Ledger party recorded",
           placement: { field: "ledgerPartyId" },
           facet: "linkage",
-          weight: 2,
           label: "Ledger party",
           message: "No ledger party is linked to this account.",
         },

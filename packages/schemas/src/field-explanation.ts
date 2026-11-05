@@ -53,16 +53,15 @@ export const fieldRefreshLocator = fieldExplanationInput.pick({
 export type FieldRefreshLocator = z.output<typeof fieldRefreshLocator>;
 
 export const qualityBreakdown = z.object({
-  /** Null when not assessed; otherwise the weighted score after caps. */
+  /** Shipped native builds decode these keys; only `status` and `summary` carry meaning. */
   score: z.number().nullable(),
   status: dataQualityStatus,
-  /** The uncapped weighted score; null when no weighted check applies. */
   weightedScore: z.number().nullable(),
-  /** The lowest cap an unresolved check imposes; null when none is unresolved. */
   scoreCap: z.number().nullable(),
+  /** Applicable checks that count toward assessment, and those not currently gaps. */
   expectedWeight: z.number(),
   satisfiedWeight: z.number(),
-  /** The score arithmetic as display text; clients render it verbatim. */
+  /** What is missing, as display text; clients render it verbatim. */
   summary: z.string(),
   checks: z.array(
     z.object({
@@ -70,16 +69,14 @@ export const qualityBreakdown = z.object({
       label: z.string(),
       facet: z.string(),
       kind: z.enum(["missing", "defect"]),
+      /** 1 when the check counts toward assessment, 0 for a diagnostic. */
       weight: z.number(),
-      /** The highest score this record may show while the check is a gap. */
+      /** Always 100; kept for shipped native builds. */
       scoreCap: z.number(),
       state: z.enum(["satisfied", "gap", "excepted"]),
       /** Display text for `state` (and `kind` when a gap): "Defect", "Missing data", … */
       stateLabel: z.string(),
-      /**
-       * Display text for `weight` (and a declared cap): "weight 3",
-       * "Unscored diagnostic", "weight 3 · caps at 60 while unresolved".
-       */
+      /** Display text for what the check is: "Check" or "Diagnostic". */
       weightLabel: z.string(),
       description: z.string(),
       /**

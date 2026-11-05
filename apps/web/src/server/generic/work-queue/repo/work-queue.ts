@@ -531,7 +531,11 @@ async function stateRowQuality<E extends ScoredEntity & ShortcodeEntity>(
     const id = item.id ? ids.get(item.id) : undefined;
     const quality = id ? qualities.get(id) : undefined;
     if (!quality) continue;
-    item.dataQuality = { status: quality.status, score: quality.score };
+    item.dataQuality = {
+      status: quality.status,
+      score: null,
+      gaps: quality.gaps,
+    };
     const gapView = workQueueGapViews.find(
       (view) => view.entity === entity && view.family === item.family,
     );

@@ -1,11 +1,10 @@
 import {
   dataCheckExemptible,
-  dataCheckScoreCap,
   type DataCheck,
   type DataQualityStatus,
   dataCheckEntity,
   dataChecksByEntity,
-  dataCheckWeight,
+  dataCheckAssessed,
   dataQualityExceptionEntities,
   dataQualityStatus,
   isDefectDataCheck,
@@ -25,7 +24,7 @@ import {
 } from "~/server/generic/data-quality/repo/registry";
 
 import { storedEntryFor } from "./entry";
-import { storedCheckStateSql, storedScoreSql } from "./stored-sql";
+import { storedCheckStateSql, storedGapCountSql } from "./stored-sql";
 
 /**
  * Every builder here returns ONE parenthesized group. Callers embed these
@@ -92,7 +91,7 @@ type StateTerm = Omit<QualityTerm, "state"> & { state: SQL };
 const code = (state: QualityTerm["state"]) =>
   sql.raw(String(qualityStateCode[state]));
 
-/** `scoreQualityTerms(...).status` in SQL; the precedence order is the TS one. */
+/** `qualityStatusOf` in SQL; the precedence order is the TS one. */
 export const statusFromStates = (terms: readonly StateTerm[]): SQL => {
   const any = (
     pick: (term: StateTerm) => boolean,
@@ -103,7 +102,7 @@ export const statusFromStates = (terms: readonly StateTerm[]): SQL => {
     );
   const weighted = orGroup(
     terms
-      .filter((term) => term.weight > 0)
+      .filter((term) => term.assessed)
       .map((term) => sql`${term.state} <> ${code("not_applicable")}`),
   );
   return group(sql`CASE
@@ -114,24 +113,20 @@ export const statusFromStates = (terms: readonly StateTerm[]): SQL => {
   ELSE ${sqlEnumConstant(dataQualityStatus, "complete")} END`);
 };
 
-/**
- * The record's published score: what `entity.records` returns and `ORDER BY
- * dataQuality` sorts on.
- */
-export const scoreSql = (
+/** What `entity.records` returns and `ORDER BY dataQuality` sorts on. */
+export const gapCountSql = (
   entity: ScoredEntity,
   t: ScoredTable = storedEntryFor(entity).table,
-): SQL => storedScoreSql(entity, t);
+): SQL => storedGapCountSql(entity, t);
 
-/** Authoritative pill tone; a defect cannot be inferred from the numeric score. */
+/** Authoritative pill tone; a defect cannot be inferred from a gap count. */
 export const statusSql = (
   entity: ScoredEntity,
   t: ScoredTable = storedEntryFor(entity).table,
 ): SQL =>
   statusFromStates(
     checksOf(entity).map((check) => ({
-      weight: dataCheckWeight[check],
-      scoreCap: dataCheckScoreCap[check],
+      assessed: dataCheckAssessed[check],
       defect: isDefectDataCheck(check),
       state: sql`CASE ${storedCheckStateSql(entity, check, t)}
       WHEN ${state("pass")} THEN ${code("satisfied")} WHEN ${state("gap")} THEN ${code("gap")}
@@ -249,13 +244,13 @@ export const dataQualityFilterPredicates = <Filters extends object>(
 
 const DATA_QUALITY_SORT = "dataQuality";
 
-/** `resolve` for `buildOrderBy`: the score, asc = weakest row first. */
+/** `resolve` for `buildOrderBy`: asc = most missing first, ordered by gap count. */
 export const dataQualitySortResolver =
   (entity: ScoredEntity, t: ScoredTable) =>
   (sort: { orderBy: string; direction: string }): SQL[] | null =>
     sort.orderBy === DATA_QUALITY_SORT
       ? [
-          // A not-assessed (null) score sorts after every scored row either way.
-          sql`${scoreSql(entity, t)} ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} NULLS LAST`,
+          // A not-assessed record (null) sorts after every assessed one either way.
+          sql`${gapCountSql(entity, t)} ${sql.raw(sort.direction === "asc" ? "desc" : "asc")} NULLS LAST`,
         ]
       : null;

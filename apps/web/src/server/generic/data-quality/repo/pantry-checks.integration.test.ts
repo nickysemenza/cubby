@@ -303,7 +303,6 @@ describe("data quality: pantry and garden entities", () => {
       "inventory_unknown_location",
     );
     // Parked in Unknown is consequential, not a free diagnostic.
-    expect(hydrated.get(gap.entityId)?.score).toBeLessThanOrEqual(69);
     expect(hydrated.get(complete.entityId)).toMatchObject({
       status: "needs_data",
       gaps: [{ check: "inventory_display_image" }],
@@ -394,7 +393,6 @@ describe("data quality: pantry and garden entities", () => {
     expect(after.gaps.map((g) => g.check)).toEqual(
       expect.arrayContaining(["recipe_ingredients", "recipe_instructions"]),
     );
-    expect(after.score).toBeLessThanOrEqual(69);
   });
 
   // Failure mode: a sub-recipe ingredient outliving its deleted Recipe and
@@ -430,7 +428,6 @@ describe("data quality: pantry and garden entities", () => {
     expect(orphaned.gaps.map((g) => g.check)).toContain(
       "ingredient_recipe_deleted",
     );
-    expect(orphaned.score).toBeLessThanOrEqual(49);
   });
 
   // Failure mode: a cooked meal whose only recipe was deleted still counting
@@ -461,7 +458,6 @@ describe("data quality: pantry and garden entities", () => {
       await loadDataQualities(ctx.db, "meal", [meal.entityId])
     ).get(meal.entityId)!;
     expect(quality.gaps.map((g) => g.check)).toContain("meal_contents");
-    expect(quality.score).toBeLessThanOrEqual(69);
   });
 
   // Failure modes: an unmapped category passing; a deliberate "keep
@@ -542,7 +538,6 @@ describe("data quality: pantry and garden entities", () => {
     expect(checks(1)).toContain("image_dimensions");
     expect(checks(2)).toContain("image_asset_unusable");
     expect(hydrated.get(ids[2]!)?.status).toBe("defect");
-    expect(hydrated.get(ids[2]!)?.score).toBeLessThanOrEqual(49);
   });
 
   it("productCategory: description and root feature", async () => {

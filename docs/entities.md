@@ -3723,9 +3723,8 @@ and Brand matching; domain-specific merchant/title canonicalization is separate.
 Shipment quality requires a known incoming/outgoing purpose and a resolved
 Purchase association: a live Purchase link, or a member-reviewed null association
 for a non-purchase shipment. A reviewed link to a deleted Purchase still fails.
-Unknown purpose caps the score at 69; unresolved association caps it at 49.
-These unscored prerequisites cap the existing tracking-evidence score rather
-than changing its weights. Purchase/Expense quality owns itemization and Product
+An unknown purpose or an unresolved association each lists as its own missing
+check beside the tracking evidence. Purchase/Expense quality owns itemization and Product
 completeness; optional parcel contents are not a universal prerequisite.
 
 Shipment is the first stored-quality kind. Its batch loader reconciles current
@@ -3752,8 +3751,9 @@ Every scored repository declares one `defineStoredEntityChecks` entry in
 evaluator whose single batch loader produces the records consumed by pure
 shared `qualityCheck` builders (`required`, `observed`, `hasRelated`,
 `hasImage`, `when`). Its type requires a function for every declared check.
-Declarations in `packages/schemas` own check identity, weight, caps and
-placement. The shared `data-quality-score.ts` formula owns stored scores.
+Declarations in `packages/schemas` own check identity, whether it counts toward
+assessment, and placement. A record's quality is the list of its unresolved
+checks; `data-quality-score.ts` owns the status derived from them.
 
 Related-row facts are loaded once per ID page; soft-deleted Recipes,
 Ingredients, Products, Purchases, attachments and Images do not count. Cookbook covers, Vendor logos and
@@ -3763,14 +3763,15 @@ analyses; both are declared quality inputs.
 
 Stored quality is the `dataQuality` derived value
 ([background derived data](#background-derived-data)): its value holds the
-score, rules version and each check's pass, gap, waived or not_applicable
-state, and its sort projection is the score. Entity itself has no quality
+rules version and each check's pass, gap, waived or not_applicable state. The
+`dataQuality` sort counts `gap` states at read time, ascending is most missing
+first, and an unassessed record sorts last. Entity itself has no quality
 columns.
 Hydration consumes the named check states directly for both published and live
 evaluations; check order is not an intermediate row encoding.
 Quality consumers use `storedEntryFor` in `entries.ts` as the single
 erased-table registry accessor; SQL builders do not wrap or re-export it.
-Lists, filters, score sorts and related rollups consume published outcomes. A
+Lists, filters, missing-count sorts and related rollups consume published outcomes. A
 missing publication is unassessed. `loadDataQualities`
 defaults to live evaluation for record and detail reads; list pages and the Work
 queue population reads pass `"stored"`. A single-record Work strip evaluates
@@ -3800,10 +3801,10 @@ Compact entity facts, including board cards, use the shared quality value and la
 Scored entities receive a shared, unscored display-image check by default.
 An evidence-only quality declaration can set `displayImage: false`; Shipment
 uses this because tracking evidence completeness does not require imagery. Without a
-usable direct or declared related image, its score is capped at 99; this check
+usable direct or declared related image, the check lists as missing; it
 cannot be waived with a DataException. It uses the thumbnail resolver's presence
 predicate, so deleted images, PDFs, failed renders and unavailable files do not
-qualify. Existing weighted image checks still own their domain requirements.
+qualify. Existing image checks still own their domain requirements.
 Entities without applicable weighted checks remain unassessed when the image
 check passes; an absent image supplies the unresolved 99 cap.
 

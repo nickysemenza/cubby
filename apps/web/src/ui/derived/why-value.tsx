@@ -391,8 +391,8 @@ function UnassessedQualityExplanation({
       <section className="grid gap-2 border-t border-border pt-3">
         <h3 className={sectionLabelClassName}>Technical details</h3>
         <p className="text-sm leading-relaxed">
-          There is no score, calculation, or check evaluation for this entity.
-          Not assessed is not a score of zero or a guarantee of completeness.
+          There are no quality checks for this entity. Not assessed does not
+          mean complete.
         </p>
         {rule ? (
           <p className="font-mono text-xs break-all">
@@ -492,7 +492,7 @@ function QualityCalculation({
           {dataQualityStatusLabel(breakdown.status)}
         </Badge>
       </div>
-      <Disclosure summary="Score arithmetic">
+      <Disclosure summary="All checks">
         <p className="pb-2 text-xs leading-5 tabular-nums">
           {breakdown.summary}
         </p>

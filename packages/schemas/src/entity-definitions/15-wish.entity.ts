@@ -600,7 +600,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Candidate recorded",
           placement: { section: "candidates" },
           facet: "linkage",
-          weight: 1,
           label: "Candidate",
           message: "No live candidate product is linked to this wish.",
         },

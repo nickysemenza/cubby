@@ -247,7 +247,7 @@ export const { definition, readSchemas } = defineEntityModel({
           id: "research-queue",
           label: "Research queue",
           description:
-            "Purchases missing account attribution, lines, or paperwork, weakest first",
+            "Purchases missing account attribution, lines, or paperwork, most missing first",
           // Missing account attribution and order facts are actionable here.
           filters: [
             {
@@ -2165,7 +2165,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Vendor account recorded",
           placement: { field: "vendorAccountId" },
           facet: "identity",
-          weight: 1,
           exceptions: "forbidden",
           label: "Missing vendor account",
           message: "Purchase is not assigned to a member's vendor account.",
@@ -2175,8 +2174,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Date recorded",
           placement: { field: "date" },
           facet: "identity",
-          weight: 3,
-          scoreCap: 69,
           label: "Missing date",
           message: "Purchase date is not recorded.",
         },
@@ -2201,8 +2198,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Expenses recorded",
           placement: { section: "expenses" },
           facet: "ledger",
-          weight: 3,
-          scoreCap: 69,
           label: "No expense lines",
           message: "Purchase has no live Expenses.",
         },
@@ -2230,7 +2225,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Itemized",
           placement: { section: "expenses" },
           facet: "ledger",
-          weight: 2,
           label: "Itemization",
           message:
             "The order is not yet broken into item lines with their Products.",
@@ -2240,7 +2234,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Expense prices complete",
           placement: { section: "expenses" },
           facet: "ledger",
-          weight: 2,
           label: "Unpriced expense line",
           message: "At least one linked, non-future Expense is unpriced.",
         },
@@ -2250,8 +2243,6 @@ export const { definition, readSchemas } = defineEntityModel({
           placement: { section: "reconciliation" },
           facet: "paperwork",
           kind: "defect",
-          weight: 2,
-          scoreCap: 49,
           label: "Paperwork mismatch",
           message:
             "Expense total differs from the literal vendor-stated total, and posted refunds do not fully explain it.",
@@ -2261,7 +2252,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Settlement evidence linked",
           placement: { section: "financial-settlement" },
           facet: "settlement",
-          weight: 2,
           label: "No settlement evidence",
           message:
             "No posted qualifying FinancialTransaction with external or cash-account evidence is linked.",
@@ -2272,8 +2262,6 @@ export const { definition, readSchemas } = defineEntityModel({
           placement: { section: "financial-settlement" },
           facet: "settlement",
           kind: "defect",
-          weight: 2,
-          scoreCap: 49,
           label: "Settlement mismatch",
           message:
             "Settlement evidence differs from incurred Expenses. Review the ledger and source evidence, or record a reasoned expected mismatch.",
@@ -2284,8 +2272,6 @@ export const { definition, readSchemas } = defineEntityModel({
           placement: { section: "financial-settlement" },
           facet: "settlement",
           kind: "defect",
-          weight: 2,
-          scoreCap: 49,
           label: "Settled from another member's account",
           message:
             "A settling transaction's account is not one this order's member could use on that date. Move the charge to its own order, or record confirmed shared use.",
@@ -2296,8 +2282,6 @@ export const { definition, readSchemas } = defineEntityModel({
           placement: { section: "financial-settlement" },
           facet: "settlement",
           kind: "defect",
-          weight: 2,
-          scoreCap: 49,
           label: "Settled from an account that did not pay",
           message:
             "A settling transaction's account is not among the accounts this order's payment evidence or payment-account links name. Move the charge, link the paying account, or record the confirmed payment method.",

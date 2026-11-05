@@ -568,7 +568,6 @@ export const { definition, readSchemas } = defineEntityModel({
           id: "shipment_purpose",
           facet: "identity",
           scoring: "unscored",
-          scoreCap: 69,
           exceptions: "forbidden",
           label: "Unknown shipment purpose",
           satisfiedLabel: "Shipment purpose known",
@@ -579,7 +578,6 @@ export const { definition, readSchemas } = defineEntityModel({
           id: "shipment_purchase_association",
           facet: "provenance",
           scoring: "unscored",
-          scoreCap: 49,
           exceptions: "forbidden",
           label: "Unresolved purchase association",
           satisfiedLabel: "Purchase association resolved",
@@ -590,8 +588,6 @@ export const { definition, readSchemas } = defineEntityModel({
         {
           id: "shipment_events",
           facet: "provenance",
-          weight: 10,
-          scoreCap: 25,
           label: "Limited event history",
           satisfiedLabel: "Multiple distinct events",
           message:
@@ -601,7 +597,6 @@ export const { definition, readSchemas } = defineEntityModel({
         {
           id: "shipment_shipped",
           facet: "provenance",
-          weight: 30,
           label: "Shipment not evidenced",
           satisfiedLabel: "Shipment evidenced",
           message:
@@ -611,7 +606,6 @@ export const { definition, readSchemas } = defineEntityModel({
         {
           id: "shipment_delivered",
           facet: "provenance",
-          weight: 30,
           label: "Delivery not yet evidenced",
           satisfiedLabel: "Delivery evidenced",
           message: "No explicit delivered event is retained.",
@@ -620,7 +614,6 @@ export const { definition, readSchemas } = defineEntityModel({
         {
           id: "shipment_span",
           facet: "provenance",
-          weight: 10,
           label: "Limited event span",
           satisfiedLabel: "Event span exceeds one day",
           message:
@@ -630,7 +623,6 @@ export const { definition, readSchemas } = defineEntityModel({
         {
           id: "shipment_dates",
           facet: "provenance",
-          weight: 10,
           label: "Missing milestone dates",
           satisfiedLabel: "Milestone dates recorded",
           message:
@@ -640,7 +632,6 @@ export const { definition, readSchemas } = defineEntityModel({
         {
           id: "shipment_chronology",
           facet: "integrity",
-          weight: 10,
           kind: "defect",
           label: "Conflicting shipment chronology",
           satisfiedLabel: "Consistent shipment chronology",

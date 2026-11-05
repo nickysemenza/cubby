@@ -523,7 +523,6 @@ describe("data quality: finance and project entities", () => {
     expect(quality?.gaps.map((gap) => gap.check)).toContain(
       "planting_lifecycle",
     );
-    expect(quality?.score).toBeLessThanOrEqual(49);
 
     const gapId = parseEntityId(
       "planting",
@@ -647,7 +646,6 @@ describe("data quality: finance and project entities", () => {
     );
     // A guest party is never expected to map to a financial account.
     expect(hydrated.get(guest.entityId)).toMatchObject({
-      score: 99,
       status: "needs_data",
       gaps: [{ check: "ledgerparty_display_image" }],
     });

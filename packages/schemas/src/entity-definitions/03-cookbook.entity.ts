@@ -510,8 +510,6 @@ export const { definition, readSchemas } = defineEntityModel(
             placement: { section: "import-progress" },
             facet: "integrity",
             kind: "defect",
-            weight: 3,
-            scoreCap: 69,
             label: "Import incomplete",
             message:
               "Fewer recipes are imported than the source cookbook contains.",
@@ -521,7 +519,6 @@ export const { definition, readSchemas } = defineEntityModel(
             satisfiedLabel: "Cover recorded",
             placement: { field: "coverUrl" },
             facet: "provenance",
-            weight: 1,
             label: "Cover image",
             message: "No cover image is recorded.",
           },

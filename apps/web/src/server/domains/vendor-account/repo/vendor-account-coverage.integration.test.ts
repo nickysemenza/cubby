@@ -132,7 +132,6 @@ describe("vendor identity and purchase account coverage", () => {
     expect(after?.gaps.map((gap) => gap.check)).not.toContain(
       "purchase_vendor_account",
     );
-    expect(after?.score).toBeGreaterThan(before?.score ?? 0);
     const fixed = await readWorkQueue(ctx.db, {
       input: input,
       memberPartyId: null,
