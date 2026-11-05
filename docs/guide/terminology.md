@@ -851,8 +851,8 @@ Suggestion strong.
 _Avoid_: quality (a record's completeness), score
 
 **Impact**:
-The record Quality a Suggestion would restore if accepted, from the
-data-quality checks its family says acceptance resolves.
+What a Suggestion would resolve if accepted, listed as the data-quality checks
+its family says acceptance closes. It is a list, not a number.
 
 **Automatic rule**:
 A named, versioned family rule that applies matching Suggestions without

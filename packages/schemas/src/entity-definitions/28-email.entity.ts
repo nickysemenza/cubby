@@ -230,7 +230,7 @@ export const { definition, readSchemas } = defineEntityModel({
           id: "pipeline-worklist",
           label: "Needs attention",
           description:
-            "Emails whose Relevance, review, original, preview or import is incomplete, weakest first",
+            "Emails whose Relevance, review, original, preview or import is incomplete, most missing first",
           filters: [
             {
               id: "dataGaps",
@@ -1084,7 +1084,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Relevance classified",
           placement: { field: "classification" },
           facet: "content",
-          weight: 3,
           label: "Relevance",
           message: "Relevance is uncertain.",
         },
@@ -1093,7 +1092,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Member review complete",
           placement: { field: "reviewedClassification" },
           facet: "provenance",
-          weight: 1,
           label: "Member review",
           message:
             "A rule, the decision model or the relevance model decided; no member review.",
@@ -1103,7 +1101,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Original retained",
           placement: { section: "review" },
           facet: "integrity",
-          weight: 2,
           label: "Original",
           message: "The original content is not retained.",
         },
@@ -1112,7 +1109,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Extraction preview recorded",
           placement: { section: "review" },
           facet: "content",
-          weight: 1,
           label: "Extraction preview",
           message: "No extraction preview for the current original.",
         },
@@ -1121,7 +1117,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Import complete",
           placement: { section: "review" },
           facet: "linkage",
-          weight: 3,
           label: "Import",
           message: "No associated Purchase or completed import Run.",
         },

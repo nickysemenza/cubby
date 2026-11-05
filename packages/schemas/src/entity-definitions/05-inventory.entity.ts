@@ -1234,8 +1234,6 @@ export const { definition, readSchemas } = defineEntityModel(
             placement: { field: "locationId" },
             facet: "integrity",
             kind: "defect",
-            weight: 2,
-            scoreCap: 69,
             exceptions: "forbidden",
             label: "Unknown location",
             message:
@@ -1246,7 +1244,6 @@ export const { definition, readSchemas } = defineEntityModel(
             satisfiedLabel: "Inventory verified",
             placement: { field: "verifiedAt" },
             facet: "provenance",
-            weight: 1,
             label: "Verified",
             message: "This stock entry has never been verified.",
             coverage: "neverVerifiedInventory",

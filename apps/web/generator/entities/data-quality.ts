@@ -20,7 +20,7 @@ const DATA_QUALITY_FIELD = "dataQuality";
 const DATA_GAPS_FIELD = "dataGaps";
 /**
  * The sort shares the column's id: a list column sorts by its own id, so the
- * one "Quality" column is what sorts by score (asc = weakest first).
+ * one "Quality" column is what sorts by missing checks (asc = most first).
  */
 const DATA_QUALITY_SORT = "dataQuality";
 const DATA_QUALITY_LIST_RENDERER = "data-quality";
@@ -56,11 +56,11 @@ const qualityField = (entityKey: string): EntityField => ({
     ruleId: `${entityKey}.data-quality`,
     version: 1,
     description:
-      "Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.",
+      "Data-quality gaps are evaluated from the checks this entity declares.",
     resolver: "field",
     projections: {
-      list: "dataQuality.score",
-      summary: "dataQuality.score",
+      list: "dataQuality.status",
+      summary: "dataQuality.status",
     },
     sourceDependencies: [{ path: "dataQuality.gaps", label: "Detected gaps" }],
   },
@@ -151,11 +151,11 @@ export const compileDataQuality = (
     );
   if (!hasContract)
     throw new EntityDeclarationError(
-      `${context}.capabilities.dataQuality needs a contract (the score is an output field).`,
+      `${context}.capabilities.dataQuality needs a contract (quality is an output field).`,
     );
   if (fieldModel.sort === null)
     throw new EntityDeclarationError(
-      `${context}.capabilities.dataQuality needs model.sort (the score is a sort).`,
+      `${context}.capabilities.dataQuality needs model.sort (quality is a sort).`,
     );
   const checks = [
     ...raw.checks.map((check) => ({

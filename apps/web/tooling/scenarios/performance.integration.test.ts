@@ -109,7 +109,7 @@ it("seeds connected performance history readable by the real Work queue", async 
     projection: ["dataQuality"],
   });
   expect(parcels.count).toBe(1);
-  expect(dataQuality.parse(parcels.data[0]?.dataQuality).score).toBe(25);
+  expect(dataQuality.parse(parcels.data[0]?.dataQuality).gaps).not.toEqual([]);
   const queue = await readWorkQueue(ctx.db, {
     input: workQueueInput.parse({ pageSize: 25 }),
     memberPartyId: null,

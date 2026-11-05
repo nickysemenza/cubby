@@ -57,8 +57,8 @@ export function QualityResult({ check }: { check: RecordQualityCheck }) {
       : check.state === "excepted"
         ? MinusCircleIcon
         : WarningCircleIcon;
-  // A satisfied check stays visible without asking for attention; an unscored
-  // gap only caps the score, so it reads no louder.
+  // A satisfied check stays visible without asking for attention; a diagnostic
+  // gap reads no louder.
   const tone =
     check.state !== "gap" || (check.kind === "missing" && check.weight === 0)
       ? "text-muted-foreground"
@@ -257,7 +257,7 @@ function AssessedRecordQuality({
     enabled: hydrated,
   });
   const breakdown = result.data?.qualityBreakdown;
-  // The score covers every check, so the counts and issue links do too; a
+  // The summary covers every check, so the counts and issue links do too; a
   // check this surface does not place keeps its result in a fallback list.
   const allChecks = breakdown?.checks ?? EMPTY_CHECKS;
   const placed = (check: RecordQualityCheck) => {
@@ -327,10 +327,11 @@ function AssessedRecordQuality({
         >
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <strong>
-              Quality{" "}
-              {breakdown.score === null
-                ? "not assessed"
-                : `${Math.round(breakdown.score)}/100`}
+              {breakdown.status === "not_assessed"
+                ? "Quality not assessed"
+                : unresolved.length === 0
+                  ? "Nothing missing"
+                  : `${unresolved.length} missing`}
             </strong>
             <span className="text-muted-foreground">
               {allChecks.filter((check) => check.state === "satisfied").length}{" "}
@@ -342,7 +343,7 @@ function AssessedRecordQuality({
               entity={entity}
               id={id}
               field="dataQuality"
-              label="Score calculation"
+              label="Quality checks"
               resolution={result.data?.envelope}
             />
           </div>

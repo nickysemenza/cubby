@@ -129,15 +129,15 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
     }),
   );
   add(
-    helper.accessor((row) => row.quality, {
-      id: "quality",
-      header: "Quality",
+    helper.accessor((row) => row.missing, {
+      id: "missing",
+      header: "Missing",
       sortDescFirst: false,
       meta: attachCubbyColumnMeta<EntityRecord>({
         className: "w-20",
         numeric: true,
         mobile: { slot: "meta" },
-        cellData: numberCellData<EntityRecord>("number", (row) => row.quality),
+        cellData: numberCellData<EntityRecord>("number", (row) => row.missing),
         explanation: {
           resolve: (row) => ({
             entity: row.kind,
@@ -150,7 +150,10 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
         <DataQualityValue
           quality={
             original.qualityStatus !== null
-              ? { score: original.quality, status: original.qualityStatus }
+              ? {
+                  missing: original.missing ?? 0,
+                  status: original.qualityStatus,
+                }
               : undefined
           }
           scored={scoredEntities.some((entity) => entity === original.kind)}
@@ -181,8 +184,8 @@ const FILTER_KEYS = [
   "q",
   "kind",
   "image",
-  "qualityMin",
-  "qualityMax",
+  "missingMin",
+  "missingMax",
   "createdFrom",
   "createdTo",
   "updatedFrom",
@@ -215,8 +218,8 @@ const filterFields: FilterBarField[] = [
   },
   ...(
     [
-      ["qualityMin", "Minimum quality"],
-      ["qualityMax", "Maximum quality"],
+      ["missingMin", "Minimum missing"],
+      ["missingMax", "Maximum missing"],
     ] as const
   ).map(([key, label]): FilterBarField => ({
     key,
@@ -340,8 +343,8 @@ export function EntityRecordsTab({
           q: next.data.q,
           kind: next.data.kind,
           image: next.data.image,
-          qualityMin: next.data.qualityMin,
-          qualityMax: next.data.qualityMax,
+          missingMin: next.data.missingMin,
+          missingMax: next.data.missingMax,
           createdFrom: next.data.createdFrom,
           createdTo: next.data.createdTo,
           updatedFrom: next.data.updatedFrom,

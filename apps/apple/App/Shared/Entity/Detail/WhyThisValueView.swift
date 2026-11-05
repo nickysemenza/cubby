@@ -612,7 +612,7 @@ struct WhyThisValueView: View {
     @ViewBuilder
     private func qualityBreakdown(_ breakdown: QualityBreakdown) -> some View {
         Divider()
-        sectionLabel("Score calculation")
+        sectionLabel("Quality checks")
         Text(breakdown.summary).font(.callout.monospacedDigit())
         ForEach(breakdown.checks, id: \.check) { check in
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {

@@ -5,7 +5,6 @@ import {
   fieldValueOf,
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
-import { AsteriskSimpleIcon } from "@phosphor-icons/react/dist/csr/AsteriskSimple";
 import { z } from "zod";
 
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
@@ -14,22 +13,15 @@ import { useDenseCell } from "~/ui/common/stacked-value";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { WhyValue } from "~/ui/derived/why-value";
 
-const METER_BARS = 5;
-
-/** Filled bars for a score below 100: one per full fifth, at least one. */
-export const qualityMeterFill = (score: number) =>
-  Math.min(METER_BARS - 1, Math.max(1, Math.floor(score / 20)));
-
 /**
- * Quality scores stay visible, including complete records.
- * A gap shows a five-bar meter in its condition tone —
- * warning for missing data, destructive for a defect — beside the score.
+ * Quality reads as what is missing, in its condition tone: warning for missing
+ * data, destructive for a defect. A complete record stays quiet.
  */
 export function DataQualityValue({
   quality,
   scored = true,
 }: {
-  quality?: Pick<DataQuality, "score" | "status">;
+  quality?: Pick<DataQuality, "status"> & { missing: number };
   scored?: boolean;
 }) {
   const dense = useDenseCell();
@@ -43,61 +35,30 @@ export function DataQualityValue({
       </span>
     );
   const label = dataQualityStatusLabel(quality.status);
-  if (quality.status === "complete")
-    return (
-      <span className="text-muted-foreground tabular-nums" title={label}>
-        {quality.score}
-        {dense ? null : "/100"}
-        <span className="sr-only">, {label}</span>
-      </span>
-    );
-  if (quality.score === null || quality.status === "not_assessed")
+  if (quality.status === "not_assessed")
     return (
       <span className="text-xs text-muted-foreground" title={label}>
         {label}
       </span>
     );
-  // Caps keep an unresolved gap at 99 or below, so this never rounds a gap
-  // up to 100.
-  const score = Math.round(quality.score);
-  // Exceptions-only completeness is a distinct state, not a plain 100: the
-  // marker is visible and spoken, not color alone.
-  if (quality.status === "complete_with_exceptions")
+  if (quality.missing === 0)
     return (
-      <span className="text-muted-foreground tabular-nums" title={label}>
-        {score}
-        <AsteriskSimpleIcon
-          weight="bold"
-          aria-hidden
-          className="inline size-2 align-super"
-        />
-        <span className="sr-only">, {label}</span>
+      <span className="text-muted-foreground" title={label}>
+        {label}
       </span>
     );
-  const tone = quality.status === "defect" ? "bg-destructive" : "bg-warning";
-  const filled = qualityMeterFill(score);
   return (
     <span
-      data-quality-meter={quality.status}
-      className="inline-flex items-center gap-1.5 tabular-nums"
-      title={`${label} · ${score}/100`}
+      data-quality-status={quality.status}
+      className={cn(
+        "tabular-nums",
+        quality.status === "defect" ? "text-destructive" : "text-warning-ink",
+      )}
+      title={label}
     >
-      <span aria-hidden className="inline-flex gap-px">
-        {Array.from({ length: METER_BARS }, (_, index) => (
-          <i
-            key={index}
-            className={cn(
-              "block h-2.5 w-[3px] rounded-[1px]",
-              index < filled ? tone : "bg-border",
-            )}
-          />
-        ))}
-      </span>
-      <span>
-        {score}
-        {dense ? null : "/100"}
-        <span className="sr-only">, {label}</span>
-      </span>
+      {quality.missing}
+      {dense ? null : " missing"}
+      <span className="sr-only">, {label}</span>
     </span>
   );
 }
@@ -113,9 +74,10 @@ export function EntityQualityFact({
   id: string;
   envelope?: ReadableFieldEnvelope;
 }) {
-  const quality = envelope
+  const parsed = envelope
     ? dataQuality.safeParse(fieldValueOf(envelope)).data
     : undefined;
+  const quality = parsed && { ...parsed, missing: parsed.gaps.length };
   return (
     <div className="flex items-center gap-1.5 text-xs">
       <FieldValueMark envelope={envelope}>

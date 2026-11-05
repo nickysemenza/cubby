@@ -628,7 +628,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Crop recorded",
           placement: { field: "gardenGuideKey" },
           facet: "linkage",
-          weight: 1,
           label: "Crop",
           message: "No crop is recorded for this plant.",
         },

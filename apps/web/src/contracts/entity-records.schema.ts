@@ -10,18 +10,18 @@ export const entityRecordSortSchema = z.enum([
   "kind",
   "id",
   "hasImage",
-  "quality",
+  "missing",
   "createdAt",
   "updatedAt",
 ]);
-const score = z.coerce.number().min(0).max(100);
+const missingCount = z.coerce.number().int().min(0);
 const date = z.iso.date().optional();
 export const entityRecordsInputSchema = z.object({
   q: z.string().max(200).optional(),
   kind: entitySchema.optional(),
   image: z.enum(["has", "none"]).optional(),
-  qualityMin: score.optional(),
-  qualityMax: score.optional(),
+  missingMin: missingCount.optional(),
+  missingMax: missingCount.optional(),
   createdFrom: date,
   createdTo: date,
   updatedFrom: date,
@@ -36,7 +36,8 @@ export const entityRecordSchema = z.object({
   id: z.string(),
   kind: entitySchema,
   name: z.string(),
-  quality: z.number().min(0).max(100).nullable(),
+  /** Unresolved quality checks; null when not assessed. */
+  missing: z.number().int().min(0).nullable(),
   qualityStatus: dataQualityStatus.nullable(),
   hasImage: z.boolean(),
   createdAt: dateTime,

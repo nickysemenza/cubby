@@ -37,7 +37,6 @@ export async function storedQuality(
 ): Promise<
   | {
       rulesVersion: number;
-      score: number | null;
       checks: Record<string, string>;
     }
   | undefined
@@ -50,7 +49,6 @@ export async function storedQuality(
       z.object({
         value: z.object({
           rulesVersion: z.number(),
-          score: z.number().nullable(),
           checks: z.record(z.string(), z.string()),
         }),
       }),

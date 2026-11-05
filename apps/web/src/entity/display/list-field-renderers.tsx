@@ -105,13 +105,13 @@ const recipeSourceRenderer: ListRenderer<"recipe"> = (helper) =>
   });
 
 /**
- * The one `dataQuality` column every scored entity shares: one status pill
- * that carries the 0–100 score. Its id is also the sort field, so the
- * column header sorts by score (asc = weakest row first — the worklist).
+ * The one `dataQuality` column every scored entity shares: how much is missing,
+ * in its condition tone. Its id is also the sort field, so the
+ * column header sorts by what is missing (asc = most missing first — the worklist).
  */
-// Only the cell's status and score: the Work queue's rows carry no more.
+// Only the cell's status and gaps: the Work queue's rows carry no more.
 const qualityRow = z.object({
-  dataQuality: dataQuality.pick({ status: true, score: true }).nullish(),
+  dataQuality: dataQuality.pick({ status: true, gaps: true }).nullish(),
 });
 export const createDataQualityColumn = <TRow extends object>(
   helper: CubbyColumnHelper<TRow>,
@@ -120,24 +120,28 @@ export const createDataQualityColumn = <TRow extends object>(
   createCubbyColumnCollection<TRow>((add) => {
     const qualityOf = (row: TRow) =>
       readRecordField(row, "dataQuality", qualityRow.shape.dataQuality);
+    const missingOf = (row: TRow) => {
+      const quality = qualityOf(row);
+      return !quality || quality.status === "not_assessed"
+        ? null
+        : quality.gaps.length;
+    };
     add(
-      // A not-assessed (null) score sinks below every scored row in both
-      // directions, matching the server's `NULLS LAST`.
-      helper.accessor((row) => qualityOf(row)?.score ?? undefined, {
+      // A not-assessed row sinks below every assessed row in both directions,
+      // matching the server's `NULLS LAST`. Ascending puts most missing first.
+      helper.accessor((row) => missingOf(row) ?? undefined, {
         id: "dataQuality",
         header: "Quality",
         enableSorting: scored,
         sortDescFirst: false,
         sortUndefined: "last",
         sortFn: (left, right) =>
-          (qualityOf(left.original)?.score ?? 0) -
-          (qualityOf(right.original)?.score ?? 0),
+          (missingOf(right.original) ?? 0) - (missingOf(left.original) ?? 0),
         meta: attachCubbyColumnMeta<TRow>({
           className: "w-20",
-          // The score sorts numerically, but its status pill aligns with other values.
           cellData: numberCellData<TRow>(
             "number",
-            (row) => qualityOf(row)?.score ?? null,
+            (row) => missingOf(row) ?? null,
           ),
           mobile: { slot: "meta", priority: 0, showWhenEmpty: true },
         }),
@@ -145,7 +149,11 @@ export const createDataQualityColumn = <TRow extends object>(
           const quality = qualityOf(info.row.original);
           return (
             <DataQualityValue
-              quality={quality ?? undefined}
+              quality={
+                quality
+                  ? { status: quality.status, missing: quality.gaps.length }
+                  : undefined
+              }
               scored={scored && quality !== null}
             />
           );

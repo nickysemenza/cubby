@@ -16,12 +16,8 @@ const qualityCompute = (kind: ScoredEntity): DerivedCompute => {
     const out = new Map<string, DerivedComputed>();
     for (const row of await prepareQualityPublications(db, kind, ids))
       out.set(row.entityId, {
-        value: {
-          rulesVersion: row.rulesVersion,
-          score: row.score,
-          checks: row.checks,
-        },
-        sort: row.score,
+        value: { rulesVersion: row.rulesVersion, checks: row.checks },
+        sort: null,
       });
     return out;
   };

@@ -887,7 +887,6 @@ Rules:
             placement: { section: "composition" },
             facet: "integrity",
             kind: "defect",
-            weight: 1,
             scoring: "unscored",
             exceptions: "forbidden",
             label: "Incomplete recipe cost",
@@ -899,8 +898,6 @@ Rules:
             satisfiedLabel: "Contents recorded",
             placement: { section: "composition" },
             facet: "content",
-            weight: 3,
-            scoreCap: 69,
             label: "Contents",
             message:
               "No live recipes or food entries are recorded for this cooked meal.",

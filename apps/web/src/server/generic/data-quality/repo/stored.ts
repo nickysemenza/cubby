@@ -1,13 +1,8 @@
 import {
   dataCheck,
   dataCheckExemptible,
-  dataCheckKind,
-  dataCheckScoreCap,
-  dataCheckWeight,
   dataChecksByEntity,
   dataException,
-  scoreQualityTerms,
-  type QualityTerm,
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
 import { entityQualityCheckState } from "@cubby/schemas/data-quality-shape";
@@ -27,24 +22,6 @@ type ReaderDb = Database | DrizzleTransaction;
 export type StoredEvaluation = QualityEvaluation & {
   exceptions: z.infer<typeof dataException>[];
 };
-
-const storedQualityTerms = (
-  checks: QualityEvaluation["checks"],
-): QualityTerm[] =>
-  Object.entries(checks).map(([key, state]) => {
-    const check = dataCheck.parse(key);
-    return {
-      weight: dataCheckWeight[check],
-      scoreCap: dataCheckScoreCap[check],
-      defect: dataCheckKind[check] === "defect",
-      state:
-        state === "pass"
-          ? "satisfied"
-          : state === "waived"
-            ? "excepted"
-            : state,
-    };
-  });
 
 async function loadExceptions(
   db: ReaderDb,
@@ -110,7 +87,7 @@ export async function loadPublishedQuality(
   const [result, exceptions] = await Promise.all([
     unwrapDb(db)
       .execute(sql`SELECT ${t.id}::text AS id, ${t.shortcode} AS shortcode,
-      q."sortNumber" AS score, coalesce(q.value->'checks', '{}'::jsonb) AS checks
+      coalesce(q.value->'checks', '{}'::jsonb) AS checks
       FROM ${t} LEFT JOIN "DerivedValue" q ON q."entityId" = ${t.id} AND q.key = 'dataQuality'
       WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}`),
     loadExceptions(db, kind, ids),
@@ -120,7 +97,6 @@ export async function loadPublishedQuality(
       z.object({
         id: z.string(),
         shortcode: z.string(),
-        score: z.number().nullable(),
         checks: z.record(z.string(), entityQualityCheckState),
       }),
     )
@@ -143,7 +119,6 @@ export type QualityPublication = {
   entityId: string;
   kind: ScoredEntity;
   rulesVersion: number;
-  score: number | null;
   checks: QualityEvaluation["checks"];
 };
 
@@ -159,7 +134,6 @@ export async function prepareQualityPublications(
       entityId: row.id,
       kind,
       rulesVersion: entry.rulesVersion,
-      score: scoreQualityTerms(storedQualityTerms(row.checks)).score,
       checks: row.checks,
     }))
     .sort((a, b) => a.entityId.localeCompare(b.entityId));

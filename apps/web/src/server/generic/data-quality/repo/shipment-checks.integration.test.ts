@@ -30,7 +30,6 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { scoreSql } from "~/server/generic/data-quality/repo/sql";
 import { DERIVED_COMPUTE_BATCH } from "~/server/generic/derived/repo/drain";
 import { markAllStoredDerived } from "~/server/generic/derived/repo/drain";
 import {
@@ -152,7 +151,6 @@ describe("Shipment evidence quality", () => {
       (
         await loadDataQualities(ctx.db, "shipment", [parcel.row.id], "live")
       ).get(parcel.row.id)!;
-    expect((await quality()).score).toBe(49);
     expect((await quality()).gaps.map((gap) => gap.check)).toEqual(
       expect.arrayContaining([
         "shipment_purpose",
@@ -164,7 +162,6 @@ describe("Shipment evidence quality", () => {
       { shipmentId: parcel.code, purchaseId: null },
       ctx.actor,
     );
-    expect((await quality()).score).toBe(69);
     const kernel = buildKernelContext(ctx.db, ctx.actor.userId);
     await executeEntity(kernel, {
       action: "bulkUpdate",
@@ -172,13 +169,7 @@ describe("Shipment evidence quality", () => {
       ids: [parcel.code],
       data: { purpose: "outgoing" },
     });
-    expect((await quality()).score).toBe(100);
     await refresh();
-    expect(
-      (
-        await loadDataQualities(ctx.db, "shipment", [parcel.row.id], "stored")
-      ).get(parcel.row.id)?.score,
-    ).toBe(100);
 
     const seller = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic parcel seller",
@@ -197,7 +188,6 @@ describe("Shipment evidence quality", () => {
       .update(shipment)
       .set({ purchaseAssociationReviewed: false })
       .where(eq(shipment.id, parcel.row.id));
-    expect((await quality()).score).toBe(100);
     await unwrapDb(ctx.db)
       .update(purchase)
       .set({ deletedAt: new Date() })
@@ -205,13 +195,11 @@ describe("Shipment evidence quality", () => {
     expect((await quality()).gaps.map((gap) => gap.check)).toContain(
       "shipment_purchase_association",
     );
-    expect((await quality()).score).toBeLessThan(100);
     // Reviewing an existing link does not make a deleted Purchase valid.
     await unwrapDb(ctx.db)
       .update(shipment)
       .set({ purchaseAssociationReviewed: true })
       .where(eq(shipment.id, parcel.row.id));
-    expect((await quality()).score).toBeLessThan(100);
     await refresh();
     const filtered = await shipmentScaffold.read(ctx.db, {
       filters: { dataGap: ["shipment_purchase_association"] },
@@ -223,10 +211,9 @@ describe("Shipment evidence quality", () => {
 
   it("requires shipped, delivered, dated, consistent evidence spanning strictly over one day", async () => {
     const cases = [
-      { events: [shipped, delivered], score: 100, gaps: [] },
+      { events: [shipped, delivered], gaps: [] },
       {
         events: [shipped, { ...delivered, timeBasis: "estimate" as const }],
-        score: 25,
         gaps: [
           "shipment_events",
           "shipment_delivered",
@@ -236,7 +223,6 @@ describe("Shipment evidence quality", () => {
       },
       {
         events: [delivered],
-        score: 25,
         gaps: [
           "shipment_events",
           "shipment_shipped",
@@ -249,7 +235,6 @@ describe("Shipment evidence quality", () => {
           shipped,
           { ...shipped, rawStatus: "Another source reports pickup" },
         ],
-        score: 25,
         gaps: [
           "shipment_events",
           "shipment_delivered",
@@ -259,12 +244,10 @@ describe("Shipment evidence quality", () => {
       },
       {
         events: [shipped, event("delivered", instant("2026-06-02T09:00:00Z"))],
-        score: 90,
         gaps: ["shipment_span"],
       },
       {
         events: [shipped, event("delivered", instant("2026-06-02T09:00:01Z"))],
-        score: 100,
         gaps: [],
       },
       {
@@ -272,7 +255,6 @@ describe("Shipment evidence quality", () => {
           event("carrier_possession", day("2026-06-01")),
           event("delivered", day("2026-06-03")),
         ],
-        score: 100,
         gaps: [],
       },
       {
@@ -284,7 +266,6 @@ describe("Shipment evidence quality", () => {
             timezone: "America/Los_Angeles",
           }),
         ],
-        score: 100,
         gaps: [],
       },
       {
@@ -292,17 +273,14 @@ describe("Shipment evidence quality", () => {
           event("carrier_possession", day("2026-06-01")),
           event("delivered", day("2026-06-02")),
         ],
-        score: 90,
         gaps: ["shipment_span"],
       },
       {
         events: [event("label_created", day("2026-06-01")), delivered],
-        score: 60,
         gaps: ["shipment_shipped", "shipment_dates"],
       },
       {
         events: [event("carrier_possession", { kind: "unknown" }), delivered],
-        score: 80,
         gaps: ["shipment_dates", "shipment_span"],
       },
       {
@@ -314,7 +292,6 @@ describe("Shipment evidence quality", () => {
           }),
           delivered,
         ],
-        score: 80,
         gaps: ["shipment_dates", "shipment_span"],
       },
       {
@@ -323,7 +300,6 @@ describe("Shipment evidence quality", () => {
           delivered,
           event("delivered", instant("2026-06-03T11:00:00Z")),
         ],
-        score: 90,
         gaps: ["shipment_chronology"],
       },
       {
@@ -331,17 +307,14 @@ describe("Shipment evidence quality", () => {
           event("carrier_possession", instant("2026-06-05T09:00:00Z")),
           delivered,
         ],
-        score: 90,
         gaps: ["shipment_chronology"],
       },
       {
         events: [event("carrier_possession", day("2026-06-05")), delivered],
-        score: 100,
         gaps: [],
       },
       {
         events: [event("in_transit", day("2026-06-01")), delivered],
-        score: 100,
         gaps: [],
       },
     ];
@@ -353,7 +326,6 @@ describe("Shipment evidence quality", () => {
     const qualities = await loadDataQualities(ctx.db, "shipment", ids, "live");
     for (const parcel of parcels) {
       const quality = qualities.get(parcel.row.id)!;
-      expect(quality.score).toBe(parcel.sample.score);
       expect(quality.gaps.map((gap) => gap.check).sort()).toEqual(
         [...parcel.sample.gaps].sort(),
       );
@@ -372,13 +344,6 @@ describe("Shipment evidence quality", () => {
       );
     }
     await refresh();
-    const scalar = await unwrapDb(ctx.db)
-      .select({ id: shipment.id, score: scoreSql("shipment") })
-      .from(shipment);
-    for (const parcel of parcels)
-      expect(
-        Number(scalar.find((row) => row.id === parcel.row.id)?.score),
-      ).toBe(parcel.sample.score);
     const filtered = await shipmentScaffold.read(ctx.db, {
       filters: { dataGap: ["shipment_span"] },
       sorts: [{ orderBy: "dataQuality", direction: "asc" }],
@@ -397,9 +362,10 @@ describe("Shipment evidence quality", () => {
       pagination: { pageIndex: 0, pageSize: 100 },
       projection: ["dataQuality"],
     });
-    expect(
-      sorted.data.map((row) => dataQuality.parse(row.dataQuality).score),
-    ).toEqual(parcels.map((p) => p.sample.score).sort((a, b) => a - b));
+    const missing = sorted.data.map(
+      (row) => dataQuality.parse(row.dataQuality).gaps.length,
+    );
+    expect(missing).toEqual([...missing].sort((a, b) => b - a));
     const defects = await shipmentScaffold.read(ctx.db, {
       filters: { dataStatus: ["defect"] },
       sorts: [],
@@ -461,11 +427,10 @@ describe("Shipment evidence quality", () => {
       ).get(parcel.row.id)!;
     expect((await stored()).status).toBe("not_assessed");
     expect(
-      (await loadQualityBreakdown(ctx.db, "shipment", parcel.code)).score,
-    ).toBe(100);
+      (await loadQualityBreakdown(ctx.db, "shipment", parcel.code)).status,
+    ).toBe("complete");
     expect(await storedQualityIds(ctx.db)).toEqual([]);
     await refresh();
-    expect((await stored()).score).toBe(100);
     // Shipment fixtures also create other stored kinds, such as carrier Vendors.
     expect(await storedQualityIds(ctx.db, "shipment")).toEqual(
       [...historical.map((row) => row.id), parcel.row.id].sort(),
@@ -489,12 +454,10 @@ describe("Shipment evidence quality", () => {
       },
       ctx.actor,
     );
-    expect((await stored()).score).toBe(100);
     expect(
-      (await loadQualityBreakdown(ctx.db, "shipment", parcel.code)).score,
-    ).toBe(90);
+      (await loadQualityBreakdown(ctx.db, "shipment", parcel.code)).status,
+    ).toBe("needs_data");
     await refresh();
-    expect((await stored()).score).toBe(90);
     // An older version is stale even when the check states are unchanged:
     // reconciliation republishes it.
     await unwrapDb(ctx.db).execute(sql`
@@ -504,7 +467,6 @@ describe("Shipment evidence quality", () => {
     await markAllStoredDerived(ctx.db);
     await refresh();
     expect(await storedQuality(ctx.db, parcel.row.id)).toMatchObject({
-      score: 90,
       rulesVersion: SHIPMENT_QUALITY_RULES_VERSION,
     });
     // Waivers are durable member decisions and survive later evidence edits.
@@ -518,10 +480,8 @@ describe("Shipment evidence quality", () => {
     expect((await stored()).gaps.map((gap) => gap.check)).toContain(
       "shipment_span",
     );
-    expect((await stored()).score).toBe(90);
     // Recording the waiver marked the record; the drain applies it.
     await refresh();
-    expect((await stored()).score).toBe(100);
     await editShipmentObservation(
       ctx.db,
       {
@@ -535,10 +495,9 @@ describe("Shipment evidence quality", () => {
       ctx.actor,
     );
     expect(
-      (await loadQualityBreakdown(ctx.db, "shipment", parcel.code)).score,
-    ).toBe(100);
+      (await loadQualityBreakdown(ctx.db, "shipment", parcel.code)).status,
+    ).toBe("complete_with_exceptions");
     await refresh();
-    expect((await stored()).score).toBe(100);
     expect((await stored()).exceptions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ check: "shipment_span", state: "active" }),
@@ -578,10 +537,5 @@ describe("Shipment evidence quality", () => {
       await derivedMarkTickets(ctx.db, "shipment.dataQuality", parcel.row.id),
     ).toHaveLength(1);
     await drainStoredDerived(ctx.db);
-    expect(
-      (
-        await loadDataQualities(ctx.db, "shipment", [parcel.row.id], "stored")
-      ).get(parcel.row.id)?.score,
-    ).toBe(90);
   });
 });

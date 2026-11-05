@@ -1,4 +1,4 @@
-/** MCP must return the same score/gap transition as UI writes, retain source
+/** MCP must return the same gap transition as UI writes, retain source
  * explanations, reject blank notes, and stop honoring changed evidence. */
 import { dataQuality } from "@cubby/schemas/data-quality";
 import { eq } from "drizzle-orm";
@@ -47,16 +47,12 @@ describe("availability explanations through MCP", () => {
         },
         mcpContext,
       );
-    const before = (
-      await loadDataQualities(ctx.db, "product", [saved.entityId])
-    ).get(saved.entityId)!;
     expect((await call("set", " ")).isError).toBe(true);
     const note =
       "Checked [synthetic catalog](https://example.test/catalog); no brandName is available.";
     const accepted = dataQuality.parse(
       (await call("set", note)).structuredContent,
     );
-    expect(accepted.score).toBeGreaterThan(before.score!);
     expect(accepted.gaps.map((gap) => gap.check)).not.toContain(
       "product_brand",
     );
@@ -64,7 +60,6 @@ describe("availability explanations through MCP", () => {
       expect.objectContaining({ note, state: "active" }),
     );
     const cleared = dataQuality.parse((await call("clear")).structuredContent);
-    expect(cleared.score).toBe(before.score);
     expect(cleared.gaps.map((gap) => gap.check)).toContain("product_brand");
     await call("set", note);
     await getDb(ctx.db)

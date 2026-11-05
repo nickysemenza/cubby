@@ -932,7 +932,6 @@ Rules:
           satisfiedLabel: "Description recorded",
           placement: { field: "description" },
           facet: "content",
-          weight: 1,
           label: "Description",
           message: "No description is recorded.",
         },
@@ -941,7 +940,6 @@ Rules:
           satisfiedLabel: "Feature classified",
           placement: { field: "feature" },
           facet: "identity",
-          weight: 2,
           label: "Feature",
           message:
             "No feature classification is recorded for this root category.",
@@ -951,7 +949,6 @@ Rules:
           satisfiedLabel: "Spending category resolved",
           placement: { field: "effectiveSpendingCategory" },
           facet: "linkage",
-          weight: 2,
           label: "Spending category",
           message:
             "No spending category is mapped here or inherited, and none is deliberately kept unresolved.",

@@ -1259,7 +1259,6 @@ Rules:
             satisfiedLabel: "Description recorded",
             placement: { section: "ai-description" },
             facet: "content",
-            weight: 1,
             label: "AI description",
             message: "No AI-generated description is recorded.",
           },
@@ -1272,8 +1271,6 @@ Rules:
             placement: { field: "productId" },
             facet: "integrity",
             kind: "defect",
-            weight: 2,
-            scoreCap: 49,
             label: "Counted twice",
             message:
               "This furniture location's Product also has live inventory entries, so the item is counted twice.",

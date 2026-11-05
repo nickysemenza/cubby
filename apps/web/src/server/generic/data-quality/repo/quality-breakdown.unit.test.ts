@@ -4,7 +4,7 @@ import {
   dataCheckExemptible,
   dataCheckKind,
   dataCheckLabel,
-  dataCheckWeight,
+  dataCheckAssessed,
   dataChecksByEntity,
   dataQualityExceptionEntities,
   isDefectDataCheck,
@@ -12,7 +12,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import { exceptionReasonsFor } from "./exception-reasons";
-import { buildQualityBreakdown, calculateDataQualityScore } from "./hydrate";
+import { buildQualityBreakdown } from "./hydrate";
 
 // The explanation must use applicability, rather than all declared checks;
 // active exceptions satisfy a check, stale exceptions do not, and unrelated
@@ -21,63 +21,35 @@ describe("quality explanation calculation", () => {
   const first = dataChecksByEntity.product.enum.product_category;
   const second = dataChecksByEntity.product.enum.product_image;
 
-  it("reconciles the displayed weights with the canonical score", () => {
-    const result = buildQualityBreakdown([first, second], [second], []);
-    expect(result.score).toBe(
-      calculateDataQualityScore([first, second], [{ check: second }]),
-    );
-    expect(result.expectedWeight).toBe(
-      dataCheckWeight[first] + dataCheckWeight[second],
-    );
-    expect(result.satisfiedWeight).toBe(dataCheckWeight[first]);
-    expect(result.checks.map((check) => check.state)).toEqual([
-      "satisfied",
-      "gap",
-    ]);
-  });
-
   it("distinguishes accepted gaps from stale exceptions", () => {
     const result = buildQualityBreakdown([first, second], [second], [first]);
     expect(result.checks.map((check) => check.state)).toEqual([
       "excepted",
       "gap",
     ]);
-    expect(result.score).toBeLessThan(100);
   });
 
   it("does not assess a record with no applicable checks", () => {
     const result = buildQualityBreakdown([], [first], []);
     expect(result).toMatchObject({
-      score: null,
       status: "not_assessed",
-      expectedWeight: 0,
-      satisfiedWeight: 0,
       checks: [],
     });
   });
 
-  // An unscored diagnostic carries no weight, but an unresolved one must
-  // still keep the record below 100 and say why.
-  it("caps an unscored gap and names it in the summary", () => {
-    const unscored = dataCheck.options.find(
-      (check) => dataCheckWeight[check] === 0 && isDefectDataCheck(check),
-    )!;
-    const alone = buildQualityBreakdown([unscored], [unscored], []);
-    expect(alone).toMatchObject({ score: 99, status: "defect" });
-    expect(alone.summary).toBe(
-      `No applicable weighted checks; unresolved “${dataCheckLabel[unscored]}” caps the score at 99 → 99/100`,
+  it("names what is missing in the summary, including a diagnostic", () => {
+    const diagnostic = dataCheck.options.find(
+      (check) => !dataCheckAssessed[check] && isDefectDataCheck(check),
     );
-    const mixed = buildQualityBreakdown([first, unscored], [unscored], []);
-    expect(mixed.score).toBe(99);
-    expect(mixed.summary).toBe(
-      `${dataCheckWeight[first]} satisfied weight ÷ ${dataCheckWeight[first]} applicable weight × 100 = 100, capped at 99 while “${dataCheckLabel[unscored]}” is unresolved → 99/100`,
-    );
+    if (!diagnostic) throw new Error("Expected a diagnostic defect check");
+    const alone = buildQualityBreakdown([diagnostic], [diagnostic], []);
+    expect(alone.status).toBe("defect");
+    expect(alone.summary).toBe(`1 unresolved: ${dataCheckLabel[diagnostic]}.`);
   });
 
   it("marks a record complete only through accepted exceptions", () => {
     const result = buildQualityBreakdown([first, second], [], [second]);
     expect(result).toMatchObject({
-      score: 100,
       status: "complete_with_exceptions",
     });
     expect(result.summary).toContain("accepted exceptions count as satisfied");
@@ -101,13 +73,11 @@ describe("quality explanation calculation", () => {
       "Defect",
       "Missing data",
     ]);
-    expect(result.summary).toBe(
-      `0 satisfied weight ÷ ${result.expectedWeight} applicable weight × 100 = ${result.score}/100`,
-    );
+    expect(result.summary).toContain("unresolved:");
     const satisfied = buildQualityBreakdown([missing], [], []);
     expect(satisfied.checks[0]!.stateLabel).toBe("Satisfied");
     expect(satisfied.checks[0]!.weightLabel).toBe(
-      `weight ${dataCheckWeight[missing]}`,
+      dataCheckAssessed[missing] ? "Check" : "Diagnostic",
     );
     const excepted = buildQualityBreakdown([missing], [], [missing]);
     expect(excepted.checks[0]!.stateLabel).toBe("Accepted exception");

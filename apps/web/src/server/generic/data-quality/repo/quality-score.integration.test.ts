@@ -1,7 +1,4 @@
-import {
-  type QualityTerm,
-  scoreQualityTerms,
-} from "@cubby/schemas/data-quality";
+import { type QualityTerm, qualityStatusOf } from "@cubby/schemas/data-quality";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -11,8 +8,6 @@ import { unwrapDb } from "~/server/db/helpers";
 
 import { qualityStateCode, statusFromStates } from "./sql";
 
-const weights = [0, 1, 3, 7] as const;
-const caps = [null, 0, 40, 98] as const;
 const states = [
   "not_applicable",
   "satisfied",
@@ -31,8 +26,7 @@ const cases = (): QualityTerm[][] => {
   for (let index = 0; index < 160; index++) {
     result.push(
       Array.from({ length: 1 + next(4) }, () => ({
-        weight: weights[next(weights.length)]!,
-        scoreCap: caps[next(caps.length)]!,
+        assessed: next(2) === 0,
         defect: next(3) === 0,
         state: states[next(states.length)]!,
       })),
@@ -42,9 +36,9 @@ const cases = (): QualityTerm[][] => {
 };
 
 /**
- * Stored scores come from the TS core. The `dataStatus` filter and
+ * Stored status comes from the TS core. The `dataStatus` filter and
  * `entity.records` derive status in SQL from published check states, so it
- * must agree with the TS core on every combination of weight, cap, kind and
+ * must agree with the TS core on every combination of assessment, kind and
  * state.
  */
 describe("quality status: TS and SQL agree", () => {
@@ -74,7 +68,7 @@ describe("quality status: TS and SQL agree", () => {
     for (const row of result) {
       expect({ index: row.index, status: row.status }).toEqual({
         index: row.index,
-        status: scoreQualityTerms(all[row.index]!).status,
+        status: qualityStatusOf(all[row.index]!),
       });
     }
   });

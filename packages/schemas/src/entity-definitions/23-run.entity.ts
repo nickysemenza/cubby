@@ -1374,8 +1374,6 @@ export const { definition, readSchemas } = defineEntityModel({
           placement: { field: "actorName" },
           facet: "provenance",
           kind: "defect",
-          weight: 1,
-          scoreCap: 49,
           label: "Actor attribution",
           message: "The run has no recorded actor name.",
         },
@@ -1385,8 +1383,6 @@ export const { definition, readSchemas } = defineEntityModel({
           placement: { section: "import-timeline" },
           facet: "integrity",
           kind: "defect",
-          weight: 1,
-          scoreCap: 49,
           label: "Run timeline",
           message:
             "The run ends before it starts or its terminal status has no end time.",
@@ -1397,8 +1393,6 @@ export const { definition, readSchemas } = defineEntityModel({
           placement: { section: "import-targets" },
           facet: "integrity",
           kind: "defect",
-          weight: 3,
-          scoreCap: 49,
           label: "Target outcomes",
           message:
             "A completed targeted run has no targets or has an unfinished or unexplained target outcome.",

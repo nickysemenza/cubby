@@ -8,13 +8,12 @@ import {
   dataCheckFacet,
   dataCheckKind,
   dataCheckMessage,
-  dataCheckWeight,
-  dataCheckScoreCap,
+  dataCheckAssessed,
   dataCheckExemptible,
   dataQualityFacets,
   dataChecksByEntity,
   type QualityTerm,
-  scoreQualityTerms,
+  qualityStatusOf,
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
 import { entityQualityCheckState } from "@cubby/schemas/data-quality-shape";
@@ -25,7 +24,6 @@ const qualityPresentationRow = z.object({
   shortcode: z.string(),
   checks: z.partialRecord(dataCheck, entityQualityCheckState),
   exceptions: z.array(dataException),
-  score: z.number().nullable().optional(),
 });
 type QualityPresentationRow = z.output<typeof qualityPresentationRow>;
 type Evaluated = Omit<DataQuality, "relatedGaps" | "relatedExceptions">;
@@ -34,7 +32,7 @@ type CheckState = QualityTerm["state"];
 /**
  * One term per distinct expected check: a gap unless an active exception
  * covers it. A gap or exception on a check that is not expected is ignored,
- * so unrelated (rolled-up) gaps never touch this record's score.
+ * so unrelated (rolled-up) gaps never touch this record's status.
  */
 export const qualityTerms = (
   expectedChecks: readonly DataCheck[],
@@ -51,8 +49,7 @@ export const qualityTerms = (
         : "satisfied";
     return {
       check,
-      weight: dataCheckWeight[check],
-      scoreCap: dataCheckScoreCap[check],
+      assessed: dataCheckAssessed[check],
       defect: dataCheckKind[check] === "defect",
       state,
     };
@@ -106,22 +103,25 @@ export const evaluateRow = (
   );
   const facets = dataQualityFacets[entity].map((name) => ({
     name,
-    status: scoreQualityTerms(
+    status: qualityStatusOf(
       terms.filter((term) => dataCheckFacet[term.check] === name),
-    ).status,
+    ),
     gaps: gaps.filter((gap) => gap.facet === name),
   }));
-  const calculated = scoreQualityTerms(terms);
-  const score = row.score === undefined ? calculated.score : row.score;
-  return { status: calculated.status, score, facets, gaps, exceptions };
+  return {
+    status: qualityStatusOf(terms),
+    score: null,
+    facets,
+    gaps,
+    exceptions,
+  };
 };
 
 const publishedQualityValue = z.object({
-  score: z.number().nullable(),
   checks: z.record(z.string(), entityQualityCheckState),
 });
 
-/** Format this exact publication; do not pair another read's score with its timestamp. */
+/** Format this exact publication; do not pair another read's checks with its timestamp. */
 export function presentPublishedQuality(
   entity: ScoredEntity,
   shortcode: string,
@@ -133,7 +133,6 @@ export function presentPublishedQuality(
     ...evaluateRow(entity, {
       shortcode,
       checks: snapshot.checks,
-      score: snapshot.score,
       exceptions: context.exceptions.map((exception) =>
         dataException.parse(exception),
       ),

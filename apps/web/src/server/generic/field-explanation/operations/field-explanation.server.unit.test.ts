@@ -21,13 +21,12 @@ it.each([
   {
     check:
       dataChecksByEntity.financialAccount.enum.financial_account_ledger_party,
-    summary: "reduces this record's score",
-    score: 0,
+    summary: "1 unresolved",
     noWeightedChecks: false,
   },
 ])(
   "explains the scoring policy of $check without hiding its gap",
-  ({ check, summary, score, noWeightedChecks }) => {
+  ({ check, summary, noWeightedChecks }) => {
     const field = entityFieldModels.financialAccount.fields.find(
       (entry) => entry.key === "dataQuality",
     );
@@ -40,7 +39,7 @@ it.each([
       {
         dataQuality: {
           status,
-          score: breakdown.score,
+          score: null,
           facets: [],
           gaps: [
             {
@@ -73,7 +72,6 @@ it.each([
         .join(" ")
         .includes("No weighted checks apply"),
     ).toBe(noWeightedChecks);
-    expect(breakdown.score).toBe(score);
   },
 );
 

@@ -439,7 +439,6 @@ export const { definition, readSchemas } = defineEntityModel({
           placement: { field: "itemizationExpectation" },
           facet: "paperwork",
           exceptions: "forbidden",
-          weight: 2,
           label: "Itemization expectation",
           message:
             "Whether spending in this category should be itemized is unclassified.",
@@ -450,7 +449,6 @@ export const { definition, readSchemas } = defineEntityModel({
           placement: { field: "productExpectation" },
           facet: "identity",
           exceptions: "forbidden",
-          weight: 1,
           label: "Product expectation",
           message:
             "Whether lines in this category need a Product identity is unclassified.",

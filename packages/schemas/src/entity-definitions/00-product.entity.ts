@@ -393,7 +393,7 @@ export const { definition, readSchemas } = defineEntityModel(
             id: "research-queue",
             label: "Research queue",
             description:
-              "Products whose identity, image or category research could improve, weakest first",
+              "Products whose identity, image or category research could improve, most missing first",
             // The Research queue (terminology): a Burn-down session works these with
             // its own browser and writes Sources. "Searched, not available" is a
             // DataException on the gap, so it leaves until the waiver is cleared.
@@ -630,7 +630,7 @@ export const { definition, readSchemas } = defineEntityModel(
             label: "Stocked but unpriced",
             description: "On a shelf, with no price to value it by",
             // `product_price` gaps exactly this pairing (placement 'stock', not a
-            // `misc:` bucket): an unstocked Product is scored on a price only when
+            // `misc:` bucket): an unstocked Product is checked for a price only when
             // it already has one — see checks/product.ts. Unpriced stock
             // is invisible to the location valuation rollup: a null price yields a
             // null entry valuation and the rollup omits it.
@@ -3580,12 +3580,9 @@ Rules:
     },
     capabilities: {
       timeline: "custom",
-      // Identity carries the weight: `dataQualityScore asc` is the enrichment
-      // worklist (it replaced the bespoke `identity_strength` sort), so a
-      // product with no manufacturer or external id sorts before one that
-      // only lacks a photo. Identity applies to every Product, catalog-only
-      // included, so a named catalog entry scores instead of reading as not
-      // assessed.
+      // `dataQuality asc` is the enrichment worklist: most missing checks first.
+      // Identity applies to every Product, catalog-only included, so a named
+      // catalog entry is assessed instead of reading as not assessed.
       dataQuality: {
         // Rows the stored evaluator reads beyond its own row (ADR 0021).
         inputs: [
@@ -3760,7 +3757,6 @@ Rules:
             satisfiedLabel: "Name recorded",
             placement: { field: "name" },
             facet: "identity",
-            weight: 3,
             exceptions: "forbidden",
             label: "Name",
             message: "Product name is blank.",
@@ -3770,7 +3766,6 @@ Rules:
             satisfiedLabel: "Brand recorded",
             placement: { field: "brandId" },
             facet: "identity",
-            weight: 2,
             label: "Brand",
             message: "Brand is not recorded.",
           },
@@ -3779,7 +3774,6 @@ Rules:
             satisfiedLabel: "Identifier recorded",
             placement: { field: "externalIds" },
             facet: "identity",
-            weight: 2,
             label: "Identifier",
             message: "No model or external identifier is recorded.",
           },
@@ -3788,8 +3782,6 @@ Rules:
             satisfiedLabel: "Category recorded",
             placement: { field: "categoryId" },
             facet: "identity",
-            weight: 3,
-            scoreCap: 69,
             label: "Category",
             message: "No live product category is recorded.",
           },
@@ -3798,7 +3790,6 @@ Rules:
             satisfiedLabel: "Valuation price available",
             placement: { field: "price" },
             facet: "ledger",
-            weight: 3,
             label: "Price",
             message: "Stocked product has no price to value it by.",
           },

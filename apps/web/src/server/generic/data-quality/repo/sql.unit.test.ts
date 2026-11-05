@@ -11,7 +11,6 @@ import { describe, expect, it } from "vitest";
 import { product } from "~/server/db/schema";
 
 import { storedEntryFor } from "./entry";
-import { calculateDataQualityScore } from "./hydrate";
 import {
   checksOf,
   dataQualityFilterPredicates,
@@ -19,7 +18,7 @@ import {
   filterableChecks,
   gapCondition,
   relatedGapCondition,
-  scoreSql,
+  gapCountSql,
   statusCondition,
   statusSql,
 } from "./sql";
@@ -68,7 +67,7 @@ describe("data-quality predicate grouping", () => {
           () => statusCondition(entity, status),
         ] as const,
     ),
-    [`scoreSql(${entity})`, () => scoreSql(entity)] as const,
+    [`gapCountSql(${entity})`, () => gapCountSql(entity)] as const,
     [`statusSql(${entity})`, () => statusSql(entity)] as const,
     ...checksOf(entity).map(
       (check) =>
@@ -110,45 +109,13 @@ describe("data-quality registry", () => {
   );
 });
 
-describe("calculateDataQualityScore", () => {
-  const gap = (check: "product_image" | "product_brand" | "product_name") => ({
-    check,
-  });
-
-  it("does not score a record with no expected checks", () => {
-    expect(calculateDataQualityScore([], [])).toBeNull();
-  });
-
-  it("weights unresolved gaps by the check's declared weight", () => {
-    // name weighs 3, image 1: a missing image costs 25, not 50.
-    expect(
-      calculateDataQualityScore(
-        ["product_name", "product_image"],
-        [gap("product_image")],
-      ),
-    ).toBe(75);
-    expect(
-      calculateDataQualityScore(
-        ["product_name", "product_image"],
-        [gap("product_name")],
-      ),
-    ).toBe(25);
-  });
-
-  it("ignores a gap on a check that is not expected", () => {
-    expect(
-      calculateDataQualityScore(["product_brand"], [gap("product_image")]),
-    ).toBe(100);
-  });
-});
-
 /**
- * List reads never re-run check or waiver SQL: score and status come only from
+ * List reads never re-run check or waiver SQL: gaps and status come only from
  * published rows through primary-key lookups.
  */
-describe("score and status read only published quality rows", () => {
+describe("gaps and status read only published quality rows", () => {
   it.each([
-    ["scoreSql", scoreSql],
+    ["gapCountSql", gapCountSql],
     ["statusSql", statusSql],
     [
       "statusCondition",
@@ -162,7 +129,7 @@ describe("score and status read only published quality rows", () => {
     expect(sources.every((table) => table === "DerivedValue")).toBe(true);
   });
 
-  it("sorts records without a score after every scored record", () => {
+  it("sorts unassessed records after every assessed record", () => {
     for (const direction of ["asc", "desc"]) {
       const [order] = dataQualitySortResolver(
         "product",

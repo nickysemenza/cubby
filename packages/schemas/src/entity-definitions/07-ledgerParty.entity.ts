@@ -344,7 +344,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Financial account linked",
           placement: { section: "financial-accounts" },
           facet: "linkage",
-          weight: 1,
           label: "Financial account",
           message: "No financial account is linked to this member.",
         },

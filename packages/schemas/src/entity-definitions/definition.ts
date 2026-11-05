@@ -2515,14 +2515,8 @@ const buildMetadataSchemas = () => {
       id: z.string().regex(/^[a-z][a-z0-9_]*$/, "must be snake_case"),
       facet: dataQualityFacetName,
       kind: dataQualityCheckKind.optional().default("missing"),
-      weight: z.number().int().positive().optional().default(1),
+      /** An `unscored` diagnostic alone never makes a record assessed. */
       scoring: z.enum(["weighted", "unscored"]).optional().default("weighted"),
-      /**
-       * The highest score a record may show while this check is an
-       * unresolved gap, weighted or unscored. Undeclared, every unresolved
-       * check still caps the score at 99, so a gap never displays as 100.
-       */
-      scoreCap: z.number().int().min(0).max(99).optional(),
       exceptions: z
         .enum(["inherit", "forbidden"])
         .optional()

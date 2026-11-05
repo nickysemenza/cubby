@@ -24,8 +24,8 @@ import {
 } from "~/server/testing/repo.fixtures";
 
 // Regressions: paging before sorting/filtering, payload updates confused with
-// identity creation, deleted identities leaking, unscored rows called 100%,
-// and score-only rosters losing the authoritative status needed for pill color.
+// identity creation, deleted identities leaking, unscored rows called complete,
+// and count-only rosters losing the authoritative status needed for pill color.
 describe("combined entity records", () => {
   const ctx = withTestDb();
   // Record rosters sort and filter by published quality.
@@ -137,19 +137,18 @@ describe("combined entity records", () => {
     );
     expect(second.items.map((row) => row.id)).toEqual([item.id]);
     expect(first.items[0]).toMatchObject({
-      quality: location.dataQuality.score,
+      missing: location.dataQuality.gaps.length,
       qualityStatus: location.dataQuality.status,
     });
     expect(second.items[0]).toMatchObject({
-      quality: quality?.score,
+      missing: quality?.gaps.length,
       qualityStatus: quality?.status,
     });
     expect(first.items[0]).toMatchObject({
-      quality: 99,
+      missing: 1,
       qualityStatus: "needs_data",
     });
-    expect(second.items[0]?.quality).toBeGreaterThanOrEqual(0);
-    expect(second.items[0]?.quality).toBeLessThan(100);
+    expect(second.items[0]?.missing).toBeGreaterThan(0);
     expect(
       (
         await listEntityRecords(
@@ -195,7 +194,7 @@ describe("combined entity records", () => {
     });
   });
 
-  it("scores Runs while leaving unscored identities outside numeric quality ranges", async () => {
+  it("scores Runs while leaving unscored identities outside missing-count ranges", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const [identity] = await getDb(ctx.db)
       .select({ shortcode: runTable.shortcode })
@@ -207,13 +206,13 @@ describe("combined entity records", () => {
       q: identity!.shortcode,
     });
     expect((await listEntityRecords(ctx.db, input)).items).toMatchObject([
-      { id: identity!.shortcode, quality: 99, qualityStatus: "needs_data" },
+      { id: identity!.shortcode, missing: 1, qualityStatus: "needs_data" },
     ]);
     expect(
-      await listEntityRecords(ctx.db, { ...input, qualityMin: 99 }),
+      await listEntityRecords(ctx.db, { ...input, missingMin: 1 }),
     ).toMatchObject({ items: [{ id: identity!.shortcode }], totalCount: 1 });
     expect(
-      await listEntityRecords(ctx.db, { ...input, qualityMax: 98 }),
+      await listEntityRecords(ctx.db, { ...input, missingMax: 0 }),
     ).toMatchObject({ items: [], totalCount: 0 });
 
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -235,10 +234,10 @@ describe("combined entity records", () => {
     expect(
       (await listEntityRecords(ctx.db, unscoredInput)).items,
     ).toMatchObject([
-      { id: account.shortcode, quality: null, qualityStatus: null },
+      { id: account.shortcode, missing: null, qualityStatus: null },
     ]);
     expect(
-      await listEntityRecords(ctx.db, { ...unscoredInput, qualityMin: 0 }),
+      await listEntityRecords(ctx.db, { ...unscoredInput, missingMin: 0 }),
     ).toMatchObject({ items: [], totalCount: 0 });
   });
 });

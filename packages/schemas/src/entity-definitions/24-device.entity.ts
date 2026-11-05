@@ -555,7 +555,6 @@ export const { definition, readSchemas } = defineEntityModel({
           satisfiedLabel: "Owner recorded",
           placement: { field: "ledgerPartyId" },
           facet: "identity",
-          weight: 2,
           label: "Owner",
           message: "No owner is recorded for this device.",
         },
