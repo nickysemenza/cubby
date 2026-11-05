@@ -273,7 +273,7 @@ async function readDrains(
         body: "Two hourly rebuilds have not finished. Records you entered are fine; calculated values may be out of date.",
         action: { type: "none" },
       });
-    } else if (since && since <= minutesAgo(now, 60)) facts.behind = true;
+    } else if (since && since <= minutesAgo(now, 75)) facts.behind = true;
   }
   return facts;
 }

@@ -97,6 +97,12 @@ containers and separate Node processes are ruled out. Work that presses these
 limits is split across invocations with committed cursors, or pushed down into
 set-based SQL.
 
+Stored field envelopes report the latest published value as fresh and idle, even
+when source edits are awaiting the next pass. A value's `computedAt` records its
+last content change, not the pass heartbeat; Activity and maintenance status expose
+the pass's `finishedAt`. This deliberately permits mixed-age display for up to an
+hour. Assignments and financial command validation still use current evidence.
+
 Keeping every member feature, the native app and the mail agent limits the
 reduction. The estimate is about 90 tables and 10 to 17 percent less production
 code, plus large cuts to tests and docs. Going further means cutting product.

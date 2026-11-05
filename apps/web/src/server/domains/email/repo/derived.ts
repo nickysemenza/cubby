@@ -80,6 +80,7 @@ const emailRelationshipCompute: DerivedCompute = async (db, ids) => {
 };
 export const emailDerivedComputes = {
   "email.relationshipFacts": Object.assign(emailRelationshipCompute, {
+    preparationBatchSize: 200,
     fanoutSelections: {
       purchaseEvidence: emailPurchaseSourceIdsSql,
     },

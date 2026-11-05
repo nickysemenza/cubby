@@ -2725,7 +2725,7 @@ cutovers; their retained source tickets are neither claimed nor deleted.
 Project start-date ordering/filtering already reads canonical recursive SQL.
 
 Per-value queued/running/failure observations are retired. Activity checks the
-coarse pass for two missed hourly periods or three consecutive failures; it
+coarse pass for two missed hourly periods or three consecutive failures; a 75-minute lag marks it behind without flapping at an hour. It
 never treats retained tickets as unfinished work. The maintenance rebuild command
 starts or resumes the same Worker pass, and its status query exposes aggregate
 progress and timings without triggering work. A manual request never resets an
