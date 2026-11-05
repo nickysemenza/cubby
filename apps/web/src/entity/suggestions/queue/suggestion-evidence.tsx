@@ -28,6 +28,7 @@ import { useState, useMemo, type ReactNode } from "react";
 import { match } from "ts-pattern";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import { ReviewedBeneficiariesField } from "~/entity/editing/ledger-attributions-field";
 import { useEntityMetadata } from "~/entity/metadata";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker as RecordPicker } from "~/entity/picker/picker";
@@ -163,13 +164,39 @@ function SpendingResultFacts({
             : "Keep existing Expense classification",
         ],
         [
-          "Spending category",
+          "Candidate category",
           <FieldValue
             key="category"
             entity="expense"
             field="spendingCategoryId"
             value={plan.spendingCategoryId}
           />,
+        ],
+        [
+          "Category override",
+          <FieldValue
+            key="override"
+            entity="expense"
+            field="spendingCategoryId"
+            value={plan.categoryOverride ?? null}
+          />,
+        ],
+        [
+          "Effective category",
+          plan.effect !== "create_aggregate" ? (
+            "Keep existing Expense categories"
+          ) : !plan.effectiveCategory ? (
+            "Unverified"
+          ) : plan.effectiveCategory.value === null ? (
+            "Uncategorized"
+          ) : (
+            <FieldValue
+              key="effective"
+              entity="expense"
+              field="spendingCategoryId"
+              value={plan.effectiveCategory.value}
+            />
+          ),
         ],
         [
           "Purchaser",
@@ -358,19 +385,28 @@ function SpendingEvidence({
               }}
             />
             {showsCostTypeChoice(controls) ? (
-              <RecordPicker
-                mode="choose"
-                label="Cost type for new Expense"
-                options={COST_TYPE_OPTIONS}
-                value={current.booking?.costType ?? "default"}
-                disabled={busy}
-                onValueChange={(next) => {
-                  const costType = costTypeValues.find(
-                    (value) => value === next,
-                  );
-                  setDraft(row.id, { booking: { ...booking, costType } });
-                }}
-              />
+              <>
+                <ReviewedBeneficiariesField
+                  value={current.booking?.beneficiaries}
+                  disabled={busy}
+                  onChange={(beneficiaries) =>
+                    setDraft(row.id, { booking: { ...booking, beneficiaries } })
+                  }
+                />
+                <RecordPicker
+                  mode="choose"
+                  label="Cost type for new Expense"
+                  options={COST_TYPE_OPTIONS}
+                  value={current.booking?.costType ?? "default"}
+                  disabled={busy}
+                  onValueChange={(next) => {
+                    const costType = costTypeValues.find(
+                      (value) => value === next,
+                    );
+                    setDraft(row.id, { booking: { ...booking, costType } });
+                  }}
+                />
+              </>
             ) : null}
             <WithVendorShortcodeSearch>
               {(search) => (

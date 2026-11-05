@@ -8,6 +8,7 @@ import type {
   FinancialBookingPreview,
   FinancialBookingInput,
 } from "@cubby/schemas/financial-booking";
+import { spendingCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import { type Trade, tradeSchema } from "@cubby/schemas/task-fields";
@@ -15,6 +16,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { ReviewedBeneficiariesField } from "~/entity/editing/ledger-attributions-field";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker } from "~/entity/picker/picker";
@@ -24,6 +26,7 @@ import { financialTransaction } from "~/integrations/tanstack-query/generated/do
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { Facts } from "~/ui/common/facts";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
@@ -52,6 +55,21 @@ function expectsBookingReview(transaction: FinancialTransactionOut) {
       transaction.allocations.length === 0)
   );
 }
+function BookingCategoryValue({
+  value,
+}: {
+  value:
+    | FinancialBookingPreview["candidateCategoryId"]
+    | NonNullable<FinancialBookingPreview["effectiveCategory"]>["value"];
+}) {
+  const parsed = spendingCategoryShortcode.safeParse(value);
+  return parsed.success ? (
+    <EntityRefLink entity="spendingCategory" id={parsed.data} />
+  ) : (
+    <>None</>
+  );
+}
+
 function BookingPreviewDetails({
   review,
   vendorName,
@@ -86,6 +104,47 @@ function BookingPreviewDetails({
           : "spending"}
         . Receipt lines remain separate evidence.
       </p>
+      <Facts
+        layout="list"
+        facts={[
+          {
+            label: "Candidate category",
+            value: (
+              <BookingCategoryValue
+                value={review.candidateCategoryId ?? null}
+              />
+            ),
+          },
+          {
+            label: "Category override",
+            value: review.categoryOverride ? (
+              <BookingCategoryValue value={review.categoryOverride} />
+            ) : (
+              "None"
+            ),
+          },
+          {
+            label: "Effective category",
+            value:
+              review.action === "link_existing" ? (
+                "Keep existing Expense categories"
+              ) : !review.effectiveCategory ? (
+                "Unverified"
+              ) : review.effectiveCategory.value === null ? (
+                "Uncategorized"
+              ) : (
+                <BookingCategoryValue value={review.effectiveCategory.value} />
+              ),
+            caption: review.effectiveCategory?.sourceEntity ? (
+              <EntityRefLink
+                entity={review.effectiveCategory.sourceEntity.entityKind}
+                id={review.effectiveCategory.sourceEntity.entityId}
+                name={review.effectiveCategory.sourceEntity.name ?? undefined}
+              />
+            ) : undefined,
+          },
+        ]}
+      />
       <p className="text-xs text-muted-foreground">
         {review.accountName} ·{" "}
         {review.funderName ?? "No account owner recorded"} · Cost type:{" "}
@@ -117,6 +176,8 @@ export function FinancialBookingReview({
   // it was.
   const [trade, setTrade] = useState<Trade>("other");
   const [costType, setCostType] = useState<CostType>("materials");
+  const [beneficiaries, setBeneficiaries] =
+    useState<FinancialBookingInput["beneficiaries"]>();
   const [review, setReview] = useState<FinancialBookingPreview | null>(null);
   const preview = useMutation({
     mutationFn: (input: FinancialBookingInput) =>
@@ -224,6 +285,14 @@ export function FinancialBookingReview({
           disabled={busy}
         />
       </Row>
+      <ReviewedBeneficiariesField
+        value={beneficiaries}
+        disabled={busy}
+        onChange={(rows) => {
+          setBeneficiaries(rows);
+          setReview(null);
+        }}
+      />
       {transaction.amount < 0 ? (
         <Picker
           mode="choose"
@@ -288,6 +357,7 @@ export function FinancialBookingReview({
                   economicRole: role,
                   trade,
                   costType,
+                  ...(beneficiaries === undefined ? {} : { beneficiaries }),
                 },
                 { onSuccess: setReview },
               );

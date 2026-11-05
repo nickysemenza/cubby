@@ -31,12 +31,14 @@ function LedgerAttributionRowFields({
   rows,
   label,
   onChangeRows,
+  disabled,
 }: {
   row: LedgerAttributionRow;
   index: number;
   rows: readonly LedgerAttributionRow[];
   label: string;
   onChangeRows: (rows: LedgerAttributionRow[]) => void;
+  disabled?: boolean;
 }) {
   const { dialog, items, onSearchChange, isLoading, onOpenChange } =
     useEntityListSource("ledgerParty");
@@ -46,6 +48,7 @@ function LedgerAttributionRowFields({
       <Picker
         entity="ledgerParty"
         label={`${label} party`}
+        disabled={disabled}
         placeholder="Unattributed share"
         items={items}
         onSearchChange={onSearchChange}
@@ -79,6 +82,7 @@ function LedgerAttributionRowFields({
         min={1}
         step={1}
         aria-label={`${label} relative weight`}
+        disabled={disabled}
         value={row.weight}
         onValueChange={(weight) => {
           if (weight != null && Number.isSafeInteger(weight) && weight > 0)
@@ -93,6 +97,7 @@ function LedgerAttributionRowFields({
         type="button"
         variant="ghost"
         size="sm"
+        disabled={disabled}
         onClick={() => onChangeRows(rows.filter((_, at) => at !== index))}
       >
         Remove
@@ -158,39 +163,95 @@ export function LedgerAttributionsField({
       render={({ field, fieldState }) => {
         const rows = ledgerAttributions.parse(field.value ?? []);
         return (
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">{label}</legend>
-            {rows.map((row, index) => (
-              <LedgerAttributionRowFields
-                key={row.partyId ?? "unattributed"}
-                row={row}
-                index={index}
-                rows={rows}
-                label={label}
-                onChangeRows={field.onChange}
-              />
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={rows.some((row) => row.partyId === null)}
-              onClick={() =>
-                field.onChange([...rows, { partyId: null, weight: 1 }])
-              }
-            >
-              Add share
-            </Button>
-            <Description size="xs">
-              Weights specify relative shares. Beneficiaries and funders are
-              independent.
-            </Description>
+          <>
+            <LedgerAttributionsEditor
+              rows={rows}
+              label={label}
+              onChangeRows={field.onChange}
+              disabled={field.disabled}
+            />
             {fieldState.error?.message ? (
               <p role="alert">{fieldState.error.message}</p>
             ) : null}
-          </fieldset>
+          </>
         );
       }}
     />
+  );
+}
+
+/** The same relative-share editor serves generic forms and reviewed aggregate booking. */
+export function LedgerAttributionsEditor({
+  rows,
+  label,
+  onChangeRows,
+  disabled,
+}: {
+  rows: readonly LedgerAttributionRow[];
+  label: string;
+  onChangeRows: (rows: LedgerAttributionRow[]) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-medium">{label}</legend>
+      {rows.map((row, index) => (
+        <LedgerAttributionRowFields
+          key={row.partyId ?? "unattributed"}
+          row={row}
+          index={index}
+          rows={rows}
+          label={label}
+          onChangeRows={onChangeRows}
+          disabled={disabled}
+        />
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled || rows.some((row) => row.partyId === null)}
+        onClick={() => onChangeRows([...rows, { partyId: null, weight: 1 }])}
+      >
+        Add share
+      </Button>
+      <p className="text-xs text-muted-foreground">
+        Weights specify relative shares. Beneficiaries and funders are
+        independent.
+      </p>
+    </fieldset>
+  );
+}
+
+/** Review drafts keep omitted defaults distinct from an explicit empty or unknown share. */
+export function ReviewedBeneficiariesField({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: LedgerAttributionRow[] | undefined;
+  onChange: (value: LedgerAttributionRow[] | undefined) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <>
+      <LedgerAttributionsEditor
+        label="Beneficiaries for a new Expense"
+        rows={value ?? []}
+        disabled={disabled}
+        onChangeRows={onChange}
+      />
+      {value !== undefined ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          onClick={() => onChange(undefined)}
+        >
+          Use default beneficiaries
+        </Button>
+      ) : null}
+    </>
   );
 }
