@@ -345,7 +345,7 @@ describe("category-based service Products", () => {
       const failed = await readCanonical();
       expect(failed.fields.cost.result).toMatchObject({
         kind: "cached",
-        freshness: "stale",
+        freshness: "fresh",
         computedAt:
           published.fields.cost.result.kind === "cached"
             ? published.fields.cost.result.computedAt
@@ -358,8 +358,7 @@ describe("category-based service Products", () => {
         },
       });
       expect(failed.fields.cost.work).toMatchObject({
-        kind: "failed",
-        error: "Synthetic Cost refresh failure",
+        kind: "idle",
       });
       const explainCost = () =>
         explainField(
@@ -438,7 +437,7 @@ describe("category-based service Products", () => {
         WHERE "productId" = ${service.entityId} AND cost = 40`);
       expect((await readCanonical()).fields.cost.result).toMatchObject({
         kind: "cached",
-        freshness: "stale",
+        freshness: "fresh",
       });
       await drainStoredDerived(ctx.db);
       expect((await readCanonical()).fields.cost.result).toMatchObject({
@@ -549,7 +548,7 @@ describe("category-based service Products", () => {
       decision: { outcome: { kind: "empty", reason: "not_applicable" } },
     });
     expect(restored.fields.cost.result).toEqual({ kind: "missing" });
-    expect(restored.fields.cost.work).toMatchObject({ kind: "pending" });
+    expect(restored.fields.cost.work).toMatchObject({ kind: "idle" });
     const valued = await listProductsFixture(
       ctx.db,
       { ids: [service.id], pricePresenceFilter: "has" },

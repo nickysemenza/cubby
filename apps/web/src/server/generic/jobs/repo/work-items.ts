@@ -99,20 +99,6 @@ export async function observePendingWork(
     .orderBy(workItem.target, workItem.ref);
 }
 
-/** Pending items include future retries; callers may narrow to their owned targets. */
-export async function hasPendingWork(
-  db: RepositoryQueryInput,
-  drain: string,
-  eligible: (target: SQL) => SQL,
-): Promise<boolean> {
-  const [row] = await repositoryQueries(db)
-    .select({ target: workItem.target })
-    .from(workItem)
-    .where(and(eq(workItem.drain, drain), eligible(sql`${workItem.target}`)))
-    .limit(1);
-  return !!row;
-}
-
 /** Exactly these tickets: a re-marked item no longer matches. */
 // Drizzle has no tuple IN; a jsonb record set keeps one parameter per call.
 export const workTickets = (items: readonly WorkItem[]) => sql`(
@@ -459,10 +445,6 @@ export async function observeWorkExecution(
     })
     .where(workTickets(held));
 }
-
-/** Whether any item of `targets` is still owed. */
-export const workPendingIn = (targets: readonly string[]) =>
-  sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${inArray(workItem.target, [...targets])})`;
 
 /** Whether a drain (a key or a correlated key column) still owes any item. */
 export const drainPending = (drain: string | SQL) =>

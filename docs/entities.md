@@ -153,7 +153,10 @@ Related search preserves the semantic reader's coverage flag through grouping.
 Incomplete coverage remains visible even when it yields no matches; it is not a
 successful complete empty result. Pending publication work and an exhausted
 candidate budget keep their existing distinct explanations; only pending work
-is described as updating. Completeness never promises exhaustive ANN recall.
+is described as updating. Coverage checks eligible sources missing a search
+document and published documents missing a current embedding; retained derived
+tickets no longer block it. Source edits may keep the prior published text until
+the next hourly pass, while application gates validate current evidence. Completeness never promises exhaustive ANN recall.
 Provider and read failures retain scrubbed diagnostics and a retry action without
 hiding lexical results. An unavailable
 provider with no diagnostic remains unavailable, with no invented cause.

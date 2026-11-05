@@ -1,19 +1,43 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
+import { USDAClient } from "~/server/clients/usda";
+import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
+import { derivedSink } from "~/server/generic/derived/repo/compute";
+import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
+import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
+import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";
+import { derivedComputes } from "~/server/workflows/derived-computes";
+
+const offlineUsda = new USDAClient(
+  fromPartial<UsdaReleaseRpc>({
+    lookupBatch: async (lookups: readonly unknown[]) => lookups.map(() => null),
+    search: async () => ({ data: [], count: 0 }),
+  }),
+);
+const computes = {
+  ...derivedComputes,
+  "product.conversionCoverage": derivedSink({
+    prepare: (db, ids) =>
+      prepareProductConversionCoverage(
+        db,
+        ids.map((id) => parseEntityId("product", id)),
+        offlineUsda,
+      ),
+    publish: (tx, ids, prepared) => prepared.publish(tx, ids),
+  }),
+};
 import {
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
-import { productionJobHandlers } from "~/server/workflows/jobs";
 
 import { repairSearchIndex } from "./search-index-repair.service";
 
-// Explicit repair must commit ordinary Job intent, survive a disconnected
-// reader, and publish through the same generation fence as stored derived recomputation.
+// A member repair survives a disconnected reader and uses the ordinary deterministic pass.
 describe("search repair admission", () => {
   const ctx = withTestDb();
   it("streams derived drain results while workers rebuild authoritative search text", async () => {
@@ -26,12 +50,10 @@ describe("search repair admission", () => {
     const first = await stream.next();
     if (first.done) throw new Error("Expected repair progress");
     expect(first.value).toMatchObject({ type: "progress", phase: "sources" });
-    for (let page = 0; page < 100; page++) {
-      const executions = await readJobs(ctx.db, { key: "derived:drain" });
-      if (executions.every((execution) => execution.state === "completed"))
-        break;
-      for (const execution of executions)
-        await advanceJob(ctx.db, execution.id, productionJobHandlers);
+    for (let page = 0; page < 1_000; page++) {
+      if (!(await rebuildDerived(ctx.db, computes))) break;
+      if (page === 999)
+        throw new Error("Synthetic search repair exceeded its page bound");
     }
     let last = await stream.next();
     while (!last.done && last.value.type !== "done") last = await stream.next();
@@ -55,8 +77,6 @@ describe("search repair admission", () => {
     await stream.next();
     controller.abort();
     await expect(stream.next()).rejects.toThrow(/cancelled/i);
-    expect((await readJobs(ctx.db, { key: "derived:drain" }))[0]?.state).toBe(
-      "queued",
-    );
+    expect((await readDerivedRebuildStatus(ctx.db)).running).toBe(true);
   });
 });

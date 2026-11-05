@@ -125,11 +125,3 @@ export async function rebuildDerived(
     throw error;
   }
 }
-
-/** Manual rebuilds use the same pass and never reset an active cursor. */
-export async function requestDerivedRebuild(db: Database) {
-  const existing = await rebuildActive(db);
-  const claim = await claimRebuild(db, true);
-  if (claim) await releaseRebuild(db, claim.token);
-  return { existing: existing || claim === null };
-}

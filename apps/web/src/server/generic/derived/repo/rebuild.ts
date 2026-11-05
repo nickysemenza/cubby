@@ -209,3 +209,13 @@ export async function readDerivedRebuildStatus(
     durationsMs: row?.durationsMs ?? [],
   };
 }
+
+/** A member repair joins active work instead of creating per-value tickets. */
+export async function requestDerivedRebuild(
+  db: Database,
+): Promise<{ existing: boolean }> {
+  const existing = await rebuildActive(db);
+  const claim = await claimRebuild(db, true);
+  if (claim) await releaseRebuild(db, claim.token);
+  return { existing: existing || claim === null };
+}

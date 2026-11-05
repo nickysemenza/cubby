@@ -1,5 +1,4 @@
 import {
-  searchIndexRepairCountersSchema,
   type SearchIndexRepairCounters,
   type SearchIndexRepairEvent,
 } from "@cubby/schemas/maintenance";
@@ -23,38 +22,21 @@ const createSearchIndexRepairCounters = (): SearchIndexRepairCounters => ({
   published: 0,
 });
 
-/** Explicit repair schedules the ordinary derived drain; the stream only reads them. */
+/** Explicit repair requests the hourly pass; disconnecting the stream leaves its cursor intact. */
 export async function* repairSearchIndex(
   db: Database,
   signal?: AbortSignal,
 ): AsyncGenerator<SearchIndexRepairEvent, void> {
-  const ids = await scheduleSearchRepair(db);
+  await scheduleSearchRepair(db);
   while (true) {
     if (signal?.aborted)
       throw new WorkflowCancelledError({
         committed: true,
         effectsPending: true,
       });
-    const { executions, pending } = await readSearchRepairProgress(db, ids);
-    if (executions.length !== ids.length)
-      throw new Error("Search repair Job disappeared");
-    const stopped = executions.find((execution) =>
-      ["failed", "paused", "cancelled"].includes(execution.state),
-    );
-    if (stopped)
-      throw new Error(
-        stopped.error ?? `Search repair ${stopped.key} is ${stopped.state}`,
-      );
+    const { pending, error } = await readSearchRepairProgress(db);
+    if (error) throw new Error(error);
     const counters = createSearchIndexRepairCounters();
-    for (const execution of executions) {
-      const parsed = searchIndexRepairCountersSchema
-        .partial()
-        .safeParse(execution.result);
-      if (!parsed.success) continue;
-      for (const key of searchIndexRepairCountersSchema.keyof().options)
-        counters[key] += parsed.data[key] ?? 0;
-    }
-    // Other derived families retain their own retry deadlines on this shared Job.
     const done = !pending;
     if (done) {
       yield { type: "done", result: counters };

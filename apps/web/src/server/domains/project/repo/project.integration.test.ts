@@ -277,7 +277,7 @@ describe("project repository", () => {
       },
       ctx.actor,
     );
-    expect((await stored())?.stale).toBe(true);
+    expect((await stored())?.stale).toBe(false);
     await drainStoredDerived(ctx.db);
     const excluded = await readProjectById(ctx.db, project.entityId);
     expect(excluded.rollup).toMatchObject({ taskCount: 1, doneTaskCount: 0 });
@@ -291,7 +291,7 @@ describe("project repository", () => {
       },
       ctx.actor,
     );
-    expect((await stored())?.stale).toBe(true);
+    expect((await stored())?.stale).toBe(false);
     await drainStoredDerived(ctx.db);
     const restored = await readProjectById(ctx.db, project.entityId);
     expect(restored.rollup).toEqual(before.rollup);

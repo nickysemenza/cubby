@@ -7,7 +7,7 @@ import {
   readMaintenanceStatus,
 } from "~/server/domains/maintenance/service/maintenance.service";
 import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
-import { requestDerivedRebuild } from "~/server/generic/derived/service/rebuild";
+import { requestDerivedRebuild } from "~/server/generic/derived/repo/rebuild";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { wakeAt } from "~/server/workflows/background-tasks/publish";
 import { requestCatchUp } from "~/server/workflows/catch-up";

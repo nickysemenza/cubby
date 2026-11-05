@@ -7,7 +7,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { OWNER_FILTER_HOUSEHOLD, OWNER_FILTER_UNKNOWN } from "@cubby/shared";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { raceUniqueInsert, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -55,9 +55,6 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
 import { executeEntitySelectionIds } from "~/server/entity-kernel/selection-ids";
-import { markExpiredClockDerived } from "~/server/generic/derived/repo/drain";
-import { loadStoredDerived } from "~/server/generic/derived/repo/read";
-import { updateWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { selectListReadRows } from "~/server/generic/list/repo/list-read-schema";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -269,57 +266,6 @@ describe("inventory ownership mutations", () => {
     expect(complete).toMatchObject({
       meta: { totalCount: 1, sums: { valuation: expect.any(Number) } },
     });
-  });
-
-  it("expires ownership at a household-day boundary without inventing pending work or resetting failures", async () => {
-    const subject = await createSubject("Calendar ownership expiry");
-    await drainStoredDerived(ctx.db);
-    await getDb(ctx.db).execute(sql`
-      UPDATE "DerivedValue" SET "computedAt" = (now() AT TIME ZONE 'UTC') - interval '2 days'
-      WHERE "entityId" = ${subject.entryId} AND key = 'ownership'`);
-    const read = async () =>
-      (
-        await loadStoredDerived(
-          ctx.db,
-          "inventory",
-          [subject.entryId],
-          ["ownership"],
-        )
-      )
-        .get(subject.entryId)
-        ?.get("ownership");
-    expect(await read()).toMatchObject({
-      resultExists: true,
-      stale: true,
-      pending: false,
-    });
-    expect(await markExpiredClockDerived(ctx.db)).toBeGreaterThan(0);
-    expect(await read()).toMatchObject({ stale: true, pending: true });
-    await updateWorkItems(
-      ctx.db,
-      { target: "inventory.ownership", refs: [subject.entryId] },
-      {
-        lastError: "synthetic retry",
-        readyAt: sql`(now() AT TIME ZONE 'UTC') + interval '1 hour'`,
-      },
-    );
-    expect(await markExpiredClockDerived(ctx.db)).toBe(0);
-    expect(await read()).toMatchObject({
-      error: "synthetic retry",
-      pending: true,
-    });
-    await updateWorkItems(
-      ctx.db,
-      { target: "inventory.ownership", refs: [subject.entryId] },
-      { readyAt: sql`now() AT TIME ZONE 'UTC'` },
-    );
-    await drainStoredDerived(ctx.db);
-    expect(await read()).toMatchObject({
-      stale: false,
-      pending: false,
-      error: null,
-    });
-    expect(await markExpiredClockDerived(ctx.db)).toBe(0);
   });
 
   const addPurchase = async (args: {
