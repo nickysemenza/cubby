@@ -31,8 +31,6 @@ import {
   projectStatusValues,
 } from "@cubby/schemas/project";
 import { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
-import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
@@ -60,6 +58,7 @@ import { FieldRecordValue } from "~/ui/derived/record-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { cellMonoDense, stickyRowHeaderPage } from "~/ui/matrix/matrix-chrome";
+import { PrevNextButtons } from "~/ui/navigation/prev-next-buttons";
 import { Input } from "~/ui/primitives/input";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { Badge } from "~/ui/reui/badge";
@@ -510,33 +509,26 @@ export function ToolMatrixPage({
             />
           </Row>
           <Row align="center" gap="xs" className="ml-auto">
-            <button
-              type="button"
-              aria-label="Previous project page"
-              title="Previous project page"
-              disabled={page <= 1}
-              onClick={() => onSearchChange({ page: page - 1 })}
-              className="flex size-7 items-center justify-center rounded border border-[var(--border)] text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            <PrevNextButtons
+              previous={{
+                label: "Previous project page",
+                disabled: page <= 1,
+                onClick: () => onSearchChange({ page: page - 1 }),
+              }}
+              next={{
+                label: "Next project page",
+                disabled: pageCount === 0 || page >= pageCount,
+                onClick: () => onSearchChange({ page: page + 1 }),
+              }}
             >
-              <CaretLeftIcon className="size-3.5" aria-hidden />
-            </button>
-            <span
-              className="font-mono text-2xs whitespace-nowrap text-slate"
-              title="Pages prioritize projects with tool activity, then recent projects; each page reads chronologically."
-            >
-              {firstProject}–{lastProject} of {data.totals.matchingProjects} ·
-              page {page}/{Math.max(pageCount, 1)}
-            </span>
-            <button
-              type="button"
-              aria-label="Next project page"
-              title="Next project page"
-              disabled={pageCount === 0 || page >= pageCount}
-              onClick={() => onSearchChange({ page: page + 1 })}
-              className="flex size-7 items-center justify-center rounded border border-[var(--border)] text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <CaretRightIcon className="size-3.5" aria-hidden />
-            </button>
+              <span
+                className="font-mono text-2xs whitespace-nowrap text-slate"
+                title="Pages prioritize projects with tool activity, then recent projects; each page reads chronologically."
+              >
+                {firstProject}–{lastProject} of {data.totals.matchingProjects} ·
+                page {page}/{Math.max(pageCount, 1)}
+              </span>
+            </PrevNextButtons>
           </Row>
         </Row>
         <Row

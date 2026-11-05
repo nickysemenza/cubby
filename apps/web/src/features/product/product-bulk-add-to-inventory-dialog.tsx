@@ -31,7 +31,6 @@ import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { type FC, useEffect, useRef } from "react";
 import { FormProvider, useFieldArray, useForm } from "react-hook-form";
@@ -53,9 +52,9 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { requiredLocationCode } from "~/ui/forms/form-fields";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/primitives/button";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/reui/alert";
 import { Description } from "~/ui/text/description";
 import { tryFormatAmount } from "~/ui/text/format-amount";
@@ -370,16 +369,13 @@ export const ProductBulkAddToInventoryDialog: FC<
                       unitPath={`items.${index}.amount.unit`}
                     />
                   </div>
-                  <Button
+                  <RemoveButton
                     type="button"
-                    variant="ghost"
                     size="icon"
                     aria-label={`Remove ${field.label}`}
                     onClick={() => remove(index)}
                     className="self-end sm:mb-1 sm:shrink-0"
-                  >
-                    <XIcon className="size-4" />
-                  </Button>
+                  />
                 </Row>
               );
             })}

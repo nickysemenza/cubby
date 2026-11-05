@@ -10,8 +10,6 @@ import {
 import { allEntities, entityRoster } from "@cubby/schemas/entity-roster";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
-import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
-import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
 import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -36,6 +34,7 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Panel, Row, Stack } from "~/ui/layout";
+import { PrevNextButtons } from "~/ui/navigation/prev-next-buttons";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
@@ -1118,24 +1117,18 @@ function VisitedRecords({
           aria-label="Exploration history"
         >
           <Row wrap gap="sm" align="center">
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label="Previous visited record"
-              disabled={cursor === 0}
-              onClick={() => moveHistory(-1)}
-            >
-              <ArrowLeftIcon className="size-3.5" />
-            </Button>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label="Next visited record"
-              disabled={cursor >= trail.length - 1}
-              onClick={() => moveHistory(1)}
-            >
-              <ArrowRightIcon className="size-3.5" />
-            </Button>
+            <PrevNextButtons
+              previous={{
+                label: "Previous visited record",
+                disabled: cursor === 0,
+                onClick: () => moveHistory(-1),
+              }}
+              next={{
+                label: "Next visited record",
+                disabled: cursor >= trail.length - 1,
+                onClick: () => moveHistory(1),
+              }}
+            />
             <EntityIcon entity={selected.entityKind} className="size-4" />
             <GraphRecordLink node={selected} href={hrefFor(selected, router)} />
             <span className="text-xs text-muted-foreground">

@@ -8,6 +8,7 @@ import { RecordEmoji } from "~/entity/components/record-emoji";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Panel } from "~/ui/layout/panel";
 import { Image } from "~/ui/media/image";
+import { TileOverlay } from "~/ui/media/tile-overlay";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -230,11 +231,7 @@ export function ShelfCard({
               {badgeSlot}
             </div>
           )}
-          {extraCount > 0 && (
-            <div className="absolute right-1 bottom-1 rounded bg-black/60 px-1 text-2xs text-white">
-              +{extraCount}
-            </div>
-          )}
+          <TileOverlay count={extraCount} />
         </div>
         <div className="min-w-0 px-3 pt-3 pb-2">
           <div

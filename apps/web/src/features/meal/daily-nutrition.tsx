@@ -10,8 +10,6 @@ import {
   type MealType,
 } from "@cubby/schemas/meal-classification";
 import { getErrorMessage } from "@cubby/shared";
-import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -24,6 +22,7 @@ import { useHouseholdToday } from "~/lib/use-household-today";
 import { Picker } from "~/ui/combobox/picker";
 import { DatePickerInput } from "~/ui/dates/date-picker-input";
 import { Row, Section, Stack } from "~/ui/layout";
+import { PrevNextButtons } from "~/ui/navigation/prev-next-buttons";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
@@ -51,30 +50,19 @@ export function DailyNutrition({
     <Stack gap="lg">
       <Row justify="between" gap="md" className="flex-wrap">
         <Row gap="sm" className="flex-wrap">
-          <Button
-            variant="outline"
-            className="min-h-11 min-w-11"
-            aria-label="Previous day"
-            onClick={() => move(-1)}
+          <PrevNextButtons
+            previous={{ label: "Previous day", onClick: () => move(-1) }}
+            next={{ label: "Next day", onClick: () => move(1) }}
           >
-            <CaretLeftIcon className="size-4" />
-          </Button>
-          <DatePickerInput
-            value={selectedDate}
-            onChange={(value) => {
-              if (value) onDateChange(value);
-            }}
-            aria-label="Nutrition date"
-            className="min-h-11 w-44"
-          />
-          <Button
-            variant="outline"
-            className="min-h-11 min-w-11"
-            aria-label="Next day"
-            onClick={() => move(1)}
-          >
-            <CaretRightIcon className="size-4" />
-          </Button>
+            <DatePickerInput
+              value={selectedDate}
+              onChange={(value) => {
+                if (value) onDateChange(value);
+              }}
+              aria-label="Nutrition date"
+              className="min-h-11 w-44"
+            />
+          </PrevNextButtons>
           <Button
             variant="ghost"
             className="min-h-11"

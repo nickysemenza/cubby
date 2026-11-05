@@ -6,7 +6,6 @@ import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { StarIcon } from "@phosphor-icons/react/dist/csr/Star";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation } from "@tanstack/react-query";
 import { cn } from "cn";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -19,6 +18,8 @@ import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { FileDropField } from "~/ui/file-upload/file-drop-field";
+import { RemoveButton } from "~/ui/forms/remove-button";
+import { TileOverlay } from "~/ui/media/tile-overlay";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
@@ -613,16 +614,13 @@ export function PendingImageUpload({
                       Retry
                     </Button>
                   ) : null}
-                  <Button
+                  <RemoveButton
                     type="button"
-                    variant="outline"
                     size="icon"
                     className="size-6"
                     aria-label={`Remove ${draft.filename}`}
                     onClick={() => removeUploadDraft(draft.id)}
-                  >
-                    <XIcon className="size-3.5" />
-                  </Button>
+                  />
                 </div>
               </div>
             )}
@@ -638,17 +636,13 @@ export function PendingImageUpload({
             images={pendingImages}
             onSelect={(image) => setViewing({ group: "pending", id: image.id })}
             renderOverlay={(image) => (
-              <Button
-                type="button"
-                variant="destructive"
-                size="icon"
-                className="absolute top-1 right-1 z-20 size-6 rounded-full p-1"
-                onClick={() => removeImage(image.id)}
-                aria-label={`Remove ${image.filename}`}
-                title={`Remove ${image.filename}`}
-              >
-                <XIcon className="size-4" />
-              </Button>
+              <TileOverlay
+                remove={{
+                  "aria-label": `Remove ${image.filename}`,
+                  title: `Remove ${image.filename}`,
+                  onClick: () => removeImage(image.id),
+                }}
+              />
             )}
           />
         </div>
@@ -665,17 +659,13 @@ export function PendingImageUpload({
             }
             renderOverlay={(image, index) => (
               <>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="icon"
-                  className="absolute top-1 right-1 z-20 size-6 rounded-full p-1"
-                  aria-label={`Remove ${image.filename}`}
-                  title={`Remove ${image.filename}`}
-                  onClick={() => removeExistingImage(image.id)}
-                >
-                  <XIcon className="size-4" />
-                </Button>
+                <TileOverlay
+                  remove={{
+                    "aria-label": `Remove ${image.filename}`,
+                    title: `Remove ${image.filename}`,
+                    onClick: () => removeExistingImage(image.id),
+                  }}
+                />
                 {onExistingImagesReorder && index === 0 && (
                   <span className="absolute bottom-1 left-1 z-20 rounded-sm bg-background/80 px-1 text-xs font-medium text-foreground">
                     Cover

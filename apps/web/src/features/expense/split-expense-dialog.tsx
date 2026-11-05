@@ -13,7 +13,6 @@ import {
 } from "@cubby/schemas/purchase";
 import { countLabel } from "@cubby/shared/pluralize";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import {
   keepPreviousData,
@@ -34,6 +33,7 @@ import { useTradeOptions } from "~/entity/presentation/trade-options";
 import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-apply";
 import { purchase } from "~/integrations/tanstack-query/generated/domains/purchase.gen";
 import { formatCurrency } from "~/lib/number-format";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
@@ -132,15 +132,12 @@ function SplitPartCard({
     <Stack gap="xs" className="border border-[var(--border)] p-2">
       <Row align="center" justify="between" gap="sm">
         <Eyebrow>Part {index + 1}</Eyebrow>
-        <Button
-          variant="ghost"
-          size="sm"
+        <RemoveButton
+          size="icon-sm"
           disabled={!canRemove}
           onClick={onRemove}
           aria-label={`Remove part ${index + 1}`}
-        >
-          <XIcon />
-        </Button>
+        />
       </Row>
       <Row align="center" gap="sm">
         <Input

@@ -1,6 +1,5 @@
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { UploadIcon } from "@phosphor-icons/react/dist/csr/Upload";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -10,6 +9,7 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { imageUpload } from "~/integrations/tanstack-query/generated/domains/imageUpload.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { FileDropField } from "~/ui/file-upload/file-drop-field";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
@@ -203,16 +203,13 @@ export function UploadImageDialog({
                         Retry
                       </Button>
                     ) : null}
-                    <Button
+                    <RemoveButton
                       type="button"
                       size="icon"
-                      variant="outline"
                       className="size-6"
                       aria-label={`Remove ${draft.filename}`}
                       onClick={() => removeDraft(draft.id)}
-                    >
-                      <XIcon className="size-3.5" />
-                    </Button>
+                    />
                   </div>
                 </div>
               )}

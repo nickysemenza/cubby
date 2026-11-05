@@ -9,7 +9,6 @@ import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowC
 import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
 import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
-import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { PushPinSlashIcon } from "@phosphor-icons/react/dist/csr/PushPinSlash";
 import { SidebarIcon } from "@phosphor-icons/react/dist/csr/Sidebar";
@@ -17,12 +16,12 @@ import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple"
 import type { RowData } from "@tanstack/react-table";
 import { cn } from "cn";
 
+import { MoreMenuTrigger } from "~/ui/navigation/more-menu-trigger";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 import { Description } from "~/ui/text/description";
 
@@ -178,18 +177,11 @@ function SortableColumn<TData extends RowData>({
       )}
       {!locked && (
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="md:hidden"
-                aria-label={`Actions for ${columnLabel(column)}`}
-              />
-            }
-          >
-            <DotsThreeIcon className="size-3.5" />
-          </DropdownMenuTrigger>
+          <MoreMenuTrigger
+            size="icon-sm"
+            className="md:hidden"
+            aria-label={`Actions for ${columnLabel(column)}`}
+          />
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuItem disabled={index === 0} onClick={() => move(-1)}>
               <ArrowUpIcon className="size-3.5" />

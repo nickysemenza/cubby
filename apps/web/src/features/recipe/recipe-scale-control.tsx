@@ -1,5 +1,4 @@
 import { ArrowsOutIcon } from "@phosphor-icons/react/dist/csr/ArrowsOut";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
@@ -8,6 +7,7 @@ import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { roundTo } from "~/lib/round-to";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -295,14 +295,11 @@ export function RecipeScaleControl({
       </Popover>
 
       {scaled && (
-        <Button
-          variant="ghost"
+        <RemoveButton
           size="icon-sm"
           aria-label="Reset scale to 1×"
           onClick={() => onFactorChange(1)}
-        >
-          <XIcon className="size-3" />
-        </Button>
+        />
       )}
     </Row>
   );

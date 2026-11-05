@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import { EntityIcon } from "~/entity/entities";
 import { Image } from "~/ui/media/image";
 import { ImageWithPreview } from "~/ui/media/image-with-preview";
+import { TileOverlay } from "~/ui/media/tile-overlay";
 
 interface EntityCoverProps {
   images: readonly ImageUrlSummary[];
@@ -109,11 +110,7 @@ export function EntityCover({
           )}
         />
       )}
-      {images.length > 1 && (
-        <span className="absolute right-0 bottom-0 flex size-3 items-center justify-center bg-foreground text-3xs text-background">
-          +{images.length - 1}
-        </span>
-      )}
+      <TileOverlay count={images.length - 1} />
     </div>
   );
 }

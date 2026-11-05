@@ -18,8 +18,9 @@ import { usdaFood } from "~/integrations/tanstack-query/generated/domains/usdaFo
 import type { EnrichmentProposal } from "~/server/ai/enrichment/proposals";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Kbd, KbdGroup } from "~/ui/primitives/kbd";
+import { Kbd } from "~/ui/primitives/kbd";
 import { Spinner } from "~/ui/primitives/spinner";
+import { KeyHint } from "~/ui/text/key-hint";
 
 import {
   EnrichmentEditor,
@@ -302,33 +303,13 @@ export function ReviewCard({
               )}
 
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-2 text-2xs text-muted-foreground">
-                <span>
-                  <Kbd>↵</Kbd> Apply
-                </span>
-                {!usdaLinked && (
-                  <span>
-                    <Kbd>u</Kbd> Search
-                  </span>
-                )}
-                <span>
-                  <Kbd>m</Kbd> Merge
-                </span>
-                <span>
-                  <Kbd>s</Kbd> Skip
-                </span>
-                <span>
-                  <Kbd>n</Kbd> No USDA
-                </span>
-                <span>
-                  <KbdGroup>
-                    <Kbd>j</Kbd>
-                    <Kbd>k</Kbd>
-                  </KbdGroup>{" "}
-                  Nav
-                </span>
-                <span>
-                  <Kbd>esc</Kbd> Back
-                </span>
+                <KeyHint keys={["↵"]}>Apply</KeyHint>
+                {!usdaLinked && <KeyHint keys={["u"]}>Search</KeyHint>}
+                <KeyHint keys={["m"]}>Merge</KeyHint>
+                <KeyHint keys={["s"]}>Skip</KeyHint>
+                <KeyHint keys={["n"]}>No USDA</KeyHint>
+                <KeyHint keys={["j", "k"]}>Nav</KeyHint>
+                <KeyHint keys={["esc"]}>Back</KeyHint>
               </div>
             </Stack>
           ),

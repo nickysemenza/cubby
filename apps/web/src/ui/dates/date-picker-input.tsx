@@ -1,7 +1,6 @@
 "use client";
 
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { cn } from "cn";
 import type { ComponentProps } from "react";
 import {
@@ -19,6 +18,7 @@ import { formatCalendarDay } from "~/lib/date-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { parsePlainDateInput } from "~/lib/plain-date-input";
 import type { Calendar as CalendarComponent } from "~/ui/dates/calendar";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import {
   Popover,
   PopoverContent,
@@ -85,15 +85,13 @@ const DateClearButton = ({
     return <span aria-hidden className="h-full w-7 shrink-0 max-sm:w-10" />;
   }
   return (
-    <button
+    <RemoveButton
       type="button"
       aria-label="Clear date"
       disabled={disabled}
-      className="inline-flex h-full w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50 max-sm:w-10"
+      className="inline-flex h-full w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors disabled:pointer-events-none disabled:opacity-50 max-sm:w-10"
       onClick={onClear}
-    >
-      <XIcon className="size-3.5" />
-    </button>
+    />
   );
 };
 

@@ -7,7 +7,6 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQueries } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import pluralize from "pluralize";
@@ -17,6 +16,7 @@ import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.g
 import { flattenRecipes } from "~/lib/cookbook-graph";
 import { cookbookRecipeSignature } from "~/lib/recipe-signature";
 import { BulkProgressBar } from "~/ui/feedback/bulk-progress-bar";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Panel } from "~/ui/layout/panel";
 import { Row } from "~/ui/layout/row";
@@ -189,14 +189,12 @@ export function BookGroupCard({
               Import {book.selected.size}
             </Button>
           )}
-          <button
+          <RemoveButton
             type="button"
             onClick={() => handlers.remove(book.source)}
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground"
             aria-label="Remove book"
-          >
-            <XIcon className="size-4" />
-          </button>
+          />
         </Row>
       </div>
 

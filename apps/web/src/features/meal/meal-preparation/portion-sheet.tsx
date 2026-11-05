@@ -4,7 +4,6 @@ import type {
 } from "@cubby/schemas/meal";
 import { countLabel } from "@cubby/shared/pluralize";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
-import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -13,6 +12,7 @@ import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { Picker } from "~/entity/picker/picker";
 import { formatDateSpan } from "~/lib/date-span";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Panel } from "~/ui/layout/panel";
@@ -498,16 +498,13 @@ function PortionDraftRow({
         <span className="text-xs font-medium text-muted-foreground">
           Person {index + 1}
         </span>
-        <Button
+        <RemoveButton
           type="button"
-          variant="ghost"
           size="icon"
           aria-label={`Remove person ${index + 1}`}
           onClick={onRemove}
           disabled={!canRemove}
-        >
-          <TrashIcon className="size-4" />
-        </Button>
+        />
       </Row>
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_minmax(11rem,0.9fr)]">
         <Picker

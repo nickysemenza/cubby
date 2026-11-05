@@ -626,7 +626,7 @@ describe("createActionsColumn", () => {
       },
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Open menu" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Row actions" }));
     fireEvent.click(
       await screen.findByRole("button", { name: /Copy PRD-4K7M/ }),
     );
@@ -645,7 +645,7 @@ describe("createActionsColumn", () => {
       },
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Open menu" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Row actions" }));
     expect(
       await screen.findByRole("menuitem", { name: /View details/ }),
     ).toBeVisible();

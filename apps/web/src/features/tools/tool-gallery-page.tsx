@@ -43,6 +43,7 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Image } from "~/ui/media/image";
+import { TileOverlay } from "~/ui/media/tile-overlay";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { Skeleton } from "~/ui/primitives/skeleton";
@@ -198,11 +199,7 @@ function ToolCard({
             </div>
           }
         />
-        {item.extraImageCount > 0 ? (
-          <Badge className="absolute right-1.5 bottom-1.5 border-black/20 bg-black/65 text-white">
-            +{item.extraImageCount}
-          </Badge>
-        ) : null}
+        <TileOverlay count={item.extraImageCount} />
         {placements.installed ? (
           <Badge
             variant="slate"
