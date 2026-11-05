@@ -64,7 +64,7 @@ export async function driveAiWork(
           { runId: id, attempt: claim.generation },
           ports,
         );
-        return { page: { done: !pending?.length } };
+        return { page: { done: !pending } };
       },
     },
   };

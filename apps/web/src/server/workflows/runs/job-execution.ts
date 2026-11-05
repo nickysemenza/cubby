@@ -140,7 +140,7 @@ export const runJobHandler = defineJobHandler(
         // the interval only recovers a lost wake.
         return {
           page: {
-            done: !pending?.length,
+            done: !pending,
             availableAt: new Date(Date.now() + 60_000),
           },
         };

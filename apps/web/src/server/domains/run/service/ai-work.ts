@@ -1,3 +1,4 @@
+import { aiRefreshProgress } from "@cubby/schemas/ai-evaluation";
 import { buildActorContext } from "@cubby/schemas/context";
 import {
   emailReclassifyResult,
@@ -11,14 +12,19 @@ import {
 import { z } from "zod";
 
 import { aiBudgetWindow } from "~/server/ai/budget-window";
-import {
-  aiEvaluationProgress,
-  type ClaimedAiEvaluation,
-} from "~/server/ai/evaluation/repo/ai-evaluation";
+import type { ClaimedAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation";
 import {
   requestedAiEvaluations,
   PENDING_AI_STATES,
 } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import {
+  readEvaluationErrorText,
+  readEvaluationOutcomes,
+  readEvaluationTally,
+  readFirstEvaluationErrors,
+  type EvaluationScope,
+  type EvaluationTally,
+} from "~/server/ai/evaluation/repo/evaluation-tally";
 import type { Database } from "~/server/db";
 import {
   executeReclassificationTarget,
@@ -110,52 +116,87 @@ export async function advanceAiWorkRun(
       { requireNoOwnedPendingWork: complete },
     );
     if (complete && !written) return advanceAiWorkRun(db, params, ports);
-    return summary.pending;
+    return summary.pending.length;
   }
-  const items = await aiWorkItems(db, owner);
-  if (owner.purpose === "mail_reclassify" && !items.length)
+  const work = await readAiWork(db, owner, params.attempt);
+  if (owner.purpose === "mail_reclassify" && !work.total)
     throw new Error(
       "Manual Reclassify has no durable roster; retain its evidence for historical recovery.",
     );
-  const pending = items.filter((item) =>
-    PENDING_AI_STATES.includes(item.state),
-  );
-  const progress = aiWorkProgress(
-    owner,
-    items,
-    params.attempt,
-    pending.length === 0,
-  );
-  const failed = items.some((item) => item.state === "failed");
   const written = await writeRunningAttemptProgress(
     db,
     owner.id,
     params.attempt,
     {
-      progress,
-      ...(pending.length
+      progress: work.progress,
+      ...(work.pending
         ? {}
         : {
-            status: failed ? "failed" : "completed",
+            status: work.failed ? "failed" : "completed",
             endedAt: new Date(),
-            failureCode: failed ? "ai_work_failed" : null,
-            dispatchError:
-              items
-                .flatMap((item) => (item.error ? [item.error] : []))
-                .join("\n") || null,
+            failureCode: work.failed ? "ai_work_failed" : null,
+            dispatchError: await work.errorText(),
           }),
     },
     {
-      requireNoOwnedPendingWork: !pending.length && ownsAiWork(owner),
+      requireNoOwnedPendingWork: !work.pending && ownsAiWork(owner),
     },
   );
   // Work joined this Run after its roster read: continue with it instead of settling.
-  if (!pending.length && !written && ownsAiWork(owner))
+  if (!work.pending && !written && ownsAiWork(owner))
     return advanceAiWorkRun(db, params, ports);
-  return pending
-    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
-    .slice(0, 2);
+  return work.pending;
 }
+
+/** What a Run's evaluations add up to, read in SQL unless its checkpoint needs each one. */
+async function readAiWork(db: Database, owner: RunRow, attempt: number) {
+  if (owner.purpose === "mail_reclassify") {
+    // A reclassify checkpoint records a result per Email, so it reads its roster.
+    const items = await aiWorkItems(db, owner);
+    const pending = items.filter((item) =>
+      PENDING_AI_STATES.includes(item.state),
+    ).length;
+    return {
+      total: items.length,
+      pending,
+      failed: items.some((item) => item.state === "failed"),
+      progress: reclassificationProgress(items, attempt, pending === 0),
+      errorText: async () =>
+        items.flatMap((item) => (item.error ? [item.error] : [])).join("\n") ||
+        null,
+    };
+  }
+  const scope: EvaluationScope = ownsAiWork(owner)
+    ? { runId: owner.id, source: "owned" }
+    : { runId: owner.id, source: "requested" };
+  const tally = await readEvaluationTally(db, scope);
+  return {
+    total: tally.total,
+    pending: tally.pending,
+    failed: tally.failed > 0,
+    progress: ownsAiWork(owner)
+      ? aiRefreshProgress.parse({
+          attempt,
+          selected: tally.total,
+          queued: tally.queued,
+          resultReady: tally.resultReady,
+          completed: tally.completed,
+          blocked: tally.blocked,
+          failed: tally.failed,
+          obsolete: tally.obsolete,
+          cancelled: tally.cancelled,
+          errors: await readFirstEvaluationErrors(db, scope, 10),
+        })
+      : suggestionSweepProgress(
+          owner,
+          tally,
+          await readEvaluationOutcomes(db, scope),
+          attempt,
+        ),
+    errorText: () => readEvaluationErrorText(db, scope),
+  };
+}
+
 export async function aiWorkItems(db: Database, owner: RunRow) {
   const items = await (ownsAiWork(owner)
     ? aiEvaluationsForRun(db, owner.id)
@@ -201,83 +242,63 @@ export async function executeAiWorkTarget(
       });
 }
 
-function aiWorkProgress(
-  owner: RunRow,
+function reclassificationProgress(
   items: readonly AiEvaluationRow[],
   attempt: number,
-  complete = false,
+  complete: boolean,
 ) {
-  if (ownsAiWork(owner))
-    return {
-      ...aiEvaluationProgress(items, attempt),
-    };
-  if (owner.purpose === "mail_reclassify") {
-    const results = items.flatMap((item) => {
-      const receipt = z
-        .object({ result: emailReclassifyResult })
-        .safeParse(item.receipt);
-      if (receipt.success) return [receipt.data.result];
-      if (!["failed", "obsolete", "cancelled"].includes(item.state)) return [];
-      const snapshot = z
-        .object({ publicId: emailReclassifyResult.shape.id })
-        .safeParse(item.snapshot);
-      return snapshot.success
-        ? [
-            emailReclassifyResult.parse({
-              id: snapshot.data.publicId,
-              outcome:
-                item.state === "failed"
-                  ? "failed"
-                  : item.state === "cancelled"
-                    ? "cancelled"
-                    : "changed",
-              classification: null,
-              stage: null,
-              conflict: false,
-              error: item.error,
-            }),
-          ]
-        : [];
-    });
-    return mailReclassificationCheckpoint.parse({
-      kind: "mail_reclassification",
-      version: 1,
-      attempt,
-      complete,
-      results,
-    });
-  }
+  const results = items.flatMap((item) => {
+    const receipt = z
+      .object({ result: emailReclassifyResult })
+      .safeParse(item.receipt);
+    if (receipt.success) return [receipt.data.result];
+    if (!["failed", "obsolete", "cancelled"].includes(item.state)) return [];
+    const snapshot = z
+      .object({ publicId: emailReclassifyResult.shape.id })
+      .safeParse(item.snapshot);
+    return snapshot.success
+      ? [
+          emailReclassifyResult.parse({
+            id: snapshot.data.publicId,
+            outcome:
+              item.state === "failed"
+                ? "failed"
+                : item.state === "cancelled"
+                  ? "cancelled"
+                  : "changed",
+            classification: null,
+            stage: null,
+            conflict: false,
+            error: item.error,
+          }),
+        ]
+      : [];
+  });
+  return mailReclassificationCheckpoint.parse({
+    kind: "mail_reclassification",
+    version: 1,
+    attempt,
+    complete,
+    results,
+  });
+}
+
+function suggestionSweepProgress(
+  owner: RunRow,
+  tally: EvaluationTally,
+  outcomes: Awaited<ReturnType<typeof readEvaluationOutcomes>>,
+  attempt: number,
+) {
   const legacy = suggestionSweepRunProgress.safeParse(owner.progress).data
     ?.legacyCounts;
-  const receipts = items.map((item) =>
-    z
-      .object({
-        outcome: z.string(),
-        diagnostics: suggestionSweepRunProgress.shape.diagnostics.optional(),
-      })
-      .safeParse(item.receipt),
-  );
   return {
     ...suggestionSweepRunProgress.parse({
-      total: items.length,
-      done: items.filter((item) => !PENDING_AI_STATES.includes(item.state))
-        .length,
-      applied:
-        (legacy?.applied ?? 0) +
-        receipts.filter(
-          (receipt) => receipt.success && receipt.data.outcome === "applied",
-        ).length,
-      queued:
-        (legacy?.queued ?? 0) +
-        receipts.filter(
-          (receipt) => receipt.success && receipt.data.outcome === "queued",
-        ).length,
-      failed:
-        (legacy?.failed ?? 0) +
-        items.filter((item) => item.state === "failed").length,
-      diagnostics: receipts.flatMap((receipt) =>
-        receipt.success ? (receipt.data.diagnostics ?? []) : [],
-      ),
+      total: tally.total,
+      done: tally.total - tally.pending,
+      applied: (legacy?.applied ?? 0) + outcomes.applied,
+      queued: (legacy?.queued ?? 0) + outcomes.queued,
+      failed: (legacy?.failed ?? 0) + tally.failed,
+      diagnostics: outcomes.diagnostics,
     }),
     ...(legacy ? { legacyCounts: legacy } : {}),
     rosterPrepared: true,
