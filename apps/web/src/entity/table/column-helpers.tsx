@@ -51,14 +51,18 @@ import { CurrencyValue } from "~/ui/common/currency-value";
 import { renderScalarValue } from "~/ui/common/scalar-value";
 import { ImageChainPopover } from "~/ui/derived/image-chain";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "~/ui/shadcn/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+} from "~/ui/primitives/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 import { EnumPill } from "~/ui/text/enum-pill";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 import { NoneValue } from "~/ui/text/none-value";

@@ -4,7 +4,7 @@ import { cn } from "cn";
 
 import { EntityIcon, entities } from "~/entity/entities";
 import { domainForEntity } from "~/ui/navigation/domain-wayfinding";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,8 +12,12 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from "~/ui/shadcn/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+} from "~/ui/primitives/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 import { actionsForSurface } from "../actions/action-items";
 import { navGroups } from "./nav-items";

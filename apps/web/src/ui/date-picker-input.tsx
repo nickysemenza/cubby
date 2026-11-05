@@ -19,7 +19,11 @@ import { formatCalendarDay } from "~/lib/date-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { parsePlainDateInput } from "~/lib/plain-date-input";
 import type { Calendar as CalendarComponent } from "~/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 
 // Keep react-day-picker out of the critical chunk — it's only needed once the
 // popover actually opens.

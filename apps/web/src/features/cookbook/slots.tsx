@@ -18,7 +18,7 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { BulkProgressBar } from "~/ui/feedback/bulk-progress-bar";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 
 /**

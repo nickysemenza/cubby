@@ -20,8 +20,12 @@ import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionCount } from "~/ui/data-table/detail-section-state";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
-import { Button } from "~/ui/shadcn/button";
-import { Progress, ProgressLabel, ProgressValue } from "~/ui/shadcn/progress";
+import { Button } from "~/ui/primitives/button";
+import {
+  Progress,
+  ProgressLabel,
+  ProgressValue,
+} from "~/ui/primitives/progress";
 
 /** "about 12 min", "about 3 h", "under a minute". */
 function formatMinutesLeft(minutes: number) {

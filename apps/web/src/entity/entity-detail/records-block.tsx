@@ -6,8 +6,8 @@ import { DateDisplay } from "~/ui/common/date-display";
 import { Image } from "~/ui/common/image";
 import { RecordDetail } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Button } from "~/ui/primitives/button";
+import { Skeleton } from "~/ui/primitives/skeleton";
 import { Description } from "~/ui/text/description";
 import { Eyebrow } from "~/ui/text/eyebrow";
 

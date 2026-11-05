@@ -6,7 +6,7 @@ import { type Accept, type FileRejection, useDropzone } from "react-dropzone";
 
 import { roundTo } from "~/lib/round-to";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 interface FileDropFieldProps {
   accept: string;

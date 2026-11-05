@@ -15,7 +15,7 @@ import {
   RecordRow,
 } from "~/ui/common/record-list";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Progress } from "~/ui/shadcn/progress";
+import { Progress } from "~/ui/primitives/progress";
 
 import { WaitNotice } from "../job/job-status";
 import {

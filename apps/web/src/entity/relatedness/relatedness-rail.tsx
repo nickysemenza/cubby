@@ -16,7 +16,7 @@ import { recommendations } from "~/integrations/tanstack-query/generated/domains
 import { search } from "~/integrations/tanstack-query/generated/domains/search.gen";
 import { RecordList } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
-import { Button, buttonVariants } from "~/ui/shadcn/button";
+import { Button, buttonVariants } from "~/ui/primitives/button";
 
 import {
   type EntityDisplayImageMap,

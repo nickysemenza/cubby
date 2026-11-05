@@ -16,7 +16,7 @@ import { DateDisplay } from "~/ui/common/date-display";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 import { NoneValue } from "~/ui/text/none-value";
 

@@ -37,8 +37,8 @@ import {
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
-import { Button } from "~/ui/shadcn/button";
-import { Switch } from "~/ui/shadcn/switch";
+import { Button } from "~/ui/primitives/button";
+import { Switch } from "~/ui/primitives/switch";
 
 import {
   canSwapExpenseAnalyzeAxes,

@@ -16,10 +16,10 @@ import { MarkdownText } from "~/entity/prose/markdown";
 import { wasm } from "~/lib/wasm";
 import { Image } from "~/ui/common/image";
 import { Panel, Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { Spinner } from "~/ui/primitives/spinner";
 import { Badge } from "~/ui/reui/badge";
-import { Button } from "~/ui/shadcn/button";
-import { Checkbox } from "~/ui/shadcn/checkbox";
-import { Spinner } from "~/ui/shadcn/spinner";
 import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 

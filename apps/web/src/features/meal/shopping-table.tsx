@@ -14,7 +14,7 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useLocalTable } from "~/ui/data-table/use-local-table";
-import { Checkbox } from "~/ui/shadcn/checkbox";
+import { Checkbox } from "~/ui/primitives/checkbox";
 
 import {
   formatAmount,

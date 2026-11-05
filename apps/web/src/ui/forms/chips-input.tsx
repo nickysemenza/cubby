@@ -12,9 +12,9 @@ import {
 } from "react";
 
 import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
 import { Badge } from "~/ui/reui/badge";
-import { Button } from "~/ui/shadcn/button";
-import { Input } from "~/ui/shadcn/input";
 
 export interface ChipsInputProps {
   id?: string;

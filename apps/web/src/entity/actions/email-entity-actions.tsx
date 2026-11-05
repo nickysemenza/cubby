@@ -20,7 +20,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/ui/shadcn/alert-dialog";
+} from "~/ui/primitives/alert-dialog";
 
 import { useRelationScope } from "../entity-detail/relation-scope";
 import { useActionMutation } from "../hooks/use-action-mutation";

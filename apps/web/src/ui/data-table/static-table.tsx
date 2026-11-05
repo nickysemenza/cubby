@@ -8,7 +8,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "~/ui/shadcn/table";
+} from "~/ui/primitives/table";
 
 export interface StaticTableColumn<T> {
   id: string;

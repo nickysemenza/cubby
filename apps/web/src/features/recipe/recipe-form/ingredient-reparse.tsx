@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import { formatAmounts } from "~/ui/text/format-amount";
 
 import { DriftIndicator } from "../parse-drift-indicator";

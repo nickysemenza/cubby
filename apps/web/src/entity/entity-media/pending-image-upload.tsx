@@ -19,9 +19,9 @@ import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { FileDropField } from "~/ui/file-upload/file-drop-field";
-import { Button } from "~/ui/shadcn/button";
-import { Input } from "~/ui/shadcn/input";
-import { Label } from "~/ui/shadcn/label";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
+import { Label } from "~/ui/primitives/label";
 
 import { PhotoGrid } from "./photo-grid";
 import { PhotoViewer } from "./photo-viewer";

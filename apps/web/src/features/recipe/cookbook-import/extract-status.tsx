@@ -6,8 +6,8 @@ import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
 import { formatMinutesSeconds } from "~/lib/format-duration";
 import { formatSmallCurrency } from "~/lib/number-format";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { Spinner } from "~/ui/shadcn/spinner";
+import { Button } from "~/ui/primitives/button";
+import { Spinner } from "~/ui/primitives/spinner";
 import { Description } from "~/ui/text/description";
 
 import { formatMinuteRange } from "./import-helpers";

@@ -3,7 +3,7 @@ import { lazy, Suspense } from "react";
 
 import type { ListSlotComponent } from "~/entity/entity-list/list-slot-types";
 import { entityCalendar } from "~/features/calendar/entity-calendar";
-import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 // The analytics view is entirely Nivo charts and its tab is unmounted until
 // selected — lazy so the chart stack stays out of the default Ledger view.

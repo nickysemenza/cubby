@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 
 import { authClient } from "~/lib/auth-client";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Avatar, AvatarFallback, AvatarImage } from "~/ui/shadcn/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "~/ui/primitives/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +15,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/ui/shadcn/dropdown-menu";
+} from "~/ui/primitives/dropdown-menu";
 import { Description } from "~/ui/text/description";
 
 export const UserAvatarDropdown = () => {

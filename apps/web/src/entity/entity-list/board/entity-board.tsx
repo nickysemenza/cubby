@@ -52,7 +52,7 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { ListLoadingSkeleton } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Panel } from "~/ui/layout/panel";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,7 +61,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/ui/shadcn/dropdown-menu";
+} from "~/ui/primitives/dropdown-menu";
 
 import { listGroupBy } from "../list-grouping";
 import type { ListSlotProps } from "../list-slot-types";

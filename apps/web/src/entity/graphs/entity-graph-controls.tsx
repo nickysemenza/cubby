@@ -6,8 +6,8 @@ import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Row, Stack } from "~/ui/layout";
-import { Checkbox } from "~/ui/shadcn/checkbox";
-import { Input } from "~/ui/shadcn/input";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { Input } from "~/ui/primitives/input";
 
 import type {
   GraphData,

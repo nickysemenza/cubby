@@ -4,7 +4,11 @@ import { fieldMissingLabel } from "@cubby/schemas/field-envelope-presentation";
 import { countLabel } from "@cubby/shared/pluralize";
 
 import { formatCurrency } from "~/lib/number-format";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 import { NoneValue } from "~/ui/text/none-value";
 
 /** Cost renders only its canonical snapshot; its shared explanation owns source details. */

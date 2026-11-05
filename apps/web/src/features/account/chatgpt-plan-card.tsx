@@ -13,7 +13,7 @@ import { formatCurrency } from "~/lib/number-format";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import { StatusText } from "~/ui/text/status-text";
 
 import { aiFundingStatusQuery } from "./ai-funding";

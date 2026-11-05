@@ -32,10 +32,14 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { SidePanel } from "~/ui/overlays/side-panel";
+import { Button } from "~/ui/primitives/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/ui/primitives/tabs";
 import { Badge } from "~/ui/reui/badge";
-import { Button } from "~/ui/shadcn/button";
-import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/ui/shadcn/tabs";
 import { StatusText } from "~/ui/text/status-text";
 
 const activeRunStatuses = new Set<string>(ACTIVE_RUN_STATUSES);

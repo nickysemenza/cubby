@@ -5,7 +5,7 @@ import {
   MobileRowShell,
 } from "~/ui/data-table/mobile-card";
 import { Stack } from "~/ui/layout";
-import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 /**
  * Loading placeholder for one mobile list row.

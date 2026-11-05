@@ -33,7 +33,7 @@ import {
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import { EnumPill } from "~/ui/text/enum-pill";
 
 export const Route = createFileRoute("/_authenticated/runs/types")({

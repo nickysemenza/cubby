@@ -11,7 +11,7 @@ import { Picker } from "~/entity/picker/picker";
 import type { FieldSuggestionSource } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-apply";
 import { useDenseCell } from "~/ui/common/stacked-value";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import type {
   ComboboxItem,

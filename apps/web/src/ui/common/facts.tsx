@@ -7,8 +7,12 @@ import {
   useContext,
 } from "react";
 
-import { Button } from "~/ui/shadcn/button";
-import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
+import { Button } from "~/ui/primitives/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 
 import { Ledger, LedgerCell, LedgerRow } from "./ledger";
 import type { RecordTone } from "./record-list";

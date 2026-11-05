@@ -16,7 +16,7 @@ import {
   getIngredientMappings,
   unitMappingsFromFood,
 } from "~/lib/unit-mapping-utils";
-import { Input } from "~/ui/shadcn/input";
+import { Input } from "~/ui/primitives/input";
 import { getHoverableMeasureUnitIcon } from "~/ui/text/format-amount";
 
 // Shared core for the two enrichment surfaces — the dense Browse table editor

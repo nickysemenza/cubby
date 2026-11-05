@@ -57,7 +57,7 @@ import { WhyValue } from "~/ui/derived/why-value";
 import { DetailEditAction } from "~/ui/forms/detail-edit-action";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { VisibleContent } from "~/ui/hooks/visible-content";
-import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 import {
   SectionPair,

@@ -25,9 +25,9 @@ import { DatePickerInput } from "~/ui/date-picker-input";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
 import { Badge } from "~/ui/reui/badge";
-import { Button } from "~/ui/shadcn/button";
-import { Input } from "~/ui/shadcn/input";
 
 import { AddFoodDialog } from "./add-food-dialog";
 import { NutritionSummary } from "./meal-nutrition-summary";

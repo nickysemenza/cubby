@@ -36,7 +36,7 @@ import { Page } from "~/entity/page/page";
 import { pageTitle } from "~/lib/page-title";
 import { useTabParam } from "~/ui/hooks/use-tab-param";
 import { Stack } from "~/ui/layout";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/shadcn/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 const tabSchema = z.enum([
   "records",

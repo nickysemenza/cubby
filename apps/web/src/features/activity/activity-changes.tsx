@@ -11,7 +11,7 @@ import { entityPluralLabel } from "~/entity/entities";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 const ENTITY_KIND_OPTIONS: readonly PickerOption[] = [
   { value: "", label: "All entities" },

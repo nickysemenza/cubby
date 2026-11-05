@@ -6,7 +6,7 @@ import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
-import { Switch } from "~/ui/shadcn/switch";
+import { Switch } from "~/ui/primitives/switch";
 import { StatusText } from "~/ui/text/status-text";
 
 const MAIL_IMPORT_REFRESH_MS = 30_000;

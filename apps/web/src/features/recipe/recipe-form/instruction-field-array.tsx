@@ -4,7 +4,7 @@ import { type UseFormReturn, useFieldArray } from "react-hook-form";
 
 import { TextareaField } from "~/ui/forms/form-utils";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import { FieldArrayItemControls } from "./field-array-item-controls";
 import type { RecipeFormValues } from "./types";

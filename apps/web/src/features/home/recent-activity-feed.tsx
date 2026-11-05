@@ -22,7 +22,7 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
-import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 type AuditEntry = AuditLogListOut["entries"][number];
 

@@ -15,8 +15,8 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { Panel } from "~/ui/layout";
+import { Table, TableBody, TableCell, TableRow } from "~/ui/primitives/table";
 import { Badge } from "~/ui/reui/badge";
-import { Table, TableBody, TableCell, TableRow } from "~/ui/shadcn/table";
 
 import {
   buildDisplayQuantities,

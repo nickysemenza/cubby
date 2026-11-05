@@ -18,7 +18,7 @@ import { formatCurrency } from "~/lib/number-format";
 import { Image } from "~/ui/common/image";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 
 import type { TriageProduct } from "./triage-types";

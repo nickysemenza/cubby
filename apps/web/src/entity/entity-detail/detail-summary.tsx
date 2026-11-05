@@ -38,8 +38,8 @@ import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Button } from "~/ui/shadcn/button";
-import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Button } from "~/ui/primitives/button";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { readPathValue } from "../read-path";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";

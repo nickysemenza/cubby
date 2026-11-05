@@ -11,7 +11,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "~/ui/shadcn/tooltip";
+} from "~/ui/primitives/tooltip";
 import { NoneValue } from "~/ui/text/none-value";
 
 import ValidInvalidIcon from "../icons/valid-invalid";

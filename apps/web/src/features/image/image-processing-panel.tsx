@@ -31,8 +31,8 @@ import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button, buttonVariants } from "~/ui/shadcn/button";
-import { Textarea } from "~/ui/shadcn/textarea";
+import { Button, buttonVariants } from "~/ui/primitives/button";
+import { Textarea } from "~/ui/primitives/textarea";
 
 import { workStateLabel } from "./image-processing-state";
 

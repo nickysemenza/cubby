@@ -32,9 +32,13 @@ import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
-} from "~/ui/shadcn/hover-card";
-import { Spinner } from "~/ui/shadcn/spinner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+} from "~/ui/primitives/hover-card";
+import { Spinner } from "~/ui/primitives/spinner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 const EntityPreviewContent = browserOnlyLazy<
   ComponentProps<typeof EntityPreviewContentComponent>

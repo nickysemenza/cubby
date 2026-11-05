@@ -1,7 +1,7 @@
 import { cn } from "cn";
 import type { ReactNode } from "react";
 
-import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 /** Home's ruled rows: one 32px line each, a hairline under every row. */
 export function HomeList({

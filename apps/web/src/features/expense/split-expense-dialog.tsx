@@ -36,9 +36,9 @@ import { purchase } from "~/integrations/tanstack-query/generated/domains/purcha
 import { formatCurrency } from "~/lib/number-format";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/shadcn/button";
-import { Checkbox } from "~/ui/shadcn/checkbox";
-import { Input } from "~/ui/shadcn/input";
+import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { Input } from "~/ui/primitives/input";
 import { Description } from "~/ui/text/description";
 import { Eyebrow } from "~/ui/text/eyebrow";
 import { NoneValue } from "~/ui/text/none-value";

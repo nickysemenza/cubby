@@ -55,8 +55,8 @@ import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { requiredLocationCode } from "~/ui/forms/form-fields";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
+import { Button } from "~/ui/primitives/button";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/reui/alert";
-import { Button } from "~/ui/shadcn/button";
 import { Description } from "~/ui/text/description";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 

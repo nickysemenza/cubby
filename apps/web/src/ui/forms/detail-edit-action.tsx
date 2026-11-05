@@ -1,7 +1,7 @@
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import type { ComponentProps } from "react";
 
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 export function DetailEditAction(props: ComponentProps<typeof Button>) {
   return (

@@ -22,8 +22,12 @@ import { useLocalTable } from "~/ui/data-table/use-local-table";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
-import { Button } from "~/ui/shadcn/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import { Button } from "~/ui/primitives/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 

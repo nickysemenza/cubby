@@ -11,8 +11,12 @@ import {
 } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
 import { StaticTable } from "~/ui/data-table/static-table";
-import { Button } from "~/ui/shadcn/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import { Button } from "~/ui/primitives/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 import {
   entityDisplayImageKey,

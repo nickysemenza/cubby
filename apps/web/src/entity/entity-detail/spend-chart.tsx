@@ -7,7 +7,11 @@ import { entityGraph } from "~/integrations/tanstack-query/generated/domains/ent
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 const monthLabel = (month: string) =>
   formatCalendarDay(`${month}-01`, "monthShort");

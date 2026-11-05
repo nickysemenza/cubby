@@ -9,7 +9,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { DropdownMenu, DropdownMenuContent } from "~/ui/shadcn/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+} from "~/ui/primitives/dropdown-menu";
 
 import { VerbButton, VerbMenuItem } from "./action-verb-ui";
 

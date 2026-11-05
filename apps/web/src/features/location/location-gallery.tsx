@@ -21,7 +21,7 @@ import { ImageWithPreview } from "~/ui/common/image-with-preview";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 import { NoneValue } from "~/ui/text/none-value";
 import {

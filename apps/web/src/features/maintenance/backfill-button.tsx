@@ -11,7 +11,7 @@ import {
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
 import { Stack } from "~/ui/layout";
-import { Progress } from "~/ui/shadcn/progress";
+import { Progress } from "~/ui/primitives/progress";
 
 import { PendingButton } from "./pending-button";
 

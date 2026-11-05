@@ -42,7 +42,7 @@ import { RouteNotFound } from "~/ui/feedback/route-not-found";
 import { AppFooter } from "~/ui/footer";
 import { useDebug } from "~/ui/hooks/use-debug";
 import { useNavAuthed } from "~/ui/hooks/use-nav-authed";
-import { Toaster } from "~/ui/shadcn/sonner";
+import { Toaster } from "~/ui/primitives/sonner";
 
 import { Provider } from "../integrations/tanstack-query/root-provider";
 

@@ -21,8 +21,8 @@ import { RecordFieldSuggestion } from "~/entity/suggestions/record-suggestions";
 import { DenseCellContext } from "~/ui/common/stacked-value";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { WhyValue } from "~/ui/derived/why-value";
-import { Button } from "~/ui/shadcn/button";
-import { TableCell, TableRow } from "~/ui/shadcn/table";
+import { Button } from "~/ui/primitives/button";
+import { TableCell, TableRow } from "~/ui/primitives/table";
 
 import { CellFrame } from "../../ui/data-table/cell-frame";
 import { NON_SELECTABLE_COLUMN_IDS } from "../../ui/data-table/cell-selection-context";

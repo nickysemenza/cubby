@@ -4,7 +4,7 @@ import { Suspense, useId } from "react";
 import { DEFAULT_DOC_SLUG, getDocSection } from "~/features/docs/docs-registry";
 import { pageTitle } from "~/lib/page-title";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 export const Route = createFileRoute("/docs/$section")({
   // The registry's own title, not the raw slug — the section is already

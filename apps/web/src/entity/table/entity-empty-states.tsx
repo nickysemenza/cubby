@@ -8,7 +8,7 @@ import { createActionFor } from "~/entity/actions/action-items";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { useEntityMetadata } from "~/entity/metadata";
 import { EmptyState } from "~/ui/feedback/empty-state";
-import { Button, buttonVariants } from "~/ui/shadcn/button";
+import { Button, buttonVariants } from "~/ui/primitives/button";
 
 import type { CubbyTable as Table } from "../../ui/data-table/table-features";
 

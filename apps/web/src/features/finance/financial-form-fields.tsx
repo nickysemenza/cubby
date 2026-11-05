@@ -6,7 +6,7 @@ import {
 
 import { ArrayFieldManager } from "~/ui/forms/array-field-manager";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
-import { Input } from "~/ui/shadcn/input";
+import { Input } from "~/ui/primitives/input";
 
 /** Small structured editors for finance evidence.  These deliberately expose
  * source-owned fields rather than a JSON textarea: array updates replace the

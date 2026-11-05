@@ -13,8 +13,8 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Row, Section, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 import { Badge } from "~/ui/reui/badge";
-import { Button } from "~/ui/shadcn/button";
 import { Description } from "~/ui/text/description";
 
 import type { ShoppingListView } from "./meal-search";

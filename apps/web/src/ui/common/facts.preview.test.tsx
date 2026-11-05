@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { page } from "vitest/browser";
 
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import { Facts } from "./facts";
 import { RecordList, RecordRow } from "./record-list";

@@ -3,7 +3,7 @@ import { SidebarIcon } from "@phosphor-icons/react/dist/csr/Sidebar";
 import { cn } from "cn";
 import { useEffect, useRef } from "react";
 
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import { LocationOutline } from "./location-outline";
 

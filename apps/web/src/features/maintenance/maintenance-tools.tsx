@@ -23,7 +23,7 @@ import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.g
 import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 import { Eyebrow } from "~/ui/text/eyebrow";
 import { tryFormatAmount } from "~/ui/text/format-amount";

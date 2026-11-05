@@ -6,7 +6,11 @@ import { formatCount } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
 import { MiddleTruncate } from "~/ui/common/middle-truncate";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 import { BooleanValue, EnumPill } from "~/ui/text/enum-pill";
 import JsonRenderer from "~/ui/text/json-renderer";
 import { NoneValue } from "~/ui/text/none-value";

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { copyText } from "~/lib/clipboard";
 import { getAppErrorDetails, type UnparsedError } from "~/lib/error-utils";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import { openErrorDetailsDialog } from "./error-details-store";
 

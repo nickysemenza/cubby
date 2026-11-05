@@ -10,7 +10,6 @@ import { suggestions } from "~/integrations/tanstack-query/generated/domains/sug
 import { DateDisplay } from "~/ui/common/date-display";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { Section } from "~/ui/layout/section";
-import { Badge } from "~/ui/reui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,8 +19,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/ui/shadcn/alert-dialog";
-import { Switch } from "~/ui/shadcn/switch";
+} from "~/ui/primitives/alert-dialog";
+import { Switch } from "~/ui/primitives/switch";
+import { Badge } from "~/ui/reui/badge";
 
 const RULE_NAME = {
   "field.addition": "Field assignment",

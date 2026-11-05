@@ -9,8 +9,12 @@ import { DateDisplay } from "~/ui/common/date-display";
 import { DecisionLevels } from "~/ui/derived/decision-levels";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/shadcn/button";
-import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
+import { Button } from "~/ui/primitives/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 import { Description } from "~/ui/text/description";
 
 /** The manifest fields a field's decision reads: Jev and Clef return no

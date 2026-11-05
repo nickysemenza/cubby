@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 /**
  * Branded 404. Used as the root route's `notFoundComponent` and the router-wide

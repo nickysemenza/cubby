@@ -1,7 +1,11 @@
 import type { AmountKind } from "@cubby/recipebridge";
 import { cn } from "cn";
 
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 import { kindIconFor } from "./kind-icons";
 

@@ -34,8 +34,8 @@ import { NullableNumericField, UnifiedTextField } from "~/ui/forms/form-utils";
 import { useImageState } from "~/ui/hooks/use-image-state";
 import { Row } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/shadcn/button";
-import { Spinner } from "~/ui/shadcn/spinner";
+import { Button } from "~/ui/primitives/button";
+import { Spinner } from "~/ui/primitives/spinner";
 
 import { PendingImageUpload } from "../../entity/entity-media/pending-image-upload";
 import type { ComboboxItem } from "../../ui/combobox/combobox-types";

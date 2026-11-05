@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type { JobSetFilter } from "~/contracts/job.contract";
 import { job } from "~/integrations/tanstack-query/generated/domains/job.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 export function RetryJobsButton({
   filter,

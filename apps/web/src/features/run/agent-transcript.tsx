@@ -20,8 +20,8 @@ import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import { MarkdownText } from "~/entity/prose/markdown";
 import { displayToolAction } from "~/features/purchase/agent-tool-names";
 import { formatCompactCount, formatCount } from "~/lib/number-format";
-import { Button } from "~/ui/shadcn/button";
-import { Spinner } from "~/ui/shadcn/spinner";
+import { Button } from "~/ui/primitives/button";
+import { Spinner } from "~/ui/primitives/spinner";
 import {
   CodeBlock,
   CodeBlockContent,

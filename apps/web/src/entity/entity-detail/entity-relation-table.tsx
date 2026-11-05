@@ -41,7 +41,7 @@ import { entityGraph } from "~/integrations/tanstack-query/generated/domains/ent
 import { entityList } from "~/integrations/tanstack-query/generated/domains/entityList.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QuerySection } from "~/ui/feedback/query-section";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import {
   useSectionCount,

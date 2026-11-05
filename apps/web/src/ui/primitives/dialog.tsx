@@ -4,7 +4,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 
 import { cn } from "cn";
 import { popoverElevationClassName } from "~/ui/overlays/popover-elevation";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {

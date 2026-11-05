@@ -32,10 +32,14 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { CellEditorPendingContext } from "~/ui/data-table/cell-editor-overlay";
 import { DateSpanInput } from "~/ui/date-span-input";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
-import { Button } from "~/ui/shadcn/button";
-import { Input } from "~/ui/shadcn/input";
-import { Textarea } from "~/ui/shadcn/textarea";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
+import { Textarea } from "~/ui/primitives/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 import type {
   CellClipboardSpec,

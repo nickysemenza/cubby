@@ -17,9 +17,13 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { Spinner } from "~/ui/shadcn/spinner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import { Button } from "~/ui/primitives/button";
+import { Spinner } from "~/ui/primitives/spinner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 import { Description } from "~/ui/text/description";
 import { formatAmounts } from "~/ui/text/format-amount";
 import { NoneValue } from "~/ui/text/none-value";

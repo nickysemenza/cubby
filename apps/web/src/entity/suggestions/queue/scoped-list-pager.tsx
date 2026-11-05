@@ -1,5 +1,5 @@
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 export function ScopedListPager({
   offset,

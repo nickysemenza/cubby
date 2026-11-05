@@ -21,7 +21,7 @@ import { useViewCounts } from "~/entity/table/list-query-context";
 import { formatCount } from "~/lib/number-format";
 import { useSlidingIndicator } from "~/ui/hooks/use-sliding-indicator";
 import { Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,7 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from "~/ui/shadcn/dropdown-menu";
+} from "~/ui/primitives/dropdown-menu";
 
 import { applyColumnLayout } from "../../ui/data-table/column-layout";
 import type { CubbyTable as Table } from "../../ui/data-table/table-features";

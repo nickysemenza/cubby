@@ -27,8 +27,8 @@ import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { Row } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/shadcn/button";
-import { Input } from "~/ui/shadcn/input";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
 
 /** Runs ordinary commands with the catalog's validation, cache ripple and result effects. */
 export function useReportCommands() {

@@ -22,9 +22,9 @@ import { Disclosure } from "~/ui/layout/disclosure";
 import { Panel } from "~/ui/layout/panel";
 import { Row } from "~/ui/layout/row";
 import { Stack } from "~/ui/layout/stack";
-import { Button } from "~/ui/shadcn/button";
-import { Checkbox } from "~/ui/shadcn/checkbox";
-import { Input } from "~/ui/shadcn/input";
+import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { Input } from "~/ui/primitives/input";
 import { Description } from "~/ui/text/description";
 
 import type { SubRecipeLink } from "../parsed-ingredient-table";

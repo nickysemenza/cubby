@@ -13,7 +13,7 @@ import { Facts, FactsDensityProvider } from "~/ui/common/facts";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import type { DetailRecordOf } from "./detail-record";
 import { EntityReportSlot } from "./report-slot";

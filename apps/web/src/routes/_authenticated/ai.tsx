@@ -7,7 +7,7 @@ import { DecisionsCatalog } from "~/features/ai/decisions-catalog";
 import { AiSmokeTest } from "~/features/developer/ai-smoke-test";
 import { pageTitle } from "~/lib/page-title";
 import { useTabParam } from "~/ui/hooks/use-tab-param";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/shadcn/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 const tabSchema = z.enum(["decisions", "smoke", "usage"]);
 

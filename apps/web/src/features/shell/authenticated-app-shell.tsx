@@ -30,7 +30,7 @@ import {
   useAppViewportBounds,
   useVirtualKeyboard,
 } from "~/ui/hooks/use-virtual-keyboard";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import {
   AuthenticatedShellAccount,

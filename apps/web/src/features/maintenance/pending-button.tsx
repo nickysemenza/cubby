@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-import { Button } from "~/ui/shadcn/button";
-import { Spinner } from "~/ui/shadcn/spinner";
+import { Button } from "~/ui/primitives/button";
+import { Spinner } from "~/ui/primitives/spinner";
 
 /**
  * The run button shared by maintenance tools: a small button

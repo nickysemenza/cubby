@@ -13,7 +13,7 @@ import { scaleEstimate } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import type { ListRenderer, ListRowOf } from "../list-renderer-types";
 

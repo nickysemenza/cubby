@@ -28,7 +28,7 @@ import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestio
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { FactsAddProvider, FactsDensityProvider } from "~/ui/common/facts";
 import { Section, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";

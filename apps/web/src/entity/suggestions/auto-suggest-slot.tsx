@@ -3,7 +3,7 @@ import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 
 import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { entityMetadata } from "~/entity/metadata";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import { FieldSuggestionHint } from "./field-suggestion-hint";
 import { useFieldSuggestionContext } from "./field-suggestion-provider";

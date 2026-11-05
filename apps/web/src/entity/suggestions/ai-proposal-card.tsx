@@ -10,8 +10,8 @@ import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
 import { badgeToneTextClass, statusTone } from "~/lib/status-tone";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { Kbd } from "~/ui/shadcn/kbd";
+import { Button } from "~/ui/primitives/button";
+import { Kbd } from "~/ui/primitives/kbd";
 import { Description } from "~/ui/text/description";
 
 /** Confidence → text color, from the shared status tone so every AI-suggestion

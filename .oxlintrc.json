@@ -150,7 +150,7 @@
       // EmptyState's dashed slot is the one non-Panel content box.
       // Home files are rewritten by the Home lane; drop them when it lands.
       "files": [
-        "apps/web/src/ui/shadcn/**",
+        "apps/web/src/ui/primitives/**",
         "apps/web/src/ui/combobox/**",
         "apps/web/src/ui/overlays/**",
         "apps/web/src/ui/reui/**",
@@ -167,9 +167,9 @@
       // Exact-path specialized compositions; reasons live in apps/web/DESIGN.md.
       "files": [
         "apps/web/src/ui/overlays/overlay.tsx",
-        "apps/web/src/ui/shadcn/dialog.tsx",
-        "apps/web/src/ui/shadcn/sheet.tsx",
-        "apps/web/src/ui/shadcn/command.tsx",
+        "apps/web/src/ui/primitives/dialog.tsx",
+        "apps/web/src/ui/primitives/sheet.tsx",
+        "apps/web/src/ui/primitives/command.tsx",
         "apps/web/src/entity/entity-media/photo-viewer.tsx",
         "apps/web/src/entity/relationships/graph-explorer.tsx",
         "apps/web/src/entity/hooks/use-entity-preview.tsx",
@@ -599,7 +599,7 @@
         "**/*.spec.ts",
         "**/*.spec.tsx",
         "**/*.live-eval.ts",
-        "apps/web/src/ui/shadcn/**",
+        "apps/web/src/ui/primitives/**",
         "apps/web/src/ui/reui/**"
       ],
       "rules": {
@@ -689,7 +689,7 @@
     },
     {
       // These sources were globally ignored; retain their other lint exclusions.
-      "files": ["apps/web/src/ui/shadcn/**", "apps/web/src/ui/reui/**"],
+      "files": ["apps/web/src/ui/primitives/**", "apps/web/src/ui/reui/**"],
       "rules": {
         "anti-slop/no-known-value-widening": "off",
         "anti-slop/no-unsafe-dictionary-type": "off",

@@ -3,8 +3,8 @@ import { useMemo } from "react";
 
 import type { purchaseSettlementCandidateRead } from "~/contracts/purchase.contract";
 import { formatCurrency } from "~/lib/number-format";
+import { Button } from "~/ui/primitives/button";
 import { Badge } from "~/ui/reui/badge";
-import { Button } from "~/ui/shadcn/button";
 import { Description } from "~/ui/text/description";
 
 export type SettlementCandidate =

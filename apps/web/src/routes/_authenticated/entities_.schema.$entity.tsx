@@ -4,7 +4,7 @@ import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { Page } from "~/entity/page/page";
 import { EntitySchemaDetail } from "~/entity/platform/entity-schema-inspector";
 import { pageTitle } from "~/lib/page-title";
-import { buttonVariants } from "~/ui/shadcn/button";
+import { buttonVariants } from "~/ui/primitives/button";
 
 export const Route = createFileRoute(
   "/_authenticated/entities_/schema/$entity",

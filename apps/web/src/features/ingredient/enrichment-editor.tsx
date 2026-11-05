@@ -29,8 +29,8 @@ import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Checkbox } from "~/ui/shadcn/checkbox";
-import { Input } from "~/ui/shadcn/input";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { Input } from "~/ui/primitives/input";
 import { Description } from "~/ui/text/description";
 
 import type { EquivalenceDraft } from "./equivalence-workbench-link";

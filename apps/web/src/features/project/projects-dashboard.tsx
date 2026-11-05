@@ -43,9 +43,9 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { DashboardSectionLoading } from "~/ui/feedback/loading-skeletons";
 import { Grid, Panel, Row, Section, Stack } from "~/ui/layout";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { Skeleton } from "~/ui/primitives/skeleton";
 import { Badge } from "~/ui/reui/badge";
-import { Checkbox } from "~/ui/shadcn/checkbox";
-import { Skeleton } from "~/ui/shadcn/skeleton";
 
 import {
   defaultFilters,

@@ -19,7 +19,7 @@ import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Label } from "~/ui/shadcn/label";
+import { Label } from "~/ui/primitives/label";
 
 const PURPOSE_OPTIONS: readonly PickerOption[] = [
   { value: "item", label: "Item photo" },

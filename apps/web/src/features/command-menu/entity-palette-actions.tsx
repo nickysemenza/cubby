@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { type ReactNode, useState } from "react";
 
-import { CommandGroup, CommandItem } from "~/ui/shadcn/command";
+import { CommandGroup, CommandItem } from "~/ui/primitives/command";
 
 import { verbDef } from "../../entity/actions/action-verbs";
 import {

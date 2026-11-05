@@ -30,16 +30,16 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { MobileCardSkeletonList } from "~/ui/feedback/mobile-card-skeleton";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/reui/badge";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "~/ui/shadcn/dropdown-menu";
-import { Input } from "~/ui/shadcn/input";
-import { Skeleton } from "~/ui/shadcn/skeleton";
+} from "~/ui/primitives/dropdown-menu";
+import { Input } from "~/ui/primitives/input";
+import { Skeleton } from "~/ui/primitives/skeleton";
+import { Badge } from "~/ui/reui/badge";
 
 import {
   type EntityPreviewRowData,

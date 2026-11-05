@@ -19,7 +19,7 @@ import { entities } from "~/entity/entities";
 import { useEntityMetadata } from "~/entity/metadata";
 import { DisplayRow } from "~/entity/table/display-menu";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +31,7 @@ import {
   DropdownMenuSubmenu,
   DropdownMenuSubmenuTrigger,
   DropdownMenuSubmenuContent,
-} from "~/ui/shadcn/dropdown-menu";
+} from "~/ui/primitives/dropdown-menu";
 
 import { listGroupBy, PIVOT_VIEW_ID, pivotAvailable } from "./list-grouping";
 import { useEntityListCardDensity, useListSearch } from "./list-search";

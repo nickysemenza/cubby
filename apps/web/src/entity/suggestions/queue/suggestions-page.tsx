@@ -63,9 +63,9 @@ import type {
   ListQueryResponse,
 } from "~/ui/hooks/use-paginated-table-core";
 import { Panel } from "~/ui/layout/panel";
+import { Button } from "~/ui/primitives/button";
+import { Tabs, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 import { Alert, AlertAction } from "~/ui/reui/alert";
-import { Button } from "~/ui/shadcn/button";
-import { Tabs, TabsList, TabsTrigger } from "~/ui/shadcn/tabs";
 
 import { useAcceptClean, type CleanTarget } from "./accept-clean";
 import { AutomaticDecisions } from "./automatic-decisions";

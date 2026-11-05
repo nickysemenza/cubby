@@ -15,8 +15,8 @@ import { StaticTable } from "~/ui/data-table/static-table";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { domainWayfinding } from "~/ui/navigation/domain-wayfinding";
 import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
+import { buttonVariants } from "~/ui/primitives/button";
 import { Badge } from "~/ui/reui/badge";
-import { buttonVariants } from "~/ui/shadcn/button";
 
 import {
   DETAIL_STATUS_LABEL,

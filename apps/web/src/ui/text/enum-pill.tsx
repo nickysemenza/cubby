@@ -5,7 +5,11 @@ import { cn } from "cn";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 
 import { OptionGlyph } from "~/ui/common/option-glyph";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 import { Pill } from "~/ui/text/pill";
 
 /**

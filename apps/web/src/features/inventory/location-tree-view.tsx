@@ -11,10 +11,10 @@ import {
 import { LocationOutline } from "~/features/location/location-outline";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { Checkbox } from "~/ui/shadcn/checkbox";
-import { Input } from "~/ui/shadcn/input";
-import { Label } from "~/ui/shadcn/label";
+import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { Input } from "~/ui/primitives/input";
+import { Label } from "~/ui/primitives/label";
 import {
   Visualization,
   visualizationState,

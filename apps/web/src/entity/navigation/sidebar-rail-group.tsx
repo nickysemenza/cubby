@@ -8,8 +8,12 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from "~/ui/shadcn/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+} from "~/ui/primitives/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
 import { WorkNavDot } from "../../ui/navigation/work-nav-status";

@@ -6,7 +6,7 @@ import { Page } from "~/entity/page/page";
 import { usdaFood } from "~/integrations/tanstack-query/generated/domains/usdaFood.gen";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Stack } from "~/ui/layout";
-import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 type AlternateId = Parameters<typeof usdaFood.alternateId.queryOptions>[0];
 

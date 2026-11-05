@@ -10,8 +10,8 @@ import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import type { EntityDetailByEntity } from "~/entity/model/detail-contracts";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { Input } from "~/ui/shadcn/input";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
 
 import type { UnitCoverageItem } from "./unit-coverage-items";
 

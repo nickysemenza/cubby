@@ -6,7 +6,7 @@ import {
   RunSentryAction,
 } from "~/entity/entity-detail/report-slot";
 import { RunAgentActions } from "~/features/purchase/purchase-import-run-detail";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 /** The Run header: live-progress commands, the import agent's controls and its Sentry link. */
 export const RunDetailActions: DetailSlotComponent<"run"> = ({ record }) => (

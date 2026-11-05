@@ -12,8 +12,8 @@ import { type EntityMutationTransport } from "~/entity/entity-mutation-command";
 import type { imageUpload } from "~/integrations/tanstack-query/generated/domains/imageUpload.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { Spinner } from "~/ui/shadcn/spinner";
+import { Button } from "~/ui/primitives/button";
+import { Spinner } from "~/ui/primitives/spinner";
 
 import EntityImageList from "../../entity/components/entity-image-list";
 import { useActionMutation } from "../../entity/hooks/use-action-mutation";

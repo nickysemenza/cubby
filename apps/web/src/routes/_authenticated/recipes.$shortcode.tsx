@@ -17,7 +17,7 @@ import { detailPage, notFoundPage } from "~/entity/routing/detail-page";
 import EditRecipeForm from "~/features/recipe/edit-recipe";
 import { shortcodeHead } from "~/lib/page-title";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 /**
  * Hand-written because the workflow slot's state (`view`, `scale`,

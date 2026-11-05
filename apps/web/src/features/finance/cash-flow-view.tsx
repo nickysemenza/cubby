@@ -30,9 +30,9 @@ import { IndexedSections } from "~/ui/data-table/indexed-sections";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { Input } from "~/ui/shadcn/input";
-import { Switch } from "~/ui/shadcn/switch";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
+import { Switch } from "~/ui/primitives/switch";
 import {
   Visualization,
   visualizationState,

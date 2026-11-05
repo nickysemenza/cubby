@@ -32,6 +32,9 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Overlay } from "~/ui/overlays/overlay";
+import { Button } from "~/ui/primitives/button";
+import { Skeleton } from "~/ui/primitives/skeleton";
+import { Textarea } from "~/ui/primitives/textarea";
 import {
   Alert,
   AlertAction,
@@ -39,9 +42,6 @@ import {
   AlertTitle,
 } from "~/ui/reui/alert";
 import { Badge } from "~/ui/reui/badge";
-import { Button } from "~/ui/shadcn/button";
-import { Skeleton } from "~/ui/shadcn/skeleton";
-import { Textarea } from "~/ui/shadcn/textarea";
 import { Description } from "~/ui/text/description";
 
 import { CopyJsonButton } from "./copy-debug-button";

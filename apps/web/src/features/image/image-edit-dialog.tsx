@@ -6,8 +6,8 @@ import { image as imageOperations } from "~/integrations/tanstack-query/generate
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Input } from "~/ui/shadcn/input";
-import { Label } from "~/ui/shadcn/label";
+import { Input } from "~/ui/primitives/input";
+import { Label } from "~/ui/primitives/label";
 
 const SOURCE_OPTIONS: readonly PickerOption[] = [
   { value: "own", label: "Our photo" },

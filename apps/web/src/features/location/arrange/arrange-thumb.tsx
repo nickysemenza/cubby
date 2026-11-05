@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 
 import { Image } from "~/ui/common/image";
 import { ImagePreviewPopup } from "~/ui/common/image-with-preview";
-import { Tooltip, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import { Tooltip, TooltipTrigger } from "~/ui/primitives/tooltip";
 
 interface ArrangeThumbProps {
   /** Canonical display images supplied by the owning batch. */

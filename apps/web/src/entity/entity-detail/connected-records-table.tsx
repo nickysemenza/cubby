@@ -20,7 +20,7 @@ import {
   RecordMore,
   RecordRow,
 } from "~/ui/common/record-list";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import {
   useSectionCount,

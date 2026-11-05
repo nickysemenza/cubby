@@ -14,7 +14,7 @@ import { Page } from "~/entity/page/page";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { QueryRefreshStatus } from "~/ui/feedback/query-refresh-status";
 import { useDetailTitle } from "~/ui/hooks/use-document-title";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 /**
  * The `$shortcode` page bodies every entity detail route shares, as factories.

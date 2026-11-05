@@ -36,7 +36,7 @@ import { FieldRecordValue } from "~/ui/derived/record-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Input } from "~/ui/shadcn/input";
+import { Input } from "~/ui/primitives/input";
 import { Description } from "~/ui/text/description";
 import { NoneValue } from "~/ui/text/none-value";
 

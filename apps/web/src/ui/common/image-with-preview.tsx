@@ -3,7 +3,11 @@ import { cn } from "cn";
 import type { ReactNode } from "react";
 
 import { Image } from "~/ui/common/image";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 /**
  * Every hover-preview popup renders at one size so the same photo previewed

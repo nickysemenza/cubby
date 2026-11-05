@@ -10,8 +10,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "~/ui/shadcn/dialog";
-import { InputGroup, InputGroupAddon } from "~/ui/shadcn/input-group";
+} from "~/ui/primitives/dialog";
+import { InputGroup, InputGroupAddon } from "~/ui/primitives/input-group";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 

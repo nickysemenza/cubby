@@ -18,8 +18,8 @@ import {
   DisclosureRoot,
   DisclosureTrigger,
 } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/shadcn/button";
-import { Sheet, SheetContent, SheetTitle } from "~/ui/shadcn/sheet";
+import { Button } from "~/ui/primitives/button";
+import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
 
 /**
  * The docked panel's width, as one CSS custom property on the document root.

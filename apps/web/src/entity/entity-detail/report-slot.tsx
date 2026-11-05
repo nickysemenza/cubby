@@ -30,10 +30,14 @@ import {
 } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { buttonVariants } from "~/ui/shadcn/button";
-import { Button } from "~/ui/shadcn/button";
-import { Progress, ProgressLabel, ProgressValue } from "~/ui/shadcn/progress";
-import { Skeleton } from "~/ui/shadcn/skeleton";
+import { buttonVariants } from "~/ui/primitives/button";
+import { Button } from "~/ui/primitives/button";
+import {
+  Progress,
+  ProgressLabel,
+  ProgressValue,
+} from "~/ui/primitives/progress";
+import { Skeleton } from "~/ui/primitives/skeleton";
 import { Description } from "~/ui/text/description";
 import { EnumPill } from "~/ui/text/enum-pill";
 import { Eyebrow } from "~/ui/text/eyebrow";

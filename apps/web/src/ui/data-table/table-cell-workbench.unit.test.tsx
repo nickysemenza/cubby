@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { Table, TableBody, TableCell, TableRow } from "~/ui/shadcn/table";
+import { Table, TableBody, TableCell, TableRow } from "~/ui/primitives/table";
 
 import { TableCellWorkbench } from "./table-cell-workbench";
 

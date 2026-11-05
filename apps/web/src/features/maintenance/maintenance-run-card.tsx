@@ -20,8 +20,8 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/shadcn/button";
-import { Progress } from "~/ui/shadcn/progress";
+import { Button } from "~/ui/primitives/button";
+import { Progress } from "~/ui/primitives/progress";
 import { Description } from "~/ui/text/description";
 
 /** Poll while a pass runs; an idle card has nothing to watch. */

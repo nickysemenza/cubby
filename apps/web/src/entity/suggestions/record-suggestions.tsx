@@ -95,9 +95,13 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
-import { Spinner } from "~/ui/shadcn/spinner";
+import { Button } from "~/ui/primitives/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
+import { Spinner } from "~/ui/primitives/spinner";
 import { Description } from "~/ui/text/description";
 import { Pill } from "~/ui/text/pill";
 

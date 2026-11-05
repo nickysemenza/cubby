@@ -9,8 +9,8 @@ import { entityReport } from "~/integrations/tanstack-query/generated/domains/en
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Button } from "~/ui/primitives/button";
+import { Skeleton } from "~/ui/primitives/skeleton";
 import { Description } from "~/ui/text/description";
 
 type PortionsBlock = Extract<ReportBlock, { kind: "records" }> & {

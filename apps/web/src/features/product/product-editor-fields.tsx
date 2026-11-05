@@ -42,10 +42,10 @@ import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { NullableNumericField, UnifiedTextField } from "~/ui/forms/form-utils";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/shadcn/button";
-import { Checkbox } from "~/ui/shadcn/checkbox";
-import { FieldError } from "~/ui/shadcn/field";
-import { Spinner } from "~/ui/shadcn/spinner";
+import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { FieldError } from "~/ui/primitives/field";
+import { Spinner } from "~/ui/primitives/spinner";
 import { Description } from "~/ui/text/description";
 
 import type {

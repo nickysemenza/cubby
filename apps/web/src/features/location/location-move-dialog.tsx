@@ -5,7 +5,7 @@ import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 /** A disabled-reason resolver that refuses every location in `sources`. */
 export const refuseSourceLocations =

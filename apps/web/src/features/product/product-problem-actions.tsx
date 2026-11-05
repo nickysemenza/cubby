@@ -10,7 +10,7 @@ import { BACKFILL } from "~/features/maintenance/backfill-registry";
 import { ProblemItemsAction } from "~/features/work-queue/problem-items-action";
 import { recommendations } from "~/integrations/tanstack-query/generated/domains/recommendations.gen";
 import { Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 const deleteProduct = entityMutationOptionsFactory("product", "delete");
 

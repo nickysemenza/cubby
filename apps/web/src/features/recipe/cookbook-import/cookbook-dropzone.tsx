@@ -2,8 +2,8 @@ import { useId } from "react";
 
 import { FileDropField } from "~/ui/file-upload/file-drop-field";
 import { Row } from "~/ui/layout/row";
-import { Input } from "~/ui/shadcn/input";
-import { Label } from "~/ui/shadcn/label";
+import { Input } from "~/ui/primitives/input";
+import { Label } from "~/ui/primitives/label";
 
 /**
  * The drag-and-drop / file-picker surface for {@link CookbookImport}: accepts

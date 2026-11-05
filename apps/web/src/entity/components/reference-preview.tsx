@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 
 import type { ReferenceItem } from "~/entity/entity-references";
 import { ChipCluster } from "~/ui/common/chip-cluster";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 /** A declaration bounds dense multi-reference cells without hiding the remaining records. */
 export function ReferencePreview({

@@ -17,10 +17,10 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { Panel } from "~/ui/layout/panel";
 import { Overlay } from "~/ui/overlays/overlay";
+import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
 import { Alert } from "~/ui/reui/alert";
 import { Badge } from "~/ui/reui/badge";
-import { Button } from "~/ui/shadcn/button";
-import { Checkbox } from "~/ui/shadcn/checkbox";
 import { Description } from "~/ui/text/description";
 
 /** Display text comes from `mergeable.rowLabel`/`rowStat`, not a hardcoded

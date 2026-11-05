@@ -26,7 +26,7 @@ import {
 } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { Panel } from "~/ui/layout/panel";
-import { Avatar, AvatarFallback, AvatarImage } from "~/ui/shadcn/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "~/ui/primitives/avatar";
 import { InlineTextDiff } from "~/ui/text/inline-text-diff";
 
 import { foldedFields } from "./audit-log-fold";

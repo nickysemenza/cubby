@@ -36,7 +36,7 @@ import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { AliasesField } from "~/ui/forms/aliases-field";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import { useActionMutation } from "../hooks/use-action-mutation";
 import { VerbMenuItem } from "./action-verb-ui";

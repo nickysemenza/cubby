@@ -22,9 +22,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/ui/shadcn/alert-dialog";
-import { Button } from "~/ui/shadcn/button";
-import { Input } from "~/ui/shadcn/input";
+} from "~/ui/primitives/alert-dialog";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
 import { StatusText } from "~/ui/text/status-text";
 
 const usd = (value: number) => formatCurrency(value);

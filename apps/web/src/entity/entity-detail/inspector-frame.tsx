@@ -18,7 +18,7 @@ import {
   SidePanelSection,
   useTableRowStep,
 } from "~/ui/overlays/side-panel";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 export type InspectorTab = "overview" | "relations" | "activity";
 

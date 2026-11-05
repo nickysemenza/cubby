@@ -2,13 +2,13 @@ import { cn } from "cn";
 import { type ReactNode, useId, useState } from "react";
 
 import { copyTextWithToast } from "~/lib/clipboard";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   Popover,
   PopoverContent,
   PopoverTitle,
   PopoverTrigger,
-} from "~/ui/shadcn/popover";
+} from "~/ui/primitives/popover";
 
 /** Explicit readable/raw pairs only; essential information stays in the label. */
 export function InspectableValue({

@@ -24,8 +24,8 @@ import {
   RecordRow,
 } from "~/ui/common/record-list";
 import { CloudflareIcon } from "~/ui/icons/cloudflare";
+import { Button, buttonVariants } from "~/ui/primitives/button";
 import { Badge } from "~/ui/reui/badge";
-import { Button, buttonVariants } from "~/ui/shadcn/button";
 
 import { collectionActionFor } from "./collection-actions";
 import { DetailAction } from "./detail-action-bar";

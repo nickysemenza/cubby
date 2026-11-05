@@ -36,8 +36,8 @@ import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Panel, Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { Input } from "~/ui/shadcn/input";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
 
 import {
   GRAPH_BRANCH_PAGE_SIZE,

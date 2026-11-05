@@ -22,10 +22,10 @@ import { Panel } from "~/ui/layout/panel";
 import { Row } from "~/ui/layout/row";
 import { Stack } from "~/ui/layout/stack";
 import { Toolbar } from "~/ui/layout/toolbar";
-import { Button } from "~/ui/shadcn/button";
-import { Checkbox } from "~/ui/shadcn/checkbox";
-import { Input } from "~/ui/shadcn/input";
-import { Spinner } from "~/ui/shadcn/spinner";
+import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { Input } from "~/ui/primitives/input";
+import { Spinner } from "~/ui/primitives/spinner";
 import { Description } from "~/ui/text/description";
 
 import type { ImportResult } from "../cookbook-import/types";

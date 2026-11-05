@@ -7,11 +7,11 @@ import { type Control, Controller } from "react-hook-form";
 
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { FieldLabel } from "~/ui/shadcn/field";
-import { Input } from "~/ui/shadcn/input";
-import { Spinner } from "~/ui/shadcn/spinner";
-import { Textarea } from "~/ui/shadcn/textarea";
+import { Button } from "~/ui/primitives/button";
+import { FieldLabel } from "~/ui/primitives/field";
+import { Input } from "~/ui/primitives/input";
+import { Spinner } from "~/ui/primitives/spinner";
+import { Textarea } from "~/ui/primitives/textarea";
 import { Description } from "~/ui/text/description";
 
 import { formatRichText } from "../richtext";

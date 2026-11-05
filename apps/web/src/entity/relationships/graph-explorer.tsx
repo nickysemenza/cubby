@@ -28,14 +28,14 @@ import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Panel } from "~/ui/layout/panel";
-import { Button } from "~/ui/shadcn/button";
-import { Input } from "~/ui/shadcn/input";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
-} from "~/ui/shadcn/sheet";
+} from "~/ui/primitives/sheet";
 
 import { EntityGraphPicker } from "./entity-graph-picker";
 import { graphBranchKey, graphRefKey } from "./entity-graph-state";

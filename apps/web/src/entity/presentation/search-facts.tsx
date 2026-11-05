@@ -7,7 +7,11 @@ import { entitySearchFacts } from "~/entity/display/entity-display";
 import { entities } from "~/entity/entities";
 import { useEntityMetadata } from "~/entity/metadata";
 import { DenseCellContext } from "~/ui/common/stacked-value";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 const denseSearchCell = { linksTo: null };
 

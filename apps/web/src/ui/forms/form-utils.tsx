@@ -23,11 +23,11 @@ import { toast } from "sonner";
 import { FLAGS } from "~/lib/flags";
 import { QuantityInput } from "~/ui/forms/quantity-input";
 import { Stack } from "~/ui/layout";
+import { Button, type buttonVariants } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
+import { Spinner } from "~/ui/primitives/spinner";
+import { Textarea } from "~/ui/primitives/textarea";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/reui/alert";
-import { Button, type buttonVariants } from "~/ui/shadcn/button";
-import { Input } from "~/ui/shadcn/input";
-import { Spinner } from "~/ui/shadcn/spinner";
-import { Textarea } from "~/ui/shadcn/textarea";
 
 import { DatePickerInput } from "../date-picker-input";
 

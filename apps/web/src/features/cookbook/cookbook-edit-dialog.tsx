@@ -10,8 +10,8 @@ import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { cookbook as cookbookOperations } from "~/integrations/tanstack-query/generated/domains/cookbook.gen";
 import { ChipsInput } from "~/ui/forms/chips-input";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Input } from "~/ui/shadcn/input";
-import { Label } from "~/ui/shadcn/label";
+import { Input } from "~/ui/primitives/input";
+import { Label } from "~/ui/primitives/label";
 
 /**
  * A cookbook is born from an import, so its Edit action is title, authors and

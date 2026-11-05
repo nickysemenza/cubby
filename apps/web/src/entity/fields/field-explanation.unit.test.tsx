@@ -10,7 +10,7 @@ import {
   ReadableExplanationValue,
   WhyValueContents,
 } from "~/ui/derived/why-value";
-import { Popover, PopoverContent } from "~/ui/shadcn/popover";
+import { Popover, PopoverContent } from "~/ui/primitives/popover";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {

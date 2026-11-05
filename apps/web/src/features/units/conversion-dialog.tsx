@@ -16,11 +16,15 @@ import { wasm } from "~/lib/wasm";
 import { FormWrapper } from "~/ui/forms/form-utils";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/shadcn/button";
-import { Checkbox } from "~/ui/shadcn/checkbox";
-import { DialogTrigger } from "~/ui/shadcn/dialog";
-import { Label } from "~/ui/shadcn/label";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { DialogTrigger } from "~/ui/primitives/dialog";
+import { Label } from "~/ui/primitives/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 import { Description } from "~/ui/text/description";
 
 import { ConversionCapabilitiesSummary } from "./conversion-capabilities-summary";

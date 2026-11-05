@@ -7,7 +7,7 @@ import { AttachExistingImageDialog } from "~/features/image/attach-existing-imag
 import { ImageDetailMedia } from "~/features/image/image-detail";
 import { SubjectJobsDisclosure } from "~/features/job/job-diagnostics";
 import { Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import { ImageProcessingPanel } from "./image-processing-panel";
 

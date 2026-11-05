@@ -8,8 +8,8 @@ import type { ReadonlyDeep } from "type-fest";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { Row } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 import { badgeVariants } from "~/ui/reui/badge";
-import { Button } from "~/ui/shadcn/button";
 
 import {
   entityDisplayImageKey,

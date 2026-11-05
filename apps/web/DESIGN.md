@@ -149,9 +149,9 @@ and field renderers, retaining rich pickers, enum glyphs, inheritance, suggestio
 validation and date behavior; native dropdowns and hand-built imitations do not
 establish whether an existing Cubby workflow improves.
 
-`components.json` configures the shadcn Base UI/Mira family. Folders under
-`src/ui` are named by owner: `src/ui/shadcn` holds whole shadcn registry copies
-that `shadcn add <item> --overwrite` refreshes, `src/ui/reui` holds copied ReUI
+`components.json` configures the shadcn Base UI/Mira family. `src/ui/primitives`
+holds only whole shadcn registry copies that `shadcn add <item> --overwrite`
+refreshes; Cubby-owned components never live there. `src/ui/reui` holds copied ReUI
 items, including Badge and Alert (source and license in [`src/ui/reui/SOURCE.md`](src/ui/reui/SOURCE.md)),
 and every other folder is Cubby-owned. Base UI owns accessible interaction,
 while Cubby owns styling and composition. Registry copies keep their unused
@@ -598,7 +598,7 @@ their age distribution as an execution-event rate.
 The Assessment producer and its internal-source observations are a separate
 publication cutover; the additive DTO alone does not enable them.
 
-Progress uses the shadcn `ui/shadcn/progress.tsx` copy, extended with Cubby's
+Progress uses the shadcn `ui/primitives/progress.tsx` copy, extended with Cubby's
 normalization and paused and indeterminate states, with
 `ProgressLabel`, `ProgressValue`, and a 6px token-colored track. Labels and
 values stack on phone widths so long Job kinds retain their own line. Run detail and

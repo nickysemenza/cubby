@@ -7,7 +7,7 @@ import type { RowData } from "@tanstack/react-table";
 import { formatCount, formatCurrency } from "~/lib/number-format";
 import { type QueryTiming, QueryTimingIndicator } from "~/lib/query-timing";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import { getCellSelectionStats } from "./cell-selection-stats";
 import { RowsPerPageSelect } from "./rows-per-page-select";

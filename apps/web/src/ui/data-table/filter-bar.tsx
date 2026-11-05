@@ -55,10 +55,14 @@ import { PickerVisual } from "~/ui/combobox/picker-visual";
 import { RecordPill } from "~/ui/common/record-pill";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/shadcn/button";
-import { Input } from "~/ui/shadcn/input";
-import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
-import { Switch } from "~/ui/shadcn/switch";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
+import { Switch } from "~/ui/primitives/switch";
 import { EnumPill } from "~/ui/text/enum-pill";
 import { Pill } from "~/ui/text/pill";
 

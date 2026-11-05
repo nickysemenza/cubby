@@ -5,7 +5,7 @@ import type * as React from "react";
 import { type Control, type FieldValues, useFieldArray } from "react-hook-form";
 
 import { Section } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 /**
  * Generic array field manager for react-hook-form.

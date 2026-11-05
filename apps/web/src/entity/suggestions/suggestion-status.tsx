@@ -6,7 +6,11 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 
 import { Stack } from "~/ui/layout";
-import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 import { Description } from "~/ui/text/description";
 
 import { describeOutcome } from "./suggestion-outcome-mark";

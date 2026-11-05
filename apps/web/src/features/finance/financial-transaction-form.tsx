@@ -22,7 +22,7 @@ import { useEntityMetadata } from "~/entity/metadata";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/domains/financialTransaction.gen";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 const AccountSearch = referenceEntitySearch("financialAccount");
 const PurchaseSearch = referenceEntitySearch("purchase");

@@ -43,14 +43,14 @@ import {
   DisclosureRoot,
   DisclosureTrigger,
 } from "~/ui/layout/disclosure";
-import { Badge } from "~/ui/reui/badge";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   Popover,
   PopoverContent,
   PopoverTitle,
   PopoverTrigger,
-} from "~/ui/shadcn/popover";
+} from "~/ui/primitives/popover";
+import { Badge } from "~/ui/reui/badge";
 import JsonRenderer from "~/ui/text/json-renderer";
 import { NoneValue } from "~/ui/text/none-value";
 

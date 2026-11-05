@@ -18,7 +18,7 @@ import { useEntityMetadata } from "~/entity/metadata";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Facts } from "~/ui/common/facts";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import {
   pendingWorkLabel,

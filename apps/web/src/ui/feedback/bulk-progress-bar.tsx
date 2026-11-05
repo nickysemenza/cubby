@@ -1,7 +1,7 @@
 import { cn } from "cn";
 
-import { Progress } from "~/ui/shadcn/progress";
-import { Spinner } from "~/ui/shadcn/spinner";
+import { Progress } from "~/ui/primitives/progress";
+import { Spinner } from "~/ui/primitives/spinner";
 
 /**
  * The shared "{verb} X of N" + bar shown while a streamed bulk operation runs

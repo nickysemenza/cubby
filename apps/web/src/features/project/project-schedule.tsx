@@ -34,13 +34,13 @@ import { entityReport } from "~/integrations/tanstack-query/generated/domains/en
 import { project } from "~/integrations/tanstack-query/generated/domains/project.gen";
 import { flattenUniquePageItems } from "~/ui/hooks/infinite-page-utils";
 import { Panel } from "~/ui/layout/panel";
+import { Button, buttonVariants } from "~/ui/primitives/button";
 import {
   Alert,
   AlertAction,
   AlertDescription,
   AlertTitle,
 } from "~/ui/reui/alert";
-import { Button, buttonVariants } from "~/ui/shadcn/button";
 
 import {
   buildPortfolioScheduleRows,

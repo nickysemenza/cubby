@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 
 import { DateDisplay } from "~/ui/common/date-display";
 import { Panel, Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { Progress } from "~/ui/shadcn/progress";
+import { Button } from "~/ui/primitives/button";
+import { Progress } from "~/ui/primitives/progress";
 import { Description } from "~/ui/text/description";
 
 import type { PassCounts } from "./queue-pass";

@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { actionItems } from "~/entity/actions/action-items";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Input } from "~/ui/shadcn/input";
+import { Input } from "~/ui/primitives/input";
 
 import { domainChipClass } from "../../ui/navigation/domain-wayfinding";
 import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";

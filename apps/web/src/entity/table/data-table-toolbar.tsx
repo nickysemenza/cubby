@@ -18,7 +18,7 @@ import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { defaultSortFor } from "~/entity/sortable-fields";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Toolbar } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,7 +30,7 @@ import {
   DropdownMenuSubmenuContent,
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
-} from "~/ui/shadcn/dropdown-menu";
+} from "~/ui/primitives/dropdown-menu";
 
 import { isTableLayoutCustomized } from "../../ui/data-table/column-layout";
 import { DataTableViewOptions } from "../../ui/data-table/data-table-view-options";

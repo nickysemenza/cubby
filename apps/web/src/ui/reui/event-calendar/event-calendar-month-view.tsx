@@ -50,8 +50,8 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "~/ui/shadcn/popover";
-import { ScrollArea } from "~/ui/shadcn/scroll-area";
+} from "~/ui/primitives/popover";
+import { ScrollArea } from "~/ui/primitives/scroll-area";
 import { cn } from "cn";
 
 // Layout-effect on the client (measure before paint, no flash), plain effect on

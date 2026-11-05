@@ -22,8 +22,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/ui/shadcn/alert-dialog";
-import { Progress } from "~/ui/shadcn/progress";
+} from "~/ui/primitives/alert-dialog";
+import { Progress } from "~/ui/primitives/progress";
 
 import { RecordLink } from "./suggestion-values";
 

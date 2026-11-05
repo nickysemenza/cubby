@@ -12,7 +12,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "~/ui/shadcn/table";
+} from "~/ui/primitives/table";
 
 import { HeaderLabel } from "../../entity/table/table-header-layout";
 import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "./cell-frame";

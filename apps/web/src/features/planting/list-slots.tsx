@@ -19,7 +19,7 @@ import { usePlantingScheduleLabel } from "~/features/garden/planting-schedule-la
 import { ScheduleGrid } from "~/features/schedule/schedule-grid";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 function searchYear(value: ListSlotProps["search"]["year"]): number {
   const parsed = Number(value);

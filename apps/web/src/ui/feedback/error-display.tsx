@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 
 import { getAppErrorDetails } from "~/lib/error-utils";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import { ErrorDetails } from "./error-details";
 

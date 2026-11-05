@@ -15,8 +15,8 @@ import { copyTextWithToast } from "~/lib/clipboard";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button, buttonVariants } from "~/ui/shadcn/button";
-import { DialogTrigger } from "~/ui/shadcn/dialog";
+import { Button, buttonVariants } from "~/ui/primitives/button";
+import { DialogTrigger } from "~/ui/primitives/dialog";
 import { StatusText } from "~/ui/text/status-text";
 
 const FEEDS = [

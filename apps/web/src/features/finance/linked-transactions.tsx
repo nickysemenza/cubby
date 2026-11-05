@@ -20,7 +20,7 @@ import {
 import { EmptyState } from "~/ui/feedback/empty-state";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 const EMBEDDED_TABLE_STATE = {
   initialSort: "postedDate",

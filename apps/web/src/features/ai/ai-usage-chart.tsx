@@ -11,7 +11,7 @@ import { ChartTooltip } from "~/ui/charts/chart-tooltip";
 import { ResponsiveBar } from "~/ui/charts/nivo-responsive";
 import { formatAiCost } from "~/ui/common/ai-cost";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import { Visualization } from "~/ui/visualizations/visualization";
 
 export const usageChartDimensions = {

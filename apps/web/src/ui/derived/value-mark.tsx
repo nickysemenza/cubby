@@ -7,7 +7,11 @@ import { cn } from "cn";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 type PendingWork = Extract<ReadableFieldEnvelope["work"], { kind: "pending" }>;
 

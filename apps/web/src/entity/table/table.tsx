@@ -29,13 +29,13 @@ import { ValueChangeScope } from "~/ui/derived/value-change";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QueryRefreshStatus } from "~/ui/feedback/query-refresh-status";
 import { Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-} from "~/ui/shadcn/dropdown-menu";
-import { Skeleton } from "~/ui/shadcn/skeleton";
+} from "~/ui/primitives/dropdown-menu";
+import { Skeleton } from "~/ui/primitives/skeleton";
 import {
   Table,
   TableBody,
@@ -43,7 +43,7 @@ import {
   TableFooter,
   TableHeader,
   TableRow,
-} from "~/ui/shadcn/table";
+} from "~/ui/primitives/table";
 
 import type { BulkActionPreview } from "../../ui/data-table/bulk-actions.types";
 import { tableMoneyTotals } from "../../ui/data-table/bulk/table-money";

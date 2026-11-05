@@ -32,9 +32,9 @@ import {
   type LongPressHandlers,
   useLongPress,
 } from "~/ui/hooks/use-long-press";
-import { Button } from "~/ui/shadcn/button";
-import { Checkbox } from "~/ui/shadcn/checkbox";
-import { Spinner } from "~/ui/shadcn/spinner";
+import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { Spinner } from "~/ui/primitives/spinner";
 
 import { DebugDialog } from "../../ui/data-table/debug-dialog";
 import { groupRecordIdentity } from "../../ui/data-table/group-record-identity";

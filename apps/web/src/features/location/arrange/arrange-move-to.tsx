@@ -5,8 +5,12 @@ import { useState } from "react";
 import { match } from "ts-pattern";
 
 import { LocationMoveDialog } from "~/features/location/location-move-dialog";
-import { Button } from "~/ui/shadcn/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import { Button } from "~/ui/primitives/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 import { isValidItemDrop, isValidLocationDrop } from "./arrange-tree-utils";
 import type { ItemDragData } from "./arrange-types";

@@ -17,13 +17,13 @@ import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple"
 import type { RowData } from "@tanstack/react-table";
 import { cn } from "cn";
 
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "~/ui/shadcn/dropdown-menu";
+} from "~/ui/primitives/dropdown-menu";
 
 import {
   applyColumnLayout,

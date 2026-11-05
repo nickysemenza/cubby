@@ -10,19 +10,19 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { formatCalendarDay } from "~/lib/date-format";
 import { HOUSEHOLD_TIMEZONE } from "~/lib/household-date";
 import { formatPlainDate } from "~/lib/plain-date";
-import {
-  buildEventIndex,
-  packWeekRowLanes,
-} from "~/ui/reui/event-calendar/event-calendar-lib";
-import type { CalendarEvent } from "~/ui/reui/event-calendar/event-calendar-types";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   Popover,
   PopoverContent,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
-} from "~/ui/shadcn/popover";
+} from "~/ui/primitives/popover";
+import {
+  buildEventIndex,
+  packWeekRowLanes,
+} from "~/ui/reui/event-calendar/event-calendar-lib";
+import type { CalendarEvent } from "~/ui/reui/event-calendar/event-calendar-types";
 
 import { CalendarItemPresentation } from "./calendar-item-row";
 import { calendarOverviewLayout } from "./calendar-overview-layout";

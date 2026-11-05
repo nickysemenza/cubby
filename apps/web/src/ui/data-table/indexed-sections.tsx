@@ -17,14 +17,14 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useSlidingIndicator } from "~/ui/hooks/use-sliding-indicator";
 import { Section } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/ui/shadcn/dropdown-menu";
+} from "~/ui/primitives/dropdown-menu";
 
 import {
   ContinuousDetailContext,

@@ -5,7 +5,11 @@ import {
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { Progress, ProgressLabel, ProgressValue } from "~/ui/shadcn/progress";
+import {
+  Progress,
+  ProgressLabel,
+  ProgressValue,
+} from "~/ui/primitives/progress";
 
 import { RunWorkProgress, runProgressValue } from "./run-work-progress";
 

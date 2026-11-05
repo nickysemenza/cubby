@@ -232,7 +232,7 @@ const VALUE_CONTROL_PARTS = new Set([
   "ToggleGroup",
 ]);
 const VALUE_CONTROL_MODULES =
-  /^@base-ui\/react\/(combobox|select|autocomplete|toggle-group)$|^~\/ui\/shadcn\/toggle-group$/u;
+  /^@base-ui\/react\/(combobox|select|autocomplete|toggle-group)$|^~\/ui\/primitives\/toggle-group$/u;
 
 /** A value control built outside `Picker`: Base UI's combobox, select,
  * autocomplete, or toggle group, or the toggle-group primitive. */

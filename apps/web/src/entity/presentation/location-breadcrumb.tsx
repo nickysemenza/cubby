@@ -13,7 +13,7 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "~/ui/shadcn/breadcrumb";
+} from "~/ui/primitives/breadcrumb";
 import { Description } from "~/ui/text/description";
 
 import { LocationIcon } from "./location-icons";

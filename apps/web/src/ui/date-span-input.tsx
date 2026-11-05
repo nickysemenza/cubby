@@ -8,8 +8,12 @@ import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import type { Calendar as CalendarComponent } from "~/ui/calendar";
 import { Picker } from "~/ui/combobox/picker";
 import { DatePickerInput } from "~/ui/date-picker-input";
-import { Button } from "~/ui/shadcn/button";
-import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
+import { Button } from "~/ui/primitives/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 
 const Calendar = browserOnlyLazy<ComponentProps<typeof CalendarComponent>>(
   import.meta.env.SSR

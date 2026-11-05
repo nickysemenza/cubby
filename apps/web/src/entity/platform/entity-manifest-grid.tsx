@@ -18,7 +18,6 @@ import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useLocalTable } from "~/ui/data-table/use-local-table";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { domainWayfinding } from "~/ui/navigation/domain-wayfinding";
-import { Badge } from "~/ui/reui/badge";
 import {
   Table,
   TableBody,
@@ -26,8 +25,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "~/ui/shadcn/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/shadcn/tabs";
+} from "~/ui/primitives/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
+import { Badge } from "~/ui/reui/badge";
 
 import { EntityOverrideTable } from "./entity-override-table";
 import { EntityReferenceGraph } from "./entity-reference-graph";

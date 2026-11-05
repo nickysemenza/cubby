@@ -12,8 +12,8 @@ import { EntityPrimitiveFields } from "~/entity/editing/entity-primitive-fields"
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { NullableNumericField, SideBySideFields } from "~/ui/forms/form-utils";
 import { Row, Stack } from "~/ui/layout";
+import { Input } from "~/ui/primitives/input";
 import { Badge } from "~/ui/reui/badge";
-import { Input } from "~/ui/shadcn/input";
 
 import type { RecipeFormValues } from "./types";
 

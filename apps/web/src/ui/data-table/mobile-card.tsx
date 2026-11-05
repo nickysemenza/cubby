@@ -15,7 +15,7 @@ import {
   useLongPress,
 } from "~/ui/hooks/use-long-press";
 import { Row, Stack } from "~/ui/layout";
-import { Checkbox } from "~/ui/shadcn/checkbox";
+import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/text/description";
 import { Eyebrow } from "~/ui/text/eyebrow";
 

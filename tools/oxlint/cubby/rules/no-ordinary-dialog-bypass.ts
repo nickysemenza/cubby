@@ -8,8 +8,9 @@ function dialogModule(source: string, filename: string): boolean {
     ? resolve(dirname(filename), source)
     : source.replace(/^#web\//u, "apps/web/");
   return (
-    /(?:^|\/)ui\/shadcn\/(?:dialog|sheet)(?:\.[cm]?[jt]sx?)?$/u.test(path) ||
-    /^@base-ui\/react\/dialog(?:\/.*)?$/u.test(source)
+    /(?:^|\/)ui\/primitives\/(?:dialog|sheet)(?:\.[cm]?[jt]sx?)?$/u.test(
+      path,
+    ) || /^@base-ui\/react\/dialog(?:\/.*)?$/u.test(source)
   );
 }
 

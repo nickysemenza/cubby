@@ -16,7 +16,7 @@ import {
 import { formatCount } from "~/lib/number-format";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { Section } from "~/ui/layout";
-import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { HomeList, HomeRow } from "./home-list";
 

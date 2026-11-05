@@ -8,8 +8,8 @@ import { RecordEmoji } from "~/entity/components/record-emoji";
 import { Image } from "~/ui/common/image";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Panel } from "~/ui/layout/panel";
-import { Button } from "~/ui/shadcn/button";
-import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Button } from "~/ui/primitives/button";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { SectionHeader } from "../../ui/data-table/section-header";
 import {

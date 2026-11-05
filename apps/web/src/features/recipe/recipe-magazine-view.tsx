@@ -23,7 +23,7 @@ import type {
 } from "~/lib/recipe-costing";
 import { SectionPair } from "~/ui/data-table/indexed-sections";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import { Eyebrow } from "~/ui/text/eyebrow";
 
 import {

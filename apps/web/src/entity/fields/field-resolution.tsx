@@ -22,7 +22,7 @@ import { entityMetadata } from "~/entity/metadata";
 import { fieldEnvelopeAtPath } from "~/entity/read-path";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 const resolutionPatchSchema = z.record(z.string(), z.json());
 type ResolutionPatch = z.output<typeof resolutionPatchSchema>;

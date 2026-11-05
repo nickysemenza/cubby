@@ -6,7 +6,7 @@ import { type FC, useState } from "react";
 
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row } from "~/ui/layout";
-import { Button, buttonVariants } from "~/ui/shadcn/button";
+import { Button, buttonVariants } from "~/ui/primitives/button";
 
 import { PhotoGrid } from "../entity-media/photo-grid";
 import { PhotoViewer } from "../entity-media/photo-viewer";

@@ -6,8 +6,8 @@ import type { BaseKind } from "~/lib/conversion-coverage";
 import { wasm } from "~/lib/wasm";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Checkbox } from "~/ui/shadcn/checkbox";
-import { Label } from "~/ui/shadcn/label";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { Label } from "~/ui/primitives/label";
 
 import { ConversionCapabilities } from "./conversion-capabilities";
 import { ServingAliasField } from "./serving-alias-field";

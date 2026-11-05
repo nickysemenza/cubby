@@ -12,10 +12,10 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { FileDropField } from "~/ui/file-upload/file-drop-field";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/shadcn/button";
-import { DialogTrigger } from "~/ui/shadcn/dialog";
-import { Input } from "~/ui/shadcn/input";
-import { Label } from "~/ui/shadcn/label";
+import { Button } from "~/ui/primitives/button";
+import { DialogTrigger } from "~/ui/primitives/dialog";
+import { Input } from "~/ui/primitives/input";
+import { Label } from "~/ui/primitives/label";
 
 import { PhotoGrid } from "../../entity/entity-media/photo-grid";
 import { PhotoViewer } from "../../entity/entity-media/photo-viewer";

@@ -11,15 +11,15 @@ import { PickerField } from "~/entity/forms/picker-field";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { QuantityInput } from "~/ui/forms/quantity-input";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/ui/shadcn/dropdown-menu";
-import { Input } from "~/ui/shadcn/input";
+} from "~/ui/primitives/dropdown-menu";
+import { Input } from "~/ui/primitives/input";
 
 import { IngredientReparse } from "./ingredient-reparse";
 import type { IngItem, RecipeFormValues } from "./types";

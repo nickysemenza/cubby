@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import { DetailSections } from "./detail-page";
 

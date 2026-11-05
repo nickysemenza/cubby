@@ -11,7 +11,7 @@ import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { MarkdownText } from "~/entity/prose/markdown";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import { FlowSourceContent } from "./recipe-flow-renderers";
 

@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 /** The overview and Relations tab share one cached manifest-backed read. */
 export function EntityRelationshipPreview({

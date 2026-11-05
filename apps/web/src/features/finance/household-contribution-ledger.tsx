@@ -18,10 +18,10 @@ import { StaticTable } from "~/ui/data-table/static-table";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Skeleton } from "~/ui/primitives/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/reui/alert";
 import { Badge } from "~/ui/reui/badge";
-import { Button } from "~/ui/shadcn/button";
-import { Skeleton } from "~/ui/shadcn/skeleton";
 
 function CheckMark({ ok }: { ok: boolean }) {
   return ok ? (

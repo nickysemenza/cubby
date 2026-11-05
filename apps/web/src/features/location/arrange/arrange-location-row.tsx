@@ -13,7 +13,11 @@ import { LocationIcon } from "~/entity/presentation/location-icons";
 import { resolveLocationPrimaryVisual } from "~/entity/presentation/location-visual-resolver";
 import { LocationTreeRow } from "~/features/location/location-tree-row";
 import { Row } from "~/ui/layout";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 import { ArrangeMoveTo } from "./arrange-move-to";
 import { ArrangeThumb } from "./arrange-thumb";

@@ -29,7 +29,7 @@ import { type ReactNode, useRef } from "react";
 
 import { EntityIcon } from "~/entity/entities";
 import { FieldProvenance } from "~/entity/fields/field-provenance";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,8 +38,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/ui/shadcn/dropdown-menu";
-import { TableHead, TableRow } from "~/ui/shadcn/table";
+} from "~/ui/primitives/dropdown-menu";
+import { TableHead, TableRow } from "~/ui/primitives/table";
 
 import {
   columnWidthValue,

@@ -18,7 +18,7 @@ import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 export function InventoryExpenseActions({
   record,

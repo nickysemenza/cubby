@@ -24,7 +24,7 @@ import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 const MAPPING_MODE_OPTIONS: readonly PickerOption[] = [
   { value: "inherit", label: "Use ancestor mapping" },

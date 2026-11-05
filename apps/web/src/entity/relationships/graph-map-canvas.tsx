@@ -22,13 +22,13 @@ import { createPortal } from "react-dom";
 import { EntityIcon, entityLabel } from "~/entity/entities";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from "~/ui/shadcn/dropdown-menu";
+} from "~/ui/primitives/dropdown-menu";
 
 import { graphRefKey, graphBranchKey } from "./entity-graph-state";
 import {

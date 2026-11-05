@@ -2,7 +2,7 @@ import { cn } from "cn";
 import { type FC, type KeyboardEvent, useEffect, useState } from "react";
 
 import { wasm } from "~/lib/wasm";
-import { Input } from "~/ui/shadcn/input";
+import { Input } from "~/ui/primitives/input";
 
 interface QuantityInputProps {
   /** The numeric quantity, or null when empty. */

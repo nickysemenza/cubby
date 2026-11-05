@@ -14,7 +14,7 @@ import {
 } from "~/entity/entities";
 import { Image } from "~/ui/common/image";
 import { Row } from "~/ui/layout";
-import { Spinner } from "~/ui/shadcn/spinner";
+import { Spinner } from "~/ui/primitives/spinner";
 import { Description } from "~/ui/text/description";
 import { Eyebrow } from "~/ui/text/eyebrow";
 

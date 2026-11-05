@@ -2,7 +2,11 @@ import { cn } from "cn";
 import { type ReactNode, useId, useState } from "react";
 
 import { formatCurrency, formatExactCurrency } from "~/lib/number-format";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 /** Full currency evidence stays associated with its trigger for keyboard and assistive access. */
 export function CurrencyTooltip({

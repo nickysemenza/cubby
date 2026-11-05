@@ -11,7 +11,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/ui/shadcn/alert-dialog";
+} from "~/ui/primitives/alert-dialog";
 
 import type { RecipeFormValues } from "./types";
 

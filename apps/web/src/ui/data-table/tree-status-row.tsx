@@ -1,7 +1,7 @@
 import { getAppErrorDetails } from "~/lib/error-utils";
 import { openErrorDetailsDialog } from "~/ui/feedback/error-details-store";
-import { Button } from "~/ui/shadcn/button";
-import { Spinner } from "~/ui/shadcn/spinner";
+import { Button } from "~/ui/primitives/button";
+import { Spinner } from "~/ui/primitives/spinner";
 
 import type { ServerTreeChildStatus } from "../hooks/use-server-tree-children";
 

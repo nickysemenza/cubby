@@ -11,15 +11,15 @@ import {
 } from "~/lib/recipe-totals-gaps";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/reui/badge";
-import { buttonVariants } from "~/ui/shadcn/button";
+import { buttonVariants } from "~/ui/primitives/button";
 import {
   Popover,
   PopoverContent,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
-} from "~/ui/shadcn/popover";
+} from "~/ui/primitives/popover";
+import { Badge } from "~/ui/reui/badge";
 
 /**
  * The deep-link target that fixes a gap: an ingredient row routes to the

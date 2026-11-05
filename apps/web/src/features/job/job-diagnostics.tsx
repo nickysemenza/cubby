@@ -25,8 +25,8 @@ import { CloudflareIcon } from "~/ui/icons/cloudflare";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Panel } from "~/ui/layout/panel";
 import { Section } from "~/ui/layout/section";
-import { Button } from "~/ui/shadcn/button";
-import { Input } from "~/ui/shadcn/input";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
 
 import { jobWait } from "../run/run-view-model";
 import { JobDefinition } from "../run/work-definition";

@@ -1,7 +1,11 @@
 import { cn } from "cn";
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 const CLUSTER_MAX_HEIGHT = "max-h-[min(1.75rem,var(--table-row-height))]";
 

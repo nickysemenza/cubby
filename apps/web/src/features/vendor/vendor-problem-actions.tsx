@@ -13,7 +13,7 @@ import {
 import { ProblemItemsAction } from "~/features/work-queue/problem-items-action";
 import { vendor } from "~/integrations/tanstack-query/generated/domains/vendor.gen";
 import { Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 /** `1 purchase` / `4 purchases` — a vendor's weight in the merge decision. */
 const purchases = (n: number) => countLabel(n, "purchase");

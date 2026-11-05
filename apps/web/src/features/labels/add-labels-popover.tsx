@@ -13,8 +13,12 @@ import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { typeSupportsQrCode } from "~/entity/presentation/location-type-theme";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
-import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
+import { Button } from "~/ui/primitives/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 
 /**
  * Adds a location's label, or every QR-eligible child's, to the sheet. The

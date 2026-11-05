@@ -14,7 +14,7 @@ import { ingredient } from "~/integrations/tanstack-query/generated/domains/ingr
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import type { EnrichmentEditorHandle } from "./enrichment-editor";
 import { type MergeOption, ReviewCard } from "./review-card";

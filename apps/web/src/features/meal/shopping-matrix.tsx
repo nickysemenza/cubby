@@ -12,7 +12,7 @@ import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
 import type { CrossTabColumn } from "~/ui/matrix/group-columns";
 import { HEAT_CLASSES, heatBucket } from "~/ui/matrix/heat-scale";
 import { totalCell } from "~/ui/matrix/matrix-chrome";
-import { Checkbox } from "~/ui/shadcn/checkbox";
+import { Checkbox } from "~/ui/primitives/checkbox";
 
 import {
   formatAmount,

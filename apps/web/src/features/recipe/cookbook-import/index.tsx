@@ -48,7 +48,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/ui/shadcn/alert-dialog";
+} from "~/ui/primitives/alert-dialog";
 import { Description } from "~/ui/text/description";
 
 import { BookGroupCard } from "./book-group-card";

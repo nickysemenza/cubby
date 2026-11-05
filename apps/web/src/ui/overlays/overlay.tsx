@@ -9,15 +9,15 @@ import {
 } from "react";
 
 import { useIsMobile } from "~/ui/hooks/use-mobile";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
-} from "~/ui/shadcn/dialog";
-import { SheetContent } from "~/ui/shadcn/sheet";
-import { Spinner } from "~/ui/shadcn/spinner";
+} from "~/ui/primitives/dialog";
+import { SheetContent } from "~/ui/primitives/sheet";
+import { Spinner } from "~/ui/primitives/spinner";
 
 type OverlayAction = {
   label: string;

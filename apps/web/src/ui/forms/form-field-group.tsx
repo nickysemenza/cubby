@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { FieldError as RHFFieldError } from "react-hook-form";
 
-import { Field, FieldError, FieldLabel } from "~/ui/shadcn/field";
+import { Field, FieldError, FieldLabel } from "~/ui/primitives/field";
 
 /**
  * Standardized labeled-field block: `<Field>` wrapper + optional `<FieldLabel>`,

@@ -13,9 +13,9 @@ import * as React from "react";
 
 import { useHydrationGate } from "~/ui/hooks/use-hydrated";
 import { popoverElevationClassName } from "~/ui/overlays/popover-elevation";
-import { Kbd } from "~/ui/shadcn/kbd";
-import { Spinner } from "~/ui/shadcn/spinner";
-import { ToggleGroup, ToggleGroupItem } from "~/ui/shadcn/toggle-group";
+import { Kbd } from "~/ui/primitives/kbd";
+import { Spinner } from "~/ui/primitives/spinner";
+import { ToggleGroup, ToggleGroupItem } from "~/ui/primitives/toggle-group";
 import { EnumPill } from "~/ui/text/enum-pill";
 
 import type { ComboboxItem, PickerChip, PickerTone } from "./combobox-types";

@@ -8,13 +8,13 @@ import type { z } from "zod";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { Image } from "~/ui/common/image";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
   PopoverTitle,
-} from "~/ui/shadcn/popover";
+} from "~/ui/primitives/popover";
 
 import { SourceStack } from "./source-stack";
 import { ExplanationEntityLink } from "./why-value";

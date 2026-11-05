@@ -87,7 +87,7 @@ import {
   type ListQueryOptionsFn,
   type ListQueryResponse,
 } from "~/ui/hooks/use-paginated-table-core";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 import {
   suggestionsSearch,

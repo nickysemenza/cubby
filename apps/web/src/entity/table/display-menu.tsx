@@ -3,8 +3,12 @@ import { SlidersHorizontalIcon } from "@phosphor-icons/react/dist/csr/SlidersHor
 import { createContext, useState, type ReactNode } from "react";
 
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/shadcn/button";
-import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
+import { Button } from "~/ui/primitives/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 
 /** A labelled row of the Display popover: the control keeps its own menu. */
 export function DisplayRow({

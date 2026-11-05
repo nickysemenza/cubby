@@ -28,13 +28,13 @@ import { DecisionValue } from "~/ui/derived/decision-chain";
 import { ResolutionEvidence } from "~/ui/derived/resolution-evidence";
 import { SourceStack } from "~/ui/derived/source-stack";
 import { ExplanationEntityLink } from "~/ui/derived/why-value";
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 import {
   Popover,
   PopoverContent,
   PopoverTitle,
   PopoverTrigger,
-} from "~/ui/shadcn/popover";
+} from "~/ui/primitives/popover";
 
 import { useFieldSuggestionContext } from "./field-suggestion-provider";
 

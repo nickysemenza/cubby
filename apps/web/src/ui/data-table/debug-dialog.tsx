@@ -2,7 +2,7 @@ import { useState, type ReactElement } from "react";
 
 import { Panel } from "~/ui/layout/panel";
 import { Overlay } from "~/ui/overlays/overlay";
-import { DialogTrigger } from "~/ui/shadcn/dialog";
+import { DialogTrigger } from "~/ui/primitives/dialog";
 
 import JsonRenderer from "../text/json-renderer";
 

@@ -3,7 +3,7 @@ import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import type { FC } from "react";
 
-import { Button } from "~/ui/shadcn/button";
+import { Button } from "~/ui/primitives/button";
 
 interface FieldArrayItemControlsProps {
   move: (from: number, to: number) => void;
