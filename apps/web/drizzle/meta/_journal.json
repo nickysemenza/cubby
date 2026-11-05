@@ -526,6 +526,13 @@
       "when": 1793863303129,
       "tag": "0074_mail_decision_owners",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1793864260923,
+      "tag": "0075_drop_redundant_indexes",
+      "breakpoints": true
     }
   ]
 }

@@ -166,10 +166,7 @@ export const upcLookupCache = pgTable(
     status: text("status").notNull().default("ready"),
     fetchedAt: timestamp("fetchedAt", { mode: "date" }).notNull(),
   },
-  (table) => [
-    index("UpcLookupCache_fetchedAt_idx").on(table.fetchedAt),
-    index("UpcLookupCache_status_idx").on(table.status),
-  ],
+  (table) => [index("UpcLookupCache_status_idx").on(table.status)],
 );
 
 export const entityEmbedding = pgTable(
@@ -712,7 +709,6 @@ export const mcpToolCall = pgTable(
       table.occurredAt.desc(),
     ),
     index("McpToolCall_outcome_idx").on(table.outcome),
-    index("McpToolCall_release_idx").on(table.release),
     index("McpToolCall_entity_occurredAt_idx").on(
       table.entityKind,
       table.occurredAt.desc(),

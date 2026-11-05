@@ -1932,7 +1932,6 @@ export async function controlRun(
         dispatchEventId: runTable.dispatchEventId,
         coordinatorStartedAt: runTable.coordinatorStartedAt,
         decisionRevision: runTable.decisionRevision,
-        historyCursorUrl: runTable.historyCursorUrl,
       })
       .from(runTable)
       .where(eq(runTable.id, scope.runId))
