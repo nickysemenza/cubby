@@ -292,3 +292,87 @@ it.each([
   },
   60_000,
 );
+
+it("carries an owed embedding from its WorkItem onto its SearchDocument", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle(client);
+    await migrateDatabase(db, { through: "0076_drop_dead_columns" });
+    const productId = "00000000-0000-4000-8000-000000000001";
+    await identity(client, "product", productId, "PRD-SYNTH1");
+    await client.query(
+      `INSERT INTO "Product" (id, shortcode, name) VALUES ($1, 'PRD-SYNTH1', 'Synthetic')`,
+      [productId],
+    );
+    await client.query(
+      `INSERT INTO "SearchDocument" ("entityKind", "entityId", title, body, "semanticText", "normalizedText", "searchVector", "sourceHash")
+       VALUES ('product', $1, 'Synthetic', 'b', 's', 'n', ''::tsvector, 'h')`,
+      [productId],
+    );
+    await client.query(
+      `INSERT INTO "WorkItem" (drain, target, ref, attempts, "lastError", "readyAt")
+       VALUES ('embedding:refresh', 'embedding.refresh', $1, 2, 'Synthetic outage', '2026-03-01T00:00:00Z')`,
+      [productId],
+    );
+    await client.query(
+      `INSERT INTO "WorkItem" (drain, target, ref) VALUES ('derived:drain', 'synthetic.target', $1)`,
+      [productId],
+    );
+    await identity(
+      client,
+      "job",
+      "00000000-0000-4000-8000-000000000002",
+      "JOB-SYNTH1",
+    );
+    await client.query(
+      `INSERT INTO "Job" (id, shortcode, key, kind, state, input)
+       VALUES ('00000000-0000-4000-8000-000000000002', 'JOB-SYNTH1', 'embedding:refresh', 'embedding.refresh', 'running', '{}')`,
+    );
+
+    await migrateDatabase(db, { through: "0077_embedding_work_on_owner_rows" });
+
+    expect(
+      (
+        await client.query(
+          `SELECT to_char("embeddingDueAt", 'YYYY-MM-DD') AS due, "embeddingAttempts" AS attempts, "embeddingError" AS error FROM "SearchDocument"`,
+        )
+      ).rows,
+    ).toEqual([{ due: "2026-03-01", attempts: 2, error: "Synthetic outage" }]);
+    // The running predecessor may be paying right now, and deleting its Job cannot stop
+    // that call, so its items stay reserved past the longest a consumer can run.
+    expect(
+      (
+        await client.query(
+          `SELECT "embeddingLeaseToken" IS NOT NULL AS reserved,
+             "embeddingLeaseUntil" > now() + interval '15 minutes' AS outlasts FROM "SearchDocument"`,
+        )
+      ).rows,
+    ).toEqual([{ reserved: true, outlasts: true }]);
+    // Derived work is another lane's: it stays exactly where it was.
+    expect(
+      (
+        await client.query(
+          `SELECT drain FROM "WorkItem" WHERE target = 'synthetic.target'`,
+        )
+      ).rows,
+    ).toEqual([{ drain: "derived:drain" }]);
+    expect(
+      (
+        await client.query(
+          `SELECT 1 FROM "Job" WHERE key = 'embedding:refresh'`,
+        )
+      ).rows,
+    ).toEqual([]);
+    // A predecessor's late mark or wake fails rather than stranding its intent.
+    await expect(
+      client.query(
+        `INSERT INTO "WorkItem" (drain, target, ref) VALUES ('embedding:refresh', 'embedding.refresh', $1)`,
+        [productId],
+      ),
+    ).rejects.toThrow("WorkItem_retired_target_check");
+    await expect(
+      client.query(
+        `INSERT INTO "Job" (shortcode, key, kind, input) VALUES ('JOB-LATE', 'embedding:refresh', 'embedding.refresh', '{}')`,
+      ),
+    ).rejects.toThrow("Job_kind_retired_check");
+  });
+});

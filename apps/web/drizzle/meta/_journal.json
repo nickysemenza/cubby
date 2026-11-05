@@ -540,6 +540,13 @@
       "when": 1793864481385,
       "tag": "0076_drop_dead_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1793867962928,
+      "tag": "0077_embedding_work_on_owner_rows",
+      "breakpoints": true
     }
   ]
 }

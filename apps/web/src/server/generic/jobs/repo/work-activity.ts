@@ -1,3 +1,4 @@
+import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import {
   imageProcessingAttemptState,
@@ -82,6 +83,65 @@ async function readImageStreams(db: Database, now: Date): Promise<StreamRow[]> {
   return rows;
 }
 
+/** Search embeddings, held on their documents and retired artifacts. */
+async function readEmbeddingStreams(
+  db: Database,
+  now: Date,
+): Promise<StreamRow[]> {
+  const at = sql`${now.toISOString()}::timestamp`;
+  const since = (minutes: number) =>
+    sql`${at} - ${minutes} * interval '1 minute'`;
+  const empty = { paused: 0, runs: null };
+  const { rows } = await getDb(db).execute<
+    Omit<StreamRow, "paused" | "runs" | "failed" | "kind"> & {
+      cleanupDue: number;
+      cleanupLater: number;
+    }
+  >(sql`
+    WITH owed AS MATERIALIZED (
+      SELECT "embeddingDueAt" AS due, "embeddingAttempts" AS attempts,
+        coalesce("embeddingLeaseUntil" > ${at}, false) AS leased
+      FROM "SearchDocument"
+      WHERE "embeddingDueAt" IS NOT NULL AND ${notDeleted("SearchDocument")}
+    ), indexed AS MATERIALIZED (
+      SELECT "indexedAt" AS at FROM "EntityEmbedding"
+      WHERE "indexedAt" > ${since(RECENT_MINUTES.failed)}
+    ), retired AS MATERIALIZED (
+      SELECT "deletionRetryAt" AS retry FROM "EntityEmbedding"
+      WHERE "deletionId" IS NULL AND "artifactState" <> ${embeddingArtifactState.enum.selected}
+        AND ("deletedAt" IS NOT NULL OR "artifactState" IN (${embeddingArtifactState.enum.retired}, ${embeddingArtifactState.enum.failed}))
+    )
+    SELECT (SELECT count(*)::int FROM owed WHERE leased) AS running,
+      (SELECT count(*)::int FROM owed WHERE due <= ${at} AND NOT leased) AS due,
+      (SELECT count(*)::int FROM owed WHERE due > ${at} AND NOT leased AND attempts > 0) AS "backingOff",
+      (SELECT count(*)::int FROM owed WHERE due > ${at} AND NOT leased AND attempts = 0) AS scheduled,
+      (SELECT count(*)::int FROM indexed WHERE at > ${since(RECENT_MINUTES.pace)}) AS "completedPace",
+      (SELECT count(*)::int FROM indexed WHERE at > ${since(RECENT_MINUTES.completed)}) AS completed,
+      (SELECT max(at) FROM indexed) AS "lastCompletedAt",
+      (SELECT min(due) FROM owed WHERE due <= ${at} AND NOT leased) AS "oldestDueAt",
+      (SELECT count(*)::int FROM retired WHERE coalesce(retry <= ${at}, true)) AS "cleanupDue",
+      (SELECT count(*)::int FROM retired WHERE retry > ${at}) AS "cleanupLater"`);
+  const row = rows[0];
+  if (!row) return [];
+  const { cleanupDue, cleanupLater, ...refresh } = row;
+  return [
+    { ...refresh, ...empty, kind: "embedding.refresh", failed: 0 },
+    {
+      ...empty,
+      kind: "embedding.cleanup",
+      running: 0,
+      due: cleanupDue,
+      backingOff: cleanupLater,
+      scheduled: 0,
+      completedPace: 0,
+      completed: 0,
+      failed: 0,
+      lastCompletedAt: null,
+      oldestDueAt: null,
+    },
+  ];
+}
+
 /**
  * Live and recent work per Job kind and domain-owned stream: what runs now, what
  * waits and why, and how fast recent work finished. Internal maintenance kinds are
@@ -145,7 +205,11 @@ export async function readWorkActivity(
       completedMinutes: RECENT_MINUTES.completed,
       failedMinutes: RECENT_MINUTES.failed,
     },
-    streams: [...rows.rows, ...(await readImageStreams(db, now))]
+    streams: [
+      ...rows.rows,
+      ...(await readImageStreams(db, now)),
+      ...(await readEmbeddingStreams(db, now)),
+    ]
       .sort((left, right) => left.kind.localeCompare(right.kind))
       .map((row) => ({
         kind: row.kind,

@@ -1,42 +1,60 @@
 import type { SearchableEntityRef } from "@cubby/schemas/search";
+import { and, inArray, isNotNull, isNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { getDb } from "~/server/db/helpers";
+import { searchDocument } from "~/server/db/retained-tables";
+import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
 import {
-  EMBEDDING_REFRESH_DRAIN,
-  EMBEDDING_REFRESH_TARGET,
-} from "~/server/generic/embedding/repo/embedding-drain";
-import { embeddingRefreshHandler } from "~/server/generic/embedding/service/embedding-refresh";
-import {
-  updateJobs,
-  updateWorkItems,
-  readWorkItems,
-} from "~/server/generic/jobs/jobs.fixtures";
-import { readJob } from "~/server/generic/jobs/repo/job-reads";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
-import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
+  prepareSearchDocuments,
+  publishPreparedSearchDocuments,
+} from "~/server/generic/search/repo/search-document";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
   enqueueEmbeddingRefs,
   type EmbeddingRefreshPort,
 } from "~/server/workflows/background-tasks/embedding";
 
+/** The document owes the embedding, so it is published before the mark. */
+export async function markEmbeddingFixture(
+  db: Database,
+  refs: readonly SearchableEntityRef[],
+) {
+  const prepared = await prepareSearchDocuments(db, refs);
+  await publishPreparedSearchDocuments(db, prepared);
+  await enqueueEmbeddingRefs(db, prepared);
+}
+
+/** What each source still owes: its due time, attempts and last error. */
+export const embeddingWorkFor = (db: Database, entityIds: readonly string[]) =>
+  getDb(db)
+    .select({
+      ref: searchDocument.entityId,
+      attempts: searchDocument.embeddingAttempts,
+      lastError: searchDocument.embeddingError,
+      readyAt: searchDocument.embeddingDueAt,
+    })
+    .from(searchDocument)
+    .where(
+      and(
+        inArray(searchDocument.entityId, [...entityIds]),
+        isNotNull(searchDocument.embeddingDueAt),
+        isNull(searchDocument.deletedAt),
+      ),
+    );
+
 /** Advance one source-keyed embedding page; tests move postponed work due explicitly. */
 export async function advanceEmbeddingFixture(
   db: Database,
   port: EmbeddingRefreshPort,
 ) {
-  const execution = await readJob(db, { key: EMBEDDING_REFRESH_DRAIN.key });
-  if (!execution) return null;
-  await updateJobs(db, { id: execution.id }, { availableAt: new Date(0) });
-  await updateWorkItems(
-    db,
-    { drain: EMBEDDING_REFRESH_DRAIN.key },
-    { readyAt: new Date(0) },
-  );
-  await advanceJob(db, execution.id, {
-    "embedding.refresh": embeddingRefreshHandler(port),
+  await getDb(db)
+    .update(searchDocument)
+    .set({ embeddingDueAt: new Date(0) })
+    .where(isNotNull(searchDocument.embeddingDueAt));
+  await embeddingRefreshDrain(port).page(db, {
+    deadline: Date.now() + 30_000,
   });
-  return execution;
 }
 
 export async function embedFixtures(
@@ -47,16 +65,16 @@ export async function embedFixtures(
   const uniqueRefs = [
     ...new Map(refs.map((ref) => [ref.entityId, ref])).values(),
   ];
-  await enqueueEmbeddingRefs(db, await prepareSearchDocuments(db, uniqueRefs));
+  await markEmbeddingFixture(db, uniqueRefs);
   for (let attempt = 0; attempt < 5; attempt++) {
     await advanceEmbeddingFixture(db, port);
-    const pending = await readWorkItems(db, {
-      target: EMBEDDING_REFRESH_TARGET,
-    });
     if (
-      !pending.some(({ ref }) =>
-        uniqueRefs.some((candidate) => candidate.entityId === ref),
-      )
+      !(
+        await embeddingWorkFor(
+          db,
+          uniqueRefs.map((ref) => ref.entityId),
+        )
+      ).length
     )
       return uniqueRefs;
   }

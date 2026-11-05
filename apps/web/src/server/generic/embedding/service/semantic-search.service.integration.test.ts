@@ -18,7 +18,6 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { getActiveAssessmentSuppressionKeys } from "~/server/generic/assessment/repo/assessment-state";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
-import { EMBEDDING_REFRESH_TARGET } from "~/server/generic/embedding/repo/embedding-drain";
 import { getStoredEmbeddingHashes } from "~/server/generic/embedding/repo/entity-embedding-refresh";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
@@ -26,15 +25,11 @@ import {
   createInMemoryVectorizeIndex,
   type VectorStorePort,
 } from "~/server/generic/embedding/service/semantic/vector-store";
-import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { workItemStates } from "~/server/generic/jobs/repo/work-items";
 import { requestEmbeddingRefreshWorkflow } from "~/server/generic/search/operations/search.server";
 import {
   countUnembeddedSearchDocuments,
   getSearchDocumentEmbeddingText,
   refreshSearchDocument,
-  prepareSearchDocuments,
   selectUnembeddedSearchDocumentRefs,
 } from "~/server/generic/search/repo/search-document";
 import { drainStoredDerived } from "~/server/testing/background-queue";
@@ -46,11 +41,12 @@ import {
   renameFixtureRaw,
 } from "~/server/testing/repo.fixtures";
 import type { EmbeddingRefreshPort } from "~/server/workflows/background-tasks/embedding";
-import { enqueueEmbeddingRefs } from "~/server/workflows/background-tasks/embedding";
 import { executeWorkflow } from "~/server/workflows/runtime";
 
 import {
   advanceEmbeddingFixture,
+  embeddingWorkFor,
+  markEmbeddingFixture,
   embedFixtures,
 } from "../repo/embedding-drain.fixtures";
 
@@ -113,7 +109,7 @@ const refreshOne = async (
   ref: SearchableEntityRef,
   port: EmbeddingRefreshPort,
 ) => {
-  await enqueueEmbeddingRefs(db, await prepareSearchDocuments(db, [ref]));
+  await markEmbeddingFixture(db, [ref]);
   await advanceEmbeddingFixture(db, port);
   await advanceEmbeddingFixture(db, port);
   const [selected] = await getDb(db)
@@ -188,20 +184,14 @@ describe("semantic search background tasks", () => {
       entityId: product.id,
     });
     expect(result).toEqual({ accepted: true });
-    expect(published).toEqual([
-      expect.objectContaining({
-        version: 3,
-        queueType: "background",
-      }),
-    ]);
-    const jobs = await readJobs(ctx.db, { key: "embedding:refresh" });
-    expect(jobs).toHaveLength(1);
-    const pending = await readWorkItems(ctx.db, {
-      target: "embedding.refresh",
-    });
-    expect(pending.map(({ ref }) => ({ ref }))).toEqual([
-      { ref: product.entityId },
-    ]);
+    expect(published).toContainEqual(
+      expect.objectContaining({ version: 3, queueType: "background" }),
+    );
+    expect(
+      (await embeddingWorkFor(ctx.db, [product.entityId])).map(
+        ({ ref }) => ref,
+      ),
+    ).toEqual([product.entityId]);
   });
 
   it("dismisses a current duplicate group and suppresses its recommendation", async () => {
@@ -376,19 +366,13 @@ describe("semantic search background tasks", () => {
             "Embedding after concurrent change",
           );
           await refreshSearchDocument(ctx.db, "product", product.entityId);
-          await enqueueEmbeddingRefs(
-            ctx.db,
-            await prepareSearchDocuments(ctx.db, [ref]),
-          );
+          await markEmbeddingFixture(ctx.db, [ref]);
         }
         return texts.map(() => vectorFor(staleResult ? 0.1 : 0.9));
       },
     };
 
-    await enqueueEmbeddingRefs(
-      ctx.db,
-      await prepareSearchDocuments(ctx.db, [ref]),
-    );
+    await markEmbeddingFixture(ctx.db, [ref]);
     await advanceEmbeddingFixture(ctx.db, writerAPort);
     expect(remote.vectors.size).toBe(0);
     await embedFixtures(ctx.db, [ref], writerAPort);
@@ -444,14 +428,9 @@ describe("semantic search background tasks", () => {
         texts.map(() => Array(config.dimensions).fill(0.5)),
     };
 
-    await enqueueEmbeddingRefs(
-      ctx.db,
-      await prepareSearchDocuments(ctx.db, [ref]),
-    );
+    await markEmbeddingFixture(ctx.db, [ref]);
     await advanceEmbeddingFixture(ctx.db, port);
-    const [work] = await workItemStates(ctx.db, EMBEDDING_REFRESH_TARGET, [
-      ref.entityId,
-    ]);
+    const [work] = await embeddingWorkFor(ctx.db, [ref.entityId]);
     expect(work?.attempts).toBe(1);
     expect(work?.lastError).toContain("vectorize outage");
 

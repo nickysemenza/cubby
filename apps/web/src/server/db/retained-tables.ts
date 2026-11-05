@@ -190,12 +190,19 @@ export const entityEmbedding = pgTable(
     observedAt: timestamp("observedAt", { mode: "date" }),
     indexedAt: timestamp("indexedAt", { mode: "date" }),
     deletionId: text("deletionId"),
+    /** A failed vector deletion waits until then (`embeddingCleanupStore`). */
+    deletionRetryAt: timestamp("deletionRetryAt", { mode: "date" }),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
   (table) => [
     // A rebuildable projection of one live identity (ADR 0006).
     entityRefFk("EntityEmbedding_entity_fk", table),
+    index("EntityEmbedding_cleanup_idx")
+      .on(table.deletionRetryAt)
+      .where(
+        sql`${table.deletionId} IS NULL AND ${table.artifactState} <> ${sqlEnumConstant(embeddingArtifactState, "selected")}`,
+      ),
     uniqueIndex("EntityEmbedding_entity_model_key")
       .on(
         table.entityKind,
@@ -254,12 +261,24 @@ export const searchDocument = pgTable(
     normalizedText: text("normalizedText").notNull(),
     searchVector: pgTsVector("searchVector").notNull(),
     sourceHash: text("sourceHash").notNull(),
+    /** When a fresh embedding is owed; null when none is (`embeddingRefreshStore`). */
+    embeddingDueAt: timestamp("embeddingDueAt", { mode: "date" }),
+    /** Bumped by each mark: which intent a page settles, not who may pay for it. */
+    embeddingGeneration: integer("embeddingGeneration").notNull().default(0),
+    /** The page allowed to call the provider for this source. A mark never touches it. */
+    embeddingLeaseToken: uuid("embeddingLeaseToken"),
+    embeddingLeaseUntil: timestamp("embeddingLeaseUntil", { mode: "date" }),
+    embeddingAttempts: integer("embeddingAttempts").notNull().default(0),
+    embeddingError: text("embeddingError"),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
   (table) => [
     // A rebuildable projection of one live identity (ADR 0006).
     entityRefFk("SearchDocument_entity_fk", table),
+    index("SearchDocument_embedding_due_idx")
+      .on(table.embeddingDueAt)
+      .where(sql`${table.embeddingDueAt} IS NOT NULL`),
     uniqueIndex("SearchDocument_live_entity_key")
       .on(table.entityKind, table.entityId)
       .where(sql`${table.deletedAt} IS NULL`),

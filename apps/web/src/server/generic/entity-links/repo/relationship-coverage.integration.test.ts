@@ -60,8 +60,8 @@ describe("relationship evidence coverage", () => {
       ctx.actor,
     );
     const execution = await enqueueJob(ctx.db, {
-      key: "synthetic-embedding",
-      kind: "embedding.refresh",
+      key: "synthetic-discovery",
+      kind: "discovery.connections",
       subjectKind: "product",
       subjectId: target.entityId,
       input: {},

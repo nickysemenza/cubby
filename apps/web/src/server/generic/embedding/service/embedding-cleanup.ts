@@ -1,18 +1,24 @@
 import type { Database } from "~/server/db";
 import {
+  storeDrain,
+  type BackgroundDrain,
+} from "~/server/generic/background/drains";
+import {
   assertEmbeddingArtifactCanBeDeleted,
   findDeletableEmbeddingArtifactIds,
   recordEmbeddingDeletion,
 } from "~/server/generic/embedding/repo/embedding-cleanup";
+import { embeddingCleanupStore } from "~/server/generic/embedding/repo/embedding-work";
 import {
   productionVectorStore,
   type VectorStorePort,
 } from "~/server/generic/embedding/service/semantic/vector-store";
-import { lockWork, type WorkItem } from "~/server/generic/jobs/repo/work-items";
+import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 import { defineDrain } from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
 
 const PAGE_LIMIT = 100;
+const EMBEDDING_BACKOFF = { baseMs: 60_000, maxMs: 15 * 60_000 };
 
 type CleanupPage = {
   receipts: Map<WorkItem, string>;
@@ -28,7 +34,6 @@ async function prepareCleanupPage(
   items: readonly WorkItem[],
   context: JobContext,
 ) {
-  if (!store.configured()) throw new Error("Vectorize binding is unavailable");
   const prepared: CleanupPage = { receipts: new Map() };
   const eligibleIds = await findDeletableEmbeddingArtifactIds(
     db,
@@ -37,7 +42,9 @@ async function prepareCleanupPage(
   const candidates = items.filter((item) => eligibleIds.has(item.ref));
   if (!candidates.length) return { prepared };
 
-  const active = await context.fenced((tx) => lockWork(tx, candidates));
+  const active = await context.fenced((tx) =>
+    embeddingCleanupStore.lock(tx, candidates),
+  );
   const activeSet = new Set(active);
   const deletable: WorkItem[] = [];
   for (const item of candidates) {
@@ -78,28 +85,32 @@ async function prepareCleanupPage(
   };
 }
 
-export function embeddingCleanupHandler(
+/** Deletes the physical vectors of retired artifacts. The artifacts are the debt. */
+export function embeddingCleanupDrain(
   store: VectorStorePort = productionVectorStore,
-) {
-  return defineDrain<CleanupPage>({
-    limit: PAGE_LIMIT,
-    prepare: (db, items, context) =>
-      prepareCleanupPage(store, db, items, context),
-    publish: async (tx, items, prepared) => {
-      const receipts = items.flatMap((item) => {
-        const receipt = prepared.receipts.get(item);
-        return receipt ? [{ item, receipt }] : [];
-      });
-      if (!receipts.length) return;
-      const held = new Set(
-        await lockWork(
-          tx,
-          receipts.map(({ item }) => item),
-        ),
-      );
-      for (const { item, receipt } of receipts)
-        if (held.has(item))
-          await recordEmbeddingDeletion(tx, item.ref, receipt);
-    },
+): BackgroundDrain {
+  const drain = storeDrain({
+    name: "embedding.cleanup",
+    store: embeddingCleanupStore,
+    handler: defineDrain<CleanupPage>({
+      store: embeddingCleanupStore,
+      backoff: EMBEDDING_BACKOFF,
+      limit: PAGE_LIMIT,
+      prepare: (db, items, context) =>
+        prepareCleanupPage(store, db, items, context),
+      publish: async (tx, items, prepared) => {
+        for (const item of items) {
+          const receipt = prepared.receipts.get(item);
+          if (receipt) await recordEmbeddingDeletion(tx, item.ref, receipt);
+        }
+      },
+    }),
   });
+  return {
+    name: drain.name,
+    page: (db, round) =>
+      store.configured()
+        ? drain.page(db, round)
+        : Promise.resolve({ more: false, nextAt: null }),
+  };
 }

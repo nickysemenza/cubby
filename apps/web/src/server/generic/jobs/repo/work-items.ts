@@ -330,19 +330,6 @@ export async function lockWork(
   return items.filter(({ target, ref }) => held.has(`${target}\0${ref}`));
 }
 
-/** Make items wait (a provider visibility poll) without spending an attempt. */
-export async function postponeWork(
-  tx: RepositoryQueryInput,
-  items: readonly WorkItem[],
-  until: Date,
-) {
-  if (!items.length) return;
-  await repositoryQueries(tx)
-    .update(workItem)
-    .set({ readyAt: until })
-    .where(workTickets(items));
-}
-
 /**
  * Explain and hold items that upstream work still owes. Same ticket, attempts,
  * `reason` and `lastError`; a new ticket clears the wait. The delay follows the
@@ -458,10 +445,6 @@ export async function drainReady(db: RepositoryQueryInput, drain: string) {
     .limit(1);
   return row !== undefined;
 }
-
-/** Whether a target still owes work for `ref` (a correlated column). */
-export const workPending = (target: string | SQL, ref: SQL) =>
-  sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${workItem.target} = ${target} AND ${workItem.ref} = ${ref})`;
 
 /** Whether any item whose target matches `target` is still owed. */
 export const workPendingWhere = (target: (column: SQL) => SQL) =>

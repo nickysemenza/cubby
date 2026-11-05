@@ -1,52 +1,32 @@
 import type { SearchableEntityRef } from "@cubby/schemas/search";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { entityEmbedding } from "~/server/db/retained-tables";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import {
-  EMBEDDING_CLEANUP_DRAIN,
-  EMBEDDING_CLEANUP_TARGET,
-  queueEmbeddingCleanupPage,
-} from "~/server/generic/embedding/repo/embedding-cleanup";
-import {
-  EMBEDDING_REFRESH_DRAIN,
-  EMBEDDING_REFRESH_TARGET,
-} from "~/server/generic/embedding/repo/embedding-drain";
-import { embeddingCleanupHandler } from "~/server/generic/embedding/service/embedding-cleanup";
-import { embeddingRefreshHandler } from "~/server/generic/embedding/service/embedding-refresh";
+  advanceEmbeddingFixture,
+  embeddingWorkFor,
+  markEmbeddingFixture,
+} from "~/server/generic/embedding/repo/embedding-drain.fixtures";
+import { embeddingCleanupDrain } from "~/server/generic/embedding/service/embedding-cleanup";
+import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
 import {
   getSemanticEmbeddingConfig,
   type SemanticEmbeddingConfig,
 } from "~/server/generic/embedding/service/semantic/config";
 import type { VectorStorePort } from "~/server/generic/embedding/service/semantic/vector-store";
 import { JobRetryableError } from "~/server/generic/jobs/errors";
-import {
-  updateJobs,
-  updateWorkItems,
-  readWorkItems,
-} from "~/server/generic/jobs/jobs.fixtures";
-import { readJob } from "~/server/generic/jobs/repo/job-reads";
-import {
-  workItemsFor,
-  workItemStates,
-} from "~/server/generic/jobs/repo/work-items";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
-import {
-  prepareSearchDocuments,
-  refreshSearchDocument,
-} from "~/server/generic/search/repo/search-document";
+import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import {
   createProductFixture,
   makeProductInput,
   renameFixtureRaw,
 } from "~/server/testing/repo.fixtures";
-import {
-  enqueueEmbeddingRefs,
-  type EmbeddingRefreshPort,
-} from "~/server/workflows/background-tasks/embedding";
+import { type EmbeddingRefreshPort } from "~/server/workflows/background-tasks/embedding";
 
 const config = getSemanticEmbeddingConfig();
 
@@ -127,49 +107,91 @@ function embeddingPort(
   };
 }
 
-async function markRefresh(
-  db: Parameters<typeof enqueueEmbeddingRefs>[0],
-  refs: SearchableEntityRef[],
-) {
-  await enqueueEmbeddingRefs(db, await prepareSearchDocuments(db, refs));
-}
+const selectArtifacts = (db: Database, entityId: string) =>
+  getDb(db)
+    .select({
+      id: entityEmbedding.id,
+      artifactState: entityEmbedding.artifactState,
+    })
+    .from(entityEmbedding)
+    .where(eq(entityEmbedding.entityId, entityId));
 
-async function advanceRefresh(
-  db: Parameters<typeof advanceJob>[0],
-  port: EmbeddingRefreshPort,
-) {
-  const execution = await readJob(db, { key: EMBEDDING_REFRESH_DRAIN.key });
-  if (!execution) throw new Error("Missing embedding refresh drain");
-  await updateJobs(db, { id: execution.id }, { availableAt: new Date(0) });
-  await updateWorkItems(
-    db,
-    { drain: EMBEDDING_REFRESH_DRAIN.key },
-    { readyAt: new Date(0) },
-  );
-  await advanceJob(db, execution.id, {
-    "embedding.refresh": embeddingRefreshHandler(port),
-  });
-}
+const markRefresh = markEmbeddingFixture;
+const advanceRefresh = advanceEmbeddingFixture;
 
-async function advanceCleanup(
-  db: Parameters<typeof advanceJob>[0],
-  store: VectorStorePort,
-) {
-  const execution = await readJob(db, { key: EMBEDDING_CLEANUP_DRAIN.key });
-  if (!execution) throw new Error("Missing embedding cleanup drain");
-  await updateJobs(db, { id: execution.id }, { availableAt: new Date(0) });
-  await updateWorkItems(
-    db,
-    { drain: EMBEDDING_CLEANUP_DRAIN.key },
-    { readyAt: new Date(0) },
-  );
-  await advanceJob(db, execution.id, {
-    "embedding.cleanup": embeddingCleanupHandler(store),
+async function advanceCleanup(db: Database, store: VectorStorePort) {
+  await getDb(db)
+    .update(entityEmbedding)
+    .set({ deletionRetryAt: null })
+    .where(isNotNull(entityEmbedding.deletionRetryAt));
+  await embeddingCleanupDrain(store).page(db, {
+    deadline: Date.now() + 30_000,
   });
 }
 
 describe("embedding refresh and cleanup drains", () => {
   const ctx = withTestDb();
+
+  // The hourly cron runs beside the queue consumer, and a publication can re-mark a
+  // document at any moment. The generation says what is owed; only the lease says who
+  // may pay, so neither a sibling nor a same-text re-mark can buy the embedding twice.
+  it("pays once for a document re-marked with the same text while its provider call is in flight", async () => {
+    const subject = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic overlap fixture" }),
+      ctx.actor,
+    );
+    const ref = { entityKind: "product", entityId: subject.entityId } as const;
+    const remote = fakeStore();
+    const calls: string[][] = [];
+    const inner = embeddingPort(remote.store, calls);
+    let release = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered = () => {};
+    const inFlight = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const port: EmbeddingRefreshPort = {
+      ...inner,
+      embed: async (...args) => {
+        entered();
+        await released;
+        return inner.embed(...args);
+      },
+    };
+    await markRefresh(ctx.db, [ref]);
+    const deadline = () => ({ deadline: Date.now() + 30_000 });
+    const first = embeddingRefreshDrain(port).page(ctx.db, deadline());
+    await inFlight;
+
+    await markRefresh(ctx.db, [ref]);
+    const [remarked] = await embeddingWorkFor(ctx.db, [ref.entityId]);
+    expect(remarked?.readyAt?.getTime()).toBeLessThanOrEqual(Date.now());
+    const sibling = await embeddingRefreshDrain(port).page(ctx.db, deadline());
+    expect(sibling.more).toBe(false);
+    // The sibling waits for the lease rather than the due time.
+    expect(sibling.nextAt?.getTime()).toBeGreaterThan(Date.now() + 60_000);
+
+    release();
+    const settled = await first;
+    expect(calls).toHaveLength(1);
+    // The latest intent is still owed and is claimable straight away.
+    expect(settled.nextAt?.getTime()).toBeLessThanOrEqual(Date.now());
+    const [submitted] = await selectArtifacts(ctx.db, ref.entityId);
+    expect(submitted).toMatchObject({ artifactState: "submitted" });
+    expect(remote.upserted).toHaveLength(1);
+
+    await embeddingRefreshDrain(port).page(ctx.db, deadline());
+    await advanceRefresh(ctx.db, port);
+    expect(calls).toHaveLength(1);
+    expect(remote.upserted).toHaveLength(1);
+    expect(await embeddingWorkFor(ctx.db, [ref.entityId])).toEqual([]);
+    expect(await selectArtifacts(ctx.db, ref.entityId)).toMatchObject([
+      { id: submitted?.id, artifactState: "selected" },
+    ]);
+  });
 
   it("postpones Vectorize visibility polling without spending a work attempt", async () => {
     const subject = await createProductFixture(
@@ -184,23 +206,17 @@ describe("embedding refresh and cleanup drains", () => {
     await markRefresh(ctx.db, [ref]);
 
     await advanceRefresh(ctx.db, port);
-    const [first] = await workItemStates(ctx.db, EMBEDDING_REFRESH_TARGET, [
-      ref.entityId,
-    ]);
+    const [first] = await embeddingWorkFor(ctx.db, [ref.entityId]);
     expect(first).toMatchObject({ attempts: 0 });
-    expect(first?.readyAt.getTime()).toBeGreaterThan(Date.now());
+    expect(first?.readyAt?.getTime()).toBeGreaterThan(Date.now());
 
     await advanceRefresh(ctx.db, port);
-    const [second] = await workItemStates(ctx.db, EMBEDDING_REFRESH_TARGET, [
-      ref.entityId,
-    ]);
+    const [second] = await embeddingWorkFor(ctx.db, [ref.entityId]);
     expect(second).toMatchObject({ attempts: 0 });
 
     remote.setVisible(true);
     await advanceRefresh(ctx.db, port);
-    expect(
-      await workItemsFor(ctx.db, EMBEDDING_REFRESH_TARGET, [ref.entityId]),
-    ).toEqual([]);
+    expect(await embeddingWorkFor(ctx.db, [ref.entityId])).toEqual([]);
     expect(
       await getDb(ctx.db)
         .select({ id: entityEmbedding.id })
@@ -294,7 +310,10 @@ describe("embedding refresh and cleanup drains", () => {
     await advanceRefresh(ctx.db, port);
     await advanceRefresh(ctx.db, port);
     expect(
-      await readWorkItems(ctx.db, { target: EMBEDDING_REFRESH_TARGET }),
+      await embeddingWorkFor(
+        ctx.db,
+        refs.map((ref) => ref.entityId),
+      ),
     ).toEqual([]);
     expect(
       await getDb(ctx.db)
@@ -355,15 +374,12 @@ describe("embedding refresh and cleanup drains", () => {
           ) <= 300_000,
       ),
     ).toBe(true);
-    const longItem = await workItemStates(ctx.db, EMBEDDING_REFRESH_TARGET, [
-      long.entityId,
-    ]);
+    const longItem = await embeddingWorkFor(ctx.db, [long.entityId]);
     expect(longItem).toHaveLength(1);
     expect(longItem[0]?.attempts).toBe(1);
     expect(
-      await workItemsFor(
+      await embeddingWorkFor(
         ctx.db,
-        EMBEDDING_REFRESH_TARGET,
         refs.slice(0, -1).map((ref) => ref.entityId),
       ),
     ).toHaveLength(39);
@@ -418,14 +434,13 @@ describe("embedding refresh and cleanup drains", () => {
     if (!replacement) throw new Error("Missing replacement artifact");
     expect(replacement.id).not.toBe(first.id);
 
-    await queueEmbeddingCleanupPage(ctx.db);
     await advanceCleanup(ctx.db, remote.store);
     expect(remote.deleted.flat()).toContain(first.id);
     expect(remote.vectors.has(first.id)).toBe(false);
     expect(remote.vectors.has(replacement.id)).toBe(true);
   });
 
-  it("backs off Vectorize 429 cleanup failures on the cleanup WorkItem", async () => {
+  it("backs off Vectorize 429 cleanup failures on the retired artifact", async () => {
     const subject = await createProductFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic cleanup rate limit" }),
@@ -445,18 +460,20 @@ describe("embedding refresh and cleanup drains", () => {
       .update(entityEmbedding)
       .set({ artifactState: "retired", deletedAt: new Date() })
       .where(eq(entityEmbedding.id, staged.id));
-    await queueEmbeddingCleanupPage(ctx.db);
     remote.setDeleteFailure(
       new JobRetryableError("Vectorize 429 Too Many Requests"),
     );
     const before = Date.now();
 
     await advanceCleanup(ctx.db, remote.store);
-    const [work] = await workItemStates(ctx.db, EMBEDDING_CLEANUP_TARGET, [
-      staged.id,
-    ]);
-    expect(work?.attempts).toBe(1);
-    expect(work?.lastError).toContain("429");
-    expect(work?.readyAt.getTime()).toBeGreaterThan(before);
+    const [work] = await getDb(ctx.db)
+      .select({
+        deletionId: entityEmbedding.deletionId,
+        retryAt: entityEmbedding.deletionRetryAt,
+      })
+      .from(entityEmbedding)
+      .where(eq(entityEmbedding.id, staged.id));
+    expect(work?.deletionId).toBeNull();
+    expect(work?.retryAt?.getTime()).toBeGreaterThan(before);
   });
 });
