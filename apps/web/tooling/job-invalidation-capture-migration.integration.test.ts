@@ -69,7 +69,7 @@ it("keeps the pending start of markers already ahead of their Job at the cutover
 it("retires late catalog wrappers per table and keeps the no-op if another function still references it", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
-    await migrateDatabase(db, { through: "0095_noop_derived_marker" });
+    await migrateDatabase(db, { through: "0098_source_occurrence_ownership" });
     await client.query(`
       CREATE TABLE "SyntheticLateEvidence" (value text);
       CREATE TABLE "SyntheticEmptyEvidence" (value text);
@@ -100,7 +100,7 @@ it("retires late catalog wrappers per table and keeps the no-op if another funct
       ).rows;
     const before = await preserved();
     await expect(
-      migrateDatabase(db, { through: "0096_retire_derived_source_triggers" }),
+      migrateDatabase(db, { through: "0099_retire_derived_markers" }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",
@@ -123,7 +123,7 @@ it("retires late catalog wrappers per table and keeps the no-op if another funct
     );
     // Replay after committed table drops, with the shared no-op still present.
     await migrateDatabase(db, {
-      through: "0096_retire_derived_source_triggers",
+      through: "0099_retire_derived_markers",
     });
     expect(await preserved()).toEqual(before);
     expect(

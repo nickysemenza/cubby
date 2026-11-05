@@ -269,10 +269,10 @@ counter and are not deleted by either DDL migration.
 
 In one retirement PR and deployment, first replace the shared
 `derived_mark(text, uuid[], text)` function with a no-op preserving its signature
-and default. The following migration discovers wrapper triggers through `pg_trigger`,
+and default. The same migration then discovers wrapper triggers through `pg_trigger`,
 `pg_proc` and `pg_depend`, then retires them table by table and
 finally removes the shared marker. There is no intervening deployment or timed
-wait. Both migrations use transaction-per-statement and a 2-second lock timeout;
+wait. The migration uses transaction-per-statement and a 2-second lock timeout;
 the trigger migration refuses a marker that still writes retained work. Each
 existing repeat-batch transaction locks just one source table and verifies the
 removed trigger count against that transaction's live catalog count. Discovery

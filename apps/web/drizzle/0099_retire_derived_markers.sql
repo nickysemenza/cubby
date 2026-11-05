@@ -1,5 +1,16 @@
 -- cubby:transaction-per-statement
--- Reader/writer removal must already be deployed; the preceding migration installs a no-op.
+-- Apply only after the reader/writer removal Worker is deployed and verified.
+-- One deployment: install a no-op, retire live catalog triggers, then drop functions.
+SET lock_timeout = '2s';--> statement-breakpoint
+CREATE OR REPLACE FUNCTION derived_mark(p_target text, p_refs uuid[], p_reason text DEFAULT 'Refresh requested') RETURNS void
+LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN;
+END $$;--> statement-breakpoint
+RESET lock_timeout;
+
+--> statement-breakpoint
+-- Reader/writer removal must already be deployed; the preceding statement installs a no-op.
 -- Discover from the live catalog, never from a frozen source-table census.
 CREATE OR REPLACE FUNCTION public.cubby_retire_marker_table() RETURNS boolean
 LANGUAGE plpgsql AS $$
