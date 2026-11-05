@@ -20,7 +20,6 @@ import {
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
-import { cookbookContract } from "~/contracts/cookbook.contract";
 import { ENTITY_PREVIEW_RESOURCE } from "~/contracts/entity-preview";
 import { expenseContract } from "~/contracts/expense.contract";
 import { imageUploadContract } from "~/contracts/image-upload.contract";
@@ -103,9 +102,9 @@ export const MCP_TOOL_DESCRIPTIONS = {
     description:
       "Files and images on declared image-bearing records. Galleries append; role cover replaces a Cookbook cover and role logo replaces a Vendor logo after image validation succeeds.",
   },
-  imports_read: {
+  imports: {
     description:
-      "Read Vendor coverage and fetch a representative logo from a Vendor's public website after reviewing the resolved site.",
+      "Fetch a representative logo from a Vendor's public website after reviewing the resolved site.",
   },
   inventory: {
     description:
@@ -179,10 +178,6 @@ export const MCP_ACTION_OVERRIDES = {
       output: mcpItemsEnvelope(assessmentContract.ops.reviewBatch.output),
     },
   ),
-  "cookbook.list": mcpActionOverride(cookbookContract.ops.list, {
-    project: (items) => ({ items }),
-    output: mcpItemsEnvelope(cookbookContract.ops.list.output),
-  }),
   "expense.analytics": mcpActionOverride(expenseContract.ops.analytics, {
     strict: true,
   }),

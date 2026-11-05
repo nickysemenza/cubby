@@ -3,13 +3,11 @@ import {
   fetchVendorLogoInput,
   mergeVendorsInput,
   mergeVendorsOut,
-  vendorCoverageInput,
-  vendorCoverageOut,
   setVendorSenderInput,
   setVendorSenderOut,
 } from "@cubby/schemas/vendor";
 
-import { defineContract, mutation, query } from "~/contracts/define";
+import { defineContract, mutation } from "~/contracts/define";
 
 export const vendorContract = defineContract(
   "vendor",
@@ -43,13 +41,6 @@ export const vendorContract = defineContract(
       output: vendorOut,
       invalidates: ["vendorLogo"],
     }),
-    /** Identity, latest purchase date, and order ids in a window (MCP `imports_read`). */
-    coverage: query({
-      description:
-        "Vendor identity, its latest live purchase date overall, and sorted unique non-null order IDs from an inclusive date range.",
-      input: vendorCoverageInput,
-      output: vendorCoverageOut,
-    }),
   },
-  { exposure: "capability", mcpToolGroup: "imports_read" },
+  { exposure: "capability", mcpToolGroup: "imports" },
 );

@@ -17,13 +17,11 @@ import { getDb } from "~/server/db/helpers";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { setInventoryOwnership } from "~/server/domains/inventory/repo/ownership-mutations";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
-import { vendorHandlers } from "~/server/domains/vendor/operations.server";
 import { executeEntity } from "~/server/entity-kernel";
 import { listOperations } from "~/server/entity-kernel/list-operations";
 import { selectedFieldEnvelopeSchema } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { systemPrincipal } from "~/server/http/authenticate";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createLocationFixture,
@@ -136,32 +134,6 @@ describe("complete list composition", () => {
     expect(response.mergeSummary).toMatchObject({
       deletedIds: [parseShortcodeFor("vendor", donor.shortcode)],
     });
-  });
-
-  it("publishes a successful empty coverage date through the Vendor envelope", async () => {
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic empty coverage",
-    });
-    const response = await vendorHandlers.operations.coverage({
-      data: {
-        vendorId: parseShortcodeFor("vendor", vendor.shortcode),
-        from: "2026-01-01",
-        to: "2026-12-31",
-      },
-      request: {
-        principal: systemPrincipal(buildKernelContext(ctx.db)),
-        headers: new Headers(),
-        signal: new AbortController().signal,
-      },
-    });
-    expect(response).toMatchObject({ ok: true });
-    if (!response.ok) return;
-    expect(response.data.fields.latestPurchaseDate.result).toMatchObject({
-      kind: "live",
-      decision: { outcome: { kind: "empty", reason: "unset" } },
-    });
-    expect(response.data).not.toHaveProperty("latestPurchaseDate");
-    expect(response.data.orderIds).toEqual([]);
   });
 
   it("counts every declared saved view as its applied list reads it", async () => {
