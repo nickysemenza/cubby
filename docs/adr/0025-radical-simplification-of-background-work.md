@@ -1,0 +1,102 @@
+# ADR 0025: Shrink Cubby's machinery in place on Workers and Neon
+
+Status: Accepted by the owner 2026-11-04. Supersedes
+[ADR 0015](0015-unified-durable-work-coordination.md) and
+[ADR 0021](0021-derived-values.md), and amends
+[ADR 0016](0016-shared-assessments-and-feedback.md) and
+[ADR 0017](0017-subscription-funded-model-fallback.md). Each superseded mechanism
+stays in force until the change that removes it ships.
+
+## Context
+
+In the week ending 2026-11-04, 152 PRs merged (+133k/-58k lines). By a title and
+path classification, 79 patched or extended background machinery and 27 changed
+something a member would notice. Production showed about 310,000 pending derived
+refresh tickets, 60,195 Jobs (85 unfinished) and every open browser tab refetching
+about every five seconds. Coordination, derived and AI-opinion tables made up 42
+of 121 tables and 542 of 1,565 columns.
+
+Two designers wrote blank-page replacements independently, then attacked each
+other's designs against code-level findings. Both then rejected their own
+platform. A whole-household SQLite Durable Object cannot cancel or time-bound a
+query, keeps the 128 MB isolate limit, and would rewrite tested Postgres money
+code. Moving to Render costs about $210 a month at the sizes proposed and strands
+existing bindings. Both blank-page schemas lost distinctions that the code showed
+were real: Run replay receipts, decisions held only in `AssessmentState`, money
+evidence and photo-group decisions.
+
+## Decision
+
+1. **Neon Postgres is the single source of truth for household data.** Durable
+   Object SQLite holds only data that can be rebuilt from Neon or fetched again,
+   such as USDA releases. It holds no member facts, money, evidence or decisions,
+   and no agent-supplied SQL runs against it.
+2. **Workers only. Add no paid infrastructure.** No containers or Node processes.
+   The scheduler Durable Object goes. Background domain work is woken by the
+   Cloudflare Queue and by an hourly cron, which is the timer and the backstop.
+   Durable Objects that own their own feature, such as calendar and the mail
+   agent, keep their alarms.
+3. **Background work has three forms.** A drain is a registered function over the
+   rows a domain already owes, and it has no Job row. A Task is one table holding
+   one-off and resumable work, deleted on success. A Run is only a member- or
+   agent-started session worth reviewing; automatic purposes stop creating Runs.
+   Automatic Runs retire only after their NOT NULL AI usage references and
+   background budget check have another owner. Image processing is owned by
+   `ImageProcessingJob`, with the device wire unchanged.
+4. **Derived values are views, typed snapshots and one scheduled bulk pass.** No
+   per-value tickets, fan-out expansion, publication generations, stages or
+   coverage. Background totals and search may lag by up to one hour. A member's
+   own edit shows at once, and money and identity commands validate current data
+   when they act.
+5. **Review is one Suggestion table.** Evaluators are idempotent functions, and
+   domain handlers revalidate when a suggestion is applied. Quality and Impact
+   scores become plain lists of what is missing. Explicit member decisions,
+   including those held only in `AssessmentState`, move to explicit owners before
+   the old storage retires.
+6. **Money has a canonical source occurrence.** Immutable observations belong to a
+   proven occurrence, which owns its judgment, account resolution and explicit
+   link to the accepted FinancialTransaction. External references become evidence
+   aliases. Identity needs proof, and ambiguous history stays unresolved with its
+   money unchanged. This may add tables; the goal is fewer authoritative facts and
+   write paths, not fewer tables.
+7. **Member-visible features stay.** Removals cover machinery and developer tools
+   only. The in-app mail agent stays. The native app keeps its features and wire;
+   only unused generated Swift goes.
+8. **AI funding stays as ordered pools.** The ChatGPT plan and provider subscriber
+   credits come first, then paid API. The accounting around them may be simplified.
+9. **Delivery shrinks the live system in place, with direct cutovers.** Relief ships
+   first. There is no second application. A reshape of authoritative data is one
+   breaking migration with its matching deploy, with no rehearsal, staged rollout
+   or dual writers. The migration verifies preservation row by row and aborts the
+   deployment on a mismatch.
+10. **Proven machinery tables may be dropped without an archive.** A table qualifies
+    only when a hand trace shows it holds no member facts, money, evidence,
+    decisions or unfinished paid or member-requested work, its readers and writers
+    are already gone from a deployed Worker, and a named Neon snapshot is taken
+    first, because production's history window is only 6 hours. Recovery exports
+    from a separate restored branch and never overwrites production. Authoritative
+    tables replaced by a reshape,
+    and the Assessment and Feedback ledgers, are retained under an archive name
+    until the owner decides otherwise.
+11. **Entity features are composable capabilities declared in the manifest.** Each
+    capability has one owner and brings its own fields, list columns, detail slot,
+    filters, MCP output and native presentation, so adopting it means declaring it
+    on the entity. This extends the existing declarations rather than replacing
+    their shape, and whatever replaces the removed engines is declared this way.
+
+## Consequences
+
+Members lose assessment coverage indicators, weighted scores, replayable AI opinion
+history and automatic propagation of historical corrections. They gain a quiet
+idle system and an Activity page that says only what needs them or what is stuck.
+
+Workers limits remain a real constraint. Statement and mail work already press
+against memory and CPU, and the quality pass alone is estimated at 105 to 540 CPU
+seconds, so it must run across several invocations. All compute stays on Workers:
+containers and separate Node processes are ruled out. Work that presses these
+limits is split across invocations with committed cursors, or pushed down into
+set-based SQL.
+
+Keeping every member feature, the native app and the mail agent limits the
+reduction. The estimate is about 90 tables and 10 to 17 percent less production
+code, plus large cuts to tests and docs. Going further means cutting product.
