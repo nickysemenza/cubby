@@ -109,7 +109,7 @@ export const workItem = pgTable(
     // These families moved to their owners' rows: a late write must fail, not strand.
     check(
       "WorkItem_retired_target_check",
-      sql`${t.target} NOT IN ('embedding.refresh', 'embedding.cleanup')`,
+      sql`${t.target} NOT IN ('embedding.refresh', 'embedding.cleanup', 'ai.evaluation')`,
     ),
     primaryKey({ columns: [t.target, t.ref] }),
     index("WorkItem_ready_idx").on(t.drain, t.priority, t.readyAt),

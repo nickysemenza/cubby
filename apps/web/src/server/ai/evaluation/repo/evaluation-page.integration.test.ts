@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
+  completeAiEvaluation,
   publishAiEvaluation,
   settleAiEvaluations,
 } from "~/server/ai/evaluation/repo/ai-evaluation";
@@ -18,10 +19,14 @@ import {
 } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import { markAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import { prepareEvaluationEvidence } from "~/server/ai/evaluation/repo/evaluation-page";
-import { aiEvaluationJobHandler } from "~/server/ai/evaluation/service/ai-evaluation-drain";
+import {
+  runAiEvaluationPage,
+  type AiEvaluationExecution,
+} from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import {
   aiEvaluationItem,
   drainAiEvaluations,
+  updateAiEvaluationWork,
   withClaimedAiEvaluation,
 } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
@@ -35,13 +40,8 @@ import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";
 import { readAiRefreshWorkSummary } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
-import {
-  updateJobs,
-  updateWorkItems,
-} from "~/server/generic/jobs/jobs.fixtures";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 
 // Real pooled transactions exercise drain items, slot uniqueness and publication authority.
 describe("AI evaluation drain publication", () => {
@@ -95,25 +95,24 @@ describe("AI evaluation drain publication", () => {
     const seeded = await seed(12);
     for (const row of seeded.rows)
       expect(await aiEvaluationItem(ctx.db, row.id)).toMatchObject({
-        drain: "ai-evaluation:product-identity",
+        feature: "product-identity",
         attempts: 0,
       });
     // Mixed urgency and prior attempts must survive admission without reticketing.
     for (const [index, row] of seeded.rows.entries())
-      await updateWorkItems(
-        ctx.db,
-        { refs: [row.id] },
-        {
+      await getDb(ctx.db)
+        .update(aiEvaluation)
+        .set({
           priority: index < 4 ? 0 : 2,
           attempts: 2,
-          readyAt: new Date(index * 1000),
-        },
-      );
+          runAt: new Date(index * 1000),
+        })
+        .where(eq(aiEvaluation.id, row.id));
     const workRows = async (ids: readonly string[]) =>
       (
         await getDb(ctx.db)
-          .execute(sql`SELECT to_jsonb(w) AS value FROM "WorkItem" w
-        WHERE target='ai.evaluation' AND ref=ANY(${uuidArrayParam(ids)}) ORDER BY ref`)
+          .execute(sql`SELECT jsonb_build_object('ref', w.id, 'priority', w.priority, 'attempts', w.attempts, 'runAt', w."runAt") AS value FROM "AiEvaluation" w
+        WHERE w."runAt" IS NOT NULL AND w.id=ANY(${uuidArrayParam(ids)}) ORDER BY w.id`)
       ).rows;
     const original = await workRows(seeded.rows.map((row) => row.id));
     let before = original;
@@ -121,7 +120,7 @@ describe("AI evaluation drain publication", () => {
     const payload = "x".repeat(2 * 1024 * 1024);
     const oversized = "y".repeat(4 * 1024 * 1024);
     let overflow: string[] = [];
-    const handler = aiEvaluationJobHandler({
+    const execution: AiEvaluationExecution = {
       ...runAiEvaluationExecution(),
       async preparePage(db, targets) {
         const admission = await prepareEvaluationEvidence(db, targets, {
@@ -169,13 +168,11 @@ describe("AI evaluation drain publication", () => {
             })),
         };
       },
-    });
-    const execution = await readJob(ctx.db, {
-      key: "ai-evaluation:product-identity",
-    });
-    if (!execution) throw new Error("Synthetic evaluation drain missing");
-    const handlers = { "ai.evaluation": handler };
-    expect(await advanceJob(ctx.db, execution.id, handlers)).toBe("succeeded");
+    };
+    const advance = async () =>
+      (await runAiEvaluationPage(ctx.db, execution, "product-identity"))
+        .outcome;
+    expect(await advance()).toBe("succeeded");
     expect(captured.length).toBeLessThan(seeded.rows.length);
     expect(captured).not.toContain(seeded.rows.at(-1)!.id);
     // Unadmitted and unobserved items alike keep their tickets and attempts.
@@ -197,9 +194,7 @@ describe("AI evaluation drain publication", () => {
       page < seeded.rows.length && (await workRows(owed)).length;
       page++
     )
-      expect(await advanceJob(ctx.db, execution.id, handlers)).toBe(
-        "succeeded",
-      );
+      expect(await advance()).toBe("succeeded");
     expect(await workRows(seeded.rows.map((row) => row.id))).toEqual([]);
     const settled = await getDb(ctx.db).select().from(aiEvaluation);
     expect(settled.filter((row) => row.state === "completed")).toHaveLength(10);
@@ -245,20 +240,18 @@ describe("AI evaluation drain publication", () => {
     expect(coordinator!.availableAt.getTime()).toBeLessThan(Date.now() + 1000);
   });
 
-  it("refuses publication once the drain lease is lost", async () => {
+  it("refuses publication once the page's lease is lost", async () => {
     const seeded = await seed(1);
     const id = seeded.rows[0]!.id;
-    const drain = (await aiEvaluationItem(ctx.db, id))!.drain;
     const refused = await withClaimedAiEvaluation(
       ctx.db,
       id,
       async (claimed) => {
-        // Another worker reclaimed the drain after this lease expired.
-        await updateJobs(
-          ctx.db,
-          { key: drain },
-          { leaseToken: sql`gen_random_uuid()` },
-        );
+        // Another worker reclaimed the row after this lease expired.
+        await getDb(ctx.db)
+          .update(aiEvaluation)
+          .set({ leaseToken: crypto.randomUUID() })
+          .where(eq(aiEvaluation.id, id));
         return publishAiEvaluation(
           ctx.db,
           id,
@@ -330,6 +323,74 @@ describe("AI evaluation drain publication", () => {
     expect(summary.failureText).toBe("Synthetic evaluation failure");
   });
 
+  // A page may hold a provider call for minutes, and a mark can arrive at any moment.
+  describe.each([
+    {
+      name: "new input",
+      revive: false,
+      calls: 2,
+      priority: 1,
+    },
+    {
+      name: "more urgent demand for the same input",
+      revive: true,
+      calls: 1,
+      priority: 2,
+    },
+  ])(
+    "a mark for $name during a paid attempt",
+    ({ revive, calls, priority }) => {
+      it("lets no sibling page pay, and settles the latest intent", async () => {
+        const feature = "synthetic-overlap-feature";
+        const { rows } = await seed(1, feature);
+        const id = rows[0]!.id;
+        await updateAiEvaluationWork(ctx.db, [id], {
+          priority,
+          runAt: new Date(0),
+        });
+        const paid: string[] = [];
+        let release = () => {};
+        const released = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        let entered = () => {};
+        const inFlight = new Promise<void>((resolve) => {
+          entered = resolve;
+        });
+        const execution: AiEvaluationExecution = {
+          ...runAiEvaluationExecution(),
+          async execute(db, claimed) {
+            paid.push(claimed.attemptToken);
+            entered();
+            await released;
+            await withTransactionDatabase(db, (tx) =>
+              completeAiEvaluation(tx, claimed.id, claimed.attemptToken, {
+                synthetic: true,
+              }),
+            );
+          },
+        };
+        const first = runAiEvaluationPage(ctx.db, execution, feature);
+        await inFlight;
+
+        await markAiEvaluationWork(ctx.db, [id], { revive });
+        await runAiEvaluationPage(ctx.db, execution, feature);
+        expect(paid).toHaveLength(1);
+
+        release();
+        await first;
+        await runAiEvaluationPage(ctx.db, execution, feature);
+        expect(paid).toHaveLength(calls);
+        expect(await aiEvaluationItem(ctx.db, id)).toBeUndefined();
+        const [settled] = await getDb(ctx.db)
+          .select({ state: aiEvaluation.state, lease: aiEvaluation.leaseToken })
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, id));
+        expect(settled).toEqual({ state: "completed", lease: null });
+      });
+    },
+  );
+
   it("keeps parked evaluation work when its Run resumes before publication", async () => {
     const feature = "synthetic-resume-feature";
     const seeded = await seed(1, feature);
@@ -338,40 +399,33 @@ describe("AI evaluation drain publication", () => {
       .update(run)
       .set({ status: "paused", trigger: "manual" })
       .where(eq(run.id, seeded.runId));
-    await updateWorkItems(
-      ctx.db,
-      { refs: [evaluation.id] },
-      { priority: 0, readyAt: sql`now()` },
-    );
-    const execution = await enqueueJob(ctx.db, {
-      key: `ai-evaluation:${feature}`,
-      kind: "ai.evaluation",
-      input: {},
+    await updateAiEvaluationWork(ctx.db, [evaluation.id], {
+      priority: 0,
+      runAt: new Date(0),
     });
-    const handler = aiEvaluationJobHandler(runAiEvaluationExecution());
     let resumed = false;
-    const outcome = await advanceJob(ctx.db, execution.id, {
-      "ai.evaluation": {
-        prepare: (db, claim, context) =>
-          handler.prepare(db, claim, {
-            ...context,
-            async fenced(work, options) {
-              await withTransactionDatabase(db, async (tx) => {
-                await getDb(tx)
-                  .update(run)
-                  .set({ status: "running" })
-                  .where(eq(run.id, seeded.runId));
-                await markAiEvaluationWork(tx, [evaluation.id], {
-                  revive: true,
-                });
-              });
-              resumed = true;
-              return context.fenced(work, options);
-            },
-          }),
-      },
-    });
-    expect(outcome).toBe("succeeded");
+    const { outcome } = await runAiEvaluationPage(
+      ctx.db,
+      runAiEvaluationExecution(),
+      feature,
+      (context) => ({
+        ...context,
+        async fenced(work, options) {
+          await withTransactionDatabase(ctx.db, async (tx) => {
+            await getDb(tx)
+              .update(run)
+              .set({ status: "running" })
+              .where(eq(run.id, seeded.runId));
+            await markAiEvaluationWork(tx, [evaluation.id], {
+              revive: true,
+            });
+          });
+          resumed = true;
+          return context.fenced(work, options);
+        },
+      }),
+    );
+    expect(outcome).not.toBe("failed");
     expect(resumed).toBe(true);
     expect(await aiEvaluationItem(ctx.db, evaluation.id)).toBeDefined();
   });

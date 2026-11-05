@@ -9,7 +9,7 @@ import { jobWaitReason, type JOB_KIND_POLICY } from "@cubby/schemas/job";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
-import { aiEvaluationJobHandler } from "~/server/ai/evaluation/service/ai-evaluation-drain";
+import { aiEvaluationDrain } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import { getPurchaseDispatchHostEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
@@ -80,7 +80,6 @@ export const productionJobHandlers: JobHandlers = {
   "derived.reconcile": derivedReconcileHandler,
   "discovery.connections": connectionDiscoveryJobHandler,
   "run.execute": runJobHandler,
-  "ai.evaluation": aiEvaluationJobHandler(runAiEvaluationExecution()),
   "ai-refresh.activate": aiRefreshActivationHandler,
   "jobs.maintenance": jobMaintenanceHandler,
   "purchase.dispatch": defineJobHandler(
@@ -139,6 +138,7 @@ const productionDrains = (): readonly BackgroundDrain[] => [
   cloudImageDrain,
   embeddingRefreshDrain(),
   embeddingCleanupDrain(),
+  aiEvaluationDrain(runAiEvaluationExecution()),
 ];
 
 export async function drainProductionJobs(

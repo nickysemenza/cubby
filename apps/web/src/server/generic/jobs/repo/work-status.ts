@@ -1,3 +1,4 @@
+import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { imageProcessingJobState } from "@cubby/schemas/image-processing";
 import {
   JOB_NEEDS_ATTENTION_ATTEMPTS,
@@ -506,6 +507,80 @@ async function readEmbeddingWork(
 }
 
 /**
+ * Evaluations the AI drain owes. A funding or provider wait pushes their due time
+ * ahead, so it reads as waiting rather than stopped; a parked evaluation owes nothing.
+ */
+async function readAiEvaluationWork(
+  db: Database,
+  now: Date,
+): Promise<StatusFacts> {
+  const at = stamp(now);
+  const { rows } = await getDb(db).execute<{
+    dueSince: string | null;
+    lastFinishedAt: string | null;
+    failedAt: string | null;
+    failedError: string | null;
+    failedAttempts: number | null;
+  }>(sql`
+    WITH failing AS (
+      SELECT "updatedAt", error, attempts FROM "AiEvaluation"
+      WHERE "runAt" IS NOT NULL AND attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
+      ORDER BY "updatedAt" DESC LIMIT 1
+    )
+    SELECT
+      (SELECT min("runAt") FROM "AiEvaluation" WHERE "runAt" <= ${at}) AS "dueSince",
+      (SELECT "updatedAt" FROM "AiEvaluation"
+        WHERE state NOT IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.result_ready})
+        ORDER BY "updatedAt" DESC LIMIT 1) AS "lastFinishedAt",
+      (SELECT "updatedAt" FROM failing) AS "failedAt",
+      (SELECT error FROM failing) AS "failedError",
+      (SELECT attempts FROM failing) AS "failedAttempts"`);
+  const row = rows[0];
+  const dueSince = utc(row?.dueSince ?? null);
+  const lastFinishedAt = utc(row?.lastFinishedAt ?? null);
+  const facts: StatusFacts = { stuck: [], behind: false, lastFinishedAt };
+  const action: WorkStuckItem["action"] = { type: "none" };
+  const consequence = "Suggestions won't update until this works.";
+  if (dueSince && dueSince <= minutesAgo(now, STUCK_WINDOW_MINUTES)) {
+    if (
+      !lastFinishedAt ||
+      lastFinishedAt <= minutesAgo(now, STUCK_WINDOW_MINUTES)
+    ) {
+      const item = stoppedItem(
+        "ai.evaluation",
+        lastFinishedAt ?? dueSince,
+        now,
+        row?.failedError ?? null,
+      );
+      facts.stuck.push({
+        ...item,
+        title: "AI evaluations stopped",
+        body: `${item.body} ${consequence}`,
+        action,
+      });
+    } else facts.behind = true;
+  } else if (dueSince && dueSince <= minutesAgo(now, BEHIND_MINUTES))
+    facts.behind = true;
+  const failedAt = utc(row?.failedAt ?? null);
+  if (failedAt) {
+    const item = failingItem(
+      "ai.evaluation",
+      failedAt,
+      row?.failedAttempts ?? 1,
+      row?.failedError ?? null,
+      false,
+    );
+    facts.stuck.push({
+      ...item,
+      title: "AI evaluations keep failing",
+      body: `${item.body} ${consequence}`,
+      action,
+    });
+  }
+  return facts;
+}
+
+/**
  * Runs a member started or reviews that stopped. Stalled Runs are listed one by
  * one. Failures collapse to each purpose's latest and clear when a later Run of
  * that purpose completes. A member's own failed Run shows at once; a scheduled
@@ -619,10 +694,11 @@ async function readStoppedRuns(db: Database, now: Date) {
 
 export async function readBackgroundWorkStatus(db: Database, now = new Date()) {
   const drains = await readDrains(db, now);
-  const [kinds, images, embeddings, runs] = await Promise.all([
+  const [kinds, images, embeddings, evaluations, runs] = await Promise.all([
     readJobKinds(db, now, drains.kinds),
     readImageWork(db, now),
     readEmbeddingWork(db, now),
+    readAiEvaluationWork(db, now),
     readStoppedRuns(db, now),
   ]);
   // A kind that stopped says so once, whichever row noticed first.
@@ -632,6 +708,7 @@ export async function readBackgroundWorkStatus(db: Database, now = new Date()) {
     ...kinds.stuck,
     ...images.stuck,
     ...embeddings.stuck,
+    ...evaluations.stuck,
   ].filter((item) => {
     const kind = item.key.replace(/:failing$/, "");
     if (seen.has(kind)) return false;
@@ -640,12 +717,18 @@ export async function readBackgroundWorkStatus(db: Database, now = new Date()) {
   });
   return {
     stuck: [...stuck, ...runs],
-    behind: drains.behind || kinds.behind || images.behind || embeddings.behind,
+    behind:
+      drains.behind ||
+      kinds.behind ||
+      images.behind ||
+      embeddings.behind ||
+      evaluations.behind,
     lastFinishedAt: latest(
       drains.lastFinishedAt,
       kinds.lastFinishedAt,
       images.lastFinishedAt,
       embeddings.lastFinishedAt,
+      evaluations.lastFinishedAt,
     ),
     deviceDueSince: images.deviceDueSince,
   };

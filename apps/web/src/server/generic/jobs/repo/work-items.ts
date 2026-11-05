@@ -15,7 +15,6 @@ import {
 } from "~/server/db/repository-access.boundary";
 import { job, workItem } from "~/server/db/retained-tables";
 
-import type { JobBackoff } from "../kind-policy";
 import { wakeJob } from "./producer";
 
 export type WorkItem = {
@@ -330,30 +329,6 @@ export async function lockWork(
   return items.filter(({ target, ref }) => held.has(`${target}\0${ref}`));
 }
 
-/**
- * Explain and hold items that upstream work still owes. Same ticket, attempts,
- * `reason` and `lastError`; a new ticket clears the wait. The delay follows the
- * kind's ordinary backoff bounds and doubles with the wait's age, because a wait
- * spends no attempts to count.
- */
-export async function waitForWork(
-  tx: RepositoryQueryInput,
-  items: readonly WorkItem[],
-  cause: WorkWaitCause,
-  backoff: JobBackoff,
-) {
-  if (!items.length) return;
-  await repositoryQueries(tx)
-    .update(workItem)
-    .set({
-      waitCause: cause,
-      waitStartedAt: sql`coalesce(${workItem.waitStartedAt}, now())`,
-      readyAt: sql`now() + least(${backoff.maxMs}::double precision, greatest(${backoff.baseMs}::double precision,
-        extract(epoch FROM now() - coalesce(${workItem.waitStartedAt}, now())) * 1000)) * interval '1 millisecond'`,
-    })
-    .where(workTickets(items));
-}
-
 /** Hold a target's items until `until`, whatever their ticket; a page already holding one keeps it. */
 export async function postponeWorkRefs(
   tx: RepositoryQueryInput,
@@ -569,27 +544,3 @@ export async function drainNextWaitCauses(
     ),
   );
 }
-
-/** A target's owed item priority for `ref` (a correlated column), or null. */
-export const workPriority = (target: string, ref: SQL) =>
-  sql<
-    number | null
-  >`(SELECT ${workItem.priority} FROM ${workItem} WHERE ${workItem.target} = ${target} AND ${workItem.ref} = ${ref})`;
-
-/**
- * One item attempt is the drain lease plus the item's ticket: a re-mark
- * (changed input, new demand) or a lost lease makes it obsolete. Domains
- * persist the token on their own row to recognise their attempt's writes.
- */
-export const workAttemptToken = (
-  claim: { readonly leaseToken: string },
-  item: Pick<WorkItem, "ticket">,
-) => `${claim.leaseToken}/${item.ticket}`;
-
-/** Whether `token` still holds `target`/`ref` through its drain's live lease. */
-export const workAttemptLive = (target: string, ref: SQL, token: string) =>
-  sql`EXISTS (SELECT 1 FROM ${workItem} JOIN ${job} ON ${job.key} = ${workItem.drain}
-    WHERE ${workItem.target} = ${target} AND ${workItem.ref} = ${ref}
-      AND ${workItem.ticket} = split_part(${token}, '/', 2)::bigint
-      AND ${job.state} = ${jobState.enum.running} AND ${job.leaseToken} = split_part(${token}, '/', 1)::uuid
-      AND ${job.leaseExpiresAt} > now())`;

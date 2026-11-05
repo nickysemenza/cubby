@@ -141,11 +141,6 @@ describe("connection discovery pacing", () => {
       (item) => item.state,
     );
     expect(states).toEqual(["queued"]);
-    const cancelledJobs = await readJobs(ctx.db, {
-      kind: "ai.evaluation",
-      states: ["cancelled"],
-    }).then((rows) => rows.map(({ state }) => ({ state })));
-    expect(cancelledJobs).toHaveLength(0);
   });
 
   it.each([

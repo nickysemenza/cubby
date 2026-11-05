@@ -7,13 +7,12 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { jobPage, type JobPage, type JobWaitReason } from "@cubby/schemas/job";
 import { runStatus, VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
-import { and, eq, gt, inArray, not, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { outer, related } from "~/server/db/helpers/related";
 import {
   repositoryBeforeCommit,
   repositoryQueries,
@@ -86,36 +85,6 @@ const due = (now: Date) =>
 
 /** Whether a Job is claimable now: the one predicate the drain, claims and diagnostics share. */
 export const jobDue = (now: Date) => due(now);
-
-/** Run execution and work of any active Run bypass kind admission. */
-const jobCapExempt = () =>
-  sql<boolean>`(${job.kind} = 'run.execute' OR ${related(
-    run,
-    (r) =>
-      sql`${r.id} = ${outer(job.runId)} AND ${r.status} = ${runStatus.enum.running}`,
-  ).exists()})`;
-
-/** A kind's `maxInFlight` across Workers; never waits while holding the candidate. */
-async function admitJobKind(tx: Database, kind: string, now: Date) {
-  const cap = jobKindPolicy(kind).maxInFlight;
-  if (cap === undefined) return true;
-  const admission = await repositoryQueries(tx).execute<{ locked: boolean }>(
-    sql`SELECT pg_try_advisory_xact_lock(hashtextextended(${`job-kind:${kind}`}, 0)) AS locked`,
-  );
-  if (!admission.rows[0]?.locked) return false;
-  const [live] = await repositoryQueries(tx)
-    .select({ count: sql<number>`count(*)::int` })
-    .from(job)
-    .where(
-      and(
-        eq(job.kind, kind),
-        eq(job.state, "running"),
-        gt(job.leaseExpiresAt, now),
-        not(jobCapExempt()),
-      ),
-    );
-  return (live?.count ?? 0) < cap;
-}
 
 /**
  * One fair batch. Run-owned Jobs lead; then kinds take turns, least recently
@@ -205,15 +174,12 @@ export async function claimJob(
       .select({
         row: job,
         woken: unobservedJobInvalidation(),
-        capExempt: jobCapExempt(),
       })
       .from(job)
       .where(and(eq(job.id, recordId), due(now)))
       .for("update", { of: job, skipLocked: true });
     if (!candidate) return null;
     const { row } = candidate;
-    if (!candidate.capExempt && !(await admitJobKind(tx, row.kind, now)))
-      return null;
     // A woken finished Job starts a fresh pass.
     const fresh = candidate.woken && row.state === "completed";
     const attempts = fresh

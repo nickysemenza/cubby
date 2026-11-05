@@ -4,11 +4,13 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { enqueueAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
-import { aiEvaluationItem } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
+import {
+  aiEvaluationItem,
+  owedAiEvaluations,
+} from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { aiEvaluation } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -65,9 +67,7 @@ describe("Run AI work cancel", () => {
       .where(eq(aiEvaluation.runId, runId));
     expect(evaluations).toHaveLength(120);
     expect(evaluations.every((row) => row.state === "cancelled")).toBe(true);
-    expect(await readWorkItems(ctx.db, { target: "ai.evaluation" })).toEqual(
-      [],
-    );
+    expect(await owedAiEvaluations(ctx.db)).toBe(0);
   });
 
   it("keeps work another live requester still wants", async () => {
@@ -121,7 +121,7 @@ describe("Run AI work cancel", () => {
       .where(eq(aiEvaluation.id, evaluation.id));
     expect(row?.state).toBe("queued");
     expect(await aiEvaluationItem(ctx.db, evaluation.id)).toMatchObject({
-      drain: "ai-evaluation:mailbox-relevance",
+      feature: "mailbox-relevance",
     });
   });
 });

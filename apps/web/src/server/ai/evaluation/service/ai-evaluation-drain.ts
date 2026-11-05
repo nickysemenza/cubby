@@ -1,16 +1,17 @@
 import { aiEvaluationTarget } from "@cubby/schemas/ai-evaluation";
 import { workWaitCause } from "@cubby/schemas/job";
+import { z } from "zod";
 
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { findErrorCause, scrubErrorMessage } from "~/lib/error-diagnostics";
 /**
- * The `ai.evaluation` drain (docs/jobs.md#ai-evaluation-drains): one Job per feature pages
- * through evaluation items. Product and connection refresh evaluate a whole
- * page and publish it in fenced chunks; other features run each item's own
- * guarded transactions under the drain lease. Activation, pending state and
- * generation are checked here; requester Runs and feature execution arrive
- * through `AiEvaluationExecution`; `defineDrain` owns leases, attempts and
- * backoff.
+ * The AI evaluation drain (docs/jobs.md#ai-evaluation-drains): pages through the
+ * evaluations each feature owes, with no Job or `WorkItem` row. Product and
+ * connection refresh evaluate a whole page and publish it in fenced chunks; other
+ * features run each item's own guarded transactions under their lease. Activation,
+ * pending state and generation are checked here; requester Runs and feature
+ * execution arrive through `AiEvaluationExecution`; `defineDrain` owns publication,
+ * attempts and backoff.
  */
 import type { UnparsedError } from "~/lib/error-utils";
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
@@ -30,6 +31,16 @@ import {
   withAiEvaluationSavepoint,
 } from "~/server/ai/evaluation/repo/ai-evaluation";
 import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import {
+  aiEvaluationPageHeld,
+  aiEvaluationPageKey,
+  aiEvaluationStore,
+  deferAiEvaluationFeature,
+  dueAiEvaluationFeatures,
+  nextAiEvaluationDue,
+  releaseAiEvaluationPage,
+  waitAiEvaluations,
+} from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type {
   EvaluationPagePublication,
   EvaluationPageTarget,
@@ -41,18 +52,25 @@ import {
 } from "~/server/ai/policy/refresh-manifest";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { JobDeferredError, JobTargetError } from "~/server/generic/jobs/errors";
-import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import {
-  waitForWork,
-  type WorkItem,
-} from "~/server/generic/jobs/repo/work-items";
+  repositorySnapshotWriteDatabase,
+  repositoryTransactionDatabase,
+} from "~/server/db/repository-access.boundary";
+import type { BackgroundDrain } from "~/server/generic/background/drains";
+import {
+  JobDeferredError,
+  JobSupersededError,
+  JobTargetError,
+} from "~/server/generic/jobs/errors";
+import { classifyJobFailure } from "~/server/generic/jobs/failure";
+import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 import {
   defineDrain,
   type DrainContext,
+  type DrainHandler,
   stopsDrainPage,
 } from "~/server/generic/jobs/service/drain";
-import type { JobHandler } from "~/server/generic/jobs/types";
+import type { JobContext } from "~/server/generic/jobs/types";
 
 /**
  * Feature execution and requester-Run authority, supplied by the Run domain.
@@ -91,6 +109,9 @@ const PAGE_LIMIT = 8;
 const ITEM_CONCURRENCY = 2;
 /** Consecutive failures before an item settles its evaluation `failed`. */
 const AI_EVALUATION_MAX_ATTEMPTS = 3;
+/** A page of each of this many features at once; pages may hold provider calls for minutes. */
+const FEATURE_LANES = 2;
+const AI_EVALUATION_BACKOFF = { baseMs: 60_000, maxMs: 15 * 60_000 };
 
 type Entry =
   /** Nothing pending, or a newer attempt owns the evaluation. */
@@ -212,11 +233,15 @@ async function prepareItems(
   if (context.signal.aborted) throw context.signal.reason;
 }
 
-function aiEvaluationDrainSpec(
+function aiEvaluationPage(
   execution: AiEvaluationExecution,
-  paged: boolean,
-) {
+  feature: string,
+  token: string,
+): DrainHandler {
+  const paged = PAGE_FEATURES.has(feature);
   return defineDrain<Prepared>({
+    store: aiEvaluationStore(feature, token),
+    backoff: AI_EVALUATION_BACKOFF,
     limit: PAGE_LIMIT,
     isolationLevel: "serializable",
     maxAttempts: AI_EVALUATION_MAX_ATTEMPTS,
@@ -365,11 +390,12 @@ function aiEvaluationDrainSpec(
       const waiting = held.flatMap(({ target, entry }) =>
         entry.kind === "wait" ? [target.item] : [],
       );
-      await waitForWork(
+      await waitAiEvaluations(
         tx,
         waiting,
+        token,
         workWaitCause.enum.search_coverage,
-        jobKindPolicy("ai.evaluation").backoff,
+        AI_EVALUATION_BACKOFF.baseMs,
       );
       const retain = [
         ...parked
@@ -461,17 +487,115 @@ function aiEvaluationDrainSpec(
   });
 }
 
-/** Product and connection features page; other features run item by item. */
-export function aiEvaluationJobHandler(
+export type AiEvaluationPageOutcome =
+  | "skipped"
+  | "succeeded"
+  | "superseded"
+  | "deferred"
+  | "failed";
+
+/**
+ * One feature's page under a fresh lease. A provider or funding wait stops the
+ * feature, a lost lease ends the page quietly, and an escaped error waits out a
+ * backoff on the rows without spending their attempts, since it is no item's fault.
+ * Whatever the page did not settle goes back due, unchanged.
+ */
+export async function runAiEvaluationPage(
+  db: Database,
   execution: AiEvaluationExecution,
-): JobHandler {
-  const paged = aiEvaluationDrainSpec(execution, true);
-  const single = aiEvaluationDrainSpec(execution, false);
+  feature: string,
+  /** A test seam around the page's transactions. */
+  around: (context: JobContext) => JobContext = (context) => context,
+): Promise<{ outcome: AiEvaluationPageOutcome; settled: number }> {
+  const token = crypto.randomUUID();
+  const assertHeld = async (client: Database) => {
+    if (!(await aiEvaluationPageHeld(client, token)))
+      throw new JobSupersededError();
+  };
+  const context = around({
+    signal: new AbortController().signal,
+    // Each row's lease is checked under its own lock when published, so there is
+    // no commit-time fence here: a chunk's last publish clears the leases it read.
+    fenced: (work, options) =>
+      (options?.isolationLevel === "serializable"
+        ? repositorySnapshotWriteDatabase
+        : repositoryTransactionDatabase)(db, async (tx) => {
+        await assertHeld(tx);
+        return work(tx);
+      }),
+    fence: assertHeld,
+    check: () => assertHeld(db),
+  });
+  try {
+    const { page } = await aiEvaluationPage(execution, feature, token).prepare(
+      db,
+      { key: aiEvaluationPageKey(feature), generation: 1, leaseToken: token },
+      context,
+    );
+    const counts = settledCounts.parse(page.result);
+    return {
+      outcome: counts.processed ? "succeeded" : "skipped",
+      settled: counts.published + counts.failed,
+    };
+  } catch (error) {
+    const failure = classifyJobFailure(error);
+    if (failure.kind === "deferred") {
+      await deferAiEvaluationFeature(
+        db,
+        feature,
+        token,
+        failure.until,
+        failure.reason ?? "provider_capacity",
+      );
+      return { outcome: "deferred", settled: 0 };
+    }
+    if (failure.kind === "interrupted")
+      return { outcome: "superseded", settled: 0 };
+    await deferAiEvaluationFeature(
+      db,
+      feature,
+      token,
+      new Date(Date.now() + AI_EVALUATION_BACKOFF.baseMs),
+      "page_failed",
+    );
+    throw error;
+  } finally {
+    await releaseAiEvaluationPage(db, token);
+  }
+}
+
+const settledCounts = z
+  .object({
+    processed: z.number().catch(0),
+    published: z.number().catch(0),
+    failed: z.number().catch(0),
+  })
+  .catch({ processed: 0, published: 0, failed: 0 });
+
+/** Up to `FEATURE_LANES` features each round, most urgent first; product and connections page. */
+export function aiEvaluationDrain(
+  execution: AiEvaluationExecution,
+): BackgroundDrain {
   return {
-    prepare: (db, claim, context) =>
-      (PAGE_FEATURES.has(claim.key.slice("ai-evaluation:".length))
-        ? paged
-        : single
-      ).prepare(db, claim, context),
+    name: "ai.evaluation",
+    async page(db) {
+      const features = await dueAiEvaluationFeatures(db);
+      const pages = await Promise.allSettled(
+        features
+          .slice(0, FEATURE_LANES)
+          .map((feature) => runAiEvaluationPage(db, execution, feature)),
+      );
+      const failure = pages.find((page) => page.status === "rejected");
+      if (failure?.status === "rejected") throw failure.reason;
+      const settled = pages.some(
+        (page) => page.status === "fulfilled" && page.value.settled > 0,
+      );
+      return {
+        more:
+          features.length > FEATURE_LANES ||
+          (settled && (await dueAiEvaluationFeatures(db)).length > 0),
+        nextAt: await nextAiEvaluationDue(db),
+      };
+    },
   };
 }

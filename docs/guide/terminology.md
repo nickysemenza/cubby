@@ -538,8 +538,7 @@ through many work items. Jobs are coarse: a Job is not one household record.
 _Avoid_: task, workflow instance
 
 **Drain Job**:
-A long-lived Job, one per kind and feature (`ai-evaluation:<feature>`,
-`derived:drain`), that claims pages of work items and
+A long-lived Job (`derived:drain`) that claims pages of work items and
 publishes their results. It completes when nothing is ready and wakes when
 more is marked.
 _Avoid_: batch Job, page claim, per-item Job

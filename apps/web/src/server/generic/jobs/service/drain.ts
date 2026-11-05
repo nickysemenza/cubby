@@ -10,10 +10,10 @@ import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { withJobPhase } from "~/server/generic/jobs/context";
+import type { DrainClaim, DrainStore } from "~/server/generic/jobs/drain-store";
 import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import type { JobBackoff } from "~/server/generic/jobs/kind-policy";
-import type { JobClaim } from "~/server/generic/jobs/repo/queue";
 import {
   claimWork,
   clearWork,
@@ -27,11 +27,6 @@ import type { JobContext, PreparedJobPage } from "../types";
 /** What a drain adapter may know of its claim: identity for attempt tokens, never the lease itself. */
 export type DrainContext = JobContext & {
   claim: DrainClaim;
-};
-
-/** The identity a page reads: a drain Job's claim, or a domain row drain's page. */
-export type DrainClaim = Pick<JobClaim, "key" | "generation" | "leaseToken"> & {
-  kind?: string;
 };
 
 /** Pause, defer and lease loss stop the page; an adapter must rethrow them rather than settle an item. */
@@ -52,32 +47,6 @@ type DrainPublication = {
   retain?: readonly WorkItem[];
   /** Bounded extra ready marks whose identical effect this publication already applied. */
   covered?: readonly WorkItem[];
-};
-
-/**
- * Where a drain's owed items live. `WorkItem` by default; a domain whose own rows
- * are the debt supplies its own (`generic/background/drains.ts`). `lock` returns
- * the same item objects it was given, narrowed to those still current.
- */
-export type DrainStore = {
-  claim(
-    db: Database,
-    limit: number,
-    eligible?: (target: SQL) => SQL,
-  ): Promise<WorkItem[]>;
-  lock(
-    tx: Database,
-    items: readonly WorkItem[],
-    options?: { drain?: string },
-  ): Promise<WorkItem[]>;
-  clear(tx: Database, items: readonly WorkItem[]): Promise<void>;
-  defer(
-    tx: Database,
-    items: readonly WorkItem[],
-    error: string,
-    backoff: JobBackoff,
-  ): Promise<void>;
-  nextReadyAt(db: Database): Promise<Date | null>;
 };
 
 const workItemStore = (drain: string): DrainStore => ({

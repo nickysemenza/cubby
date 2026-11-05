@@ -31,8 +31,8 @@ import {
   repositoryAfterCommit,
 } from "~/server/db/repository-access.boundary";
 import { entityEmbedding, searchDocument } from "~/server/db/retained-tables";
+import type { DrainStore } from "~/server/generic/jobs/drain-store";
 import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
-import type { DrainStore } from "~/server/generic/jobs/service/drain";
 
 const EMBEDDING_REFRESH_TARGET = "embedding.refresh";
 const EMBEDDING_CLEANUP_TARGET = "embedding.cleanup";

@@ -3,8 +3,7 @@ import type { JobHandlers } from "~/server/generic/jobs/types";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { pauseJob } from "~/server/generic/jobs/repo/operator";
-import { postponeWorkRefs } from "~/server/generic/jobs/repo/work-items";
-import { AI_EVALUATION_TARGET } from "~/server/ai/evaluation/repo/ai-evaluation-work";
+import { postponeAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 
@@ -16,7 +15,7 @@ import {
   aiWorkItems,
   type AiWorkPorts,
 } from "~/server/domains/run/service/ai-work";
-import { aiEvaluationJobHandler } from "~/server/ai/evaluation/service/ai-evaluation-drain";
+import { runAiEvaluationPage } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { reclassifyEmails } from "~/server/domains/purchase-import/service/gmail/reclassify";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
@@ -68,7 +67,6 @@ export async function driveAiWork(
         return { page: { done: !pending?.length } };
       },
     },
-    "ai.evaluation": aiEvaluationJobHandler(runAiEvaluationExecution(ports)),
   };
   for (let cycle = 0; cycle < 205; cycle++) {
     const execution = await readJob(db, { key: `run:${id}` });
@@ -101,37 +99,23 @@ export async function driveAiWork(
               ports.sweep.pauseAfter - (items.length - pending.length),
             ),
           );
-    const drains = await postponeWorkRefs(
+    await postponeAiEvaluationWork(
       db,
-      AI_EVALUATION_TARGET,
       pending.map((item) => item.id),
       new Date(Date.now() + 60 * 60_000),
     );
-    await postponeWorkRefs(
+    await postponeAiEvaluationWork(
       db,
-      AI_EVALUATION_TARGET,
       released.map((item) => item.id),
-      new Date(),
+      new Date(0),
     );
-    for (const key of drains) {
-      const target = await readJob(db, { key });
-      if (
-        !target ||
-        ["paused", "failed", "cancelled", "completed"].includes(target.state)
-      )
-        continue;
-      if (
-        target.availableAt.getTime() > Date.now() &&
-        owner.status === "paused_auth"
-      )
-        return;
-      await updateJobs(
+    for (const feature of new Set(released.map((item) => item.feature))) {
+      const { outcome } = await runAiEvaluationPage(
         db,
-        { id: target.id, states: ["queued", "retry_wait"] },
-        { availableAt: new Date(0), waitUntil: null, waitReason: null },
+        runAiEvaluationExecution(ports),
+        feature,
       );
-      const outcome = await advanceJob(db, target.id, handlers);
-      if (["superseded", "paused", "deferred"].includes(outcome)) return;
+      if (["superseded", "deferred"].includes(outcome)) return;
       if (ports.sweep?.pauseAfter !== undefined) {
         const done = (await aiWorkItems(db, owner)).filter(
           (item) => !["queued", "result_ready"].includes(item.state),

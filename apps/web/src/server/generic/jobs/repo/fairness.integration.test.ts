@@ -1,19 +1,15 @@
-import { jobState } from "@cubby/schemas/job";
 import { eq, inArray, asc } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { job, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { reconcileWorkflowRuns } from "~/server/workflows/runs/lifecycle";
 
-import { defineDrain } from "../service/drain";
 import { drainDueJobs } from "../service/jobs";
 import { enqueueJob, enqueueJobs } from "./producer";
-import * as jobQueue from "./queue";
 import { dueJobs } from "./queue";
-import { markWork } from "./work-items";
 
 describe("durable Job selection", () => {
   const ctx = withTestDb();
@@ -121,122 +117,6 @@ describe("durable Job selection", () => {
     } finally {
       release.resolve();
       await holding;
-    }
-  });
-
-  it("enforces maxInFlight across concurrent drains", async () => {
-    const kind = "ai.evaluation";
-    const ids = await Promise.all(
-      [0, 1, 2].map(async (index) => {
-        const key = `synthetic.capped-drain.${index}`;
-        const item = await enqueueJob(ctx.db, {
-          key,
-          kind,
-          input: {},
-          maxAttempts: null,
-        });
-        await markWork(ctx.db, { key, kind }, [
-          { target: "synthetic", ref: crypto.randomUUID() },
-        ]);
-        return item.id;
-      }),
-    );
-    const started = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    let active = 0;
-    let peak = 0;
-    const handler = defineDrain({
-      limit: 1,
-      prepare: async () => {
-        active++;
-        peak = Math.max(peak, active);
-        if (active === 2) started.resolve();
-        await release.promise;
-        active--;
-        return { prepared: null };
-      },
-      publish: async () => {},
-    });
-    const handlers = { [kind]: handler };
-    const first = drainDueJobs(ctx.db, handlers, 1, 30_000, 1);
-    try {
-      await expect.poll(() => active, { timeout: 10_000 }).toBe(1);
-      const second = drainDueJobs(ctx.db, handlers, 1, 30_000, 1);
-      await started.promise;
-      const third = await drainDueJobs(ctx.db, handlers, 1, 30_000, 1);
-      expect(third).toEqual(["skipped"]);
-      const rows = await getDb(ctx.db)
-        .select({ id: job.id, state: job.state })
-        .from(job)
-        .where(eq(job.kind, kind));
-      expect(
-        rows.filter((row) => row.state === jobState.enum.running),
-      ).toHaveLength(2);
-      expect(
-        rows.filter((row) => row.state === jobState.enum.queued),
-      ).toHaveLength(1);
-      release.resolve();
-      await Promise.all([first, second]);
-    } finally {
-      release.resolve();
-    }
-    expect(peak).toBe(2);
-    // A drain completes only on its first empty pass.
-    await drainDueJobs(ctx.db, handlers, 10, 30_000, 1);
-    expect(
-      (await getDb(ctx.db).select().from(job).where(eq(job.kind, kind))).every(
-        (row) => row.state === "completed",
-      ),
-    ).toBe(true);
-    expect(ids).toHaveLength(3);
-  });
-
-  it("reconsiders a capped Job after holders release capacity in the same drain", async () => {
-    const kind = "ai.evaluation";
-    const items = await enqueueJobs(
-      ctx.db,
-      [0, 1, 2].map((index) => ({
-        key: `synthetic.cap-release.${index}`,
-        kind,
-        input: {},
-      })),
-    );
-    for (const item of items)
-      await markWork(ctx.db, { key: item.key, kind }, [
-        { target: "synthetic", ref: crypto.randomUUID() },
-      ]);
-    const refused = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    const original = jobQueue.claimJob;
-    const claim = vi
-      .spyOn(jobQueue, "claimJob")
-      .mockImplementation(async (...args) => {
-        const result = await original(...args);
-        if (!result) refused.resolve();
-        return result;
-      });
-    const handler = defineDrain({
-      limit: 1,
-      prepare: async () => {
-        await release.promise;
-        return { prepared: null };
-      },
-      publish: async () => {},
-    });
-    const draining = drainDueJobs(ctx.db, { [kind]: handler }, 20, 30_000, 3);
-    try {
-      await refused.promise;
-      release.resolve();
-      await draining;
-      expect(
-        (
-          await getDb(ctx.db).select().from(job).where(eq(job.kind, kind))
-        ).every((row) => row.state === "completed"),
-      ).toBe(true);
-    } finally {
-      release.resolve();
-      await draining;
-      claim.mockRestore();
     }
   });
 

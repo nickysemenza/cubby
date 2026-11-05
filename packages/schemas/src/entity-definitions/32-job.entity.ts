@@ -335,7 +335,7 @@ export const { definition, readSchemas } = defineEntityModel({
       // Work these kinds described now lives on its owner's rows; see docs/jobs.md.
       {
         name: "Job_kind_retired_check",
-        sql: "{kind} NOT IN ('image.cloud', 'image.device', 'image.device.wake', 'embedding.refresh', 'embedding.cleanup')",
+        sql: "{kind} NOT IN ('image.cloud', 'image.device', 'image.device.wake', 'embedding.refresh', 'embedding.cleanup', 'ai.evaluation')",
       },
       {
         name: "Job_waitReason_check",

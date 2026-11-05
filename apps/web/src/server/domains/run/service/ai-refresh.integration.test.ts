@@ -19,6 +19,7 @@ import {
   guardAiEvaluation,
   publishAiEvaluation,
 } from "~/server/ai/evaluation/repo/ai-evaluation";
+import { aiEvaluationItem } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import {
   drainAiEvaluations,
   withClaimedAiEvaluation,
@@ -59,7 +60,6 @@ import {
   acceptSuggestion,
   canAutomaticallyFillField,
 } from "~/server/generic/assessment/repo/suggestion-review";
-import { workItemStates } from "~/server/generic/jobs/repo/work-items";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   drainDerivedRefreshFrontier,
@@ -1227,7 +1227,7 @@ describe("targeted prompt refresh", () => {
       // A token from another lease has no publication authority.
       await expect(
         withTransactionDatabase(ctx.db, (tx) =>
-          guardAiEvaluation(tx, evaluation!.id, `${crypto.randomUUID()}/1`),
+          guardAiEvaluation(tx, evaluation!.id, crypto.randomUUID()),
         ),
       ).rejects.toThrow("AI evaluation attempt is obsolete");
       const changed = {
@@ -1373,20 +1373,15 @@ describe("targeted prompt refresh", () => {
       .select()
       .from(aiEvaluation)
       .where(eq(aiEvaluation.id, evaluation!.id));
-    // Incomplete coverage retries the whole source; retry evidence belongs to
-    // its WorkItem, while the pending evaluation keeps its queued state.
-    expect(savedEvaluation).toMatchObject({
-      state: "queued",
-      error: null,
-    });
-    const [pending] = await workItemStates(ctx.db, "ai.evaluation", [
-      evaluation!.id,
-    ]);
+    // Incomplete coverage retries the whole source; the pending evaluation keeps
+    // its queued state and holds the retry evidence.
+    expect(savedEvaluation).toMatchObject({ state: "queued" });
+    const pending = await aiEvaluationItem(ctx.db, evaluation!.id);
     expect(pending).toMatchObject({
       attempts: 1,
       lastError: expect.stringContaining("candidate coverage is unconfirmed"),
     });
-    expect(pending?.readyAt.getTime()).toBeGreaterThan(Date.now());
+    expect(pending?.readyAt?.getTime()).toBeGreaterThan(Date.now());
     expect(
       await getDb(ctx.db)
         .select({ id: suggestion.id })
