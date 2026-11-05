@@ -111,6 +111,7 @@ const recipeTotalsSink = derivedSink({
 });
 
 const conversionCoverageSink = derivedSink({
+  preparationBatchSize: 100,
   prepare: (db, ids) =>
     prepareProductConversionCoverage(
       db,
@@ -127,12 +128,16 @@ const searchComputes: Record<string, DerivedAdapter> = Object.fromEntries(
 
 export const derivedComputes: DerivedComputes = {
   ...productDerivedComputes,
-  "product.readFacts": computeProductReadFacts,
-  "product.food": (db, ids) =>
+  "product.readFacts": Object.assign(computeProductReadFacts, {
+    preparationBatchSize: 100,
+  }),
+  "product.food": Object.assign(
     productFoodCompute({
       findFoodsBatch: (lookups) =>
         new USDAClient(requestUsdaRelease()).findFoodsBatch(lookups),
-    })(db, ids),
+    }),
+    { preparationBatchSize: 100 },
+  ),
   ...inventoryDerivedComputes,
   ...expenseDerivedComputes,
   ...emailDerivedComputes,
