@@ -76,6 +76,18 @@ describe("treePickerItems", () => {
     expect(orphanItem?.presentation?.group?.id).toBe("orphan");
   });
 
+  it("omits a parent cycle without hiding other roots", () => {
+    const cyclic: Node[] = [
+      { id: "a", parentId: "b", name: "A" },
+      { id: "b", parentId: "a", name: "B" },
+    ];
+    expect(
+      treePickerItems([...nodes, ...cyclic], baseOptions).map(
+        (item) => item.id,
+      ),
+    ).toEqual(nodes.map((node) => node.id));
+  });
+
   it("honors an explicit rootOrder over the alphabetical default", () => {
     const items = treePickerItems(nodes, {
       ...baseOptions,

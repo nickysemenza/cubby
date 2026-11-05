@@ -9,11 +9,9 @@
 
 import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
 
-/** The only two fields a forest walk reads off a project row. */
-export interface ForestNode {
-  id: string;
-  parentProjectId: string | null;
-}
+import { groupForest, type ForestNode } from "../../lib/forest";
+
+export type { ForestNode } from "../../lib/forest";
 
 export interface Forest<T extends ForestNode> {
   /**
@@ -41,21 +39,11 @@ export function buildForest<T extends ForestNode>(
 ): Forest<T> {
   const byId = new Map(items.map((item) => [item.id, item]));
 
-  const childrenByParent = new Map<string, T[]>();
-  const roots: T[] = [];
-  for (const item of items) {
-    const parentId = item.parentProjectId;
-    if (parentId == null || !byId.has(parentId)) {
-      roots.push(item);
-      continue;
-    }
-    const siblings = childrenByParent.get(parentId);
-    if (siblings) {
-      siblings.push(item);
-    } else {
-      childrenByParent.set(parentId, [item]);
-    }
-  }
+  const { roots, childrenByParent } = groupForest(
+    items,
+    (item) => item.id,
+    (item) => item.parentProjectId,
+  );
 
   /**
    * Walks `item`'s ancestor chain (ignoring the depth cap) to tell a genuine
