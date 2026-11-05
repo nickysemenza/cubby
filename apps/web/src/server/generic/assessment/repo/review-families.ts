@@ -543,7 +543,11 @@ export const reviewFamilyDeclarations = {
   recommendation: {
     ...assessmentReviewFamilies.recommendation,
     scopes: recommendationScopes,
-    records: sql`${one} || CASE WHEN ${recommendationScopes.connection}
+    // State holds the source and target, so a record badge never detoasts the
+    // connection evidence. Rows published before connectionTarget still read it.
+    records: sql`${one} || CASE WHEN jsonb_typeof(s.data->'connectionTarget') = 'object'
+      THEN jsonb_build_array(${ref(sql`s.data #>> '{connectionTarget,entityKind}'`, sql`s.data #>> '{connectionTarget,entityId}'`)})
+      WHEN ${recommendationScopes.connection}
       THEN jsonb_build_array(${endpoint("source")}, ${endpoint("target")})
       ELSE COALESCE(a.evidence->'records', '[]'::jsonb) END`,
     matchesRelatedRecords: (scope: AssessmentRecordScope) => {
@@ -816,6 +820,41 @@ const assessmentRecordsSql = (
     ),
     sql` `,
   )} ELSE '[]'::jsonb END`;
+
+/**
+ * Record tokens per pending suggestion for Work. The large families read only
+ * AssessmentState; small families use their declared records. Tokens are UUIDs
+ * or shortcodes, as stored. Current evidence is rechecked when a row is opened.
+ */
+export function pendingSuggestionRecordsSql(ids?: readonly string[]) {
+  const pending = (families: readonly AssessmentFamily[]) =>
+    sql`s.family IN (${sql.join(
+      families.map((family) => sql`${family}`),
+      sql`, `,
+    )}) AND s.active AND s.status = ${suggestionStatus.enum.pending}
+      ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}`;
+  const { recommendation, statement_transaction } = assessmentFamily.enum;
+  return sql`SELECT s.family, s.entity, s."recordId"::text AS token
+      FROM "AssessmentState" s WHERE ${pending([recommendation])}
+    UNION ALL
+    SELECT s.family, s.data #>> '{connectionTarget,entityKind}', s.data #>> '{connectionTarget,entityId}'
+      FROM "AssessmentState" s
+      WHERE ${pending([recommendation])} AND jsonb_typeof(s.data->'connectionTarget') = 'object'
+    -- Statement review belongs to the account, not every settlement reference.
+    UNION ALL
+    SELECT s.family, ${entities.financialAccount}::text, s.data->>'accountId'
+      FROM "AssessmentState" s WHERE ${pending([statement_transaction])}
+    UNION ALL
+    SELECT s.family, record->>'entity', record->>'id'
+      FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id AND a.served
+      CROSS JOIN LATERAL jsonb_array_elements(${assessmentRecordsSql(undefined, sql`s.family`)}) record
+      WHERE ${pending([
+        assessmentFamily.enum.field,
+        assessmentFamily.enum.transfer_pair,
+        assessmentFamily.enum.product_pair,
+        assessmentFamily.enum.image_description,
+      ])} AND (s.family NOT IN (${assessmentFamily.enum.product_pair}, ${assessmentFamily.enum.image_description}) OR s.suppression IS NULL)`;
+}
 
 /** A typed entity plus UUID or shortcode; stored families predate a shared reference representation. */
 const storedRef = z.object({

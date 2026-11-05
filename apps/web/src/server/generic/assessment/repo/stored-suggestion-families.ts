@@ -45,7 +45,7 @@ const outcomes =
     const { rows } = await unwrapDb(db).execute<{
       status: string;
       count: number;
-    }>(sql`SELECT s.status, count(*)::int AS count FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id WHERE a.family = ${family}
+    }>(sql`SELECT s.status, count(*)::int AS count FROM "AssessmentState" s WHERE s.family = ${family}
     ${filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``} GROUP BY s.status`);
     const count = (status: string) =>
       rows.find((row) => row.status === status)?.count ?? 0;

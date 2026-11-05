@@ -18,10 +18,10 @@ import {
   suggestionListInput,
   suggestionListOut,
   type SuggestionColumnValue,
-  type SuggestionGroup,
   type SuggestionListFamily,
   type SuggestionListFilters,
   type SuggestionListRow,
+  type SuggestionStrength,
 } from "@cubby/schemas/suggestion-list";
 import { suggestionFilterDeclaration } from "@cubby/schemas/suggestion-list-declarations";
 import {
@@ -32,6 +32,7 @@ import {
   gt,
   isNull,
   lt,
+  notInArray,
   or,
   sql,
   type SQL,
@@ -43,6 +44,7 @@ import { getDb } from "~/server/db/helpers";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { reviewAssessmentBatch } from "~/server/generic/assessment/repo/assessment-review";
 import {
+  type SuggestionFactQuery,
   type SuggestionFamilyQuery,
   type SuggestionKey,
   type SuggestionReadObserver,
@@ -117,9 +119,8 @@ export function suggestionKeyFacts(
   };
 }
 
-function keyRelation(db: Database, keys: readonly SuggestionKey[]) {
-  const facts = keys.map(suggestionKeyFacts);
-  const names = new Set([
+const FACT_COLUMNS = [
+  ...new Set([
     "id",
     "family",
     "strength",
@@ -131,24 +132,66 @@ function keyRelation(db: Database, keys: readonly SuggestionKey[]) {
     "source",
     "target",
     ...suggestionFilterDeclaration.filters.map((filter) => filter.columnId),
-  ]);
-  const fields = Object.fromEntries(
-    [...names].map((name) => {
-      const text = sql`fact.value->>${name}`;
-      const value = ARRAY_COLUMNS.has(name)
+  ]),
+];
+
+const typedFact = (name: string, value: SQL) =>
+  sql`(${value})::${sql.raw(
+    ARRAY_COLUMNS.has(name)
+      ? "text[]"
+      : NUMBER_COLUMNS.has(name) || name === "strengthRank"
+        ? "numeric"
+        : "text",
+  )} AS ${sql.identifier(name)}`;
+
+/** Keys of the small families read as JSON, in the same shape as family facts. */
+function keysFactSelect(keys: readonly SuggestionKey[]) {
+  const facts = keys.map(suggestionKeyFacts);
+  const columns = FACT_COLUMNS.map((name) => {
+    const text = sql`fact.value->>${name}`;
+    return typedFact(
+      name,
+      ARRAY_COLUMNS.has(name)
         ? sql`ARRAY(SELECT jsonb_array_elements_text(fact.value->${name}))`
-        : NUMBER_COLUMNS.has(name) || name === "strengthRank"
-          ? sql`(${text})::numeric`
-          : text;
-      return [name, value.as(name)];
-    }),
-  );
-  return getDb(db)
-    .select(fields)
-    .from(
-      sql`jsonb_array_elements(${JSON.stringify(facts)}::jsonb) AS fact(value)`,
-    )
-    .as("suggestion_facts");
+        : text,
+    );
+  });
+  return sql`SELECT ${sql.join(columns, sql`, `)}
+    FROM jsonb_array_elements(${JSON.stringify(facts)}::jsonb) AS fact(value)`;
+}
+
+const STRENGTH_RANK_SQL = (strength: SQL) => sql`CASE (${strength})::text
+  WHEN ${"strong"} THEN ${STRENGTH_RANK.strong}::int
+  WHEN ${"medium"} THEN ${STRENGTH_RANK.medium}::int
+  WHEN ${"weak"} THEN ${STRENGTH_RANK.weak}::int END`;
+
+function familyFactSelect(
+  family: SuggestionListFamily,
+  query: SuggestionFactQuery,
+  needs: ReadonlySet<string>,
+) {
+  const columns = FACT_COLUMNS.map((name) => {
+    if (name === "id") return typedFact(name, sql`s.id`);
+    if (name === "family") return typedFact(name, sql`${family}`);
+    if (!needs.has(name)) return typedFact(name, sql`NULL`);
+    if (name === "strengthRank")
+      return typedFact(name, STRENGTH_RANK_SQL(query.columns.strength!));
+    return typedFact(name, query.columns[name] ?? sql`NULL`);
+  });
+  return sql`SELECT ${sql.join(columns, sql`, `)} FROM ${query.from} WHERE ${query.where}`;
+}
+
+function factRelation(parts: readonly SQL[]) {
+  const union = parts.length
+    ? sql.join(
+        parts.map((part) => sql`(${part})`),
+        sql` UNION ALL `,
+      )
+    : sql`SELECT ${sql.join(
+        FACT_COLUMNS.map((name) => typedFact(name, sql`NULL`)),
+        sql`, `,
+      )} WHERE false`;
+  return sql`(${union}) AS suggestion_facts`;
 }
 
 const relationColumn = (name: string) =>
@@ -185,41 +228,113 @@ function predicates(filters: SuggestionListFilters) {
   );
 }
 
-async function selectKeys(
-  db: Database,
-  keys: readonly SuggestionKey[],
+/** Which fact columns a filter set and an order read; the rest stay unjoined. */
+function factNeeds(
   filters: SuggestionListFilters,
   order: readonly SortTerm[] = [],
-  paging?: {
+  extra: readonly string[] = [],
+) {
+  const values = new Map(Object.entries(filters));
+  const needs = new Set(extra);
+  for (const column of [
+    ...suggestionFilterDeclaration.filters.map((filter) => filter.columnId),
+    "month",
+  ])
+    if (
+      values.get(column) !== undefined ||
+      values.get(`${column}Exclude`) !== undefined ||
+      values.get(`${column}Presence`) !== undefined
+    )
+      needs.add(column);
+  for (const name of order.flatMap((term) => sortColumns(term.by))) {
+    needs.add(name === "strengthRank" ? "strength" : name);
+    needs.add(name);
+  }
+  // An explicit Strength filter or sort reads judged labels; default order need not.
+  if (
+    values.get("strength") !== undefined ||
+    values.get("strengthExclude") !== undefined ||
+    order.some((term) => term.by === "strength")
+  )
+    needs.add("exactStrength");
+  return needs;
+}
+
+function sortColumns(by: string) {
+  const ready = ["clean", "strengthRank", "createdAt"];
+  return by === "ready"
+    ? ready
+    : by === "impact"
+      ? ["impact", ...ready]
+      : [by === "strength" ? "strengthRank" : by];
+}
+
+/**
+ * The fact relation for one read. Large families project from AssessmentState;
+ * small ones reuse their keys. Family hydration revalidates only paged rows, so
+ * a count may include a row whose evidence has since gone stale.
+ */
+async function preparedFacts(
+  db: Database,
+  filters: SuggestionListFilters,
+  needs: ReadonlySet<string>,
+  prepared?: Awaited<ReturnType<typeof scopedFamilyQuery>>,
+) {
+  const { families, touching, matchedFamilies, familyScope } =
+    prepared ?? (await scopedFamilyQuery(db, filters));
+  if (touching?.size === 0) return { families, relation: factRelation([]) };
+  const selected = families.filter(
+    (family) => !matchedFamilies || matchedFamilies.has(family),
+  );
+  const keyed: SuggestionKey[] = [];
+  const parts: SQL[] = [];
+  for (const family of selected) {
+    const presentation = suggestionFamilies[family];
+    if ("facts" in presentation && presentation.facts) {
+      const query = presentation.facts(familyScope, needs);
+      if (query) parts.push(familyFactSelect(family, query, needs));
+      continue;
+    }
+    keyed.push(
+      ...(await presentation.keys(db, familyScope)).filter(
+        (key) =>
+          (filters.status !== "pending" || key.automaticRule === null) &&
+          (!touching || touching.has(key.assessmentId)),
+      ),
+    );
+  }
+  if (keyed.length) parts.push(keysFactSelect(keyed));
+  return { families, relation: factRelation(parts), familyScope };
+}
+
+async function selectFacts(
+  db: Database,
+  relation: SQL,
+  filters: SuggestionListFilters,
+  order: readonly SortTerm[],
+  paging: {
     limit: number;
     offset: number;
     cursor?: z.infer<typeof cursorSchema>;
   },
+  extra: readonly (SQL | undefined)[] = [],
 ) {
-  const relation = keyRelation(db, keys);
-  const terms = order.flatMap((term) => {
-    const ready = ["clean", "strengthRank", "createdAt"];
-    const names =
-      term.by === "ready"
-        ? ready
-        : term.by === "impact"
-          ? ["impact", ...ready]
-          : [term.by === "strength" ? "strengthRank" : term.by];
-    return names.map((name) => ({
+  const terms = order.flatMap((term) =>
+    sortColumns(term.by).map((name) => ({
       ...term,
       name,
       value: ARRAY_COLUMNS.has(name)
         ? sql`(${relationColumn(name)})[1]`
         : relationColumn(name),
-    }));
-  });
+    })),
+  );
   terms.push({
     by: "id",
     name: "id",
     value: relationColumn("id"),
     direction: "asc",
   });
-  const cursor = paging?.cursor;
+  const cursor = paging.cursor;
   const equal: SQL[] = [];
   const after = cursor
     ? or(
@@ -243,30 +358,58 @@ async function selectKeys(
         }),
       )
     : undefined;
-  const query = getDb(db)
+  return getDb(db)
     .select({
       id: sql<string>`${relationColumn("id")}`,
+      family: sql<SuggestionListFamily>`${relationColumn("family")}`,
       vector: sql<SuggestionColumnValue[]>`jsonb_build_array(${sql.join(
         terms.slice(0, -1).map((term) => term.value),
         sql`, `,
       )})`,
     })
     .from(relation)
-    .where(and(...predicates(filters), after))
+    .where(and(...predicates(filters), after, ...extra))
     .orderBy(
       ...terms.map(
         (term) =>
           sql`${term.direction === "asc" ? asc(term.value) : desc(term.value)} NULLS LAST`,
       ),
+    )
+    .limit(paging.limit)
+    .offset(cursor ? 0 : paging.offset);
+}
+
+/** Reads each paged row's family key and hydrated evidence, dropping stale rows. */
+async function pagedRows(
+  db: Database,
+  entries: readonly { id: string; family: SuggestionListFamily }[],
+  filters: SuggestionListFilters,
+) {
+  const byFamily = new Map<SuggestionListFamily, string[]>();
+  for (const entry of entries)
+    byFamily.set(entry.family, [
+      ...(byFamily.get(entry.family) ?? []),
+      entry.id,
+    ]);
+  const keys = (
+    await Promise.all(
+      [...byFamily].map(([family, assessmentIds]) =>
+        suggestionFamilies[family].keys(db, {
+          filters: {
+            ...filters,
+            recordEntity: undefined,
+            recordIds: undefined,
+          },
+          assessmentIds,
+        }),
+      ),
+    )
+  )
+    .flat()
+    .filter(
+      (key) => filters.status !== "pending" || key.automaticRule === null,
     );
-  const selected = paging
-    ? await query.limit(paging.limit).offset(cursor ? 0 : paging.offset)
-    : await query;
-  const byId = new Map(keys.map((key) => [key.assessmentId, key]));
-  return selected.flatMap((row) => {
-    const key = byId.get(row.id);
-    return key ? [{ key, id: row.id, vector: row.vector }] : [];
-  });
+  return hydrate(db, keys);
 }
 
 async function familyQuery(
@@ -405,48 +548,6 @@ export async function prepareSuggestionAdmission(
   };
 }
 
-async function scopedKeys(
-  db: Database,
-  filters: SuggestionListFilters,
-  prepared?: Awaited<ReturnType<typeof scopedFamilyQuery>>,
-) {
-  const candidates = await currentCandidates(db, filters, prepared);
-  return {
-    ...candidates,
-    all: candidates.keys,
-    keys: candidates.keys.length
-      ? (await selectKeys(db, candidates.keys, filters)).map(
-          (entry) => entry.key,
-        )
-      : [],
-  };
-}
-
-/** Work and browse use identical canonical admission during publication retirement. */
-export async function canonicalSuggestionRecordRefs(
-  db: Database,
-  scope: { entity?: string; records?: readonly { code: string }[] },
-): Promise<{ families: string[]; entity: string; recordCode: string }[]> {
-  const { keys } = await currentCandidates(
-    db,
-    suggestionListFilters.parse({
-      recordEntity: scope.entity,
-      recordIds: scope.records?.map((record) => record.code),
-    }),
-  );
-  const refs = await readAssessmentRecordRefs(
-    db,
-    keys.map((key) => key.assessmentId),
-  );
-  return keys.flatMap((key) =>
-    (refs.get(key.assessmentId) ?? []).map((record) => ({
-      families: [key.family],
-      entity: record.entity,
-      recordCode: record.id,
-    })),
-  );
-}
-
 /** Counts use the queue's eligibility and declared subjects, including either endpoint. */
 export async function suggestionRecordCounts(
   db: Database,
@@ -458,16 +559,19 @@ export async function suggestionRecordCounts(
       records: [],
       coverage: canonicalCoverage,
     });
-  // This input has no relation filters or ordering. Candidate preparation
-  // already enforces pending admission, member decisions and live freshness.
-  const { keys } = await currentCandidates(
+  // Discovery already applies family, status and record scope. A badge may count
+  // a row whose evidence went stale; opening the row revalidates it.
+  const { touching } = await scopedFamilyQuery(
     db,
     suggestionListFilters.parse({ recordIds: input.recordIds }),
   );
-  const refs = await readAssessmentRecordRefs(
-    db,
-    keys.map((key) => key.assessmentId),
-  );
+  const [only, ...others] = input.recordIds;
+  if (only && !others.length)
+    return suggestionRecordCountsOut.parse({
+      records: [{ id: only, pending: touching?.size ?? 0 }],
+      coverage: canonicalCoverage,
+    });
+  const refs = await readAssessmentRecordRefs(db, [...(touching ?? [])]);
   const counts = new Map(input.recordIds.map((id) => [id, 0]));
   for (const references of refs.values())
     for (const record of references)
@@ -495,44 +599,45 @@ async function hydrate(
   return new Map(maps.flatMap((map) => [...map]));
 }
 
-const GROUP_ACTIONS = ["create", "attach", "supersede", "void"] as const;
-
-/** Account × month sections of the ordered statement keys, in page order. */
-function statementGroups(keys: readonly SuggestionKey[]): SuggestionGroup[] {
-  type Draft = Omit<SuggestionGroup, "accountId" | "ownerId"> & {
-    accountId: string;
-    ownerId: unknown;
-  };
-  const groups = new Map<string, Draft>();
-  for (const key of keys) {
-    const month = String(key.columns.month);
-    const accountId = String(key.columns.account);
-    const groupKey = `${accountId}|${month}`;
-    const group = groups.get(groupKey) ?? {
-      key: groupKey,
-      label: month,
-      count: 0,
-      clean: 0,
-      create: 0,
-      attach: 0,
-      supersede: 0,
-      void: 0,
-      amount: 0,
-      accountId,
-      ownerId: key.columns.owner ?? null,
-      month,
-    };
-    group.count += 1;
-    if (key.clean) group.clean += 1;
-    const action = GROUP_ACTIONS.find((name) => name === key.columns.action);
-    if (action) group[action] += 1;
-    group.amount += Number(key.columns.amount ?? 0);
-    groups.set(groupKey, group);
-  }
-  return suggestionGroup.array().parse([...groups.values()]);
+/** Account × month sections of the filtered statements, in page order. */
+async function statementGroups(
+  db: Database,
+  relation: SQL,
+  filters: SuggestionListFilters,
+) {
+  const month = relationColumn("month");
+  const account = sql`(${relationColumn("account")})[1]`;
+  const action = relationColumn("action");
+  const count = (value: string) =>
+    sql`count(*) FILTER (WHERE ${action} = ${value})::int`;
+  const groups = await getDb(db)
+    .select({
+      month: sql<string>`${month}`,
+      accountId: sql<string>`${account}`,
+      ownerId: sql<string | null>`min((${relationColumn("owner")})[1])`,
+      count: sql<number>`count(*)::int`,
+      clean: sql<number>`count(*) FILTER (WHERE ${relationColumn("clean")} = 'true')::int`,
+      create: count("create"),
+      attach: count("attach"),
+      supersede: count("supersede"),
+      void: count("void"),
+      amount: sql<string>`coalesce(sum(${relationColumn("amount")}), 0)`,
+    })
+    .from(relation)
+    .where(and(...predicates(filters)))
+    .groupBy(month, account)
+    .orderBy(sql`${month} DESC NULLS LAST`, sql`${account} ASC NULLS LAST`);
+  return suggestionGroup.array().parse(
+    groups.map((group) => ({
+      ...group,
+      key: `${group.accountId}|${group.month}`,
+      label: group.month,
+      amount: Number(group.amount),
+    })),
+  );
 }
 
-/** One SQL-filtered, ordered page of currently reviewable family facts. */
+/** One SQL-filtered, ordered page of pending family rows. */
 export async function listSuggestionPage(
   db: Database,
   raw: z.input<typeof suggestionListInput>,
@@ -542,11 +647,6 @@ export async function listSuggestionPage(
   const filters = grouped
     ? { ...input, family: "statement_transaction" as const }
     : input;
-  const {
-    keys,
-    all,
-    rows = new Map<string, SuggestionListRow>(),
-  } = await scopedKeys(db, filters);
   const requested = suggestionFilterDeclaration.sortsOf(input.sort);
   const order: SortTerm[] = [
     ...(grouped
@@ -570,15 +670,30 @@ export async function listSuggestionPage(
     throw new Error(
       "Cursor was issued for another order; restart without a cursor",
     );
-  const entries = await selectKeys(db, all, filters, order, {
-    ...input,
-    cursor,
+  const needs = factNeeds(
+    filters,
+    order,
+    grouped
+      ? ["clean", "month", "account", "owner", "action", "amount"]
+      : ["clean"],
+  );
+  const { relation } = await preparedFacts(db, filters, needs);
+  const entries = await selectFacts(db, relation, filters, order, {
     limit: input.limit + 1,
+    offset: input.offset,
+    cursor,
   });
   const more = entries.length > input.limit;
   const page = entries.slice(0, input.limit);
   const last = page.at(-1);
-  const clean = keys.filter((key) => key.clean).length;
+  const rows = await pagedRows(db, page, filters);
+  const [totals] = await getDb(db)
+    .select({
+      total: sql<number>`count(*)::int`,
+      clean: sql<number>`count(*) FILTER (WHERE ${relationColumn("clean")} = 'true')::int`,
+    })
+    .from(relation)
+    .where(and(...predicates(filters)));
   return suggestionListOut.parse({
     items: page.flatMap((entry) => {
       const row = rows.get(entry.id);
@@ -588,16 +703,10 @@ export async function listSuggestionPage(
       pageIndex: Math.floor(input.offset / input.limit),
       pageSize: input.limit,
       coverage: canonicalCoverage,
-      totalCount: keys.length,
-      cleanCount: clean,
+      totalCount: totals?.total ?? 0,
+      cleanCount: totals?.clean ?? 0,
       ...(grouped
-        ? {
-            groups: statementGroups(
-              (await selectKeys(db, all, filters, order)).map(
-                (entry) => entry.key,
-              ),
-            ),
-          }
+        ? { groups: await statementGroups(db, relation, filters) }
         : {}),
     },
     next:
@@ -622,49 +731,65 @@ export async function suggestionCountsByFamily(
     ...suggestionCountsInput.parse(raw),
     status: "pending" as const,
   };
-  const { families, touching, matchedFamilies, familyScope } =
-    await scopedFamilyQuery(db, filters);
+  const { families, relation } = await preparedFacts(
+    db,
+    filters,
+    factNeeds(filters, [], ["clean", "strength"]),
+  );
+  const familyColumn = relationColumn("family");
+  const strengthCount = (strength: SuggestionStrength) =>
+    sql<number>`count(*) FILTER (WHERE ${relationColumn("strength")} = ${strength})::int`;
+  const [pendingRows, fieldRows] = [
+    await getDb(db)
+      .select({
+        family: sql<SuggestionListFamily>`${familyColumn}`,
+        pending: sql<number>`count(*)::int`,
+        clean: sql<number>`count(*) FILTER (WHERE ${relationColumn("clean")} = 'true')::int`,
+        strong: strengthCount("strong"),
+        medium: strengthCount("medium"),
+        weak: strengthCount("weak"),
+      })
+      .from(relation)
+      .where(and(...predicates(filters)))
+      .groupBy(familyColumn),
+    families.includes("field")
+      ? await getDb(db)
+          .select({
+            entity: sql<string>`${relationColumn("entity")}`,
+            field: sql<string>`${relationColumn("field")}`,
+            pending: sql<number>`count(*)::int`,
+          })
+          .from(relation)
+          .where(
+            and(
+              ...predicates(filters),
+              sql`${familyColumn} = ${suggestionListFamily.enum.field}`,
+            ),
+          )
+          .groupBy(relationColumn("entity"), relationColumn("field"))
+      : [],
+  ];
+  const pendingByFamily = new Map(pendingRows.map((row) => [row.family, row]));
   const counts = await Promise.all(
     families.map(async (family) => {
-      const presentation = suggestionFamilies[family];
-      const pending = emptyPendingCounts();
-      let admitted: SuggestionKey[] = [];
-      if (
-        touching?.size !== 0 &&
-        (!matchedFamilies || matchedFamilies.has(family))
-      ) {
-        const { keys: own } = await scopedKeys(
-          db,
-          { ...filters, family },
-          {
-            families: [family],
-            touching,
-            matchedFamilies,
-            familyScope: {
-              ...familyScope,
-              filters: { ...familyScope.filters, family },
-            },
-          },
-        );
-        admitted = own;
-        for (const key of own) {
-          pending.pending++;
-          if (key.clean) pending.clean++;
-          pending[key.strength]++;
-        }
-      }
-      const outcomes = await presentation.outcomes(db, filters);
+      const outcomes = await suggestionFamilies[family].outcomes(db, filters);
+      const { family: _family, ...pending } = pendingByFamily.get(family) ?? {
+        family,
+        ...emptyPendingCounts(),
+      };
       return {
         family,
         ...pending,
         ...outcomes,
         fields: outcomes.fields.map((field) => ({
           ...field,
-          pending: admitted.filter(
-            (key) =>
-              key.columns.entity === field.entity &&
-              key.columns.field === field.field,
-          ).length,
+          pending:
+            family === "field"
+              ? (fieldRows.find(
+                  (row) =>
+                    row.entity === field.entity && row.field === field.field,
+                )?.pending ?? 0)
+              : 0,
         })),
       };
     }),
@@ -703,22 +828,27 @@ export async function acceptCleanSuggestions(
   raw: z.input<typeof acceptCleanSuggestionsInput>,
 ) {
   const input = acceptCleanSuggestionsInput.parse(raw);
-  const skip = new Set(input.skip);
-  const { keys } = await scopedKeys(db, {
-    ...input.filters,
-    status: "pending",
-  });
-  const entries = await selectKeys(
+  const filters = { ...input.filters, status: "pending" as const };
+  const order: SortTerm[] = [{ by: "ready", direction: "desc" }];
+  const { relation } = await preparedFacts(
     db,
-    keys.filter((key) => key.clean && !skip.has(key.assessmentId)),
-    { ...input.filters, status: "pending" },
-    [{ by: "ready", direction: "desc" }],
+    filters,
+    factNeeds(filters, order),
+  );
+  const entries = await selectFacts(
+    db,
+    relation,
+    filters,
+    order,
     { limit: input.limit, offset: 0 },
+    [
+      sql`${relationColumn("clean")} = 'true'`,
+      input.skip.length
+        ? notInArray(relationColumn("id"), input.skip)
+        : undefined,
+    ],
   );
-  const hydrated = await hydrate(
-    db,
-    entries.map((entry) => entry.key),
-  );
+  const hydrated = await pagedRows(db, entries, filters);
   const rows = entries.flatMap((entry) => {
     const row = hydrated.get(entry.id);
     return row ? [row] : [];

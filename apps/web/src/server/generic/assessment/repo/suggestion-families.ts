@@ -48,7 +48,10 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { connectionBasisRecordRefs } from "~/server/domains/connection/repo/connection-evidence";
-import { readEntityConnectionsBatch } from "~/server/domains/connection/repo/entity-connections";
+import {
+  readEntityConnectionsBatch,
+  readStoredConnectionProposals,
+} from "~/server/domains/connection/repo/entity-connections";
 import {
   currentTransferPairs,
   transferPairEvidenceFingerprint,
@@ -56,6 +59,7 @@ import {
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import {
   readStatementSuggestions,
+  statementSuggestionFacts,
   statementSuggestionKeys,
   type StatementSuggestionScope,
   statementSuggestionStatusCounts,
@@ -124,6 +128,13 @@ type RowOf<F extends SuggestionListFamily> = Extract<
   { family: F }
 >;
 
+/** One family's browse columns; names match the declared filters and sorts. */
+export type SuggestionFactQuery = {
+  columns: Partial<Record<string, SQL>>;
+  from: SQL;
+  where: SQL;
+};
+
 /** Canonical input observations for background publication; absence is not a complete read set. */
 export type SuggestionReadObserver = (
   id: string,
@@ -144,6 +155,14 @@ type SuggestionOutcomes = {
  * `assessment-review.ts`; this adds listing, Strength, Impact and clean.
  */
 export type SuggestionFamilyPresentation<F extends SuggestionListFamily> = {
+  /**
+   * Browse columns for a family too large to read as keys. Only columns named
+   * in `needs` have to be meaningful; rows are revalidated when paged in.
+   */
+  facts?: (
+    query: SuggestionFamilyQuery,
+    needs: ReadonlySet<string>,
+  ) => SuggestionFactQuery | null;
   keys: (
     db: Database,
     query: SuggestionFamilyQuery,
@@ -455,6 +474,10 @@ function statementScope(
 
 const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"> =
   {
+    facts: (query, needs) => {
+      const scope = statementScope(query);
+      return scope ? statementSuggestionFacts(scope, needs) : null;
+    },
     keys: async (db, query) => {
       const scope = statementScope(query);
       if (!scope) return [];
@@ -634,7 +657,55 @@ const connectionActions = (proposal: ConnectionProposal): Action[] => {
 
 const READ_BATCH = 250;
 
+const connectionImpactCount = sql.join(
+  Object.entries(connectionImpact).map(
+    ([relation, impacts]) =>
+      sql`WHEN ${`connection.${relation}`} THEN ${impacts.filter((impact) => "qualityCheck" in impact).length}::int`,
+  ),
+  sql` `,
+);
+
 const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
+  facts: (query, needs) => {
+    if (query.filters.status !== "pending") return null;
+    const has = (...names: string[]) => names.some((name) => needs.has(name));
+    const target = (key: "entityKind" | "entityId") =>
+      sql`s.data->'connectionTarget'->>${key}`;
+    const { recordEntity, runId } = query.filters;
+    return {
+      columns: {
+        clean: sql`false`,
+        // Connection evidence averages hundreds of kB per row, so browse order
+        // cannot read Strength from it. The hydrated row reports the real one.
+        strength: sql`${"medium"}`,
+        createdAt: sql`to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+        impact: sql`CASE a.subject->>'scope' ${connectionImpactCount} ELSE 0 END`,
+        relation: sql`substr(a.subject->>'scope', ${"connection.".length + 1})`,
+        entityKind: sql`array_remove(ARRAY[s.entity, ${target("entityKind")}], NULL)`,
+        source: sql`source_identity.shortcode`,
+        target: target("entityId"),
+      },
+      from: sql.join(
+        [
+          sql`"AssessmentState" s`,
+          ...(has("impact", "relation")
+            ? [sql`JOIN "Assessment" a ON a.id = s.id`]
+            : []),
+          ...(has("source")
+            ? [
+                sql`LEFT JOIN "Entity" source_identity ON source_identity.id = s."recordId"`,
+              ]
+            : []),
+        ],
+        sql` `,
+      ),
+      where: sql`s.family = ${assessmentFamily.enum.recommendation} AND s.active
+        AND s.status = ${suggestionStatus.enum.pending}
+        AND ${assessmentIdScope(query.assessmentIds, sql`s.id`)}
+        ${recordEntity ? sql`AND (s.entity = ${recordEntity} OR ${target("entityKind")} = ${recordEntity})` : sql``}
+        ${runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runId})` : sql``}`,
+    };
+  },
   keys: async (db, query, observeInputs) => {
     const { filters, records } = query;
     if (filters.status !== "pending") return [];
@@ -708,6 +779,45 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
   rows: async (db, keys, observeInputs) => {
     if (!keys.length) return new Map();
     const byId = new Map(keys.map((key) => [key.assessmentId, key]));
+    const found = await tagSuggestionRows(db, keys);
+    const addProposal = (proposal: ConnectionProposal) => {
+      const key = byId.get(proposal.review.assessmentId);
+      if (!key || found.has(key.assessmentId)) return;
+      const source = {
+        entity: shortcodeEntity.parse(proposal.source.entityKind),
+        id: proposal.source.entityId,
+      };
+      const target = {
+        entity: shortcodeEntity.parse(proposal.target.entityKind),
+        id: proposal.target.entityId,
+      };
+      found.set(
+        key.assessmentId,
+        recommendationSuggestionRow.parse({
+          ...keyBase(key),
+          fingerprint: proposal.fingerprint,
+          family: "recommendation",
+          record: source,
+          other: target,
+          summary: [
+            { kind: "record", ref: source },
+            { kind: "text", text: proposal.label },
+            { kind: "record", ref: target },
+          ],
+          actions: connectionActions(proposal),
+          evidence: proposal,
+        }),
+      );
+    };
+    if (!observeInputs) {
+      for (const proposal of await readStoredConnectionProposals(
+        db,
+        keys.map((key) => key.assessmentId),
+      ))
+        addProposal(proposal);
+      return found;
+    }
+    // Publication observes every basis input; retires with the publication tables.
     const { rows: sources } = await unwrapDb(db).execute<{
       entityKind: string;
       entityId: string;
@@ -720,12 +830,10 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         sql`, `,
       )})
     `);
-    const found = await tagSuggestionRows(db, keys);
     const currentInputs = new Map<
       string,
       ReturnType<typeof connectionBasisRecordRefs>
     >();
-    // Stored only: readEntityConnectionsBatch rechecks evidence, never discovers.
     for (let start = 0; start < sources.length; start += READ_BATCH) {
       const groups = await readEntityConnectionsBatch(
         db,
@@ -733,47 +841,17 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
           .array()
           .parse(sources.slice(start, start + READ_BATCH)),
         keys.map((key) => key.assessmentId),
-        observeInputs &&
-          ((id, candidate, basis) => {
-            currentInputs.set(id, connectionBasisRecordRefs(candidate, basis));
-          }),
+        (id, candidate, basis) => {
+          currentInputs.set(id, connectionBasisRecordRefs(candidate, basis));
+        },
       );
-      for (const proposal of groups.flat()) {
-        const key = byId.get(proposal.review.assessmentId);
-        if (!key || found.has(key.assessmentId)) continue;
-        const source = {
-          entity: shortcodeEntity.parse(proposal.source.entityKind),
-          id: proposal.source.entityId,
-        };
-        const target = {
-          entity: shortcodeEntity.parse(proposal.target.entityKind),
-          id: proposal.target.entityId,
-        };
-        found.set(
-          key.assessmentId,
-          recommendationSuggestionRow.parse({
-            ...keyBase(key),
-            fingerprint: proposal.fingerprint,
-            family: "recommendation",
-            record: source,
-            other: target,
-            summary: [
-              { kind: "record", ref: source },
-              { kind: "text", text: proposal.label },
-              { kind: "record", ref: target },
-            ],
-            actions: connectionActions(proposal),
-            evidence: proposal,
-          }),
-        );
-      }
+      for (const proposal of groups.flat()) addProposal(proposal);
     }
-    if (observeInputs)
-      for (const [id, sources] of await resolveAssessmentReadInputRefs(
-        db,
-        [...currentInputs].map(([id, refs]) => ({ id, refs })),
-      ))
-        observeInputs(id, sources);
+    for (const [id, sources] of await resolveAssessmentReadInputRefs(
+      db,
+      [...currentInputs].map(([id, refs]) => ({ id, refs })),
+    ))
+      observeInputs(id, sources);
     return found;
   },
   outcomes: async (db, filters) => {
@@ -782,8 +860,8 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
       count: number;
     }>(sql`
       SELECT s.status, count(*)::int AS count
-      FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
-      WHERE a.family = ${assessmentFamily.enum.recommendation} AND ${reviewFamilyDeclarations.recommendation.scopes.connection}
+      FROM "AssessmentState" s
+      WHERE s.family = ${assessmentFamily.enum.recommendation}
         ${filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}
       GROUP BY s.status
     `);
@@ -836,8 +914,9 @@ async function transferPairRows(
       ${runCode(query) ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runCode(query)})` : sql``}
   `);
   if (!rows.length) return [];
+  // Browse pages list stored pairs; apply rechecks the evidence with its fence.
   const current =
-    query.filters.status === "pending" && !ids
+    query.filters.status === "pending" && !ids && !query.assessmentIds
       ? new Map(
           await Promise.all(
             (
@@ -909,7 +988,49 @@ async function transferPairRows(
   });
 }
 
+const TRANSFER_WEAK_BLOCKERS = [
+  "weak_movement",
+  "competing_candidates",
+  "unresolved_overlap",
+  "cash_leg_missing",
+  "owner_missing",
+];
+
 const transferPair: SuggestionFamilyPresentation<"transfer_pair"> = {
+  facts: (query) => {
+    const { status, runId } = query.filters;
+    const legs = ["outflow", "inflow"] as const;
+    const legArray = (value: (end: (typeof legs)[number]) => SQL) =>
+      sql`array_remove(ARRAY[${sql.join(legs.map(value), sql`, `)}], NULL)`;
+    return {
+      columns: {
+        clean: sql`coalesce((a.judgment->>'clean')::boolean, false)`,
+        strength: sql`CASE WHEN a.judgment->'blockers' ?| ARRAY[${sql.join(
+          TRANSFER_WEAK_BLOCKERS.map((blocker) => sql`${blocker}`),
+          sql`, `,
+        )}]::text[] THEN ${"weak"}
+          WHEN a.judgment->'blockers' ? ${"date_gap"} THEN ${"medium"} ELSE ${"strong"} END`,
+        createdAt: sql`to_char(a."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+        date: sql`a.judgment->>${"date"}`,
+        amount: sql`a.judgment->>${"amount"}`,
+        dateGapDays: sql`a.judgment->>${"dateGapDays"}`,
+        account: legArray((end) => sql`a.judgment->${end}->>${"accountId"}`),
+        owner: legArray((end) => sql`a.judgment->${end}->${"owner"}->>${"id"}`),
+        merchant: sql`ARRAY[concat_ws(' ', ${sql.join(
+          [
+            ...legs.map((end) => sql`a.judgment->${end}->>${"merchant"}`),
+            ...legs.map((end) => sql`a.judgment->${end}->>${"description"}`),
+          ],
+          sql`, `,
+        )})]`,
+      },
+      from: sql`"AssessmentState" s JOIN "Assessment" a ON a.id = s.id`,
+      where: sql`s.family = ${assessmentFamily.enum.transfer_pair} AND s.status = ${status}
+        ${status === suggestionStatus.enum.pending ? sql`AND s.active` : sql``}
+        AND ${assessmentIdScope(query.assessmentIds, sql`s.id`)}
+        ${runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runId})` : sql``}`,
+    };
+  },
   keys: async (db, query) =>
     (await transferPairRows(db, query)).map((row) => ({
       family: "transfer_pair",
@@ -918,13 +1039,7 @@ const transferPair: SuggestionFamilyPresentation<"transfer_pair"> = {
       fingerprint: row.fingerprint,
       clean: row.evidence.clean,
       strength: row.evidence.blockers.some((reason) =>
-        [
-          "weak_movement",
-          "competing_candidates",
-          "unresolved_overlap",
-          "cash_leg_missing",
-          "owner_missing",
-        ].includes(reason),
+        TRANSFER_WEAK_BLOCKERS.includes(reason),
       )
         ? "weak"
         : row.evidence.blockers.includes("date_gap")
