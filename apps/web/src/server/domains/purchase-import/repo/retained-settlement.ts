@@ -750,7 +750,8 @@ export async function planPurchaseRetainedSettlement(
     : target.statedTotal !== null
       ? financialEvidenceAmountMinor(target.statedTotal)
       : await liveExpenseTotalCents(tx, input.purchaseId).then((total) =>
-          total === null ? null : BigInt(total),
+          // Expense still uses legacy dollar rounding; an unsafe cent anchor cannot authorize settlement.
+          total === null || !Number.isSafeInteger(total) ? null : BigInt(total),
         );
   if (orderTotal === null) return "incomplete";
   const paid = payments.reduce((sum, payment) => sum + payment.amountMinor, 0n);
