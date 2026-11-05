@@ -7,7 +7,7 @@
  */
 import type { Entity } from "@cubby/schemas/entity";
 import { humanize } from "@cubby/shared";
-import { and, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
+import { inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { DatabaseChanges } from "~/lib/doorbell";
@@ -75,12 +75,9 @@ export function derivedWorkEligible(target: SQL): SQL {
         : [],
     ),
   );
-  // Publication activation can exhaust Postgres memory and roll back the entire
-  // page. Keep its tickets owed while canonical reads serve review during retirement.
-  return and(
-    sql`${target} NOT LIKE 'assessment.reviewFacts%'`,
-    blocked.length ? sql`NOT (${sql.join(blocked, sql` OR `)})` : sql`true`,
-  )!;
+  return blocked.length
+    ? sql`NOT (${sql.join(blocked, sql` OR `)})`
+    : sql`true`;
 }
 
 const ident = (name: string) => sql.raw(`"${name.replaceAll('"', '""')}"`);

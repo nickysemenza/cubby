@@ -78,7 +78,16 @@ const derivedDrain = (
       (limit === undefined
         ? (items) => admitDerivedPage({ items, computes })
         : undefined),
-    eligible: eligible ?? derivedWorkEligible,
+    // Explicit fixture drains still exercise the retained publication sink.
+    eligible:
+      eligible ??
+      (limit === undefined
+        ? (target) =>
+            and(
+              derivedWorkEligible(target),
+              notLike(target, "assessment.reviewFacts%"),
+            )!
+        : derivedWorkEligible),
     chunk,
     async prepare(db, items, context) {
       await context.fenced((tx) =>
@@ -199,7 +208,11 @@ export const derivedDrainHandler = (
         // Busy fanouts spent their expansion slot already and remain owed.
         // The direct phase never retries them ahead of independent values.
         eligible: (target) =>
-          and(derivedWorkEligible(target), notLike(target, "%@%"))!,
+          and(
+            derivedWorkEligible(target),
+            notLike(target, "assessment.reviewFacts%"),
+            notLike(target, "%@%"),
+          )!,
         admit(items) {
           if (overflowPriority === undefined)
             return admitDerivedPage({ items, computes });
