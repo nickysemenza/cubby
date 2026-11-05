@@ -16,6 +16,7 @@ import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 
 // Only the two params this screen renders from. The rest of the signed
 // authorize query stays in the address bar untouched — the oauthProviderClient
@@ -200,10 +201,10 @@ function ConsentPage() {
             </Stack>
           )}
 
-          <p className="text-sm text-muted-foreground">
+          <Description>
             Approving also lets this application read and modify your inventory,
             recipes, and other Cubby data through the MCP API.
-          </p>
+          </Description>
 
           {decisionError && (
             <p role="alert" className="text-sm text-destructive">

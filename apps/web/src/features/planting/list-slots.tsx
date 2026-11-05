@@ -20,6 +20,7 @@ import { ScheduleGrid } from "~/features/schedule/schedule-grid";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 
 function searchYear(value: ListSlotProps["search"]["year"]): number {
   const parsed = Number(value);
@@ -52,10 +53,10 @@ function PlantingsScheduleSlot({ search, navigate }: ListSlotProps) {
       <Row align="center" justify="between" className="flex-wrap gap-2">
         <div>
           <h2 className="text-sm font-semibold">Planting schedule</h2>
-          <p className="text-xs text-muted-foreground">
+          <Description size="xs">
             Grouped by current location. Recorded dates, expected harvests,
             cited recommendations, and free-text plans stay distinct.
-          </p>
+          </Description>
         </div>
         <Row align="center" gap="sm">
           <Button

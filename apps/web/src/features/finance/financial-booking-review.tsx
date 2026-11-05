@@ -28,6 +28,7 @@ import { FieldValueMark } from "~/ui/derived/value-mark";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 
 const CREDIT_PURPOSE_OPTIONS: readonly PickerOption[] = [
   { value: "vendor", label: "Vendor refund or proceeds" },
@@ -132,9 +133,9 @@ export function FinancialBookingReview({
   const busy = preview.isPending || commit.isPending;
   return (
     <Stack gap="sm">
-      <p className="text-sm text-muted-foreground">
+      <Description>
         Review this spending before recording it as an Expense.
-      </p>
+      </Description>
       <EntityReferencePicker
         entity="spendingCategory"
         label="Spending category"
@@ -190,10 +191,10 @@ export function FinancialBookingReview({
               </span>
             </Row>
           ) : !vendor && inference?.status === "ambiguous" ? (
-            <p className="text-xs text-muted-foreground">
+            <Description size="xs">
               This statement label identifies several Vendors. Choose the Vendor
               or an existing Purchase.
-            </p>
+            </Description>
           ) : null}
         </Stack>
       ) : null}

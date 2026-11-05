@@ -29,6 +29,7 @@ import {
 } from "~/ui/primitives/alert-dialog";
 import { Button } from "~/ui/primitives/button";
 import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 import { DateDisplay } from "~/ui/values/date-display";
 
 // A static sibling of /account/$accountView: TanStack ranks literal segments
@@ -79,7 +80,7 @@ function ConnectedAppsPage() {
       </p>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <Description>Loading…</Description>
       ) : error ? (
         <Stack gap="sm">
           <ErrorDisplay error={error} />

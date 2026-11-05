@@ -28,6 +28,7 @@ import {
   type IndexedSectionGroup,
   IndexedSections,
 } from "~/ui/data-table/indexed-sections";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
@@ -72,8 +73,7 @@ function RunActivity({ entry }: { entry: ActivityEntry | undefined }) {
     () => fieldEnumOptions(queryClient, "run", "status"),
     [queryClient],
   );
-  if (!entry)
-    return <p className="text-sm text-muted-foreground">No recorded run.</p>;
+  if (!entry) return <EmptyState size="inline">No recorded run.</EmptyState>;
   const status = statusOptions.find((option) => option.value === entry.status);
   return (
     <Stack gap="xs">

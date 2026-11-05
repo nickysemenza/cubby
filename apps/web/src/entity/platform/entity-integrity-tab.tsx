@@ -21,10 +21,12 @@ import { entityIntegrity } from "~/integrations/tanstack-query/generated/domains
 import { integrityProblems } from "~/integrations/tanstack-query/generated/domains/integrityProblems.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Grid, Panel, Row, Stack } from "~/ui/layout";
 import { KeyNumbers } from "~/ui/records/key-numbers";
 import { Badge, type BadgeVariant } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 import { Eyebrow } from "~/ui/text/eyebrow";
 
 import {
@@ -139,10 +141,10 @@ export function EntityIntegrityTab({
       />
 
       <Row justify="between" align="center" wrap gap="md">
-        <p className="text-sm text-muted-foreground">
+        <Description>
           One node per entity — click a node (or a chip below) to inspect its
           relationships, incoming edges, and lifecycle dispositions.
-        </p>
+        </Description>
         <Picker
           mode="segmented"
           label="Graph lens"
@@ -203,10 +205,10 @@ function PhysicalRelationshipGraph({ catalog }: { catalog: IntegrityCatalog }) {
   return (
     <div className="h-[420px] overflow-y-auto border border-[var(--border)] p-3">
       <Stack gap="tight">
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Physical FK/join edges → target entity · operation-specific lifecycle
           effects
-        </p>
+        </Description>
         {rows.map(({ entity, edge }) => {
           const dispositions = catalog.operations.flatMap((operation) =>
             operation.entity === entity
@@ -494,9 +496,7 @@ function EntityDetailPanel({
         tone="default"
         className="flex h-[420px] items-center justify-center"
       >
-        <p className="text-sm text-muted-foreground">
-          Select an entity in the graph to inspect it.
-        </p>
+        <Description>Select an entity in the graph to inspect it.</Description>
       </Panel>
     );
   }
@@ -541,9 +541,7 @@ function EntityDetailPanel({
         <Stack gap="sm">
           <Eyebrow>Relationships ({row.relationships.length})</Eyebrow>
           {row.relationships.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              No outgoing relationships.
-            </p>
+            <EmptyState size="inline">No outgoing relationships.</EmptyState>
           ) : (
             <Stack gap="tight">
               {row.relationships.map((rel) => (
@@ -560,9 +558,7 @@ function EntityDetailPanel({
         <Stack gap="sm">
           <Eyebrow>Incoming edges ({row.incomingEdges.length})</Eyebrow>
           {row.incomingEdges.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              Nothing points at this entity.
-            </p>
+            <Description size="xs">Nothing points at this entity.</Description>
           ) : (
             <Stack gap="tight">
               {row.incomingEdges.map((edge) => (
@@ -575,9 +571,9 @@ function EntityDetailPanel({
         <Stack gap="sm">
           <Eyebrow>Lifecycle operations</Eyebrow>
           {operations.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
+            <EmptyState size="inline">
               No delete or merge operation declared.
-            </p>
+            </EmptyState>
           ) : (
             <Stack gap="md">
               {operations.map((op) => (

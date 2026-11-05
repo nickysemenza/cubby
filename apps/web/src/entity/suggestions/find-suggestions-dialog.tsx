@@ -30,6 +30,7 @@ import { Overlay } from "~/ui/overlays/overlay";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { DropdownMenuItem } from "~/ui/primitives/dropdown-menu";
 import { Input } from "~/ui/primitives/input";
+import { Description } from "~/ui/text/description";
 
 type Family = SweepStartInput["families"][number]["family"];
 type SweepFieldTarget = z.infer<typeof sweepFieldTargets>[number];
@@ -480,10 +481,10 @@ export function FindSuggestionsDialog({
           ) : (
             <p className="text-muted-foreground">Estimating…</p>
           )}
-          <p className="mt-1.5 text-muted-foreground">
+          <Description className="mt-1.5">
             Already-covered records are skipped. Paid model calls pause at the
             AI budget and resume in the next window.
-          </p>
+          </Description>
         </div>
       </Overlay>
     </>

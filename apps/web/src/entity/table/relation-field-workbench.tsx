@@ -10,7 +10,9 @@ import {
   isInspectableFieldProvenance,
 } from "~/entity/fields/field-provenance";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
+import { Section } from "~/ui/layout/section";
 import { Button } from "~/ui/primitives/button";
 
 import { TableCellWorkbench } from "../../ui/data-table/table-cell-workbench";
@@ -57,21 +59,20 @@ function RelatedRecords({
     relationKeys.includes(branch.relationshipKey),
   );
   if (branches.every((branch) => branch.items.length === 0)) {
-    return <p className="text-sm text-muted-foreground">No related records.</p>;
+    return <EmptyState size="inline">No related records.</EmptyState>;
   }
 
   return (
     <Stack gap="sm">
       {branches.map((branch) => (
-        <section key={branch.relationshipKey} aria-label={branch.label}>
-          <Row align="center" justify="between" className="mb-1">
-            <h3 className="text-xs font-semibold text-foreground-strong">
-              {branch.label}
-            </h3>
-            <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-              {branch.totalCount}
-            </span>
-          </Row>
+        <Section
+          key={branch.relationshipKey}
+          title={branch.label}
+          headingAs="h3"
+          compact
+          count={branch.totalCount}
+          ruled
+        >
           <div className="border-y border-border">
             {branch.items.map((item) => {
               const node = nodes.get(`${item.entityKind}:${item.entityId}`);
@@ -97,7 +98,7 @@ function RelatedRecords({
               );
             })}
           </div>
-        </section>
+        </Section>
       ))}
     </Stack>
   );

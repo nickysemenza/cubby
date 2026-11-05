@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import { Description } from "~/ui/text/description";
 
 const EMPTY: readonly PhotoGroupProposal[] = [];
 type ReviewScope = {
@@ -155,8 +156,8 @@ export function PhotoReviewEmpty({
 }) {
   if (!total || visible) return null;
   return (
-    <p className="text-sm text-muted-foreground">
+    <Description>
       No photo groups match this view. Clear search or choose All items.
-    </p>
+    </Description>
   );
 }

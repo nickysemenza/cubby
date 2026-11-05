@@ -35,6 +35,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import { Description } from "~/ui/text/description";
 
 import { useFieldSuggestionContext } from "./field-suggestion-provider";
 
@@ -253,9 +254,7 @@ function BoundFormFieldResolution<TValues extends FieldValues>({
             field={field}
           />
           {explanations[0]?.isFetching ? (
-            <p className="text-xs text-muted-foreground">
-              Loading source preview…
-            </p>
+            <Description size="xs">Loading source preview…</Description>
           ) : null}
           {explanations[0]?.error ? (
             <p role="alert" className="text-xs text-destructive">

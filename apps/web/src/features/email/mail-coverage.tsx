@@ -39,6 +39,7 @@ import {
 } from "~/ui/primitives/popover";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/ui/primitives/tabs";
 import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 import { DateDisplay } from "~/ui/values/date-display";
 
@@ -833,9 +834,9 @@ function PurchaseCountCell({ row }: { row: MailCoverageRow }) {
         onClick={(event) => event.stopPropagation()}
       >
         <h3 className="text-sm font-semibold">Linked Purchases</h3>
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Distinct Purchases linked to this Vendor’s Emails in this mailbox.
-        </p>
+        </Description>
         <ul className="space-y-2">
           {row.linkedPurchaseIds.map((id) => (
             <li key={id}>
@@ -877,11 +878,11 @@ function SearchCoverageCell({ row }: { row: MailCoverageRow }) {
         onClick={(event) => event.stopPropagation()}
       >
         <h3 className="text-sm font-semibold">Search coverage</h3>
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Completed full-history Gmail queries for this Vendor’s current domains
           and verified senders. This counts query definitions, not Emails or
           import Runs.
-        </p>
+        </Description>
         {row.searches.length ? (
           <ul className="space-y-3">
             {row.searches.map((search) => (
@@ -912,16 +913,14 @@ function SearchCoverageCell({ row }: { row: MailCoverageRow }) {
                 {search.runId ? (
                   <EntityRefLink entity="run" id={search.runId} />
                 ) : search.state !== "not_started" ? (
-                  <p className="text-xs text-muted-foreground">
-                    Run not recorded
-                  </p>
+                  <Description size="xs">Run not recorded</Description>
                 ) : null}
                 {search.completedAt ? (
                   <DateDisplay timestamp={search.completedAt} />
                 ) : search.state === "complete" ? (
-                  <p className="text-xs text-muted-foreground">
+                  <Description size="xs">
                     Completion time not recorded
-                  </p>
+                  </Description>
                 ) : null}
               </li>
             ))}
@@ -931,10 +930,10 @@ function SearchCoverageCell({ row }: { row: MailCoverageRow }) {
             Add a website or verified sender to the Vendor to enable searches.
           </p>
         )}
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Existing Emails can come from earlier or manual imports. Date-limited
           runs are shown under Controlled import.
-        </p>
+        </Description>
       </PopoverContent>
     </Popover>
   );
@@ -971,11 +970,11 @@ function LinkedEmailCell({ row }: { row: MailCoverageRow }) {
           {countLabel(row.linkedEmails - row.linkedRetainedEmails, "Email")}{" "}
           with metadata only
         </p>
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           An Email’s Purchase link remains if its original content is cleared.
           Content saved counts currently retained originals; it is not a
           required step before an Email can stay linked.
-        </p>
+        </Description>
       </PopoverContent>
     </Popover>
   );
@@ -1243,10 +1242,10 @@ function ControlledMailImport({
                   ? "Gmail did not provide a match count."
                   : `${preview.data.approximate ? "About " : ""}${countLabel(preview.data.matchedMessages, "matching message")}`}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <Description size="xs">
                 Candidate matches in Gmail; import rules still apply. Updates
                 when you choose new dates.
-              </p>
+              </Description>
               <DateDisplay timestamp={preview.data.checkedAt} />
               <details className="text-xs">
                 <summary>Gmail search</summary>
@@ -1669,12 +1668,12 @@ function CoverageTable({
       }}
     >
       {vendorId || mailboxId || accountId ? (
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Showing linked record context.{" "}
           <Link to="/emails/coverage" search={{}} className="underline">
             Show all Vendors and mailboxes
           </Link>
-        </p>
+        </Description>
       ) : null}
       {onViewChange ? (
         <TabsList className="h-auto flex-wrap" aria-label="Mail coverage views">
@@ -1809,10 +1808,10 @@ export function MailCoveragePage({
   const loading = useHydratedLoading(query.isPending);
   return (
     <div className="min-w-0 space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         Track coverage and upcoming work in each mailbox. Select a Vendor to
         preview Gmail matches or import next.
-      </p>
+      </Description>
       <details className="text-xs text-muted-foreground">
         <summary>How coverage and counts work</summary>
         <p className="max-w-prose text-xs text-muted-foreground">

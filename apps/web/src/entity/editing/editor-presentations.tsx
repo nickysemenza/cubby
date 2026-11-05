@@ -466,9 +466,7 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
             );
           })}
           {!productsQuery.isLoading && productOptions.length === 0 ? (
-            <p className="p-1 text-muted-foreground">
-              No matching products yet.
-            </p>
+            <Description className="p-1">No matching products yet.</Description>
           ) : null}
         </div>
         <p className="text-muted-foreground">

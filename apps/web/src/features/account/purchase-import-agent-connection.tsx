@@ -7,6 +7,7 @@ import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { formatTimestamp } from "~/lib/date-format";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 
 export function PurchaseImportAgentConnection({
@@ -22,10 +23,10 @@ export function PurchaseImportAgentConnection({
   );
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         Authorize the private agent to continue an interactive vendor import on
         your behalf.
-      </p>
+      </Description>
 
       {feedback === "authorized" ? (
         <StatusText tone="positive">

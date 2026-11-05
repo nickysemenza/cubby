@@ -9,6 +9,7 @@ import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
 import { GraphExplorer } from "~/entity/relationships/graph-explorer";
 import { pageTitle } from "~/lib/page-title";
 import { Stack } from "~/ui/layout";
+import { Description } from "~/ui/text/description";
 
 export const Route = createFileRoute("/_authenticated/graph")({
   validateSearch: z.object({
@@ -64,10 +65,10 @@ function GraphPage() {
             }
           />
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <Description>
             Choose a starting record, then expand its connections to build your
             map.
-          </p>
+          </Description>
         )}
       </Stack>
     </Page>

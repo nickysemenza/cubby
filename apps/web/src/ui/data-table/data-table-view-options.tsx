@@ -13,6 +13,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
+import { Description } from "~/ui/text/description";
 
 import { isTableLayoutCustomized } from "./column-layout";
 import type {
@@ -86,9 +87,9 @@ export function DataTableViewOptions<TData extends RowData>({
         >
           <div className="space-y-4">
             {isCustomized && (
-              <p className="text-xs text-muted-foreground">
+              <Description size="xs">
                 Customized layout — restore defaults below
-              </p>
+              </Description>
             )}
             <TableLayoutCustomizer table={table} />
           </div>

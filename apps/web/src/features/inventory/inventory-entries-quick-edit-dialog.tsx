@@ -14,6 +14,7 @@ import {
 import { EditableAmountCell } from "~/entity/table/editable-cell";
 import { EditableEntityCell } from "~/entity/table/editable-entity-cell";
 import { FieldRecordValue } from "~/ui/derived/record-value";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { NoneValue } from "~/ui/text/none-value";
@@ -80,7 +81,7 @@ export function InventoryEntriesQuickEditDialog({
     >
       <Stack gap="xs">
         {entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No inventory entries.</p>
+          <EmptyState size="inline">No inventory entries.</EmptyState>
         ) : (
           entries.map((entry) => {
             const amount = fieldValueOf(entry.fields.amount);

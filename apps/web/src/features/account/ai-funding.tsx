@@ -25,6 +25,7 @@ import {
 } from "~/ui/primitives/alert-dialog";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 
 const usd = (value: number) => formatCurrency(value);
@@ -122,12 +123,12 @@ export function AiFundingSettings() {
   const budget = status.data;
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         Every feature’s frontier AI calls use Claude credit first, then OpenAI
         credit, then the ChatGPT plan, then paid models. Background work stops
         drawing each free source at its window budget (the plan’s quota is
         shared with your own use), then pays within the paid budget.
-      </p>
+      </Description>
       <Stack gap="md">
         {status.isLoading ? <StatusText>Loading AI funding…</StatusText> : null}
         {status.error ? <ErrorDisplay error={status.error} /> : null}

@@ -21,6 +21,7 @@ import { schemaSheetSchema } from "~/entity/platform/schema-sheet";
 import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
 import { EntityRelations } from "~/entity/relationships/entity-relations";
 import { CookbookSelect } from "~/features/recipe/cookbook-select";
+import { Description } from "~/ui/text/description";
 import type { GraphFilters } from "~/ui/visualizations/dependency-graph-model";
 const RecipeDependencyGraph = lazy(() =>
   import("~/entity/graphs/recipe-dependency-graph").then((module) => ({
@@ -286,11 +287,11 @@ function GraphTab({ recipes }: { recipes: boolean }) {
   if (!recipes)
     return (
       <Stack gap="md">
-        <p className="text-sm text-muted-foreground">
+        <Description>
           Dependency arrows point from blockers to blocked work. Dotted
           hierarchy connectors show projects and subtasks. Click a record to
           open it.
-        </p>
+        </Description>
         <WorkDependencyGraph
           search={search.q ?? ""}
           onSearch={onSearch}
@@ -312,10 +313,10 @@ function GraphTab({ recipes }: { recipes: boolean }) {
     );
   return (
     <Stack gap="md">
-      <p className="text-sm text-muted-foreground">
+      <Description>
         Each arrow means “uses”: it points from a recipe to the sub-recipe it
         uses as an ingredient. Click a record to open it.
-      </p>
+      </Description>
       <CookbookSelect
         value={search.cookbookId}
         onChange={(cookbookId) => {
@@ -345,10 +346,10 @@ function CrossEntityTab() {
   const navigate = useNavigate();
   return (
     <Stack gap="md">
-      <p className="text-sm text-muted-foreground">
+      <Description>
         Follow connections across your household. Choose a starting record, then
         reveal each relationship branch as you need it.
-      </p>
+      </Description>
       <EntityGraphPicker
         onSelect={(root) =>
           void navigate({
@@ -401,10 +402,10 @@ function CrossEntityTab() {
           }
         />
       ) : (
-        <p className="text-sm text-muted-foreground">
+        <Description>
           Start with a cookbook, recipe, product, project, or any searchable
           record.
-        </p>
+        </Description>
       )}
     </Stack>
   );

@@ -15,6 +15,7 @@ import { GraphExplorer } from "~/entity/relationships/graph-explorer";
 import { pageTitle } from "~/lib/page-title";
 import { Stack, Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 
 // A partial or stale link still offers a starting-record picker.
 const searchSchema = z.object({
@@ -160,11 +161,11 @@ function ConnectionsPage() {
             )}
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <Description>
             Choose a record to explore its purchases, placement, work, and
             source records. Select a connection to inspect its facts and
             evidence.
-          </p>
+          </Description>
         )}
       </Stack>
     </Page>

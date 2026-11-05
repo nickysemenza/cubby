@@ -7,6 +7,7 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Panel } from "~/ui/layout/panel";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 
 import { appendGraphImages, type GraphImage } from "./dependency-graph-images";
 import { bindGraphInteractions } from "./dependency-graph-interactions";
@@ -436,10 +437,10 @@ export function DependencyGraphCanvas({
           </Row>
         )}
       </Row>
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         Pinch to zoom; scroll or drag to explore. Tab to records; arrow keys
         scroll the canvas. Fit graph shows the overview.
-      </p>
+      </Description>
       {state && !error && <output>{state}</output>}
       {error !== null && (
         <ErrorDisplay

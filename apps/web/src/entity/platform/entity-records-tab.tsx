@@ -47,6 +47,7 @@ import {
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useFilterBarDraft } from "~/ui/data-table/use-filter-bar-draft";
 import { Stack } from "~/ui/layout";
+import { Description } from "~/ui/text/description";
 import { EnumPill } from "~/ui/text/enum-pill";
 import { renderScalarValue } from "~/ui/values/scalar-value";
 
@@ -362,9 +363,7 @@ export function EntityRecordsTab({
   });
   return (
     <Stack gap="md">
-      <p className="text-sm text-muted-foreground">
-        Records across all entity types.
-      </p>
+      <Description>Records across all entity types.</Description>
       <div className="hidden md:block">
         <FilterBar
           fields={filterFields}

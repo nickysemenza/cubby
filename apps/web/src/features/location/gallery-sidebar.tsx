@@ -4,6 +4,7 @@ import { cn } from "cn";
 import { useEffect, useRef } from "react";
 
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 
 import { LocationOutline } from "./location-outline";
 
@@ -96,9 +97,9 @@ export function GallerySidebar({
               onSelect={onSelect}
             />
           ) : (
-            <p className="px-2 py-4 text-xs text-muted-foreground">
+            <Description size="xs" className="px-2 py-4">
               No locations in this outline.
-            </p>
+            </Description>
           )}
         </div>
       )}

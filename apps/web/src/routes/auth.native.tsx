@@ -14,6 +14,7 @@ import {
 import { pageTitle } from "~/lib/page-title";
 import { Panel } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 
 export const Route = createFileRoute("/auth/native")({
   validateSearch: nativeAuthSearch,
@@ -64,9 +65,7 @@ function NativeAuthCompletion({
       title="Returning to Cubby"
       caption="Google sign-in is complete. Cubby should reopen automatically."
     >
-      <p className="text-sm text-muted-foreground">
-        You can close this window after the app opens.
-      </p>
+      <Description>You can close this window after the app opens.</Description>
     </Panel>
   );
 }
@@ -165,7 +164,7 @@ function NativeAuthStart({
             again.
           </p>
         ) : (
-          <p className="text-sm text-muted-foreground">Opening Google…</p>
+          <Description>Opening Google…</Description>
         )}
         {error ? (
           <p role="alert" className="text-sm text-destructive">

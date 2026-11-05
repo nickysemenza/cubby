@@ -14,6 +14,7 @@ import {
 import { formatInstant } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
+import { Description } from "~/ui/text/description";
 
 /* oxlint-disable jsx-a11y/prefer-tag-over-role -- Pinned labels and independently scrolling dates require flex layout; native table layout cannot preserve those regions. */
 
@@ -627,9 +628,9 @@ export function ScheduleGrid({
         </div>
       </div>
       {rows.length === 0 && (
-        <p className="px-3 py-4 text-sm text-muted-foreground">
+        <Description className="px-3 py-4">
           No schedule rows in this view.
-        </p>
+        </Description>
       )}
     </div>
   );

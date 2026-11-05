@@ -178,9 +178,9 @@ function MemberLoginsSettings() {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         Link each signed-in account to the household member it represents.
-      </p>
+      </Description>
 
       {roster.isLoading ? (
         <StatusText>Loading member logins…</StatusText>

@@ -14,9 +14,11 @@ import { z } from "zod";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { recommendations } from "~/integrations/tanstack-query/generated/domains/recommendations.gen";
 import { search } from "~/integrations/tanstack-query/generated/domains/search.gen";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 import { RecordList } from "~/ui/records/record-list";
+import { Description } from "~/ui/text/description";
 
 import {
   type EntityDisplayImageMap,
@@ -183,9 +185,9 @@ export function RelatednessRail({
       )}
 
       {status === "unavailable" && (
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Similarity is unavailable until embeddings are configured.
-        </p>
+        </Description>
       )}
 
       <EntityDisplayImagesProvider
@@ -217,9 +219,7 @@ export function RelatednessRail({
         </Button>
       )}
       {status === "ready" && items.length === 0 && (
-        <p className="text-xs text-muted-foreground">
-          No related products yet.
-        </p>
+        <EmptyState size="inline">No related products yet.</EmptyState>
       )}
 
       {status === "ready" && (

@@ -33,6 +33,7 @@ import {
   noArbitraryFontSizeRule,
   noDarkVariantRule,
   noHandRolledPanelRule,
+  noRawKbdRule,
 } from "./rules/visual-conventions.ts";
 
 /** Cubby-specific Oxlint rules ported from one-off `scripts/check-*.ts` gates. */
@@ -45,6 +46,7 @@ const cubbyPlugin = eslintCompatPlugin({
     "no-arbitrary-font-size": noArbitraryFontSizeRule,
     "no-dark-variant": noDarkVariantRule,
     "no-hand-rolled-panel": noHandRolledPanelRule,
+    "no-raw-kbd": noRawKbdRule,
     "no-ordinary-dialog-bypass": noOrdinaryDialogBypassRule,
     "domain-layers": domainLayersRule,
     "no-domain-barrel": noDomainBarrelRule,

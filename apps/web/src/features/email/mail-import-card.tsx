@@ -7,6 +7,7 @@ import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 import { Switch } from "~/ui/primitives/switch";
+import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 
 const MAIL_IMPORT_REFRESH_MS = 30_000;
@@ -44,7 +45,7 @@ export function MailImportSettings() {
   const mailboxes = status.data?.mailboxes ?? [];
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         When on, daily discovery reads new mail and searches the history of
         known Vendors, observed shared senders and unmatched transactions.
         Unambiguous purchases are imported; anything uncertain waits in the{" "}
@@ -53,7 +54,7 @@ export function MailImportSettings() {
         </Link>
         . Turning this off prevents new automatic imports; previously admitted
         work may finish. Inventory is never received automatically.
-      </p>
+      </Description>
 
       <Stack gap="md">
         {status.isLoading ? (
@@ -61,9 +62,9 @@ export function MailImportSettings() {
         ) : null}
         {status.error ? <ErrorDisplay error={status.error} /> : null}
         {status.data && mailboxes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <Description>
             Connect Google &amp; Gmail above to turn on Mail import.
-          </p>
+          </Description>
         ) : null}
         {mailboxes.map((mailbox) => {
           const id = `mail-import-${mailbox.mailboxId}`;

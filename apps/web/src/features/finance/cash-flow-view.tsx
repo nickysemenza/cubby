@@ -33,6 +33,7 @@ import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { Switch } from "~/ui/primitives/switch";
 import { KeyNumbers } from "~/ui/records/key-numbers";
+import { Description } from "~/ui/text/description";
 import {
   Visualization,
   visualizationState,
@@ -176,10 +177,10 @@ function ScenarioEditor({
           ]}
         />
       ) : (
-        <p className="my-0 text-xs text-muted-foreground">
+        <Description size="xs" className="my-0">
           No scenarios. Add a planned inflow or outflow to see its effect on
           net; scenarios live in this page&apos;s link only.
-        </p>
+        </Description>
       )}
       <form
         className="flex flex-wrap items-end gap-2"

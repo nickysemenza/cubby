@@ -12,6 +12,7 @@ interface FieldArrayItemControlsProps {
   fieldsLength: number;
   itemLabel?: string;
   className?: string;
+  removeDisabled?: boolean;
 }
 
 export const FieldArrayItemControls: FC<FieldArrayItemControlsProps> = ({
@@ -21,6 +22,7 @@ export const FieldArrayItemControls: FC<FieldArrayItemControlsProps> = ({
   fieldsLength,
   itemLabel = "item",
   className = "mt-6 flex flex-col space-y-1",
+  removeDisabled = false,
 }) => (
   <div className={className}>
     <Button
@@ -52,6 +54,7 @@ export const FieldArrayItemControls: FC<FieldArrayItemControlsProps> = ({
       className="max-sm:min-h-11 max-sm:min-w-11"
       aria-label={`Remove ${itemLabel} ${index + 1}`}
       onClick={() => remove(index)}
+      disabled={removeDisabled}
     >
       <TrashIcon className="size-4" />
     </Button>

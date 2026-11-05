@@ -42,6 +42,7 @@ import { entityList } from "~/integrations/tanstack-query/generated/domains/enti
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 
 import {
   useSectionCount,
@@ -692,7 +693,7 @@ function LiveEntityRelationTable({
           </p>
         ) : null}
         {truncated ? (
-          <p className="text-xs text-muted-foreground">
+          <Description size="xs">
             Showing {plan.limit} of {list.totalCount} ·{" "}
             <Link
               to="/connections"
@@ -704,7 +705,7 @@ function LiveEntityRelationTable({
             >
               Open all
             </Link>
-          </p>
+          </Description>
         ) : null}
       </div>
     </RelationshipMovementProvider>

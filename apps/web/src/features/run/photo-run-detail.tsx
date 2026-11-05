@@ -20,6 +20,7 @@ import { Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Progress } from "~/ui/primitives/progress";
+import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 import { AiCost } from "~/ui/values/ai-cost";
 
@@ -37,9 +38,7 @@ function PhotoRunCost({ run }: { run: RunDetail }) {
   if (!usage.data) return null;
   return (
     <div aria-live="polite">
-      <p className="text-xs text-muted-foreground">
-        Run cost · includes all nested work
-      </p>
+      <Description size="xs">Run cost · includes all nested work</Description>
       <AiCost cost={usage.data} />
     </div>
   );

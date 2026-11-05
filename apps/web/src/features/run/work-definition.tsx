@@ -11,6 +11,7 @@ import { Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Facts } from "~/ui/records/facts";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
+import { Description } from "~/ui/text/description";
 
 /** The same effects contract is read before launch and alongside actual outcomes. */
 export function WorkEffects({
@@ -70,10 +71,10 @@ export function DefinedRunSteps({ kind }: { kind: RunKindDeclaration }) {
       ))}
     </RecordList>
   ) : (
-    <p className="text-sm text-muted-foreground">
+    <Description>
       The work depends on the selected inputs. Open an actual Run to inspect its
       targets, operations and outcomes; this type has no fixed step sequence.
-    </p>
+    </Description>
   );
 }
 
@@ -96,10 +97,10 @@ export function RunDefinition({ purpose }: { purpose: string }) {
   const parsed = runPurpose.safeParse(purpose);
   if (!parsed.success)
     return (
-      <p className="text-sm text-muted-foreground">
+      <Description>
         This retained Run has no current type definition. Its recorded outcomes
         remain available below.
-      </p>
+      </Description>
     );
   const kind: RunKindDeclaration = RUN_KINDS[parsed.data];
   return (
@@ -129,10 +130,10 @@ export function JobDefinition({
   const declaration = jobKindDeclaration(kind);
   if (!declaration)
     return (
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         No current definition for this retained Job kind. Inspect its subject,
         owning Run and recorded diagnostics.
-      </p>
+      </Description>
     );
   return (
     <Disclosure
