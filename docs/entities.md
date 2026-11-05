@@ -2741,6 +2741,12 @@ legacy values temporarily publish in `DerivedValue` until their typed/view
 cutovers; their retained source tickets are neither claimed nor deleted.
 Project start-date ordering/filtering already reads canonical recursive SQL.
 
+Typed result slots distinguish an absent publication from a published null through
+their own publication time. A published SQL NULL becomes JSON null on the generic
+read. In particular, a published empty Product price remains empty rather than
+falling back to an authored price; a missing publication still uses the declared
+field-resolution fallback.
+
 Per-value queued/running/failure observations are retired. Activity checks the
 coarse pass for two missed hourly periods or three consecutive failures; a 75-minute lag marks it behind without flapping at an hour. It
 never treats retained tickets as unfinished work. The maintenance rebuild command
