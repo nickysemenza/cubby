@@ -68,7 +68,8 @@ export async function rebuildDerived(
       const followingTarget = following
         ? { target: following.target, afterId: null }
         : null;
-      let next = followingTarget;
+      let next: { target: string; afterId: string | null } | null =
+        followingTarget;
       try {
         const compute = computes[declaration.compute];
         if (!compute)
