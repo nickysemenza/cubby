@@ -26,11 +26,11 @@ import { financialTransaction } from "~/integrations/tanstack-query/generated/do
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { Facts } from "~/ui/common/facts";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { Facts } from "~/ui/records/facts";
 import { Description } from "~/ui/text/description";
 
 const CREDIT_PURPOSE_OPTIONS: readonly PickerOption[] = [
