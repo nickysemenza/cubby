@@ -39,6 +39,7 @@ const STATUS_TONES = {
     delete: "destructive",
   },
   statementMatch: {
+    held: "warning",
     matched: "positive",
     unmatched: "warning",
     superseded: "slate",
