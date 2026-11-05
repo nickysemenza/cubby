@@ -76,7 +76,7 @@ describe("background work status", () => {
     await insertWorkItems(ctx.db, [
       {
         drain: DERIVED_DRAIN_JOB_KEY,
-        target: "assessment.reviewFacts",
+        target: "product.dataQuality",
         ref: crypto.randomUUID(),
         priority: 1,
         readyAt: minutesAgo(720, now),

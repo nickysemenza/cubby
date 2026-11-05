@@ -11,7 +11,6 @@ import {
 import { recordChange } from "~/server/generic/changes/repo/change";
 import type { DerivedComputes } from "~/server/generic/derived/repo/compute";
 import {
-  DERIVED_UNCLAIMED_TARGETS,
   DERIVED_COMPUTE_BATCH,
   admitDerivedPage,
   derivedChunk,
@@ -67,16 +66,7 @@ const derivedDrain = (
       (limit === undefined
         ? (items) => admitDerivedPage({ items, computes })
         : undefined),
-    // Explicit fixture drains still exercise the retained publication sink.
-    eligible:
-      eligible ??
-      (limit === undefined
-        ? (target) =>
-            and(
-              derivedWorkEligible(target),
-              notLike(target, DERIVED_UNCLAIMED_TARGETS),
-            )!
-        : derivedWorkEligible),
+    eligible: eligible ?? derivedWorkEligible,
     chunk,
     async prepare(db, items, context) {
       await context.fenced((tx) =>
@@ -199,11 +189,7 @@ export const derivedDrainHandler = (
         // Busy fanouts spent their expansion slot already and remain owed.
         // The direct phase never retries them ahead of independent values.
         eligible: (target) =>
-          and(
-            derivedWorkEligible(target),
-            notLike(target, DERIVED_UNCLAIMED_TARGETS),
-            notLike(target, "%@%"),
-          )!,
+          and(derivedWorkEligible(target), notLike(target, "%@%"))!,
         admit(items) {
           if (overflowPriority === undefined)
             return admitDerivedPage({ items, computes });

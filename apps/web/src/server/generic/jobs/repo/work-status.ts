@@ -17,10 +17,7 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { DERIVED_REBUILD_KEY } from "~/server/db/derived-rebuild-schema";
-import {
-  DERIVED_DRAIN_JOB_KEY,
-  DERIVED_UNCLAIMED_TARGETS,
-} from "~/server/db/derived-trigger-ddl";
+import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import {
@@ -176,7 +173,6 @@ async function readDrains(
       CROSS JOIN LATERAL (
         SELECT w."readyAt", w."lastError" FROM "WorkItem" w
         WHERE w.drain = d.drain AND w.priority = p.priority AND w."readyAt" <= ${at}
-          AND w.target NOT LIKE ${DERIVED_UNCLAIMED_TARGETS}
         ORDER BY w."readyAt" LIMIT 1
       ) oldest
       ORDER BY oldest."readyAt" LIMIT 1
@@ -187,7 +183,6 @@ async function readDrains(
       CROSS JOIN LATERAL (
         SELECT w."lastError", w.attempts, w."dirtiedAt" FROM "WorkItem" w
         WHERE w.drain = d.drain AND w.priority = p.priority AND w."readyAt" > ${at}
-          AND w.target NOT LIKE ${DERIVED_UNCLAIMED_TARGETS}
           AND w."waitCause" IS NULL AND w."lastError" IS NOT NULL
           AND w.attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
         ORDER BY w."readyAt" LIMIT 1
