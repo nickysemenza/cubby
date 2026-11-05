@@ -1051,6 +1051,7 @@ Rules:
           storage: "json",
           sort: "workDiagnosticFactsSort",
         },
+        // This phase is hourly-only; source changes cannot admit legacy fan-out tickets.
         rebuildPhase: "diagnostics",
         publishes: "derivedValue",
         resultSchema: workDiagnosticFacts,

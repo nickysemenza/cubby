@@ -666,6 +666,13 @@
       "when": 1793898237150,
       "tag": "0094_drop_unread_job_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1793898237151,
+      "tag": "0095_stop_diagnostic_ticket_admission",
+      "breakpoints": true
     }
   ]
 }
