@@ -246,7 +246,7 @@ function sortColumns(by: string) {
 }
 
 /**
- * The fact relation for one read. Large families project from AssessmentState;
+ * The fact relation for one read. Large families project from Suggestion columns;
  * small ones reuse their keys. Family hydration revalidates only paged rows, so
  * a count may include a row whose evidence has since gone stale.
  */

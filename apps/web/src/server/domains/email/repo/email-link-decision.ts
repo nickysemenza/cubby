@@ -166,7 +166,7 @@ export async function publishEmailLinkDecision(
   });
 }
 
-/** The retained subject of a decision, as its Assessment history stored it. */
+/** The retained subject of a decision, as its review history stores it. */
 export const emailLinkSubject = (
   row: Pick<
     Decision,

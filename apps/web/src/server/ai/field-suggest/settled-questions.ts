@@ -402,7 +402,7 @@ async function readSavedAnswerPreviews(
     ${preview}->${"suggestion"}::text->>${"assessmentId"}::text
   )`;
   // Stored legacy previews may lack a valid assessment handle. Cast the
-  // lookup value, preserving UUID indexes on AssessmentState and Feedback.
+  // lookup value, preserving the UUID index on Suggestion.
   const answerAssessment = sql`CASE
     WHEN ${answerAssessmentText} ~ ${"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}
     THEN (${answerAssessmentText})::uuid

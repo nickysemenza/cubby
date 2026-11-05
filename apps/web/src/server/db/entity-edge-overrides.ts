@@ -1648,7 +1648,7 @@ export const ENTITY_EDGE_OVERRIDES = {
       role: "history",
       label: "Suggestions",
       description:
-        "Nullable execution provenance; deleting the Run preserves Assessment and Feedback history.",
+        "Nullable execution provenance; deleting the Run preserves Suggestions and their decisions.",
       liveness: {
         kind: "allow-target-deleted",
         reason:

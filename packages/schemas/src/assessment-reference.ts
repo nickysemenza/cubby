@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Assessment/Feedback child handles retain PostgreSQL GUIDs, including historical hash-derived IDs. */
+/** Suggestion and decision handles retain PostgreSQL GUIDs, including historical hash-derived IDs. */
 export const assessmentChildHandle = z.guid();
 
 /** Unknown membership is a coverage gap, never a precise count of missing results. */

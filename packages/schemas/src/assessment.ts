@@ -192,7 +192,7 @@ export const assessmentProjectionTargets = {
   }),
   product_pair: z.object({ entity: z.literal("product"), recordId: z.uuid() }),
   recommendation: publicAssessmentTarget,
-  /** Assessment history retains the canonical observation UUID behind its public code. */
+  /** A Suggestion retains the canonical observation UUID behind its public code. */
   statement_transaction: z.object({
     entity: z.literal("sourceTransactionRecord"),
     recordId: z.uuid(),

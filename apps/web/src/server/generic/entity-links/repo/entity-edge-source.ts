@@ -275,7 +275,7 @@ const edgeArmsSql = (
 /**
  * The live edge source: both endpoints must be live identities. The target's
  * kind must match the arm's, because a polymorphic column such as
- * `AssessmentState.recordId` feeds one arm per target kind from the same rows. `specs` and
+ * `Suggestion.recordId` feeds one arm per target kind from the same rows. `specs` and
  * `filter` narrow the arms; with neither, this is the whole graph.
  */
 const entityEdgeSourceSql = (
