@@ -168,6 +168,7 @@ export async function releaseRebuild(
 ): Promise<void> {
   await getDb(db)
     .execute(sql`UPDATE "DerivedRebuild" SET token = NULL, "leaseExpiresAt" = NULL,
+    "cursorAttempts" = CASE WHEN ${error}::text IS NULL THEN 0 ELSE "cursorAttempts" END,
     failures = CASE WHEN ${error}::text IS NULL THEN failures ELSE failures + 1 END,
     "passFailures" = CASE WHEN ${error}::text IS NULL THEN "passFailures" ELSE "passFailures" + 1 END,
     error = coalesce(${error}::text, error)
@@ -243,6 +244,7 @@ export async function requestDerivedRebuild(
   db: Database,
 ): Promise<{ existing: boolean }> {
   const existing = await rebuildActive(db);
+  if (existing) return { existing: true };
   const claim = await claimRebuild(db, true);
   if (claim) await releaseRebuild(db, claim.token);
   return { existing: existing || claim === null };

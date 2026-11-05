@@ -16,6 +16,7 @@ import {
   claimRebuild,
   commitRebuildPage,
   rebuildDeclarations,
+  requestDerivedRebuild,
 } from "./rebuild";
 
 describe("hourly deterministic rebuild", () => {
@@ -48,6 +49,12 @@ describe("hourly deterministic rebuild", () => {
         { preparationBatchSize: 2 },
       ),
     };
+    // Repair requests join the active pass and never count as failed compute attempts.
+    await requestDerivedRebuild(ctx.db);
+    await requestDerivedRebuild(ctx.db);
+    expect(
+      (await getDb(ctx.db).select().from(derivedRebuild))[0]?.cursorAttempts,
+    ).toBe(0);
     const abandon = async (count: number) => {
       for (let index = 0; index < count; index++) {
         expect(await claimRebuild(ctx.db)).not.toBeNull();
