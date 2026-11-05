@@ -28,7 +28,6 @@ export async function publishQualityFixtures(db: Database, kind: ScoredEntity) {
     const page = ids.slice(start, start + 200);
     const prepared = await adapter.prepare(db, page);
     await adapter.publish(db, page, prepared, {
-      tickets: new Map(),
       notify: () => {},
     });
   }

@@ -125,7 +125,6 @@ export async function rebuildDerived(
             !(await commitRebuildPage(db, claim, next, async (tx) => {
               if (prepared === undefined) return;
               const outcome = await compute.publish(tx, ids, prepared, {
-                tickets: new Map(),
                 notify: () => {},
               });
               if (
