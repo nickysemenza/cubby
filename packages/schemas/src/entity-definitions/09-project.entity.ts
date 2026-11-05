@@ -1078,6 +1078,7 @@ Rules:
     stored: {
       workDiagnosticFacts: {
         compute: "project.workDiagnosticFacts",
+        rebuildPhase: "diagnostics",
         publishes: "derivedValue",
         resultSchema: workDiagnosticFacts,
         clock: "householdDay",

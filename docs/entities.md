@@ -2688,75 +2688,42 @@ edge and gets the toggle like any other.
 
 ### Background derived data
 
-Quality's 28 declared evaluators publish typed `QualitySnapshot` rows, containing
-only the entity kind, check states, rules version and publication time. Browse,
-`dataGap`, weakest-first ordering and Work admission read that same snapshot;
-waivers remain durable `DataException` inputs. The ticketed drain temporarily
-invokes the snapshot sink until the hourly deterministic pass replaces admission.
-Legacy quality rows in `DerivedValue` are no longer read or rewritten and are
-retained until the separate table retirement.
+ADR 0025 replaces per-value admission with one hourly deterministic pass. Entity
+stored declarations own their compute adapters and dependencies; the data-quality
+and search capabilities declare their phases. `rebuildPhase` orders facts,
+quality, search and household diagnostics. Self-dependencies describe domain
+hierarchies handled by the computation, never scheduler tickets.
 
-ADR 0025 replaces ticketed derived values one kind at a time. Project
-start-date ordering and filtering now read the canonical recursive SQL directly,
-including descendant overrides and inherited expense attribution. This read needs
-no publication. Its old target remains registered temporarily so deployed source
-triggers and retained tickets remain serviceable until the separate retirement
-migration; other Project rollups still read their publications.
+`DerivedRebuild` holds one coarse pass cursor (target and last committed UUID),
+a single-writer lease, last success, consecutive failures and the last three
+wall-clock durations. Each Worker invocation publishes at most five bounded
+pages. Publication and cursor advancement commit together. A failed page keeps
+the previous cursor and output; an expired invocation resumes there. A failed pass
+from an earlier hourly cycle starts over so new upstream rows can repair a late
+phase. Source edits
+need no fences or generations; the next hourly pass repairs mixed-age reads.
+Own assignments and money/identity command validation remain immediate and live.
+Queue continuations and the hourly timer both enter the shared background drain.
+An interrupted isolate's duplicate delivery waits out the coarse lease.
 
-Refresh execution observations are separate from work ownership. A derived
-preparation page records its current WorkItem ticket, Job lease and start time;
-readers report execution only while that exact ticket and unexpired running
-lease still match. A newer source ticket, a postponed attempt or a lost lease
-cannot inherit an older attempt's execution status. These nullable observations
-do not replace Job fencing, retries or retained publications.
+Quality's 28 declared evaluators publish `QualitySnapshot` check states, rules
+version and publication time. Browse, gap-count ordering, filters and Work use
+the same snapshot. `DataException` owns waivers. SearchDocument, Recipe totals
+and ProductConversionCoverage retain their existing typed storage. Remaining
+legacy values temporarily publish in `DerivedValue` until their typed/view
+cutovers; their retained source tickets are neither claimed nor deleted.
+Project start-date ordering/filtering already reads canonical recursive SQL.
 
-Refresh trigger descriptions travel with existing WorkItem tickets through
-source capture, fanout and dependent publication. Field work metadata and
-Activity's per-value trigger counts read those same observations. A missing
-description stays unknown; it never means no work or a zero result. Clock expiry
-can identify a daily refresh even before scheduling. Before fanout expansion,
-the conservative target-wide pending flag shows only a generic related refresh;
-it cannot attribute a source ticket's cause to an individual record. Its pending
-work carries `attribution: "related"`: a read fact that this value has no ticket
-of its own, so clients branch on it and never on reason text. Reasons are diagnostic
-metadata and do not participate in calculation fingerprints or publication
-authority.
+Per-value queued/running/failure observations are retired. Activity checks the
+coarse pass for two missed hourly periods or three consecutive failures; it
+never treats retained tickets as unfinished work. The maintenance rebuild command
+starts or resumes the same Worker pass, and its status query exposes aggregate
+progress and timings without triggering work. A manual request never resets an
+active cursor. AI responses and vectors are retained; the pass does not wait for
+AI or embedding regeneration.
 
-A value's refresh status is a read of its explanation, not a second status
-store. `fieldRefreshLocator` names the owed slot by subject, field, surface and
-scope; an old Work link carrying one redirects to the value's record. Only an explicit `diagnostic` input
-recomputes a value. Per-value progress is phase and observed start time. Drain
-processed and total counts stay in spans.
-
-Stored-value page reads declare requested keys with a typed `VALUES` relation.
-Its actual cardinality lets PostgreSQL choose indexed publication and work
-lookups for small rosters; an estimated hundred-key JSON recordset must not
-turn those reads into population-wide hashes. This changes neither availability
-nor refresh scheduling, and missing publications remain distinct from zero.
-
-Compute adapters may share an authoritative preparation source within one admitted
-page. The union of its admitted IDs stays inside the existing page budget;
-each target projects only its own IDs. A failed shared preparation falls back
-to independent target preparation. The scope ends before publication, preserving
-the existing ordered admission, source fences and retained-ticket behavior.
-
-[ADR 0021](adr/0021-derived-values.md) owns the decision. A stored derived
-value is any value Cubby computes from other rows and keeps for reads:
-valuations, product price and ledger quantities, project dates, quality,
-search documents, recipe totals and conversion coverage. Each is declared once:
-`model.derived.<key>.stored` for a list field, `model.stored.<key>` for a value
-that is not a list field, a scored entity's `dataQuality` block, or a searchable
-entity's `search` setting. Non-list `model.stored` entries default to
-`publishes: "ownTable"`; `publishes: "derivedValue"` stores their output in `DerivedValue`
-without exposing a list column. Declarations are generated into
-`entity-stored-derived.gen.ts`; `server/db/derived-declarations.ts` parses them.
-The repository scaffold supplies each searchable entity's document SQL and
-text loader through `read.search`; generic refresh resolves it through the
-kernel binding with a lazy import. Each scored entity's evaluator lives in
-`generic/data-quality/repo/checks/<entity>.ts`, and generation wires it into
-`server/generated/data-quality-entries.gen.ts`. The quality runtime is
-imported by domain repositories and reads quality synchronously, so it cannot
-depend on the repository registry, which imports every repository.
+The input and internal-record declarations below remain transitional schema
+contracts until their triggers and the retired assessment target are removed.
 
 A publication about non-entity records registers in `internalRecordSpecs` in
 `server/db/derived-declarations.ts`, not in the manifest. A spec names a human-readable

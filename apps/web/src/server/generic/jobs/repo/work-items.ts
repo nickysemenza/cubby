@@ -439,17 +439,6 @@ export const owedWorkItem = (target: SQL, ref: SQL) =>
   sql`(SELECT ${workItem.ref} AS ref, CASE WHEN ${workItem.waitCause} IS NULL THEN ${workItem.lastError} END AS "lastError", ${workItem.readyAt} AS "readyAt"
     FROM ${workItem} WHERE ${workItem.target} = ${target} AND ${workItem.ref} = ${ref})`;
 
-/** Public refresh metadata additionally observes the exact executing Job lease. */
-export const observedWorkItem = (target: SQL, ref: SQL) =>
-  sql`(SELECT w.ref, w.reason, CASE WHEN w."waitCause" IS NULL THEN w."lastError" END AS "lastError", w."readyAt", w."waitCause",
-      (w."readyAt" > now()) IS TRUE AS waiting,
-      CASE WHEN ${currentWorkExecution}
-        THEN w."executionStartedAt" ELSE NULL END AS "runningSince",
-      j."leaseExpiresAt" AS "leaseExpiresAt"
-    FROM ${workItem} w
-    LEFT JOIN ${job} j ON j.key = w.drain
-    WHERE w.target = ${target} AND w.ref = ${ref})`;
-
 /** Fenced caller only. An observation grants no authority over a work ticket. */
 export async function observeWorkExecution(
   tx: RepositoryQueryInput,

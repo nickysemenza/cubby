@@ -8,11 +8,10 @@ import {
   householdLocalDate,
   shiftPlainDate,
 } from "~/lib/household-date";
-import type { Database } from "~/server/db";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import type { DerivedComputes } from "~/server/generic/derived/repo/compute";
 import {
-  DERIVED_DRAIN_JOB_KEY,
+  DERIVED_UNCLAIMED_TARGETS,
   DERIVED_COMPUTE_BATCH,
   admitDerivedPage,
   derivedChunk,
@@ -26,7 +25,6 @@ import {
   prepareDerivedPage,
   publishDerivedChunk,
 } from "~/server/generic/derived/repo/drain";
-import { repeatJob } from "~/server/generic/jobs/repo/producer";
 import { observeWorkExecution } from "~/server/generic/jobs/repo/work-items";
 import {
   defineDrain,
@@ -69,7 +67,16 @@ const derivedDrain = (
       (limit === undefined
         ? (items) => admitDerivedPage({ items, computes })
         : undefined),
-    eligible: eligible ?? derivedWorkEligible,
+    // Explicit fixture drains still exercise the retained publication sink.
+    eligible:
+      eligible ??
+      (limit === undefined
+        ? (target) =>
+            and(
+              derivedWorkEligible(target),
+              notLike(target, DERIVED_UNCLAIMED_TARGETS),
+            )!
+        : derivedWorkEligible),
     chunk,
     async prepare(db, items, context) {
       await context.fenced((tx) =>
@@ -192,7 +199,11 @@ export const derivedDrainHandler = (
         // Busy fanouts spent their expansion slot already and remain owed.
         // The direct phase never retries them ahead of independent values.
         eligible: (target) =>
-          and(derivedWorkEligible(target), notLike(target, "%@%"))!,
+          and(
+            derivedWorkEligible(target),
+            notLike(target, DERIVED_UNCLAIMED_TARGETS),
+            notLike(target, "%@%"),
+          )!,
         admit(items) {
           if (overflowPriority === undefined)
             return admitDerivedPage({ items, computes });
@@ -235,12 +246,3 @@ export const derivedReconcileHandler: JobHandler = defineJobHandler(
   z.object({}).passthrough(),
   async () => ({ page: { done: true, result: { outcome: "retired" } } }),
 );
-
-/** Existing dirty tickets and clock deadlines retain their ordinary drain. */
-export async function scheduleDerivedJobs(db: Database): Promise<void> {
-  await repeatJob(db, {
-    key: DERIVED_DRAIN_JOB_KEY,
-    kind: "derived.drain",
-    input: {},
-  });
-}

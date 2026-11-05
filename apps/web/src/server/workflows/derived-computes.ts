@@ -46,6 +46,7 @@ import {
  */
 const searchSink = (entity: SearchableEntity) =>
   derivedSink({
+    preparationBatchSize: 200,
     prepare: (db, ids) =>
       prepareSearchDocuments(
         db,

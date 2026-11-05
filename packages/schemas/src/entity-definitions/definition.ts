@@ -1157,6 +1157,9 @@ const buildMetadataSchemas = () => {
   const derivedStoreSchema = z
     .object({
       compute: nonEmptyString(),
+      rebuildPhase: z
+        .enum(["facts", "quality", "search", "diagnostics"])
+        .optional(),
       clock: z.literal("householdDay").optional(),
       inputs: z.array(derivedInputSchema).min(1),
       dependsOn: z

@@ -1,7 +1,12 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import {
+  DERIVED_REBUILD_KEY,
+  derivedRebuild,
+} from "~/server/db/derived-rebuild-schema";
 import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
+import { getDb } from "~/server/db/helpers";
 import {
   insertWorkItems,
   updateJobs,
@@ -16,13 +21,48 @@ const minutesAgo = (minutes: number, now: Date) =>
 describe("background work status", () => {
   const ctx = withTestDb();
 
-  const seedDrain = async (
+  const seedRebuild = async (
     now: Date,
-    pageAgeMinutes: number,
-    dueMinutes: number,
-    published: number,
-    attempts = 0,
+    finishedMinutes: number,
+    failures = 0,
   ) => {
+    await getDb(ctx.db).delete(derivedRebuild);
+    await getDb(ctx.db)
+      .insert(derivedRebuild)
+      .values({
+        key: DERIVED_REBUILD_KEY,
+        running: true,
+        target: "product.price",
+        startedAt: minutesAgo(finishedMinutes + 60, now),
+        finishedAt: minutesAgo(finishedMinutes, now),
+        failures,
+        error: failures ? "Synthetic rebuild failure" : null,
+      });
+  };
+
+  it("does not call the hourly pass stuck between scheduled completions", async () => {
+    const now = new Date();
+    await seedRebuild(now, 40);
+    const status = await readBackgroundWorkStatus(ctx.db, now);
+    expect(status.stuck).toEqual([]);
+    expect(status.behind).toBe(false);
+  });
+
+  it("alarms only after two hourly completions are missed", async () => {
+    const now = new Date();
+    await seedRebuild(now, 125);
+    const status = await readBackgroundWorkStatus(ctx.db, now);
+    expect(status.stuck).toEqual([
+      expect.objectContaining({
+        key: "derived.drain",
+        title: "Totals and search results stopped updating",
+        action: { type: "none" },
+      }),
+    ]);
+  });
+
+  it("does not call an idle drain stuck over tickets it never claims", async () => {
+    const now = new Date();
     await enqueueJob(ctx.db, {
       key: DERIVED_DRAIN_JOB_KEY,
       kind: "derived.drain",
@@ -31,50 +71,29 @@ describe("background work status", () => {
     await updateJobs(
       ctx.db,
       { key: DERIVED_DRAIN_JOB_KEY },
-      {
-        updatedAt: minutesAgo(pageAgeMinutes, now),
-        availableAt: minutesAgo(1, now),
-        result: { published },
-        attempts,
-      },
+      { state: "completed", updatedAt: minutesAgo(600, now) },
     );
     await insertWorkItems(ctx.db, [
       {
         drain: DERIVED_DRAIN_JOB_KEY,
-        target: "product.dataQuality",
+        target: "assessment.reviewFacts",
         ref: crypto.randomUUID(),
-        priority: 2,
-        readyAt: minutesAgo(dueMinutes, now),
+        priority: 1,
+        readyAt: minutesAgo(720, now),
       },
     ]);
-  };
-
-  it("does not call a drain stuck while its pages publish, whatever is running now", async () => {
-    const now = new Date();
-    await seedDrain(now, 5, 720, 40);
     const status = await readBackgroundWorkStatus(ctx.db, now);
     expect(status.stuck).toEqual([]);
-    expect(status.behind).toBe(true);
+    expect(status.behind).toBe(false);
   });
 
-  it("alarms when due work has seen no completion for the window", async () => {
+  it("reports repeated rebuild failures even after a recent successful pass", async () => {
     const now = new Date();
-    await seedDrain(now, 45, 720, 40);
+    await seedRebuild(now, 3, 3);
     const status = await readBackgroundWorkStatus(ctx.db, now);
-    expect(status.stuck).toEqual([
-      expect.objectContaining({
-        key: "derived.drain",
-        title: "Totals and search results stopped updating",
-        action: { type: "retry", kinds: ["derived.drain"] },
-      }),
+    expect(status.stuck.map((item) => item.key)).toEqual([
+      "derived.drain:failing",
     ]);
-  });
-
-  it("does not count a stale page result while pages keep failing", async () => {
-    const now = new Date();
-    await seedDrain(now, 3, 720, 40, 15);
-    const status = await readBackgroundWorkStatus(ctx.db, now);
-    expect(status.stuck.map((item) => item.key)).toEqual(["derived.drain"]);
   });
 
   it("clears a failed kind once a later Job of that kind completes", async () => {

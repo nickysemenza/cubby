@@ -16,7 +16,11 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
+import { DERIVED_REBUILD_KEY } from "~/server/db/derived-rebuild-schema";
+import {
+  DERIVED_DRAIN_JOB_KEY,
+  DERIVED_UNCLAIMED_TARGETS,
+} from "~/server/db/derived-trigger-ddl";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import {
@@ -164,7 +168,7 @@ async function readDrains(
       due."readyAt" AS "dueSince", due."lastError" AS "dueError",
       failing."lastError" AS "failingError", failing.attempts AS "failingAttempts",
       failing."dirtiedAt" AS "failingAt"
-    FROM drains d
+    FROM (SELECT drain FROM drains WHERE drain <> ${DERIVED_DRAIN_JOB_KEY}) d
     LEFT JOIN "Job" j ON j.key = d.drain
     LEFT JOIN LATERAL (
       SELECT oldest."readyAt", oldest."lastError"
@@ -172,6 +176,7 @@ async function readDrains(
       CROSS JOIN LATERAL (
         SELECT w."readyAt", w."lastError" FROM "WorkItem" w
         WHERE w.drain = d.drain AND w.priority = p.priority AND w."readyAt" <= ${at}
+          AND w.target NOT LIKE ${DERIVED_UNCLAIMED_TARGETS}
         ORDER BY w."readyAt" LIMIT 1
       ) oldest
       ORDER BY oldest."readyAt" LIMIT 1
@@ -182,6 +187,7 @@ async function readDrains(
       CROSS JOIN LATERAL (
         SELECT w."lastError", w.attempts, w."dirtiedAt" FROM "WorkItem" w
         WHERE w.drain = d.drain AND w.priority = p.priority AND w."readyAt" > ${at}
+          AND w.target NOT LIKE ${DERIVED_UNCLAIMED_TARGETS}
           AND w."waitCause" IS NULL AND w."lastError" IS NOT NULL
           AND w.attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
         ORDER BY w."readyAt" LIMIT 1
@@ -189,27 +195,20 @@ async function readDrains(
       ORDER BY backoff.attempts DESC LIMIT 1
     ) failing ON true
     WHERE d.drain IS NOT NULL`);
-  const published = rows.some((row) => row.drain === DERIVED_DRAIN_JOB_KEY)
-    ? await getDb(db).execute<{ at: string | null }>(
-        sql`SELECT max("computedAt") AS at FROM "DerivedValue"`,
-      )
-    : null;
   const facts: StatusFacts & { kinds: Set<string> } = {
     stuck: [],
     behind: false,
     lastFinishedAt: null,
-    kinds: new Set(),
+    kinds: new Set(["derived.drain"]),
   };
   for (const row of rows) {
+    if (row.drain === DERIVED_DRAIN_JOB_KEY) continue;
     const kind = row.kind ?? row.drain;
     facts.kinds.add(kind);
     const lastCompletion = latest(
       // Claims touch `updatedAt` and failures keep the old result, but only a
       // landed page resets attempts: a failing drain must not read as moving.
       row.published && row.jobAttempts === 0 ? utc(row.jobUpdatedAt) : null,
-      row.drain === DERIVED_DRAIN_JOB_KEY
-        ? utc(published?.rows[0]?.at ?? null)
-        : null,
     );
     facts.lastFinishedAt = latest(facts.lastFinishedAt, lastCompletion);
     const dueSince = utc(row.dueSince);
@@ -242,6 +241,39 @@ async function readDrains(
           false,
         ),
       );
+  }
+  const rebuild = await getDb(db).execute<{
+    createdAt: string;
+    startedAt: string | null;
+    finishedAt: string | null;
+    running: boolean;
+    failures: number;
+    error: string | null;
+  }>(sql`
+    SELECT "createdAt", "startedAt", "finishedAt", running, failures, error FROM "DerivedRebuild" WHERE key = ${DERIVED_REBUILD_KEY}`);
+  const pass = rebuild.rows[0];
+  if (pass) {
+    const finished = utc(pass.finishedAt);
+    const since = finished ?? utc(pass.createdAt);
+    facts.lastFinishedAt = latest(facts.lastFinishedAt, finished);
+    if (pass.failures >= 3 && since) {
+      facts.stuck.push({
+        ...failingItem(
+          "derived.drain",
+          since,
+          pass.failures,
+          pass.error,
+          false,
+        ),
+        action: { type: "none" },
+      });
+    } else if (since && since <= minutesAgo(now, 120)) {
+      facts.stuck.push({
+        ...stoppedItem("derived.drain", since, now, pass.error),
+        body: "Two hourly rebuilds have not finished. Records you entered are fine; calculated values may be out of date.",
+        action: { type: "none" },
+      });
+    } else if (since && since <= minutesAgo(now, 60)) facts.behind = true;
   }
   return facts;
 }

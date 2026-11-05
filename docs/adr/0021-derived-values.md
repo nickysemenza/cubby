@@ -1,6 +1,6 @@
 # ADR 0021: Derived values
 
-Status: Accepted; engine implementation tracked in #3309, unified field
+Status: Engine superseded in place by ADR 0025; unified field
 contract and editing experience in #3324. Amends
 [ADR 0015](0015-unified-durable-work-coordination.md): the `refresh.family`
 passes and `derived_refresh` Runs it coordinates are retired.

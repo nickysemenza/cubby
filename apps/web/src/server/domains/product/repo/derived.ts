@@ -138,8 +138,12 @@ const computeServiceCost: DerivedCompute = async (db, ids) => {
 
 export const productDerivedComputes = {
   "product.ownership": productOwnershipCompute,
-  "product.cost": computeServiceCost,
-  "product.price": computeProductPrice,
+  "product.cost": Object.assign(computeServiceCost, {
+    preparationBatchSize: 200,
+  }),
+  "product.price": Object.assign(computeProductPrice, {
+    preparationBatchSize: 200,
+  }),
   "product.ledgerExpectedQuantity": computeProductQuantity(
     "ledgerExpectedQuantity",
   ),

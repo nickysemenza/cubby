@@ -1,6 +1,5 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { fieldValueOf, fieldEnvelopeFor } from "@cubby/schemas/field-envelope";
-import { sql } from "drizzle-orm";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -18,7 +17,6 @@ import {
 import { listOperations } from "~/server/entity-kernel/list-operations";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
-import { updateWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import {
   drainDerivedPage,
   drainStoredDerived,
@@ -65,7 +63,7 @@ describe("assignment and stored projection precedence", () => {
       ?.get("price");
     expect(stored).toMatchObject({
       value: 13,
-      stale: true,
+      stale: false,
       decision: { provenance: { kind: "own" } },
     });
     const detail = entityFieldEnvelopeSchemas.product.detail.parse(
@@ -133,7 +131,7 @@ describe("assignment and stored projection precedence", () => {
     );
     expect(reset.fields.price.current.assignment).toEqual({ kind: "inherit" });
     expect(reset.fields.price.result).toEqual({ kind: "missing" });
-    expect(reset.fields.price.work).toMatchObject({ kind: "pending" });
+    expect(reset.fields.price.work).toMatchObject({ kind: "idle" });
     expect(reset.fields.cost.result).toEqual({ kind: "missing" });
     expect(reset.fields.cost.work).toEqual(reset.fields.price.work);
     expect(reset.fields.unitPriceDetailLabel.result).toEqual({
@@ -257,7 +255,7 @@ describe("assignment and stored projection precedence", () => {
     );
     expect(detail.fields.price.result).toMatchObject({
       kind: "cached",
-      freshness: "stale",
+      freshness: "fresh",
     });
     expect(fieldValueOf(detail.fields.price)).toBe(13);
     expect(fieldValueOf(detail.fields.cost)).toEqual({
@@ -304,32 +302,6 @@ describe("assignment and stored projection precedence", () => {
           ]),
         }),
       ]),
-    );
-    await updateWorkItems(
-      ctx.db,
-      { target: "product.price", refs: [product.entityId] },
-      {
-        lastError: "Synthetic unit-price input refresh failure",
-        readyAt: sql`now() + interval '1 hour'`,
-      },
-    );
-    const failed = entityFieldEnvelopeSchemas.product.detail.parse(
-      (
-        await executeEntity(context(), {
-          action: "get",
-          entity: "product",
-          id: product.id,
-          missing: "error",
-        })
-      ).item,
-    );
-    expect(fieldValueOf(failed.fields.unitPriceDetailLabel)).toBe("$13.00/ea");
-    expect(failed.fields.unitPriceDetailLabel.work).toMatchObject({
-      kind: "failed",
-      error: "Synthetic unit-price input refresh failure",
-    });
-    expect(failed.fields.unitPriceDetailLabel.work).toEqual(
-      failed.fields.price.work,
     );
     await updateProduct(
       ctx.db,

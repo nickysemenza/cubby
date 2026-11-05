@@ -409,7 +409,7 @@ describe("image repository", () => {
       );
       expect(fieldValueOf(row.fields.sightings)).toEqual(raw.sightings);
       expect(row.fields.dataQuality.result.kind).toBe("cached");
-      expect(row.fields.dataQuality.work.kind).toBe("pending");
+      expect(row.fields.dataQuality.work.kind).toBe("idle");
       expect(row.fields.dataQuality.current).toMatchObject({
         assignment: null,
         controls: { kind: "readonly", reason: "computed" },

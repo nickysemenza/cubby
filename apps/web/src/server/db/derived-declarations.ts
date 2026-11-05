@@ -108,6 +108,7 @@ export interface EntityStoredDerivedDeclaration extends StoredDerivedWork {
   /** Publication and freshness ring this declaration's own record refs. */
   readonly notifications: "entityRefs";
   readonly clock: "householdDay" | null;
+  readonly rebuildPhase?: "facts" | "quality" | "search" | "diagnostics";
   /**
    * `derivedValue`: published as a `DerivedValue` row, with per-row meta in the
    * envelope. `ownTable`: written to the value's own table (search documents,
@@ -221,6 +222,9 @@ const storedEntry = z.object({
   publishes: z.enum(["derivedValue", "ownTable"]),
   stored: z.object({
     compute: z.string(),
+    rebuildPhase: z
+      .enum(["facts", "quality", "search", "diagnostics"])
+      .optional(),
     snapshotSource: snapshotSource.optional(),
     recordSource: z
       .object({
@@ -401,6 +405,7 @@ const manifestDeclarations = (): EntityStoredDerivedDeclaration[] =>
           table: entry.table,
           compute: entry.stored.compute,
           clock: entry.stored.clock ?? null,
+          rebuildPhase: entry.stored.rebuildPhase ?? "facts",
           publishes: entry.publishes,
           recordSource: entry.stored.recordSource ?? null,
           snapshotSource: entry.stored.snapshotSource,

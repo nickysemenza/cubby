@@ -201,3 +201,14 @@ export const searchIndexRepairEventSchema = z.discriminatedUnion("type", [
 export type SearchIndexRepairEvent = z.infer<
   typeof searchIndexRepairEventSchema
 >;
+
+/** Aggregate progress and the last three wall-clock rebuild durations, excluding AI/embedding regeneration. */
+export const derivedRebuildStatusSchema = z.object({
+  running: z.boolean(),
+  target: z.string().nullable(),
+  startedAt: z.iso.datetime().nullable(),
+  finishedAt: z.iso.datetime().nullable(),
+  failures: z.int().nonnegative(),
+  error: z.string().nullable(),
+  durationsMs: z.array(z.number().nonnegative()),
+});
