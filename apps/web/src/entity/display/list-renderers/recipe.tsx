@@ -10,10 +10,11 @@ import {
 } from "~/entity/presentation/recipe-utils";
 import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
-import { formatEstimate } from "~/lib/nutrition-format";
+import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { NoneValue } from "~/ui/text/none-value";
 
 import type { ListRenderer, ListRowOf } from "../list-renderer-types";
 
@@ -107,6 +108,12 @@ const estimateColumn =
                   />
                 ) : (
                   <span className="text-muted-foreground">Pending</span>
+                );
+              if (!hasKnownEstimate(estimate))
+                return (
+                  <NoneValue
+                    title={estimateStatusText(estimate) ?? undefined}
+                  />
                 );
               const perItem = getServingBasis(recipe);
               return (

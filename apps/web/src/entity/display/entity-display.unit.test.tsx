@@ -1541,7 +1541,6 @@ it.each(["network", "primaryCardholderId"])(
     const dash = screen.getByRole("note", {
       name: "Not applicable. Only applies to credit-card accounts.",
     });
-    expect(dash).toHaveTextContent("—");
     expect(dash).toHaveAttribute("tabindex", "0");
     expect(screen.queryByRole("button")).toBeNull();
     view.unmount();

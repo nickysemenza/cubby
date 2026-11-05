@@ -15,10 +15,13 @@ export function EntityPill({
   displayImage,
   emoji,
   fallback,
+  parent,
 }: {
   entity: Entity;
   id: string;
   name: string;
+  /** Hierarchy ancestors drawn muted after the leaf `name`. */
+  parent?: string | null;
   displayImage: ImageUrlSummary | null;
   emoji?: string | null;
   fallback?: ReactNode;
@@ -30,6 +33,7 @@ export function EntityPill({
   return (
     <RecordPill
       name={name}
+      parent={parent}
       mark={
         <EntityIdentityMark
           entity={entity}

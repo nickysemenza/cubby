@@ -51,19 +51,29 @@ export function EntityIdentityMark({
   className?: string;
 }) {
   const pixels = MARK_SIZE[size];
+  // A pill's mark follows the pill's own slot (14px in an 18px desktop pill,
+  // 18px on the base scale); a fixed 18px image overflowed the desktop slot.
+  const fluid = size === "pill";
+  const box = fluid ? undefined : { width: pixels, height: pixels };
   const fallbackMark =
     entity === "ledgerParty" && id && name ? (
       <PersonAvatar
         id={id}
         name={name}
-        className={size === "compact" ? "size-3.5" : undefined}
+        className={
+          size === "compact"
+            ? "size-3.5"
+            : fluid
+              ? "size-(--record-pill-mark)"
+              : undefined
+        }
       />
     ) : (
       (fallback ?? (
         <RecordEmoji
           entity={entity}
           emoji={emoji}
-          size={size === "compact" ? 10 : size === "inline" ? 12 : 16}
+          size={size === "compact" ? 10 : size === "inline" || fluid ? 12 : 16}
         />
       ))
     );
@@ -72,8 +82,12 @@ export function EntityIdentityMark({
     return (
       <span
         aria-hidden
-        className={cn("flex shrink-0 items-center justify-center", className)}
-        style={{ width: pixels, height: pixels }}
+        className={cn(
+          "flex shrink-0 items-center justify-center",
+          fluid && "size-(--record-pill-mark)",
+          className,
+        )}
+        style={box}
       >
         {fallbackMark}
       </span>
@@ -90,14 +104,18 @@ export function EntityIdentityMark({
       ]}
       entity={entity}
       alt=""
-      size={pixels}
+      size={fluid ? undefined : pixels}
       fit={containedEntities.has(entity) ? "contain" : "cover"}
       fallback={
         <span className="flex h-full w-full items-center justify-center bg-card">
           {fallbackMark}
         </span>
       }
-      className={cn("border border-border bg-card", className)}
+      className={cn(
+        "border border-border bg-card",
+        fluid && "size-(--record-pill-mark)",
+        className,
+      )}
     />
   );
 }

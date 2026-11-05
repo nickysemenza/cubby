@@ -1,7 +1,11 @@
 "use client";
 
+import { cn } from "cn";
 import * as React from "react";
 import { createPortal } from "react-dom";
+
+import { popoverElevationClassName } from "~/ui/overlays/popover-elevation";
+import { Spinner } from "~/ui/primitives/spinner";
 
 export const CellEditorPendingContext = React.createContext<
   (pending: boolean) => void
@@ -37,7 +41,7 @@ function useAnchoredOverlayStyle(
       viewportWidth - viewportPadding * 2,
     );
     const left = Math.min(
-      Math.max(rect.left - 8, viewportPadding),
+      Math.max(rect.left, viewportPadding),
       Math.max(viewportPadding, viewportWidth - width - viewportPadding),
     );
     setStyle({
@@ -45,7 +49,7 @@ function useAnchoredOverlayStyle(
       top: Math.max(
         viewportPadding,
         Math.min(
-          rect.top - 4,
+          rect.top,
           window.innerHeight - viewportPadding - (overlay?.height ?? 0),
         ),
       ),
@@ -95,6 +99,16 @@ const OVERLAY_GUARDED_KEYS = new Set([
   "Escape",
 ]);
 
+/** The first (or last) text field in an editor, where Tab leaves the editor. */
+function edgeField(root: HTMLElement | null, first: boolean) {
+  const fields = [
+    ...(root?.querySelectorAll<HTMLElement>(
+      "input:not([type=hidden]):not([disabled]), textarea:not([disabled])",
+    ) ?? []),
+  ];
+  return (first ? fields[0] : fields.at(-1)) ?? null;
+}
+
 /**
  * Portals an inline-cell editor OVER its cell so it can be wider than the
  * `table-fixed` column (body cells are `overflow-hidden`, which used to clip
@@ -119,6 +133,21 @@ export function CellEditorOverlay({
 }) {
   const overlayRef = React.useRef<HTMLDivElement>(null);
   const [saving, setSaving] = React.useState(false);
+  const tabMove = React.useRef<boolean | null>(null);
+  React.useEffect(
+    () => () => {
+      if (tabMove.current === null) return;
+      const pane = anchorEl?.closest<HTMLElement>("section[tabindex]");
+      const shiftKey = tabMove.current;
+      requestAnimationFrame(() => {
+        pane?.focus();
+        pane?.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true }),
+        );
+      });
+    },
+    [anchorEl],
+  );
   const style = useAnchoredOverlayStyle(anchorEl, overlayRef);
 
   // Document-level Escape: focus can legitimately sit OUTSIDE the overlay
@@ -128,7 +157,10 @@ export function CellEditorOverlay({
   // native event from reaching this listener — two-level Escape holds.
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onRequestCancel();
+      if (event.key === "Escape") {
+        tabMove.current = null;
+        onRequestCancel();
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
@@ -170,24 +202,53 @@ export function CellEditorOverlay({
       data-slot="cell-editor-overlay"
       aria-busy={saving}
       style={style}
-      className="w-max border bg-popover px-2 py-1"
+      className={cn(
+        "w-max rounded-lg bg-popover px-2 py-1 ring-1 ring-link",
+        popoverElevationClassName,
+      )}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         // Editor keys must not reach the table container's row-nav handler
         // (portal bubbling goes through the React tree). Escape with the
         // combobox dropdown open never gets here — the combobox stops its
         // own Escape — so this is the "second Escape" that cancels the edit.
+        if (e.key === "Tab" && !e.defaultPrevented) {
+          e.stopPropagation();
+          const field = edgeField(overlayRef.current, e.shiftKey);
+          // Tab moves natively between the editor's own fields and actions;
+          // only leaving its edge field commits and advances. The commit runs
+          // through the field's own Enter path, so a failed save keeps the
+          // editor, its draft and focus, and the pending move is dropped.
+          if (!field || field !== document.activeElement) return;
+          e.preventDefault();
+          tabMove.current = e.shiftKey;
+          field.dispatchEvent(
+            new KeyboardEvent("keydown", {
+              key: "Enter",
+              ctrlKey: field instanceof HTMLTextAreaElement,
+              bubbles: true,
+              cancelable: true,
+            }),
+          );
+          return;
+        }
+        // Any other key the member presses abandons a pending Tab move; the
+        // synthetic commit Enter above is untrusted and keeps it.
+        if (e.nativeEvent.isTrusted) tabMove.current = null;
         if (!OVERLAY_GUARDED_KEYS.has(e.key)) return;
         e.stopPropagation();
-        if (e.key === "Escape") onRequestCancel();
+        if (e.key === "Escape") {
+          tabMove.current = null;
+          onRequestCancel();
+        }
       }}
     >
       <CellEditorPendingContext value={setSaving}>
         {children}
       </CellEditorPendingContext>
       {saving && (
-        <output className="block py-1 text-xs text-muted-foreground">
-          Saving…
+        <output className="flex items-center gap-1 py-1 text-xs text-muted-foreground">
+          <Spinner size="sm" /> Saving…
         </output>
       )}
     </div>,

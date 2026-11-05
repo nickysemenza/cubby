@@ -1,6 +1,6 @@
 import { render, waitFor } from "@testing-library/react";
 import { type ReactNode, useRef } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
 import {
@@ -118,9 +118,41 @@ describe("table density", () => {
     expect(Math.round(rect(spill).top)).toBe(Math.round(rect(clipped).top));
     expect(Math.round(rect(clipped).height)).toBe(24);
 
-    await userEvent.hover(view.getByTestId("cell-1"));
+    // The overlay now covers its neighbour, so leave through the header.
+    await userEvent.hover(view.getByTestId("head-1"));
     await waitFor(() => expect(overlay()).toBeNull());
     await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(overlay()).toBeNull();
+  });
+
+  it("replays a press on the spilled copy on the clipped original", async () => {
+    await page.viewport(1440, 900);
+    const press = vi.fn();
+    const select = vi.fn();
+    const view = render(
+      <Fixture
+        cells={[
+          {
+            id: "c1",
+            width: 160,
+            content: (
+              <button type="button" className="block w-full" onClick={press}>
+                <span className="block truncate">{LONG_NAME}</span>
+              </button>
+            ),
+          },
+          { id: "c2", width: 160, content: <span>Short</span> },
+        ]}
+      />,
+    );
+    view.getByTestId("cell-0").addEventListener("mousedown", select);
+    await userEvent.hover(view.getByTestId("cell-0"));
+    await waitFor(() => expect(overlay()).not.toBeNull());
+    const copy = overlay()?.querySelector<HTMLElement>("span");
+    if (!copy) throw new Error("missing spilled copy");
+    await userEvent.click(copy);
+    expect(select).toHaveBeenCalledOnce();
+    expect(press).toHaveBeenCalledOnce();
     expect(overlay()).toBeNull();
   });
 
@@ -331,6 +363,7 @@ describe("table density", () => {
 
   it("never paints the ⓘ over clipped text; the spill carries it", async () => {
     await page.viewport(1440, 900);
+    const explain = vi.fn();
     const view = render(
       <Fixture
         cells={[
@@ -344,6 +377,7 @@ describe("table density", () => {
                   <button
                     type="button"
                     aria-label="Explain"
+                    onClick={explain}
                     className={CELL_RAIL_BUTTON_CLASS}
                   >
                     i
@@ -370,6 +404,17 @@ describe("table density", () => {
       "[data-cell-spill-rail]",
     );
     expect(copy && getComputedStyle(copy).opacity).toBe("1");
+    const button = copy?.querySelector<HTMLElement>("button");
+    if (!button) throw new Error("missing copied rail control");
+    expect(button.getBoundingClientRect().right).toBeGreaterThan(
+      view.getByTestId("cell-0").getBoundingClientRect().right,
+    );
+    await userEvent.hover(button);
+    expect(overlay()).not.toBeNull();
+    expect(getComputedStyle(button).pointerEvents).toBe("auto");
+    await userEvent.click(button);
+    expect(overlay()).toBeNull();
+    expect(explain).toHaveBeenCalledOnce();
   });
 
   // Regression: 20px pills wrapped to a second line the 32px cell clipped

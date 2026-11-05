@@ -39,7 +39,7 @@ import {
 } from "@cubby/schemas/suggestion-list";
 import { parseShortcode } from "@cubby/shared";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
-import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   useQueries,
@@ -47,6 +47,7 @@ import {
   type UseQueryResult,
   type UseQueryOptions,
 } from "@tanstack/react-query";
+import { cn } from "cn";
 import {
   createContext,
   useCallback,
@@ -89,7 +90,7 @@ import type { OperationCallOptions } from "~/integrations/tanstack-query/operati
 import { operationCachePolicy } from "~/integrations/tanstack-query/query-policy";
 import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
-import { CellFrame } from "~/ui/data-table/cell-frame";
+import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "~/ui/data-table/cell-frame";
 import { WhyValueContents } from "~/ui/derived/why-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -102,8 +103,13 @@ import {
   PopoverTrigger,
 } from "~/ui/primitives/popover";
 import { Spinner } from "~/ui/primitives/spinner";
+import {
+  RecordPillTreatmentContext,
+  SuggestionSparkle,
+} from "~/ui/records/record-pill";
 import { Description } from "~/ui/text/description";
 import { Pill } from "~/ui/text/pill";
+import { DenseCellContext } from "~/ui/values/stacked-value";
 
 import {
   fieldSuggestionBasisFromRecord,
@@ -2664,6 +2670,7 @@ function GhostSuggestionCell({
   const acceptImmediately = () =>
     context.acceptValue(record, field, value, label, assessmentId, accept);
   const valueText = useRenderedText();
+  const inCell = useContext(DenseCellContext) !== null;
   const proposed =
     renderValue?.(value) ??
     renderSuggestedListFieldValue(
@@ -2677,24 +2684,48 @@ function GhostSuggestionCell({
   // Inert: a reference value renders as a navigating link, which would
   // swallow the click meant to accept it (and nest a link in a button).
   // Inert content leaves the accessibility tree, so the button's name
-  // carries the rendered value text instead.
+  // carries the rendered value text instead. A record value's own pill
+  // becomes the one suggestion chip (dashed, its sparkle in place of the
+  // thumbnail); any other value takes the dashed chip around it.
   const ghost = (
     <span
       ref={valueText.ref}
       inert
       className="pointer-events-none inline-flex min-w-0 items-center gap-1"
     >
-      {busy ? (
-        <Spinner className="size-3 shrink-0" />
-      ) : (
-        <SparkleIcon aria-hidden className="size-3 shrink-0" />
-      )}
-      {proposed}
+      <span className="contents group-has-data-entity-pill/suggestion:hidden">
+        {busy ? (
+          <Spinner className="size-3 shrink-0" />
+        ) : (
+          <SuggestionSparkle className="size-3" />
+        )}
+      </span>
+      <RecordPillTreatmentContext.Provider value={{ kind: "suggested", busy }}>
+        {proposed}
+      </RecordPillTreatmentContext.Provider>
     </span>
   );
-  return (
-    <span className="inline-flex min-w-0 items-center gap-1">
-      {compact ? (
+  const dialog = (
+    <DifferentValueDialog
+      entity={context.entity}
+      record={record}
+      field={field}
+      open={editOpen}
+      onOpenChange={setEditOpen}
+      onSubmitted={() => void onCorrected?.()}
+      onSubmitOverride={
+        correct
+          ? async (values) => {
+              await correct(z.json().parse(values[field]));
+              setEditOpen(false);
+            }
+          : undefined
+      }
+    />
+  );
+  if (compact)
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1">
         <SuggestionBody
           compact
           current={kind === "correction" ? children : null}
@@ -2709,90 +2740,94 @@ function GhostSuggestionCell({
           onReject={() => void run(reject)}
           onUseDifferent={() => setEditOpen(true)}
         />
-      ) : (
+        {dialog}
+      </span>
+    );
+  const shown = (
+    <>
+      {kind === "correction" || !inline ? (
         <>
-          {kind === "correction" || !inline ? (
-            <>
-              {children}
-              {inline ? (
-                <ArrowRightIcon
-                  aria-label="Suggested replacement"
-                  className="size-3 shrink-0"
-                />
-              ) : null}
-            </>
-          ) : null}
+          {children}
           {inline ? (
-            <Pill
-              mode="suggestion"
-              render={
-                <button
-                  type="button"
-                  disabled={busy}
-                  aria-label={suggestionAcceptLabel(valueText.text)}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void run(acceptImmediately);
-                  }}
-                />
-              }
-              aria-busy={busy}
-              className="max-w-full min-w-0 cursor-pointer gap-1 overflow-hidden hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait max-md:min-h-11"
-            >
-              {ghost}
-            </Pill>
+            <ArrowRightIcon
+              aria-label="Suggested replacement"
+              className="size-3 shrink-0"
+            />
           ) : null}
-          <Popover open={bodyOpen} onOpenChange={setBodyOpen}>
-            <PopoverTrigger
-              aria-label="Suggestion actions"
-              disabled={busy}
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => event.stopPropagation()}
-              className="relative inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none after:absolute after:-inset-3 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring md:after:hidden"
-            >
-              <span aria-hidden>···</span>
-            </PopoverTrigger>
-            <PopoverContent side="bottom" className="w-auto max-w-xs p-2">
-              <SuggestionBody
-                current={kind === "correction" ? children : null}
-                proposed={proposed}
-                probability={probability}
-                runnerUp={runnerUp}
-                reasoning={reasoning}
-                basis={suggestionBasisLabels(
-                  queryClient,
-                  context.entity,
-                  field,
-                )}
-                provenance={provenance}
-                saving={busy}
-                onAccept={() => void run(acceptImmediately)}
-                onReject={() => void run(reject)}
-                onUseDifferent={() => {
-                  setBodyOpen(false);
-                  setEditOpen(true);
-                }}
-              />
-            </PopoverContent>
-          </Popover>
         </>
-      )}
-      <DifferentValueDialog
-        entity={context.entity}
-        record={record}
-        field={field}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        onSubmitted={() => void onCorrected?.()}
-        onSubmitOverride={
-          correct
-            ? async (values) => {
-                await correct(z.json().parse(values[field]));
-                setEditOpen(false);
-              }
-            : undefined
-        }
-      />
+      ) : null}
+      {inline ? (
+        <Pill
+          mode="suggestion"
+          render={
+            <button
+              type="button"
+              disabled={busy}
+              aria-label={suggestionAcceptLabel(valueText.text)}
+              onClick={(event) => {
+                event.stopPropagation();
+                void run(acceptImmediately);
+              }}
+            />
+          }
+          aria-busy={busy}
+          className="group/suggestion max-w-full min-w-0 cursor-pointer gap-1 overflow-hidden hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait has-data-entity-pill:h-auto has-data-entity-pill:border-0 has-data-entity-pill:bg-transparent has-data-entity-pill:p-0 has-data-entity-pill:hover:bg-transparent max-md:min-h-11"
+        >
+          {ghost}
+        </Pill>
+      ) : null}
+    </>
+  );
+  // Decline, alternatives and evidence live behind this trigger; Tab from
+  // the accept chip reaches it, since focus activates the cell's rail.
+  const trigger = (
+    <Popover open={bodyOpen} onOpenChange={setBodyOpen}>
+      <PopoverTrigger
+        aria-label="Suggestion actions"
+        disabled={busy}
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+        className={cn(
+          inCell
+            ? CELL_RAIL_BUTTON_CLASS
+            : "relative size-5 rounded-sm text-muted-foreground after:absolute after:-inset-3 hover:text-foreground md:after:hidden",
+          "inline-flex shrink-0 items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        )}
+      >
+        <DotsThreeIcon aria-hidden weight="bold" />
+      </PopoverTrigger>
+      <PopoverContent side="bottom" className="w-auto max-w-xs p-2">
+        <SuggestionBody
+          current={kind === "correction" ? children : null}
+          proposed={proposed}
+          probability={probability}
+          runnerUp={runnerUp}
+          reasoning={reasoning}
+          basis={suggestionBasisLabels(queryClient, context.entity, field)}
+          provenance={provenance}
+          saving={busy}
+          onAccept={() => void run(acceptImmediately)}
+          onReject={() => void run(reject)}
+          onUseDifferent={() => {
+            setBodyOpen(false);
+            setEditOpen(true);
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+  return inCell ? (
+    <CellFrame overlay trailing={trigger}>
+      <span className="inline-flex max-w-full min-w-0 items-center gap-1">
+        {shown}
+        {dialog}
+      </span>
+    </CellFrame>
+  ) : (
+    <span className="inline-flex min-w-0 items-center gap-1">
+      {shown}
+      {trigger}
+      {dialog}
     </span>
   );
 }

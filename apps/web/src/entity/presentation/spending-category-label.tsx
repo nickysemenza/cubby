@@ -8,6 +8,8 @@ import { useServerTree } from "~/entity/hooks/use-server-tree";
 import { useEntityMetadata } from "~/entity/metadata";
 import { NoneValue } from "~/ui/text/none-value";
 
+import { categoryLeafParts } from "./category-text";
+
 // One cached hierarchy read shared by every pill on the page.
 const spendingCategoryTreeInput = (queryClient: QueryClient) =>
   compileEntityListInput(
@@ -72,21 +74,26 @@ export function SpendingCategoryLabel({
     () => (id && tree ? findSpendingCategory(tree, id) : null),
     [tree, id],
   );
-  const label = resolved?.path.join(" / ") || name || id;
-  if (!label) return <NoneValue />;
+  const { leaf, parent } = categoryLeafParts(
+    resolved?.path ?? [],
+    name || id || "",
+  );
+  if (!leaf) return <NoneValue />;
   const mark = resolved?.emoji ?? emoji;
   return id ? (
     <EntityRefLink
       entity="spendingCategory"
       id={id}
-      name={label}
+      name={leaf}
+      parent={parent}
       emoji={mark}
     />
   ) : (
     <EntityPill
       entity="spendingCategory"
       id=""
-      name={label}
+      name={leaf}
+      parent={parent}
       emoji={mark}
       displayImage={null}
     />

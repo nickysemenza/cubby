@@ -1,4 +1,5 @@
 import type { EnumIcon, EnumRole } from "@cubby/shared/enum-palette";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -40,10 +41,18 @@ export type ScalarDisplayValue =
   /** A structured value with no domain renderer; shown as readable JSON. */
   | { kind: "json"; raw: unknown };
 
-/** A plain number with locale grouping; a zero is a quiet fact, never a dash. */
+/**
+ * A plain number with locale grouping; a zero is a quiet fact, never a dash.
+ * In a table cell it reads in the mono figure face and size money uses.
+ */
 export function NumberValue({ value }: { value: number }) {
   return (
-    <span className={value === 0 ? "text-muted-foreground" : undefined}>
+    <span
+      className={cn(
+        "tabular-nums in-data-[slot=table-cell]:font-mono in-data-[slot=table-cell]:text-xs",
+        value === 0 && "text-muted-foreground",
+      )}
+    >
       {formatCount(value, 20)}
     </span>
   );

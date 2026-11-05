@@ -374,7 +374,7 @@ function HeaderHoverChrome({
       className={cn(
         // Pointer-transparent so a click still sorts; the source icon keeps
         // its own pointer for its phrase.
-        "pointer-events-none invisible absolute inset-y-0 my-auto flex h-5 items-center gap-1 rounded-sm bg-card px-0.5 group-focus-within/th:visible group-hover/th:visible [&_[data-field-provenance]]:pointer-events-auto",
+        "pointer-events-none invisible absolute inset-y-0 my-auto flex h-5 items-center gap-1 rounded-sm bg-(--table-header-surface) px-0.5 group-focus-within/th:visible group-hover/th:visible [&_[data-field-provenance]]:pointer-events-auto",
         // Clear of the column menu caret at the same edge.
         numeric ? "left-6" : "right-6",
       )}
@@ -462,6 +462,7 @@ function SortableHeader<TData extends RowData>({
       data-column-id={header.column.id}
       colSpan={header.colSpan}
       aria-sort={ariaSort(sortDirection)}
+      data-sorted={sortDirection || undefined}
       className={cn(
         "group/th relative has-[[data-popup-open]]:bg-muted",
         styles.header,
@@ -520,7 +521,7 @@ function SortableHeader<TData extends RowData>({
             ref={setActivatorNodeRef}
             variant="ghost"
             size="icon-sm"
-            aria-label={`Reorder ${header.column.id} column`}
+            aria-label={`Reorder ${headerLabel} column`}
             data-cell-spill-off=""
             className="absolute inset-y-0 left-0 z-10 my-auto h-5 w-2 shrink-0 cursor-grab touch-none rounded-none px-0 text-muted-foreground opacity-0 transition-opacity group-focus-within/th:opacity-100 group-hover/th:opacity-100 active:cursor-grabbing pointer-coarse:opacity-100"
             {...attributes}
@@ -556,25 +557,31 @@ function SortableHeader<TData extends RowData>({
         />
       </div>
       {header.column.getCanResize() && (
-        <ColumnResizeHandle
-          onResizeStart={(event) => {
-            // A flexible column paints wider than its configured size (it
-            // shares pane slack). Seed the painted width first so the drag
-            // starts from what the person sees instead of snapping narrower.
-            const painted = Math.round(
-              event.currentTarget.parentElement?.getBoundingClientRect()
-                .width ?? 0,
-            );
-            if (painted > 0 && painted !== header.column.getSize()) {
-              table.setColumnSizing((sizing) => ({
-                ...sizing,
-                [header.column.id]: painted,
-              }));
-            }
-            header.getResizeHandler()(event);
-          }}
-          onReset={() => header.column.resetSize()}
-        />
+        <table.Subscribe source={table.atoms.columnResizing!}>
+          {(resizing) => (
+            <ColumnResizeHandle
+              dragging={header.column.getIsResizing()}
+              deltaOffset={resizing.deltaOffset ?? 0}
+              onResizeStart={(event) => {
+                // A flexible column paints wider than its configured size (it
+                // shares pane slack). Seed the painted width first so the drag
+                // starts from what the person sees instead of snapping narrower.
+                const painted = Math.round(
+                  event.currentTarget.parentElement?.getBoundingClientRect()
+                    .width ?? 0,
+                );
+                if (painted > 0 && painted !== header.column.getSize()) {
+                  table.setColumnSizing((sizing) => ({
+                    ...sizing,
+                    [header.column.id]: painted,
+                  }));
+                }
+                header.getResizeHandler()(event);
+              }}
+              onReset={() => header.column.resetSize()}
+            />
+          )}
+        </table.Subscribe>
       )}
     </TableHead>
   );

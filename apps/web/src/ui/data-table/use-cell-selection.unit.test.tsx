@@ -34,6 +34,46 @@ const data: TestRow[] = [
 const noopScroll = () => undefined;
 
 describe("useCellSelection", () => {
+  it.each([
+    ["ArrowRight", true, false, 0, 2],
+    ["ArrowDown", true, true, 1, 0],
+    ["End", false, false, 0, 2],
+    ["End", true, false, 1, 2],
+    ["Home", true, false, 0, 0],
+    ["PageDown", false, true, 1, 0],
+    ["PageUp", false, false, 0, 0],
+    ["Tab", false, false, 0, 1],
+    // Shift+Tab at the first cell leaves the grid instead of moving.
+    ["Tab", false, true, 0, 0],
+  ])("moves with %s (mod=%s, shift=%s)", (key, ctrlKey, shiftKey, row, col) => {
+    const { result } = renderHook(() => {
+      const table = useCubbyTable({
+        data,
+        columns,
+        getRowId: (item) => item.id,
+      });
+      const selection = useCellSelection({
+        enabled: true,
+        rows: table.getRowModel().rows,
+        table,
+        scrollToFlatRow: noopScroll,
+      });
+      return { table, selection };
+    });
+    act(() => result.current.table.setFocusedCell("row-a", "alpha"));
+    const view = render(
+      <section
+        data-testid="moves"
+        {...result.current.selection.containerProps}
+      />,
+    );
+    fireEvent.keyDown(view.getByTestId("moves"), { key, ctrlKey, shiftKey });
+    expect(result.current.selection.getSelection()).toEqual({
+      anchor: shiftKey ? { row: 0, col: 0 } : { row, col },
+      focus: { row, col },
+    });
+  });
+
   it("derives clipboard coordinates in pinned display order", () => {
     const { result } = renderHook(() => {
       const table = useCubbyTable({

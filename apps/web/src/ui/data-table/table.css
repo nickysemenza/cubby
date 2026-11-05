@@ -34,15 +34,38 @@
 
 /* A painted hairline preserves the fixed cell frame's height. */
 [data-slot="table"] tr[data-cell-row] > td {
-  background-image: linear-gradient(var(--hairline-soft), var(--hairline-soft));
-  background-size: 100% 1px;
-  background-position: bottom;
+  background-image:
+    linear-gradient(
+      var(--range-top, transparent),
+      var(--range-top, transparent)
+    ),
+    linear-gradient(
+      var(--range-bottom, transparent),
+      var(--range-bottom, transparent)
+    ),
+    linear-gradient(
+      var(--range-left, transparent),
+      var(--range-left, transparent)
+    ),
+    linear-gradient(
+      var(--range-right, transparent),
+      var(--range-right, transparent)
+    ),
+    linear-gradient(var(--hairline-soft), var(--hairline-soft));
+  background-size:
+    100% 1px,
+    100% 1px,
+    1px 100%,
+    1px 100%,
+    100% 1px;
+  background-position: top, bottom, left, right, bottom;
   background-repeat: no-repeat;
 }
 
 /* DateDisplay owns deadline status, including household midnight and settled work. */
 [data-slot="table"] tr[data-cell-row] > td:has([data-overdue]) {
-  background-color: var(--destructive-surface);
+  color: var(--destructive);
+  border-inline-start: 2px solid var(--destructive);
 }
 
 [data-slot="table"]
@@ -125,4 +148,90 @@
 /* A transition keeps the prior rows and totals, dimmed, until the next arrive. */
 [data-table-pending] {
   opacity: 0.55;
+}
+
+/* Grid focus survives pinned boundary shadows. Range edges form one perimeter. */
+[data-slot="table"] td[data-cell-selected] {
+  background-color: color-mix(
+    in srgb,
+    var(--link) 8%,
+    var(--table-row-surface, var(--card))
+  );
+}
+[data-slot="table"] td[data-cell-anchor] {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+[data-range-top] {
+  --range-top: var(--link);
+}
+[data-range-bottom] {
+  --range-bottom: var(--link);
+}
+[data-range-left] {
+  --range-left: var(--link);
+}
+[data-range-right] {
+  --range-right: var(--link);
+}
+[data-slot="table"] th {
+  --table-header-surface: var(--card);
+}
+[data-slot="table"] th[data-sorted] {
+  --table-header-surface: color-mix(in srgb, var(--link) 6%, var(--card));
+  background: color-mix(in srgb, var(--link) 6%, var(--card));
+  color: var(--foreground);
+}
+[data-row-focused] > td:first-child {
+  border-inline-start: 2px solid var(--ring);
+}
+.table-resize-handle::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--hairline-soft);
+  transition-property: background-color;
+  transition-duration: var(--brand-motion-fast);
+}
+.table-resize-handle:hover::after,
+.table-resize-handle[data-dragging]::after {
+  background: var(--link);
+}
+.table-resize-handle[data-dragging]::after {
+  height: 100vh;
+  transform: translateX(var(--resize-delta));
+}
+[data-scroll-top] thead th {
+  border-bottom: 1px solid var(--hairline-strong);
+}
+/* Sticky pane fades remain stationary while the table scrolls beneath them. */
+[data-slot="table-pane"]::before,
+[data-slot="table-pane"]::after {
+  content: "";
+  position: absolute;
+  top: var(--table-fade-top, var(--table-header-height));
+  bottom: 0;
+  width: 16px;
+  pointer-events: none;
+  z-index: 25;
+  opacity: 0;
+  transition: opacity var(--brand-motion-fast);
+}
+[data-slot="table-pane"]::before {
+  left: 0;
+  background: linear-gradient(to right, var(--card), transparent);
+}
+[data-slot="table-pane"]::after {
+  right: 0;
+  background: linear-gradient(to left, var(--card), transparent);
+}
+[data-scroll-edge-start]::before,
+[data-scroll-edge-end]::after {
+  opacity: 1;
+}
+
+[data-slot="table"] tr:not([data-cell-row]):hover {
+  background-color: inherit;
 }

@@ -112,7 +112,7 @@ describe("field value automatic ownership", () => {
         Blue
       </FieldValueMark>,
     );
-    expect(screen.getByText("auto")).toBeInTheDocument();
+    expect(screen.getByText("Set automatically")).toBeInTheDocument();
   });
 
   it("does not relabel an older cached decision with a new automatic receipt", () => {
@@ -126,7 +126,7 @@ describe("field value automatic ownership", () => {
         Blue
       </FieldValueMark>,
     );
-    expect(screen.queryByText("auto")).not.toBeInTheDocument();
+    expect(screen.queryByText("Set automatically")).not.toBeInTheDocument();
     expect(screen.getByText("Blue")).toBeInTheDocument();
     expect(screen.getByLabelText("Stale result")).toBeInTheDocument();
   });

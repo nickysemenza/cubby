@@ -98,7 +98,10 @@ export function SectionHeader({
         className="sticky left-2 z-10 flex min-w-0 items-center gap-2 bg-card md:bg-(--table-section-surface)"
         style={{ paddingInlineStart: `${depth * 12}px` }}
       >
-        <h3 aria-label={title} className="min-w-0 truncate text-sm font-medium">
+        <h3
+          aria-label={title}
+          className="min-w-0 truncate text-sm font-semibold"
+        >
           {onToggle ? (
             <button
               type="button"

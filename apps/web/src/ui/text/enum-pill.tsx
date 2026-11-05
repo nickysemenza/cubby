@@ -1,8 +1,12 @@
 import type { EnumIcon } from "@cubby/shared/enum-palette";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
-import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";
 import { cn } from "cn";
-import type { CSSProperties, ReactElement, ReactNode } from "react";
+import {
+  useContext,
+  type CSSProperties,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 
 import { OptionGlyph } from "~/ui/media/option-glyph";
 import {
@@ -10,7 +14,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { NoneValue } from "~/ui/text/none-value";
 import { Pill } from "~/ui/text/pill";
+import { DenseCellContext } from "~/ui/values/stacked-value";
 
 /**
  * Shared chip geometry for both roles. `border-transparent` keeps the 1px
@@ -121,8 +127,9 @@ export function EnumPill({
 }
 
 /**
- * A stored boolean in a cell: a positive check for yes, a muted dash for no.
- * No pill — two states need no chip. `null` stays the caller's unknown mark.
+ * A stored boolean: a text-size check for yes; no is the shared empty mark
+ * (blank in a table cell). No pill — two states need no chip. `null` stays
+ * the caller's unknown mark.
  */
 export function BooleanValue({
   value,
@@ -133,14 +140,16 @@ export function BooleanValue({
   trueLabel?: string;
   falseLabel?: string;
 }) {
+  // A No in a table cell is blank; it is a value, so it never offers "Add…".
+  const inCell = useContext(DenseCellContext) !== null;
   return value ? (
     <span className="inline-flex items-center gap-1 text-positive">
-      <CheckIcon aria-hidden className="size-3.5" />
+      <CheckIcon aria-hidden className="size-3" />
       <span className="sr-only">{trueLabel}</span>
     </span>
   ) : (
-    <span className="inline-flex items-center text-muted-foreground">
-      <MinusIcon aria-hidden weight="regular" className="size-3.5" />
+    <span className="inline-flex items-center">
+      {!inCell && <NoneValue />}
       <span className="sr-only">{falseLabel}</span>
     </span>
   );

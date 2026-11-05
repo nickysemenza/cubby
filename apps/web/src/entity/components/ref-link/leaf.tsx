@@ -78,6 +78,8 @@ type PreviewRefLinkProps = {
   showIdentityMark?: boolean;
   openInNewTab?: boolean;
   className?: string;
+  /** Replaces the drawn text as the link's name (a leaf-first path). */
+  ariaLabel?: string;
 };
 
 /**
@@ -96,6 +98,7 @@ function PreviewRefLink({
   showIdentityMark = true,
   openInNewTab,
   className,
+  ariaLabel,
 }: PreviewRefLinkProps) {
   const linkClass = cn(
     showIdentityMark && "inline-flex items-center gap-1",
@@ -120,6 +123,7 @@ function PreviewRefLink({
               to="/usda/$id"
               params={{ id }}
               className={linkClass}
+              aria-label={ariaLabel}
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => event.stopPropagation()}
               {...newTab}
@@ -129,6 +133,7 @@ function PreviewRefLink({
               to={entities[entity].routes.detail}
               params={entityDetailParams(id)}
               className={linkClass}
+              aria-label={ariaLabel}
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => event.stopPropagation()}
               {...newTab}
@@ -167,7 +172,7 @@ const tableLinkVariants = cva(
   {
     variants: {
       tone: {
-        default: "font-medium text-muted-foreground hover:text-primary",
+        default: "font-normal text-muted-foreground hover:text-primary",
         // Graphite carries hierarchy; cobalt signals interaction. A column of
         // bold cobalt names made every row shout.
         identity: "font-medium text-foreground hover:text-primary",
@@ -210,6 +215,7 @@ type TableLinkBase = {
   children: ReactNode;
   className?: string;
   title?: string;
+  ariaLabel?: string;
 } & (USDALookupRoute | EntityRoute);
 
 /**
@@ -223,6 +229,7 @@ export function TableRefLink({
   children,
   className = "",
   title,
+  ariaLabel,
   tone,
 }: { tone?: TableLinkRole } & TableLinkBase) {
   return (
@@ -231,6 +238,7 @@ export function TableRefLink({
       to={to}
       params={params}
       title={title}
+      aria-label={ariaLabel}
       onClick={(event) => event.stopPropagation()}
     >
       {children}
@@ -249,6 +257,8 @@ type ChipRefLinkProps = {
   entity: BrowserRoutedEntity | "usda-food";
   id: string;
   name: string | null;
+  /** Hierarchy ancestors of `name`, joined root first with " / ". */
+  parent?: string | null;
   bare?: boolean;
   emoji?: string | null;
   displayImage?: ImageUrlSummary | null;
@@ -276,17 +286,20 @@ export function ChipRefLink({
   openInNewTab,
   context,
   fallback,
+  parent,
 }: ChipRefLinkProps) {
   const identityCell = useIdentityCell();
   const identity = bare ?? identityCell;
-  const label = name ?? id;
+  const leaf = name ?? id;
+  const label = parent ? `${parent} / ${leaf}` : leaf;
   const content = identity ? (
     <span className="min-w-0 truncate">{label}</span>
   ) : (
     <EntityPill
       entity={entity}
       id={id}
-      name={label}
+      name={leaf}
+      parent={parent}
       displayImage={displayImage ?? null}
       emoji={emoji}
       fallback={fallback}
@@ -306,6 +319,7 @@ export function ChipRefLink({
         ),
       })}
       openInNewTab={openInNewTab}
+      ariaLabel={!identity && parent ? label : undefined}
     >
       {content}
       {!identity && context && (
@@ -320,6 +334,7 @@ export function ChipRefLink({
       to={entities[entity].routes.detail}
       params={entityDetailParams(id)}
       title={label}
+      ariaLabel={!identity && parent ? label : undefined}
       tone={identity ? "identity" : undefined}
       className={cn(
         "inline-flex max-w-full min-w-0 items-center gap-1 align-middle",
