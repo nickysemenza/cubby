@@ -1,11 +1,9 @@
-import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { jobWaitReason } from "@cubby/schemas/job";
 import { RUN_KINDS } from "@cubby/schemas/run-fields";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/retained-tables";
 import { readRun } from "~/server/domains/run/repo/ai-work-state";
@@ -134,38 +132,6 @@ export const runJobHandler = defineJobHandler(
               cursor: { phase: "list", index: cursor.index + 1 },
             },
           };
-        }
-        if (input.purpose === "ai_refresh") {
-          const owner = await readRun(db, input.runId);
-          if (owner && aiRefreshRunInput.parse(owner.input).discovery) {
-            const activation = await readAiRefreshActivation(db);
-            if (
-              !activation?.enabled ||
-              activation.discoveryRunId !== input.runId
-            )
-              throw new JobPausedError(
-                "Automatic discovery activation is disabled or superseded",
-              );
-            const page = await (
-              await import("~/server/domains/run/service/ai-refresh")
-            ).discoverAiRefresh(db);
-            const availableAt = new Date(
-              Date.now() +
-                (page.deferred ? 30_000 : page.complete ? 120_000 : 0),
-            );
-            return {
-              page: {
-                done: false,
-                availableAt,
-                ...(page.deferred
-                  ? {
-                      waitUntil: availableAt,
-                      waitReason: jobWaitReason.enum.provider_capacity,
-                    }
-                  : {}),
-              },
-            };
-          }
         }
         const pending = await (
           await import("~/server/domains/run/service/ai-work")

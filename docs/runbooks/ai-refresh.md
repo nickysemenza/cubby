@@ -152,8 +152,8 @@ preparation. Recovery first launches unstarted Runs that already hold slots,
 then considers failed and dispatch-failed Runs oldest first, within its ten-Run budget;
 exhausted automatic-recovery budgets and member cancellations are excluded before
 the limit, so they cannot starve relaunches. Recovery uses the same two ordinary
-execution slots as new discovery. Existing unfinished Runs launch
-before new discovery. Workflow target
+execution slots as Email refresh. Field and Product refresh have no Run and hold no
+slot: a discovery page defers while 1,000 automatic evaluations are owed. Workflow target
 steps retry infrastructure failures twice with exponential backoff; an exhausted
 instance records a failed Run for recovery. Nightly and app-open recovery also
 reconcile instances quiet for 30 minutes. Imported or historical Email sources
@@ -179,7 +179,7 @@ UTC ISO text cast to `timestamp` so the driver's local timezone cannot shift a
 cutoff.
 
 Proposed cleanup: choose an explicit UTC cutoff and the ordinary refresh owners
-to stop, excluding the current discovery Run, Sweeps and member
+to stop, excluding Sweeps and member
 work outside this scope. Under the AI-admission lock, mark selected active Runs
 `failed` / `user_cancelled`, set `endedAt` and the cancellation diagnostic, and
 cancel their pending evaluations in a batch, mirroring Run control. Preserve

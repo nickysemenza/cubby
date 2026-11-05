@@ -86,16 +86,21 @@ export async function claimAiEvaluation(
         new Date(Date.now() + 120_000),
         "provider_capacity",
       );
-    const owner = await aiExecutionOwner(tx, existing, requestingRunId);
+    // Automatic refresh work has no Run: the activation just read is its authority.
+    const automatic = !existing.runId;
+    const owner = automatic
+      ? null
+      : await aiExecutionOwner(tx, existing, requestingRunId);
     if (
-      !owner ||
-      (existing.executionKind === "ai_refresh" &&
+      (!automatic && !owner) ||
+      (owner &&
+        existing.executionKind === "ai_refresh" &&
         (owner.status !== "running" || owner.deletedAt || owner.retiredAt))
     )
       throw new AiEvaluationUnauthorizedError();
     const [row] = await getDb(tx)
       .update(aiEvaluation)
-      .set({ runId: owner.id, updatedAt: new Date() })
+      .set({ runId: owner?.id ?? null, updatedAt: new Date() })
       .where(
         and(
           eq(aiEvaluation.id, item.ref),
@@ -142,9 +147,11 @@ export async function guardAiEvaluation(
     })
     .from(run)
     .where(
-      read.executionKind === "ai_refresh"
-        ? eq(run.id, read.runId)
-        : or(eq(run.id, read.runId), liveAiRequestRun(id)),
+      !read.runId
+        ? sql`false`
+        : read.executionKind === "ai_refresh"
+          ? eq(run.id, read.runId)
+          : or(eq(run.id, read.runId), liveAiRequestRun(id)),
     )
     .orderBy(run.id)
     .for("no key update");
@@ -162,11 +169,12 @@ export async function guardAiEvaluation(
   if (!row) throw new AiEvaluationAttemptObsoleteError();
   const owner = owners.find((entry) => entry.id === row.runId);
   if (
-    !owner ||
-    !owners.some(
-      (entry) =>
-        entry.status === "running" && !entry.deletedAt && !entry.retiredAt,
-    )
+    row.runId &&
+    (!owner ||
+      !owners.some(
+        (entry) =>
+          entry.status === "running" && !entry.deletedAt && !entry.retiredAt,
+      ))
   )
     throw new AiEvaluationUnauthorizedError();
   if (row.executionKind === "ai_refresh") {
@@ -363,7 +371,8 @@ export async function aiEvaluationAuthorizations(
   >[],
   lock: "share" | false = "share",
 ) {
-  if (!evaluations.length) return new Map<string, typeof run.$inferSelect>();
+  if (!evaluations.length)
+    return new Map<string, typeof run.$inferSelect | null>();
   const ids = evaluations.map((item) => item.id);
   const query = getDb(db)
     .select()
@@ -372,7 +381,7 @@ export async function aiEvaluationAuthorizations(
       or(
         inArray(
           run.id,
-          evaluations.map((item) => item.runId),
+          evaluations.flatMap((item) => item.runId ?? []),
         ),
         sql`EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."runId"=${run.id} AND r."evaluationId" = ANY(${uuidArrayParam(ids)}) AND r."cancelledAt" IS NULL)`,
       ),
@@ -397,21 +406,26 @@ export async function aiEvaluationAuthorizations(
       .map((owner) => [owner.id, owner]),
   );
   return new Map(
-    evaluations.flatMap((item) => {
-      const ownRequest = requests.find(
-        (request) =>
-          request.evaluationId === item.id && request.runId === item.runId,
-      );
-      const owner =
-        item.executionKind === "ai_refresh"
-          ? active.get(item.runId)
-          : ((ownRequest ? active.get(item.runId) : undefined) ??
-            requests
-              .filter((request) => request.evaluationId === item.id)
-              .map((request) => active.get(request.runId))
-              .find((value) => value !== undefined));
-      return owner ? [[item.id, owner] as const] : [];
-    }),
+    evaluations.flatMap(
+      (item): (readonly [string, typeof run.$inferSelect | null])[] => {
+        // Automatic refresh work answers to its activation, which the caller checks.
+        if (!item.runId) return [[item.id, null]];
+        const { runId } = item;
+        const ownRequest = requests.find(
+          (request) =>
+            request.evaluationId === item.id && request.runId === runId,
+        );
+        const owner =
+          item.executionKind === "ai_refresh"
+            ? active.get(runId)
+            : ((ownRequest ? active.get(runId) : undefined) ??
+              requests
+                .filter((request) => request.evaluationId === item.id)
+                .map((request) => active.get(request.runId))
+                .find((value) => value !== undefined));
+        return owner ? [[item.id, owner] as const] : [];
+      },
+    ),
   );
 }
 

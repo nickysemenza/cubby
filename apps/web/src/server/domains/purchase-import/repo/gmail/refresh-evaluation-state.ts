@@ -22,6 +22,8 @@ export async function loadEmailRefreshTarget(
   db: Database,
   evaluation: EmailRefreshEvaluation,
 ) {
+  // Mailbox refresh keeps its Run: its authorization and pause live there.
+  if (!evaluation.runId) throw new Error("Email refresh has no owning Run");
   const [[current], [owner]] = await Promise.all([
     getDb(db)
       .select({ item: email, member: emailMemberClassificationSql() })

@@ -197,6 +197,32 @@ export const aiContract = defineContract(
       output: suggestionSweepStartOut,
       invalidates: [],
     }),
+    automaticWork: query({
+      exposure: "capability",
+      description:
+        "Whether a member stopped automatic AI work (refresh and routine connection discovery), and when.",
+      input: zod.strictObject({}),
+      output: zod.object({ stoppedAt: zod.iso.datetime().nullable() }),
+      cache: { tags: [["run"]], profile: "live-status" },
+    }),
+    stopAutomaticWork: mutation({
+      exposure: "capability",
+      description:
+        "Stop automatic AI work until a member resumes it: discovery admits nothing, owed evaluations are parked, and an answer already in flight is not published. Work a member or agent session owns is unaffected.",
+      command: { label: "Stop automatic AI work", confirmation: null },
+      input: zod.strictObject({}),
+      output: zod.object({ parked: zod.number().int().nonnegative() }),
+      invalidates: ["runOnly"],
+    }),
+    resumeAutomaticWork: mutation({
+      exposure: "capability",
+      description:
+        "Resume automatic AI work a member stopped, including everything the Stop parked.",
+      command: { label: "Resume automatic AI work", confirmation: null },
+      input: zod.strictObject({}),
+      output: zod.object({ resumed: zod.number().int().nonnegative() }),
+      invalidates: ["runOnly"],
+    }),
     latestSuggestionSweepStatus: query({
       exposure: "capability",
       description:

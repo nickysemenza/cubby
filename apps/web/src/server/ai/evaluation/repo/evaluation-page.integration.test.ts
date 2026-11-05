@@ -38,6 +38,10 @@ import {
 } from "~/server/db/helpers";
 import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";
 import { readAiRefreshWorkSummary } from "~/server/domains/run/repo/ai-work-state";
+import {
+  resumeAutomaticAi,
+  stopAutomaticAi,
+} from "~/server/domains/run/repo/automatic-ai-stop";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
@@ -390,6 +394,63 @@ describe("AI evaluation drain publication", () => {
       });
     },
   );
+
+  // Automatic work has no Run to press Stop on. A member's Stop has to park what is owed,
+  // discard an answer already in flight, and bring all of it back on Resume.
+  it("parks automatic work on a member's Stop, fences an attempt in flight, and resumes it", async () => {
+    const feature = "synthetic-stop-feature";
+    const { rows } = await seed(1, feature);
+    const id = rows[0]!.id;
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ runId: null, runAt: new Date(0) })
+      .where(eq(aiEvaluation.id, id));
+    let release = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered = () => {};
+    const inFlight = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let calls = 0;
+    const execution: AiEvaluationExecution = {
+      ...runAiEvaluationExecution(),
+      async execute(db, claimed) {
+        calls++;
+        entered();
+        await released;
+        await withTransactionDatabase(db, (tx) =>
+          completeAiEvaluation(tx, claimed.id, claimed.attemptToken, {
+            synthetic: true,
+          }),
+        );
+      },
+    };
+    const first = runAiEvaluationPage(ctx.db, execution, feature);
+    await inFlight;
+
+    await expect(stopAutomaticAi(ctx.db, ctx.actor)).resolves.toEqual({
+      parked: 1,
+    });
+    release();
+    await first;
+    const state = async () =>
+      (
+        await getDb(ctx.db)
+          .select({ state: aiEvaluation.state, runAt: aiEvaluation.runAt })
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, id))
+      )[0];
+    expect(await state()).toEqual({ state: "queued", runAt: null });
+    await runAiEvaluationPage(ctx.db, execution, feature);
+    expect(calls).toBe(1);
+
+    await expect(resumeAutomaticAi(ctx.db)).resolves.toEqual({ resumed: 1 });
+    await runAiEvaluationPage(ctx.db, execution, feature);
+    expect(calls).toBe(2);
+    expect(await state()).toEqual({ state: "completed", runAt: null });
+  });
 
   it("keeps parked evaluation work when its Run resumes before publication", async () => {
     const feature = "synthetic-resume-feature";

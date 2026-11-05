@@ -48,7 +48,15 @@ import {
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { writeRunningAttemptProgress as writeRunningAttemptProgressImplementation } from "~/server/domains/run/repo/ai-work-state";
+import {
+  resumeAutomaticAi,
+  stopAutomaticAi,
+} from "~/server/domains/run/repo/automatic-ai-stop";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
+import {
+  discoverAiRefreshNow,
+  fillAutomaticBacklog,
+} from "~/server/domains/run/service/ai-refresh.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
@@ -70,19 +78,16 @@ import {
   insertEntityFixtures,
 } from "~/server/testing/repo.fixtures";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
-import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
 import { settleAppliedFieldRefresh } from "../repo/ai-refresh-state";
 import { scheduleConnectionRefresh } from "../repo/connection-refresh";
 import type { AiEvaluationPorts } from "./ai-evaluation-execution";
-import { discoverAiRefresh } from "./ai-refresh";
 import {
   categoryPorts,
   PRIMARY_MODEL,
   kernelCtx,
   productCategoryId,
   seedPending,
-  runCode,
   startSuggestionSweep,
 } from "./suggestion-sweep.fixtures";
 
@@ -141,16 +146,16 @@ describe("targeted prompt refresh", () => {
     sql`${aiEvaluation.target}->>${emailTarget.keyof().enum.kind} = ${emailTarget.shape.kind.value}`,
   );
   async function discoverFieldRefresh(
-    ports: Parameters<typeof discoverAiRefresh>[1],
+    ports: Parameters<typeof discoverAiRefreshNow>[1],
   ) {
-    const { runs: discovered } = await discoverAiRefresh(ctx.db, ports);
-    const targets = await getDb(ctx.db)
-      .select({ runId: aiEvaluation.runId })
-      .from(aiEvaluation)
-      .where(fieldRefreshTarget);
-    return discovered.filter((id) =>
-      targets.some((target) => target.runId === id),
-    );
+    const owed = async () =>
+      getDb(ctx.db)
+        .select({ id: aiEvaluation.id })
+        .from(aiEvaluation)
+        .where(fieldRefreshTarget);
+    const before = new Set((await owed()).map((row) => row.id));
+    await discoverAiRefreshNow(ctx.db, ports);
+    return (await owed()).map((row) => row.id).filter((id) => !before.has(id));
   }
   // Failure: unchanged pending backlog is skipped forever; a saved clear or
   // populated value is overwritten; replay applies the same advice twice.
@@ -208,8 +213,8 @@ describe("targeted prompt refresh", () => {
         context: kernelCtx(ctx),
         suggestPorts: categoryPorts().suggestPorts,
       };
-      await discoverAiRefresh(ctx.db, ports);
-      await discoverAiRefresh(ctx.db, ports);
+      await discoverAiRefreshNow(ctx.db, ports);
+      await discoverAiRefreshNow(ctx.db, ports);
       const [saved] = await getDb(ctx.db)
         .select()
         .from(suggestion)
@@ -290,7 +295,7 @@ describe("targeted prompt refresh", () => {
         context: kernelCtx(ctx),
         suggestPorts: categoryPorts(0.97).suggestPorts,
       };
-      await discoverAiRefresh(ctx.db, ports);
+      await discoverAiRefreshNow(ctx.db, ports);
       expect(await productCategoryId(ctx.db, item.id)).toBeNull();
       const [evaluation] = await getDb(ctx.db)
         .select()
@@ -385,24 +390,12 @@ describe("targeted prompt refresh", () => {
       if (state === "obsolete policy")
         manifest["field:product.categoryId"]!.policyFingerprint =
           "synthetic-obsolete-policy";
-      const activation = await activateAiRefresh(
-        ctx.db,
-        "synthetic-live-deferral",
-        { enabled: true, startDiscovery: false, manifest },
-      );
-      if (state === "capacity") {
-        for (let index = 0; index < 2; index++)
-          await ensureRun(ctx.db, systemActor(), {
-            purpose: "ai_refresh",
-            trigger: "scheduled",
-            status: "running",
-            input: aiRefreshRunInput.parse({
-              kind: "ai_refresh",
-              mailboxId: `synthetic-parked-${index}`,
-              activation,
-            }),
-          });
-      }
+      await activateAiRefresh(ctx.db, "synthetic-live-deferral", {
+        enabled: true,
+        startDiscovery: false,
+        manifest,
+      });
+      if (state === "capacity") await fillAutomaticBacklog(ctx.db);
       const output = await inferFieldAssessments(
         kernelCtx(ctx),
         {
@@ -429,50 +422,102 @@ describe("targeted prompt refresh", () => {
   );
 
   // A two-target inference cap cannot bound one Workflow/Run per catalog record.
-  it("joins Product discovery targets to one active refresh Run across repeated passes", async () => {
+  it("admits Product discovery targets with no Run across repeated passes", async () => {
     await productFixture(ctx, "Synthetic refresh hammer");
     await productFixture(ctx, "Synthetic refresh drill");
     await productFixture(ctx, "Synthetic refresh saw");
     await activateAiRefresh(ctx.db, "synthetic-shared-discovery", {
       enabled: true,
     });
-    await discoverAiRefresh(ctx.db);
-    await discoverAiRefresh(ctx.db);
+    await discoverAiRefreshNow(ctx.db);
+    await discoverAiRefreshNow(ctx.db);
     const evaluations = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
       .where(eq(aiEvaluation.feature, "product-identity"));
     expect(evaluations).toHaveLength(3);
-    expect(new Set(evaluations.map((row) => row.runId)).size).toBe(1);
-    const owners = await getDb(ctx.db)
-      .select({ id: run.id })
-      .from(run)
-      .where(and(eq(run.purpose, "ai_refresh"), eq(run.status, "running")));
-    expect(owners).toHaveLength(1);
+    expect(evaluations.every((row) => row.runId === null)).toBe(true);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.purpose, "ai_refresh")),
+    ).toEqual([]);
+  });
+
+  // The activation is the authority for automatic work: nothing about a Run may be
+  // needed between admission and publication.
+  it("drains and settles an automatic field evaluation with no Run", async () => {
+    const item = await productFixture(ctx, "Synthetic ownerless product");
+    await activateAiRefresh(ctx.db, "synthetic-ownerless", { enabled: true });
+    await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [item.id] },
+      },
+      { context: kernelCtx(ctx), ...categoryPorts(0.6) },
+    );
+    await activateAiRefresh(ctx.db, "synthetic-ownerless", { enabled: true });
+    const ports = {
+      context: kernelCtx(ctx),
+      suggestPorts: {
+        ...categoryPorts(0.6).suggestPorts,
+        decisionModel: PRIMARY_MODEL,
+      },
+    };
+    const admitted = await discoverFieldRefresh(ports);
+    expect(admitted).toHaveLength(1);
+    const owed = () =>
+      getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.id, admitted[0]!));
+    expect((await owed())[0]?.runId).toBeNull();
+
+    await drainAiEvaluations(ctx.db, admitted, ports);
+
+    expect((await owed())[0]).toMatchObject({
+      runId: null,
+      state: "completed",
+      runAt: null,
+    });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.purpose, "ai_refresh")),
+    ).toEqual([]);
+  });
+
+  it("admits no automatic work while a member's Stop stands, and resumes after it", async () => {
+    await productFixture(ctx, "Synthetic stopped Product");
+    await activateAiRefresh(ctx.db, "synthetic-stopped-discovery", {
+      enabled: true,
+    });
+    await stopAutomaticAi(ctx.db, ctx.actor);
+    await expect(discoverAiRefreshNow(ctx.db)).resolves.toMatchObject({
+      complete: true,
+    });
+    const products = () =>
+      getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.feature, "product-identity"));
+    expect(await products()).toEqual([]);
+    await resumeAutomaticAi(ctx.db);
+    await discoverAiRefreshNow(ctx.db);
+    expect(await products()).toHaveLength(1);
   });
 
   it("retains the discovery cursor while execution slots are full and covers deferred Products later", async () => {
     const item = await productFixture(ctx, "Synthetic deferred Product");
-    const activation = await activateAiRefresh(
-      ctx.db,
-      "synthetic-deferred-discovery",
-      { enabled: true },
-    );
-    const owners = [];
-    for (let index = 0; index < 2; index++)
-      owners.push(
-        await ensureRun(ctx.db, systemActor(), {
-          purpose: "ai_refresh",
-          trigger: "scheduled",
-          status: "running",
-          input: aiRefreshRunInput.parse({
-            kind: "ai_refresh",
-            mailboxId: `synthetic-busy-${index}`,
-            activation,
-          }),
-        }),
-      );
-    await discoverAiRefresh(ctx.db);
+    await activateAiRefresh(ctx.db, "synthetic-deferred-discovery", {
+      enabled: true,
+    });
+    const backlog = await fillAutomaticBacklog(ctx.db);
+    await discoverAiRefreshNow(ctx.db);
     expect(await readAiDiscoveryCursor(ctx.db)).toMatchObject({
       productDone: false,
       product: null,
@@ -484,10 +529,10 @@ describe("targeted prompt refresh", () => {
         .where(eq(aiEvaluation.feature, "product-identity")),
     ).toHaveLength(0);
     await getDb(ctx.db)
-      .update(run)
-      .set({ status: "completed", endedAt: new Date() })
-      .where(eq(run.id, owners[0]!));
-    await discoverAiRefresh(ctx.db);
+      .update(aiEvaluation)
+      .set({ runAt: null })
+      .where(eq(aiEvaluation.id, backlog[0]!.id));
+    await discoverAiRefreshNow(ctx.db);
     expect(await readAiDiscoveryCursor(ctx.db)).toMatchObject({
       productDone: true,
     });
@@ -567,8 +612,8 @@ describe("targeted prompt refresh", () => {
       context: kernelCtx(ctx),
       suggestPorts: categoryPorts().suggestPorts,
     };
-    await discoverAiRefresh(ctx.db, ports);
-    await discoverAiRefresh(ctx.db, ports);
+    await discoverAiRefreshNow(ctx.db, ports);
+    await discoverAiRefreshNow(ctx.db, ports);
     const evaluations = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
@@ -618,7 +663,7 @@ describe("targeted prompt refresh", () => {
       context: kernelCtx(ctx),
       suggestPorts: categoryPorts(0.95).suggestPorts,
     };
-    await discoverAiRefresh(ctx.db, ports);
+    await discoverAiRefreshNow(ctx.db, ports);
     const [evaluation] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
@@ -758,7 +803,7 @@ describe("targeted prompt refresh", () => {
           },
         },
       };
-      await discoverAiRefresh(ctx.db, ports);
+      await discoverAiRefreshNow(ctx.db, ports);
       const [evaluation] = await getDb(ctx.db)
         .select()
         .from(aiEvaluation)
@@ -1114,7 +1159,7 @@ describe("targeted prompt refresh", () => {
         },
       },
     };
-    await discoverAiRefresh(ctx.db, ports);
+    await discoverAiRefreshNow(ctx.db, ports);
     const [evaluation] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
@@ -1169,7 +1214,7 @@ describe("targeted prompt refresh", () => {
       context: kernelCtx(ctx),
       suggestPorts: categoryPorts(0.6).suggestPorts,
     };
-    await discoverAiRefresh(ctx.db, ports);
+    await discoverAiRefreshNow(ctx.db, ports);
     const [evaluation] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
@@ -1231,7 +1276,7 @@ describe("targeted prompt refresh", () => {
     await activateAiRefresh(ctx.db, "synthetic-bounded-catalog", {
       enabled: true,
     });
-    await discoverAiRefresh(ctx.db, { context: kernelCtx(ctx) });
+    await discoverAiRefreshNow(ctx.db, { context: kernelCtx(ctx) });
     const productTarget = aiEvaluationTarget.options.find(
       (target) => target.shape.kind.value === "product",
     )!;
@@ -1355,7 +1400,7 @@ describe("targeted prompt refresh", () => {
     await activateAiRefresh(ctx.db, "synthetic-publication-fence", {
       enabled: true,
     });
-    await discoverAiRefresh(ctx.db, {
+    await discoverAiRefreshNow(ctx.db, {
       context: kernelCtx(ctx),
       suggestPorts: categoryPorts(0.6).suggestPorts,
     });
@@ -1456,23 +1501,18 @@ describe("targeted prompt refresh", () => {
     await activateAiRefresh(ctx.db, "synthetic-mail-refresh", {
       enabled: true,
     });
-    const { runs: discovered } = await discoverAiRefresh(ctx.db);
+    await discoverAiRefreshNow(ctx.db);
     const emailRunIds = await getDb(ctx.db)
       .select({ runId: aiEvaluation.runId })
       .from(aiEvaluation)
       .where(emailRefreshTarget);
-    expect(
-      discovered.filter((id) =>
-        emailRunIds.some((target) => target.runId === id),
-      ),
-    ).toEqual([]);
     const runs = await getDb(ctx.db)
       .select()
       .from(run)
       .where(
         inArray(
           run.id,
-          emailRunIds.map(({ runId }) => runId),
+          emailRunIds.flatMap(({ runId }) => runId ?? []),
         ),
       );
     expect(
@@ -1489,7 +1529,7 @@ describe("targeted prompt refresh", () => {
     expect(
       evaluations.some((row) => row.target.recordId === confident.id),
     ).toBe(false);
-    await discoverAiRefresh(ctx.db);
+    await discoverAiRefreshNow(ctx.db);
     expect(
       await getDb(ctx.db).select().from(aiEvaluation).where(emailRefreshTarget),
     ).toHaveLength(201);
@@ -1522,7 +1562,7 @@ describe("targeted prompt refresh", () => {
     await activateAiRefresh(ctx.db, "synthetic-mail-reopen", {
       enabled: true,
     });
-    await discoverAiRefresh(ctx.db);
+    await discoverAiRefreshNow(ctx.db);
     const [blocked] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
@@ -1532,7 +1572,7 @@ describe("targeted prompt refresh", () => {
       mailboxId: "synthetic-reopen-mailbox",
       enabled: true,
     });
-    const { runs: discovered } = await discoverAiRefresh(ctx.db);
+    await discoverAiRefreshNow(ctx.db);
     const rows = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
@@ -1555,16 +1595,13 @@ describe("targeted prompt refresh", () => {
         reason: "mailbox_authorization_unavailable",
       },
     });
-    expect(discovered).toContain(replacement.runId);
     const [owner] = await getDb(ctx.db)
       .select()
       .from(run)
-      .where(eq(run.id, replacement.runId));
+      .where(eq(run.id, replacement.runId!));
     expect(owner?.status).toBe("running");
     // Queued work is not re-enqueued by another pass.
-    expect((await discoverAiRefresh(ctx.db)).runs).not.toContain(
-      replacement.runId,
-    );
+    await discoverAiRefreshNow(ctx.db);
     expect(
       await getDb(ctx.db).select().from(aiEvaluation).where(emailRefreshTarget),
     ).toHaveLength(2);
@@ -1655,7 +1692,7 @@ describe("targeted prompt refresh", () => {
         },
       },
     };
-    await discoverAiRefresh(ctx.db, ports);
+    await discoverAiRefreshNow(ctx.db, ports);
     const [first] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
@@ -1673,14 +1710,14 @@ describe("targeted prompt refresh", () => {
       (await getDb(ctx.db).select().from(suggestion))[0]?.supersessionReceipt
         ?.reason,
     ).toBe("no_proposal");
-    await discoverAiRefresh(ctx.db, ports);
+    await discoverAiRefreshNow(ctx.db, ports);
     expect(
       await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget),
     ).toHaveLength(1);
     await getDb(ctx.db)
       .update(product)
       .set({ name: "Synthetic changed evidence" });
-    await discoverAiRefresh(ctx.db, ports);
+    await discoverAiRefreshNow(ctx.db, ports);
     expect(
       await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget),
     ).toHaveLength(2);
@@ -1721,7 +1758,7 @@ describe("targeted prompt refresh", () => {
         decisionModel: PRIMARY_MODEL,
       },
     };
-    await discoverAiRefresh(ctx.db, ports);
+    await discoverAiRefreshNow(ctx.db, ports);
     const [first] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
@@ -1759,7 +1796,8 @@ describe("targeted prompt refresh", () => {
       .select({ id: run.id })
       .from(run)
       .where(eq(run.purpose, "ai_refresh"));
-    for (let pass = 0; pass < 3; pass++) await discoverAiRefresh(ctx.db, ports);
+    for (let pass = 0; pass < 3; pass++)
+      await discoverAiRefreshNow(ctx.db, ports);
     expect(
       await getDb(ctx.db)
         .select({ id: run.id })
@@ -1767,29 +1805,6 @@ describe("targeted prompt refresh", () => {
         .where(eq(run.purpose, "ai_refresh")),
     ).toEqual(beforeRediscovery);
     expect(physicalCalls).toBe(3);
-    // An explicit operator retry may recover; the earlier rejected row still suppresses its candidate.
-    await getDb(ctx.db)
-      .update(run)
-      .set({ status: "failed", endedAt: new Date() })
-      .where(eq(run.id, first!.runId));
-    await controlWorkflowRun(
-      ctx.db,
-      ctx.actor,
-      { runPublicId: await runCode(ctx.db, first!.runId), action: "retry" },
-      "ai_refresh",
-    );
-    const replacement = (
-      await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget)
-    ).find((row) => row.id !== first!.id)!;
-    await executeAiRefreshTarget(ctx.db, replacement.id, ports);
-    expect(
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(aiEvaluation)
-          .where(eq(aiEvaluation.id, first!.id))
-      )[0]?.state,
-    ).toBe("failed");
     expect(
       (
         await getDb(ctx.db)
@@ -1798,12 +1813,6 @@ describe("targeted prompt refresh", () => {
           .where(eq(suggestion.id, original!.id))
       )[0]?.status,
     ).toBe("rejected");
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(suggestion)
-        .where(eq(suggestion.status, "pending")),
-    ).toHaveLength(0);
   });
 
   it("protects a member ABA edit while an input-invalidated no-proposal target is in flight", async () => {
@@ -1831,7 +1840,7 @@ describe("targeted prompt refresh", () => {
         },
       },
     };
-    await discoverAiRefresh(ctx.db, empty);
+    await discoverAiRefreshNow(ctx.db, empty);
     const [first] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
@@ -1855,7 +1864,7 @@ describe("targeted prompt refresh", () => {
         },
       },
     };
-    await discoverAiRefresh(ctx.db, ports);
+    await discoverAiRefreshNow(ctx.db, ports);
     const second = (
       await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget)
     ).find((row) => row.id !== first!.id)!;

@@ -77,6 +77,11 @@ import {
   type AiCallOwner,
 } from "~/server/domains/run/repo/ai-call-owner";
 import {
+  readAutomaticAiStop,
+  resumeAutomaticAi,
+  stopAutomaticAi,
+} from "~/server/domains/run/repo/automatic-ai-stop";
+import {
   pauseSuggestionSweep,
   resumeSuggestionSweep,
   startSuggestionSweep,
@@ -723,6 +728,18 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   },
   latestSuggestionSweepStatus: (context) =>
     latestSuggestionSweepStatus(context.db),
+  automaticWork: async (context) => ({
+    stoppedAt: (await readAutomaticAiStop(context.db))?.stoppedAt ?? null,
+  }),
+  stopAutomaticWork: (context) =>
+    stopAutomaticAi(context.db, context.actorContext),
+  resumeAutomaticWork: async (context) => {
+    const resumed = await resumeAutomaticAi(context.db);
+    const { wakeJobs } =
+      await import("~/server/workflows/background-tasks/publish");
+    await wakeJobs({ source: "automatic-ai-resume" });
+    return resumed;
+  },
   // Both presentations share the page run grouping and authoritative inference.
   suggestFields: (context, input) => inferFieldAssessments(context, input),
   suggestFieldsBatch: (context, input) =>

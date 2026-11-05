@@ -1,49 +1,27 @@
-import type { RunId } from "@cubby/schemas/identifiers";
-import { connectionDiscoveryRunInput } from "@cubby/schemas/run-fields";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  activateAiRefresh,
-  readAiRefreshActivation,
-} from "~/server/ai/repo/ai-refresh";
+import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { aiEvaluation, run, task } from "~/server/db/schema";
+import { aiEvaluation, task } from "~/server/db/schema";
 import { claimDerivedDiscovery } from "~/server/domains/run/repo/derived-discovery";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
+import { outsideJob } from "~/server/generic/jobs/outside-job";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { claimContext } from "~/server/generic/jobs/service/jobs";
 import { wakeAiEvaluationRequesters } from "~/server/workflows/runs/wake";
 
-import { SUPERSEDED_RUN_FAILURE } from "./ai-refresh-state";
-import * as discoveryRepo from "./connection-refresh";
+import { stopAutomaticAi } from "./automatic-ai-stop";
 import {
   CONNECTION_DISCOVERY_PENDING_CAP,
   pendingConnectionEvaluations,
-  prepareConnectionDiscoveryRoster,
+  admitConnectionDiscoveryPage,
 } from "./connection-refresh";
-import { ensureRun, systemActor } from "./ensure-run";
-
-async function createDiscoveryRun(db: Database) {
-  const activation = await readAiRefreshActivation(db);
-  if (!activation) throw new Error("Synthetic AI refresh is not active");
-  return ensureRun(db, systemActor(), {
-    purpose: "connection_discovery",
-    trigger: "scheduled",
-    status: "running",
-    execution: false,
-    input: connectionDiscoveryRunInput.parse({
-      kind: "connection_discovery",
-      activation,
-    }),
-  });
-}
 
 async function connectionEvaluations(db: Database, recordId: string) {
   const rows = await getDb(db)
@@ -84,16 +62,14 @@ describe("connection discovery pacing", () => {
     let after: string | null = null;
     let pages = 0;
     do {
-      const result: Awaited<
-        ReturnType<typeof prepareConnectionDiscoveryRoster>
-      > = await prepareConnectionDiscoveryRoster(ctx.db, {
-        runId: null,
-        after,
-        limit: 2,
-        entityKinds: ["task"],
-        newestFirst: true,
-        createRun: createDiscoveryRun,
-      });
+      const result: Awaited<ReturnType<typeof admitConnectionDiscoveryPage>> =
+        await admitConnectionDiscoveryPage(ctx.db, {
+          after,
+          limit: 2,
+          entityKinds: ["task"],
+          newestFirst: true,
+        });
+      if (result.held) throw new Error("Synthetic discovery page was held");
       after = result.next;
       pages += 1;
     } while (after && pages < 5);
@@ -119,13 +95,11 @@ describe("connection discovery pacing", () => {
   it("updates a changed record's queued evaluation without cancelling its Job", async () => {
     const [created] = await tasks(["Synthetic replaceable task"]);
     const page = () =>
-      prepareConnectionDiscoveryRoster(ctx.db, {
-        runId: null,
+      admitConnectionDiscoveryPage(ctx.db, {
         after: null,
         limit: 25,
         entityKinds: ["task"],
         newestFirst: true,
-        createRun: createDiscoveryRun,
       });
     await page();
     const [row] = await getDb(ctx.db)
@@ -143,197 +117,6 @@ describe("connection discovery pacing", () => {
     expect(states).toEqual(["queued"]);
   });
 
-  it.each([
-    { failureCode: SUPERSEDED_RUN_FAILURE, readmitted: true },
-    { failureCode: "user_cancelled", readmitted: false },
-  ])(
-    "re-admits cancelled work only when its Run was superseded ($failureCode)",
-    async ({ failureCode, readmitted }) => {
-      const [created] = await tasks(["Synthetic superseded task"]);
-      const input = {
-        runId: null,
-        after: null,
-        limit: 25,
-        entityKinds: ["task"],
-        newestFirst: true,
-        createRun: createDiscoveryRun,
-      };
-      const first = await prepareConnectionDiscoveryRoster(ctx.db, input);
-      if (!first.runId) throw new Error("Synthetic discovery admitted nothing");
-      await getDb(ctx.db)
-        .update(run)
-        .set({ status: "failed", failureCode })
-        .where(eq(run.id, first.runId));
-      await getDb(ctx.db)
-        .update(aiEvaluation)
-        .set({ state: "cancelled" })
-        .where(eq(aiEvaluation.runId, first.runId));
-      const second = await prepareConnectionDiscoveryRoster(ctx.db, input);
-      expect(second.inserted).toBe(readmitted ? 1 : 0);
-      const [row] = await getDb(ctx.db)
-        .select({ id: task.id })
-        .from(task)
-        .where(eq(task.shortcode, created!.output.id));
-      const live = (await connectionEvaluations(ctx.db, row!.id)).filter(
-        (item) => item.state === "queued",
-      );
-      expect(live).toHaveLength(readmitted ? 1 : 0);
-    },
-  );
-
-  it("never appends into a stopped Run carried in the cursor", async () => {
-    await tasks(["Synthetic stopped-run task"]);
-    const stopped = await createDiscoveryRun(ctx.db);
-    await getDb(ctx.db)
-      .update(run)
-      .set({ status: "failed", failureCode: SUPERSEDED_RUN_FAILURE })
-      .where(eq(run.id, stopped));
-    const page = await prepareConnectionDiscoveryRoster(ctx.db, {
-      runId: stopped,
-      after: null,
-      limit: 25,
-      entityKinds: ["task"],
-      newestFirst: true,
-      createRun: createDiscoveryRun,
-    });
-    expect(page.runId).not.toBe(stopped);
-    const inStopped = await getDb(ctx.db)
-      .select({ id: aiEvaluation.id })
-      .from(aiEvaluation)
-      .where(eq(aiEvaluation.runId, stopped));
-    expect(inStopped).toEqual([]);
-  });
-
-  it("stops at roster admission when the owning Run was member-cancelled", async () => {
-    await tasks(["Synthetic keyed continuation task"]);
-    // Production opens the pass Run with a key per Job claim; reopening with
-    // the same key returns the stopped Run, which must not receive work.
-    const keyed = async (db: Database, replacing: RunId | null) => {
-      const activation = await readAiRefreshActivation(db);
-      if (!activation) throw new Error("Synthetic AI refresh is not active");
-      return ensureRun(db, systemActor(), {
-        purpose: "connection_discovery",
-        trigger: "scheduled",
-        status: "running",
-        execution: false,
-        clientKey: `connection-discovery:synthetic-claim:1${replacing ? `:after:${replacing}` : ""}`,
-        input: connectionDiscoveryRunInput.parse({
-          kind: "connection_discovery",
-          activation,
-        }),
-      });
-    };
-    const stopped = await keyed(ctx.db, null);
-    await getDb(ctx.db)
-      .update(run)
-      .set({ status: "failed", failureCode: "user_cancelled" })
-      .where(eq(run.id, stopped));
-    const page = await prepareConnectionDiscoveryRoster(ctx.db, {
-      runId: stopped,
-      after: null,
-      limit: 25,
-      entityKinds: ["task"],
-      newestFirst: true,
-      createRun: keyed,
-    });
-    expect(page).toMatchObject({
-      outcome: "member-stopped",
-      runId: null,
-      inserted: 0,
-    });
-    const inStopped = await getDb(ctx.db)
-      .select({ id: aiEvaluation.id })
-      .from(aiEvaluation)
-      .where(eq(aiEvaluation.runId, stopped));
-    expect(inStopped).toEqual([]);
-  });
-
-  it("keeps the stopped Run's identity across a page that admits nothing", async () => {
-    await tasks(["Synthetic late continuation task"]);
-    const keyed = async (db: Database, replacing: RunId | null) => {
-      const activation = await readAiRefreshActivation(db);
-      if (!activation) throw new Error("Synthetic AI refresh is not active");
-      return ensureRun(db, systemActor(), {
-        purpose: "connection_discovery",
-        trigger: "scheduled",
-        status: "running",
-        execution: false,
-        clientKey: `connection-discovery:synthetic-claim:2${replacing ? `:after:${replacing}` : ""}`,
-        input: connectionDiscoveryRunInput.parse({
-          kind: "connection_discovery",
-          activation,
-        }),
-      });
-    };
-    const stopped = await keyed(ctx.db, null);
-    await getDb(ctx.db)
-      .update(run)
-      .set({ status: "failed", failureCode: SUPERSEDED_RUN_FAILURE })
-      .where(eq(run.id, stopped));
-    // A page with nothing admissible right after the stop.
-    const empty = await prepareConnectionDiscoveryRoster(ctx.db, {
-      runId: stopped,
-      after: null,
-      limit: 25,
-      entityKinds: ["plant"],
-      newestFirst: true,
-      createRun: keyed,
-    });
-    expect(empty).toMatchObject({ runId: null, replacing: stopped });
-    const later = await prepareConnectionDiscoveryRoster(ctx.db, {
-      runId: empty.runId,
-      replacing: empty.replacing,
-      after: null,
-      limit: 25,
-      entityKinds: ["task"],
-      newestFirst: true,
-      createRun: keyed,
-    });
-    expect(later.runId).not.toBeNull();
-    expect(later.runId).not.toBe(stopped);
-    expect(later.inserted).toBe(1);
-    expect(later.replacing).toBeNull();
-  });
-
-  it("continues after a Run its open returns stopped when the cursor never saved it", async () => {
-    await tasks(["Synthetic unpublished continuation task"]);
-    const keyed = async (db: Database, replacing: RunId | null) => {
-      const activation = await readAiRefreshActivation(db);
-      if (!activation) throw new Error("Synthetic AI refresh is not active");
-      return ensureRun(db, systemActor(), {
-        purpose: "connection_discovery",
-        trigger: "scheduled",
-        status: "running",
-        execution: false,
-        clientKey: `connection-discovery:synthetic-claim:3${replacing ? `:after:${replacing}` : ""}`,
-        input: connectionDiscoveryRunInput.parse({
-          kind: "connection_discovery",
-          activation,
-        }),
-      });
-    };
-    // Preparation committed this Run, then publication failed before the
-    // cursor saved it; the member cancelled it before the replay.
-    const stopped = await keyed(ctx.db, null);
-    await getDb(ctx.db)
-      .update(run)
-      .set({ status: "failed", failureCode: SUPERSEDED_RUN_FAILURE })
-      .where(eq(run.id, stopped));
-    const replay = await prepareConnectionDiscoveryRoster(ctx.db, {
-      runId: null,
-      replacing: null,
-      after: null,
-      limit: 25,
-      entityKinds: ["task"],
-      newestFirst: true,
-      createRun: keyed,
-    });
-    expect(replay.runId).not.toBeNull();
-    expect(replay.runId).not.toBe(stopped);
-    expect(replay.inserted).toBe(1);
-    expect(replay.replacing).toBeNull();
-  });
-
   it("updates the queued slot when input reverts before execution", async () => {
     const [created] = await tasks(["Synthetic reverting task"]);
     const [row] = await getDb(ctx.db)
@@ -341,13 +124,11 @@ describe("connection discovery pacing", () => {
       .from(task)
       .where(eq(task.shortcode, created!.output.id));
     const page = () =>
-      prepareConnectionDiscoveryRoster(ctx.db, {
-        runId: null,
+      admitConnectionDiscoveryPage(ctx.db, {
         after: null,
         limit: 25,
         entityKinds: ["task"],
         newestFirst: true,
-        createRun: createDiscoveryRun,
       });
     const rename = (name: string) =>
       getDb(ctx.db).update(task).set({ name }).where(eq(task.id, row!.id));
@@ -363,47 +144,35 @@ describe("connection discovery pacing", () => {
     expect(states).toEqual(["queued"]);
   });
 
-  // Even an unfinished queued slot remains stopped after its owner is cancelled.
-  it("never updates a queued slot whose Run the member cancelled", async () => {
-    const [created] = await tasks(["Synthetic cancelled reverting task"]);
-    const [row] = await getDb(ctx.db)
-      .select({ id: task.id })
-      .from(task)
-      .where(eq(task.shortcode, created!.output.id));
-    const page = () =>
-      prepareConnectionDiscoveryRoster(ctx.db, {
-        runId: null,
-        after: null,
-        limit: 25,
-        entityKinds: ["task"],
-        newestFirst: true,
-        createRun: createDiscoveryRun,
-      });
-    const rename = (name: string) =>
-      getDb(ctx.db).update(task).set({ name }).where(eq(task.id, row!.id));
-    const first = await page(); // fingerprint A queued
-    if (!first.runId) throw new Error("Synthetic discovery admitted nothing");
-    await rename("Synthetic cancelled reverting task, edited");
-    await page(); // queued slot now captures B
-    await getDb(ctx.db)
-      .update(run)
-      .set({ status: "failed", failureCode: "user_cancelled" })
-      .where(eq(run.id, first.runId));
-    await rename("Synthetic cancelled reverting task");
-    const reverted = await page();
-    expect(reverted.inserted).toBe(0);
+  it("holds its cursor while a member's Stop stands", async () => {
+    await tasks(["Synthetic stopped task"]);
+    await stopAutomaticAi(ctx.db, ctx.actor);
+    const saved = await claimDerivedDiscovery(ctx.db);
+    const claim = await claimJob(ctx.db, saved.id);
+    if (!claim) throw new Error("Synthetic discovery Job was not claimable");
+    const prepared = await connectionDiscoveryJobHandler.prepare(
+      ctx.db,
+      { ...claim, cursor: { after: "synthetic-cursor", runId: null } },
+      fromPartial({
+        signal: new AbortController().signal,
+        fenced: outsideJob(ctx.db),
+      }),
+    );
+    expect(prepared.page).toMatchObject({
+      done: false,
+      cursor: { after: "synthetic-cursor", runId: null },
+    });
+    expect(await pendingConnectionEvaluations(ctx.db)).toBe(0);
   });
 
   it("holds its cursor while the evaluation backlog is at the cap", async () => {
     await tasks(["Synthetic backpressure task"]);
-    const owner = await createDiscoveryRun(ctx.db);
     await getDb(ctx.db)
       .insert(aiEvaluation)
       .values(
         Array.from(
           { length: CONNECTION_DISCOVERY_PENDING_CAP },
           (_, index) => ({
-            runId: owner,
             workKey: `synthetic-backlog-${index}`,
             feature: "entity-connections",
             target: {
@@ -477,47 +246,5 @@ describe("connection discovery pacing", () => {
     );
     const released = (await readJobs(ctx.db, { id: saved.id }))[0];
     expect(released?.availableAt.getTime()).toBeLessThanOrEqual(Date.now());
-  });
-  it("stops the pass for a day when a member cancels its Run", async () => {
-    await tasks(["Synthetic member-stopped task"]);
-    const cancelled = await createDiscoveryRun(ctx.db);
-    // The member cancels after the handler began, before roster admission.
-    // An earlier out-of-transaction stop check cannot observe this cancellation.
-    const pending = discoveryRepo.pendingConnectionEvaluations;
-    vi.spyOn(
-      discoveryRepo,
-      "pendingConnectionEvaluations",
-    ).mockImplementationOnce(async (db) => {
-      await getDb(db)
-        .update(run)
-        .set({ status: "failed", failureCode: "user_cancelled" })
-        .where(eq(run.id, cancelled));
-      return pending(db);
-    });
-    const saved = await claimDerivedDiscovery(ctx.db);
-    const claim = await claimJob(ctx.db, saved.id);
-    if (!claim) throw new Error("Synthetic discovery Job was not claimable");
-    const before = Date.now();
-    const prepared = await connectionDiscoveryJobHandler.prepare(
-      ctx.db,
-      {
-        ...claim,
-        cursor: { after: null, runId: cancelled },
-      },
-      claimContext(ctx.db, claim),
-    );
-    expect(prepared.page).toMatchObject({
-      done: false,
-      cursor: { after: null, runId: null, replacing: null },
-    });
-    const page = prepared.page as { waitUntil?: Date };
-    expect(page.waitUntil?.getTime()).toBeGreaterThanOrEqual(
-      before + 23 * 60 * 60_000,
-    );
-    const opened = await getDb(ctx.db)
-      .select({ id: run.id })
-      .from(run)
-      .where(eq(run.purpose, "connection_discovery"));
-    expect(opened.map((row) => row.id)).toEqual([cancelled]);
   });
 });

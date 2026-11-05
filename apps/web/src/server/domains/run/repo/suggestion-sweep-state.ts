@@ -3,7 +3,7 @@ import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
@@ -90,7 +90,8 @@ export async function pauseRunningSuggestionSweep(db: Database, runId: RunId) {
 
 export async function saveSweepSuggestions(
   db: Database,
-  runId: RunId,
+  // Automatic refresh publishes with no Run, and its slot is then unique on the record.
+  runId: RunId | null,
   input: {
     entity: FieldSuggestionsInput["entity"];
     field: string;
@@ -123,7 +124,9 @@ export async function saveSweepSuggestions(
         .from(suggestionTable)
         .where(
           and(
-            eq(suggestionTable.runId, runId),
+            runId
+              ? eq(suggestionTable.runId, runId)
+              : isNull(suggestionTable.runId),
             eq(suggestionTable.recordId, typedRecordId),
             eq(suggestionTable.field, input.field),
             eq(suggestionTable.active, true),
@@ -150,7 +153,10 @@ export async function saveSweepSuggestions(
       const txContext = {
         ...context,
         db: tx,
-        actorContext: { ...context.actorContext, runId },
+        actorContext: {
+          ...context.actorContext,
+          runId: runId ?? context.actorContext.runId,
+        },
       };
       const [record] = await readSelectedEntityRecords({
         context: txContext,

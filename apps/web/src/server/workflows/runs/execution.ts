@@ -11,7 +11,7 @@ type ExecutionFence = Readonly<{
   job: Pick<JobContext, "fence" | "check">;
 }>;
 type WorkflowExecution = ExecutionFence &
-  Readonly<{ runId: string; attempt: number; database?: Database }>;
+  Readonly<{ runId: string | null; attempt: number; database?: Database }>;
 const execution = new AsyncLocalStorage<ExecutionFence>();
 export const hasWorkflowExecution = () =>
   execution.getStore() !== undefined || currentJobExecution() !== undefined;

@@ -177,7 +177,7 @@ export async function executeAiWorkTarget(
   if (item.executionKind === "mail_reclassify")
     await executeReclassificationTarget(db, item, ports.reclassification);
   else {
-    const owner = await readRun(db, item.runId);
+    const owner = item.runId && (await readRun(db, item.runId));
     if (!owner) throw new Error("Suggestion sweep Run no longer exists");
     const context = ports.sweep?.context ?? {
       ...buildCrudServices(db),

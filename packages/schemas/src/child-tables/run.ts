@@ -905,10 +905,10 @@ export const runChildren = [
         default: { sql: "gen_random_uuid()" },
       },
       {
+        /** The session that owns it; automatic refresh work has none and answers to its activation. */
         key: "runId",
         kind: "uuid",
         type: "RunId",
-        notNull: true,
         reference: { table: "run", column: "id" },
       },
       {

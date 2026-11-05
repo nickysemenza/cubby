@@ -16,6 +16,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   gt,
@@ -57,6 +58,7 @@ import {
   hasAiRefreshRunCapacity,
   tryLockAiRefreshScheduling,
 } from "./ai-refresh-admission";
+import { readAutomaticAiStop } from "./automatic-ai-stop";
 import { ensureRun } from "./ensure-run";
 
 export type AssessmentStateRow = SuggestionStateRow;
@@ -91,7 +93,7 @@ const targetWorkKey = ({ target, provenance }: EvaluationTargetInput) =>
 // Persistently declined input gets a bounded number of automatic attempts.
 const MAX_REOPENS = 3;
 /** failureCode of a Run whose queued work was cleared as redundant, not refused. */
-export const SUPERSEDED_RUN_FAILURE = "superseded";
+const SUPERSEDED_RUN_FAILURE = "superseded";
 const refreshRunRevision = sql<number>`coalesce((${run.input}->${aiRefreshRunInput.keyof().enum.activation}->>${aiRefreshActivation.keyof().enum.revision})::int, 0)`;
 
 const targetFeature = (target: AiEvaluationTarget) =>
@@ -176,7 +178,7 @@ async function slotAdmissions(
 }
 
 /** Whether any logical slot admits current input, using one history read. */
-export async function hasAdmissibleTarget(
+async function hasAdmissibleTarget(
   db: Database,
   targets: readonly EvaluationTargetInput[],
 ) {
@@ -188,7 +190,7 @@ export async function hasAdmissibleTarget(
 /** Admit/update a finite slot set with one history read and set-based writes. */
 export async function insertEvaluationTargets(
   db: Database,
-  runId: string,
+  runId: string | null,
   targets: readonly EvaluationTargetInput[],
   options: { updatesOnly?: boolean } = {},
 ) {
@@ -274,7 +276,7 @@ export async function insertEvaluationTargets(
         tx,
         written.map((entry) => entry.id),
       );
-      if (written.length)
+      if (written.length && runId)
         await getDb(tx)
           .insert(aiEvaluationRequest)
           .values(
@@ -292,7 +294,7 @@ export async function insertEvaluationTargets(
         .insert(aiEvaluation)
         .values(
           fresh.map((entry) => ({
-            runId: runEntityId.parse(runId),
+            runId: runId ? runEntityId.parse(runId) : null,
             feature: targetFeature(entry.input.target),
             workKey: entry.workKey,
             target: entry.input.target,
@@ -309,7 +311,7 @@ export async function insertEvaluationTargets(
         )
         .onConflictDoNothing()
         .returning();
-      if (inserted.length)
+      if (inserted.length && runId)
         await getDb(tx)
           .insert(aiEvaluationRequest)
           .values(
@@ -333,6 +335,41 @@ type ScheduleEvaluationResult =
   | { kind: "scheduled"; runId: RunId }
   | { kind: "unchanged" }
   | { kind: "deferred"; reason: "scheduling_busy" | "capacity" };
+
+/** Automatic evaluations waiting before a discovery page holds its cursor. */
+export const AUTOMATIC_EVALUATION_BACKLOG = 1_000;
+
+/**
+ * Admit automatic refresh work, which has no Run: the drain runs it and the activation
+ * authorizes it. A full backlog defers the page, so a pass drains at the drain's pace.
+ */
+export async function scheduleAutomaticEvaluations(
+  db: Database,
+  targets: EvaluationTargetInput[],
+): Promise<
+  | { kind: "scheduled" | "unchanged" }
+  | { kind: "deferred"; reason: "scheduling_busy" | "capacity" | "stopped" }
+> {
+  if (!(await hasAdmissibleTarget(db, targets))) return { kind: "unchanged" };
+  return withTransactionDatabase(db, async (tx) => {
+    if (!(await tryLockAiRefreshScheduling(tx)))
+      return { kind: "deferred", reason: "scheduling_busy" };
+    if (await readAutomaticAiStop(tx))
+      return { kind: "deferred", reason: "stopped" };
+    // An update keeps its slot's owner and adds no backlog.
+    await insertEvaluationTargets(tx, null, targets, { updatesOnly: true });
+    if (!(await hasAdmissibleTarget(tx, targets))) return { kind: "scheduled" };
+    const [backlog] = await getDb(tx)
+      .select({ owed: count() })
+      .from(aiEvaluation)
+      .where(and(isNull(aiEvaluation.runId), isNotNull(aiEvaluation.runAt)));
+    if ((backlog?.owed ?? 0) >= AUTOMATIC_EVALUATION_BACKLOG)
+      return { kind: "deferred", reason: "capacity" };
+    return (await insertEvaluationTargets(tx, null, targets))
+      ? { kind: "scheduled" }
+      : { kind: "unchanged" };
+  });
+}
 
 /** Work and its owner commit together. A deferred discovery keeps its cursor. */
 export async function scheduleEvaluationRun(

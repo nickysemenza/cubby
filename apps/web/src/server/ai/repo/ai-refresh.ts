@@ -1,6 +1,5 @@
 import {
   aiRefreshActivation,
-  aiRefreshRunInput,
   type AiRefreshManifest,
 } from "@cubby/schemas/ai-evaluation";
 import { eq } from "drizzle-orm";
@@ -80,7 +79,6 @@ export async function activateAiRefresh(
         options.observationEpoch ??
         (prior.success ? prior.data.observationEpoch : 0),
       revision: (prior.success ? prior.data.revision : 0) + (changed ? 1 : 0),
-      discoveryRunId: prior.success ? prior.data.discoveryRunId : null,
       enabled: options.enabled,
       manifest,
       activatedAt:
@@ -89,26 +87,8 @@ export async function activateAiRefresh(
           : new Date().toISOString(),
     });
     let resetCursor = false;
-    if (
-      options.startDiscovery &&
-      options.enabled &&
-      (changed || !activation.discoveryRunId)
-    ) {
+    if (options.startDiscovery && options.enabled && changed)
       resetCursor = true;
-      const { ensureRun, systemActor } =
-        await import("~/server/domains/run/repo/ensure-run");
-      activation.discoveryRunId = await ensureRun(tx, systemActor(), {
-        purpose: "ai_refresh",
-        trigger: "scheduled",
-        status: "running",
-        clientKey: `ai-refresh:discovery:${activation.revision}`,
-        input: aiRefreshRunInput.parse({
-          kind: "ai_refresh",
-          discovery: true,
-          activation,
-        }),
-      });
-    }
     await getDb(tx)
       .update(appSettings)
       .set({ metadata: activation, updatedAt: new Date() })
@@ -149,6 +129,8 @@ export async function producingAiManifest(db: Database) {
 
 const DISCOVERY_SETTINGS_ID = "00000000-0000-4000-8000-000000000075";
 const discoveryCursor = z.object({
+  /** When this generation's pass finished; the next one starts an hour later. */
+  completedAt: z.iso.datetime().nullable().default(null),
   revision: z.number().int().nonnegative().default(0),
   fieldDone: z.boolean().default(false),
   emailDone: z.boolean().default(false),

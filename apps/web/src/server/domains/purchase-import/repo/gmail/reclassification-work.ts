@@ -83,6 +83,8 @@ export async function loadReclassificationTarget(
 ) {
   if (evaluation.target.kind !== "email")
     throw new Error("Email reclassification requires an Email target");
+  if (!evaluation.runId)
+    throw new Error("Email reclassification has no owning Run");
   const [[owner], [current]] = await Promise.all([
     getDb(db).select().from(run).where(eq(run.id, evaluation.runId)),
     getDb(db)

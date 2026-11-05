@@ -1,7 +1,4 @@
-import { aiRefreshActivation } from "@cubby/schemas/ai-evaluation";
-import { runEntityId } from "@cubby/schemas/identifiers";
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
-import type { z } from "zod";
 
 import {
   admitAiRefreshDeployment,
@@ -10,8 +7,8 @@ import {
 } from "../ai/repo/ai-refresh";
 import { getAiGatewayEgress } from "../cf-env";
 import type { Database } from "../db";
+import { repositoryAfterCommit } from "../db/repository-access.boundary";
 import { defineJobHandler } from "../generic/jobs/service/jobs";
-import { launchWorkflowRun } from "./runs/lifecycle";
 
 const currentVersion = async () => {
   const egress = getAiGatewayEgress(CUBBY_AI_GATEWAY_ID);
@@ -36,21 +33,18 @@ export const aiRefreshActivationHandler = defineJobHandler(
       page: { done: true },
       publish: async (tx) => {
         const activation = await activateAiRefreshDeployment(tx, input);
-        if (activation) await dispatchAiRefreshDiscovery(tx, activation);
+        if (activation) await dispatchAiRefreshDiscovery(tx);
         return { outcome: activation ? "activated" : "superseded" };
       },
     };
   },
 );
 
-export async function dispatchAiRefreshDiscovery(
-  db: Database,
-  activation: z.infer<typeof aiRefreshActivation>,
-) {
-  if (!activation.enabled || !activation.discoveryRunId) return;
-  await launchWorkflowRun(db, {
-    runId: runEntityId.parse(activation.discoveryRunId),
-    purpose: "ai_refresh",
-    automatic: true,
-  });
+/** The discovery drain (`ai-refresh.discovery`) reads the new activation on its next round. */
+async function dispatchAiRefreshDiscovery(db: Database) {
+  await repositoryAfterCommit(db, async () =>
+    (await import("./background-tasks/publish")).wakeJobs({
+      source: "ai-refresh-activation",
+    }),
+  );
 }

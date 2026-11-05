@@ -17,6 +17,7 @@ import { DERIVED_REBUILD_LEASE_SECONDS } from "~/server/db/derived-rebuild-schem
 import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
+import { aiRefreshDiscoveryDrain } from "~/server/domains/run/service/ai-refresh";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
 import {
   runDrains,
@@ -164,6 +165,7 @@ const productionDrains = (): readonly BackgroundDrain[] => [
   embeddingCleanupDrain(),
   aiEvaluationDrain(runAiEvaluationExecution()),
   derivedRebuildDrain,
+  aiRefreshDiscoveryDrain,
 ];
 
 export async function drainProductionJobs(

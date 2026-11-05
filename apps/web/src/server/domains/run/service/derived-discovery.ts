@@ -1,6 +1,5 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { jobWaitReason } from "@cubby/schemas/job";
-import { connectionDiscoveryRunInput } from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
@@ -14,7 +13,6 @@ import {
   claimDerivedDiscovery,
   prepareConnectionDiscoveryPage,
 } from "~/server/domains/run/repo/derived-discovery";
-import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
@@ -22,25 +20,13 @@ import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 // One-hour retry is only the backstop for a missed release, not an idle poll.
 const DISCOVERY_BACKPRESSURE_MS = 60 * 60_000;
 
-/**
- * A member's cancel of the pass's Run stops the pass until the next day's
- * routine pass; continuing under a new Run made Stop ineffective.
- */
-const MEMBER_STOP_MS = 24 * 60 * 60_000;
-
 const cursorSchema = z.object({
   after: z.string().nullable(),
-  // Cursors from before lazy Run creation carry no runId.
+  // A pass already under way when its Run was retired; launched once so it can finish.
   runId: runEntityId.nullable().default(null),
-  // A stopped Run the pass continues from until a continuation Run opens.
-  replacing: runEntityId.nullable().default(null),
 });
 
-/**
- * The routine connection discovery pass. Its Job owns the pass; the
- * `connection_discovery` Run appears only once a page admits work, and its
- * id rides in the Job cursor until the last page launches it.
- */
+/** The routine connection discovery pass. Its Job owns the pass, and its work has no Run. */
 export const connectionDiscoveryJobHandler = defineJobHandler(
   z.object({}),
   async (db, claim, _input, context) => {
@@ -62,49 +48,30 @@ export const connectionDiscoveryJobHandler = defineJobHandler(
         },
       };
     const page = await prepareConnectionDiscoveryPage(context.fenced, {
-      runId: previous.runId,
-      replacing: previous.replacing,
       after: previous.after,
       limit: CONNECTION_ROSTER_PAGE,
       newestFirst: true,
-      createRun: (tx, replacing) =>
-        ensureRun(tx, systemActor(), {
-          purpose: "connection_discovery",
-          trigger: "scheduled",
-          status: "running",
-          execution: false,
-          clientKey: `connection-discovery:${claim.id}:${claim.generation}${replacing ? `:after:${replacing}` : ""}`,
-          input: connectionDiscoveryRunInput.parse({
-            kind: "connection_discovery",
-            activation,
-          }),
-        }),
     });
-    if (page.outcome === "member-stopped")
+    // Stopped by a member, or a sibling is admitting: the pass keeps its place.
+    if (page.held)
       return {
         page: {
           done: false,
-          cursor: { after: null, runId: null, replacing: null },
-          waitUntil: new Date(Date.now() + MEMBER_STOP_MS),
+          cursor: previous,
+          waitUntil: new Date(Date.now() + DISCOVERY_BACKPRESSURE_MS),
         },
       };
     return {
       page: {
         done: !page.next,
         ...(page.next
-          ? {
-              cursor: {
-                after: page.next,
-                runId: page.runId,
-                replacing: page.replacing,
-              },
-            }
-          : { result: { outcome: page.runId ? "admitted" : "nothing" } }),
+          ? { cursor: { after: page.next, runId: previous.runId } }
+          : { result: { outcome: page.inserted ? "admitted" : "nothing" } }),
       },
       publish: async (tx) => {
-        if (!page.next && page.runId)
+        if (!page.next && previous.runId)
           await launchWorkflowRun(tx, {
-            runId: page.runId,
+            runId: previous.runId,
             purpose: "connection_discovery",
             automatic: true,
           });
