@@ -3,6 +3,7 @@ import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
 import { entityMutationOutputEntities } from "../generated/entity-read-keys.gen";
+export { entityMutationOutputEntities };
 export type EntityMutationOutputEntity =
   (typeof entityMutationOutputEntities)[number];
 

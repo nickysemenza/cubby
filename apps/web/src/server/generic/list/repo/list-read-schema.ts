@@ -1,4 +1,4 @@
-import { type ListEntity } from "~/entity/generated/entity-lists.gen";
+import { type ListEntity } from "~/entity/model/list-contracts";
 import {
   type ListProjection,
   type ListReadRow,

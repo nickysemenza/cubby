@@ -10,7 +10,7 @@ import {
   type EntityDetailInputByEntity,
   entityDetailInputFor,
   parseEntityDetailInput,
-} from "./generated/entity-details.gen";
+} from "./model/detail-contracts";
 
 /** Compatibility error shape for browser error renderers. */
 export class EntityDetailError extends Error {

@@ -1,8 +1,8 @@
 import type React from "react";
 import { z } from "zod";
 
-import type { DetailEntity } from "~/entity/generated/entity-details.gen";
-import type { ListEntity } from "~/entity/generated/entity-lists.gen";
+import type { DetailEntity } from "~/entity/model/detail-contracts";
+import type { ListEntity } from "~/entity/model/list-contracts";
 
 export const ComboboxItem = z.object({
   name: z.string(),

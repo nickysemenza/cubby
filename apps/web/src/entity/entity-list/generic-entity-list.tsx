@@ -26,10 +26,6 @@ import { ListTotalSummary } from "~/entity/entity-list/list-total-summary";
 import { readRecordField } from "~/entity/entity-references";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { compileFilterCodec, sortToParam } from "~/entity/filters";
-import {
-  type ListEntity,
-  listEntities,
-} from "~/entity/generated/entity-lists.gen";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import {
   type TimelineEntity,
@@ -51,6 +47,7 @@ import {
   type ListOverrideWorkbenchProps,
 } from "~/entity/list-columns/types";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
+import { type ListEntity, listEntities } from "~/entity/model/list-contracts";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { usePageCount } from "~/entity/page/page";
 import { useFindSuggestionsAction } from "~/entity/suggestions/find-suggestions-dialog";

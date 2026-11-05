@@ -11,7 +11,7 @@ import {
   searchContract,
   searchStreamsContract,
 } from "~/contracts/search.contract";
-import { listEntities } from "~/entity/generated/entity-lists.gen";
+import { listEntities } from "~/entity/model/list-contracts";
 import type { Database } from "~/server/db";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { listOperations } from "~/server/entity-kernel/list-operations";

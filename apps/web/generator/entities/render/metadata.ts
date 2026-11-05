@@ -532,14 +532,6 @@ export const renderEntityMetadataArtifacts = (
         },
       ],
     }),
-    artifact("apps/web/src/server/generated/entity-metadata-loaders.gen.ts", {
-      exports: [
-        {
-          from: "../entity-metadata/loaders",
-          names: ["entityMetadataLoaders"],
-        },
-      ],
-    }),
     artifact("packages/schemas/src/generated/entity-manifest-data.gen.ts", {
       ...projection("generatedEntityManifest", "descriptor"),
     }),
@@ -943,14 +935,6 @@ export const renderEntityMetadataArtifacts = (
           value: Object.fromEntries(
             browserIcons.map((name) => [name, tsReference(`${name}Icon`)]),
           ),
-        },
-      ],
-    }),
-    artifact("apps/web/src/entity/generated/entity-icons.gen.ts", {
-      exports: [
-        {
-          from: "../model/browser-definitions",
-          names: ["generatedBrowserDefinitions"],
         },
       ],
     }),

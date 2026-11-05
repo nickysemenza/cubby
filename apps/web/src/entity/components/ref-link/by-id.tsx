@@ -13,7 +13,7 @@ import {
   isDetailEntity,
 } from "~/entity/entity-query";
 import { readRecordField } from "~/entity/entity-references";
-import type { DetailEntity } from "~/entity/generated/entity-details.gen";
+import type { DetailEntity } from "~/entity/model/detail-contracts";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Spinner } from "~/ui/primitives/spinner";
 

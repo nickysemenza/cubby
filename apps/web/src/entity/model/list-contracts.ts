@@ -28,6 +28,7 @@ export type EntitySelectedListResultByEntity = {
   };
 };
 import { listEntities } from "../generated/entity-read-keys.gen";
+export { listEntities };
 export type ListEntity = (typeof listEntities)[number];
 const filterValue = z
   .union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()])

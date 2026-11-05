@@ -14,14 +14,14 @@ import { getSourceRelease } from "~/server/cf-env";
 import { purchaseAgentRunActions } from "~/server/domains/purchase-import/repo/capabilities";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import {
-  MCP_TOOL_BINDINGS,
-  MCP_TOOL_DECLARATIONS,
-} from "~/server/generated/mcp-tools.gen";
-import {
   PLAYBOOK_FILES,
   PLAYBOOK_SKILLS,
 } from "~/server/generated/playbooks.gen";
 import entityPreviewHtml from "~/server/mcp/entity-preview.html?raw";
+import {
+  MCP_TOOL_BINDINGS,
+  MCP_TOOL_DECLARATIONS,
+} from "~/server/mcp/tool-bindings";
 
 import { purchaseAgentTools } from "./agent-tool-catalog";
 import { installToolCallTelemetryHandler } from "./tools/tool-call-telemetry";

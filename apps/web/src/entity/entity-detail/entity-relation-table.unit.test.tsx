@@ -13,7 +13,7 @@ import {
   createEditorTestQueryClient,
 } from "#web/tests/editor-metadata.fixtures.ts";
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
-import type { EntityListInputByEntity } from "~/entity/generated/entity-lists.gen";
+import type { EntityListInputByEntity } from "~/entity/model/list-contracts";
 import { installFeatures } from "~/features/registry";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { entityList } from "~/integrations/tanstack-query/generated/domains/entityList.gen";

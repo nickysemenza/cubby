@@ -25,7 +25,7 @@ import {
   domainIconClass,
 } from "~/ui/navigation/domain-wayfinding";
 
-import { generatedBrowserDefinitions } from "./generated/entity-icons.gen";
+import { generatedBrowserDefinitions } from "./model/browser-definitions";
 import { generatedSortRoster } from "./sortable-fields";
 import {
   defineMergeableConfig,

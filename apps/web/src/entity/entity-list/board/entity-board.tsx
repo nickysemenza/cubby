@@ -27,14 +27,14 @@ import {
   buildFiltersFromManifest,
   filterGetterFromColumnFilters,
 } from "~/entity/filters";
+import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
+import { useEntityFieldSave } from "~/entity/hooks/use-update-mutation";
+import { useEntityMetadata } from "~/entity/metadata";
 import {
   type ListEntity,
   parseEntityListInput,
   entityListParamsFromParsed,
-} from "~/entity/generated/entity-lists.gen";
-import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
-import { useEntityFieldSave } from "~/entity/hooks/use-update-mutation";
-import { useEntityMetadata } from "~/entity/metadata";
+} from "~/entity/model/list-contracts";
 import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { useTableState } from "~/entity/table/use-table-state";
 import { cn } from "~/lib/utils";

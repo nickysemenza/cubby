@@ -7,10 +7,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import type { EntityListParamsByEntity } from "~/entity/generated/entity-lists.gen";
 import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
+import type { EntityListParamsByEntity } from "~/entity/model/list-contracts";
 import { formatYield } from "~/entity/presentation/recipe-yield";
 import { EditableCell } from "~/entity/table/editable-cell";
 import { EditableTagsCell } from "~/features/recipe/editable-tags-cell";

@@ -6,7 +6,7 @@ import {
 import { buildPaginatedResponse } from "@cubby/schemas/pagination";
 import { z } from "zod";
 
-import type { ListEntity } from "~/entity/generated/entity-lists.gen";
+import type { ListEntity } from "~/entity/model/list-contracts";
 import { listReadRowSchema } from "~/entity/model/list-read-fields";
 import { withListEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
 import {

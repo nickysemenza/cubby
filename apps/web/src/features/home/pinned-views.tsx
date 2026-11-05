@@ -7,11 +7,8 @@ import { Link } from "@tanstack/react-router";
 import { EntityIcon, isBrowserRoutedEntity } from "~/entity/entities";
 import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
 import { entityListHref, entityListSearch } from "~/entity/entity-list-href";
-import {
-  type ListEntity,
-  listEntities,
-} from "~/entity/generated/entity-lists.gen";
 import { useEntityMetadata } from "~/entity/metadata";
+import { type ListEntity, listEntities } from "~/entity/model/list-contracts";
 import {
   type ViewDefinition,
   toViewDefinition,

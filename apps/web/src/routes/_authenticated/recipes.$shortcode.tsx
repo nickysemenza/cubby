@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { entityDetailFor } from "~/entity/entity-detail";
 import { GenericEntityDetail } from "~/entity/entity-detail/generic-entity-detail";
-import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
+import type { EntityDetailByEntity } from "~/entity/model/detail-contracts";
 import { DetailPagePending } from "~/entity/navigation/route-pending";
 import { Page } from "~/entity/page/page";
 import { ensureDetailRecord } from "~/entity/routing/detail-loader";

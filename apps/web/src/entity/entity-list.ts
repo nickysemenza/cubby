@@ -21,6 +21,7 @@ import {
   filterGetterFromSearch,
   paramToSort,
 } from "./filters";
+import { entityMetadata } from "./metadata";
 import {
   type EntityListInputByEntity,
   type EntityListParseInput,
@@ -31,8 +32,7 @@ import {
   entityListInputFor,
   type ListEntity,
   parseEntityListInput,
-} from "./generated/entity-lists.gen";
-import { entityMetadata } from "./metadata";
+} from "./model/list-contracts";
 
 export type EntityListParams<E extends ListEntity> =
   EntityListParamsByEntity[E];

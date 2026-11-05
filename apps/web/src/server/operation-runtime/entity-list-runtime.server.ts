@@ -1,5 +1,5 @@
 import { entityListContract } from "~/contracts/entity-list.contract";
-import { entityListInputSchema } from "~/entity/generated/entity-lists.gen";
+import { entityListInputSchema } from "~/entity/model/list-contracts";
 import { loadEntityListSchemas } from "~/entity/model/read-schemas/loaders";
 import { executeEntitySelectionIds } from "~/server/entity-kernel";
 import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";

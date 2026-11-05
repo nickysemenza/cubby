@@ -20,7 +20,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import pMap from "p-map";
 import { z } from "zod";
 
-import type { ListEntity } from "~/entity/generated/entity-lists.gen";
+import type { ListEntity } from "~/entity/model/list-contracts";
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inheritedFieldOfColumn } from "~/server/db/computed/effective-field";

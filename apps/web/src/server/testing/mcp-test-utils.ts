@@ -13,7 +13,6 @@ import type { z } from "zod";
 import { mutation, query } from "~/contracts/define";
 import { isKernelActionRef, type McpActionSpec } from "~/contracts/mcp-define";
 import type { EntityKernelContext } from "~/server/entity-kernel";
-import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
 import {
   type DeadlineBudget,
   MCP_TOOL_DEADLINE_MS,
@@ -26,6 +25,7 @@ import {
   createKernelMcpActions,
   type McpEntityExecutor,
 } from "~/server/mcp/kernel-actions";
+import { MCP_TOOL_BINDINGS } from "~/server/mcp/tool-bindings";
 import { observeOperation } from "~/server/observability/observed-request";
 import type { OperationHandler } from "~/server/operation-runtime/operation-handlers.server";
 import { operationWireValueSchema } from "~/server/operation-runtime/operation.contract";

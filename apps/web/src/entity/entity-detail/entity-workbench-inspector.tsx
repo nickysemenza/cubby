@@ -13,7 +13,7 @@ import { EntityCover } from "~/entity/components/entity-cover";
 import {
   detailEntities,
   type DetailEntity,
-} from "~/entity/generated/entity-details.gen";
+} from "~/entity/model/detail-contracts";
 import { setInspectedRecord } from "~/entity/preview/inspected-record";
 import { CellSelectionContext } from "~/ui/data-table/cell-selection-context";
 import { QuerySection } from "~/ui/feedback/query-section";

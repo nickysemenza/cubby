@@ -22,10 +22,7 @@ import {
   mcpResultsEnvelope,
   projectEntityResult,
 } from "~/contracts/mcp-projections";
-import {
-  type ListEntity,
-  listEntities,
-} from "~/entity/generated/entity-lists.gen";
+import { type ListEntity, listEntities } from "~/entity/model/list-contracts";
 import { resolveWithProductCandidatesWorkflow } from "~/server/domains/ingredient/operations.server";
 import { resolveOrCreatePlants } from "~/server/domains/plant/repo/plant";
 import { resolveProductNames } from "~/server/domains/product/repo/resolve-names";

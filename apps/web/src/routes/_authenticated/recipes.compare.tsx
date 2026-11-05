@@ -11,8 +11,8 @@ import { useMemo } from "react";
 import { z } from "zod";
 
 import { entityDetailFor } from "~/entity/entity-detail";
-import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
 import { useRecipeCostingData } from "~/entity/hooks/use-recipe-costing-data";
+import type { EntityDetailByEntity } from "~/entity/model/detail-contracts";
 import { Page } from "~/entity/page/page";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import {

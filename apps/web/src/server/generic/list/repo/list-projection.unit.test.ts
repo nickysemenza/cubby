@@ -4,8 +4,8 @@ import { z } from "zod";
 
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
-import { listEntities } from "~/entity/generated/entity-lists.gen";
 import { entityMetadata } from "~/entity/metadata";
+import { listEntities } from "~/entity/model/list-contracts";
 import { db } from "~/server/db";
 import {
   selectListReadRows,

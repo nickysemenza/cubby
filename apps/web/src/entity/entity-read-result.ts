@@ -3,11 +3,11 @@ import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import type {
   DetailEntity,
   EntityDetailByEntity,
-} from "./generated/entity-details.gen";
+} from "./model/detail-contracts";
 import type {
   ListEntity,
   EntityListResultByEntity,
-} from "./generated/entity-lists.gen";
+} from "./model/list-contracts";
 
 /** The server validates the complete selected schema. Its shortcode discriminates
  * the returned union without loading those schemas again in the browser. */

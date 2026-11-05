@@ -6,8 +6,8 @@ import { match } from "ts-pattern";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
-import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import type { EntityDetailByEntity } from "~/entity/model/detail-contracts";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";

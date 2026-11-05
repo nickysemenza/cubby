@@ -59,7 +59,7 @@
         "src/contracts/index.ts!",
         // The `<entity>ListItem` exports name the generated client models; the
         // generator reads them, nothing in the web app does.
-        "src/server/generated/entity-lists.server.gen.ts!",
+        "src/server/entity-reads/list-contracts.ts!",
         // Type-only port existence checks; nothing imports them by design.
         "src/entity/generated/entity-port-checks.gen.ts!",
         "src/server/generated/entity-port-checks.gen.ts!",

@@ -10,10 +10,7 @@ import type { RowData } from "@tanstack/react-table";
 import { Fragment, useState } from "react";
 
 import type { ListSearch } from "~/entity/entity-list/list-slot-types";
-import {
-  type ListEntity,
-  listEntities,
-} from "~/entity/generated/entity-lists.gen";
+import { type ListEntity, listEntities } from "~/entity/model/list-contracts";
 import {
   isViewActive,
   type ViewDefinition,

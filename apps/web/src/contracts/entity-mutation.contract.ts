@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineContract, mutation } from "~/contracts/define";
 import { kernelRecordWire } from "~/contracts/entity-kernel-wire";
-import { entityMutationOutputEntities } from "~/entity/generated/entity-mutation-results.gen";
+import { entityMutationOutputEntities } from "~/entity/model/mutation-contracts";
 import type {
   EntityBrowserMutationInput,
   EntityBrowserMutationResult,

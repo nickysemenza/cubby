@@ -13,11 +13,11 @@ import {
   type FilterPatch,
   type FilterValue,
 } from "~/entity/filters";
+import { ensureEntityMetadata } from "~/entity/metadata";
 import {
   entityListParamsFromParsed,
   parseEntityListInput,
-} from "~/entity/generated/entity-lists.gen";
-import { ensureEntityMetadata } from "~/entity/metadata";
+} from "~/entity/model/list-contracts";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 
 /**

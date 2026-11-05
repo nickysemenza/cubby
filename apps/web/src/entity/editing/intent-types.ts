@@ -3,7 +3,7 @@ import type { ExpenseCreateInput } from "@cubby/schemas/project";
 
 import type { EntityEditValidationInputs } from "~/entity/generated/entity-edit-validation-types.gen";
 
-import type { EntityMutationOutputByEntity } from "../generated/entity-mutation-results.gen";
+import type { EntityMutationOutputByEntity } from "../model/mutation-contracts";
 
 type GeneratedIntents = typeof generatedEntityEditIntents;
 /** Intent names per operation, from the entity declarations. */

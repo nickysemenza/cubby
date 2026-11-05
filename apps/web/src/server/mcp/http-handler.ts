@@ -112,8 +112,7 @@ async function callWrites(
   action: string | undefined,
 ): Promise<boolean | undefined> {
   if (!tool) return undefined;
-  const { MCP_TOOL_BINDINGS } =
-    await import("~/server/generated/mcp-tools.gen");
+  const { MCP_TOOL_BINDINGS } = await import("~/server/mcp/tool-bindings");
   const binding = Object.entries(MCP_TOOL_BINDINGS).find(
     ([name]) => name === tool,
   )?.[1];

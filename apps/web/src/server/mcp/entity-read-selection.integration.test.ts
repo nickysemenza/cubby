@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { entityCardsOutput } from "~/contracts/entity-preview";
-import { listEntities } from "~/entity/generated/entity-lists.gen";
+import { listEntities } from "~/entity/model/list-contracts";
 import { unwrapDb } from "~/server/db/helpers";
 import { entityExternalId } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";

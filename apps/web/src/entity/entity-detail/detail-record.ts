@@ -1,7 +1,7 @@
 import type {
   DetailEntity,
   EntityDetailByEntity,
-} from "~/entity/generated/entity-details.gen";
+} from "~/entity/model/detail-contracts";
 
 /** The entities the generic detail page renders: every kernel detail entity. */
 export type GenericDetailEntity = DetailEntity;

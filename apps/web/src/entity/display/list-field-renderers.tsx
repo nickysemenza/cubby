@@ -12,7 +12,7 @@ import { z } from "zod";
 
 import { readRecordField } from "~/entity/entity-references";
 import { featureRegistry } from "~/entity/feature-registry";
-import type { ListEntity } from "~/entity/generated/entity-lists.gen";
+import type { ListEntity } from "~/entity/model/list-contracts";
 import {
   RecipeSourceLink,
   sourceLabel,

@@ -7,7 +7,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import type { ListEntity } from "~/entity/generated/entity-lists.gen";
+import type { ListEntity } from "~/entity/model/list-contracts";
 import { wasm } from "~/lib/wasm";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb } from "~/server/db/helpers";

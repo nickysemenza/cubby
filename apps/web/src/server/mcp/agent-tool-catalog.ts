@@ -9,7 +9,7 @@ import type { JSONType } from "zod";
 import {
   MCP_TOOL_BINDINGS,
   MCP_TOOL_DECLARATIONS,
-} from "~/server/generated/mcp-tools.gen";
+} from "~/server/mcp/tool-bindings";
 
 import {
   compiledMcpTools,

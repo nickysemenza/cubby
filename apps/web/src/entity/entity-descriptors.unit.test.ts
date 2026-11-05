@@ -11,8 +11,8 @@ import type { OperationQueryKey } from "~/integrations/tanstack-query/operation-
 import type {
   EntityDetailByEntity,
   EntityDetailInputByEntity,
-} from "./generated/entity-details.gen";
-import type { EntityListResultByEntity } from "./generated/entity-lists.gen";
+} from "./model/detail-contracts";
+import type { EntityListResultByEntity } from "./model/list-contracts";
 
 /**
  * Query keys are the persisted-cache and SSR-hydration contract: a changed key

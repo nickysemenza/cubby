@@ -177,6 +177,8 @@ const runtimeImportSources = (body: Program["body"]): string[] =>
  * server code into the client bundle or make the generator's import fail.
  */
 const CONTRACT_IMPORT_ALLOWLIST = [
+  // The hand-written read contracts generated artifacts used to re-export.
+  /^~\/entity\/model\/(?:list|detail|mutation)-contracts$/u,
   /^zod$/u,
   /^@cubby\//u,
   /^~\/contracts\//u,

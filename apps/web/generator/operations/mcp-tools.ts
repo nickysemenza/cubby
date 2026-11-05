@@ -473,17 +473,6 @@ export const renderMcpToolArtifacts = async (): Promise<EntityArtifacts[]> => {
       source: renderServerBindings(tools),
     },
     {
-      relativePath: "apps/web/src/server/generated/mcp-tools.gen.ts",
-      source: tsModule({
-        exports: [
-          {
-            from: "~/server/mcp/tool-bindings",
-            names: ["MCP_TOOL_BINDINGS", "MCP_TOOL_DECLARATIONS"],
-          },
-        ],
-      }),
-    },
-    {
       relativePath: "packages/schemas/src/generated/mcp-tool-names.gen.ts",
       source: renderNames(tools),
     },
