@@ -148,15 +148,44 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "data-selected:bg-primary/10 data-selected:text-foreground data-selected:*:[svg]:text-foreground group/command-item relative flex min-h-8 cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-hidden transition-colors duration-150 select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 max-md:min-h-11 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+        "data-selected:bg-primary/10 data-selected:text-foreground data-selected:*:[svg]:text-foreground group/command-item relative flex min-h-8 in-data-[slot=dialog-content]:rounded-md cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-hidden transition-colors duration-150 select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
         className,
       )}
       {...props}
     >
       {children}
-      <CheckIcon className="ml-auto opacity-0 group-has-[[data-slot=command-shortcut]]/command-item:hidden group-data-[checked=true]/command-item:opacity-100" />
+      <CheckIcon className="ml-auto opacity-0 group-has-data-[slot=command-shortcut]/command-item:hidden group-data-[checked=true]/command-item:opacity-100" />
     </CommandPrimitive.Item>
   );
+}
+
+function CommandEmpty({
+  className,
+  ...props
+}: React.ComponentProps<typeof CommandPrimitive.Empty>) {
+  return (
+    <CommandPrimitive.Empty
+      data-slot="command-empty"
+      className={cn("py-6 text-center text-xs/relaxed", className)}
+      {...props}
+    />
+  )
+}
+
+function CommandShortcut({
+  className,
+  ...props
+}: React.ComponentProps<"span">) {
+  return (
+    <span
+      data-slot="command-shortcut"
+      className={cn(
+        "ml-auto text-2xs tracking-widest text-muted-foreground group-data-selected/command-item:text-foreground",
+        className
+      )}
+      {...props}
+    />
+  )
 }
 
 export {
@@ -168,4 +197,8 @@ export {
   CommandItem,
 
   CommandSeparator,
+
+  Command,
+  CommandEmpty,
+  CommandShortcut,
 };

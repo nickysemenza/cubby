@@ -739,3 +739,24 @@
   --brand-web-radius-panel: 12px;
   --brand-web-radius-chip: 6px;
 }
+
+/* Menu and command choices retain their existing touch sizes at each breakpoint. */
+@layer utilities {
+  @media (width < 40rem) {
+    :is(
+      [data-slot="dropdown-menu-item"],
+      [data-slot="dropdown-menu-submenu-trigger"],
+      [data-slot="dropdown-menu-sub-trigger"],
+      [data-slot="dropdown-menu-checkbox-item"],
+      [data-slot="dropdown-menu-radio-item"]
+    ) {
+      min-height: 2.75rem;
+    }
+  }
+
+  @media (width < 48rem) {
+    [data-slot="command-item"] {
+      min-height: 2.75rem;
+    }
+  }
+}

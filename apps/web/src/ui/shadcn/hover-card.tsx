@@ -1,30 +1,22 @@
-"use client";
+import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card"
+import { cn } from "cn"
 
-import { PreviewCard as PreviewCardPrimitive } from "@base-ui/react/preview-card";
-
-import { cn } from "cn";
-
-// Hovercard primitive (base-ui PreviewCard): a rich preview that opens on
-// hover/focus of a link trigger. Mirrors the popover.tsx/tooltip.tsx wrapper
-// convention (chunky hairline border, fade/zoom animations). The popup content
-// mounts only while open, so a query inside it fetches lazily on first hover.
-
-function PreviewCard({ ...props }: PreviewCardPrimitive.Root.Props) {
-  return <PreviewCardPrimitive.Root data-slot="preview-card" {...props} />;
+function HoverCard({ ...props }: PreviewCardPrimitive.Root.Props) {
+  return <PreviewCardPrimitive.Root data-slot="hover-card" {...props} />
 }
 
-function PreviewCardTrigger({ ...props }: PreviewCardPrimitive.Trigger.Props) {
+function HoverCardTrigger({ ...props }: PreviewCardPrimitive.Trigger.Props) {
   return (
-    <PreviewCardPrimitive.Trigger data-slot="preview-card-trigger" {...props} />
-  );
+    <PreviewCardPrimitive.Trigger data-slot="hover-card-trigger" {...props} />
+  )
 }
 
-function PreviewCardContent({
+function HoverCardContent({
   className,
-  align = "center",
-  alignOffset = 0,
   side = "bottom",
   sideOffset = 6,
+  align = "center",
+  alignOffset = 0,
   ...props
 }: PreviewCardPrimitive.Popup.Props &
   Pick<
@@ -32,7 +24,7 @@ function PreviewCardContent({
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
   return (
-    <PreviewCardPrimitive.Portal>
+    <PreviewCardPrimitive.Portal data-slot="hover-card-portal">
       <PreviewCardPrimitive.Positioner
         align={align}
         alignOffset={alignOffset}
@@ -41,16 +33,16 @@ function PreviewCardContent({
         className="isolate z-50"
       >
         <PreviewCardPrimitive.Popup
-          data-slot="preview-card-content"
+          data-slot="hover-card-content"
           className={cn(
             "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-[0.98] data-open:zoom-in-[0.98] origin-(--transform-origin) ease-cozy duration-(--brand-motion-standard) data-closed:duration-(--brand-motion-exit) data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-80 origin-(--transform-origin) rounded-none border border-[var(--border)] bg-popover p-3 text-popover-foreground text-xs outline-hidden",
-            className,
+            className
           )}
           {...props}
         />
       </PreviewCardPrimitive.Positioner>
     </PreviewCardPrimitive.Portal>
-  );
+  )
 }
 
-export { PreviewCard, PreviewCardContent, PreviewCardTrigger };
+export { HoverCard, HoverCardTrigger, HoverCardContent }

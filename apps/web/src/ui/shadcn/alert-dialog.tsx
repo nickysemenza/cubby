@@ -150,6 +150,28 @@ function AlertDialogCancel({
   );
 }
 
+function AlertDialogTrigger({ ...props }: AlertDialogPrimitive.Trigger.Props) {
+  return (
+    <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" {...props} />
+  )
+}
+
+function AlertDialogMedia({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="alert-dialog-media"
+      className={cn(
+        "mb-2 inline-flex size-8 items-center justify-center rounded-md bg-muted sm:group-data-[size=default]/alert-dialog-content:row-span-2 *:[svg:not([class*='size-'])]:size-4",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
 export {
   AlertDialog,
   AlertDialogAction,
@@ -159,4 +181,9 @@ export {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+
+  AlertDialogMedia,
+  AlertDialogOverlay,
+  AlertDialogPortal,
+  AlertDialogTrigger,
 };

@@ -29,10 +29,10 @@ import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { useIdentityCell } from "~/ui/common/stacked-value";
 import { ExternalLinkIcon } from "~/ui/external-link";
 import {
-  PreviewCard,
-  PreviewCardContent,
-  PreviewCardTrigger,
-} from "~/ui/shadcn/preview-card";
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "~/ui/shadcn/hover-card";
 import { Spinner } from "~/ui/shadcn/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
 
@@ -103,8 +103,8 @@ function PreviewRefLink({
   const inspected = useIsInspected(entity, id);
   return (
     // Controlled closed, not unmounted, so the link keeps its focus and place.
-    <PreviewCard {...(inspected ? { open: false } : {})}>
-      <PreviewCardTrigger
+    <HoverCard {...(inspected ? { open: false } : {})}>
+      <HoverCardTrigger
         // Open a touch faster than the 600ms default; close promptly.
         delay={300}
         closeDelay={150}
@@ -140,8 +140,8 @@ function PreviewRefLink({
           />
         )}
         {children}
-      </PreviewCardTrigger>
-      <PreviewCardContent>
+      </HoverCardTrigger>
+      <HoverCardContent>
         <Suspense
           fallback={
             <div className="flex justify-center py-4">
@@ -151,8 +151,8 @@ function PreviewRefLink({
         >
           <EntityPreviewContent entity={entity} id={id} />
         </Suspense>
-      </PreviewCardContent>
-    </PreviewCard>
+      </HoverCardContent>
+    </HoverCard>
   );
 }
 
