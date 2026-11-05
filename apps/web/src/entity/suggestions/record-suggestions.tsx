@@ -81,7 +81,6 @@ import { readReferenceField } from "~/entity/entity-references";
 import { NotApplicableField } from "~/entity/fields/field-applicability";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
-import { CorrectionAuthorityEvidence } from "~/entity/suggestions/correction-authority-evidence";
 import { publicationCoverageMessage } from "~/entity/suggestions/publication-coverage";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
@@ -2443,42 +2442,6 @@ function StoredSuggestionField({
   children: ReactNode;
 }) {
   const queryClient = useQueryClient();
-  if (suggestion.correctionAuthority) {
-    const mark = (
-      <SuggestionOutcomeMark
-        surface={surface}
-        outcome={{
-          kind: "correction",
-          assessmentId: suggestion.assessmentId,
-          targetInputFingerprint: null,
-          decision: suggestion.correctionAuthority,
-        }}
-        review={
-          <CorrectionAuthorityEvidence
-            decision={suggestion.correctionAuthority}
-            renderValue={(value) =>
-              renderValue?.(value) ??
-              renderSuggestedListFieldValue(
-                queryClient,
-                context.entity,
-                record,
-                field,
-                value,
-              )
-            }
-          />
-        }
-      />
-    );
-    return surface === "cell" ? (
-      <CellFrame trailing={mark}>{children}</CellFrame>
-    ) : (
-      <>
-        {children}
-        {mark}
-      </>
-    );
-  }
   const runnerUp = suggestion.runnerUpValue;
   return (
     <GhostSuggestionCell

@@ -66,7 +66,6 @@ import {
 } from "~/server/db/schema";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
-import { correctionOutcomeExists } from "~/server/generic/assessment/repo/correction-receipt";
 import {
   recommendationScopes,
   type AssessmentRecordSelection,
@@ -629,10 +628,8 @@ export function automaticAssessmentEligibility(
         assessmentFamily.parse(family),
       ),
     ),
-    or(
-      correctionOutcomeExists(sql`${reviewAssessment.id}`, undefined, bounded),
-      and(ne(reviewState.status, suggestionStatus.enum.pending), familyAudit),
-    ),
+    ne(reviewState.status, suggestionStatus.enum.pending),
+    familyAudit,
   );
 }
 

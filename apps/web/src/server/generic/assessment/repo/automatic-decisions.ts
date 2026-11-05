@@ -20,8 +20,6 @@ import {
   mailDecisionPresentation,
 } from "~/server/domains/purchase-import/repo/mail-automatic-decisions";
 import { automaticApplicationRule } from "~/server/generic/assessment/repo/assessment";
-import { readCorrectionOutcomes } from "~/server/generic/assessment/repo/correction-outcomes";
-import { correctionOutcomeExists } from "~/server/generic/assessment/repo/correction-receipt";
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -84,15 +82,12 @@ export async function listAutomaticDecisions(
         WHERE f."assessmentId" = a.id AND f.authority = ${feedbackAuthority.enum.member} AND f."operationId" <> ${"decision"}
           AND f.metadata->>${"kind"} IS DISTINCT FROM ${correctionAuthorityReceiptKinds.enum.assessment_application}
         ORDER BY f."createdAt" DESC, f.id DESC LIMIT 1) latest ON true`;
-    const correctionOrder = sql`LEFT JOIN LATERAL (SELECT c."createdAt" FROM "Feedback" c
-        WHERE c."assessmentId" = a.id AND ${correctionOutcomeExists(sql`a.id`, sql`c.id`, true)}
-        ORDER BY c."createdAt" DESC, c.id DESC LIMIT 1) latest_correction ON true`;
     branches.push({
       page: sql`SELECT a.id, a.family::text AS family, a.judgment, a."createdAt", s.fingerprint,
         ${rule} AS "automaticRule", true AS "applicationVerified", latest.verdict,
         latest."createdAt" AS "reviewedAt", s.active, s.status,
-        coalesce(latest_correction."createdAt", a."createdAt") AS "sortAt", NULL::jsonb AS refs
-        ${from} ${correctionOrder} WHERE ${admission} ${reviewFilter}`,
+        a."createdAt" AS "sortAt", NULL::jsonb AS refs
+        ${from} WHERE ${admission} ${reviewFilter}`,
       count: sql`SELECT count(*)::int AS count ${from} WHERE ${admission} ${reviewFilter}`,
     });
   }
@@ -153,7 +148,6 @@ export async function listAutomaticDecisions(
       row.refs === null ? [] : [{ id: row.id, refs: row.refs }],
     ),
   );
-  const corrections = await readCorrectionOutcomes(db, assessmentIds);
   const items = rows.map((row) => {
     const family = assessmentFamily.parse(row.family);
     const mail = mailDecisionFamily.safeParse(family).data;
@@ -164,31 +158,18 @@ export async function listAutomaticDecisions(
       : isReviewFamily(family)
         ? reviewFamilyDeclarations[family]
         : null;
-    const correction = corrections.get(row.id);
-    const originalSummary =
+    const summary =
       presentation && "summarize" in presentation
         ? presentation.summarize(z.json().parse(row.judgment))
         : isReviewFamily(family)
           ? reviewFamilyDeclarations[family].label
           : family;
-    const summary =
-      correction?.outcome.status === "applied"
-        ? `Automatically corrected to ${JSON.stringify(correction.correctedValue)}`
-        : correction?.outcome.status === "held"
-          ? `Automatic correction held: ${correction.outcome.reason}`
-          : correction?.outcome.status === "unchanged"
-            ? "Automatic correction required no change"
-            : originalSummary;
     return automaticDecisionRow.parse({
       id: row.id,
       family,
       records: (mail ? mailRefs : stored).get(row.id) ?? [],
       decision: row.judgment,
-      applicationVerified:
-        correction?.outcome.status === "held" && row.automaticRule === null
-          ? false
-          : row.applicationVerified,
-      correctionAttempt: correction?.attempt ?? null,
+      applicationVerified: row.applicationVerified,
       summary,
       createdAt: new Date(row.createdAt).toISOString(),
       fingerprint: row.fingerprint,
@@ -198,7 +179,6 @@ export async function listAutomaticDecisions(
         ? new Date(row.reviewedAt).toISOString()
         : null,
       correction:
-        correction?.outcome.status !== "held" &&
         row.active &&
         row.status !== "applied" &&
         presentation &&

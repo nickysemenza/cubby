@@ -36,7 +36,6 @@ import {
   matchStatementRules,
   ruleBase,
 } from "~/server/generic/assessment/repo/automatic-rules";
-import { fieldCorrectionIdentityKeys } from "~/server/generic/assessment/repo/field-assessment-review";
 import { canAutomaticallyFillField } from "~/server/generic/assessment/repo/suggestion-review";
 
 const log = createLogger("automatic-rules");
@@ -286,34 +285,6 @@ export async function applyAutomaticRules(
   let base = options.context;
   for (const row of rows) {
     if (!row.active || row.status !== "pending" || !row.served) continue;
-    if (row.family === "field") {
-      const { readFieldCorrectionIdentity } =
-        await import("./correction-sources");
-      const identity = await readFieldCorrectionIdentity(
-        db,
-        row.subject,
-        row.evidence,
-      );
-      const key = identity.canonicalKey ?? identity.storedKey;
-      if (key) {
-        const { resolveFieldCorrection } =
-          await import("./field-correction-resolver");
-        // Conflicts also withhold the old model answer; correction work owns the resolution.
-        if (
-          (
-            await resolveFieldCorrection(
-              db,
-              fieldCorrectionIdentityKeys(identity),
-              {
-                entity: row.entity,
-                field: row.field,
-              },
-            )
-          ).kind !== "none"
-        )
-          continue;
-      }
-    }
     const stamp = ruleStamps.safeParse(row.data).data;
     if (row.family !== "field" && !stamp?.matchedRules.length) continue;
     const current = currentMatches(row);

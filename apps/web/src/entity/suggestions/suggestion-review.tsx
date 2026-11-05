@@ -16,7 +16,6 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { Description } from "~/ui/primitives/description";
 
 import { CellFrame } from "../../ui/data-table/cell-frame";
-import { CorrectionAuthorityEvidence } from "./correction-authority-evidence";
 import { formatProbability, stringLabelOf } from "./field-suggestion";
 import { SuggestionBody } from "./suggestion-body";
 import type { SuggestionOutcomeSurface } from "./suggestion-outcome-mark";
@@ -306,14 +305,6 @@ export function SuggestionReview({
             pending={pending}
             checking={checking}
             error={error}
-            review={
-              outcome?.kind === "correction" ? (
-                <CorrectionAuthorityEvidence
-                  decision={outcome.decision}
-                  renderValue={renderValue}
-                />
-              ) : undefined
-            }
           />
         }
       >

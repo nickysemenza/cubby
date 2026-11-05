@@ -316,6 +316,7 @@ export const imageDescriptionConfirmationOwner = z.discriminatedUnion("kind", [
     commandFeedbackId: assessmentChildHandle,
     actorUserId: z.string().min(1),
   }),
+  // Never written now that propagation is gone; the native codec still decodes it.
   imageDescriptionCorrectionOwner,
 ]);
 
@@ -368,10 +369,8 @@ export function selectImageDescriptionEvidence(
   if (correction)
     return {
       description: correction.description,
-      authority:
-        correction.owner?.kind === "correction" ? "correction" : "member",
-      correction:
-        correction.owner?.kind === "correction" ? correction.owner : null,
+      authority: "member",
+      correction: null,
       analysis: null,
       claims: [],
       missingReason: null,

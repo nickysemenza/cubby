@@ -796,3 +796,11 @@ families so a stale writer fails instead of writing what nothing reads.
 `assessment.review` keeps its wire shape and routes these handles to their
 owners. Automation history reads them through `mailAutomaticDecisionBranches`
 beside the Assessment families.
+
+## Correction propagation removed
+
+ADR 0025 removes automatic correction propagation, its enrollment, repair
+receipts and the conflict hold on later model answers. A member correction now
+applies only to its own record, and no later answer is withheld because a similar
+question was corrected elsewhere. Existing receipts stay in the ledger, and
+completed `assessment.correction` Jobs stay readable.
