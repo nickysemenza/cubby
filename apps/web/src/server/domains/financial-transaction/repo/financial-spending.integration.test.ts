@@ -5,6 +5,7 @@ import {
   financialSpendingPlan,
 } from "@cubby/schemas/financial-booking";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { contributionRole } from "@cubby/schemas/ledger-party";
 import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
@@ -19,6 +20,7 @@ import {
 } from "~/server/db/helpers";
 import {
   expense,
+  expenseAttribution,
   purchase,
   financialAccount,
   ledgerParty,
@@ -537,6 +539,11 @@ describe("shared spending booking", () => {
         }),
       );
       expect(direct.purchaserId).toBeNull();
+      expect(direct).toMatchObject({
+        candidateCategoryId: category.id,
+        categoryOverride: category.id,
+        effectiveCategory: { mode: "explicit", value: category.id },
+      });
       const explicit = await previewFinancialBooking(
         ctx.db,
         financialBookingInput.parse({
@@ -546,6 +553,10 @@ describe("shared spending booking", () => {
         }),
       );
       expect(explicit.purchaserId).toBe(other.output.id);
+      expect(explicit).toMatchObject({
+        categoryOverride: null,
+        effectiveCategory: { value: null, mode: "none" },
+      });
 
       await commitFinancialSpending(ctx.db, plan, ctx.actor);
       expect(
@@ -636,6 +647,26 @@ describe("shared spending booking", () => {
         }),
       );
       expect(direct.action).toBe("link_existing");
+      expect(direct.existingCategories).toHaveLength(1);
+      expect(direct.existingCategories?.[0]?.resolution.value).toBe(
+        category.id,
+      );
+      await expect(
+        previewFinancialBooking(ctx.db, {
+          ...direct,
+          spendingCategoryId: direct.categoryOverride,
+          beneficiaries: [],
+        }),
+      ).rejects.toThrow(/Beneficiaries apply only to a new aggregate/);
+      expect(
+        await previewFinancialSpending(ctx.db, {
+          ...plan.request,
+          beneficiaries: [],
+        }),
+      ).toMatchObject({
+        status: "review_required",
+        reason: expect.stringMatching(/Beneficiaries apply only/),
+      });
       const commit =
         writer === "spending"
           ? () => commitFinancialSpending(ctx.db, plan, ctx.actor)
@@ -1056,10 +1087,18 @@ describe("shared spending booking", () => {
     "books one categorized Expense with cost type %s and replays without extra spend",
     async (costType) => {
       const { owner, transaction, advice, category } = await fixture();
+      const beneficiaries =
+        costType === undefined
+          ? undefined
+          : [
+              { partyId: owner.output.id, weight: 2 },
+              { partyId: null, weight: 1 },
+            ];
       const plan = await previewFinancialSpending(ctx.db, {
         transactionId: transaction.output.id,
         advice,
         ...(costType === undefined ? {} : { costType }),
+        ...(beneficiaries === undefined ? {} : { beneficiaries }),
       });
       expect(plan.status).toBe("ready");
       expect(Object.hasOwn(plan.request, "costType")).toBe(
@@ -1079,6 +1118,28 @@ describe("shared spending booking", () => {
       expect(
         await commitFinancialSpending(ctx.db, plan, ctx.actor),
       ).toMatchObject({ replayed: true });
+      const attribution = await getDb(ctx.db)
+        .select({
+          partyId: expenseAttribution.ledgerPartyId,
+          weight: expenseAttribution.weight,
+        })
+        .from(expenseAttribution)
+        .where(
+          sql`${expenseAttribution.role} = ${contributionRole.enum.beneficiary} AND ${expenseAttribution.deletedAt} IS NULL`,
+        );
+      expect(
+        attribution.map((share) => ({
+          ...share,
+          weight: Number(share.weight),
+        })),
+      ).toEqual(
+        beneficiaries === undefined
+          ? []
+          : [
+              { partyId: owner.entityId, weight: 2 },
+              { partyId: null, weight: 1 },
+            ],
+      );
       const replay = await previewFinancialSpending(ctx.db, {
         transactionId: transaction.output.id,
         advice,

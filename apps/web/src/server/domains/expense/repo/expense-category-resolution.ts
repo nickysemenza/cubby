@@ -9,6 +9,7 @@ import type {
   ExpenseId,
   ProductId,
   ProductCategoryId,
+  PurchaseId,
   SpendingCategoryId,
   SpendingCategoryShortcode,
   VendorId,
@@ -32,6 +33,8 @@ const column = (alias: string, key: string) =>
   sql`${sql.identifier(alias.replace(/^"|"$/gu, ""))}.${sql.identifier(key)}`;
 
 export type ExpenseSpendingCategoryResolutionDraft = {
+  /** A new Purchase has no stored category or identity yet; its Vendor still supplies context. */
+  prospectivePurchase?: { vendorId: VendorId | null; name: string };
   products?: readonly { id: ProductId; categoryId: ProductCategoryId | null }[];
   categories?: readonly {
     id: SpendingCategoryId;
@@ -208,7 +211,14 @@ function expenseSpendingCategoryChoiceSql(
         ${food} AS food
       FROM ${source ? sql`${source} ${sql.identifier(alias)}` : sql`(VALUES (1)) seed(n)`}
       LEFT JOIN "Product" g ON g.id=${productId} AND ${notDeleted("g")}
-      LEFT JOIN "Purchase" p ON p.id=${purchaseId} AND ${notDeleted("p")}
+      ${
+        draft?.prospectivePurchase
+          ? sql`LEFT JOIN (SELECT NULL::uuid AS id, NULL::text AS shortcode,
+            ${draft.prospectivePurchase.name}::text AS "displayLabel", NULL::text AS "orderId",
+            ${draft.prospectivePurchase.vendorId}::uuid AS "vendorId", NULL::uuid AS "spendingCategoryId",
+            NULL::text AS "spendingCategoryOrigin") p ON TRUE`
+          : sql`LEFT JOIN "Purchase" p ON p.id=${purchaseId} AND ${notDeleted("p")}`
+      }
       LEFT JOIN "Vendor" v ON v.id=p."vendorId" AND ${notDeleted("v")}
       LEFT JOIN mapping m ON ${source ? sql`m."rootId"=${productCategory}` : sql`TRUE`}
       ${source ? sql`LEFT JOIN category_feature ON category_feature."rootId"=${productCategory}` : sql``}
@@ -351,6 +361,30 @@ export const fallbackExpenseSpendingCategorySql = (alias: string): SQL =>
 export const parseExpenseCategoryResolution = (
   value: unknown,
 ): FieldResolution => fieldResolutionSchema.parse(value);
+
+/** The exact principal-line graph booking will create, without storing advice as an override. */
+export async function resolveAggregateExpenseCategory(
+  db: Database,
+  draft: {
+    purchaseId: PurchaseId | null;
+    vendorId: VendorId | null;
+    spendingCategoryId: SpendingCategoryId | null;
+    name: string;
+  },
+): Promise<FieldResolution> {
+  const result = await unwrapDb(db).execute(sql`
+    WITH candidate AS (SELECT ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)}::text AS "lineKind", NULL::uuid AS "productId",
+      ${draft.purchaseId}::uuid AS "purchaseId", ${draft.spendingCategoryId}::uuid AS "spendingCategoryId")
+    SELECT ${expenseSpendingCategoryResolutionSql(
+      "candidate",
+      draft.purchaseId
+        ? undefined
+        : {
+            prospectivePurchase: { vendorId: draft.vendorId, name: draft.name },
+          },
+    )} AS resolution FROM candidate`);
+  return parseExpenseCategoryResolution(result.rows[0]?.resolution);
+}
 
 /** Fresh review fingerprints include live configured policy, not a cached guess. */
 export async function spendingClassificationRevision(

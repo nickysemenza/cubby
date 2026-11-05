@@ -1,11 +1,40 @@
 import type { ExpenseId } from "@cubby/schemas/identifiers";
 import type { LedgerAttributionInput } from "@cubby/schemas/ledger-party";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
-import type { DrizzleTransaction } from "~/server/db";
-import { notDeleted } from "~/server/db/helpers";
-import { expenseAttribution } from "~/server/db/schema";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { expenseAttribution, ledgerParty } from "~/server/db/schema";
 import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/repo/ledger-party-reference";
+import { createAppError } from "~/server/errors/app-error";
+
+/** The review freezes live party semantics; the writer acquires reference locks at commit. */
+export async function readExpenseAttributionParties(
+  db: Database,
+  values: readonly LedgerAttributionInput[] | undefined,
+) {
+  const codes =
+    values?.flatMap((share) => (share.partyId ? [share.partyId] : [])) ?? [];
+  const rows = codes.length
+    ? await unwrapDb(db)
+        .select({
+          shortcode: ledgerParty.shortcode,
+          name: ledgerParty.name,
+          kind: ledgerParty.kind,
+        })
+        .from(ledgerParty)
+        .where(
+          and(inArray(ledgerParty.shortcode, codes), notDeleted(ledgerParty)),
+        )
+        .orderBy(ledgerParty.id)
+    : [];
+  if (rows.length !== codes.length)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A reviewed beneficiary is no longer live.",
+    );
+  return rows;
+}
 
 export async function replaceExpenseAttributionRole(
   tx: DrizzleTransaction,

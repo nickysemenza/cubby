@@ -1409,14 +1409,26 @@ verify unchanged source, ledger and attribution graphs. This API does not return
 the `replayed: true` flag used by direct `finance.commit_booking`; that writer has
 its own replay and current-lineage checks.
 
-Direct booking previews expose two category fields. `spendingCategoryId` is the
-resolved candidate category, while `categoryOverride` is the category input
-persisted on a newly created Expense. Preserve both fields in the commit request.
+Direct booking previews distinguish `candidateCategoryId` (also retained as
+`spendingCategoryId`) from `categoryOverride`, the category input persisted on a
+newly created Expense, and `effectiveCategory`, the canonical resolution of the
+prospective Expense and Purchase. Preserve these fields in the commit request.
 A null override stores no Expense category override; bare Purchase creation also
 leaves its category null. The Expense's effective category may inherit from its
 context or remain Uncategorized, so the preview's candidate label does not prove
-the resulting classification. Verify it through the owning category resolution
-after booking. `link_existing` does not rewrite existing categories.
+the resulting classification. The effective resolution includes its provenance
+and a null value means Uncategorized. `existingCategories` shows the canonical
+resolutions of the selected Purchase's existing lines; `link_existing` preserves
+them. Commit rechecks the live classification policy and projected result.
+
+Optional reviewed `beneficiaries` in direct booking and statement `booking`
+uses the existing attribution role format. Omission and an empty reset retain
+the normal beneficiary defaults; a null-party share explicitly records unknown
+beneficiaries, distinct from Household or a named member. Nonempty shares keep
+their exact parties and weights in the review fingerprint and are written by
+the Expense attribution owner in the same transaction as booking. A stale or
+deleted party refuses the booking. Linking or settling existing spending refuses
+creation-only beneficiary choices and preserves every recorded attribution.
 
 Source aggregate creation defaults ordinary purchases to `materials` and fees
 to `services`. Optional `booking.costType` in statement review chooses

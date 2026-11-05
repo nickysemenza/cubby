@@ -33,9 +33,11 @@ import {
   spendingCategory,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import { readExpenseAttributionParties } from "~/server/domains/expense/repo/expense-attribution";
 import {
   effectiveExpenseSpendingCategoriesSql,
   effectiveExpenseSpendingCategorySql,
+  resolveAggregateExpenseCategory,
 } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
   accountPurchaserKey,
@@ -1233,6 +1235,7 @@ async function discoverSpendingEvidence(
       vendorId: request.vendorId,
       categoryHistoryReviewed: request.categoryHistoryReviewed,
       ...(request.costType === undefined ? {} : { costType: request.costType }),
+      beneficiaries: request.beneficiaries,
       purchaseId: request.purchaseId,
       rejectedPurchaseIds: [...request.rejectedPurchaseIds].sort(),
     },
@@ -1498,6 +1501,7 @@ export async function previewFinancialSpending(
   return prepareReadySpending(db, evidence, target, Boolean(chosen));
 }
 
+// eslint-disable-next-line complexity -- Candidate capacity and creation-only reviewed intent share one admission decision.
 async function prepareReadySpending(
   db: Database,
   evidence: Awaited<ReturnType<typeof discoverSpendingEvidence>>,
@@ -1614,9 +1618,34 @@ async function prepareReadySpending(
     return review(
       "Cost type applies only to a new aggregate Expense; preserve existing spending classification.",
     );
+  if (
+    basis.request.beneficiaries !== undefined &&
+    effect !== "create_aggregate"
+  )
+    return review(
+      "Beneficiaries apply only to a new aggregate Expense; preserve existing spending attribution.",
+    );
+  const effectiveCategory =
+    effect === "create_aggregate"
+      ? await resolveAggregateExpenseCategory(db, {
+          purchaseId: target ? parseEntityId("purchase", target.id) : null,
+          vendorId: vendor?.id ?? null,
+          spendingCategoryId: bookingCategory?.id ?? null,
+          name: source.merchant || source.rawDescription || "Reviewed spending",
+        })
+      : undefined;
+  const beneficiaries = await readExpenseAttributionParties(
+    db,
+    basis.request.beneficiaries,
+  );
   return financialSpendingPlan.parse({
     ...basis,
     status: "ready",
+    snapshot: await digestValue({
+      snapshot: basis.snapshot,
+      effectiveCategory,
+      ...(basis.request.beneficiaries === undefined ? {} : { beneficiaries }),
+    }),
     effect,
     purchaserId: facts.purchaser?.shortcode ?? null,
     purchaserSnapshot: await digestValue({
@@ -1626,6 +1655,11 @@ async function prepareReadySpending(
     vendorId: vendor?.shortcode ?? null,
     vendorName: vendor?.name ?? advice!.vendorName,
     spendingCategoryId: bookingCategory?.shortcode ?? null,
+    categoryOverride:
+      effect === "create_aggregate"
+        ? (bookingCategory?.shortcode ?? null)
+        : null,
+    ...(effectiveCategory ? { effectiveCategory } : {}),
     purchaseId: target?.shortcode ?? null,
   });
 }
@@ -1797,6 +1831,7 @@ export async function commitFinancialSpending(
             facts.source.kind,
             fresh.request.costType,
           ),
+          beneficiaries: fresh.request.beneficiaries,
         }),
         actor,
       );
