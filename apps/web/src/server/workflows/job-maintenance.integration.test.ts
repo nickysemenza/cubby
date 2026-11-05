@@ -122,6 +122,7 @@ describe("Job maintenance", () => {
     for (const [key, state] of [
       ["synthetic.retention.completed", "completed"],
       ["synthetic.retention.failed", "failed"],
+      ["synthetic.retention.cancelled", "cancelled"],
     ] as const) {
       const saved = await enqueueJob(ctx.db, { key, kind: key, input: {} });
       retained.push(saved.id);
@@ -149,5 +150,6 @@ describe("Job maintenance", () => {
         rows.map(({ id }) => ({ id })),
       ),
     ).toEqual([{ id: retained[1] }]);
+    expect(await readJobs(ctx.db, { id: retained[2]! })).toHaveLength(1);
   });
 });

@@ -120,8 +120,6 @@ export const enqueueJobInput = z.object({
   kind: z.string().min(1),
   input: jobPayload,
   runId: z.uuid().nullable().optional(),
-  subjectKind: z.string().min(1).nullable().optional(),
-  subjectId: z.string().min(1).nullable().optional(),
   priority: z.number().int().optional(),
   /** Defaults to the kind policy; null never exhausts. */
   maxAttempts: z.number().int().positive().nullable().optional(),
@@ -301,20 +299,6 @@ export const JOB_KIND_POLICY = {
     exclusions:
       "Failed Jobs and domain evidence remain. This is part of daily background recovery.",
   },
-  "ai-refresh.activate": {
-    label: "Activate AI refresh",
-    purpose: "Admits refresh work after AI policy or input changes.",
-    trigger: "AI refresh activation.",
-    targets: "Eligible stale AI evaluations.",
-    effects:
-      "Creates or wakes refresh work under the existing admission policy.",
-    dependencies: "Current evaluation inputs and policy.",
-    cost: "Admitted evaluations can use AI funding; activation is coordination.",
-    exclusions:
-      "Current or ineligible evaluations are excluded by admission rules.",
-    ...SERVER,
-    internal: true,
-  },
   "derived.drain": {
     stuck: {
       title: "Totals and search results stopped updating",
@@ -388,20 +372,6 @@ export const JOB_KIND_POLICY = {
     cost: "Resumed work may incur AI charges within its funding policy.",
     exclusions:
       "Does not bypass funding eligibility or force a member-paused Run.",
-  },
-  "assessment.correction": {
-    activityLabel: "Suggestion corrections",
-    ...SERVER,
-    label: "Propagate a correction",
-    purpose: "Propagates a recorded correction through assessment policy.",
-    trigger: "A supported correction action.",
-    targets: "Assessments affected by the correction.",
-    effects:
-      "Updates correction-dependent assessment work under the owning policy.",
-    dependencies: "Recorded correction and assessment evidence.",
-    cost: "Any downstream AI work uses its configured funding policy.",
-    exclusions:
-      "Unrelated assessments and explicit decisions remain governed by their owners.",
   },
   "discovery.connections": {
     stuck: {

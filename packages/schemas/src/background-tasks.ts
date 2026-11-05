@@ -12,6 +12,14 @@ export const backgroundTaskKinds = [
   "calendar-feed.mark-dirty",
 ] as const;
 
+/** A record has one key per kind of single-item work, so re-admission replaces its Job. */
+export const imageMetadataJobKey = (imageId: string) =>
+  `image-metadata:${imageId}`;
+export const locationAiJobKey = (
+  kind: "location-ai.description.refresh" | "location-ai.inventory.refresh",
+  locationId: string,
+) => `${kind}:${locationId}`;
+
 export const backgroundTaskKindSchema = z.enum(backgroundTaskKinds);
 export type BackgroundTaskKind = z.infer<typeof backgroundTaskKindSchema>;
 

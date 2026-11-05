@@ -23,11 +23,7 @@ describe("durable task intent", () => {
     const rows = await readJobs(ctx.db, { kind: task.kind });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.input).toEqual(task);
-    expect(rows[0]).toMatchObject({
-      state: "queued",
-      subjectKind: "calendar",
-      subjectId: task.origin,
-    });
+    expect(rows[0]).toMatchObject({ state: "queued" });
   });
 
   // Optional admission fields may be present as undefined in ordinary callers.

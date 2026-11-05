@@ -35,7 +35,7 @@ export const STUCK_WINDOW_MINUTES = 30;
 /** Due work this old that is still finishing reads as catching up, not stuck. */
 const BEHIND_MINUTES = 15;
 /** A failure this old with no retry stays in `/jobs` instead of warning forever. */
-const FAILURE_LOOKBACK_DAYS = 7;
+export const FAILURE_LOOKBACK_DAYS = 7;
 /** `WorkItem.priority`: member demand, background, reconcile. */
 const WORK_PRIORITIES = [0, 1, 2] as const;
 /** A scheduled Run retries on its own; this many failures in a row is not a blip. */

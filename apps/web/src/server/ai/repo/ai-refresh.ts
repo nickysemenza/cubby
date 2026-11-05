@@ -12,7 +12,6 @@ import {
   appSettings,
   AI_REFRESH_ACTIVATION_SETTINGS_ID,
 } from "~/server/db/schema";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 // Infrastructure identity, independent of the hourly app-open catch-up claim.
 const SETTINGS_ID = AI_REFRESH_ACTIVATION_SETTINGS_ID;
@@ -180,11 +179,10 @@ const deploymentObservation = z.object({
   version: z.string(),
   occurrence: z.number().int().positive(),
 });
-export const aiRefreshDeploymentInput = deploymentObservation.extend({
-  release: z.string(),
-});
-
-/** Lock observation and Job admission together; returning to a version allocates a new occurrence. */
+/**
+ * Activate once per observed deployment, in one transaction with its observation, so a
+ * failure leaves it for the next cron tick. Returning to a version is a new occurrence.
+ */
 export async function admitAiRefreshDeployment(
   db: Database,
   version: string,
@@ -204,52 +202,24 @@ export async function admitAiRefreshDeployment(
     // Old cron invocations cannot install their version after replacement or rollback.
     if ((await currentVersion()) !== version) return null;
     const previous = deploymentObservation.safeParse(row?.metadata);
+    if (previous.success && previous.data.version === version) return null;
     const active = await readAiRefreshActivation(tx);
-    const observation =
-      previous.success && previous.data.version === version
-        ? previous.data
-        : {
-            version,
-            occurrence:
-              Math.max(
-                previous.success ? previous.data.occurrence : 0,
-                active?.observationEpoch ?? 0,
-              ) + 1,
-          };
+    const observation = {
+      version,
+      occurrence:
+        Math.max(
+          previous.success ? previous.data.occurrence : 0,
+          active?.observationEpoch ?? 0,
+        ) + 1,
+    };
     await getDb(tx)
       .update(appSettings)
       .set({ metadata: observation, updatedAt: new Date() })
       .where(eq(appSettings.id, DEPLOYMENT_SETTINGS_ID));
-    return enqueueJob(tx, {
-      key: `ai-refresh:activate:${version}:${observation.occurrence}`,
-      kind: "ai-refresh.activate",
-      input: { ...observation, release },
-    });
-  });
-}
-
-/** The active observation fences older Jobs, including the first A in A → B → A. */
-export async function activateAiRefreshDeployment(
-  db: Database,
-  input: z.infer<typeof aiRefreshDeploymentInput>,
-) {
-  return withTransactionDatabase(db, async (tx) => {
-    const [row] = await getDb(tx)
-      .select()
-      .from(appSettings)
-      .where(eq(appSettings.id, DEPLOYMENT_SETTINGS_ID))
-      .for("update");
-    const current = deploymentObservation.safeParse(row?.metadata);
-    if (
-      !current.success ||
-      current.data.version !== input.version ||
-      current.data.occurrence !== input.occurrence
-    )
-      return null;
-    return activateAiRefresh(tx, input.release, {
+    return activateAiRefresh(tx, release, {
       enabled: true,
       startDiscovery: true,
-      observationEpoch: input.occurrence,
+      observationEpoch: observation.occurrence,
     });
   });
 }

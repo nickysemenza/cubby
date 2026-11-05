@@ -552,3 +552,62 @@ it("deletes old Job identities and leaves unfinished Jobs and their attempts", a
     ).rejects.toThrow("does not exist");
   });
 });
+
+it("refuses to retire an unfinished Job of a retired kind", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle(client);
+    await migrateDatabase(db, { through: "0092_drop_job_identities" });
+    await client.query(
+      `INSERT INTO "Job" (key, kind, state, input, attempts) VALUES
+       ('synthetic:done', 'ai-refresh.activate', 'completed', '{}', 1),
+       ('synthetic:held', 'ai-refresh.activate', 'paused', '{}', 2)`,
+    );
+
+    await expect(
+      migrateDatabase(db, { through: "0093_retire_two_job_kinds" }),
+    ).rejects.toThrow("Failed query");
+
+    expect(
+      (
+        await client.query(
+          `SELECT key, state, attempts FROM "Job" WHERE key = 'synthetic:held'`,
+        )
+      ).rows,
+    ).toEqual([{ key: "synthetic:held", state: "paused", attempts: 2 }]);
+  });
+});
+
+it("retires two Job kinds and leaves paused work", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle(client);
+    await migrateDatabase(db, { through: "0092_drop_job_identities" });
+    await client.query(
+      `INSERT INTO "Job" (key, kind, state, input, attempts) VALUES
+       ('synthetic:correction', 'assessment.correction', 'completed', '{}', 1),
+       ('synthetic:activate', 'ai-refresh.activate', 'completed', '{}', 1),
+       ('synthetic:paused', 'run.execute', 'paused', '{}', 2)`,
+    );
+
+    await migrateDatabase(db, { through: "0093_retire_two_job_kinds" });
+
+    expect(
+      (
+        await client.query(
+          `SELECT key, state, attempts FROM "Job" ORDER BY key`,
+        )
+      ).rows,
+    ).toContainEqual({ key: "synthetic:paused", state: "paused", attempts: 2 });
+    expect(
+      (
+        await client.query(
+          `SELECT 1 FROM "Job" WHERE kind IN ('assessment.correction', 'ai-refresh.activate')`,
+        )
+      ).rows,
+    ).toEqual([]);
+    await expect(
+      client.query(
+        `INSERT INTO "Job" (key, kind, input) VALUES ('synthetic:late', 'ai-refresh.activate', '{}')`,
+      ),
+    ).rejects.toThrow("Job_kind_retired_check");
+  });
+});

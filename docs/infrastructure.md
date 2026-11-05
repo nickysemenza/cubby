@@ -90,10 +90,10 @@ retain `subjectKind` / `subjectId` for diagnostics on their owning record.
 `retry_wait` retains the raw scrubbed error and consecutive failure attempt of
 `maxAttempts`. Application page sizes live in `JOB_PAGE_LIMITS`.
 
-The hourly cron publishes `ai-refresh.activate`, keyed by deployment version
-and its observed occurrence. A transaction serializes occurrence admission,
-checks the gateway DO's running version and fences activation to the recorded
-occurrence. A rollback A → B → A receives a new occurrence and restarts automatic
+The first hourly cron tick after a deployment activates its AI refresh policy. One
+transaction records the observed version and occurrence, checks the gateway DO's running
+version and activates, so a failure leaves it for the next tick. A rollback A → B → A
+receives a new occurrence and restarts automatic
 discovery without replacing policy generations. Member automatic-rule controls
 remain independent. No fetch observation, observation epoch alarm or funding
 resume alarm schedules this work.

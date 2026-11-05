@@ -27,7 +27,6 @@ const jobFacts = z.object({
   /** The raw failure as stored; only `scrubErrorMessage` redacted it. */
   error: z.string().nullable(),
   cursor: z.json().nullable(),
-  subject: z.object({ kind: z.string(), id: z.string() }).nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   lane: jobLane,
@@ -128,7 +127,7 @@ const workActivity = z.object({
 });
 export type WorkActivity = z.infer<typeof workActivity>;
 
-/** Records whose single-item Jobs carry them as `subjectKind`/`subjectId`. */
+/** Records whose single-item Jobs are found by their key. */
 const jobSubjectEntity = z.enum(["image", "location"]);
 export type JobSubjectEntity = z.infer<typeof jobSubjectEntity>;
 

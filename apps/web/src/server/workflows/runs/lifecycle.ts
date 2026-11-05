@@ -104,6 +104,13 @@ export async function launchWorkflowRun(
       .for("update");
     if (!owner) throw new Error("Run no longer exists");
     const priority = input.automatic ? 0 : MANUAL_RUN_PRIORITY;
+    // Retention prunes the finished Job, so the Run's status has to refuse automatic
+    // work as the row would.
+    if (
+      input.automatic &&
+      ["completed", "failed", "cancelled"].includes(owner.status)
+    )
+      return null;
     let execution = await enqueueJob(tx, {
       key: `run:${input.runId}`,
       kind: "run.execute",
@@ -116,7 +123,13 @@ export async function launchWorkflowRun(
       const retried = await retryJob(tx, execution.id);
       if (retried) execution = retried;
     }
-    if (execution.state === "completed") {
+    if (
+      execution.state === "completed" ||
+      // Its finished Job was pruned, so this row is new and the same rule applies.
+      (owner.status === "completed" &&
+        execution.generation === 1 &&
+        execution.attempts === 0)
+    ) {
       if (input.automatic) return null;
       const pending = await getDb(tx).execute<{ pending: boolean }>(sql`SELECT (
         EXISTS (SELECT 1 FROM "AiEvaluation" e WHERE e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.result_ready})

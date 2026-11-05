@@ -1,5 +1,7 @@
 import {
   backgroundTaskSchema,
+  imageMetadataJobKey,
+  locationAiJobKey,
   type BackgroundTaskInput,
   type BackgroundTaskReceipt,
 } from "@cubby/schemas/background-tasks";
@@ -122,10 +124,10 @@ function taskKey(task: BackgroundTaskInput) {
     case "maintenance.purchase-discovery":
       return task.kind;
     case "image-metadata.extract":
-      return `image-metadata:${task.imageId}`;
+      return imageMetadataJobKey(task.imageId);
     case "location-ai.description.refresh":
     case "location-ai.inventory.refresh":
-      return `${task.kind}:${task.locationId}`;
+      return locationAiJobKey(task.kind, task.locationId);
     case "calendar-feed.mark-dirty":
       return `calendar:${task.origin}`;
     default:
@@ -156,13 +158,6 @@ export async function publishBackgroundTasks(
       await enqueueJob(tx, {
         key: taskKey(input),
         kind: task.kind,
-        ...("locationId" in task
-          ? { subjectKind: "location", subjectId: task.locationId }
-          : "imageId" in task
-            ? { subjectKind: "image", subjectId: task.imageId }
-            : task.kind === "calendar-feed.mark-dirty"
-              ? { subjectKind: "calendar", subjectId: task.origin }
-              : {}),
         input: z.json().parse(JSON.parse(JSON.stringify(input))),
         runId: task.runId,
         invalidate: true,
