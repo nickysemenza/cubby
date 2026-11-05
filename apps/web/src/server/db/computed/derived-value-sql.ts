@@ -1,19 +1,22 @@
-import { type AnyColumn, type SQL, sql } from "drizzle-orm";
+import { type AnyColumn, type SQL, sql, getTableName } from "drizzle-orm";
 
-/**
- * Relational-query extras over stored derived values (ADR 0021), for nested
- * rows a page loads in its one relational read. A typed id column survives
- * the relational layer's alias rewriting. Top-level list reads use
- * `storedDerivedSql`, which also validates the declaration.
- */
+import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
+import { storedSourceSql } from "~/server/db/derived-source-sql";
+
+/** Nested relational extras resolve the same declared source as top-level reads. */
+const source = (id: AnyColumn, key: string): SQL => {
+  const declaration = entityStoredDerivedDeclarations().find(
+    (entry) => entry.table === getTableName(id.table) && entry.key === key,
+  );
+  if (!declaration)
+    throw new Error(
+      `Undeclared nested result: ${getTableName(id.table)}.${key}`,
+    );
+  return storedSourceSql(declaration, sql`${id}`);
+};
 export const storedSortNumberSql = (id: AnyColumn, key: string) =>
-  sql<
-    number | null
-  >`(SELECT "sortNumber" FROM "DerivedValue" WHERE "entityId" = ${id} AND key = ${key})`;
+  sql<number | null>`(SELECT "sortNumber" FROM (${source(id, key)}) projected)`;
 
-/**
- * A stored value's JSON, or `fallback` until its first publication: a stored
- * JSON null stays null, while a missing row reads the fallback.
- */
+/** JSON null is a successful empty result; only a missing row uses the fallback. */
 export const storedValueOrSql = (id: AnyColumn, key: string, fallback: SQL) =>
-  sql<unknown>`COALESCE((SELECT value FROM "DerivedValue" WHERE "entityId" = ${id} AND key = ${key}), to_jsonb(${fallback}))`;
+  sql<unknown>`COALESCE((SELECT value FROM (${source(id, key)}) projected), to_jsonb(${fallback}))`;

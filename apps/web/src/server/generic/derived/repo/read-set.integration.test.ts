@@ -18,6 +18,7 @@ import {
   entityStoredDerivedDeclarations,
   storedDerivedDeclarations,
 } from "~/server/db/derived-declarations";
+import { storedSourceSql } from "~/server/db/derived-source-sql";
 import { getDb } from "~/server/db/helpers";
 import {
   entityAttachment,
@@ -224,14 +225,16 @@ describe("deterministic cache rebuild", () => {
     const snapshot = async () => ({
       values: (
         await getDb(ctx.db).execute(sql`
-          SELECT kind || '.' || key AS target, "entityId"::text AS id,
-            value, "sortNumber", "sortDate", "sortText"
-          FROM "DerivedValue" ORDER BY kind, "entityId", key`)
-      ).rows,
-      views: (
-        await getDb(ctx.db).execute(
-          sql`SELECT "entityId", value, "sortNumber" FROM "ProductCostView" ORDER BY "entityId"`,
-        )
+          SELECT * FROM (${sql.join(
+            entityStoredDerivedDeclarations()
+              .filter((entry) => entry.publishes === "derivedValue")
+              .map(
+                (entry) => sql`
+            SELECT ${entry.target}::text AS target, e.id::text AS id, projected.value, projected."sortNumber", projected."sortDate", projected."sortText"
+            FROM "Entity" e CROSS JOIN LATERAL (${storedSourceSql(entry, sql`e.id`)}) projected WHERE e.kind = ${entry.entity}`,
+              ),
+            sql` UNION ALL `,
+          )}) values ORDER BY target,id`)
       ).rows,
       quality: (
         await getDb(ctx.db).execute(sql`
@@ -313,7 +316,14 @@ describe("deterministic cache rebuild", () => {
 
     // Clear only disposable projections, leaving all household inputs in place.
     await getDb(ctx.db).execute(sql`DELETE FROM "DerivedValue"`);
-    await getDb(ctx.db).execute(sql`DELETE FROM "QualitySnapshot"`);
+    for (const table of new Set(
+      entityStoredDerivedDeclarations().flatMap((entry) =>
+        entry.snapshotSource && !entry.snapshotSource.view
+          ? [entry.snapshotSource.table]
+          : [],
+      ),
+    ))
+      await getDb(ctx.db).execute(sql`DELETE FROM ${sql.identifier(table)}`);
     await getDb(ctx.db).execute(sql`DELETE FROM "SearchDocument"`);
     await getDb(ctx.db).execute(sql`DELETE FROM "ProductConversionCoverage"`);
     await getDb(ctx.db).execute(

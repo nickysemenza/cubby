@@ -826,3 +826,5 @@ export const pgStatStatements = pgView("pg_stat_statements", {
 export const pgStatStatementsInfo = pgView("pg_stat_statements_info", {
   dealloc: text("dealloc"),
 }).existing();
+
+export * from "./read-snapshot-schema";

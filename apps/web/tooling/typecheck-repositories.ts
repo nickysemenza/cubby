@@ -67,6 +67,7 @@ export const repositoryOwners = [
   "src/server/db/derived-value-schema.ts",
   "src/server/db/derived-rebuild-schema.ts",
   "src/server/db/quality-snapshot-schema.ts",
+  "src/server/db/read-snapshot-schema.ts",
   "src/server/db/derived-declarations.ts",
   "src/server/db/derived-source-sql.ts",
   "src/server/domains/product/repo/cost-sql.ts",

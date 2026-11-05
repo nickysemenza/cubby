@@ -2718,7 +2718,11 @@ ProductCostView, so charge edits affect display, filters and ordering immediatel
 The view preserves the existing positive actual-charge selection, averaging,
 rounding and latest-charge evidence; it adds no financial judgment.
 
-The pass skips declared views. Entity
+The pass skips declared views. Named read snapshots hold Product, Inventory,
+Location, Project, Expense, Email and Shipment results. Each manifest declaration
+names its typed value, decision, sort and publication-time columns; there is no
+per-value execution row. SQL null without a publication time is missing, while
+an explicit empty decision is a successful empty result. Entity
 stored declarations own their compute adapters and dependencies; the data-quality
 and search capabilities declare their phases. `rebuildPhase` orders facts,
 quality, search and household diagnostics. Self-dependencies describe domain
@@ -2756,6 +2760,12 @@ and ProductConversionCoverage retain their existing typed storage. Remaining
 legacy values temporarily publish in `DerivedValue` until their typed/view
 cutovers; their retained source tickets are neither claimed nor deleted.
 Project start-date ordering/filtering already reads canonical recursive SQL.
+
+Typed result slots distinguish an absent publication from a published null through
+their own publication time. A published SQL NULL becomes JSON null on the generic
+read. In particular, a published empty Product price remains empty rather than
+falling back to an authored price; a missing publication still uses the declared
+field-resolution fallback.
 
 Per-value queued/running/failure observations are retired. Activity checks the
 coarse pass for two missed hourly periods or three consecutive failures; a 75-minute lag marks it behind without flapping at an hour. It

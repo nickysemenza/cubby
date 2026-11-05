@@ -23,8 +23,6 @@ describe("hourly deterministic rebuild", () => {
   const ctx = withTestDb();
 
   it("shrinks abandoned pages, skips a repeatedly terminated record and refuses stale publication", async () => {
-    const first = rebuildDeclarations()[0];
-    if (!first) throw new Error("Expected rebuild declaration");
     const products = await Promise.all(
       ["Synthetic first", "Synthetic second", "Synthetic third"].map((name) =>
         createProductIdentityFixture(
@@ -67,8 +65,8 @@ describe("hourly deterministic rebuild", () => {
     await rebuildDerived(ctx.db, computes, { pageLimit: 1 });
     expect(seen).toEqual([[sorted[0]]]);
     await getDb(ctx.db)
-      .execute(sql`INSERT INTO "DerivedValue" ("entityId", kind, key, value, "computedAt") VALUES (${sorted[1]}::uuid, ${first.entity}, ${first.key}, '12'::jsonb, now())
-      ON CONFLICT ("entityId", key) DO UPDATE SET value = EXCLUDED.value`);
+      .execute(sql`INSERT INTO "ProductReadSnapshot" ("entityId", price, "priceComputedAt") VALUES (${sorted[1]}::uuid, 12, now())
+      ON CONFLICT ("entityId") DO UPDATE SET price = EXCLUDED.price`);
     await abandon(6);
     await rebuildDerived(ctx.db, computes, { pageLimit: 1 });
     const [skipped] = await getDb(ctx.db).select().from(derivedRebuild);
@@ -79,7 +77,7 @@ describe("hourly deterministic rebuild", () => {
     });
     expect(skipped?.error).toContain("repeated isolate termination");
     const retained = await getDb(ctx.db).execute(
-      sql`SELECT value FROM "DerivedValue" WHERE "entityId" = ${sorted[1]}::uuid AND key = ${first.key}`,
+      sql`SELECT price AS value FROM "ProductReadSnapshot" WHERE "entityId" = ${sorted[1]}::uuid`,
     );
     expect(retained.rows).toEqual([{ value: 12 }]);
     // Crossing an hour with failures must resume the committed cursor.
@@ -175,7 +173,7 @@ describe("hourly deterministic rebuild", () => {
       EXISTS (SELECT 1 FROM "SearchDocument" WHERE "entityId" = ${product.entityId}::uuid AND "deletedAt" IS NULL) AS search`);
     expect(output.rows).toEqual([{ quality: true, search: true }]);
     const later = await getDb(ctx.db).execute(
-      sql`SELECT value FROM "DerivedValue" WHERE "entityId" = ${ids[2]}::uuid AND key = ${"price"}`,
+      sql`SELECT price AS value FROM "ProductReadSnapshot" WHERE "entityId" = ${ids[2]}::uuid`,
     );
     expect(later.rows).toEqual([{ value: 12 }]);
     // A failed completed pass cannot bypass the hourly gate or schedule a new full pass.

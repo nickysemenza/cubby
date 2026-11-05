@@ -1117,6 +1117,7 @@ const buildMetadataSchemas = () => {
           computedAt: nonEmptyString(),
           decidedBy: nonEmptyString().optional(),
           sort: nonEmptyString().optional(),
+          storage: z.enum(["json", "number", "text"]).optional(),
           view: z.boolean().optional(),
         })
         .strict()

@@ -120,8 +120,8 @@ describe("inventory valuation — stored and recomputed on change", () => {
     ).toEqual(originalMappings);
     // Legacy publications retain their scalar even when no input graph was captured.
     await getDb(ctx.db)
-      .execute(sql`UPDATE "DerivedValue" SET "decidedBy"="decidedBy"-${storedFieldDecision.keyof().enum.evidence}
-      WHERE "entityId"=${entry.entityId} AND key='valuation'`);
+      .execute(sql`UPDATE "InventoryReadSnapshot" SET "valuationDecision"="valuationDecision"-${storedFieldDecision.keyof().enum.evidence}
+      WHERE "entityId"=${entry.entityId}`);
     const legacy = await explain(initial.envelope.result);
     expect(legacy.publication?.kind).toBe("unavailable");
     expect(fieldValueOf(legacy.envelope)).toBe(20);

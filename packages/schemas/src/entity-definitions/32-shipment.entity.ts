@@ -387,6 +387,14 @@ export const { definition, readSchemas } = defineEntityModel({
     stored: {
       eventSummary: {
         compute: "shipment.eventSummary",
+        snapshotSource: {
+          table: "ShipmentReadSnapshot",
+          value: "eventSummary",
+          computedAt: "eventSummaryComputedAt",
+          decidedBy: "eventSummaryDecision",
+          storage: "json",
+          sort: "eventSummarySort",
+        },
         publishes: "derivedValue",
         resultSchema: shipmentEventSummarySchema,
         inputs: [

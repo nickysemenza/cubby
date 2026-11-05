@@ -25,13 +25,13 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { account as googleAccount } from "~/server/db/auth.schema";
-import { derivedValue } from "~/server/db/derived-value-schema";
 import {
   databaseForTransaction,
   getDb,
   withTransaction,
   uuidArrayParam,
 } from "~/server/db/helpers";
+import { emailReadSnapshot } from "~/server/db/read-snapshot-schema";
 import {
   importSourceClaim,
   importSourceOrder,
@@ -470,14 +470,9 @@ describe("Email Purchase links", () => {
       };
       const facts = async () => {
         const [row] = await getDb(ctx.db)
-          .select({ value: derivedValue.value })
-          .from(derivedValue)
-          .where(
-            and(
-              eq(derivedValue.entityId, originalEmail.id),
-              eq(derivedValue.key, "relationshipFacts"),
-            ),
-          );
+          .select({ value: emailReadSnapshot.relationshipFacts })
+          .from(emailReadSnapshot)
+          .where(and(eq(emailReadSnapshot.entityId, originalEmail.id)));
         return emailRelationshipResult.parse(row?.value).facts.map((fact) => ({
           purchaseId: fact.purchaseId,
           changed: fact.changed,
@@ -705,14 +700,9 @@ describe("Email Purchase links", () => {
         expect(promoted).toBe(true);
         expect(await unrelatedWork()).toEqual([]);
         const [published] = await getDb(ctx.db)
-          .select({ value: derivedValue.value })
-          .from(derivedValue)
-          .where(
-            and(
-              eq(derivedValue.entityId, unrelatedEmail.id),
-              eq(derivedValue.key, "relationshipFacts"),
-            ),
-          );
+          .select({ value: emailReadSnapshot.relationshipFacts })
+          .from(emailReadSnapshot)
+          .where(and(eq(emailReadSnapshot.entityId, unrelatedEmail.id)));
         expect(emailRelationshipResult.parse(published?.value).facts).toEqual(
           [],
         );
@@ -807,13 +797,8 @@ describe("Email Purchase links", () => {
     if (!emailIdentity) throw new Error("Synthetic Email missing");
     // Model a retained pre-backfill row: no publication is not an empty result.
     await getDb(ctx.db)
-      .delete(derivedValue)
-      .where(
-        and(
-          eq(derivedValue.entityId, emailIdentity.id),
-          eq(derivedValue.key, "relationshipFacts"),
-        ),
-      );
+      .delete(emailReadSnapshot)
+      .where(and(eq(emailReadSnapshot.entityId, emailIdentity.id)));
     const sourceTarget = "email.relationshipFacts@5";
     await executeEntity(kernelCtx(ctx), {
       action: "update",
@@ -886,14 +871,9 @@ describe("Email Purchase links", () => {
     });
     expect(
       await getDb(ctx.db)
-        .select({ value: derivedValue.value })
-        .from(derivedValue)
-        .where(
-          and(
-            eq(derivedValue.entityId, emailIdentity.id),
-            eq(derivedValue.key, "relationshipFacts"),
-          ),
-        ),
+        .select({ value: emailReadSnapshot.relationshipFacts })
+        .from(emailReadSnapshot)
+        .where(and(eq(emailReadSnapshot.entityId, emailIdentity.id))),
     ).toEqual([]);
     await getDb(ctx.db)
       .update(purchaseTable)
@@ -1000,8 +980,8 @@ describe("Email Purchase links", () => {
       linkState: "none",
       purchaseLinks: [],
     });
-    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedValue"
-      WHERE key = 'relationshipFacts' AND "entityId" IN (SELECT id FROM "Email" WHERE shortcode = ${f.email})`);
+    await getDb(ctx.db).execute(sql`DELETE FROM "EmailReadSnapshot"
+      WHERE "entityId" IN (SELECT id FROM "Email" WHERE shortcode = ${f.email})`);
     expect(
       await emailScaffold.read(ctx.db, {
         filters: {
@@ -1059,8 +1039,8 @@ describe("Email Purchase links", () => {
       .where(eq(runTable.id, f.runId));
     if (!currentRun) throw new Error("Missing synthetic import Run");
     const currentRunId = currentRun.id;
-    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedValue"
-      WHERE key = 'relationshipFacts' AND "entityId" IN (SELECT id FROM "Email" WHERE shortcode = ${f.email})`);
+    await getDb(ctx.db).execute(sql`DELETE FROM "EmailReadSnapshot"
+      WHERE "entityId" IN (SELECT id FROM "Email" WHERE shortcode = ${f.email})`);
     const explainOutcome = () =>
       explainField(kernelCtx(ctx), {
         entityKind: "email",

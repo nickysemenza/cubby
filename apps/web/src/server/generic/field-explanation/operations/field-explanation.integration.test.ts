@@ -98,8 +98,8 @@ describe("derived field explanations against canonical records", () => {
     );
     // Historical publications predate optional stock-input capture.
     await unwrapDb(ctx.db)
-      .execute(sql`UPDATE "DerivedValue" SET value=value-'stockEvidence'
-      WHERE "entityId"=${product.entityId} AND key='readFacts'`);
+      .execute(sql`UPDATE "ProductReadSnapshot" SET "readFacts"="readFacts"-'stockEvidence'
+      WHERE "entityId"=${product.entityId}`);
     const legacy = await explainField(context(), {
       ...request,
       displayedResult: complete.envelope.result,

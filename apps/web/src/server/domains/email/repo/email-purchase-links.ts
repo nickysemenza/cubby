@@ -23,6 +23,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
+import { declaredStoredSourceSql } from "~/server/db/derived-source-sql";
 import {
   purchase,
   vendorAccount,
@@ -177,21 +178,19 @@ export const emailInScopeSql = (scope: EmailPurchaseScope): SQL => {
 
 /** A missing computation is not a successful no-match result. */
 const emailRelationshipResultExistsSql = sql`EXISTS (
-  SELECT 1 FROM "DerivedValue" v WHERE v."entityId" = "Email".id AND v.key = 'relationshipFacts'
-    AND v."decidedBy"#>>'{outcome,kind}' = 'value' AND jsonb_typeof(v.value->'facts') = 'array'
+  SELECT 1 FROM (${declaredStoredSourceSql("email", "relationshipFacts", sql`"Email".id`)}) v WHERE v."decidedBy"#>>'{outcome,kind}' = 'value' AND jsonb_typeof(v.value->'facts') = 'array'
 )`;
 
 /** Fixed typed facts, with current account-owner eligibility kept separate. */
 const cachedEmailPurchaseEvidenceSql = (): SQL => sql`
   SELECT fact."purchaseId", fact."eventId", fact.kind, fact.changed, fact."proposedBy"
-  FROM "DerivedValue" v
+  FROM (${declaredStoredSourceSql("email", "relationshipFacts", sql`"Email".id`)}) v
   CROSS JOIN LATERAL jsonb_to_recordset(CASE WHEN jsonb_typeof(v.value->'facts') = 'array'
     THEN v.value->'facts' ELSE '[]'::jsonb END)
     AS fact("purchaseId" uuid, "eventId" uuid, kind text, changed boolean, "proposedBy" text)
   JOIN "Purchase" p ON p.id = fact."purchaseId" AND ${notDeleted(livePurchase)}
   LEFT JOIN "VendorAccount" account ON account.id = p."vendorAccountId" AND ${notDeleted(liveAccount)}
-  WHERE v."entityId" = "Email".id AND v.key = 'relationshipFacts'
-    AND v."decidedBy"#>>'{outcome,kind}' = 'value'
+  WHERE v."decidedBy"#>>'{outcome,kind}' = 'value'
     AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
 `;
 

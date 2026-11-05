@@ -7,6 +7,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
+import { declaredStoredSourceSql } from "~/server/db/derived-source-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { financialAccount } from "~/server/db/schema";
 import { workExpenseOwners } from "~/server/domains/expense/repo/work-owners";
@@ -99,7 +100,7 @@ export const storedPrivateDiagnosticCandidates = (
       owners,
       shared: false,
     }).from(sql`"Project" anchor
-      INNER JOIN "DerivedValue" publication ON publication."entityId" = anchor.id AND publication.key = 'workDiagnosticFacts'
+      INNER JOIN LATERAL (${declaredStoredSourceSql("project", "workDiagnosticFacts", sql`anchor.id`)}) publication ON true
       CROSS JOIN LATERAL jsonb_to_recordset(publication.value->'privateEntries'->${source.id})
         AS finding(key text, name text, reason text, refs jsonb)`)
       .where(sql`anchor.id = ${publication.id}::uuid AND anchor.shortcode = ${HOUSEHOLD_PROJECT_SHORTCODE}
