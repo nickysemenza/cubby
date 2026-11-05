@@ -12,7 +12,6 @@ import {
 import { imageSightingOut } from "../image-sighting-fields.js";
 import { optionalImageRepresentations } from "../image-summary.js";
 import { defineEntity, defineEntityModel } from "./definition.js";
-import { imageDescriptionReceiptWhere } from "./image-description-inputs";
 import { labelField } from "./label-field.js";
 import { imageShortcode, ledgerPartyShortcode } from "../identifier-fields.js";
 import { z } from "zod";
@@ -1045,25 +1044,27 @@ export const { definition, readSchemas } = defineEntityModel(
           where: { entityKind: "image", feature: "image-description" },
         },
         {
-          table: "Assessment",
+          table: "Suggestion",
           match: { subject: "id" },
           json: { key: "recordId" },
           where: { family: "image_description" },
         },
         {
-          table: "AssessmentState",
+          table: "Suggestion",
           match: { recordId: "id" },
           where: { family: "image_description" },
         },
         {
-          table: "Feedback",
-          match: { assessmentId: "id" },
-          where: imageDescriptionReceiptWhere,
-          path: [{ table: "AssessmentState", from: "id", to: "recordId" }],
+          // Decisions live on the Suggestion, whose own input above captures them.
+          table: "Suggestion",
+          capture: false,
+          match: { id: "id" },
+          path: [{ table: "Suggestion", from: "id", to: "recordId" }],
         },
       ],
     },
     capabilities: {
+      suggestions: ["image_description"],
       auditable: false,
       images: { storage: false },
       delete: { mode: "hard", bulk: true },

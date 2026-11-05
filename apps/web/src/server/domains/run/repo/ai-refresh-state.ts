@@ -44,10 +44,14 @@ import {
   emailClassificationObservation,
   ledgerParty,
   run,
-  assessmentState as suggestion,
+  suggestionTable as suggestion,
 } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
-import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import {
+  type SuggestionStateRow,
+  suggestionStateColumns,
+  transitionAssessmentStates,
+} from "~/server/generic/assessment/repo/assessment-state";
 
 import {
   hasAiRefreshRunCapacity,
@@ -55,11 +59,16 @@ import {
 } from "./ai-refresh-admission";
 import { ensureRun } from "./ensure-run";
 
-export type AssessmentStateRow = typeof suggestion.$inferSelect;
+export type AssessmentStateRow = SuggestionStateRow;
 export type FieldRefreshCursor = Pick<
   AssessmentStateRow,
-  "entity" | "recordId" | "field"
->;
+  "entity" | "field"
+> & { recordId: string };
+
+const withSavedRecord = (rows: readonly AssessmentStateRow[]) =>
+  rows.flatMap((row) =>
+    row.recordId === null ? [] : [{ ...row, recordId: row.recordId }],
+  );
 
 const jsonSnapshot = (value: unknown) =>
   z.json().parse(JSON.parse(JSON.stringify(value)));
@@ -506,16 +515,16 @@ export async function pendingFieldRefreshes(
   limit: number,
 ) {
   return getDb(db)
-    .selectDistinctOn([
-      suggestion.entity,
-      suggestion.recordId,
-      suggestion.field,
-    ])
+    .selectDistinctOn(
+      [suggestion.entity, suggestion.recordId, suggestion.field],
+      suggestionStateColumns,
+    )
     .from(suggestion)
     .where(
       and(
         eligibleSuggestions(),
         eq(suggestion.family, "field"),
+        isNotNull(suggestion.recordId),
         after
           ? sql`(${suggestion.entity}, ${suggestion.recordId}, ${suggestion.field}) > (${after.entity}, ${after.recordId}::uuid, ${after.field})`
           : undefined,
@@ -527,7 +536,8 @@ export async function pendingFieldRefreshes(
       asc(suggestion.field),
       desc(suggestion.createdAt),
     )
-    .limit(limit);
+    .limit(limit)
+    .then(withSavedRecord);
 }
 
 export async function fieldRefreshHistory(
@@ -535,7 +545,7 @@ export async function fieldRefreshHistory(
   key: FieldRefreshCursor,
 ) {
   return getDb(db)
-    .select()
+    .select(suggestionStateColumns)
     .from(suggestion)
     .where(
       and(
@@ -546,7 +556,8 @@ export async function fieldRefreshHistory(
         eligibleSuggestions(),
       ),
     )
-    .orderBy(desc(suggestion.createdAt));
+    .orderBy(desc(suggestion.createdAt))
+    .then(withSavedRecord);
 }
 
 /** Uncertain, unresolved Email without a member classification, with its owner. */
@@ -598,7 +609,7 @@ export async function assessmentStatesById(
   ids: readonly AssessmentStateRow["id"][],
 ) {
   return getDb(db)
-    .select()
+    .select(suggestionStateColumns)
     .from(suggestion)
     .where(inArray(suggestion.id, [...ids]));
 }

@@ -1,4 +1,3 @@
-import type { AssessmentReadDependency } from "@cubby/schemas/assessment-read-publication";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { SHORTCODE_CHARS } from "@cubby/shared";
@@ -28,8 +27,7 @@ import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
   aiEvaluationRequest,
-  assessment,
-  assessmentState,
+  suggestionTable,
   entityExternalId,
   importSourceClaim,
   importSourceOrder,
@@ -68,7 +66,6 @@ import {
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { mergeReviewedProductPair } from "~/server/generic/assessment/repo/assessment-product";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { readAssessmentReadMemberships } from "~/server/generic/assessment/repo/review-families";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { findDuplicateProductIdentities } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -181,16 +178,13 @@ describe("stored Product identity pairs", () => {
           conflict: false,
         },
       }));
-      await getDb(ctx.db).insert(assessment).values(predictions);
       await getDb(ctx.db)
-        .insert(assessmentState)
+        .insert(suggestionTable)
         .values(
           predictions.map((prediction, index) => ({
-            id: prediction.id,
-            family: prediction.family,
+            ...prediction,
             entity: "product",
             recordId: anchor.id,
-            fingerprint: prediction.fingerprint,
             status:
               index < suppressed ? ("resolved" as const) : ("pending" as const),
             suppression:
@@ -484,29 +478,12 @@ describe("stored Product identity pairs", () => {
     );
     const before = await getProductMatchQueue(ctx.db, {});
     expect(before.items).toHaveLength(1);
-    const readInputs = async () => {
-      const inputs = new Map<string, readonly AssessmentReadDependency[]>();
-      await readAssessmentReadMemberships(
-        ctx.db,
-        [before.items[0]!.assessmentId],
-        (id, sources) => inputs.set(id, sources),
-      );
-      return inputs.get(before.items[0]!.assessmentId);
-    };
-    const dependencies = await readInputs();
-    expect(dependencies).toHaveLength(2);
-    expect(dependencies).toEqual(
-      expect.arrayContaining(
-        ids.map((sourceId) => ({ sourceKind: "product", sourceId })),
-      ),
-    );
     await getDb(ctx.db)
       .update(product)
       .set({ model: "SYNTH-CHANGED" })
       .where(eq(product.id, ids[1]!));
     expect((await getProductMatchQueue(ctx.db, {})).items).toEqual([]);
-    expect(await readInputs()).toEqual(dependencies);
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(1);
   });
   // Claim loading must share issuer reads across accepted lines, while a later
   // operation must observe current registry ownership instead of a stale cache.
@@ -797,7 +774,7 @@ describe("stored Product identity pairs", () => {
         );
       }),
     ).rejects.toThrow(/obsolete/);
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(0);
+    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(0);
   });
   it("publishes exact rule evidence through an activated catalog pass while the model is unavailable", async () => {
     const { ids } = await acceptedIdentityPair([
@@ -994,8 +971,8 @@ describe("stored Product identity pairs", () => {
     await publishProductIdentity(ctx.db, result);
     const [pair] = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.family, "product_pair"));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.family, "product_pair"));
     expect(pair?.data).toEqual(
       expect.objectContaining({ actionable: true, conflict: false }),
     );
@@ -1018,15 +995,16 @@ describe("stored Product identity pairs", () => {
       },
     });
     await publishProductIdentity(ctx.db, opposite);
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(1);
     const [reviewed] = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.id, pair!.id));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, pair!.id));
     expect(reviewed).toMatchObject({ status: "rejected", suppression: null });
     expect(await listProductMatchRows(ctx.db)).toEqual([]);
-    const originalProducer = (await getDb(ctx.db).select().from(assessment))[0]!
-      .producer;
+    const originalProducer = (
+      await getDb(ctx.db).select().from(suggestionTable)
+    )[0]!.producer;
     expect(originalProducer?.runId).toBe(runId);
     const revised = opposite.pairs[0]!;
     await publishProductIdentity(ctx.db, {
@@ -1040,9 +1018,9 @@ describe("stored Product identity pairs", () => {
         },
       ],
     });
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(2);
+    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(2);
     expect(
-      (await getDb(ctx.db).select().from(assessmentState)).filter(
+      (await getDb(ctx.db).select().from(suggestionTable)).filter(
         (row) => row.active,
       ),
     ).toEqual([
@@ -1067,7 +1045,7 @@ describe("stored Product identity pairs", () => {
       ctx.db,
       await evaluateProductIdentity(ctx.db, bId, secondRunId, unavailable),
     );
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(3);
+    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(3);
     await expect(
       mergeReviewedProductPair(kernelCtx(ctx), {
         keepId: a.id,
@@ -1079,7 +1057,9 @@ describe("stored Product identity pairs", () => {
     expect(
       (await productIdentitySnapshot(ctx.db, bId))?.fingerprint,
     ).toBeTruthy();
-    expect((await getDb(ctx.db).select().from(assessment))[0]?.subject).toEqual(
+    expect(
+      (await getDb(ctx.db).select().from(suggestionTable))[0]?.subject,
+    ).toEqual(
       expect.objectContaining({
         recordId: [aId, bId].sort()[0],
         otherId: [aId, bId].sort()[1],
@@ -1236,8 +1216,8 @@ describe("stored Product identity pairs", () => {
     ).toEqual([]);
     const [state] = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.family, "product_pair"));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.family, "product_pair"));
     expect(state).toMatchObject({ status: "resolved", suppression: null });
     await getDb(ctx.db)
       .update(product)
@@ -1302,7 +1282,6 @@ describe("stored Product identity pairs", () => {
     expect(stored[0]).toMatchObject({ actionable: false, conflict: false });
     await drainStoredDerived(ctx.db);
     const page = await listSuggestionPage(ctx.db, {});
-    expect(page.meta.coverage).toMatchObject({ missing: false, failed: false });
     expect(page.items.map((row) => row.assessmentId)).not.toContain(
       stored[0]!.id,
     );

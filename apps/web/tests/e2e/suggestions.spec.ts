@@ -19,7 +19,7 @@ import { recordSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
-import { product as productTable, feedback } from "~/server/db/schema";
+import { product as productTable } from "~/server/db/schema";
 import {
   publishEntityConnection,
   readEntityConnections,
@@ -29,6 +29,7 @@ import { generateStatementSuggestionPage } from "~/server/domains/transaction-im
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
 import {
@@ -845,18 +846,12 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
   await expect
     .poll(
       async () =>
-        (
-          await getDb(db)
-            .select()
-            .from(feedback)
-            .where(eq(feedback.assessmentId, prediction.id))
-        ).filter((event) => event.operationId.startsWith("receipt:")).length,
+        (await readSuggestionDecisions(db, prediction.id)).filter((event) =>
+          event.operationId.startsWith("receipt:"),
+        ).length,
     )
     .toBe(1);
-  const events = await getDb(db)
-    .select()
-    .from(feedback)
-    .where(eq(feedback.assessmentId, prediction.id));
+  const events = await readSuggestionDecisions(db, prediction.id);
   expect(events).toContainEqual(
     expect.objectContaining({
       verdict: "correct",

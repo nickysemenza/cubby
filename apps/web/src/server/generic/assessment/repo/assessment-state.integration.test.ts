@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as queryTelemetry from "~/server/db/db-query-telemetry";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { updateManyAndReturn } from "~/server/db/helpers/crud";
-import { assessment, assessmentState, feedback } from "~/server/db/schema";
+import { suggestionTable } from "~/server/db/schema";
 import {
   kernelCtx,
   productFixture,
@@ -17,9 +17,9 @@ import {
   recordFeedback,
 } from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import {
-  rebuildAssessmentStates,
   retireAssessmentTargetsTx,
   transitionAssessmentState,
   transitionAssessmentStates,
@@ -31,19 +31,10 @@ const liveRows = async (ctx: Ctx, ids: readonly string[]) =>
   (
     await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(inArray(assessmentState.id, [...ids]))
-      .orderBy(assessmentState.id)
+      .from(suggestionTable)
+      .where(inArray(suggestionTable.id, [...ids]))
+      .orderBy(suggestionTable.id)
   ).map(({ updatedAt: _updatedAt, ...row }) => row);
-
-/** Drop the current rows and replay them from the ledger alone. */
-async function rebuiltRows(ctx: Ctx, ids: readonly string[]) {
-  await getDb(ctx.db)
-    .delete(assessmentState)
-    .where(inArray(assessmentState.id, [...ids]));
-  await rebuildAssessmentStates(ctx.db, ids);
-  return liveRows(ctx, ids);
-}
 
 const recommendation = (productId: string, key: string) => ({
   publicationKey: `synthetic:state-parity:${key}`,
@@ -61,11 +52,10 @@ const recommendation = (productId: string, key: string) => ({
   evidence: null,
 });
 
-// Failure modes: a rebuild loses a member's decision, suppression or receipt;
-// replays transitions out of order; lets a retired column or an unrelated
-// Feedback change the row; creates review state for an evaluation sample;
-// or loses an Email link review when its Email is removed.
-describe("AssessmentState rebuild", () => {
+// Failure modes: a transition loses a member's decision or suppression, applies
+// out of order, or lets an unrelated Feedback change the row; a publication
+// retry overwrites a reviewed row.
+describe("Suggestion publication and transitions", () => {
   const ctx = withTestDb();
 
   it("publishes batches in input order with singleton-equivalent snapshots and JSON nulls", async () => {
@@ -92,20 +82,6 @@ describe("AssessmentState rebuild", () => {
       producer: null,
       evidence: null,
     };
-    const sample = {
-      publicationKey: "synthetic:batch:evaluation-sample",
-      family: "evaluation_sample" as const,
-      subject: {
-        kind: "evaluation_sample" as const,
-        evaluation: "email_accuracy" as const,
-        ownerUserId: ctx.actor.userId,
-      },
-      judgment: { version: 1 as const, strata: [], items: [] },
-      fingerprint: null,
-      producer: null,
-      evidence: null,
-      served: false,
-    };
     const entries = [
       { input: fresh, projection },
       { input, projection: { suggestedValue: "ignored replay projection" } },
@@ -114,24 +90,20 @@ describe("AssessmentState rebuild", () => {
         input: fresh,
         projection: { suggestedValue: "ignored duplicate projection" },
       },
-      { input: sample },
     ];
     const rows = await publishAssessments(ctx.db, entries);
     expect(rows.map((row) => row.publicationKey)).toEqual(
       entries.map((entry) => entry.input.publicationKey),
     );
-    const [batched, replayed, nullImage, duplicate, evaluation] = rows;
+    const [batched, replayed, nullImage, duplicate] = rows;
     expect(replayed).toEqual(singleton);
     expect(duplicate).toEqual(batched);
-    expect(batched?.projection).toEqual(singleton.projection);
     expect(nullImage?.judgment).toBeNull();
-    expect(nullImage?.projection).toMatchObject({ suggestedValue: null });
-    expect(evaluation?.projection).toBeNull();
+    expect(nullImage?.suggestedValue).toBeNull();
     const ids = rows.map((row) => row.id);
     const states = await liveRows(ctx, ids);
     expect(states).toHaveLength(3);
     expect(states.every((state) => state.suggestedValue === null)).toBe(true);
-    expect(await rebuiltRows(ctx, ids)).toEqual(states);
     expect(await publishAssessments(ctx.db, entries)).toEqual(rows);
     expect(await liveRows(ctx, ids)).toEqual(states);
     expect(await publishAssessments(ctx.db, [])).toEqual([]);
@@ -155,8 +127,8 @@ describe("AssessmentState rebuild", () => {
     expect(
       await getDb(ctx.db)
         .select()
-        .from(assessment)
-        .where(eq(assessment.publicationKey, fresh.publicationKey)),
+        .from(suggestionTable)
+        .where(eq(suggestionTable.publicationKey, fresh.publicationKey)),
     ).toEqual([]);
     expect(await liveRows(ctx, [existing.id])).toEqual(before);
   });
@@ -181,9 +153,9 @@ describe("AssessmentState rebuild", () => {
     expect(
       await getDb(ctx.db)
         .select()
-        .from(assessment)
+        .from(suggestionTable)
         .where(
-          inArray(assessment.publicationKey, [
+          inArray(suggestionTable.publicationKey, [
             duplicate.publicationKey,
             other.publicationKey,
           ]),
@@ -211,9 +183,9 @@ describe("AssessmentState rebuild", () => {
     expect(
       await getDb(ctx.db)
         .select()
-        .from(assessment)
+        .from(suggestionTable)
         .where(
-          inArray(assessment.publicationKey, [
+          inArray(suggestionTable.publicationKey, [
             valid.publicationKey,
             invalid.publicationKey,
           ]),
@@ -221,14 +193,12 @@ describe("AssessmentState rebuild", () => {
     ).toEqual([]);
   });
 
-  it("preserves reviewed and absent projection states when a batch replays existing publications", async () => {
+  it("preserves a reviewed row when a batch replays its publication", async () => {
     const product = await productFixture(ctx, "Synthetic bulk replay item");
     const productId = await recordId(ctx.db, product.id, "product");
     const reviewedInput = recommendation(productId, "bulk-reviewed");
-    const absentInput = recommendation(productId, "bulk-absent");
-    const [reviewed, absent] = await publishAssessments(ctx.db, [
+    const [reviewed] = await publishAssessments(ctx.db, [
       { input: reviewedInput },
-      { input: absentInput },
     ]);
     await withTransaction(ctx.db, (tx) =>
       transitionAssessmentState(
@@ -242,44 +212,29 @@ describe("AssessmentState rebuild", () => {
         { kind: "synthetic-batch-review" },
       ),
     );
-    // A publication retry cannot repair a missing projection implicitly.
-    await getDb(ctx.db)
-      .delete(assessmentState)
-      .where(eq(assessmentState.id, absent!.id));
-    const ids = [reviewed!.id, absent!.id];
+    const ids = [reviewed!.id];
     const before = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(inArray(assessmentState.id, ids));
+      .from(suggestionTable)
+      .where(inArray(suggestionTable.id, ids));
     const fresh = recommendation(productId, "bulk-with-replays");
     const rows = await publishAssessments(ctx.db, [
-      {
-        input: absentInput,
-        projection: { suggestedValue: "must not recreate" },
-      },
       { input: fresh },
       {
         input: reviewedInput,
         projection: { suggestedValue: "must not overwrite", status: "pending" },
       },
     ]);
-    expect(rows[0]).toEqual(absent);
-    expect(rows[2]).toEqual(reviewed);
+    expect(rows[1]).toEqual(before[0]);
     expect(
       await getDb(ctx.db)
         .select()
-        .from(assessmentState)
-        .where(inArray(assessmentState.id, ids)),
+        .from(suggestionTable)
+        .where(inArray(suggestionTable.id, ids)),
     ).toEqual(before);
-    expect(
-      await liveRows(
-        ctx,
-        rows.map((row) => row.id),
-      ),
-    ).toHaveLength(2);
   });
 
-  it("replays publication, member review and system transitions exactly", async () => {
+  it("applies publication, member review and system transitions in statement order", async () => {
     const product = await productFixture(ctx, "Synthetic parity item");
     const productId = await recordId(ctx.db, product.id, "product");
     const kept = await publishAssessment(
@@ -292,7 +247,7 @@ describe("AssessmentState rebuild", () => {
       recommendation(productId, "dismissed"),
       { data: { candidateKey: "dismissed" } },
     );
-    expect(kept.projection).toMatchObject({
+    expect(kept).toMatchObject({
       entity: "product",
       recordId: productId,
       fingerprint: "synthetic-kept",
@@ -308,7 +263,7 @@ describe("AssessmentState rebuild", () => {
         fingerprint: null,
       },
     });
-    // Two transitions in one transaction must replay in statement order.
+    // Two transitions in one transaction must apply in statement order.
     await withTransaction(ctx.db, async (tx) => {
       await transitionAssessmentState(
         tx,
@@ -337,23 +292,15 @@ describe("AssessmentState rebuild", () => {
       expect.objectContaining({ candidateKey: "dismissed" }),
     );
     expect(live.find((row) => row.id === kept.id)?.confidence).toBe(0.7);
-    expect(await rebuiltRows(ctx, ids)).toEqual(live);
-    const events = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .where(eq(feedback.authority, "system"));
-    expect(events.length).toBeGreaterThanOrEqual(2);
+    // Transitions leave no event of their own; only the grade is retained.
     expect(
-      events.every(
-        (event) =>
-          event.actorUserId === null &&
-          event.verdict === "ungraded" &&
-          event.intent === "projection",
+      (await readSuggestionDecisions(ctx.db, kept.id)).map(
+        (decision) => decision.operationId,
       ),
-    ).toBe(true);
+    ).toEqual(["synthetic-grade"]);
   });
 
-  it("batches distinct projection values while preserving replay, no-ops and rollback", async () => {
+  it("batches distinct values while preserving no-ops and rollback", async () => {
     const product = await productFixture(
       ctx,
       "Synthetic heterogeneous transitions",
@@ -377,14 +324,14 @@ describe("AssessmentState rebuild", () => {
       .spyOn(queryTelemetry, "databaseStatementForTrace")
       .mockImplementation((head) => {
         const text = typeof head === "string" ? head : head.text;
-        if (text.startsWith('update "AssessmentState"'))
+        if (text.startsWith('update "Suggestion"'))
           returning.push(text.split(" returning ")[1] ?? "");
         return statementForTrace(head);
       });
     await withTransaction(ctx.db, async (tx) => {
       const changed = await transitionAssessmentStates(
         tx,
-        inArray(assessmentState.id, ids),
+        inArray(suggestionTable.id, ids),
         (row) => ({
           data: { retained: row.data, completed: row.id },
           suggestedValue: null,
@@ -410,39 +357,21 @@ describe("AssessmentState rebuild", () => {
       ),
     ).toBe(true);
     const live = await liveRows(ctx, ids);
-    const events = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .where(inArray(feedback.assessmentId, ids));
-    expect(events).toHaveLength(ids.length);
-    for (const event of events) {
-      expect(event.projection).toMatchObject({
-        fingerprint: null,
-        suggestedValue: null,
-      });
-      expect(event.projection).not.toHaveProperty("confidence");
-    }
     await withTransaction(ctx.db, async (tx) => {
       expect(
         await transitionAssessmentStates(
           tx,
-          inArray(assessmentState.id, ids),
+          inArray(suggestionTable.id, ids),
           (row) => ({ data: row.data }),
           { kind: "synthetic_noop" },
         ),
       ).toEqual([]);
     });
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(feedback)
-        .where(inArray(feedback.assessmentId, ids)),
-    ).toEqual(events);
     await expect(
       withTransaction(ctx.db, async (tx) => {
         await transitionAssessmentStates(
           tx,
-          inArray(assessmentState.id, ids),
+          inArray(suggestionTable.id, ids),
           (row) => ({ data: { abandoned: row.id } }),
           { kind: "synthetic_abandoned" },
         );
@@ -450,13 +379,6 @@ describe("AssessmentState rebuild", () => {
       }),
     ).rejects.toThrow("synthetic rollback");
     expect(await liveRows(ctx, ids)).toEqual(live);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(feedback)
-        .where(inArray(feedback.assessmentId, ids)),
-    ).toEqual(events);
-    expect(await rebuiltRows(ctx, ids)).toEqual(live);
   });
 
   it("decodes an explicit native update projection without returning evidence payloads", async () => {
@@ -468,7 +390,7 @@ describe("AssessmentState rebuild", () => {
       { data: { retained: "synthetic evidence" }, fingerprint: "before" },
     );
     const changed = await withTransaction(ctx.db, (tx) =>
-      updateManyAndReturn(tx, assessmentState, {
+      updateManyAndReturn(tx, suggestionTable, {
         key: "id",
         returning: [
           "id",
@@ -503,69 +425,7 @@ describe("AssessmentState rebuild", () => {
     ]);
   });
 
-  it("rebuilds a legacy row from its migration snapshot and ignores retired columns", async () => {
-    const product = await productFixture(ctx, "Synthetic legacy parity item");
-    const productId = await recordId(ctx.db, product.id, "product");
-    // Shape of a migrated row: no creation snapshot, and one legacy snapshot
-    // carrying a column the schema no longer has.
-    const [legacy] = await getDb(ctx.db)
-      .insert(assessment)
-      .values(recommendation(productId, "legacy"))
-      .returning();
-    const before = {
-      id: legacy!.id,
-      family: "recommendation" as const,
-      entity: "product",
-      recordId: productId,
-      fingerprint: "synthetic-legacy",
-      suggestedValue: { candidateKey: "legacy" },
-      status: "resolved",
-    };
-    await getDb(ctx.db).insert(assessmentState).values(before);
-    const [current] = await liveRows(ctx, [legacy!.id]);
-    const {
-      id: _id,
-      family: _family,
-      createdAt: _createdAt,
-      ...columns
-    } = current!;
-    await getDb(ctx.db)
-      .insert(feedback)
-      .values({
-        assessmentId: legacy!.id,
-        operationId: "legacy-projection",
-        verdict: "ungraded",
-        correction: { present: false },
-        intent: "projection",
-        authority: "unknown",
-        actorUserId: null,
-        projection: JSON.parse(JSON.stringify({ ...columns, pairKey: null })),
-      });
-    const [rebuilt] = await rebuiltRows(ctx, [legacy!.id]);
-    expect(rebuilt).toEqual({ ...current, createdAt: legacy!.createdAt });
-  });
-
-  it("keeps an evaluation sample out of review state", async () => {
-    const sample = await publishAssessment(ctx.db, {
-      publicationKey: "evaluation_sample:email_accuracy:synthetic",
-      family: "evaluation_sample",
-      subject: {
-        kind: "evaluation_sample",
-        evaluation: "email_accuracy",
-        ownerUserId: ctx.actor.userId,
-      },
-      judgment: { version: 1, strata: [], items: [] },
-      fingerprint: null,
-      producer: null,
-      evidence: null,
-      served: false,
-    });
-    expect(sample.projection).toBeNull();
-    expect(await rebuildAssessmentStates(ctx.db, [sample.id])).toEqual([]);
-    expect(await liveRows(ctx, [sample.id])).toEqual([]);
-  });
-
-  it("retires a removed record's rows as replayable system events", async () => {
+  it("retires a removed record's rows", async () => {
     const product = await productFixture(ctx, "Synthetic removed parity item");
     const productId = await recordId(ctx.db, product.id, "product");
     const published = await publishAssessment(
@@ -577,13 +437,12 @@ describe("AssessmentState rebuild", () => {
     );
     const [live] = await liveRows(ctx, [published.id]);
     expect(live).toMatchObject({ active: false, status: "superseded" });
-    expect(await rebuiltRows(ctx, [published.id])).toEqual([live]);
     // History stays: the Assessment row is untouched.
     expect(
       await getDb(ctx.db)
-        .select({ id: assessment.id })
-        .from(assessment)
-        .where(eq(assessment.id, published.id)),
+        .select({ id: suggestionTable.id })
+        .from(suggestionTable)
+        .where(eq(suggestionTable.id, published.id)),
     ).toEqual([{ id: published.id }]);
   });
 });

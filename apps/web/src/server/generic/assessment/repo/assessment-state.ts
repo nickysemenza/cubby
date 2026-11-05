@@ -6,11 +6,11 @@ import type { SearchableEntity } from "@cubby/schemas/search";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
-  asc,
   eq,
   getTableColumns,
   inArray,
-  isNotNull,
+  isNull,
+  ne,
   notInArray,
   or,
   is,
@@ -27,11 +27,7 @@ import {
   type RepositoryQueryTransaction as DrizzleTransaction,
   repositoryQueries as getDb,
 } from "~/server/db/repository-access.boundary";
-import {
-  assessment,
-  assessmentState,
-  feedback,
-} from "~/server/db/retained-tables";
+import { suggestionTable } from "~/server/db/retained-tables";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 
@@ -59,14 +55,14 @@ export async function getActiveAssessmentSuppressionKeys(
   },
 ): Promise<Set<string>> {
   const rows = await getDb(db)
-    .select({ suppression: assessmentState.suppression })
-    .from(assessmentState)
+    .select({ suppression: suggestionTable.suppression })
+    .from(suggestionTable)
     .where(
       and(
-        eq(assessmentState.entity, input.entityKind),
-        eq(assessmentState.recordId, input.entityId),
-        eq(assessmentState.active, true),
-        eq(assessmentState.family, "recommendation"),
+        eq(suggestionTable.entity, input.entityKind),
+        eq(suggestionTable.recordId, input.entityId),
+        eq(suggestionTable.active, true),
+        eq(suggestionTable.family, "recommendation"),
       ),
     );
   return new Set(
@@ -78,49 +74,49 @@ export async function getActiveAssessmentSuppressionKeys(
   );
 }
 
-type StateRow = typeof assessmentState.$inferSelect;
+/** Evidence is immutable and can be very wide; nothing that moves a Suggestion reads it. */
+const { evidence: _evidence, ...stateColumns } =
+  getTableColumns(suggestionTable);
+export const suggestionStateColumns = stateColumns;
+export type SuggestionStateRow = Omit<
+  typeof suggestionTable.$inferSelect,
+  "evidence"
+>;
+type StateRow = SuggestionStateRow;
 type TransitionResult = Pick<StateRow, "id" | "entity" | "active" | "status">;
 type StateColumn = Exclude<
-  keyof typeof assessmentState.$inferInsert,
+  keyof typeof suggestionTable.$inferInsert,
   "id" | "family" | "createdAt" | "updatedAt"
 >;
 /** Columns an event sets on the current projection; a present key is set. */
 export type AssessmentStatePatch = Partial<
-  Pick<typeof assessmentState.$inferInsert, StateColumn>
+  Pick<typeof suggestionTable.$inferInsert, StateColumn>
 >;
 /** Why the projection moved: a system maintenance kind or the Feedback that caused it. */
 export type ProjectionCause = { kind: string; feedbackId?: string };
 
 const projectedColumns = new Set<string>(
-  Object.keys(getTableColumns(assessmentState)).filter(
+  Object.keys(getTableColumns(suggestionTable)).filter(
     (key) => !["id", "family", "createdAt", "updatedAt"].includes(key),
   ),
 );
 
 type ProjectionPatch = z.infer<typeof assessmentProjectionPatch>;
 
-/** Only current columns, as JSON; retired keys in old snapshots are ignored. */
-function projectionColumns(
-  values: Partial<typeof assessmentState.$inferInsert> | ProjectionPatch,
-): ProjectionPatch {
-  // A replayable patch is a value; SQL computed in place could not be replayed.
+/** Only current columns, as JSON; a transition takes values, not computed SQL. */
+function projectionColumns(values: AssessmentStatePatch): ProjectionPatch {
   if (Object.values(values).some((value) => is(value, SQL)))
-    throw new Error("AssessmentState transitions take values, not SQL");
+    throw new Error("Suggestion transitions take values, not SQL");
   const json = assessmentProjectionPatch.parse(jsonSnapshot.parse(values));
   return Object.fromEntries(
     Object.entries(json).filter(([key]) => projectedColumns.has(key)),
   );
 }
 
-/** The creation snapshot `publishAssessment` stores on the Assessment. */
-export const assessmentProjectionSnapshot = (
-  values: Partial<typeof assessmentState.$inferInsert>,
-) => projectionColumns(values);
-
 /** Patch values as column writes; a JSON null in a non-null jsonb column stays JSON. */
 const columnWrites = (patch: ProjectionPatch): AssessmentStatePatch =>
-  // SAFETY: `projectionColumns` keeps only AssessmentState column keys, and
-  // each value is the JSON that column stored.
+  // SAFETY: `projectionColumns` keeps only Suggestion column keys, and each
+  // value is the JSON that column stored.
   Object.fromEntries(
     Object.entries(patch).map(([key, value]) => [
       key,
@@ -128,42 +124,10 @@ const columnWrites = (patch: ProjectionPatch): AssessmentStatePatch =>
     ]),
   ) as AssessmentStatePatch;
 
-async function recordProjectionEvents(
-  db: RepositoryQueryInput,
-  events: readonly {
-    id: string;
-    patch: ProjectionPatch;
-    cause?: ProjectionCause;
-  }[],
-  cause: ProjectionCause,
-) {
-  await getDb(db)
-    .insert(feedback)
-    .values(
-      events.map(({ id, patch, cause: eventCause }) => ({
-        assessmentId: id,
-        operationId: `projection:${crypto.randomUUID()}`,
-        verdict: "ungraded" as const,
-        correction: { present: false as const },
-        intent: "projection",
-        authority: "system",
-        actorUserId: null,
-        metadata: eventCause ?? cause,
-        projection: patch,
-        // Statement time orders several events of one transaction for replay.
-        createdAt: sql`clock_timestamp()`,
-      })),
-    );
-}
-
 /**
- * The only writer of AssessmentState after publication. Each changed row
- * gains a `system` projection Feedback event carrying its column patch, so
- * {@link rebuildAssessmentStates} replays the same row. Member and automatic
- * judgments stay in their own Feedback; their state effect names them as the
- * cause. Unchanged columns are not recorded.
- * Returns native metadata for change categories, counts and current open state;
- * locked reads and replay patches retain the evidence.
+ * The only writer of a Suggestion's status after publication. Unchanged columns
+ * are not written. `cause` names why a transition happened for the caller's
+ * reader; it is not stored, since transitions keep no event history.
  */
 export async function transitionAssessmentStates(
   db: RepositoryQueryInput,
@@ -181,8 +145,7 @@ export async function transitionAssessmentStates(
   );
 }
 
-/** One locked read, one replay-event insert and one set update for differing
- * per-row transitions. The callback is pure and sees the complete locked set,
+/** One locked read and one set update for differing per-row transitions. The callback is pure and sees the complete locked set,
  * so domains can carry suppression across a publication without N rereads.
  */
 export async function transitionAssessmentStateBatch(
@@ -195,10 +158,10 @@ export async function transitionAssessmentStateBatch(
   }[],
 ): Promise<TransitionResult[]> {
   const rows = await getDb(db)
-    .select()
-    .from(assessmentState)
+    .select(suggestionStateColumns)
+    .from(suggestionTable)
     .where(where)
-    .orderBy(assessmentState.id)
+    .orderBy(suggestionTable.id)
     .for("update");
   const rowsById = new Map(rows.map((row) => [row.id, row]));
   const changes: {
@@ -227,12 +190,7 @@ export async function transitionAssessmentStateBatch(
       changes.push({ row, patch: changed, cause });
   }
   if (!changes.length) return [];
-  await recordProjectionEvents(
-    db,
-    changes.map(({ row, patch, cause }) => ({ id: row.id, patch, cause })),
-    { kind: "batch_transition" },
-  );
-  const updated = await updateManyAndReturn(db, assessmentState, {
+  const updated = await updateManyAndReturn(db, suggestionTable, {
     key: "id",
     returning: ["id", "entity", "active", "status"],
     changes: changes.map(({ row, patch }) => ({
@@ -254,6 +212,12 @@ export async function transitionAssessmentStateBatch(
   return updated;
 }
 
+/** The record a Suggestion targets; only an answer for an unsaved record has none. */
+export function suggestionRecordId(row: { recordId: string | null }) {
+  if (row.recordId === null) throw new Error("Suggestion has no saved record");
+  return row.recordId;
+}
+
 /** One row by id; null when it does not exist or nothing changed. */
 export async function transitionAssessmentState(
   db: RepositoryQueryInput,
@@ -263,7 +227,7 @@ export async function transitionAssessmentState(
 ) {
   const [row] = await transitionAssessmentStates(
     db,
-    eq(assessmentState.id, id),
+    eq(suggestionTable.id, id),
     patch,
     cause,
   );
@@ -271,141 +235,28 @@ export async function transitionAssessmentState(
 }
 
 /**
- * Creates current rows only for newly published Assessments. Each Assessment's
- * `projection` holds the same snapshot, so no projection event is recorded.
+ * Replaced opinions are not history: a superseded row with no decision or
+ * authority of its own goes once its replacement is published. Field rows stay,
+ * since queued evaluations and settled answers name them by id.
  */
-export async function insertPublishedAssessmentStates(
+export async function pruneReplacedSuggestions(
   db: RepositoryQueryInput,
-  values: readonly (typeof assessmentState.$inferInsert & { id: string })[],
+  ids: readonly string[],
 ) {
-  if (!values.length) return;
+  if (!ids.length) return;
   await getDb(db)
-    .insert(assessmentState)
-    .values(
-      values.map((value) => ({
-        ...value,
-        // A JSON null suggestion stays a JSON value, not SQL NULL.
-        suggestedValue:
-          value.suggestedValue === null
-            ? sql`'null'::jsonb`
-            : value.suggestedValue,
-      })),
-    );
-  await recordChange(db, {
-    kind: "projection",
-    categories: [
-      ...new Set([
-        "ai",
-        "suggestions",
-        "problems",
-        ...values.map((value) => value.entity),
-      ]),
-    ],
-  });
-}
-
-/**
- * Opens review state for an Assessment published without it, recording the
- * full row as its first projection event; an existing row takes `patch`.
- */
-export async function openAssessmentState(
-  db: RepositoryQueryInput,
-  input: {
-    values: typeof assessmentState.$inferInsert & { id: string };
-    patch: AssessmentStatePatch;
-  },
-  cause: ProjectionCause,
-) {
-  const [opened] = await getDb(db)
-    .insert(assessmentState)
-    .values({
-      ...input.values,
-      // Saved-field None receipts obey the same JSON-null invariant as publication.
-      suggestedValue:
-        input.values.suggestedValue === null
-          ? sql`'null'::jsonb`
-          : input.values.suggestedValue,
-    })
-    .onConflictDoNothing({ target: assessmentState.id })
-    .returning();
-  if (!opened)
-    return transitionAssessmentState(db, input.values.id, input.patch, cause);
-  await recordProjectionEvents(
-    db,
-    [{ id: opened.id, patch: projectionColumns(opened) }],
-    cause,
-  );
-  await recordChange(db, {
-    kind: "projection",
-    categories: ["ai", "suggestions", "problems", opened.entity],
-  });
-  return opened;
-}
-
-/**
- * Replays each Assessment's creation snapshot and its Feedback patches in
- * order, replacing the current rows. An Assessment with neither has no row.
- */
-export async function rebuildAssessmentStates(
-  db: RepositoryQueryInput,
-  assessmentIds: readonly string[],
-): Promise<StateRow[]> {
-  if (!assessmentIds.length) return [];
-  const client = getDb(db);
-  const ids = [...new Set(assessmentIds)];
-  const published = await client
-    .select({
-      id: assessment.id,
-      family: assessment.family,
-      projection: assessment.projection,
-      createdAt: assessment.createdAt,
-    })
-    .from(assessment)
-    .where(inArray(assessment.id, ids));
-  const events = await client
-    .select({
-      assessmentId: feedback.assessmentId,
-      projection: feedback.projection,
-    })
-    .from(feedback)
+    .delete(suggestionTable)
     .where(
-      and(inArray(feedback.assessmentId, ids), isNotNull(feedback.projection)),
-    )
-    .orderBy(asc(feedback.createdAt), asc(feedback.id));
-  const rebuilt: StateRow[] = [];
-  for (const row of published) {
-    const patches = events.filter((event) => event.assessmentId === row.id);
-    if (row.projection === null && !patches.length) {
-      await client
-        .delete(assessmentState)
-        .where(eq(assessmentState.id, row.id));
-      continue;
-    }
-    const values = columnWrites(
-      Object.assign(
-        {},
-        projectionColumns(
-          assessmentProjectionPatch.parse(row.projection ?? {}),
-        ),
-        ...patches.map((event) =>
-          projectionColumns(assessmentProjectionPatch.parse(event.projection)),
-        ),
+      and(
+        inArray(suggestionTable.id, [...ids]),
+        ne(suggestionTable.family, "field"),
+        eq(suggestionTable.status, "superseded"),
+        sql`${suggestionTable.decisions} = '[]'::jsonb`,
+        isNull(suggestionTable.suppression),
+        isNull(suggestionTable.confirmedValue),
+        isNull(suggestionTable.acceptanceReceipt),
       ),
     );
-    const [state] = await client
-      .insert(assessmentState)
-      .values({
-        // SAFETY: a replayed creation snapshot names every required column.
-        ...(values as typeof assessmentState.$inferInsert),
-        id: row.id,
-        family: row.family,
-        createdAt: row.createdAt,
-      })
-      .onConflictDoUpdate({ target: assessmentState.id, set: values })
-      .returning();
-    rebuilt.push(state!);
-  }
-  return rebuilt;
 }
 
 const retired = {
@@ -426,11 +277,11 @@ export async function retireAssessmentTargetsTx(
   await transitionAssessmentStates(
     tx,
     and(
-      notInArray(assessmentState.family, [...retiredAssessmentFamilies]),
-      eq(assessmentState.entity, entityKind),
+      notInArray(suggestionTable.family, [...retiredAssessmentFamilies]),
+      eq(suggestionTable.entity, entityKind),
       or(
-        inArray(assessmentState.recordId, ids),
-        inArray(sql`${assessmentState.data}->>'otherId'`, ids),
+        inArray(suggestionTable.recordId, ids),
+        inArray(sql`${suggestionTable.data}->>'otherId'`, ids),
       ),
     ),
     retired,
@@ -449,9 +300,9 @@ export async function repointAssessmentTargetsTx(
   await transitionAssessmentStates(
     tx,
     and(
-      eq(assessmentState.entity, entity),
-      inArray(assessmentState.recordId, [...loserIds]),
-      eq(assessmentState.family, "field"),
+      eq(suggestionTable.entity, entity),
+      inArray(suggestionTable.recordId, [...loserIds]),
+      eq(suggestionTable.family, "field"),
     ),
     { recordId: keepId, status: "superseded", confirmedValue: null },
     { kind: "target_merged" },

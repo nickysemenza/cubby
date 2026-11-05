@@ -35,7 +35,6 @@ import { useInfiniteTableListScope } from "~/entity/hooks/use-infinite-table-lis
 import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { Page, usePageCount } from "~/entity/page/page";
 import { FindSuggestionsDialog } from "~/entity/suggestions/find-suggestions-dialog";
-import { publicationCoverageMessage } from "~/entity/suggestions/publication-coverage";
 import { ListWorkbench } from "~/entity/table/list-workbench";
 import { useChildListWorkbench } from "~/entity/table/use-child-list-workbench";
 import {
@@ -166,7 +165,7 @@ const ORDER_OPTIONS: PickerOption[] = suggestionFilterDeclaration.sorts
 
 type SuggestionTablePage = Omit<SuggestionListOut, "meta"> & {
   meta: ListQueryResponse<Row>["meta"] &
-    Pick<SuggestionListOut["meta"], "cleanCount" | "coverage">;
+    Pick<SuggestionListOut["meta"], "cleanCount">;
   statementGroups?: SuggestionGroup[];
 };
 const queryPlan: ListQueryOptionsFn<QueryFilters, Row, SuggestionTablePage> = ({
@@ -353,8 +352,7 @@ function FamilyChips({
       .filter((row) => !family || row.family === family)
       .reduce((sum, row) => sum + row.pending, 0);
   };
-  const coverage = publicationCoverageMessage(counts.data?.coverage);
-  const incomplete = Boolean(coverage || counts.error);
+  const incomplete = Boolean(counts.error);
   return (
     <div className="max-w-full">
       {counts.error ? (
@@ -363,9 +361,6 @@ function FamilyChips({
           title="suggestion counts"
           onRetry={() => void counts.refetch()}
         />
-      ) : null}
-      {coverage ? (
-        <p className="text-sm text-muted-foreground">{coverage}</p>
       ) : null}
       <div className="max-w-full overflow-x-auto">
         <Picker
@@ -653,8 +648,7 @@ function SuggestionsTableBody({
   });
   const table = list.model.table;
   const firstPage = list.pages?.[0];
-  const coverage = publicationCoverageMessage(firstPage?.meta.coverage);
-  usePageCount(list.isLoading || coverage ? undefined : list.totalCount);
+  usePageCount(list.isLoading ? undefined : list.totalCount);
   const rowsById = useMemo(
     () => new Map(list.data.map((row) => [row.id, row.record])),
     [list.data],
@@ -820,9 +814,6 @@ function SuggestionsTableBody({
   return (
     <div className="flex min-w-0 flex-col" onKeyDownCapture={onKeyDownCapture}>
       <div className="flex flex-col gap-2 px-2 py-2 md:px-4">
-        {coverage ? (
-          <p className="text-sm text-muted-foreground">{coverage}</p>
-        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <QuickFilters table={table} view={view} tableState={tableState} />
           <Picker
@@ -948,9 +939,7 @@ function SuggestionsTableBody({
         showColumnMenu
         emptyState={
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            {coverage
-              ? "No known pending suggestions."
-              : "No pending suggestions."}
+            No pending suggestions.
           </p>
         }
       />

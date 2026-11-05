@@ -6,10 +6,9 @@ import { assessmentReviewBatchOut } from "@cubby/schemas/assessment";
 import { getDb } from "~/server/db/helpers";
 import {
   emailReview,
-  feedback,
   runOperation,
   product as productTable,
-  assessmentState,
+  suggestionTable,
   expense as expenseTable,
   inventoryEntry,
   image as imageTable,
@@ -21,6 +20,7 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import {
   createEntityFixture,
@@ -191,12 +191,9 @@ test("one queue confirms proposals and records automatic-history feedback", asyn
   ]);
   await expect
     .poll(async () =>
-      (
-        await getDb(db)
-          .select()
-          .from(feedback)
-          .where(eq(feedback.assessmentId, connection.review.assessmentId))
-      ).some((row) => row.verdict === "correct" && row.intent === "apply"),
+      (await readSuggestionDecisions(db, connection.review.assessmentId)).some(
+        (row) => row.verdict === "correct" && row.intent === "apply",
+      ),
     )
     .toBe(true);
 
@@ -468,9 +465,9 @@ test("new proposal families require explicit review and preserve merge confirmat
       async () =>
         (
           await getDb(db)
-            .select({ status: assessmentState.status })
-            .from(assessmentState)
-            .where(eq(assessmentState.id, tag.assessmentId))
+            .select({ status: suggestionTable.status })
+            .from(suggestionTable)
+            .where(eq(suggestionTable.id, tag.assessmentId))
         )[0]?.status,
     )
     .toBe("applied");
@@ -484,9 +481,9 @@ test("new proposal families require explicit review and preserve merge confirmat
       async () =>
         (
           await getDb(db)
-            .select({ confirmedValue: assessmentState.confirmedValue })
-            .from(assessmentState)
-            .where(eq(assessmentState.id, description.id))
+            .select({ confirmedValue: suggestionTable.confirmedValue })
+            .from(suggestionTable)
+            .where(eq(suggestionTable.id, description.id))
         )[0]?.confirmedValue,
     )
     .toEqual({

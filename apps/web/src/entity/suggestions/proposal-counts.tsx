@@ -17,7 +17,6 @@ import {
 } from "react";
 import { z } from "zod";
 
-import { publicationCoverageMessage } from "~/entity/suggestions/publication-coverage";
 import { RecordProposals } from "~/entity/suggestions/queue/record-proposals";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -36,10 +35,6 @@ const Context = createContext<{
   counts: ReadonlyMap<string, number>;
   errors: ReadonlyMap<string, unknown>;
   retries: ReadonlyMap<string, () => void>;
-  coverage: ReadonlyMap<
-    string,
-    z.infer<typeof suggestionRecordCountsOut>["coverage"]
-  >;
 } | null>(null);
 const combine = (
   queries: UseQueryResult<z.infer<typeof suggestionRecordCountsOut>>[],
@@ -47,7 +42,6 @@ const combine = (
   records: queries.flatMap((query) => query.data?.records ?? []),
   errors: queries.map((query) => query.error),
   retries: queries.map((query) => query.refetch),
-  coverage: queries.map((query) => query.data?.coverage),
 });
 
 /** Stable roster batches retain counts; only the viewport and its buffer fetch. */
@@ -104,13 +98,6 @@ export function ProposalCountProvider({
   const context = useMemo(
     () => ({
       counts: new Map(result.records.map((row) => [row.id, row.pending])),
-      coverage: new Map(
-        result.coverage.flatMap((coverage, index) =>
-          coverage
-            ? (batches[index] ?? []).map((id) => [id, coverage] as const)
-            : [],
-        ),
-      ),
       // Retain each batch's diagnostics with its records, just like its data.
       // An inactive failed batch must not label healthy visible rows as failed.
       errors: new Map(
@@ -129,7 +116,7 @@ export function ProposalCountProvider({
         }),
       ),
     }),
-    [result.records, result.errors, result.retries, result.coverage, batches],
+    [result.records, result.errors, result.retries, batches],
   );
   return (
     <ActiveRecordsContext value={viewportOnly ? activateRecord : null}>
@@ -174,10 +161,9 @@ function EligibleProposalCount({
   const error = context?.errors.get(recordId);
   const [open, setOpen] = useState(false);
   const count = context?.counts.get(recordId) ?? 0;
-  const coverage = context?.coverage.get(recordId);
   const status = error
     ? "Couldn't refresh suggestion counts. Showing known results."
-    : publicationCoverageMessage(coverage);
+    : null;
   return (
     <span className="inline-flex min-w-0 items-center gap-1">
       <span className="min-w-0">{children}</span>

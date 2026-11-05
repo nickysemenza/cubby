@@ -46,7 +46,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { assessment, assessmentState } from "~/server/db/schema";
+import { suggestionTable } from "~/server/db/schema";
 import {
   prepareFinancialStatementPreview,
   previewFinancialTransactionImport,
@@ -66,6 +66,7 @@ import { transactionImportMembers } from "~/server/domains/transaction-import/re
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  type SuggestionStateRow,
   transitionAssessmentState,
   transitionAssessmentStates,
 } from "~/server/generic/assessment/repo/assessment-state";
@@ -1381,7 +1382,7 @@ export async function refreshTransferPairStatements(
   const pending = sql`family = ${assessmentFamily.enum.transfer_pair}
     AND data->>'pairKey' = ${pairKey} AND coalesce((data->>'statementRefreshPending')::boolean, false)`;
   const { rows } = await unwrapDb(db).execute(sql`
-    SELECT 1 FROM "AssessmentState" WHERE ${pending} LIMIT 1
+    SELECT 1 FROM "Suggestion" WHERE ${pending} LIMIT 1
   `);
   if (!rows.length) return false;
   const charges = transferPairSourceCharges(pairKey);
@@ -1400,7 +1401,7 @@ export async function refreshTransferPairStatements(
     const client = getDb(tx);
     await client.execute(pairLock(pairKey));
     const { rows: receipts } = await client.execute<{ id: string }>(sql`
-      SELECT id FROM "AssessmentState" WHERE ${pending} FOR UPDATE
+      SELECT id FROM "Suggestion" WHERE ${pending} FOR UPDATE
     `);
     if (!receipts.length) return false;
     for (const proposal of proposals)
@@ -1414,7 +1415,7 @@ export async function refreshTransferPairStatements(
     await transitionAssessmentStates(
       tx,
       inArray(
-        assessmentState.id,
+        suggestionTable.id,
         receipts.map((receipt) => receipt.id),
       ),
       (row) => ({
@@ -1549,7 +1550,7 @@ export async function countTransferPairStates(
   input: { scope: TransferPairScope; createdBefore: string | null },
 ) {
   const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
-    SELECT count(*)::int AS count FROM "AssessmentState" s
+    SELECT count(*)::int AS count FROM "Suggestion" s
     WHERE ${retireScope(input.scope, input.createdBefore)}
   `);
   return rows[0]?.count ?? 0;
@@ -1638,7 +1639,7 @@ export async function generateTransferPairSuggestionsPage(
       }>(sql`
       SELECT s.id::text AS id, to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",
         s.data->>'pairKey' AS "pairKey", s.active, s.status
-      FROM "AssessmentState" s
+      FROM "Suggestion" s
       WHERE ${retireScope(scope, input.createdBefore)}
         ${after.after ? sql`AND (s."createdAt", s.id) > (${after.after.createdAt}::timestamp, ${after.after.id}::uuid)` : sql``}
       ORDER BY s."createdAt", s.id LIMIT ${limit + 1}
@@ -1695,9 +1696,9 @@ export async function generateTransferPairSuggestionsPage(
               const retiredRows = await transitionAssessmentStates(
                 tx,
                 and(
-                  eq(assessmentState.id, row.id),
-                  eq(assessmentState.active, true),
-                  eq(assessmentState.status, "pending"),
+                  eq(suggestionTable.id, row.id),
+                  eq(suggestionTable.active, true),
+                  eq(suggestionTable.status, "pending"),
                 ),
                 { active: false, status: "superseded" },
                 { kind: "transfer_pair_out_of_scope" },
@@ -1982,8 +1983,8 @@ async function storedPairs(
     data: unknown;
     judgment: unknown;
   }>(sql`
-    SELECT s.id::text AS id, s.fingerprint, s.data, a.judgment
-    FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
+    SELECT s.id::text AS id, s.fingerprint, s.data, s.judgment
+    FROM "Suggestion" s
     WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.active
       ${status === "pending" ? sql`AND s.status = ${suggestionStatus.enum.pending}` : sql``}
       AND ${where}
@@ -2221,12 +2222,12 @@ export async function applyTransferPair(
     // Every other pending pair naming either leg lost it.
     await transitionAssessmentStates(
       tx,
-      sql`${assessmentState.family} = ${assessmentFamily.enum.transfer_pair} AND ${assessmentState.active} AND ${assessmentState.status} = ${suggestionStatus.enum.pending}
-        AND ${assessmentState.data}->'legKeys' ?| ARRAY[${sql.join(
+      sql`${suggestionTable.family} = ${assessmentFamily.enum.transfer_pair} AND ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}
+        AND ${suggestionTable.data}->'legKeys' ?| ARRAY[${sql.join(
           legKeys.map((key) => sql`${key}`),
           sql`, `,
         )}]::text[]
-        ${input.stateId ? sql`AND ${assessmentState.id} <> ${input.stateId}::uuid` : sql``}`,
+        ${input.stateId ? sql`AND ${suggestionTable.id} <> ${input.stateId}::uuid` : sql``}`,
       { active: false, status: "superseded" },
       { kind: "transfer_pair_leg_taken" },
     );
@@ -2243,15 +2244,18 @@ export async function applyTransferPair(
 export async function applyTransferPairSuggestion(
   db: Database,
   context: EntityKernelContext,
-  state: typeof assessmentState.$inferSelect,
+  state: SuggestionStateRow,
   input: Pick<z.infer<typeof assessmentReviewInput>, "expectedFingerprint">,
 ) {
   return withTransactionDatabase(db, async (tx) => {
     await assertWorkflowEffect(tx);
     const [prediction] = await getDb(tx)
-      .select({ subject: assessment.subject, judgment: assessment.judgment })
-      .from(assessment)
-      .where(eq(assessment.id, state.id))
+      .select({
+        subject: suggestionTable.subject,
+        judgment: suggestionTable.judgment,
+      })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, state.id))
       .limit(1);
     const subject = assessmentSubjects.transfer_pair.parse(prediction?.subject);
     const published = transferPairJudgment.parse(prediction?.judgment);

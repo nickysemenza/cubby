@@ -344,6 +344,16 @@ export const feedbackEvent = z.object({
   metadata: z.json().nullable().default(null),
   projection: assessmentProjectionPatch.nullable().default(null),
 });
+/**
+ * One retained decision on a Suggestion: a member's verdict, an evaluation grade
+ * or an automatic application receipt. Corrected null stays distinct from no
+ * correction, and an event is identified by its operation within its Suggestion.
+ */
+export const suggestionDecision = feedbackEvent
+  .omit({ assessmentId: true, projection: true })
+  .extend({ id: z.guid(), createdAt: z.iso.datetime() });
+export type SuggestionDecision = z.infer<typeof suggestionDecision>;
+
 export const assessmentReviewInput = feedbackEvent
   .omit({
     assessmentId: true,

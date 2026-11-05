@@ -8,8 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
-  assessment,
-  assessmentState,
+  suggestionTable,
   entityAttachment,
   entityExternalId,
   inventoryEntry,
@@ -528,22 +527,28 @@ describe("mergeProducts", () => {
         sourceUrls: ["https://example.com/b"],
       });
 
-      const beforeHistory = await getDb(ctx.db)
-        .select()
-        .from(assessment)
-        .where(eq(assessment.family, "product_pair"))
-        .orderBy(asc(assessment.id));
+      // Merging moves the current target; published evidence and decisions stay.
+      const retainedHistory = () =>
+        getDb(ctx.db)
+          .select({
+            id: suggestionTable.id,
+            publicationKey: suggestionTable.publicationKey,
+            subject: suggestionTable.subject,
+            judgment: suggestionTable.judgment,
+            evidence: suggestionTable.evidence,
+            decisions: suggestionTable.decisions,
+          })
+          .from(suggestionTable)
+          .where(eq(suggestionTable.family, "product_pair"))
+          .orderBy(asc(suggestionTable.id));
+      const beforeHistory = await retainedHistory();
       await mergeProducts(
         ctx.db,
         { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
         TEST_ACTOR,
       );
 
-      const history = await getDb(ctx.db)
-        .select()
-        .from(assessment)
-        .where(eq(assessment.family, "product_pair"))
-        .orderBy(asc(assessment.id));
+      const history = await retainedHistory();
       expect(history).toHaveLength(4);
       expect(history).toEqual(beforeHistory);
       expect(
@@ -555,8 +560,8 @@ describe("mergeProducts", () => {
       ).toBe(true);
       const states = await getDb(ctx.db)
         .select()
-        .from(assessmentState)
-        .where(eq(assessmentState.family, "product_pair"));
+        .from(suggestionTable)
+        .where(eq(suggestionTable.family, "product_pair"));
       const [pairA, pairB] = [keeper.id, third.id].sort();
       expect(states.find((row) => row.id === thirdPair.id)).toMatchObject({
         recordId: pairA,

@@ -427,6 +427,7 @@ export const { definition, readSchemas } = defineEntityModel({
 
   search: false,
   capabilities: {
+    suggestions: ["statement_transaction"],
     images: { storage: false },
     countable: false,
     delete: { mode: "soft", bulk: true },

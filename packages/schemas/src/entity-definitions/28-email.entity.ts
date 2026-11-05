@@ -1036,19 +1036,19 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         // Retired captures keep their positions, so pending tickets still expand.
         {
-          table: "Assessment",
+          table: "Suggestion",
           capture: false,
           match: { subject: "id" },
           json: { key: "recordId" },
           where: { family: "email_relevance" },
         },
         {
-          table: "Feedback",
+          table: "Suggestion",
           capture: false,
-          match: { assessmentId: "id" },
+          match: { id: "id" },
           path: [
             {
-              table: "Assessment",
+              table: "Suggestion",
               from: "id",
               to: "subject",
               jsonKey: "recordId",

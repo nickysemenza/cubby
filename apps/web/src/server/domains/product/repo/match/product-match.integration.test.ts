@@ -1,4 +1,3 @@
-import { ASSESSMENT_READ_TARGET } from "@cubby/schemas/assessment-read-publication";
 import {
   type ProductShortcode,
   parseShortcodeFor,
@@ -11,13 +10,10 @@ import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
-import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
 import { getDb } from "~/server/db/helpers";
 import {
-  assessment,
-  assessmentState,
+  suggestionTable,
   entityAttachment,
-  feedback,
   inventoryEntry,
   product as productTable,
 } from "~/server/db/schema";
@@ -41,9 +37,6 @@ import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { isDerivedSink } from "~/server/generic/derived/repo/compute";
-import { derivedFanoutSourceScope } from "~/server/generic/derived/repo/drain";
-import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
@@ -58,7 +51,7 @@ import {
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { derivedComputes } from "~/server/workflows/derived-computes";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 type Category = Parameters<typeof taxonomyShortcode>[0];
 
@@ -114,49 +107,6 @@ describe("product match queue", () => {
     expect(
       (await getProductMatchQueue(ctx.db, { productId: first.id })).items,
     ).toHaveLength(1);
-    // A first publication has no reverse dependency yet. The current attachment
-    // path must still observe image work as relevant to this pending pair.
-    const [pair] = await getDb(ctx.db)
-      .select({ id: assessmentState.id })
-      .from(assessmentState)
-      .where(eq(assessmentState.family, "product_pair"));
-    const declaration = storedDerivedDeclarations().find(
-      (entry) => entry.target === ASSESSMENT_READ_TARGET,
-    );
-    const adapter = derivedComputes[ASSESSMENT_READ_TARGET];
-    if (
-      !pair ||
-      declaration?.kind !== "internalRecord" ||
-      !adapter ||
-      !isDerivedSink(adapter) ||
-      !adapter.fanoutSelections
-    )
-      throw new Error("Synthetic pair publication registration missing");
-    const imageInput = declaration.inputs.findIndex(
-      (input) => input.table === "Image" && input.selection?.key === "product",
-    );
-    expect(imageInput).toBeGreaterThanOrEqual(0);
-    const target = `${ASSESSMENT_READ_TARGET}@${imageInput}`;
-    expect(
-      (await readWorkItems(ctx.db, { target })).map((work) => work.ref),
-    ).toContain(image.id);
-    const sourceScope = derivedFanoutSourceScope({
-      declaration,
-      selections: adapter.fanoutSelections,
-      dependentIds: [pair.id],
-      sourceRefs: new Map(),
-    });
-    const unrelated = await createImageFixture(
-      ctx.db,
-      "synthetic-unrelated-pair-image",
-    );
-    expect(
-      (
-        await getDb(ctx.db).execute(sql`SELECT
-      ${sourceScope({ target: sql`${target}`, ref: sql`${image.id}::uuid` })} AS related,
-      ${sourceScope({ target: sql`${target}`, ref: sql`${unrelated.id}::uuid` })} AS unrelated`)
-      ).rows,
-    ).toEqual([{ related: true, unrelated: false }]);
   });
 
   it("refuses prepared pair publication when identity policy changes before its transaction", async () => {
@@ -397,10 +347,7 @@ describe("product match queue", () => {
       },
     };
     const applied = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
-    const appliedHistory = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, pair.id));
+    const appliedHistory = await readSuggestionDecisions(ctx.db, pair.id);
     expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
       applied,
     );
@@ -425,10 +372,7 @@ describe("product match queue", () => {
         },
       ),
     ).toEqual({ ok: true });
-    const receipts = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, pair.id));
+    const receipts = await readSuggestionDecisions(ctx.db, pair.id);
     expect(receipts).toEqual(appliedHistory);
     expect(receipts.filter((row) => row.receipt !== null)).toHaveLength(2);
     expect(
@@ -570,12 +514,12 @@ describe("product_enrichment.propose_product_match", () => {
     });
     const states = await getDb(ctx.db)
       .select({
-        active: assessmentState.active,
-        status: assessmentState.status,
+        active: suggestionTable.active,
+        status: suggestionTable.status,
       })
-      .from(assessmentState)
-      .where(eq(assessmentState.family, "product_pair"))
-      .orderBy(assessmentState.createdAt);
+      .from(suggestionTable)
+      .where(eq(suggestionTable.family, "product_pair"))
+      .orderBy(suggestionTable.createdAt);
     expect(states).toEqual([
       { active: false, status: "superseded" },
       { active: true, status: "pending" },
@@ -599,9 +543,9 @@ describe("product_enrichment.propose_product_match", () => {
       .set({ aliases: ["Synthetic enriched alias"] })
       .where(eq(productTable.id, vendorId!));
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ fingerprint: null })
-      .where(eq(assessmentState.id, pair.id));
+      .where(eq(suggestionTable.id, pair.id));
     const [row] = await listProductMatchRows(ctx.db, undefined, {
       reviewableOnly: true,
     });
@@ -757,15 +701,15 @@ describe("product match review surfaces", () => {
     });
     // PostgreSQL accepts braced UUID input, but the historical text join did not.
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set({
-        subject: sql`jsonb_set(${assessment.subject}, '{otherId}', to_jsonb('{' || (${assessment.subject}->>'otherId') || '}'))`,
+        subject: sql`jsonb_set(${suggestionTable.subject}, '{otherId}', to_jsonb('{' || (${suggestionTable.subject}->>'otherId') || '}'))`,
       })
-      .where(eq(assessment.id, weakPublication.id));
+      .where(eq(suggestionTable.id, weakPublication.id));
     const [primary] = await getDb(ctx.db)
-      .select({ recordId: assessmentState.recordId })
-      .from(assessmentState)
-      .where(eq(assessmentState.id, weakPublication.id));
+      .select({ recordId: suggestionTable.recordId })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, weakPublication.id));
     const primaryProduct = [anchor, weak!].find(
       (row) => row.entityId === primary?.recordId,
     );

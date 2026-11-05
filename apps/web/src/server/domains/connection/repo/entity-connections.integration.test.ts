@@ -7,8 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
-  assessment,
-  assessmentState,
+  suggestionTable,
   product,
   entityLink,
   expense,
@@ -137,12 +136,10 @@ describe("stored connection evidence", () => {
       ...candidate,
       target: { entityKind: "expense", entityId: unrelated.output.id },
     });
-    // Selecting an older review still loads the edge's current competitor;
-    // narrowing to the old ID alone would change the reader's winner.
     const bounded = await readEntityConnectionsBatch(
       ctx.db,
       [candidate.source],
-      [proposal.review.assessmentId, proposal.review.assessmentId],
+      [last!.review.assessmentId, last!.review.assessmentId],
     );
     expect(bounded[0]?.map((entry) => entry.review.assessmentId)).toEqual([
       last?.review.assessmentId,
@@ -153,8 +150,8 @@ describe("stored connection evidence", () => {
     if (!last) throw new Error("Synthetic publication is missing");
     const [current] = await getDb(ctx.db)
       .select()
-      .from(assessment)
-      .where(eq(assessment.id, last.review.assessmentId));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, last.review.assessmentId));
     if (!current) throw new Error("Synthetic Assessment is missing");
     const compete = (publicationKey: string, fingerprint: string) =>
       publishAssessment(
@@ -222,8 +219,8 @@ describe("stored connection evidence", () => {
     const { candidate, proposal, item } = await fixture();
     const [original] = await getDb(ctx.db)
       .select()
-      .from(assessment)
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     if (!original) throw new Error("Synthetic Assessment is missing");
     const oversized = await publishAssessment(
       ctx.db,
@@ -320,7 +317,7 @@ describe("stored connection evidence", () => {
           assertConnectionFieldFresh(transactionDb, stored.id),
         );
         await getDb(ctx.db)
-          .update(assessmentState)
+          .update(suggestionTable)
           .set({
             data: {
               connectionEvidence: {
@@ -330,7 +327,7 @@ describe("stored connection evidence", () => {
               },
             },
           })
-          .where(eq(assessmentState.id, stored.id));
+          .where(eq(suggestionTable.id, stored.id));
         expect(
           (await readEntityConnections(db, candidate.source)).map(
             (row) => row.review.assessmentId,
@@ -390,8 +387,8 @@ describe("stored connection evidence", () => {
       .where(eq(expense.id, charge.entityId));
     const [original] = await getDb(ctx.db)
       .select()
-      .from(assessment)
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     if (!original) throw new Error("Synthetic original Assessment is missing");
     const evidence = {
       version: 1,
@@ -452,8 +449,8 @@ describe("stored connection evidence", () => {
     );
     const [purchasePrediction] = await getDb(ctx.db)
       .select()
-      .from(assessment)
-      .where(eq(assessment.id, pending.review.assessmentId));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, pending.review.assessmentId));
     if (!purchasePrediction)
       throw new Error("Synthetic purchase Assessment is missing");
     const confirmedEvidence = {
@@ -546,8 +543,8 @@ describe("stored connection evidence", () => {
     expect(changed.review.assessmentId).not.toBe(proposal.review.assessmentId);
     const [retired] = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.id, proposal.review.assessmentId));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     expect(retired).toMatchObject({ active: false, status: "superseded" });
     expect(
       (await readEntityConnections(ctx.db, candidate.source)).map(
@@ -560,8 +557,8 @@ describe("stored connection evidence", () => {
     const { candidate, proposal, item } = await fixture();
     const [state] = await getDb(ctx.db)
       .select()
-      .from(assessment)
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     if (!state) throw new Error("Missing synthetic Assessment");
     await deleteThroughKernel(ctx.db, ctx.actor, "product", [item.id]);
     await expect(
@@ -695,8 +692,8 @@ describe("stored connection evidence", () => {
     expect(await readEntityConnections(ctx.db, candidate.source)).toEqual([]);
     const [preference] = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.id, proposal.review.assessmentId));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     expect(preference?.active).toBe(true);
   });
 });

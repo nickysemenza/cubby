@@ -33,10 +33,7 @@ import {
   uuidArrayParam,
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import {
-  run as runTable,
-  assessmentState as suggestionTable,
-} from "~/server/db/schema";
+import { run as runTable, suggestionTable } from "~/server/db/schema";
 import {
   captureConnectionBasis,
   connectionBasisIsCurrent,
@@ -53,12 +50,16 @@ import {
   matchedRulesOf,
   recordFeedback,
 } from "~/server/generic/assessment/repo/assessment";
-import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
+import {
+  type SuggestionStateRow,
+  suggestionStateColumns,
+  suggestionRecordId,
+  transitionAssessmentState,
+} from "~/server/generic/assessment/repo/assessment-state";
 import {
   fieldInputFingerprint,
   fieldInputFingerprintIfLive,
   readFieldInputs,
-  type FieldInputRead,
   fenceFieldInputsAtCommit,
 } from "~/server/generic/assessment/repo/field-input-fence";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
@@ -100,10 +101,7 @@ const suggestionRowSchema = z.object({
 });
 
 /** Public rows name their Run by shortcode. */
-function reviewableRow(
-  suggestion: typeof suggestionTable.$inferSelect,
-  runCode: string | null,
-) {
+function reviewableRow(suggestion: SuggestionStateRow, runCode: string | null) {
   return [
     {
       ...suggestionRowSchema.parse(suggestion),
@@ -112,7 +110,8 @@ function reviewableRow(
   ];
 }
 /** Only served Assessments are member review candidates. */
-const reviewableSuggestionSql = sql`EXISTS (SELECT 1 FROM "Assessment" prediction WHERE prediction.id=${suggestionTable.id} AND prediction.served)`;
+// An answer for an unsaved record has nothing to review against.
+const reviewableSuggestionSql = sql`${suggestionTable.served} AND ${suggestionTable.recordId} IS NOT NULL`;
 
 /** Pending review queue, or reviewed history by `status` (the label set a
  * decision eval replays). Every filter composes, including a list page's
@@ -160,7 +159,7 @@ export async function listSuggestions(
   conditions.push(reviewableSuggestionSql);
   const rows = await getDb(db)
     .select({
-      suggestion: suggestionTable,
+      suggestion: suggestionStateColumns,
       runInput: runTable.input,
       runCode: runTable.shortcode,
     })
@@ -178,42 +177,31 @@ export async function listSuggestions(
 }
 
 type StoredFieldRow = {
-  suggestion: typeof suggestionTable.$inferSelect;
+  suggestion: SuggestionStateRow;
   runCode: string | null;
 };
 
 /** Public queue rows: records and receipt Runs named by shortcode. */
-async function presentFieldRows(
-  db: Database,
-  rows: StoredFieldRow[],
-  observeInputs?: (id: string, inputs: FieldInputRead) => void,
-) {
-  const ordinary = rows.filter(({ suggestion }) => {
-    if (suggestion.status !== "pending") return false;
+async function presentFieldRows(db: Database, rows: StoredFieldRow[]) {
+  const ordinary = rows.flatMap(({ suggestion }) => {
+    if (suggestion.status !== "pending" || suggestion.recordId === null)
+      return [];
     const data = z.record(z.string(), z.json()).parse(suggestion.data);
-    return (
-      !("connectionEvidence" in data) &&
-      (observeInputs !== undefined ||
-        typeof data.liveInputFingerprint === "string")
-    );
+    return !("connectionEvidence" in data) &&
+      typeof data.liveInputFingerprint === "string"
+      ? [{ ...suggestion, recordId: suggestion.recordId }]
+      : [];
   });
   const current = await readFieldInputs(
     db,
-    ordinary.map(({ suggestion }) => ({
-      entity: suggestion.entity,
-      recordId: suggestion.recordId,
-      field: suggestion.field,
+    ordinary.map(({ entity, recordId, field }) => ({
+      entity,
+      recordId,
+      field,
     })),
   );
-  for (const [index, row] of ordinary.entries()) {
-    const read = current[index];
-    if (read) observeInputs?.(row.suggestion.id, read);
-  }
   const fingerprints = new Map(
-    ordinary.map(({ suggestion }, index) => [
-      suggestion.id,
-      current[index]?.fingerprint,
-    ]),
+    ordinary.map(({ id }, index) => [id, current[index]?.fingerprint]),
   );
   const currentRows: StoredFieldRow[] = [];
   for (const row of rows) {
@@ -296,11 +284,10 @@ async function presentFieldRows(
 export async function readFieldSuggestions(
   db: Database,
   ids: readonly string[],
-  observeInputs?: (id: string, inputs: FieldInputRead) => void,
 ) {
   if (!ids.length) return [];
   const rows = await getDb(db)
-    .select({ suggestion: suggestionTable, runCode: runTable.shortcode })
+    .select({ suggestion: suggestionStateColumns, runCode: runTable.shortcode })
     .from(suggestionTable)
     .leftJoin(runTable, eq(runTable.id, suggestionTable.runId))
     .where(
@@ -310,7 +297,7 @@ export async function readFieldSuggestions(
         reviewableSuggestionSql,
       ),
     );
-  return presentFieldRows(db, rows, observeInputs);
+  return presentFieldRows(db, rows);
 }
 
 /** The list facts of every reviewable field suggestion for a roster, entity or Run. */
@@ -323,12 +310,7 @@ export async function fieldSuggestionKeys(
     runId?: string;
     assessmentIds?: readonly string[];
   },
-  observeInputs?: (id: string, inputs: FieldInputRead) => void,
 ) {
-  if (observeInputs && scope.assessmentIds === undefined)
-    throw new Error(
-      "Field publication observations require scoped Assessment ids",
-    );
   const conditions: (SQL | undefined)[] = [
     eq(suggestionTable.family, "field"),
     eq(suggestionTable.active, true),
@@ -362,15 +344,6 @@ export async function fieldSuggestionKeys(
     .from(suggestionTable)
     .leftJoin(runTable, eq(runTable.id, suggestionTable.runId))
     .where(and(...conditions));
-  if (observeInputs && scope.status === "pending") {
-    // Automatic receipts hide these keys before hydration, but their retained
-    // publication still needs source observations. Other keys hydrate once.
-    await readFieldSuggestions(
-      db,
-      rows.filter((row) => row.automaticRule !== null).map((row) => row.id),
-      observeInputs,
-    );
-  }
   return rows;
 }
 
@@ -519,9 +492,10 @@ async function applySuggestionValue(
 async function automaticFieldFillRefusal(
   db: Database,
   context: EntityKernelContext,
-  row: typeof suggestionTable.$inferSelect,
+  row: SuggestionStateRow,
 ) {
   const entity = fieldSuggestionsInput.shape.entity.parse(row.entity);
+  const recordId = suggestionRecordId(row);
   const policy = entityFieldByKey(entity, row.field)?.control?.suggest;
   const empty = (value: unknown) => value == null || value === "";
   if (
@@ -589,7 +563,7 @@ async function automaticFieldFillRefusal(
   )
     return "Automatic fill requires supporting field evidence";
   // A saved clear is intentional too; unchanged saves advance the fingerprint.
-  if (await latestFieldWrite(db, entity, row.recordId, row.field))
+  if (await latestFieldWrite(db, entity, recordId, row.field))
     return "Automatic fill preserves an existing field decision";
   const rejected = await getDb(db)
     .select({ value: suggestionTable.suggestedValue })
@@ -598,7 +572,7 @@ async function automaticFieldFillRefusal(
       and(
         eq(suggestionTable.family, "field"),
         eq(suggestionTable.entity, row.entity),
-        eq(suggestionTable.recordId, row.recordId),
+        eq(suggestionTable.recordId, recordId),
         eq(suggestionTable.field, row.field),
         eq(suggestionTable.status, "rejected"),
       ),
@@ -621,12 +595,12 @@ export async function canAutomaticallyFillField(
   id: string,
 ) {
   const [row] = await getDb(db)
-    .select()
+    .select(suggestionStateColumns)
     .from(suggestionTable)
     .where(
       and(eq(suggestionTable.id, id), eq(suggestionTable.status, "pending")),
     );
-  if (!row) return false;
+  if (!row?.recordId) return false;
   const fence = z
     .object({ liveInputFingerprint: z.string() })
     .safeParse(row.data);
@@ -653,7 +627,7 @@ export async function acceptSuggestion(
   const { id } = rowIdInput.parse(input);
   return withTransactionDatabase(db, async (transactionDb) => {
     const [row] = await getDb(transactionDb)
-      .select()
+      .select(suggestionStateColumns)
       .from(suggestionTable)
       .where(
         and(eq(suggestionTable.id, id), eq(suggestionTable.status, "pending")),
@@ -740,7 +714,7 @@ export async function applyFieldCorrection(
       throw new Error("Applying a corrected value requires the entity context");
     return withTransactionDatabase(db, async (transactionDb) => {
       const [row] = await getDb(transactionDb)
-        .select()
+        .select(suggestionStateColumns)
         .from(suggestionTable)
         .where(
           and(

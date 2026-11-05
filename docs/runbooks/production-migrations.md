@@ -94,6 +94,49 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Suggestion table (0080)
+
+`0080_suggestion_table` creates `Suggestion` from `Assessment`, `AssessmentState` and
+`Feedback`, then moves those three tables to the `archive` schema with their foreign
+keys, triggers and secondary indexes removed. It never drops them. It runs in one
+transaction under `lock_timeout` 5s and takes every table lock before the copy:
+`AuditLog` and `QualitySnapshot` trigger drops, then ACCESS EXCLUSIVE on Run,
+LedgerParty and AiEvaluation, the three ledgers and the four `AssessmentRead` tables.
+The parents need it because dropping a foreign key locks the referenced table too.
+Contention therefore fails within seconds and a retry repeats no copy.
+
+Reading wide connection evidence dominates its run time: each of about 32,000 rows is
+read twice, once to copy and once to compare, at about 10 ms a read when sampled
+read-only. Every reader and writer of those tables waits for about ten minutes, which
+stalls most of the app. That duration is an estimate; no run at 2 CU has measured it,
+so record the real one at cutover.
+
+The budget is about 2 minutes of build and deploy, the copy, and retries. The runner
+retries a lock timeout or deadlock five times, 15 seconds apart: about 2 minutes when
+one lock contends, about 7 if every lock waits its full timeout on every attempt.
+`deploy.yaml` allows 25 minutes because the copy is unmeasured. A job killed
+mid-copy rolls back and preserves everything, but leaves the Worker undeployed.
+
+It carries every row with a decision, suppression, confirmation or acceptance
+receipt, or status applied or rejected; every field, product pair, transfer pair and
+image description row, including answers for an unsaved record, which never had
+State; active statement rows and the newest row of each charge;
+active connections except `transaction-purchase` and `transaction-refund`. Projection
+events do not carry. It compares each carried row and each retained event by hash,
+fails on any unaccounted Feedback category, and verifies the archive by catalog
+query. `db:check` covers only `public`.
+
+After release, read back the counts below against the pre-release aggregates. The
+archive stays until the owner decides otherwise. Tickets named
+`assessment.reviewFacts%` stay unclaimed until the `WorkItem` drop.
+
+```sql
+SELECT family, status, active, count(*) FROM "Suggestion" GROUP BY 1, 2, 3;
+SELECT count(*) FROM "Suggestion" s, jsonb_array_elements(s.decisions);
+SELECT count(*) FROM archive."Assessment";
+SELECT count(*) FROM archive."Feedback";
+```
+
 ## Mail decision owners (0074)
 
 `0074_mail_decision_owners` moves `email_link`, `email_relevance`,

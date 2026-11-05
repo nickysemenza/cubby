@@ -1,14 +1,11 @@
-import { ASSESSMENT_READ_TARGET } from "@cubby/schemas/assessment-read-publication";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
 import { getDb } from "~/server/db/helpers";
 import { purchase as purchaseTable, vendorAccount } from "~/server/db/schema";
 import {
-  assessment,
   email,
   importSourceClaim,
   importSourceOrder,
@@ -22,8 +19,6 @@ import { connectionSourceFingerprint } from "~/server/domains/run/repo/connectio
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { assessmentReadSourceSelection } from "~/server/generic/assessment/repo/read-publication";
-import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 // Failure modes: discovery grants operational link authority; inverse discovery
 // misses retained events; subject similarity invents identity; a changed checksum
@@ -126,19 +121,6 @@ describe("fresh retained Email connection recommendations", () => {
         (p) => p.review.assessmentId,
       ),
     ).toContain(proposal.review.assessmentId);
-    const [stored] = await getDb(ctx.db)
-      .select()
-      .from(assessment)
-      .where(eq(assessment.id, proposal.review.assessmentId));
-    expect(stored?.evidence).toMatchObject({
-      basis: {
-        dependencies: {
-          originalId: f.original.id,
-          eventId: f.event.id,
-          expectedChecksum: f.message.checksum,
-        },
-      },
-    });
   });
 
   it("hides retained recommendations when event or checksum evidence changes", async () => {
@@ -148,40 +130,11 @@ describe("fresh retained Email connection recommendations", () => {
     const proposal = await publishEntityConnection(ctx.db, candidate);
     expect(await readEntityConnections(ctx.db, f.source)).toHaveLength(1);
     if (!proposal) throw new Error("Synthetic Email proposal missing");
-    const affected = await getDb(ctx.db).execute(
-      assessmentReadSourceSelection(
-        "emailPurchase",
-        sql`SELECT ${f.purchase.id}::uuid AS id`,
-      ),
-    );
-    expect(affected.rows.map((row) => row.id)).toContain(
-      proposal.review.assessmentId,
-    );
-    const declaration = storedDerivedDeclarations().find(
-      (entry) => entry.target === ASSESSMENT_READ_TARGET,
-    );
-    const index = declaration?.inputs.findIndex(
-      (input) =>
-        input.table === "OrderMailEvent" && input.selection?.key === "email",
-    );
-    if (index === undefined || index < 0)
-      throw new Error("Synthetic Email capture missing");
-    const target = `${ASSESSMENT_READ_TARGET}@${index}`;
-    const [before] = await readWorkItems(ctx.db, {
-      target,
-      refs: [f.original.id],
-    });
-    if (!before) throw new Error("Synthetic Email observation missing");
     await getDb(ctx.db)
       .update(orderMailEvent)
       .set({ sourceKey: "synthetic-connection-edited-key" })
       .where(eq(orderMailEvent.id, f.event.id));
     expect(await readEntityConnections(ctx.db, f.source)).toEqual([]);
-    const [after] = await readWorkItems(ctx.db, {
-      target,
-      refs: [f.original.id],
-    });
-    expect(after?.ticket).not.toBe(before.ticket);
     await getDb(ctx.db)
       .update(orderMailEvent)
       .set({ sourceKey: f.event.sourceKey })

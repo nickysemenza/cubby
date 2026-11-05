@@ -2,22 +2,12 @@ import { suggestionStatus } from "@cubby/schemas/ai";
 import {
   assessmentFamily,
   assessmentJudgments,
-  assessmentProducer,
   mailDecisionFamily,
   type AssessmentFamily,
   type MailDecisionFamily,
 } from "@cubby/schemas/assessment";
-import {
-  assessmentReadMembership,
-  assessmentReadDependency,
-  assessmentReadScopedSourceKind,
-  type AssessmentReadDependency,
-  type AssessmentReadMembership,
-} from "@cubby/schemas/assessment-read-publication";
 import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-family";
-import { SYSTEM_USER_ID } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
-import { connectionCandidate } from "@cubby/schemas/entity-connections";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { entityExternalIdKind } from "@cubby/schemas/external-id";
@@ -27,11 +17,7 @@ import {
   statementTransactionAction,
   statementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
-import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
-import {
-  suggestionListFamily,
-  suggestionRecordRef,
-} from "@cubby/schemas/suggestion-list";
+import { suggestionRecordRef } from "@cubby/schemas/suggestion-list";
 import { parseShortcode } from "@cubby/shared";
 import {
   and,
@@ -39,7 +25,6 @@ import {
   inArray,
   isNotNull,
   ne,
-  exists,
   or,
   sql,
   type SQL,
@@ -49,21 +34,10 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { hasTextSql } from "~/server/db/computed/text-whitespace";
-import { textHashRefSql } from "~/server/db/derived-source-ref";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import {
-  outer,
-  related,
-  type RelatedColumns,
-} from "~/server/db/helpers/related";
-import {
-  assessment,
-  assessmentState,
-  entityIdentity,
-  feedback,
-  run,
-} from "~/server/db/schema";
+import { outer, type RelatedColumns } from "~/server/db/helpers/related";
+import { suggestionTable, run } from "~/server/db/schema";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import {
@@ -73,8 +47,8 @@ import {
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 export { pendingRecommendationEligibility } from "~/server/generic/assessment/repo/pending-admission";
 
-const reviewAssessment = alias(assessment, "a");
-const reviewState = alias(assessmentState, "s");
+const reviewAssessment = alias(suggestionTable, "s");
+const reviewState = reviewAssessment;
 
 const referenceEntity = z.enum(shortcodeEntities);
 const entities = referenceEntity.enum;
@@ -83,18 +57,7 @@ const ref = (entity: SQL, id: SQL) =>
   sql`jsonb_build_object('entity', (${entity})::text, 'id', (${id})::text)`;
 const primary = ref(sql`s.entity`, sql`s."recordId"::text`);
 const one = sql`jsonb_build_array(${primary})`;
-const receipt = alias(feedback, "receipt");
 const reviewQueryBuilder = new QueryBuilder();
-const receiptKind = sql<string>`${receipt.metadata}->>${assessmentProducer.keyof().enum.kind}`;
-const feedbackForAssessment = (predicate: SQL | undefined, bounded = false) => {
-  const query = reviewQueryBuilder
-    .select({ id: receipt.id })
-    .from(receipt)
-    .where(and(eq(receipt.assessmentId, reviewAssessment.id), predicate));
-  // Scoped readers must not turn a few identity probes into a global receipt hash.
-  // Drizzle omits a numeric zero offset, so this barrier must be literal SQL.
-  return bounded ? sql`(${query.getSQL()} OFFSET 0)` : query;
-};
 /** Match stored UUID/shortcode references without constructing display JSON. */
 function relatedRecordMatch(
   scope: AssessmentRecordScope,
@@ -183,13 +146,13 @@ const fieldRecords = (requested?: readonly string[]) =>
 
 const endpoint = (end: "source" | "target") =>
   ref(
-    sql`a.evidence->'candidate'->${end}->>'entityKind'`,
-    sql`a.evidence->'candidate'->${end}->>'entityId'`,
+    sql`s.evidence->'candidate'->${end}->>'entityKind'`,
+    sql`s.evidence->'candidate'->${end}->>'entityId'`,
   );
 const leg = (end: "outflow" | "inflow") => sql`jsonb_build_array(
-  ${ref(sql`${entities.financialAccount}`, sql`a.judgment->${end}->>'accountId'`)},
-  ${ref(sql`${entities.financialTransaction}`, sql`a.judgment->${end}->>'transactionId'`)},
-  ${ref(sql`${entities.ledgerParty}`, sql`a.judgment->${end}->'owner'->>'id'`)})`;
+  ${ref(sql`${entities.financialAccount}`, sql`s.judgment->${end}->>'accountId'`)},
+  ${ref(sql`${entities.financialTransaction}`, sql`s.judgment->${end}->>'transactionId'`)},
+  ${ref(sql`${entities.ledgerParty}`, sql`s.judgment->${end}->'owner'->>'id'`)})`;
 
 const statementSettlementRelation = sql`"EntityExternalId" evidence
   JOIN "FinancialTransaction" settled ON settled.id=evidence."entityId" AND ${notDeleted("settled")}
@@ -200,8 +163,8 @@ const statementSettlementRelation = sql`"EntityExternalId" evidence
 const statementSettlementFrom = sql`FROM ${statementSettlementRelation}`;
 const statementSettlementEligibility = sql`evidence.kind=${entityExternalIdKind.enum.settlement_ref} AND ${notDeleted("evidence")}`;
 const statementSettlementScope = sql`${statementSettlementEligibility}
-  AND evidence.source=a.judgment #>> '{create,sourceRef,source}'
-  AND evidence."externalId"=a.judgment #>> '{create,sourceRef,externalId}'`;
+  AND evidence.source=s.judgment #>> '{create,sourceRef,source}'
+  AND evidence."externalId"=s.judgment #>> '{create,sourceRef,externalId}'`;
 const statementSettlementRefs = [
   { entity: entities.financialTransaction, id: sql<string>`settled.id` },
   { entity: entities.purchase, id: sql<string>`booked.id` },
@@ -235,20 +198,20 @@ function statementRecordParts(
   add(entities.financialAccount, sql`s.data->>'accountId'`);
   add(
     entities.financialTransaction,
-    sql`a.judgment->${statementTransactionAction.enum.supersede}->>'pendingTransactionId'`,
+    sql`s.judgment->${statementTransactionAction.enum.supersede}->>'pendingTransactionId'`,
   );
   add(
     entities.financialTransaction,
-    sql`a.judgment->${statementTransactionAction.enum.void}->>'transactionId'`,
+    sql`s.judgment->${statementTransactionAction.enum.void}->>'transactionId'`,
   );
-  add(entities.financialTransaction, sql`a.judgment->>'matchedTransactionId'`);
+  add(entities.financialTransaction, sql`s.judgment->>'matchedTransactionId'`);
   add(
     entities.vendor,
-    sql`(SELECT v.id::text FROM "Vendor" v WHERE v.shortcode=a.judgment->${statementTransactionJudgment.keyof().enum.spending}->>'vendorId' AND ${notDeleted("v")})`,
+    sql`(SELECT v.id::text FROM "Vendor" v WHERE v.shortcode=s.judgment->${statementTransactionJudgment.keyof().enum.spending}->>'vendorId' AND ${notDeleted("v")})`,
   );
   add(
     entities.spendingCategory,
-    sql`(SELECT category.id::text FROM "SpendingCategory" category WHERE category.shortcode=a.judgment->${statementTransactionJudgment.keyof().enum.spending}->>'spendingCategoryId' AND ${notDeleted("category")})`,
+    sql`(SELECT category.id::text FROM "SpendingCategory" category WHERE category.shortcode=s.judgment->${statementTransactionJudgment.keyof().enum.spending}->>'spendingCategoryId' AND ${notDeleted("category")})`,
   );
   const related = statementSettlementRefs.filter(
     ({ entity }) => withSettlements && includes(entity),
@@ -264,11 +227,11 @@ function statementRecordParts(
           AND related.id IS NOT NULL), '[]'::jsonb)`);
   if (includes(entities.purchase))
     parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.purchase}`, sql`p.id::text`)})
-        FROM jsonb_array_elements(COALESCE(a.judgment->${statementTransactionJudgment.keyof().enum.spending}->'candidates','[]'::jsonb)) candidate
+        FROM jsonb_array_elements(COALESCE(s.judgment->${statementTransactionJudgment.keyof().enum.spending}->'candidates','[]'::jsonb)) candidate
         JOIN "Purchase" p ON p.shortcode=candidate->>'purchaseId' AND ${notDeleted("p")}), '[]'::jsonb)`);
   if (includes(entities.financialTransaction))
     parts.push(
-      sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.financialTransaction}`, sql`c->>'transactionId'`)}) FROM jsonb_array_elements(a.judgment->'candidates') c), '[]'::jsonb)`,
+      sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.financialTransaction}`, sql`c->>'transactionId'`)}) FROM jsonb_array_elements(s.judgment->'candidates') c), '[]'::jsonb)`,
     );
   return parts;
 }
@@ -279,124 +242,6 @@ function statementRecords(requested?: readonly string[]) {
 }
 
 /** Reference expansion and settlement joins stay owned by the Statement reader. */
-function statementInputRefs() {
-  const { statementCharge, statementRef, referenceCode } =
-    assessmentReadScopedSourceKind.enum;
-  return sql`${statementRecords()}
-    || jsonb_build_array(${ref(sql`${entities.sourceTransactionRecord}`, sql`s."recordId"::text`)})
-    || COALESCE((SELECT jsonb_agg(${ref(sql`${entities.financialAccount}`, sql`account.id::text`)})
-      ${statementSettlementFrom} WHERE ${statementSettlementScope}), '[]'::jsonb)
-    || COALESCE((SELECT jsonb_agg(${ref(sql`${entities.ledgerParty}`, sql`owner_account."ledgerPartyId"::text`)})
-      FROM "FinancialAccount" owner_account WHERE owner_account.id = (s.data->>'accountId')::uuid), '[]'::jsonb)
-    || jsonb_build_array(${ref(sql`${statementCharge}`, sql`${textHashRefSql(sql`s.data->>'chargeKey'`)}::text`)})
-    || COALESCE((SELECT jsonb_agg(${ref(sql`${statementRef}`, sql`${textHashRefSql(sql`source_ref.value`)}::text`)})
-      FROM (
-        SELECT substr(value, strpos(value, ':') + 1) AS value
-        FROM jsonb_array_elements_text(COALESCE(s.data->'refs', '[]'::jsonb)) refs(value)
-        UNION SELECT s.data->>'headRef'
-        UNION SELECT a.judgment #>> '{create,sourceRef,externalId}'
-      ) source_ref WHERE source_ref.value IS NOT NULL), '[]'::jsonb)
-    || COALESCE((SELECT jsonb_agg(${ref(sql`${referenceCode}`, sql`${textHashRefSql(sql`lookup_code.value`)}::text`)})
-      FROM (
-        SELECT a.judgment #>> '{spending,vendorId}' AS value
-        UNION SELECT a.judgment #>> '{spending,spendingCategoryId}'
-        UNION SELECT candidate->>'purchaseId'
-          FROM jsonb_array_elements(COALESCE(a.judgment #> '{spending,candidates}', '[]'::jsonb)) candidate
-      ) lookup_code WHERE lookup_code.value IS NOT NULL), '[]'::jsonb)`;
-}
-
-/** Retained legs include competitors and overlaps that are not browse memberships. */
-function transferInputRefs() {
-  const { outflow, inflow } = assessmentJudgments.transfer_pair.keyof().enum;
-  const { statementCharge, statementRef, referenceCode } =
-    assessmentReadScopedSourceKind.enum;
-  return sql`(WITH legs AS MATERIALIZED (
-    SELECT a.judgment->${outflow} AS value
-    UNION ALL SELECT a.judgment->${inflow}
-    UNION ALL SELECT competitor->'leg'
-      FROM jsonb_array_elements(COALESCE(a.judgment->'competitors', '[]'::jsonb)) competitor
-  ), records AS MATERIALIZED (
-    SELECT value FROM legs
-    UNION ALL SELECT overlap.value FROM legs
-      CROSS JOIN LATERAL jsonb_array_elements(COALESCE(legs.value->'overlaps', '[]'::jsonb)) overlap(value)
-  ), codes AS MATERIALIZED (
-    SELECT ${entities.financialAccount}::text AS entity, value->>'accountId' AS code FROM records
-    UNION SELECT ${entities.financialTransaction}, value->>'transactionId' FROM records
-    UNION SELECT ${entities.ledgerParty}, value #>> '{owner,id}' FROM records
-  ), inputs AS (
-    SELECT ${ref(sql`${referenceCode}`, sql`${textHashRefSql(sql`codes.code`)}::text`)} AS value
-      FROM codes WHERE code IS NOT NULL
-    UNION ALL SELECT ${ref(sql`${entities.financialAccount}`, sql`account.id::text`)}
-      FROM codes JOIN "FinancialAccount" account ON codes.entity = ${entities.financialAccount} AND account.shortcode = codes.code
-    UNION ALL SELECT ${ref(sql`${entities.ledgerParty}`, sql`account."ledgerPartyId"::text`)}
-      FROM codes JOIN "FinancialAccount" account ON codes.entity = ${entities.financialAccount} AND account.shortcode = codes.code
-    UNION ALL SELECT ${ref(sql`${entities.financialTransaction}`, sql`transaction.id::text`)}
-      FROM codes JOIN "FinancialTransaction" transaction ON codes.entity = ${entities.financialTransaction} AND transaction.shortcode = codes.code
-    UNION ALL SELECT ${ref(sql`${entities.ledgerParty}`, sql`party.id::text`)}
-      FROM codes JOIN "LedgerParty" party ON codes.entity = ${entities.ledgerParty} AND party.shortcode = codes.code
-    UNION ALL SELECT ${ref(sql`${statementCharge}`, sql`${textHashRefSql(sql`value #>> '{charge,chargeKey}'`)}::text`)}
-      FROM records WHERE value #>> '{charge,chargeKey}' IS NOT NULL
-    UNION ALL SELECT ${ref(sql`${statementRef}`, sql`${textHashRefSql(sql`source_ref.value->>'externalId'`)}::text`)}
-      FROM records CROSS JOIN LATERAL jsonb_array_elements(COALESCE(records.value->'refs', '[]'::jsonb)) source_ref(value)
-  ) SELECT COALESCE(jsonb_agg(value), '[]'::jsonb) FROM inputs)`;
-}
-
-/** Candidate roots survive admission, liveness and mutable-State endpoint changes. */
-function connectionInputRefs() {
-  const { source, target } = connectionCandidate.keyof().enum;
-  return sql`jsonb_build_array(${primary}) || COALESCE((
-    SELECT jsonb_agg(${ref(sql`endpoint.value->>'entityKind'`, sql`endpoint.value->>'entityId'`)})
-    FROM (VALUES (a.evidence->'candidate'), (s.data #> '{connectionEvidence,candidate}')) candidate(value)
-    CROSS JOIN LATERAL (VALUES (candidate.value->${source}), (candidate.value->${target})) endpoint(value)
-  ), '[]'::jsonb)`;
-}
-
-/** Independent family authorities may contribute different input sets to one revision. */
-function membershipInputRefs() {
-  const family = (value: AssessmentFamily) =>
-    sql`(${reviewAssessment.family} = ${value} OR ${reviewState.family} = ${value})`;
-  const parts = [
-    {
-      matches: family(assessmentFamily.enum.statement_transaction),
-      refs: statementInputRefs(),
-    },
-    {
-      matches: family(assessmentFamily.enum.transfer_pair),
-      refs: transferInputRefs(),
-    },
-    {
-      matches: family(assessmentFamily.enum.image_description),
-      refs: sql`jsonb_build_array(
-      ${ref(sql`${entities.image}`, sql`s."recordId"::text`)},
-      ${ref(sql`${entities.image}`, sql`a.subject->>'recordId'`)})`,
-    },
-    {
-      matches: family(assessmentFamily.enum.product_pair),
-      refs: sql`jsonb_build_array(
-      ${ref(sql`${entities.product}`, sql`s."recordId"::text`)},
-      ${ref(sql`${entities.product}`, sql`s.data->>'otherId'`)},
-      ${ref(sql`${entities.product}`, sql`a.subject->>'otherId'`)})`,
-    },
-    {
-      matches: sql`(jsonb_typeof(a.evidence->'candidate') = 'object'
-      OR jsonb_typeof(s.data #> '{connectionEvidence,candidate}') = 'object')`,
-      refs: connectionInputRefs(),
-    },
-  ];
-  return sql`CASE WHEN ${sql.join(
-    parts.map(({ matches }) => matches),
-    sql` OR `,
-  )}
-    THEN ${sql.join(
-      parts.map(
-        ({ matches, refs }) =>
-          sql`CASE WHEN ${matches} THEN ${refs} ELSE '[]'::jsonb END`,
-      ),
-      sql` || `,
-    )}
-    ELSE NULL::jsonb END`;
-}
-
 function recordRefsMatch(scope: AssessmentRecordScope, refs: SQL) {
   return sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${refs}) r
     WHERE ${relatedRecordMatch(scope, sql`r->>'entity'`, sql<string>`r->>'id'`)})`;
@@ -470,11 +315,11 @@ export const reviewFamilyDeclarations = {
       THEN jsonb_build_array(${ref(sql`s.data #>> '{connectionTarget,entityKind}'`, sql`s.data #>> '{connectionTarget,entityId}'`)})
       WHEN ${recommendationScopes.connection}
       THEN jsonb_build_array(${endpoint("source")}, ${endpoint("target")})
-      ELSE COALESCE(a.evidence->'records', '[]'::jsonb) END`,
+      ELSE COALESCE(s.evidence->'records', '[]'::jsonb) END`,
     matchesRelatedRecords: (scope: AssessmentRecordScope) => {
       let retained: SQL | undefined;
       if (scope.records?.length) {
-        const indexed = alias(assessment, "retained_indexed");
+        const indexed = alias(suggestionTable, "retained_indexed");
         const requestedName = sql.identifier("retained_requested");
         const valueName = sql.identifier("value");
         const membershipName = sql.identifier("retained_membership");
@@ -508,7 +353,7 @@ export const reviewFamilyDeclarations = {
           );
         retained = inArray(reviewAssessment.id, membershipIds);
       } else if (!scope.records) {
-        retained = sql`EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(a.evidence->'records', '[]'::jsonb)) r
+        retained = sql`EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(s.evidence->'records', '[]'::jsonb)) r
             WHERE ${relatedRecordMatch(scope, sql`r->>'entity'`, sql<string>`r->>'id'`)})`;
       }
       return retained
@@ -526,25 +371,13 @@ export const reviewFamilyDeclarations = {
         entities.product,
         sql<string>`s.data->>'otherId'`,
       ),
-    actionable: sql`a.judgment->'actionable' = 'true'::jsonb`,
+    actionable: sql`s.judgment->'actionable' = 'true'::jsonb`,
   },
   image_description: {
     ...assessmentReviewFamilies.image_description,
     records: one,
     primaryOnly: true,
-    actionable: sql`jsonb_typeof(a.judgment) = 'string' AND ${hasTextSql(sql`a.judgment #>> '{}'`)}`,
-    audit: (bounded: boolean) =>
-      exists(
-        feedbackForAssessment(
-          and(
-            eq(receipt.authority, "automatic"),
-            eq(receipt.actorUserId, SYSTEM_USER_ID),
-            eq(receipt.intent, "history"),
-            eq(receiptKind, CORRECTION_OUTCOME_RECEIPT_KIND),
-          ),
-          bounded,
-        ),
-      ),
+    actionable: sql`jsonb_typeof(s.judgment) = 'string' AND ${hasTextSql(sql`s.judgment #>> '{}'`)}`,
   },
   statement_transaction: {
     ...assessmentReviewFamilies.statement_transaction,
@@ -567,17 +400,17 @@ export const reviewFamilyDeclarations = {
             relatedRecordMatch(
               scope,
               entities.financialAccount,
-              sql<string>`a.judgment->${end}->>'accountId'`,
+              sql<string>`s.judgment->${end}->>'accountId'`,
             ),
             relatedRecordMatch(
               scope,
               entities.financialTransaction,
-              sql<string>`a.judgment->${end}->>'transactionId'`,
+              sql<string>`s.judgment->${end}->>'transactionId'`,
             ),
             relatedRecordMatch(
               scope,
               entities.ledgerParty,
-              sql<string>`a.judgment->${end}->'owner'->>'id'`,
+              sql<string>`s.judgment->${end}->'owner'->>'id'`,
             ),
           ])
           .filter((match) => match !== undefined),
@@ -595,32 +428,12 @@ export const reviewFamilyDeclarations = {
     matchesRelatedRecords?: (scope: AssessmentRecordScope) => SQL | undefined;
     actionable: SQL;
     scopes?: typeof recommendationScopes;
-    audit?: (bounded: boolean) => SQL;
     summarize?: (value: DecisionValue) => string;
   }
 >;
 
-/** Rule applications leave pending; every proposal family needs an audit proof. */
-export function automaticAssessmentEligibility(
-  appliedRule: SQL,
-  bounded = false,
-) {
-  const familyAudit = or(
-    ...Object.entries(reviewFamilyDeclarations).flatMap(
-      ([family, declaration]) =>
-        "audit" in declaration
-          ? [
-              and(
-                eq(reviewAssessment.family, assessmentFamily.parse(family)),
-                declaration.audit(bounded),
-              )!,
-            ]
-          : [],
-    ),
-    isNotNull(appliedRule),
-  );
-  // A validated correction proves both candidate and audit admission. Factor
-  // that shared proof out so the three-Feedback authority join runs once.
+/** Rule applications leave pending and name the rule that applied them. */
+export function automaticAssessmentEligibility(appliedRule: SQL) {
   return and(
     inArray(
       reviewAssessment.family,
@@ -629,13 +442,13 @@ export function automaticAssessmentEligibility(
       ),
     ),
     ne(reviewState.status, suggestionStatus.enum.pending),
-    familyAudit,
+    isNotNull(appliedRule),
   );
 }
 
 const assessmentRecordsSql = (
   entities?: readonly string[],
-  familyColumn: SQL = sql`a.family`,
+  familyColumn: SQL = sql`s.family`,
 ) =>
   sql`CASE ${sql.join(
     Object.entries(reviewFamilyDeclarations).map(
@@ -644,6 +457,9 @@ const assessmentRecordsSql = (
     ),
     sql` `,
   )} ELSE '[]'::jsonb END`;
+
+/** The Work reason key suffix for an explicit correction that was never applied. */
+export const UNAPPLIED_CORRECTION_REASON = "unapplied_correction";
 
 /**
  * Record tokens per pending suggestion for Work. The large families read only
@@ -659,20 +475,27 @@ export function pendingSuggestionRecordsSql(ids?: readonly string[]) {
       ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}`;
   const { recommendation, statement_transaction } = assessmentFamily.enum;
   return sql`SELECT s.family, s.entity, s."recordId"::text AS token
-      FROM "AssessmentState" s WHERE ${pending([recommendation])}
+      FROM "Suggestion" s WHERE ${pending([recommendation])}
     UNION ALL
     SELECT s.family, s.data #>> '{connectionTarget,entityKind}', s.data #>> '{connectionTarget,entityId}'
-      FROM "AssessmentState" s
+      FROM "Suggestion" s
       WHERE ${pending([recommendation])} AND jsonb_typeof(s.data->'connectionTarget') = 'object'
     -- Statement review belongs to the account, not every settlement reference.
     UNION ALL
     SELECT s.family, ${entities.financialAccount}::text, s.data->>'accountId'
-      FROM "AssessmentState" s WHERE ${pending([statement_transaction])}
+      FROM "Suggestion" s WHERE ${pending([statement_transaction])}
+    -- An explicit correction its Suggestion never applied stays a manual notice.
+    UNION ALL
+    SELECT ${UNAPPLIED_CORRECTION_REASON}::text, s.entity, s."recordId"::text
+      FROM "Suggestion" s
+      WHERE s.status = ${suggestionStatus.enum.superseded}
+        AND s.decisions @> ${JSON.stringify([{ authority: "member", correction: { present: true } }])}::jsonb
+        ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}
     UNION ALL
     SELECT s.family, record->>'entity', record->>'id'
-      FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id AND a.served
+      FROM "Suggestion" s
       CROSS JOIN LATERAL jsonb_array_elements(${assessmentRecordsSql(undefined, sql`s.family`)}) record
-      WHERE ${pending([
+      WHERE s.served AND ${pending([
         assessmentFamily.enum.field,
         assessmentFamily.enum.transfer_pair,
         assessmentFamily.enum.product_pair,
@@ -695,8 +518,8 @@ export async function readAssessmentRecordRefs(
     id: string;
     refs: unknown;
   }>(sql`
-    SELECT a.id, ${assessmentRecordsSql()} AS refs FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
-    WHERE a.id = ANY(${uuidArrayParam(ids)})`);
+    SELECT s.id, ${assessmentRecordsSql()} AS refs FROM "Suggestion" s
+    WHERE s.id = ANY(${uuidArrayParam(ids)})`);
   return resolveStoredRecordRefs(db, rows);
 }
 
@@ -747,250 +570,6 @@ export async function resolveStoredRecordRefs(
   );
 }
 
-/** Resolve canonical record observations once per batch, preserving missing-code tokens. */
-export async function resolveAssessmentReadInputRefs(
-  db: Database,
-  inputs: readonly {
-    id: string;
-    refs: readonly { entity: string; id: string }[];
-  }[],
-): Promise<Map<string, AssessmentReadDependency[]>> {
-  const normalized = inputs.map((input) => ({
-    ...input,
-    refs: input.refs.map((value) => ({
-      ...value,
-      code: parseShortcode(value.id),
-    })),
-  }));
-  const result = new Map<string, AssessmentReadDependency[]>();
-  const codes = new Map(
-    normalized.flatMap((input) =>
-      input.refs.flatMap((value) =>
-        value.code?.type === value.entity
-          ? [
-              [
-                JSON.stringify([value.entity, value.code.shortcode]),
-                { entity: value.entity, code: value.code.shortcode },
-              ] as const,
-            ]
-          : [],
-      ),
-    ),
-  );
-  const resolvedInputs =
-    codes.size === 0
-      ? []
-      : z
-          .array(
-            z.object({
-              entity: referenceEntity,
-              code: z.string(),
-              id: z.guid().nullable(),
-              token: z.guid(),
-            }),
-          )
-          .parse(
-            (
-              await unwrapDb(db).execute(sql`
-    SELECT requested.entity, requested.code, identity.id::text AS id,
-      ${textHashRefSql(sql`requested.code`)}::text AS token
-    FROM jsonb_to_recordset(${JSON.stringify([...codes.values()])}::jsonb) requested(entity text, code text)
-    LEFT JOIN ${entityIdentity} identity ON identity.kind = requested.entity AND identity.shortcode = requested.code
-  `)
-            ).rows,
-          );
-  const byCode = new Map(
-    resolvedInputs.map((value) => [
-      JSON.stringify([value.entity, value.code]),
-      value,
-    ]),
-  );
-  for (const row of normalized) {
-    const sources = row.refs.flatMap((value) => {
-      const id = z.guid().safeParse(value.id);
-      if (id.success)
-        return [
-          assessmentReadDependency.parse({
-            sourceKind: value.entity,
-            sourceId: id.data.toLowerCase(),
-          }),
-        ];
-      const code =
-        value.code?.type === value.entity
-          ? byCode.get(JSON.stringify([value.entity, value.code.shortcode]))
-          : undefined;
-      if (!code) return [];
-      return [
-        assessmentReadDependency.parse({
-          sourceKind: assessmentReadScopedSourceKind.enum.referenceCode,
-          sourceId: code.token,
-        }),
-        ...(code.id
-          ? [
-              assessmentReadDependency.parse({
-                sourceKind: code.entity,
-                sourceId: code.id,
-              }),
-            ]
-          : []),
-      ];
-    });
-    result.set(
-      row.id,
-      [
-        ...new Map(
-          sources.map((source) => [
-            JSON.stringify([source.sourceKind, source.sourceId]),
-            source,
-          ]),
-        ).entries(),
-      ]
-        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-        .map(([, source]) => source),
-    );
-  }
-  return result;
-}
-
-/** Publish discovery tokens and count references from their existing family owners. */
-export async function readAssessmentReadMemberships(
-  db: Database,
-  ids: readonly string[],
-  observeInputs?: (
-    id: string,
-    sources: readonly AssessmentReadDependency[],
-  ) => void,
-): Promise<Map<string, AssessmentReadMembership[]>> {
-  if (!ids.length) return new Map();
-  const admitted = and(
-    reviewAssessment.served,
-    reviewState.active,
-    eq(reviewState.status, suggestionStatus.enum.pending),
-    inArray(reviewState.family, suggestionListFamily.options),
-  );
-  const sources = reviewQueryBuilder
-    .select({
-      id: reviewAssessment.id,
-      stateFamily: sql<AssessmentFamily>`${reviewState.family}`.as(
-        "stateFamily",
-      ),
-      scopeRefs: sql`CASE WHEN ${admitted}
-      THEN ${assessmentRecordsSql(undefined, sql`${reviewState.family}`)}
-      ELSE '[]'::jsonb END`.as("scopeRefs"),
-      otherRefs:
-        sql`CASE WHEN ${reviewAssessment.family} = ${reviewState.family}
-      THEN NULL::jsonb ELSE ${assessmentRecordsSql()} END`.as("otherRefs"),
-      retainedRefs: sql`CASE WHEN ${admitted}
-      AND ${reviewState.family} = ${assessmentFamily.enum.recommendation}
-      AND (${recommendationScopes.connection}) IS NOT TRUE
-      THEN COALESCE(${reviewAssessment.evidence}->'records', '[]'::jsonb)
-      ELSE '[]'::jsonb END`.as("retainedRefs"),
-      inputRefs: (observeInputs ? membershipInputRefs() : sql`NULL::jsonb`).as(
-        "inputRefs",
-      ),
-    })
-    .from(reviewAssessment)
-    .innerJoin(reviewState, eq(reviewState.id, reviewAssessment.id))
-    .where(sql`${reviewAssessment.id} = ANY(${uuidArrayParam(ids)})`);
-  const token = z.object({
-    entity: referenceEntity,
-    value: z.string(),
-    retained: z.boolean(),
-  });
-  const rows = z
-    .array(
-      z.object({
-        id: z.string(),
-        stateFamily: assessmentFamily,
-        countRefs: z.unknown(),
-        tokens: z.array(token),
-        inputRefs: z.unknown(),
-      }),
-    )
-    .parse(
-      (
-        await unwrapDb(db).execute(sql`
-    WITH membership_sources AS MATERIALIZED (${sources.getSQL()}),
-    membership_tokens AS (
-      SELECT p.id, r.value->>'entity' AS entity, r.value->>'id' AS value, false AS retained
-      FROM membership_sources p
-      CROSS JOIN LATERAL jsonb_array_elements(p."scopeRefs") r(value)
-      UNION ALL
-      SELECT p.id, r.value->>'entity', r.value->>'id', true
-      FROM membership_sources p
-      CROSS JOIN LATERAL jsonb_array_elements(p."retainedRefs") r(value)
-    ), membership_groups AS (
-      SELECT id, jsonb_agg(DISTINCT (to_jsonb(membership_tokens) - 'id')) AS tokens
-      FROM membership_tokens WHERE value IS NOT NULL
-        AND entity IN (${sql.join(
-          shortcodeEntities.map((entity) => sql`${entity}`),
-          sql`, `,
-        )})
-      GROUP BY id
-    )
-    SELECT p.id, p."stateFamily", p."inputRefs", COALESCE(p."otherRefs", p."scopeRefs") AS "countRefs",
-      COALESCE(g.tokens, '[]'::jsonb) AS tokens
-    FROM membership_sources p LEFT JOIN membership_groups g ON g.id=p.id
-  `)
-      ).rows,
-    );
-  const refs = await resolveStoredRecordRefs(
-    db,
-    rows
-      .filter((row) => row.tokens.length > 0)
-      .map((row) => ({ id: row.id, refs: row.countRefs })),
-  );
-  const inputs = rows
-    .filter((row) => row.inputRefs !== null)
-    .map((row) => ({
-      id: row.id,
-      refs: z
-        .array(z.unknown())
-        .parse(row.inputRefs)
-        .flatMap((value) => {
-          const parsed = z
-            .object({ entity: z.string(), id: z.string() })
-            .safeParse(value);
-          return parsed.success ? [parsed.data] : [];
-        }),
-    }));
-  for (const [id, sources] of await resolveAssessmentReadInputRefs(db, inputs))
-    observeInputs?.(id, sources);
-  return new Map(
-    rows.map((row) => {
-      const memberships = [
-        ...row.tokens.map((value) =>
-          assessmentReadMembership.parse({
-            ...value,
-            kind: "scope",
-            stateFamily: row.stateFamily,
-          }),
-        ),
-        ...(refs.get(row.id) ?? []).map((value) =>
-          assessmentReadMembership.parse({
-            entity: value.entity,
-            value: value.id,
-            kind: "ref",
-            retained: false,
-            stateFamily: row.stateFamily,
-          }),
-        ),
-      ];
-      // JSON aggregate order is unspecified. Membership order must not create a
-      // new publication revision when only the query plan changes.
-      memberships.sort((a, b) => {
-        for (const key of ["kind", "entity", "value", "stateFamily"] as const) {
-          if (a[key] < b[key]) return -1;
-          if (a[key] > b[key]) return 1;
-        }
-        return Number(a.retained) - Number(b.retained);
-      });
-      return [row.id, memberships];
-    }),
-  );
-}
-
-/** Admission is data, so callers cannot bind aliases or spell status values in SQL. */
 type AssessmentEligibility =
   | {
       kind: "suggestions";
@@ -1013,7 +592,7 @@ function assessmentStateAdmission(
   db: Database,
   eligibility: AssessmentEligibility,
   s: Pick<
-    RelatedColumns<typeof assessmentState>,
+    RelatedColumns<typeof suggestionTable>,
     "family" | "status" | "active" | "runId"
   > = {
     family: outer(reviewState.family),
@@ -1076,12 +655,12 @@ function assessmentRecordMatches(
   // Immutable endpoints remain independent of the mutable primary reference.
   const connectionMatches = [
     {
-      entity: sql<string>`a.evidence #>> '{candidate,source,entityKind}'`,
-      id: sql<string>`a.evidence #>> '{candidate,source,entityId}'`,
+      entity: sql<string>`s.evidence #>> '{candidate,source,entityKind}'`,
+      id: sql<string>`s.evidence #>> '{candidate,source,entityId}'`,
     },
     {
-      entity: sql<string>`a.evidence #>> '{candidate,target,entityKind}'`,
-      id: sql<string>`a.evidence #>> '{candidate,target,entityId}'`,
+      entity: sql<string>`s.evidence #>> '{candidate,target,entityKind}'`,
+      id: sql<string>`s.evidence #>> '{candidate,target,entityId}'`,
     },
   ].map(
     ({ entity, id }) =>
@@ -1130,17 +709,28 @@ function settlementAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   const keyName = sql.identifier("settlement_keys");
   const keySource = sql<string>`${keyName}.${sql.identifier("source")}`;
   const keyExternalId = sql<string>`${keyName}.${sql.identifier("externalId")}`;
-  const indexed = alias(assessment, "settlement_indexed");
+  const indexed = alias(suggestionTable, "settlement_indexed");
   const source = sql<string>`${indexed.judgment} #>> '{create,sourceRef,source}'`;
   const externalId = sql<string>`${indexed.judgment} #>> '{create,sourceRef,externalId}'`;
   // Bounded hashes support unrestricted historical text. Exact comparisons
   // retain identity authority even if two extracted values hash alike.
   const publications = reviewQueryBuilder
-    .select({ id: indexed.id, family: indexed.family })
+    .select({
+      id: indexed.id,
+      family: indexed.family,
+      status: indexed.status,
+    })
     .from(indexed)
     .where(
       and(
         indexed.served,
+        eq(indexed.family, assessmentFamily.enum.statement_transaction),
+        assessmentStateAdmission(db, scope.eligibility, {
+          family: outer(indexed.family),
+          status: outer(indexed.status),
+          active: outer(indexed.active),
+          runId: outer(indexed.runId),
+        }),
         isNotNull(source),
         isNotNull(externalId),
         eq(sql`md5(${source})`, sql`md5(${keySource})`),
@@ -1149,39 +739,20 @@ function settlementAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
         eq(externalId, keyExternalId),
       ),
     );
-  const admitted = related(assessmentState, (state) =>
-    eq(state.id, outer(reviewAssessment.id)),
-  )
-    .where((state) =>
-      and(
-        eq(state.family, assessmentFamily.enum.statement_transaction),
-        assessmentStateAdmission(db, scope.eligibility, state),
-      ),
-    )
-    .aggregate(
-      (state) =>
-        sql`${state.family} AS ${sql.identifier("family")}, ${state.status} AS ${sql.identifier("status")}`,
-    );
+  const matched = sql.identifier("settlement_matched");
+  const column = (name: string) => sql`${matched}.${sql.identifier(name)}`;
   return unwrapDb(db)
     .select({
-      id: outer(reviewAssessment.id),
-      family:
-        scope.eligibility.kind === "suggestions"
-          ? outer(reviewState.family)
-          : outer(reviewAssessment.family),
-      immutableFamily:
-        sql<AssessmentFamily>`${outer(reviewAssessment.family)}`.as(
-          "immutableFamily",
-        ),
-      status: outer(reviewState.status),
+      id: sql<string>`${column("id")}`.as("id"),
+      family: sql<AssessmentFamily>`${column("family")}`.as("family"),
+      immutableFamily: sql<AssessmentFamily>`${column("family")}`.as(
+        "immutableFamily",
+      ),
+      status: sql<string>`${column("status")}`.as("status"),
     })
     .from(sql`(${keys.getSQL()}) AS ${keyName}`)
     .innerJoinLateral(
-      sql`(${publications.getSQL()} OFFSET 0) AS ${sql.identifier("a")}`,
-      sql`true`,
-    )
-    .innerJoinLateral(
-      sql`(${admitted} OFFSET 0) AS ${sql.identifier("s")}`,
+      sql`(${publications.getSQL()} OFFSET 0) AS ${matched}`,
       sql`true`,
     )
     .getSQL();
@@ -1190,17 +761,16 @@ function settlementAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
 /** Scope identities before expensive automatic receipts; retain a statement-local barrier. */
 function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   const client = unwrapDb(db);
-  const a = reviewAssessment;
   const s = reviewState;
   const branches = assessmentRecordMatches(scope);
   const stateAdmission = assessmentStateAdmission(db, scope.eligibility);
-  const admission = and(a.served, stateAdmission);
+  const admission = and(s.served, stateAdmission);
   const matched = sql.join(
     branches.map(({ match, stateFirst }) => {
       const selection = {
-        id: a.id,
-        family: scope.eligibility.kind === "suggestions" ? s.family : a.family,
-        immutableFamily: sql<AssessmentFamily>`${a.family}`.as(
+        id: s.id,
+        family: scope.eligibility.kind === "suggestions" ? s.family : s.family,
+        immutableFamily: sql<AssessmentFamily>`${s.family}`.as(
           "immutableFamily",
         ),
         status: s.status,
@@ -1208,38 +778,15 @@ function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
       if (stateFirst) {
         const settlement = settlementAssessmentQuery(db, scope);
         if (settlement) return settlement;
-        // Settlement membership reads immutable judgment. Fence that lookup
-        // behind State identity rather than scanning every served Assessment.
-        const publication = related(assessment, (immutable) =>
-          eq(immutable.id, outer(s.id)),
-        )
-          .where((immutable) => immutable.served)
-          .aggregate(
-            (immutable) => sql`${immutable.id} AS ${sql.identifier("id")},
-            ${immutable.family} AS ${sql.identifier("family")},
-            ${immutable.judgment} AS ${sql.identifier("judgment")}`,
-          );
         return client
-          .select({
-            ...selection,
-            id: outer(a.id),
-            family:
-              scope.eligibility.kind === "suggestions"
-                ? s.family
-                : outer(a.family),
-          })
+          .select(selection)
           .from(s)
-          .innerJoinLateral(
-            sql`(${publication} OFFSET 0) AS ${sql.identifier("a")}`,
-            sql`true`,
-          )
-          .where(and(stateAdmission, match))
+          .where(and(s.served, stateAdmission, match))
           .getSQL();
       }
       return client
         .select(selection)
-        .from(a)
-        .innerJoin(s, eq(s.id, a.id))
+        .from(s)
         .where(and(admission, match))
         .getSQL();
     }),
@@ -1252,9 +799,9 @@ function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   // still enter through the same candidate and authority checks.
   return sql`WITH matched AS MATERIALIZED (
     SELECT DISTINCT id, family, status FROM (${matched}) identities)
-    SELECT DISTINCT a.id, a.family, a.family AS "immutableFamily" FROM matched a
-    CROSS JOIN LATERAL (SELECT a.status) s
-    WHERE ${automaticAssessmentEligibility(scope.eligibility.appliedRule(sql`${a.id}`), true)}`;
+    SELECT DISTINCT matched.id, matched.family, matched.family AS "immutableFamily"
+    FROM matched JOIN "Suggestion" s ON s.id = matched.id
+    WHERE ${automaticAssessmentEligibility(scope.eligibility.appliedRule(sql`${s.id}`))}`;
 }
 
 /** Adapters use both State and immutable family authority after discovery. */
@@ -1287,7 +834,7 @@ export async function touchingAssessmentIds(
  * Callers join immutable Assessment a and current AssessmentState s.
  */
 export function pendingImageDescriptionEligibility() {
-  return sql`a.family = ${assessmentFamily.enum.image_description} AND a.served
+  return sql`s.family = ${assessmentFamily.enum.image_description} AND s.served
     AND s.active AND s.status = ${suggestionStatus.enum.pending}
     AND s.suppression IS NULL AND ${reviewFamilyDeclarations.image_description.actionable}
     AND EXISTS (SELECT 1 FROM "Image" i WHERE i.id = s."recordId" AND ${notDeleted("i")})`;

@@ -7,19 +7,23 @@ import {
 } from "@cubby/schemas/assessment";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { assessment, feedback } from "~/server/db/schema";
+import { suggestionTable } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import {
   assertApplicationReceipt,
   recordFeedback,
 } from "~/server/generic/assessment/repo/assessment";
-import { openAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
+import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
+import {
+  decisionForOperation,
+  type StoredDecision,
+} from "~/server/generic/assessment/repo/suggestion-decisions";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { canonicalJson } from "~/server/lib/canonical-json";
@@ -29,26 +33,25 @@ export async function acknowledgeSavedField(
   db: Database,
   context: EntityKernelContext,
   prediction: Pick<
-    typeof assessment.$inferSelect,
+    typeof suggestionTable.$inferSelect,
     "id" | "subject" | "judgment" | "producer"
   >,
   input: {
     recordId: string;
     operationId: string;
     correction: AssessmentCorrection;
-    commandFeedback: typeof feedback.$inferSelect;
+    commandFeedback: StoredDecision;
   },
 ) {
-  const [previous] = await getDb(db)
-    .select()
-    .from(feedback)
-    .where(
-      and(
-        eq(feedback.assessmentId, prediction.id),
-        eq(feedback.operationId, `receipt:${input.operationId}`),
-      ),
-    )
-    .limit(1);
+  const [owner] = await getDb(db)
+    .select({ decisions: suggestionTable.decisions })
+    .from(suggestionTable)
+    .where(eq(suggestionTable.id, prediction.id));
+  const previous = decisionForOperation(
+    prediction.id,
+    owner?.decisions ?? [],
+    `receipt:${input.operationId}`,
+  );
   if (previous) {
     assertApplicationReceipt(previous, input.commandFeedback, "saved_field");
     return suggestionAcceptanceReceipt.parse(previous.receipt);
@@ -135,23 +138,10 @@ export async function acknowledgeSavedField(
         field: subject.field,
       },
     });
-    await openAssessmentState(
+    await transitionAssessmentState(
       transactionDb,
-      {
-        values: {
-          id: prediction.id,
-          family: "field",
-          entity,
-          recordId: id,
-          field: subject.field,
-          status: "applied",
-          active: false,
-          acceptanceReceipt: receipt,
-          suggestedValue: proposed,
-          runId: prediction.producer?.runId ?? null,
-        },
-        patch: { status: "applied", acceptanceReceipt: receipt },
-      },
+      prediction.id,
+      { status: "applied", acceptanceReceipt: receipt },
       { kind: "member_review", feedbackId: accepted.id },
     );
     return receipt;

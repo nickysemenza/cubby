@@ -9,14 +9,13 @@ import {
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
   connectionProposal,
-  connectionEdge,
   connectionEdgeKey,
   type ConnectionEdge,
   type ConnectionProposal,
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
 import { PRODUCT_PAIR_NOT_ACTIONABLE } from "@cubby/schemas/recommendations";
-import { and, eq, inArray, notExists, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -27,15 +26,11 @@ import {
   uuidArrayParam,
   sqlEnumConstant,
 } from "~/server/db/helpers";
-import { outer, related } from "~/server/db/helpers/related";
-import {
-  assessment,
-  assessmentState,
-  entityIdentity,
-  feedback,
-} from "~/server/db/schema";
+import { outer } from "~/server/db/helpers/related";
+import { suggestionTable, entityIdentity } from "~/server/db/schema";
 import { currentProductPairPolicy } from "~/server/domains/product/repo/match/product-match-candidate";
 import { readStoredProductPair } from "~/server/domains/product/repo/match/product-pair-signals";
+import { memberRejectedSql } from "~/server/generic/assessment/repo/suggestion-decisions";
 
 import {
   connectionReadEvidence,
@@ -122,20 +117,19 @@ function existingConnectionAssessmentIds(
       AND ${inArray(sql`source_entity."kind" || ':' || source_entity."shortcode"`, keys)}`;
   // Literal boolean gates let generic plans prove the partial-index predicates.
   const pendingState = and(
-    assessmentState.active,
-    eq(assessmentState.status, "pending"),
+    suggestionTable.active,
+    eq(suggestionTable.status, "pending"),
   );
   const idsFor = (families: "all" | "pair", match: SQL) =>
     getDb(db)
-      .select({ id: assessment.id })
-      .from(assessment)
-      .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+      .select({ id: suggestionTable.id })
+      .from(suggestionTable)
       .where(
         and(
-          assessment.served,
+          suggestionTable.served,
           pendingState,
           inArray(
-            assessment.family,
+            suggestionTable.family,
             families === "all"
               ? ["field", ...entityPairAssessmentFamilies]
               : entityPairAssessmentFamilies,
@@ -143,34 +137,17 @@ function existingConnectionAssessmentIds(
           match,
         ),
       );
-  const fieldMembership = sql.identifier("existing_field_membership");
-  const fieldPublication = related(assessment, (publication) =>
-    eq(publication.id, outer(assessmentState.id)),
-  )
-    .where((publication) =>
-      and(publication.served, eq(publication.family, "field")),
-    )
-    .aggregate(
-      (publication) => sql`${publication.id} AS ${sql.identifier("id")}`,
-    );
-  // Match indexed State identities before loading immutable family authority.
   const fieldIds = getDb(db)
-    .select({
-      id: sql<
-        typeof assessment.$inferSelect.id
-      >`${fieldMembership}.${sql.identifier("id")}`,
-    })
-    .from(assessmentState)
-    .innerJoinLateral(
-      sql`(${fieldPublication} OFFSET 0) AS ${fieldMembership}`,
-      sql`true`,
-    )
+    .select({ id: suggestionTable.id })
+    .from(suggestionTable)
     .where(
       and(
         pendingState,
+        suggestionTable.served,
+        eq(suggestionTable.family, "field"),
         // Exact equality remains authoritative for arbitrary historical text.
-        sql`md5(${assessmentState.suggestedValue} #>> '{}') IN (${codeHashes})
-          AND ${assessmentState.suggestedValue} #>> '{}' IN (${codes})`,
+        sql`md5(${suggestionTable.suggestedValue} #>> '{}') IN (${codeHashes})
+          AND ${suggestionTable.suggestedValue} #>> '{}' IN (${codes})`,
       ),
     );
   const requestedPairs = sql.identifier("existing_pair_requested");
@@ -178,16 +155,16 @@ function existingConnectionAssessmentIds(
   const requestedPairId = sql`${requestedPairs}.${sql.identifier("id")}`;
   const pairPointQuery = idsFor(
     "pair",
-    sql`${assessment.subject}->>'otherId' IS NOT NULL
-      AND md5(${assessment.subject}->>'otherId') = md5(${requestedPairId}::text)
-      AND ${assessment.subject}->>'otherId' = ${requestedPairId}::text`,
+    sql`${suggestionTable.subject}->>'otherId' IS NOT NULL
+      AND md5(${suggestionTable.subject}->>'otherId') = md5(${requestedPairId}::text)
+      AND ${suggestionTable.subject}->>'otherId' = ${requestedPairId}::text`,
   );
   // Each endpoint can match many publications. Keep its indexed identity probe
   // parameterized rather than hashing the pair population for a large roster.
   const pairIds = getDb(db)
     .select({
       id: sql<
-        typeof assessment.$inferSelect.id
+        typeof suggestionTable.$inferSelect.id
       >`${pairMembership}.${sql.identifier("id")}`,
     })
     .from(sql`(${sourceIds}) AS ${requestedPairs}`)
@@ -198,8 +175,8 @@ function existingConnectionAssessmentIds(
   return idsFor(
     "all",
     sql`
-    ${inArray(assessmentState.entity, [...new Set(sources.map((source) => source.entityKind))])}
-    AND ${assessmentState.recordId} IN (${sourceIds})`,
+    ${inArray(suggestionTable.entity, [...new Set(sources.map((source) => source.entityKind))])}
+    AND ${suggestionTable.recordId} IN (${sourceIds})`,
   )
     .union(fieldIds)
     .union(pairIds);
@@ -207,7 +184,7 @@ function existingConnectionAssessmentIds(
 
 /** Source-first barrier shared by selected retrieval and publication grouping. */
 function connectionSourcePeers(db: Database, sourceKind: SQL, sourceCode: SQL) {
-  const indexed = alias(assessment, "connection_peer_indexed");
+  const indexed = alias(suggestionTable, "connection_peer_indexed");
   return getDb(db)
     .select({ id: indexed.id, evidence: indexed.evidence })
     .from(indexed)
@@ -227,7 +204,7 @@ export async function readSelectedConnectionAssessmentIds(
   reviewIds: readonly string[],
 ): Promise<string[]> {
   if (!reviewIds.length) return [];
-  const selected = alias(assessment, "selected_connection");
+  const selected = alias(suggestionTable, "selected_connection");
   const matched = sql.identifier("connection_edge");
   const evidence = sql`${matched}.${sql.identifier("evidence")}`;
   const point = connectionSourcePeers(
@@ -321,14 +298,14 @@ export async function readConnectionEdgeAssessmentIds(
     SELECT DISTINCT peers.id FROM (
       SELECT matched.id FROM requested_edges r
       CROSS JOIN LATERAL (
-        SELECT a.id FROM ${assessment} a JOIN ${assessmentState} s ON s.id = a.id
-        WHERE a.served AND a.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.recommendation)}
-          AND a.subject->>'scope' LIKE 'connection.%'
-          AND a.evidence #>> '{candidate,source,entityKind}' = r."sourceKind"
-          AND a.evidence #>> '{candidate,source,entityId}' = r."sourceCode"
-          AND a.evidence #>> '{candidate,target,entityKind}' = r."targetKind"
-          AND a.evidence #>> '{candidate,target,entityId}' = r."targetCode"
-          AND a.evidence #>> '{candidate,relation}' = r.relation
+        SELECT s.id FROM ${suggestionTable} s
+        WHERE s.served AND s.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.recommendation)}
+          AND s.subject->>'scope' LIKE 'connection.%'
+          AND s.evidence #>> '{candidate,source,entityKind}' = r."sourceKind"
+          AND s.evidence #>> '{candidate,source,entityId}' = r."sourceCode"
+          AND s.evidence #>> '{candidate,target,entityKind}' = r."targetKind"
+          AND s.evidence #>> '{candidate,target,entityId}' = r."targetCode"
+          AND s.evidence #>> '{candidate,relation}' = r.relation
           AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
         OFFSET 0
       ) matched
@@ -337,9 +314,9 @@ export async function readConnectionEdgeAssessmentIds(
       JOIN ${entityIdentity} owner ON owner.kind = r.entity AND owner.shortcode = r.code
       JOIN ${entityIdentity} target ON target.kind = r."targetKind" AND target.shortcode = r."targetCode"
       CROSS JOIN LATERAL (
-        SELECT s.id FROM ${assessmentState} s JOIN ${assessment} a ON a.id = s.id
+        SELECT s.id FROM ${suggestionTable} s
         WHERE s.entity = r.entity AND s."recordId" = owner.id AND s.field = r.field
-          AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)} AND a.served AND a.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.field)}
+          AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)} AND s.served AND s.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.field)}
           AND md5(s."suggestedValue" #>> '{}') = md5(target.shortcode)
           AND s."suggestedValue" #>> '{}' = target.shortcode
         OFFSET 0
@@ -349,91 +326,16 @@ export async function readConnectionEdgeAssessmentIds(
       JOIN ${entityIdentity} owner ON owner.kind = r."sourceKind" AND owner.shortcode = r."sourceCode"
       JOIN ${entityIdentity} target ON target.kind = r."targetKind" AND target.shortcode = r."targetCode"
       CROSS JOIN LATERAL (
-        SELECT s.id FROM ${assessment} a JOIN ${assessmentState} s ON s.id = a.id
-        WHERE a.served AND a.family = r.family AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
+        SELECT s.id FROM ${suggestionTable} s
+        WHERE s.served AND s.family = r.family AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
           AND s.entity = owner.kind AND s."recordId" = owner.id
-          AND a.subject->>'otherId' IS NOT NULL
-          AND md5(a.subject->>'otherId') = md5(target.id::text)
-          AND a.subject->>'otherId' = target.id::text
+          AND s.subject->>'otherId' IS NOT NULL
+          AND md5(s.subject->>'otherId') = md5(target.id::text)
+          AND s.subject->>'otherId' = target.id::text
         OFFSET 0
       ) matched
     ) peers`);
   return rows.rows.map((row) => row.id);
-}
-
-/** Identity grouping shares the existing family mappings; it does not admit a peer. */
-export async function readConnectionAssessmentEdges(
-  db: Database,
-  ids: readonly string[],
-): Promise<Map<string, ConnectionEdge>> {
-  if (!ids.length) return new Map();
-  const from = alias(entityIdentity, "group_from");
-  const to = alias(entityIdentity, "group_to");
-  const rows = await getDb(db)
-    .select({
-      id: assessment.id,
-      family: assessment.family,
-      scope: sql<string | null>`${assessment.subject}->>'scope'`,
-      candidate: sql<unknown>`CASE WHEN ${assessment.family} = ${"recommendation"} THEN ${assessment.evidence}->'candidate' ELSE NULL END`,
-      stateEntity: assessmentState.entity,
-      field: assessmentState.field,
-      fromKind: from.kind,
-      fromCode: from.shortcode,
-      toKind: to.kind,
-      toCode: to.shortcode,
-    })
-    .from(assessment)
-    .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
-    .leftJoin(
-      from,
-      and(
-        eq(from.id, assessmentState.recordId),
-        eq(from.kind, assessmentState.entity),
-      ),
-    )
-    .leftJoin(
-      to,
-      or(
-        and(
-          eq(assessment.family, "field"),
-          eq(to.shortcode, sql`${assessmentState.suggestedValue} #>> '{}'`),
-        ),
-        and(
-          inArray(assessment.family, entityPairAssessmentFamilies),
-          eq(
-            to.id,
-            canonicalPairTargetId(sql`${assessment.subject}->>'otherId'`),
-          ),
-        ),
-      ),
-    )
-    .where(sql`${assessment.id} = ANY(${uuidArrayParam(ids)})`);
-  const edges = new Map<string, ConnectionEdge>();
-  for (const row of rows) {
-    const relation =
-      row.family === "field"
-        ? fieldRelations.get(`${row.stateEntity}.${row.field}`)
-        : isEntityPairAssessmentFamily(row.family)
-          ? pairFamilies[row.family].relation
-          : undefined;
-    const parsed = connectionEdge.safeParse(
-      row.family === "recommendation" && row.scope?.startsWith("connection.")
-        ? row.candidate
-        : {
-            relation,
-            source:
-              relation === "product-expense"
-                ? { entityKind: row.toKind, entityId: row.toCode }
-                : { entityKind: row.fromKind, entityId: row.fromCode },
-            target:
-              relation === "product-expense"
-                ? { entityKind: row.fromKind, entityId: row.fromCode }
-                : { entityKind: row.toKind, entityId: row.toCode },
-          },
-    );
-    if (parsed.success) edges.set(row.id, parsed.data);
-  }
-  return edges;
 }
 
 /** Keep the original family handle: its review handler owns evidence and writes. */
@@ -453,26 +355,26 @@ export async function readExistingConnectionAssessments(
   // The old text equality admitted only canonical lower-case UUID spellings.
   // Guard the native lookup so malformed or differently spelled history stays unmatched.
   const pairTargetId = canonicalPairTargetId(
-    sql`${assessment.subject}->>'otherId'`,
+    sql`${suggestionTable.subject}->>'otherId'`,
   );
   const rowsFor = (family: "field" | "pair") =>
     getDb(db)
       .select({
         prediction: {
-          id: assessment.id,
-          family: assessment.family,
-          subject: assessment.subject,
-          judgment: assessment.judgment,
-          producer: assessment.producer,
-          fingerprint: assessment.fingerprint,
+          id: suggestionTable.id,
+          family: suggestionTable.family,
+          subject: suggestionTable.subject,
+          judgment: suggestionTable.judgment,
+          producer: suggestionTable.producer,
+          fingerprint: suggestionTable.fingerprint,
           evidence:
-            sql<unknown>`CASE WHEN ${assessment.family} = ${"product_pair"} THEN ${assessment.evidence} ELSE NULL END`.as(
+            sql<unknown>`CASE WHEN ${suggestionTable.family} = ${"product_pair"} THEN ${suggestionTable.evidence} ELSE NULL END`.as(
               "evidence",
             ),
         },
-        state: { entity: assessmentState.entity, field: assessmentState.field },
+        state: { entity: suggestionTable.entity, field: suggestionTable.field },
         connectionEvidence: connectionReadEvidenceSql(
-          sql`${assessmentState.data}->'connectionEvidence'`,
+          sql`${suggestionTable.data}->'connectionEvidence'`,
         ).as("connectionEvidence"),
         sourceKind: sql`${from.kind}`.mapWith(from.kind).as("sourceKind"),
         sourceCode: sql`${from.shortcode}`
@@ -480,17 +382,16 @@ export async function readExistingConnectionAssessments(
           .as("sourceCode"),
         targetKind: sql`${to.kind}`.mapWith(to.kind).as("targetKind"),
         targetCode: sql`${to.shortcode}`.mapWith(to.shortcode).as("targetCode"),
-        connectionOrderCreatedAt: sql`${assessment.createdAt}`.as(
+        connectionOrderCreatedAt: sql`${suggestionTable.createdAt}`.as(
           "connectionOrderCreatedAt",
         ),
       })
-      .from(assessment)
-      .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+      .from(suggestionTable)
       .innerJoin(
         from,
         and(
-          eq(from.id, assessmentState.recordId),
-          eq(from.kind, assessmentState.entity),
+          eq(from.id, suggestionTable.recordId),
+          eq(from.kind, suggestionTable.entity),
           notDeleted(from),
           sql`${from.mergedIntoId} IS NULL`,
         ),
@@ -501,33 +402,22 @@ export async function readExistingConnectionAssessments(
           notDeleted(to),
           sql`${to.mergedIntoId} IS NULL`,
           family === "field"
-            ? eq(to.shortcode, sql`${assessmentState.suggestedValue} #>> '{}'`)
+            ? eq(to.shortcode, sql`${suggestionTable.suggestedValue} #>> '{}'`)
             : eq(to.id, pairTargetId),
         ),
       )
       .where(
         and(
-          eq(assessment.served, true),
-          eq(assessmentState.active, true),
-          eq(assessmentState.status, "pending"),
+          eq(suggestionTable.served, true),
+          eq(suggestionTable.active, true),
+          eq(suggestionTable.status, "pending"),
           family === "field"
-            ? eq(assessment.family, "field")
-            : inArray(assessment.family, entityPairAssessmentFamilies),
-          sql`${assessment.id} = ANY(ARRAY(${getDb(db).select({ id: matched.id }).from(matched)}))`,
+            ? eq(suggestionTable.family, "field")
+            : inArray(suggestionTable.family, entityPairAssessmentFamilies),
+          sql`${suggestionTable.id} = ANY(ARRAY(${getDb(db).select({ id: matched.id }).from(matched)}))`,
           sql`(${inArray(sql`${from.kind} || ':' || ${from.shortcode}`, keys)} OR ${inArray(sql`${to.kind} || ':' || ${to.shortcode}`, keys)})`,
-          notExists(
-            getDb(db)
-              .select({ id: feedback.id })
-              .from(feedback)
-              .where(
-                and(
-                  eq(feedback.assessmentId, assessment.id),
-                  eq(feedback.authority, "member"),
-                  inArray(feedback.verdict, ["wrong", "dismissed"]),
-                ),
-              ),
-          ),
-          sql`NOT EXISTS (SELECT 1 FROM "AssessmentState" suppressed WHERE suppressed.active AND suppressed.entity=${assessmentState.entity} AND suppressed."recordId"=${assessmentState.recordId} AND suppressed.suppression IS NOT NULL AND suppressed.suppression->>'candidateKey'=CASE WHEN ${assessment.family} IN (${pairFamilyList}) THEN (${assessment.subject}->>'recordId') || '|' || (${assessment.subject}->>'otherId') ELSE '' END)`,
+          sql`NOT ${memberRejectedSql(sql`${suggestionTable.decisions}`)}`,
+          sql`NOT EXISTS (SELECT 1 FROM "Suggestion" suppressed WHERE suppressed.active AND suppressed.entity=${suggestionTable.entity} AND suppressed."recordId"=${suggestionTable.recordId} AND suppressed.suppression IS NOT NULL AND suppressed.suppression->>'candidateKey'=CASE WHEN ${suggestionTable.family} IN (${pairFamilyList}) THEN (${suggestionTable.subject}->>'recordId') || '|' || (${suggestionTable.subject}->>'otherId') ELSE '' END)`,
         ),
       );
   const candidates = rowsFor("field")

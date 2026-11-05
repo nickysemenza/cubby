@@ -9,14 +9,14 @@ import { z } from "zod";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import {
-  run as runTable,
-  assessmentState as suggestionTable,
-} from "~/server/db/schema";
+import { run as runTable, suggestionTable } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
-import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import {
+  suggestionStateColumns,
+  transitionAssessmentStates,
+} from "~/server/generic/assessment/repo/assessment-state";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import {
   fieldInputFingerprint,
@@ -119,7 +119,7 @@ export async function saveSweepSuggestions(
         input.field,
       );
       const saved = await getDb(tx)
-        .select()
+        .select(suggestionStateColumns)
         .from(suggestionTable)
         .where(
           and(
@@ -180,7 +180,7 @@ export async function saveSweepSuggestions(
         throw new Error("Suggestion target changed during inference");
 
       const predecessors = await getDb(tx)
-        .select()
+        .select(suggestionStateColumns)
         .from(suggestionTable)
         .where(
           and(

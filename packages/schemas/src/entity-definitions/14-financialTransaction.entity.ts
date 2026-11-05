@@ -1646,6 +1646,7 @@ export const { definition, readSchemas } = defineEntityModel(
       ],
     },
     capabilities: {
+      suggestions: ["statement_transaction", "transfer_pair"],
       images: {
         storage: false,
         displaySourceOverrides: [

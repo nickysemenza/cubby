@@ -56,11 +56,11 @@ export async function loadCurrentFieldOwnership(
           SELECT t.id::text AS id, COALESCE((
             SELECT jsonb_object_agg(s.field, jsonb_build_object(${fieldAssignmentOwnership.options[1].keyof().enum.kind}::text, ${fieldAssignmentOwnership.options[1].shape.kind.value}::text, 'receiptId', s.id::text, 'confidence',
               (s."acceptanceReceipt"->>'confidence')::double precision))
-            FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
+            FROM "Suggestion" s
             WHERE s.entity = ${entity} AND s."recordId" = t.id
               AND s.family = ${assessmentFamily.enum.field} AND s.status = ${suggestionStatus.enum.applied}
-              AND a.subject->>'entity' = s.entity AND a.subject->>${assessmentSubjects.field.keyof().enum.field} = s.field
-              AND a.subject->>'recordId' = t.id::text
+              AND s.subject->>'entity' = s.entity AND s.subject->>${assessmentSubjects.field.keyof().enum.field} = s.field
+              AND s.subject->>'recordId' = t.id::text
               AND s."acceptanceReceipt"->>'mode' = ${feedbackAuthority.enum.automatic}
               AND jsonb_typeof(s."acceptanceReceipt"->'confidence') = ${"number"}
               AND ${automaticApplicationRule(sql`s.id`)} IS NOT NULL
@@ -75,12 +75,12 @@ export async function loadCurrentFieldOwnership(
                 WHERE edited."entityKind" = s.entity AND edited."entityId" = t.id
                   AND edited.action = ${auditLogActionSchema.enum.update} AND edited.changes ? s.field
                   AND NOT (s."acceptanceReceipt"->'auditIds' ? edited.id::text))
-              AND NOT EXISTS (SELECT 1 FROM "Feedback" member
-                JOIN "AssessmentState" reviewed ON reviewed.id = member."assessmentId"
+              AND NOT EXISTS (SELECT 1 FROM "Suggestion" reviewed
+                CROSS JOIN LATERAL jsonb_to_recordset(reviewed.decisions) member(authority text, verdict text, "createdAt" text)
                 WHERE reviewed.entity = s.entity AND reviewed."recordId" = s."recordId"
                   AND reviewed.family = ${assessmentFamily.enum.field} AND reviewed.field = s.field
                   AND member.authority = ${feedbackAuthority.enum.member} AND member.verdict IN (${feedbackVerdict.enum.correct}, ${feedbackVerdict.enum.wrong})
-                  AND member."createdAt" >= (s."acceptanceReceipt"->>'acceptedAt')::timestamp)
+                  AND member."createdAt"::timestamptz >= (s."acceptanceReceipt"->>'acceptedAt')::timestamptz)
           ), '{}'::jsonb) AS value
           FROM ${tableName} t
           WHERE t.id = ANY(${uuidArrayParam(ids)}) AND ${notDeleted(table)}

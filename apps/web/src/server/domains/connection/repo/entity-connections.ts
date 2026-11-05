@@ -14,7 +14,7 @@ import {
 import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, notExists, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -24,10 +24,8 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
-  assessment,
-  assessmentState,
+  suggestionTable,
   entityIdentity,
-  feedback,
   financialTransactionAllocation,
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
@@ -38,8 +36,13 @@ import { setProjectToolUsage } from "~/server/domains/project/repo/tools";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { publishAssessments } from "~/server/generic/assessment/repo/assessment";
-import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import {
+  suggestionStateColumns,
+  pruneReplacedSuggestions,
+  transitionAssessmentStates,
+} from "~/server/generic/assessment/repo/assessment-state";
 import { assessmentCandidateKey } from "~/server/generic/assessment/repo/assessment-state";
+import { memberRejectedSql } from "~/server/generic/assessment/repo/suggestion-decisions";
 import {
   lookupEntityLabels,
   resolveShortcodes,
@@ -154,12 +157,12 @@ export async function publishPreparedEntityConnections(
         throw new ConnectionEvidenceInvalidatedError(
           "Retained Email evidence changed; discover again before publishing",
         );
-      const evidence = connectionAssessmentEvidence.parse({
-        version: 1,
-        candidate,
-        basis,
-      });
-      const fingerprint = await sha256CanonicalJson(evidence);
+      const fingerprint = await sha256CanonicalJson(
+        connectionAssessmentEvidence.parse({ version: 1, candidate, basis }),
+      );
+      // Review hashes the current basis against this fingerprint, so the basis
+      // itself is not kept: it averaged 200 kB a row.
+      const evidence = { version: 1, candidate };
       const candidateKey = await keyFor(candidate);
       const scope = scopeFor(candidate);
       const entity = z
@@ -218,16 +221,16 @@ export async function publishPreparedEntityConnections(
       ),
       sql`, `,
     );
-    await transitionAssessmentStates(
+    const replaced = await transitionAssessmentStates(
       db,
       and(
-        eq(assessmentState.family, "recommendation"),
-        eq(assessmentState.active, true),
-        sql`${assessmentState.suppression} IS NULL`,
-        inArray(assessmentState.entity, [
+        eq(suggestionTable.family, "recommendation"),
+        eq(suggestionTable.active, true),
+        sql`${suggestionTable.suppression} IS NULL`,
+        inArray(suggestionTable.entity, [
           ...new Set(entries.map((entry) => entry.entity)),
         ]),
-        inArray(assessmentState.recordId, [
+        inArray(suggestionTable.recordId, [
           ...new Set(entries.map((entry) => entry.recordId)),
         ]),
         // Scope the indexed live subjects first, then join immutable evidence
@@ -235,9 +238,9 @@ export async function publishPreparedEntityConnections(
         // for every candidate and dominated production-copy publication time.
         sql`EXISTS (
           SELECT 1 FROM (VALUES ${wanted}) wanted(entity, record_id, scope, candidate_key, current_id)
-          JOIN "Assessment" prior ON prior.id = ${assessmentState.id}
-          WHERE wanted.entity = ${assessmentState.entity}
-            AND wanted.record_id = ${assessmentState.recordId}
+          JOIN "Suggestion" prior ON prior.id = ${suggestionTable.id}
+          WHERE wanted.entity = ${suggestionTable.entity}
+            AND wanted.record_id = ${suggestionTable.recordId}
             AND prior.id <> wanted.current_id
             AND prior.subject->>'scope' = wanted.scope
             AND prior.subject->>'candidateKey' = wanted.candidate_key
@@ -245,6 +248,10 @@ export async function publishPreparedEntityConnections(
       ),
       { active: false, status: "superseded" },
       { kind: "superseded_by_publication" },
+    );
+    await pruneReplacedSuggestions(
+      db,
+      replaced.map((row) => row.id),
     );
     return entries.map((entry, index) =>
       connectionProposal.parse({
@@ -265,12 +272,12 @@ export async function publishPreparedEntityConnections(
 }
 
 const connectionReadSelection = {
-  id: assessment.id,
-  family: assessment.family,
-  subject: assessment.subject,
-  fingerprint: assessment.fingerprint,
+  id: suggestionTable.id,
+  family: suggestionTable.family,
+  subject: suggestionTable.subject,
+  fingerprint: suggestionTable.fingerprint,
   // Freshness hashes the current basis, so the retained snapshot stays in SQL.
-  evidence: connectionReadEvidenceSql(sql`${assessment.evidence}`),
+  evidence: connectionReadEvidenceSql(sql`${suggestionTable.evidence}`),
 };
 
 function storedConnectionProposal(prediction: {
@@ -326,37 +333,25 @@ export async function readEntityConnectionsBatch(
     .select({
       prediction: connectionReadSelection,
     })
-    .from(assessment)
-    .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+    .from(suggestionTable)
     .where(
       and(
-        eq(assessment.family, "recommendation"),
-        eq(assessment.served, true),
-        eq(assessmentState.active, true),
-        eq(assessmentState.status, "pending"),
-        sql`${assessment.subject}->>'scope' LIKE 'connection.%'`,
+        eq(suggestionTable.family, "recommendation"),
+        eq(suggestionTable.served, true),
+        eq(suggestionTable.active, true),
+        eq(suggestionTable.status, "pending"),
+        sql`${suggestionTable.subject}->>'scope' LIKE 'connection.%'`,
         // Retain every competitor on a selected edge: filtering by review ID
         // alone could resurrect a proposal replaced by the reader's deduplication.
         selectedEdgeIds
-          ? sql`${assessment.id} = ANY(${uuidArrayParam(selectedEdgeIds)})`
+          ? sql`${suggestionTable.id} = ANY(${uuidArrayParam(selectedEdgeIds)})`
           : undefined,
-        sql`(${inArray(sql`(${assessment.evidence}->'candidate'->${"source"}->>'entityKind') || ':' || (${assessment.evidence}->'candidate'->${"source"}->>'entityId')`, keys)} OR ${inArray(sql`(${assessment.evidence}->'candidate'->${"target"}->>'entityKind') || ':' || (${assessment.evidence}->'candidate'->${"target"}->>'entityId')`, keys)})`,
-        notExists(
-          getDb(db)
-            .select({ id: feedback.id })
-            .from(feedback)
-            .where(
-              and(
-                eq(feedback.assessmentId, assessment.id),
-                eq(feedback.authority, "member"),
-                inArray(feedback.verdict, ["wrong", "dismissed"]),
-              ),
-            ),
-        ),
-        sql`NOT EXISTS (SELECT 1 FROM "AssessmentState" suppressed WHERE suppressed.active AND suppressed.entity=${assessmentState.entity} AND suppressed."recordId"=${assessmentState.recordId} AND suppressed.suppression->>'scope'=${assessment.subject}->>'scope' AND suppressed.suppression->>'candidateKey'=${assessment.subject}->>'candidateKey' AND (suppressed.suppression->>'fingerprint' IS NULL OR suppressed.suppression->>'fingerprint'=${assessment.fingerprint}))`,
+        sql`(${inArray(sql`(${suggestionTable.evidence}->'candidate'->${"source"}->>'entityKind') || ':' || (${suggestionTable.evidence}->'candidate'->${"source"}->>'entityId')`, keys)} OR ${inArray(sql`(${suggestionTable.evidence}->'candidate'->${"target"}->>'entityKind') || ':' || (${suggestionTable.evidence}->'candidate'->${"target"}->>'entityId')`, keys)})`,
+        sql`NOT ${memberRejectedSql(sql`${suggestionTable.decisions}`)}`,
+        sql`NOT EXISTS (SELECT 1 FROM "Suggestion" suppressed WHERE suppressed.active AND suppressed.entity=${suggestionTable.entity} AND suppressed."recordId"=${suggestionTable.recordId} AND suppressed.suppression->>'scope'=${suggestionTable.subject}->>'scope' AND suppressed.suppression->>'candidateKey'=${suggestionTable.subject}->>'candidateKey' AND (suppressed.suppression->>'fingerprint' IS NULL OR suppressed.suppression->>'fingerprint'=${suggestionTable.fingerprint}))`,
       ),
     )
-    .orderBy(assessment.createdAt, assessment.id);
+    .orderBy(suggestionTable.createdAt, suggestionTable.id);
   const parsed = rows.flatMap(({ prediction }) =>
     storedConnectionProposal(prediction),
   );
@@ -475,13 +470,12 @@ export async function readStoredConnectionProposals(
   if (!ids.length) return [];
   const rows = await getDb(db)
     .select({ prediction: connectionReadSelection })
-    .from(assessment)
-    .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+    .from(suggestionTable)
     .where(
       and(
-        sql`${assessment.id} = ANY(${uuidArrayParam(ids)})`,
-        eq(assessmentState.active, true),
-        eq(assessmentState.status, "pending"),
+        sql`${suggestionTable.id} = ANY(${uuidArrayParam(ids)})`,
+        eq(suggestionTable.active, true),
+        eq(suggestionTable.status, "pending"),
       ),
     );
   const proposals = rows.flatMap(({ prediction }) =>
@@ -536,8 +530,8 @@ export async function applyEntityConnection(
   return withTransactionDatabase(db, async (db) => {
     const [prediction] = await getDb(db)
       .select(connectionReadSelection)
-      .from(assessment)
-      .where(eq(assessment.id, state.id))
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, state.id))
       .limit(1);
     if (!prediction || prediction.family !== "recommendation")
       throw new Error("Connection Assessment not found");
@@ -560,9 +554,9 @@ export async function applyEntityConnection(
       );
     const basis = await captureConnectionBasis(db, candidate, true);
     const [freshState] = await getDb(db)
-      .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.id, state.id))
+      .select(suggestionStateColumns)
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, state.id))
       .limit(1)
       .for("update");
     if (!freshState?.active || freshState.status !== "pending")

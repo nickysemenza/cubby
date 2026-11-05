@@ -65,16 +65,19 @@ runs:
         WORKSPACE_FILTER: ${{ inputs.workspace-filter }}
         CUBBY_SKIP_POSTINSTALL_GENERATE: ${{ inputs.generate == 'false' && '1' || '' }}
       run: |
+        filter_args=()
         if [[ -n "$WORKSPACE_FILTER" ]]; then
           read -r -a workspace_filters <<< "$WORKSPACE_FILTER"
-          filter_args=()
           for workspace_filter in "${workspace_filters[@]}"; do
             filter_args+=(--filter "$workspace_filter")
           done
-          pnpm install --frozen-lockfile --prefer-offline "${filter_args[@]}"
-        else
-          pnpm install --frozen-lockfile --prefer-offline
         fi
+        # ffmpeg-static downloads its binary from GitHub during install, and that
+        # download fails transiently.
+        pnpm install --frozen-lockfile --prefer-offline "${filter_args[@]}" || {
+          sleep 15
+          pnpm install --frozen-lockfile --prefer-offline "${filter_args[@]}"
+        }
       shell: bash
 
     # The Nx `wasm` target's key fingerprints the local crates and wasm-pack,

@@ -1,6 +1,6 @@
 # ADR 0016: Shared Assessments and Feedback
 
-Status: Accepted design; implementation and migration are under review.
+Status: Superseded by [ADR 0025](0025-radical-simplification-of-background-work.md) decision 5 for storage, history and publication. The sections below record what was replaced; financial and identity constraints stay with their domain owners.
 
 Field Suggestions, Email review and accuracy grading, image-description
 corrections, Product matches and generic recommendation Dismissals capture
@@ -776,26 +776,9 @@ The derived drain retains but does not claim `assessment.reviewFacts` tickets:
 activation exhausted PostgreSQL memory and rolled back unrelated publications.
 Member decisions, evidence, paid work and all existing tickets remain retained.
 
-Browse reads project from `AssessmentState` and revalidate nothing beyond the
-requested page: connection evidence averages about 200 kB a row, so reading it
-per row cannot finish. Counts may include a stale row, and connection Strength
-is provisional in browse order. Accept rechecks current evidence, and money
-application keeps its strict checks.
-
-## Amendment: mail decisions and findings left the ledger (2026-11)
-
-Under [ADR 0025](0025-radical-simplification-of-background-work.md),
-`email_link`, `email_relevance`, `mail_import_outcome` and `run_finding` stopped
-writing Assessment, AssessmentState and Feedback.
-`EmailPurchaseDecision`, `EmailReview`, `EmailClassificationObservation`, the
-`target_outcome` RunOperation and `RunFinding` own them
-([ADR 0011](0011-email-as-a-first-class-entity.md#decisions-and-reviews-have-email-owners)).
-The other families are unchanged. Their retained rows stay in the ledgers until
-a later migration archives them, and a trigger refuses new rows in these
-families so a stale writer fails instead of writing what nothing reads.
-`assessment.review` keeps its wire shape and routes these handles to their
-owners. Automation history reads them through `mailAutomaticDecisionBranches`
-beside the Assessment families.
+Browse reads project from the Suggestion row and revalidate nothing beyond the
+requested page, so a count may include a stale row. Accept rechecks current
+evidence, and money application keeps its strict checks.
 
 ## Correction propagation removed
 
@@ -804,3 +787,24 @@ receipts and the conflict hold on later model answers. A member correction now
 applies only to its own record, and no later answer is withheld because a similar
 question was corrected elsewhere. Existing receipts stay in the ledger, and
 completed `assessment.correction` Jobs stay readable.
+
+## One Suggestion table
+
+`0080_suggestion_table` replaces Assessment, AssessmentState and Feedback with one
+`Suggestion` table and moves the old tables to the `archive` schema. A row keeps its
+old id. Member and automatic decisions move to `Suggestion.decisions`; projection
+events are not carried, and transitions no longer record any. A replaced row with
+no decision is deleted, except in the field family, whose rows queued evaluations
+and settled answers name by id. Connection evidence keeps only its candidate.
+Review still hashes the current basis against the stored fingerprint.
+
+A live answer for an unsaved record is an inactive field row with a null `recordId`:
+repeating the question reuses it, and a settled answer names it by id. It never
+appears in a review list. Frozen `evaluation_sample` rosters have no live reader and
+stay in the archive.
+
+Rows with no member input may be dropped. Evidence for this migration: of 52,983
+connection recommendations ever published, none was applied and one drew a member
+verdict; 5 of 200 sampled `transaction-purchase` and 3 of 200 `transaction-refund`
+rows passed the freshness check. Those two relations (19,410 rows) do not carry; a
+changed input re-admits discovery. Other pending connections carry, slimmed.

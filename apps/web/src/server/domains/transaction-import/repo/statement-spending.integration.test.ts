@@ -14,7 +14,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { getDb, runAfterCommit } from "~/server/db/helpers";
 import {
-  assessmentState,
+  suggestionTable,
   sourceTransactionRecord,
   vendor as vendorTable,
 } from "~/server/db/schema";
@@ -35,6 +35,7 @@ import {
 } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { drainStoredDerived } from "~/server/testing/background-queue";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import { recordSourceTransactionRecords } from "./source-transaction-record";
 import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";
@@ -148,7 +149,7 @@ describe("statement spending review and re-import", () => {
   };
   const pendingPreview = async () => {
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    const states = await getDb(ctx.db).query.assessmentState.findMany();
+    const states = await getDb(ctx.db).query.suggestionTable.findMany();
     const [suggestion] = await readStatementSuggestions(
       ctx.db,
       states.map((state) => state.id),
@@ -200,8 +201,8 @@ describe("statement spending review and re-import", () => {
       (SELECT count(*)::int FROM "FinancialTransactionAllocation") AS allocations,
       (SELECT count(*)::int FROM "Purchase") AS purchases,
       (SELECT count(*)::int FROM "Expense") AS expenses,
-      (SELECT count(*)::int FROM "Feedback" WHERE "assessmentId" = ${suggestion.id}::uuid) AS "totalFeedback",
-      (SELECT count(*)::int FROM "Feedback" WHERE "assessmentId" = ${suggestion.id}::uuid AND "operationId" IN (${command.operationId}, ${`command-application:${command.operationId}`})) AS feedback`)
+      (SELECT count(*)::int FROM "Suggestion" s CROSS JOIN LATERAL jsonb_array_elements(s.decisions) decision WHERE s.id = ${suggestion.id}::uuid) AS "totalFeedback",
+      (SELECT count(*)::int FROM "Suggestion" s CROSS JOIN LATERAL jsonb_array_elements(s.decisions) decision WHERE s.id = ${suggestion.id}::uuid AND decision->>'operationId' IN (${command.operationId}, ${`command-application:${command.operationId}`})) AS feedback`)
         ).rows[0]!;
       const before = await read();
       await enqueueJob(ctx.db, {
@@ -286,8 +287,8 @@ describe("statement spending review and re-import", () => {
               totalFeedback: before.totalFeedback + 1,
             });
             expect(
-              await getDb(ctx.db).query.assessmentState.findFirst({
-                where: eq(assessmentState.id, suggestion.id),
+              await getDb(ctx.db).query.suggestionTable.findFirst({
+                where: eq(suggestionTable.id, suggestion.id),
               }),
             ).toMatchObject({ active: true, status: "pending" });
             racing.mockRestore();
@@ -304,8 +305,8 @@ describe("statement spending review and re-import", () => {
               totalFeedback: before.totalFeedback + 1,
             });
             expect(
-              await getDb(ctx.db).query.assessmentState.findFirst({
-                where: eq(assessmentState.id, suggestion.id),
+              await getDb(ctx.db).query.suggestionTable.findFirst({
+                where: eq(suggestionTable.id, suggestion.id),
               }),
             ).toMatchObject({ active: true, status: "pending" });
             return;
@@ -337,11 +338,11 @@ describe("statement spending review and re-import", () => {
           purchases: before.purchases + 1,
           expenses: before.expenses + 1,
           feedback: before.feedback + 2,
-          totalFeedback: before.totalFeedback + 3,
+          totalFeedback: before.totalFeedback + 2,
         });
         expect(
-          await getDb(ctx.db).query.assessmentState.findFirst({
-            where: eq(assessmentState.id, suggestion.id),
+          await getDb(ctx.db).query.suggestionTable.findFirst({
+            where: eq(suggestionTable.id, suggestion.id),
           }),
         ).toMatchObject({ status: "applied" });
         const stored = await read();
@@ -442,7 +443,7 @@ describe("statement spending review and re-import", () => {
       });
     }
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    const states = await getDb(ctx.db).query.assessmentState.findMany();
+    const states = await getDb(ctx.db).query.suggestionTable.findMany();
     expect(
       await readStatementSuggestions(
         ctx.db,
@@ -481,7 +482,7 @@ describe("statement spending review and re-import", () => {
       await labelAndRefreshReads(advice);
       const suggestions = await readStatementSuggestions(
         ctx.db,
-        (await getDb(ctx.db).query.assessmentState.findMany()).map(
+        (await getDb(ctx.db).query.suggestionTable.findMany()).map(
           (state) => state.id,
         ),
       );
@@ -551,7 +552,7 @@ describe("statement spending review and re-import", () => {
           )
         ).rows[0]!.snapshot,
       ).toEqual(before);
-      const feedback = await getDb(ctx.db).query.feedback.findMany();
+      const feedback = await readSuggestionDecisions(ctx.db);
       expect(feedback).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -622,7 +623,7 @@ describe("statement spending review and re-import", () => {
     await labelAndRefreshReads(advice);
     const suggestions = await readStatementSuggestions(
       ctx.db,
-      (await getDb(ctx.db).query.assessmentState.findMany()).map(
+      (await getDb(ctx.db).query.suggestionTable.findMany()).map(
         (state) => state.id,
       ),
     );
@@ -666,7 +667,7 @@ describe("statement spending review and re-import", () => {
     await labelAndRefreshReads(advice);
     const [suggestion] = await readStatementSuggestions(
       ctx.db,
-      (await getDb(ctx.db).query.assessmentState.findMany()).map(
+      (await getDb(ctx.db).query.suggestionTable.findMany()).map(
         (state) => state.id,
       ),
     );
@@ -721,7 +722,7 @@ describe("statement spending review and re-import", () => {
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
     const suggestions = await readStatementSuggestions(
       ctx.db,
-      (await getDb(ctx.db).query.assessmentState.findMany()).map(
+      (await getDb(ctx.db).query.suggestionTable.findMany()).map(
         (state) => state.id,
       ),
     );
@@ -765,7 +766,7 @@ describe("statement spending review and re-import", () => {
     const suggestion = (
       await readStatementSuggestions(
         ctx.db,
-        (await getDb(ctx.db).query.assessmentState.findMany()).map(
+        (await getDb(ctx.db).query.suggestionTable.findMany()).map(
           (state) => state.id,
         ),
       )
@@ -850,7 +851,7 @@ describe("statement spending review and re-import", () => {
         runId: null,
       });
       expect(generated).toMatchObject({ published: 1, failed: [] });
-      const [state] = await getDb(ctx.db).query.assessmentState.findMany();
+      const [state] = await getDb(ctx.db).query.suggestionTable.findMany();
       expect(state).toBeDefined();
       const outcome = await previewStatementSuggestion(ctx.db, {
         assessmentId: state!.id,
@@ -911,7 +912,7 @@ describe("statement spending review and re-import", () => {
         'expenses', (SELECT jsonb_agg(to_jsonb(v)) FROM "Expense" v),
         'refs', (SELECT jsonb_agg(to_jsonb(v)) FROM "EntityExternalId" v),
         'rows', (SELECT jsonb_agg(to_jsonb(v)) FROM "SourceTransactionRecord" v),
-        'assessments', (SELECT jsonb_agg(to_jsonb(v)) FROM "AssessmentState" v)
+        'assessments', (SELECT jsonb_agg(to_jsonb(v)) FROM "Suggestion" v)
       ) AS state
     `)
       ).rows[0]!.state;
@@ -1109,7 +1110,7 @@ describe("statement spending review and re-import", () => {
       runId: null,
       scope: { importId: recorded.batchId! },
     });
-    const states = await getDb(ctx.db).query.assessmentState.findMany();
+    const states = await getDb(ctx.db).query.suggestionTable.findMany();
     const suggestions = await readStatementSuggestions(
       ctx.db,
       states.map((state) => state.id),
@@ -1170,7 +1171,7 @@ describe("statement spending review and re-import", () => {
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
     const refreshedStates = await getDb(
       ctx.db,
-    ).query.assessmentState.findMany();
+    ).query.suggestionTable.findMany();
     const refreshed = await readStatementSuggestions(
       ctx.db,
       refreshedStates.map((state) => state.id),

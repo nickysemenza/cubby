@@ -22,7 +22,7 @@ export const productClassificationEvidenceSql = (
       COALESCE(correction."description", analysis."result"->>'description', ''),
       CASE WHEN correction."description" IS NOT NULL THEN ' [confirmed correction]' ELSE '' END), E'\n' ORDER BY pi."sortOrder", pi."createdAt")
     FROM "EntityAttachment" pi JOIN "Image" ON "Image"."id" = pi."imageId" AND ${notDeleted("Image")}
-    LEFT JOIN LATERAL (SELECT "AssessmentState"."confirmedValue"->>'value' AS description FROM "AssessmentState" JOIN "Assessment" ON "Assessment".id = "AssessmentState".id WHERE "AssessmentState"."recordId" = "Image"."id" AND ${currentImageDescriptionConfirmation()} ORDER BY "AssessmentState"."createdAt" DESC LIMIT 1) correction ON true
+    LEFT JOIN LATERAL (SELECT "Suggestion"."confirmedValue"->>'value' AS description FROM "Suggestion" WHERE "Suggestion"."recordId" = "Image"."id" AND ${currentImageDescriptionConfirmation()} ORDER BY "Suggestion"."createdAt" DESC LIMIT 1) correction ON true
     LEFT JOIN LATERAL (SELECT a."result" FROM "AiAnalysis" a WHERE a."entityKind" = ${entitySchema.enum.image} AND a."entityId" = "Image"."id" AND a."feature" = 'image-description' AND ${notDeleted("a")} AND CASE WHEN pg_input_is_valid(a."inputFingerprint", ${"jsonb"}) THEN a."inputFingerprint"::jsonb->>'sourceContentHash' ELSE NULL END = "Image".sha256 ORDER BY a."createdAt" DESC LIMIT 1) analysis ON true
     WHERE pi."entityId" = ${productId} AND ${notDeleted("pi")}
   ), '')

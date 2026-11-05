@@ -1,13 +1,4 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
-import {
-  ASSESSMENT_READ_RULES_VERSION,
-  ASSESSMENT_READ_TARGET,
-  assessmentReadCoverage,
-  assessmentReadFact,
-  assessmentReadScopedSourceKind,
-  type AssessmentReadDependency,
-  type AssessmentReadResult,
-} from "@cubby/schemas/assessment-read-publication";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import {
   recordSourceTransactionRecordsInput,
@@ -23,15 +14,10 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { textHashRefSql } from "~/server/db/derived-source-ref";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import {
-  assessment,
-  assessmentState,
-  assessmentReadPublication,
-  assessmentReadDependency,
+  suggestionTable,
   financialTransactionAllocation,
-  financialTransaction,
   product as productTable,
   sourceTransactionRecord,
   transactionImport,
@@ -46,36 +32,10 @@ import { labelStatementSuggestions } from "~/server/domains/transaction-import/s
 import { pendingSuggestionsWorkSource } from "~/server/domains/work/repo/work-suggestions";
 import { executeEntity } from "~/server/entity-kernel";
 import {
-  writeAssessmentReadStage,
-  readAssessmentReadStage,
-  publishedAssessmentAdmissionSql,
-  publishedAssessmentCoverageSql,
-  publishedAssessmentRecordRefsSql,
-  assessmentReadSourceSelection,
-  type AssessmentReadStagePlan,
-  type AssessmentReadStageWrite,
-} from "~/server/generic/assessment/repo/read-publication";
-import {
   readAssessmentRecordRefs,
-  readAssessmentReadMemberships,
   touchingAssessmentIds,
 } from "~/server/generic/assessment/repo/review-families";
 import { suggestionFamilies } from "~/server/generic/assessment/repo/suggestion-families";
-import {
-  prepareAssessmentReadPublication,
-  prepareCanonicalAssessmentReadPublication,
-} from "~/server/generic/assessment/service/read-publication";
-import { isDerivedSink } from "~/server/generic/derived/repo/compute";
-import {
-  DERIVED_DRAIN,
-  derivedFanoutSourceScope,
-} from "~/server/generic/derived/repo/drain";
-import {
-  readWorkItems,
-  deleteWorkItems,
-  updateWorkItems,
-} from "~/server/generic/jobs/jobs.fixtures";
-import { markWork } from "~/server/generic/jobs/repo/work-items";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   readWorkQueueWith,
@@ -85,7 +45,6 @@ import {
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
-import { derivedComputes } from "~/server/workflows/derived-computes";
 
 import {
   automaticApplicationRule,
@@ -96,11 +55,9 @@ import { reviewAssessment } from "./assessment-review";
 import { listAutomaticDecisions } from "./automatic-decisions";
 import {
   acceptCleanSuggestions,
-  listSuggestionPage as readPublishedPage,
-  prepareSuggestionAdmission,
-  suggestionKeyFacts,
+  listSuggestionPage,
   suggestionRecordCounts,
-  suggestionCountsByFamily as readPublishedCounts,
+  suggestionCountsByFamily,
 } from "./suggestion-list";
 import {
   prepareTagSuggestionPublication,
@@ -232,49 +189,6 @@ const readyKey = (row: SuggestionListRow) =>
 
 describe("cross-family Suggestion list", () => {
   const ctx = withTestDb();
-  const publishReadFacts = async (ids: readonly string[]) => {
-    const prepared = await prepareCanonicalAssessmentReadPublication(
-      ctx.db,
-      ids,
-      async () => () => sql`true`,
-    );
-    expect([...prepared.failures]).toEqual([]);
-    expect(prepared.retained).toEqual([]);
-    for (const component of prepared.components)
-      expect(
-        await withTransactionDatabase(ctx.db, (tx) =>
-          writeAssessmentReadStage(tx, component.prepared, {
-            notify: () => undefined,
-          }),
-        ),
-      ).toMatchObject({ kind: "activated" });
-  };
-  // These journeys compare completed background publications with the former
-  // canonical results. Bare readers below separately verify missing coverage.
-  const refreshReadFacts = async () => {
-    const ids = (
-      await getDb(ctx.db)
-        .select({ id: assessmentState.id })
-        .from(assessmentState)
-        .where(
-          sql`${assessmentState.active} AND ${assessmentState.status} = ${"pending"}`,
-        )
-    ).map(({ id }) => id);
-    for (let start = 0; start < ids.length; start += 20)
-      await publishReadFacts(ids.slice(start, start + 20));
-  };
-  const refreshAndListSuggestions = async (
-    ...args: Parameters<typeof readPublishedPage>
-  ) => {
-    await refreshReadFacts();
-    return readPublishedPage(...args);
-  };
-  const refreshAndCountSuggestions = async (
-    ...args: Parameters<typeof readPublishedCounts>
-  ) => {
-    await refreshReadFacts();
-    return readPublishedCounts(...args);
-  };
 
   it("omits ignored statement evidence without a retirement pass", async () => {
     await card(ctx);
@@ -282,7 +196,7 @@ describe("cross-family Suggestion list", () => {
     await generate(ctx);
     expect(
       (
-        await refreshAndListSuggestions(ctx.db, {
+        await listSuggestionPage(ctx.db, {
           family: "statement_transaction",
         })
       ).items,
@@ -294,7 +208,7 @@ describe("cross-family Suggestion list", () => {
     });
     expect(
       (
-        await refreshAndListSuggestions(ctx.db, {
+        await listSuggestionPage(ctx.db, {
           family: "statement_transaction",
         })
       ).items,
@@ -327,189 +241,6 @@ describe("cross-family Suggestion list", () => {
     expect(
       (await readAssessmentRecordRefs(ctx.db, assessmentIds)).get(id),
     ).toEqual([{ entity: "product", id: item.id }]);
-    const claimed = [id];
-    for (let index = 0; index < 20; index++) {
-      const source = await createProductFixture(
-        ctx.db,
-        makeProductInput({ name: `Synthetic bounded publication ${index}` }),
-        ctx.actor,
-      );
-      claimed.push(
-        await fieldSuggestion(ctx, source, "model", 0.9, new Date()),
-      );
-    }
-    const bounded = await prepareCanonicalAssessmentReadPublication(
-      ctx.db,
-      claimed,
-      async () => () => sql`true`,
-    );
-    expect(bounded.components.flatMap(({ plan }) => plan.idsToPrepare)).toEqual(
-      claimed.slice(0, 20),
-    );
-    expect(bounded.retained).toEqual(claimed.slice(20));
-    expect(bounded.failures.size).toBe(0);
-    const resumed = await prepareCanonicalAssessmentReadPublication(
-      ctx.db,
-      bounded.retained,
-      async () => () => sql`true`,
-    );
-    expect(
-      resumed.components.flatMap(({ prepared }) =>
-        prepared.results.flatMap((result) =>
-          result.facts.map((fact) => fact.key.assessmentId),
-        ),
-      ),
-    ).toEqual(claimed.slice(20));
-    expect(resumed.retained).toEqual([]);
-    await recordFeedback(ctx.db, {
-      assessmentId: id,
-      operationId: "synthetic.hidden-field-inputs",
-      verdict: "ungraded",
-      authority: "automatic",
-      intent: "apply",
-      actorUserId: ctx.actor.userId,
-      metadata: {
-        kind: "assessment_application",
-        rule: { key: "synthetic-field-rule", revision: 1 },
-      },
-      receipt: { synthetic: true },
-    });
-    const hidden = await prepareCanonicalAssessmentReadPublication(
-      ctx.db,
-      [id],
-      async () => () => sql`true`,
-    );
-    expect(hidden.failures.size).toBe(0);
-    expect(
-      hidden.components.flatMap(({ prepared }) => prepared.results),
-    ).toMatchObject([
-      {
-        assessmentId: id,
-        facts: [],
-        dependencies: expect.arrayContaining([
-          { sourceKind: "product", sourceId: item.entityId },
-          { sourceKind: "assessment.fieldWrite", sourceId: item.entityId },
-        ]),
-      },
-    ]);
-    await getDb(ctx.db)
-      .update(assessmentState)
-      .set({ data: sql`${assessmentState.data} - 'liveInputFingerprint'` })
-      .where(eq(assessmentState.id, id));
-    const unavailable = await prepareCanonicalAssessmentReadPublication(
-      ctx.db,
-      [id],
-      async () => () => sql`true`,
-    );
-    expect(unavailable.failures.size).toBe(0);
-    expect(
-      unavailable.components.flatMap(({ prepared }) => prepared.results),
-    ).toEqual(hidden.components.flatMap(({ prepared }) => prepared.results));
-    await getDb(ctx.db)
-      .update(assessment)
-      .set({ served: false })
-      .where(eq(assessment.id, id));
-    const unserved = await prepareCanonicalAssessmentReadPublication(
-      ctx.db,
-      [id],
-      async () => () => sql`true`,
-    );
-    expect(unserved.failures.size).toBe(0);
-    expect(
-      unserved.components.flatMap(({ prepared }) => prepared.results),
-    ).toEqual([
-      {
-        assessmentId: id,
-        groupKey: `assessment:${id}`,
-        facts: [],
-        memberships: [],
-        dependencies: [],
-      },
-    ]);
-    await getDb(ctx.db)
-      .update(assessment)
-      .set({ served: true })
-      .where(eq(assessment.id, id));
-    await getDb(ctx.db)
-      .update(assessmentState)
-      .set({ active: false, status: "superseded" })
-      .where(eq(assessmentState.id, id));
-    const closed = await prepareCanonicalAssessmentReadPublication(
-      ctx.db,
-      [id],
-      async () => () => sql`true`,
-    );
-    expect(closed.failures.size).toBe(0);
-    expect(
-      closed.components.flatMap(({ prepared }) => prepared.results),
-    ).toEqual([
-      {
-        assessmentId: id,
-        groupKey: `assessment:${id}`,
-        facts: [],
-        memberships: [],
-        dependencies: [],
-      },
-    ]);
-    await markWork(
-      ctx.db,
-      DERIVED_DRAIN,
-      claimed.map((ref) => ({ target: ASSESSMENT_READ_TARGET, ref })),
-    );
-    const adapter = derivedComputes[ASSESSMENT_READ_TARGET];
-    if (!adapter || !isDerivedSink(adapter))
-      throw new Error("Synthetic Assessment sink missing");
-    const prepared = await adapter.prepare(ctx.db, claimed);
-    expect(adapter.preparationFailures?.(prepared).size).toBe(0);
-    const tickets = async () =>
-      new Map(
-        (await readWorkItems(ctx.db, { target: ASSESSMENT_READ_TARGET })).map(
-          (item) => [item.ref, item.ticket],
-        ),
-      );
-    const notified = new Set<string>();
-    const publication = {
-      tickets: await tickets(),
-      notify: (entity: string, refs: readonly string[]) => {
-        for (const ref of refs) notified.add(`${entity}:${ref}`);
-      },
-    };
-    const outcome = await withTransactionDatabase(ctx.db, (tx) =>
-      adapter.publish(tx, claimed, prepared, publication),
-    );
-    expect(outcome).toMatchObject({ retain: claimed.slice(20) });
-    expect(notified.size).toBeGreaterThan(0);
-    // The sink reports completion; only the generic settlement owner clears work.
-    expect((await tickets()).size).toBe(claimed.length);
-    await markWork(ctx.db, DERIVED_DRAIN, [
-      { target: ASSESSMENT_READ_TARGET, ref: id },
-    ]);
-    const replay = await withTransactionDatabase(ctx.db, (tx) =>
-      adapter.publish(tx, [id], prepared, {
-        ...publication,
-        tickets: new Map(),
-      }),
-    );
-    expect(replay).toMatchObject({ retain: [id], changed: [], covered: [] });
-    const currentTickets = await tickets();
-    const blocked = adapter.publicationBlocked?.(prepared, [id]);
-    const mixed = adapter.publicationBlocked?.(prepared, claimed);
-    if (!blocked || !mixed)
-      throw new Error("Synthetic Assessment source fence missing");
-    expect(
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT ${blocked} AS blocked, ${mixed} AS mixed`,
-        )
-      ).rows,
-    ).toEqual([{ blocked: true, mixed: false }]);
-    const remarked = await withTransactionDatabase(ctx.db, (tx) =>
-      adapter.publish(tx, [id], prepared, {
-        ...publication,
-        tickets: currentTickets,
-      }),
-    );
-    expect(remarked).toMatchObject({ retain: [id], changed: [], covered: [] });
   });
 
   // Reference proposals touch both the old and proposed records, even when
@@ -528,52 +259,14 @@ describe("cross-family Suggestion list", () => {
     });
     const id = await fieldSuggestion(ctx, item, "categoryId", 0.9, new Date());
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({
         currentValue: current.output.id,
         suggestedValue: proposed.output.id,
       })
-      .where(eq(assessmentState.id, id));
-    const memberships = (await readAssessmentReadMemberships(ctx.db, [id])).get(
-      id,
-    );
-    expect(memberships).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: "scope",
-          entity: "productCategory",
-          value: current.output.id,
-          stateFamily: "field",
-          retained: false,
-        }),
-        expect.objectContaining({
-          kind: "scope",
-          entity: "productCategory",
-          value: proposed.output.id,
-          stateFamily: "field",
-          retained: false,
-        }),
-      ]),
-    );
-    const references =
-      (await readAssessmentRecordRefs(ctx.db, [id])).get(id) ?? [];
-    expect(
-      memberships
-        ?.filter((row) => row.kind === "ref")
-        .map((row) => ({ entity: row.entity, id: row.value })),
-    ).toEqual(expect.arrayContaining(references));
-    expect(memberships?.filter((row) => row.kind === "ref")).toHaveLength(
-      references.length,
-    );
-    expect(
-      await suggestionRecordCounts(ctx.db, { recordIds: [current.output.id] }),
-    ).toMatchObject({
-      records: [{ id: current.output.id, pending: 1 }],
-      coverage: { missing: false },
-    });
-    await publishReadFacts([id]);
+      .where(eq(suggestionTable.id, id));
     for (const record of [current.output.id, proposed.output.id]) {
-      const page = await refreshAndListSuggestions(ctx.db, {
+      const page = await listSuggestionPage(ctx.db, {
         family: "field",
         recordEntity: "productCategory",
         recordIds: [record],
@@ -607,7 +300,7 @@ describe("cross-family Suggestion list", () => {
     );
     await record(ctx, [rowInput()]);
     await generate(ctx);
-    const unscoped = await refreshAndListSuggestions(ctx.db, {
+    const unscoped = await listSuggestionPage(ctx.db, {
       family: "statement_transaction",
     });
     expect(unscoped.items).toHaveLength(1);
@@ -617,7 +310,7 @@ describe("cross-family Suggestion list", () => {
     ]) {
       expect(
         (
-          await refreshAndListSuggestions(ctx.db, {
+          await listSuggestionPage(ctx.db, {
             family: "statement_transaction",
             recordIds: [id],
           })
@@ -643,7 +336,7 @@ describe("cross-family Suggestion list", () => {
       );
     if (!source) throw new Error("Synthetic source observation missing");
     const proposal = (
-      await refreshAndListSuggestions(ctx.db, {
+      await listSuggestionPage(ctx.db, {
         family: "statement_transaction",
       })
     ).items.find(
@@ -672,7 +365,7 @@ describe("cross-family Suggestion list", () => {
       costType: "materials",
       trade: "building",
     });
-    const settled = await createRepoEntity(ctx, "financialTransaction", {
+    await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "purchase",
       status: "posted",
@@ -696,26 +389,6 @@ describe("cross-family Suggestion list", () => {
       "financialAccount",
       account.id,
     );
-    // These observations and settlement edges arrived before any publication
-    // dependencies. Current indexed associations must still enroll the advice.
-    const transactionId = await resolveOrThrow(
-      ctx.db,
-      "financialTransaction",
-      settled.output.id,
-    );
-    for (const [kind, id] of [
-      ["sourceTransactionRecord", source.id],
-      ["financialAccount", accountId],
-      ["financialTransaction", transactionId],
-    ]) {
-      if (!kind || !id) throw new Error("Synthetic Statement input missing");
-      const affected = await getDb(ctx.db).execute(
-        assessmentReadSourceSelection(kind, sql`SELECT ${id}::uuid AS id`),
-      );
-      expect(affected.rows.map((row) => row.id)).toContain(
-        proposal.assessmentId,
-      );
-    }
     const expenseRef = {
       entity: "expense",
       id: expenseId,
@@ -769,60 +442,10 @@ describe("cross-family Suggestion list", () => {
       .set({ deletedAt: null })
       .where(eq(financialTransactionAllocation.purchaseId, purchaseId));
 
-    const otherAccount = await createRepoEntity(ctx, "financialAccount", {
-      name: "Synthetic settlement account",
-      identity: { kind: "bank_account", accountType: "checking" },
-    });
     await getDb(ctx.db)
-      .update(financialTransaction)
-      .set({ accountId: otherAccount.entityId })
-      .where(eq(financialTransaction.id, settled.entityId));
-    const observedInputs = new Map<
-      string,
-      readonly AssessmentReadDependency[]
-    >();
-    const publishedMemberships = await readAssessmentReadMemberships(
-      ctx.db,
-      [proposal.assessmentId],
-      (id, inputs) => observedInputs.set(id, inputs),
-    );
-    const inputs = observedInputs.get(proposal.assessmentId) ?? [];
-    expect(inputs).toEqual(
-      expect.arrayContaining([
-        { sourceKind: "sourceTransactionRecord", sourceId: source.id },
-        { sourceKind: "financialTransaction", sourceId: settled.entityId },
-        { sourceKind: "financialAccount", sourceId: accountId },
-        { sourceKind: "financialAccount", sourceId: otherAccount.entityId },
-        { sourceKind: "purchase", sourceId: purchaseId },
-        { sourceKind: "expense", sourceId: expenseId },
-      ]),
-    );
-    expect(publishedMemberships.get(proposal.assessmentId)).not.toContainEqual(
-      expect.objectContaining({
-        entity: "financialAccount",
-        value: otherAccount.output.id,
-      }),
-    );
-    const hashes = await getDb(ctx.db).execute(sql`SELECT
-      ${textHashRefSql(sql`${source.chargeKey}::text`)}::text AS charge,
-      ${textHashRefSql(sql`${source.externalId}::text`)}::text AS ref`);
-    expect(inputs).toEqual(
-      expect.arrayContaining([
-        {
-          sourceKind: assessmentReadScopedSourceKind.enum.statementCharge,
-          sourceId: hashes.rows[0]?.charge,
-        },
-        {
-          sourceKind: assessmentReadScopedSourceKind.enum.statementRef,
-          sourceId: hashes.rows[0]?.ref,
-        },
-      ]),
-    );
-
-    await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ status: "superseded", active: false })
-      .where(eq(assessmentState.id, proposal.assessmentId));
+      .where(eq(suggestionTable.id, proposal.assessmentId));
     await recordFeedback(ctx.db, {
       assessmentId: proposal.assessmentId,
       operationId: "synthetic.statement-history",
@@ -879,7 +502,7 @@ describe("cross-family Suggestion list", () => {
       ctx.actor,
     );
     await fieldSuggestion(ctx, product, "model", 0.95, new Date());
-    const page = await refreshAndListSuggestions(ctx.db, {});
+    const page = await listSuggestionPage(ctx.db, {});
     expect(page.items).toHaveLength(2);
     expect(
       page.items.find((row) => row.family === "statement_transaction")?.columns
@@ -890,21 +513,21 @@ describe("cross-family Suggestion list", () => {
     ).toBeUndefined();
     expect(
       (
-        await refreshAndListSuggestions(ctx.db, {
+        await listSuggestionPage(ctx.db, {
           ownerExclude: ["LPY-2A2A"],
         })
       ).items.map((row) => row.id),
     ).toEqual(page.items.map((row) => row.id));
     expect(
       (
-        await refreshAndListSuggestions(ctx.db, {
+        await listSuggestionPage(ctx.db, {
           accountExclude: [account.id],
         })
       ).items.map((row) => row.family),
     ).toEqual(["field"]);
     expect(
       (
-        await refreshAndListSuggestions(ctx.db, {
+        await listSuggestionPage(ctx.db, {
           family: "statement_transaction",
           account: [account.id],
           accountExclude: [account.id],
@@ -940,7 +563,7 @@ describe("cross-family Suggestion list", () => {
     await generate(ctx);
     const { proposal } = await connection(ctx);
 
-    const page = await refreshAndListSuggestions(ctx.db, { limit: 200 });
+    const page = await listSuggestionPage(ctx.db, { limit: 200 });
     expect(new Set(page.items.map((row) => row.family))).toEqual(
       new Set(["field", "statement_transaction", "recommendation"]),
     );
@@ -954,37 +577,6 @@ describe("cross-family Suggestion list", () => {
       ).toBe(true);
     }
     const ids = page.items.map((row) => row.id);
-    // Reset only synthetic publications for the first-publication recovery
-    // journey. Source rows, member decisions and durable tickets remain.
-    await getDb(ctx.db).delete(assessmentReadPublication);
-    await getDb(ctx.db).delete(assessmentReadDependency);
-    await markWork(
-      ctx.db,
-      DERIVED_DRAIN,
-      ids.map((ref) => ({ target: ASSESSMENT_READ_TARGET, ref })),
-    );
-    const observe = async () =>
-      (await readWorkItems(ctx.db))
-        .filter(
-          ({ target }) =>
-            target === ASSESSMENT_READ_TARGET ||
-            target.startsWith(`${ASSESSMENT_READ_TARGET}@`),
-        )
-        .map(({ target, ref, ticket }) => ({ target, ref, ticket }));
-    const observed = await observe();
-    const publishedFacts = async (
-      scope?: Parameters<typeof publishedAssessmentAdmissionSql>[0],
-    ) =>
-      assessmentReadFact
-        .array()
-        .parse(
-          (await getDb(ctx.db).execute(publishedAssessmentAdmissionSql(scope)))
-            .rows,
-        );
-    const coverage = async () =>
-      assessmentReadCoverage.parse(
-        (await getDb(ctx.db).execute(publishedAssessmentCoverageSql())).rows[0],
-      );
     const readPublishedWork = (
       input: Parameters<typeof readWorkQueueWith>[2]["input"] = {},
     ) =>
@@ -997,208 +589,6 @@ describe("cross-family Suggestion list", () => {
           memberOnly: false,
         },
       );
-    const missingWork = await readPublishedWork();
-    expect(missingWork.meta.totalCount).toBeGreaterThan(0);
-    // Work reads pending State directly, so there is no publication coverage warning.
-    expect(missingWork.meta.incompleteSources).toEqual([]);
-    expect(await publishedFacts()).toEqual([]);
-    expect(await readPublishedPage(ctx.db, {})).toMatchObject({
-      meta: { totalCount: ids.length, coverage: { missing: false } },
-    });
-    expect(await coverage()).toEqual({
-      missing: true,
-      stale: false,
-      unresolved: true,
-      failed: false,
-    });
-    const isolated = await prepareAssessmentReadPublication(
-      ctx.db,
-      [confident, unsure],
-      async (snapshot, plan) => {
-        if (plan.stage.assessmentIds.includes(confident))
-          throw new Error("Synthetic malformed publication input");
-        return prepareSuggestionAdmission(snapshot, plan.idsToPrepare);
-      },
-    );
-    expect([...isolated.failures.keys()]).toEqual([confident]);
-    expect(
-      isolated.components.map(({ plan }) => plan.stage.assessmentIds),
-    ).toEqual([[unsure]]);
-    expect(isolated.components[0]?.prepared.rows.has(unsure)).toBe(true);
-    const memberships = await readAssessmentReadMemberships(ctx.db, ids);
-    const references = await readAssessmentRecordRefs(ctx.db, ids);
-    for (const id of ids) {
-      const published = (memberships.get(id) ?? [])
-        .filter((row) => row.kind === "ref")
-        .map((row) => ({ entity: row.entity, id: row.value }));
-      expect(published).toHaveLength(references.get(id)?.length ?? 0);
-      expect(published).toEqual(
-        expect.arrayContaining(references.get(id) ?? []),
-      );
-    }
-    const together = await prepareSuggestionAdmission(ctx.db, ids);
-    expect(together.memberships).toEqual(memberships);
-    expect([...together.dependencies.keys()].sort()).toEqual([...ids].sort());
-    expect(together.dependencies.get(confident)).toEqual(
-      expect.arrayContaining([
-        { sourceKind: "product", sourceId: product.entityId },
-        { sourceKind: "assessment.fieldWrite", sourceId: product.entityId },
-      ]),
-    );
-    expect(together.dependencies.get(proposal.review.assessmentId)).toEqual(
-      expect.arrayContaining([
-        {
-          sourceKind: "product",
-          sourceId: await resolveOrThrow(
-            ctx.db,
-            "product",
-            proposal.source.entityId,
-          ),
-        },
-        {
-          sourceKind: "expense",
-          sourceId: await resolveOrThrow(
-            ctx.db,
-            "expense",
-            proposal.target.entityId,
-          ),
-        },
-      ]),
-    );
-    const separately = [];
-    for (const id of ids)
-      separately.push(await prepareSuggestionAdmission(ctx.db, [id]));
-    expect(together.rows).toEqual(
-      new Map(page.items.map((row) => [row.assessmentId, row])),
-    );
-    expect(new Map(separately.flatMap((batch) => [...batch.rows]))).toEqual(
-      together.rows,
-    );
-    expect(
-      new Map(separately.flatMap((batch) => [...batch.memberships])),
-    ).toEqual(together.memberships);
-    expect(
-      new Map(separately.flatMap((batch) => [...batch.dependencies])),
-    ).toEqual(together.dependencies);
-    const factsById = (keys: Parameters<typeof suggestionKeyFacts>[0][]) =>
-      new Map(keys.map((key) => [key.assessmentId, suggestionKeyFacts(key)]));
-    expect(factsById(separately.flatMap((batch) => batch.keys))).toEqual(
-      factsById(together.keys),
-    );
-    const canonical = await prepareCanonicalAssessmentReadPublication(
-      ctx.db,
-      ids,
-      async () => () => sql`true`,
-    );
-    expect(canonical.failures.size).toBe(0);
-    const canonicalResults = new Map(
-      canonical.components.flatMap(({ prepared }) =>
-        prepared.results.map(
-          (result) => [result.assessmentId, result] as const,
-        ),
-      ),
-    );
-    const results: AssessmentReadResult[] = ids.map((id) => {
-      const result = canonicalResults.get(id);
-      if (!result) throw new Error("Synthetic canonical publication missing");
-      // The recovery journey below supplies separate provisional dependencies.
-      return {
-        ...result,
-        groupKey: `synthetic-admission-${id}`,
-        dependencies: [],
-      };
-    });
-    const stage: AssessmentReadStagePlan = {
-      id: crypto.randomUUID(),
-      componentKey: "synthetic-shared-admission",
-      groups: results.map((row) => row.groupKey),
-      assessmentIds: ids,
-      tickets: observed,
-      revision: crypto.randomUUID(),
-      nextIndex: 0,
-      rulesVersion: ASSESSMENT_READ_RULES_VERSION,
-      clockDay: null,
-    };
-    const notified = new Set<string>();
-    const publication: Parameters<typeof writeAssessmentReadStage>[2] = {
-      notify: (entity, refs) =>
-        refs.forEach((ref) => notified.add(`${entity}:${ref}`)),
-    };
-    const write = (
-      plan: AssessmentReadStagePlan,
-      prefix: AssessmentReadResult[],
-      previousStageIds: readonly string[] = [],
-      sourceScope?: AssessmentReadStageWrite["sourceScope"],
-    ) =>
-      getDb(ctx.db).transaction((tx) =>
-        writeAssessmentReadStage(
-          tx,
-          { stage: plan, previousStageIds, results: prefix, sourceScope },
-          publication,
-        ),
-      );
-    const headers = () =>
-      getDb(ctx.db)
-        .select()
-        .from(assessmentReadPublication)
-        .where(eq(assessmentReadPublication.active, true));
-    const middle = Math.ceil(ids.length / 2);
-    const left = {
-      ...stage,
-      componentKey: "synthetic-admission-left",
-      assessmentIds: ids.slice(0, middle),
-      groups: stage.groups.slice(0, middle),
-    };
-    const right = {
-      ...stage,
-      id: crypto.randomUUID(),
-      revision: crypto.randomUUID(),
-      componentKey: "synthetic-admission-right",
-      assessmentIds: ids.slice(middle),
-      groups: stage.groups.slice(middle),
-    };
-    const firstResult = results[0];
-    if (!firstResult) throw new Error("Synthetic admission result missing");
-    expect(
-      await write(left, [
-        {
-          ...firstResult,
-          dependencies: [
-            {
-              sourceKind: "synthetic.provisional",
-              sourceId: crypto.randomUUID(),
-            },
-          ],
-        },
-      ]),
-    ).toMatchObject({
-      kind: "retained",
-    });
-    expect(
-      await getDb(ctx.db).select().from(assessmentReadDependency),
-    ).toHaveLength(1);
-    expect(await write(right, results.slice(middle, middle + 1))).toMatchObject(
-      { kind: "retained" },
-    );
-    expect(await headers()).toEqual([]);
-    // New source work cannot activate an older complete staged snapshot.
-    await markWork(ctx.db, DERIVED_DRAIN, [
-      { target: ASSESSMENT_READ_TARGET, ref: ids[0]! },
-    ]);
-    expect(
-      await write({ ...left, nextIndex: 1 }, results.slice(1, middle)),
-    ).toMatchObject({ kind: "retained" });
-    expect(await headers()).toEqual([]);
-    const restarted = {
-      ...stage,
-      id: crypto.randomUUID(),
-      revision: crypto.randomUUID(),
-      tickets: await observe(),
-    };
-    expect(await write(restarted, results, [left.id, right.id])).toMatchObject({
-      kind: "activated",
-    });
-    const active = await headers();
     expect((await readPublishedWork()).meta.totalCount).toBeGreaterThan(0);
     const recordWork = await readRecordWorkQueueWith(
       ctx.db,
@@ -1221,214 +611,6 @@ describe("cross-family Suggestion list", () => {
         (row) => row.id,
       ),
     ).toContain(product.id);
-    expect(
-      new Map(
-        (await publishedFacts()).map((fact) => [
-          fact.key.assessmentId,
-          fact.row,
-        ]),
-      ),
-    ).toEqual(together.rows);
-    expect(await coverage()).toEqual({
-      missing: false,
-      stale: true,
-      unresolved: true,
-      failed: false,
-    });
-    expect(active.map((row) => row.assessmentId).sort()).toEqual(
-      [...ids].sort(),
-    );
-    expect(await getDb(ctx.db).select().from(assessmentReadDependency)).toEqual(
-      [],
-    );
-    expect(
-      await getDb(ctx.db).select().from(assessmentReadPublication),
-    ).toHaveLength(together.keys.length);
-    expect(notified.size).toBeGreaterThan(0);
-    expect(await write(restarted, results)).toEqual({
-      kind: "activated",
-      changed: [],
-    });
-    // Another component's newly owed direct work does not invalidate this one.
-    await markWork(ctx.db, DERIVED_DRAIN, [
-      { target: ASSESSMENT_READ_TARGET, ref: crypto.randomUUID() },
-    ]);
-    const unchanged = {
-      ...restarted,
-      id: crypto.randomUUID(),
-      revision: crypto.randomUUID(),
-    };
-    notified.clear();
-    expect(await write(unchanged, results, [restarted.id])).toEqual({
-      kind: "activated",
-      changed: [],
-    });
-    expect(notified.size).toBeGreaterThan(0);
-    expect(await headers()).toEqual(active);
-    expect(
-      await getDb(ctx.db).select().from(assessmentReadPublication),
-    ).toHaveLength(together.keys.length);
-    const empty = {
-      ...unchanged,
-      id: crypto.randomUUID(),
-      revision: crypto.randomUUID(),
-    };
-    expect(
-      await write(
-        empty,
-        results.map((result) => ({ ...result, facts: [], memberships: [] })),
-        [unchanged.id],
-      ),
-    ).toMatchObject({ kind: "activated" });
-    const emptyPublications = await headers();
-    expect((await readPublishedWork()).meta.totalCount).toBeGreaterThan(0);
-    expect(await publishedFacts()).toEqual([]);
-    expect((await coverage()).missing).toBe(false);
-    expect(emptyPublications).toHaveLength(ids.length);
-    expect(
-      emptyPublications.every(
-        (row) =>
-          !row.admitted &&
-          row.family === null &&
-          row.key === null &&
-          row.row === null,
-      ),
-    ).toBe(true);
-    const relevantSource = crypto.randomUUID();
-    const newlyRelatedSource = crypto.randomUUID();
-    const sourceScope = derivedFanoutSourceScope({
-      dependentIds: ids,
-      sourceRefs: new Map([[`${ASSESSMENT_READ_TARGET}@0`, [relevantSource]]]),
-      declaration: {
-        kind: "internalRecord",
-        target: ASSESSMENT_READ_TARGET,
-        table: "Assessment",
-        compute: ASSESSMENT_READ_TARGET,
-        label: "Synthetic Assessment reviews",
-        publishes: "ownTable",
-        notifications: "sinkOwned",
-        reconcile: null,
-        dependsOn: [],
-        inputs: [
-          {
-            table: "Product",
-            tableColumn: "id",
-            entityColumn: "id",
-            columns: null,
-            where: null,
-            except: [],
-            path: null,
-            targetWhere: null,
-            json: null,
-            selection: { key: "syntheticCurrentAndRetained" },
-          },
-        ],
-      },
-      selections: {
-        syntheticCurrentAndRetained: (
-          refs,
-        ) => sql`SELECT ${confident}::uuid AS id
-          FROM (${refs}) source WHERE source.id = ${newlyRelatedSource}::uuid`,
-      },
-    });
-    // A source becoming relevant between the two barriers must not leave an
-    // applied cursor behind. The sequence models that changing SQL observation.
-    await getDb(ctx.db).execute(
-      sql`CREATE SEQUENCE synthetic_assessment_fence`,
-    );
-    const racingSource = crypto.randomUUID();
-    const racingScope: NonNullable<AssessmentReadStageWrite["sourceScope"]> = ({
-      ref,
-    }) =>
-      sql`CASE WHEN ${ref} = ${racingSource}::uuid
-        THEN nextval('synthetic_assessment_fence') > 1 ELSE false END`;
-    const raced = {
-      ...empty,
-      id: crypto.randomUUID(),
-      revision: crypto.randomUUID(),
-      tickets: await observe(),
-    };
-    await markWork(ctx.db, DERIVED_DRAIN, [
-      { target: `${ASSESSMENT_READ_TARGET}@0`, ref: racingSource },
-    ]);
-    expect(await write(raced, results, [empty.id], racingScope)).toEqual({
-      kind: "retained",
-      changed: [],
-    });
-    expect(
-      await readAssessmentReadStage(ctx.db, raced.componentKey),
-    ).toMatchObject({
-      id: raced.id,
-      assessmentIds: ids,
-      nextIndex: 0,
-    });
-    expect(await headers()).toEqual(emptyPublications);
-    await deleteWorkItems(ctx.db, {
-      target: `${ASSESSMENT_READ_TARGET}@0`,
-      refs: [racingSource],
-    });
-    expect(await write(raced, results, [], racingScope)).toMatchObject({
-      kind: "activated",
-    });
-    expect((await publishedFacts()).length).toBeGreaterThan(0);
-    await getDb(ctx.db).execute(sql`DROP SEQUENCE synthetic_assessment_fence`);
-    const scoped = {
-      ...empty,
-      id: crypto.randomUUID(),
-      revision: crypto.randomUUID(),
-      tickets: await observe(),
-    };
-    await markWork(ctx.db, DERIVED_DRAIN, [
-      { target: `${ASSESSMENT_READ_TARGET}@0`, ref: crypto.randomUUID() },
-    ]);
-    expect(await write(scoped, results, [raced.id], sourceScope)).toMatchObject(
-      { kind: "activated" },
-    );
-    const beforeSourceEdit = await headers();
-    const blocked = {
-      ...scoped,
-      id: crypto.randomUUID(),
-      revision: crypto.randomUUID(),
-    };
-    await markWork(ctx.db, DERIVED_DRAIN, [
-      { target: `${ASSESSMENT_READ_TARGET}@0`, ref: relevantSource },
-    ]);
-    expect(await write(blocked, results, [scoped.id], sourceScope)).toEqual({
-      kind: "retained",
-      changed: [],
-    });
-    expect(await headers()).toEqual(beforeSourceEdit);
-    await deleteWorkItems(ctx.db, {
-      target: `${ASSESSMENT_READ_TARGET}@0`,
-      refs: [relevantSource],
-    });
-    await markWork(ctx.db, DERIVED_DRAIN, [
-      { target: `${ASSESSMENT_READ_TARGET}@0`, ref: newlyRelatedSource },
-    ]);
-    expect(await write(blocked, results, [scoped.id], sourceScope)).toEqual({
-      kind: "retained",
-      changed: [],
-    });
-    expect(await headers()).toEqual(beforeSourceEdit);
-    await updateWorkItems(
-      ctx.db,
-      { target: ASSESSMENT_READ_TARGET, refs: [confident] },
-      { lastError: "Synthetic publication failure", attempts: 1 },
-    );
-    expect((await coverage()).failed).toBe(true);
-    await deleteWorkItems(ctx.db, { target: `${ASSESSMENT_READ_TARGET}@0` });
-    await deleteWorkItems(ctx.db, { target: ASSESSMENT_READ_TARGET });
-    // Complete the source work enrolled by real registration as well as the
-    // synthetic controller work used to exercise staged recovery above.
-    for (const target of new Set((await observe()).map((work) => work.target)))
-      await deleteWorkItems(ctx.db, { target });
-    expect(await coverage()).toEqual({
-      missing: false,
-      stale: false,
-      unresolved: false,
-      failed: false,
-    });
-    expect((await readPublishedWork()).meta.incompleteSources).toEqual([]);
     expect(ids.indexOf(confident)).toBeLessThan(ids.indexOf(unsure));
     const connectionRow = page.items.find(
       (row) => row.id === proposal.review.assessmentId,
@@ -1445,12 +627,12 @@ describe("cross-family Suggestion list", () => {
     });
 
     // Keyset and offset pages walk the same order without gaps.
-    const first = await refreshAndListSuggestions(ctx.db, { limit: 2 });
-    const second = await refreshAndListSuggestions(ctx.db, {
+    const first = await listSuggestionPage(ctx.db, { limit: 2 });
+    const second = await listSuggestionPage(ctx.db, {
       limit: 2,
       cursor: first.next!,
     });
-    const offset = await refreshAndListSuggestions(ctx.db, {
+    const offset = await listSuggestionPage(ctx.db, {
       limit: 2,
       offset: 2,
     });
@@ -1460,40 +642,15 @@ describe("cross-family Suggestion list", () => {
     expect(offset.items.map((row) => row.id)).toEqual(ids.slice(2, 4));
     expect(first.meta).toMatchObject({ pageSize: 2, totalCount: ids.length });
     // The clean banner retains its count; decorative facet rosters are removed.
-    const fieldsOnly = await refreshAndListSuggestions(ctx.db, {
+    const fieldsOnly = await listSuggestionPage(ctx.db, {
       family: "field",
     });
     expect(fieldsOnly.meta.totalCount).toBe(2);
     expect(fieldsOnly.meta.cleanCount).toBe(0);
-    const productId = await resolveOrThrow(ctx.db, "product", product.id);
-    const productScope = {
-      records: [{ entity: "product", code: product.id, id: productId }],
-    };
-    const publishedCounts = await getDb(ctx.db)
-      .execute(sql`SELECT "recordCode", count(*)::int AS count
-      FROM (${publishedAssessmentRecordRefsSql(productScope)}) records
-      WHERE "recordCode" = ${product.id} GROUP BY "recordCode"`);
-    expect(publishedCounts.rows).toEqual([
-      { recordCode: product.id, count: 2 },
-    ]);
     expect(
-      await suggestionRecordCounts(ctx.db, { recordIds: [product.id] }),
-    ).toMatchObject({
-      records: [{ id: product.id, pending: 2 }],
-      coverage: {
-        missing: false,
-        stale: false,
-        unresolved: false,
-        failed: false,
-      },
-    });
-    expect(
-      (await publishedFacts(productScope))
-        .map((fact) => fact.key.assessmentId)
-        .sort(),
-    ).toEqual([confident, unsure].sort());
-    expect(await publishedFacts({ records: [] })).toEqual([]);
-    expect(await publishedFacts({ families: [] })).toEqual([]);
+      (await suggestionRecordCounts(ctx.db, { recordIds: [product.id] }))
+        .records,
+    ).toEqual([{ id: product.id, pending: 2 }]);
     await reviewAssessment(ctx.db, kernelCtx(ctx), {
       assessmentId: confident,
       operationId: "synthetic-published-reader-reject",
@@ -1501,14 +658,11 @@ describe("cross-family Suggestion list", () => {
       intent: "history",
     });
     expect(
-      (await publishedFacts()).map((fact) => fact.key.assessmentId),
-    ).not.toContain(confident);
-    expect(
       (await suggestionRecordCounts(ctx.db, { recordIds: [product.id] }))
         .records,
     ).toEqual([{ id: product.id, pending: 1 }]);
     const fieldCounts = (
-      await readPublishedCounts(ctx.db, {
+      await suggestionCountsByFamily(ctx.db, {
         family: "field",
         recordIds: [product.id],
       })
@@ -1517,10 +671,6 @@ describe("cross-family Suggestion list", () => {
     expect(
       fieldCounts?.fields.reduce((total, field) => total + field.pending, 0),
     ).toBe(1);
-    // The retained revision is still stored; the committed member decision hid it.
-    expect(
-      (await headers()).some((row) => row.assessmentId === confident),
-    ).toBe(true);
     const donors = [];
     for (let index = 0; index < 3; index++)
       donors.push(
@@ -1548,48 +698,23 @@ describe("cross-family Suggestion list", () => {
     if (!publishTag) throw new Error("Synthetic tag preparation missing");
     const tag = await publishTag(ctx.db);
     if (!tag) throw new Error("Synthetic tag publication missing");
-    const beforeTagEdit = await prepareSuggestionAdmission(ctx.db, [
-      tag.assessmentId,
-    ]);
-    expect(beforeTagEdit.keys).toHaveLength(1);
-    expect(beforeTagEdit.dependencies.get(tag.assessmentId)).toHaveLength(4);
-    expect(
-      beforeTagEdit.dependencies
-        .get(tag.assessmentId)
-        ?.every(
-          (input) =>
-            input.sourceKind === assessmentReadScopedSourceKind.enum.tagProduct,
-        ),
-    ).toBe(true);
+    const listedForProduct = async () =>
+      (await listSuggestionPage(ctx.db, { recordIds: [product.id] })).items.map(
+        (row) => row.assessmentId,
+      );
+    expect(await listedForProduct()).toContain(tag.assessmentId);
+    // A supporting Product edit makes the tag proposal stale.
     await getDb(ctx.db)
       .update(productTable)
       .set({ updatedAt: sql`${productTable.updatedAt} + interval '1 second'` })
       .where(eq(productTable.id, donors[0]!.entityId));
-    const afterTagEdit = await prepareSuggestionAdmission(ctx.db, [
-      tag.assessmentId,
-    ]);
-    expect(afterTagEdit.keys).toEqual([]);
-    expect(afterTagEdit.dependencies).toEqual(beforeTagEdit.dependencies);
+    expect(await listedForProduct()).not.toContain(tag.assessmentId);
   });
 
   // Reference pruning must retain both endpoints and mixed scopes without
   // admitting a connection under an unrelated record kind.
   it("lists a connection under both of its endpoints", async () => {
     const { item, charge, proposal } = await connection(ctx);
-    // The target is not this recommendation's primary State record, and no
-    // publication dependencies exist yet. Endpoint indexes must still find it.
-    for (const [kind, code] of [
-      ["product", item.id],
-      ["expense", charge.output.id],
-    ] as const) {
-      const id = await resolveOrThrow(ctx.db, kind, code);
-      const affected = await getDb(ctx.db).execute(
-        assessmentReadSourceSelection(kind, sql`SELECT ${id}::uuid AS id`),
-      );
-      expect(affected.rows.map((row) => row.id)).toContain(
-        proposal.review.assessmentId,
-      );
-    }
     const unrelatedExpenses: Awaited<
       ReturnType<typeof createRepoIdentity<"expense">>
     >[] = [];
@@ -1605,13 +730,6 @@ describe("cross-family Suggestion list", () => {
     const unrelatedCodes = unrelatedExpenses.map((row) => row.output.id);
     const batchCounts = async (recordIds: string[]) =>
       (await suggestionRecordCounts(ctx.db, { recordIds })).records;
-    expect(
-      await suggestionRecordCounts(ctx.db, { recordIds: [item.id] }),
-    ).toMatchObject({
-      records: [{ id: item.id, pending: 1 }],
-      coverage: { missing: false },
-    });
-    await publishReadFacts([proposal.review.assessmentId]);
     expect(await batchCounts([charge.output.id, ...unrelatedCodes])).toEqual([
       { id: charge.output.id, pending: 1 },
       ...unrelatedCodes.map((id) => ({ id, pending: 0 })),
@@ -1628,7 +746,7 @@ describe("cross-family Suggestion list", () => {
       ...unrelatedCodes.slice(0, 48).map((id) => ({ id, pending: 0 })),
     ]);
     for (const recordId of [item.id, charge.output.id]) {
-      const page = await refreshAndListSuggestions(ctx.db, {
+      const page = await listSuggestionPage(ctx.db, {
         recordIds: [recordId],
         family: "recommendation",
       });
@@ -1646,81 +764,6 @@ describe("cross-family Suggestion list", () => {
         ],
       });
     }
-    // The connection adapter uses immutable family authority even when State
-    // differs; primary-record discovery must retain that adapter.
-    await getDb(ctx.db)
-      .update(assessmentState)
-      .set({ family: "image_description" })
-      .where(eq(assessmentState.id, proposal.review.assessmentId));
-    const divergentInputs: AssessmentReadDependency[] = [];
-    const divergent =
-      (
-        await readAssessmentReadMemberships(
-          ctx.db,
-          [proposal.review.assessmentId],
-          (_id, inputs) => divergentInputs.push(...inputs),
-        )
-      ).get(proposal.review.assessmentId) ?? [];
-    expect(divergentInputs).toEqual(
-      expect.arrayContaining([
-        { sourceKind: "image", sourceId: item.entityId },
-        { sourceKind: "product", sourceId: item.entityId },
-        {
-          sourceKind: "expense",
-          sourceId: await resolveOrThrow(ctx.db, "expense", charge.output.id),
-        },
-      ]),
-    );
-    await getDb(ctx.db)
-      .update(assessment)
-      .set({
-        evidence: sql`jsonb_set(${assessment.evidence}, '{candidate,target,entityId}', to_jsonb(${"  " + charge.output.id.toLowerCase() + "  "}::text))`,
-      })
-      .where(eq(assessment.id, proposal.review.assessmentId));
-    const normalizedInputs: AssessmentReadDependency[] = [];
-    await readAssessmentReadMemberships(
-      ctx.db,
-      [proposal.review.assessmentId],
-      (_id, inputs) => normalizedInputs.push(...inputs),
-    );
-    expect(normalizedInputs).toContainEqual({
-      sourceKind: "expense",
-      sourceId: await resolveOrThrow(ctx.db, "expense", charge.output.id),
-    });
-    await getDb(ctx.db)
-      .update(assessment)
-      .set({
-        evidence: sql`jsonb_set(${assessment.evidence}, '{candidate,target,entityId}', to_jsonb(${charge.output.id}::text))`,
-      })
-      .where(eq(assessment.id, proposal.review.assessmentId));
-    expect(divergent.filter((row) => row.kind === "scope")).toEqual([
-      expect.objectContaining({
-        entity: "product",
-        value: item.entityId,
-        stateFamily: "image_description",
-      }),
-    ]);
-    expect(divergent).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: "ref",
-          entity: "expense",
-          value: charge.output.id,
-        }),
-      ]),
-    );
-    // Discovery covers the whole request batch before references are counted.
-    expect(await batchCounts([charge.output.id])).toEqual([
-      { id: charge.output.id, pending: 0 },
-    ]);
-    expect(await batchCounts([item.id, charge.output.id])).toEqual([
-      { id: item.id, pending: 1 },
-      { id: charge.output.id, pending: 1 },
-    ]);
-    await getDb(ctx.db)
-      .update(assessmentState)
-      .set({ family: "recommendation" })
-      .where(eq(assessmentState.id, proposal.review.assessmentId));
     const category = await createRepoEntity(ctx, "productCategory", {
       name: "Synthetic unrelated category",
     });
@@ -1728,7 +771,7 @@ describe("cross-family Suggestion list", () => {
     for (const recordId of [category.output.id, task.output.id]) {
       expect(
         (
-          await refreshAndListSuggestions(ctx.db, {
+          await listSuggestionPage(ctx.db, {
             recordIds: [recordId],
             family: "recommendation",
           })
@@ -1737,7 +780,7 @@ describe("cross-family Suggestion list", () => {
     }
     expect(
       (
-        await refreshAndListSuggestions(ctx.db, {
+        await listSuggestionPage(ctx.db, {
           recordIds: [category.output.id, charge.output.id],
           family: "recommendation",
         })
@@ -1747,7 +790,7 @@ describe("cross-family Suggestion list", () => {
     for (const entityKind of ["product", "expense"]) {
       expect(
         (
-          await refreshAndListSuggestions(ctx.db, {
+          await listSuggestionPage(ctx.db, {
             family: "recommendation",
             entityKindExclude: [entityKind],
           })
@@ -1756,16 +799,19 @@ describe("cross-family Suggestion list", () => {
     }
     expect(
       (
-        await refreshAndListSuggestions(ctx.db, {
+        await listSuggestionPage(ctx.db, {
           family: "recommendation",
           entityKindExclude: ["task"],
         })
       ).items.map((row) => row.id),
     ).toEqual([proposal.review.assessmentId]);
     const [originalReference] = await getDb(ctx.db)
-      .select({ subject: assessment.subject, evidence: assessment.evidence })
-      .from(assessment)
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .select({
+        subject: suggestionTable.subject,
+        evidence: suggestionTable.evidence,
+      })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     if (!originalReference) throw new Error("Synthetic recommendation missing");
 
     const retained = await createProductFixture(
@@ -1791,60 +837,35 @@ describe("cross-family Suggestion list", () => {
       });
     for (const id of [retained.entityId, retained.id]) {
       await getDb(ctx.db)
-        .update(assessment)
+        .update(suggestionTable)
         .set({
-          evidence: sql`${assessment.evidence} || ${JSON.stringify({ records: [{ entity: "product", id, label: "Synthetic retained reference" }] })}::jsonb`,
+          evidence: sql`${suggestionTable.evidence} || ${JSON.stringify({ records: [{ entity: "product", id, label: "Synthetic retained reference" }] })}::jsonb`,
         })
-        .where(eq(assessment.id, proposal.review.assessmentId));
+        .where(eq(suggestionTable.id, proposal.review.assessmentId));
       // Connection endpoints stay authoritative even when retained records exist.
       expect((await touchesRetained())?.size).toBe(0);
-      expect(
-        (
-          await readAssessmentReadMemberships(ctx.db, [
-            proposal.review.assessmentId,
-          ])
-        )
-          .get(proposal.review.assessmentId)
-          ?.filter((row) => row.kind === "scope" && row.value === id),
-      ).toEqual([]);
     }
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set({
-        subject: sql`jsonb_set(${assessment.subject}, '{scope}', '"synthetic.retained-history"'::jsonb)`,
+        subject: sql`jsonb_set(${suggestionTable.subject}, '{scope}', '"synthetic.retained-history"'::jsonb)`,
       })
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     for (const id of [retained.entityId, retained.id]) {
       await getDb(ctx.db)
-        .update(assessment)
+        .update(suggestionTable)
         .set({
-          evidence: sql`${assessment.evidence} || ${JSON.stringify({ records: [{ entity: "product", id, label: "Synthetic retained reference" }] })}::jsonb`,
+          evidence: sql`${suggestionTable.evidence} || ${JSON.stringify({ records: [{ entity: "product", id, label: "Synthetic retained reference" }] })}::jsonb`,
         })
-        .where(eq(assessment.id, proposal.review.assessmentId));
+        .where(eq(suggestionTable.id, proposal.review.assessmentId));
       expect(await touchesRetained()).toEqual(
         new Set([proposal.review.assessmentId]),
       );
-      expect(
-        (
-          await readAssessmentReadMemberships(ctx.db, [
-            proposal.review.assessmentId,
-          ])
-        ).get(proposal.review.assessmentId),
-      ).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            kind: "scope",
-            entity: "product",
-            value: id,
-            retained: true,
-          }),
-        ]),
-      );
     }
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set(originalReference)
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     const taskUuid = await resolveOrThrow(ctx.db, "task", task.output.id);
     const taskConnection = await publishEntityConnection(ctx.db, {
       relation: "task-subject-product",
@@ -1856,7 +877,7 @@ describe("cross-family Suggestion list", () => {
     for (const recordId of [task.output.id, item.id]) {
       expect(
         (
-          await refreshAndListSuggestions(ctx.db, {
+          await listSuggestionPage(ctx.db, {
             recordIds: [recordId],
             family: "recommendation",
           })
@@ -1866,9 +887,9 @@ describe("cross-family Suggestion list", () => {
 
     // Retained current state can differ from the immutable candidate source.
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ entity: "task", recordId: taskUuid })
-      .where(eq(assessmentState.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     const productUuid = await resolveOrThrow(ctx.db, "product", item.id);
     const expenseUuid = await resolveOrThrow(
       ctx.db,
@@ -1877,12 +898,12 @@ describe("cross-family Suggestion list", () => {
     );
     // Model a retained unknown connection scope with a UUID-form source ref.
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set({
-        subject: sql`jsonb_set(${assessment.subject}, '{scope}', to_jsonb('connection.legacy-synthetic'::text))`,
-        evidence: sql`jsonb_set(${assessment.evidence}, '{candidate,source,entityId}', to_jsonb(${productUuid}::text))`,
+        subject: sql`jsonb_set(${suggestionTable.subject}, '{scope}', to_jsonb('connection.legacy-synthetic'::text))`,
+        evidence: sql`jsonb_set(${suggestionTable.evidence}, '{candidate,source,entityId}', to_jsonb(${productUuid}::text))`,
       })
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     const eligibility = {
       kind: "suggestions" as const,
       families: [assessmentFamily.enum.recommendation],
@@ -1901,9 +922,9 @@ describe("cross-family Suggestion list", () => {
 
     // Automatic history still follows both original endpoints after retirement.
     await getDb(ctx.db)
-      .update(assessmentState)
+      .update(suggestionTable)
       .set({ status: "superseded", active: false })
-      .where(eq(assessmentState.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     await recordFeedback(ctx.db, {
       assessmentId: proposal.review.assessmentId,
       operationId: "synthetic.connection-history",
@@ -1932,12 +953,12 @@ describe("cross-family Suggestion list", () => {
 
     // A retained null scope uses explicit evidence records, not candidate refs.
     await getDb(ctx.db)
-      .update(assessment)
+      .update(suggestionTable)
       .set({
-        subject: sql`jsonb_set(${assessment.subject}, '{scope}', 'null'::jsonb)`,
-        evidence: sql`jsonb_set(${assessment.evidence}, '{records}', ${JSON.stringify([{ entity: "product", id: item.id }])}::jsonb)`,
+        subject: sql`jsonb_set(${suggestionTable.subject}, '{scope}', 'null'::jsonb)`,
+        evidence: sql`jsonb_set(${suggestionTable.evidence}, '{records}', ${JSON.stringify([{ entity: "product", id: item.id }])}::jsonb)`,
       })
-      .where(eq(assessment.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     for (const record of records) {
       expect(
         (
@@ -1961,7 +982,7 @@ describe("cross-family Suggestion list", () => {
       { fingerprint: "fp-list-firmed" },
     );
     await generate(ctx);
-    const page = await refreshAndListSuggestions(ctx.db, {
+    const page = await listSuggestionPage(ctx.db, {
       family: "statement_transaction",
     });
     expect(page.items).toHaveLength(2);
@@ -1976,13 +997,13 @@ describe("cross-family Suggestion list", () => {
     }
     expect(
       (
-        await refreshAndListSuggestions(ctx.db, {
+        await listSuggestionPage(ctx.db, {
           family: "statement_transaction",
           clean: ["true"],
         })
       ).items,
     ).toEqual([]);
-    const grouped = await refreshAndListSuggestions(ctx.db, {
+    const grouped = await listSuggestionPage(ctx.db, {
       group: "account_month",
     });
     expect(grouped.meta.groups).toEqual([
@@ -2024,7 +1045,7 @@ describe("cross-family Suggestion list", () => {
       spendingAdvice: async () => advice,
       runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
     });
-    const listed = await refreshAndListSuggestions(ctx.db, {
+    const listed = await listSuggestionPage(ctx.db, {
       family: "statement_transaction",
     });
     // A later export observes the same money under a firmed-up descriptor;
@@ -2086,7 +1107,7 @@ describe("cross-family Suggestion list", () => {
       .from(transactionImport);
     expect(observations).toHaveLength(3);
     expect(collections).toHaveLength(4);
-    const all = await refreshAndListSuggestions(ctx.db, {
+    const all = await listSuggestionPage(ctx.db, {
       family: "statement_transaction",
     });
     expect(all.items).toHaveLength(2);
@@ -2113,18 +1134,18 @@ describe("cross-family Suggestion list", () => {
         recordEntity: ref.entity,
         recordIds: [ref.code],
       };
-      const page = await refreshAndListSuggestions(ctx.db, filters);
+      const page = await listSuggestionPage(ctx.db, filters);
       expect(page.items).toHaveLength(1);
       expect(page.items.some((row) => row.id === current?.id)).toBe(
         ref.relevant,
       );
-      const counts = await refreshAndCountSuggestions(ctx.db, filters);
+      const counts = await suggestionCountsByFamily(ctx.db, filters);
       expect(
         counts.families.find((row) => row.family === "statement_transaction")
           ?.pending,
       ).toBe(1);
     }
-    const combined = await refreshAndListSuggestions(ctx.db, {
+    const combined = await listSuggestionPage(ctx.db, {
       family: "statement_transaction",
       recordIds: observations
         .filter((row) => row.providerId !== null)
@@ -2145,7 +1166,7 @@ describe("cross-family Suggestion list", () => {
     const account = await card(ctx);
     await record(ctx, [rowInput()]);
     await generate(ctx);
-    const { families } = await refreshAndCountSuggestions(ctx.db);
+    const { families } = await suggestionCountsByFamily(ctx.db);
     const byFamily = new Map(families.map((row) => [row.family, row]));
     expect(byFamily.get("field")).toMatchObject({
       pending: 1,
@@ -2163,9 +1184,11 @@ describe("cross-family Suggestion list", () => {
       medium: 0,
       weak: 1,
     });
-    const pending = async (input: Parameters<typeof readPublishedCounts>[1]) =>
+    const pending = async (
+      input: Parameters<typeof suggestionCountsByFamily>[1],
+    ) =>
       (
-        await refreshAndCountSuggestions(ctx.db, {
+        await suggestionCountsByFamily(ctx.db, {
           family: "statement_transaction",
           ...input,
         })

@@ -14,7 +14,7 @@ import {
   notDeleted,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { assessment, assessmentState, product } from "~/server/db/schema";
+import { suggestionTable, product } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
@@ -85,26 +85,25 @@ async function loadRunRejections(db: Database, runId: string) {
   const runUuid = await resolveOrThrow(db, "run", runId);
   return getDb(db)
     .select({
-      scope: assessmentState.suppression,
+      scope: suggestionTable.suppression,
       id: product.shortcode,
       name: product.name,
     })
-    .from(assessmentState)
-    .innerJoin(assessment, eq(assessment.id, assessmentState.id))
+    .from(suggestionTable)
     .innerJoin(
       product,
       and(
-        sql`${assessment.evidence}->>'productId' = ${product.shortcode}`,
+        sql`${suggestionTable.evidence}->>'productId' = ${product.shortcode}`,
         notDeleted(product),
       ),
     )
     .where(
       and(
-        eq(assessmentState.entity, "run"),
-        eq(assessmentState.recordId, runUuid),
-        eq(assessmentState.family, "recommendation"),
-        eq(assessmentState.active, true),
-        isNotNull(assessmentState.suppression),
+        eq(suggestionTable.entity, "run"),
+        eq(suggestionTable.recordId, runUuid),
+        eq(suggestionTable.family, "recommendation"),
+        eq(suggestionTable.active, true),
+        isNotNull(suggestionTable.suppression),
       ),
     );
 }

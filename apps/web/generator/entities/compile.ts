@@ -2704,6 +2704,7 @@ export const compileEntity = (
     shortcode,
     inspector,
     timeline: declaration.capabilities.timeline,
+    suggestionFamilies: declaration.capabilities.suggestions,
     contract,
     descriptor,
     route,

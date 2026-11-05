@@ -13,8 +13,6 @@ import { z } from "zod";
 import type { DatabaseChanges } from "~/lib/doorbell";
 import type { Database } from "~/server/db";
 import {
-  isFanoutInput,
-  type InternalStoredDerivedDeclaration,
   type DerivedInput,
   type DerivedPathStep,
   dependentsOf,
@@ -604,56 +602,6 @@ function fanoutRows(
         : input.path
           ? pathSql(input.path, refs)
           : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
-}
-
-/** A sink's expansion and source fence share current-and-retained selectors. */
-export function derivedFanoutSourceScope({
-  declaration,
-  selections,
-  dependentIds,
-  sourceRefs,
-  sourceTargets,
-}: {
-  declaration: InternalStoredDerivedDeclaration;
-  selections: Readonly<Record<string, DerivedFanoutSelection>>;
-  dependentIds: readonly string[];
-  /** Snapshot input identities survive a move that changes the live selector. */
-  sourceRefs: ReadonlyMap<string, readonly string[]>;
-  /** Excluded or unknown inputs keep the conservative target-wide fence. */
-  sourceTargets?: ReadonlySet<string>;
-}): (source: { target: SQL; ref: SQL }) => SQL {
-  const inputs = declaration.inputs.flatMap((input, index) => {
-    if (!isFanoutInput(input)) return [];
-    const target = `${declaration.target}@${index}`;
-    if (sourceTargets && !sourceTargets.has(target)) return [];
-    const select = input.selection
-      ? selections[input.selection.key]
-      : undefined;
-    return [
-      { target, input, select, refs: [...(sourceRefs.get(target) ?? [])] },
-    ];
-  });
-  const members = [...dependentIds];
-  return ({ target, ref }) =>
-    inputs.length === 0
-      ? sql`true`
-      : sql`CASE ${target}
-    ${sql.join(
-      inputs.map(
-        (source) => sql`WHEN ${source.target} THEN (
-      ${ref} = ANY(${uuidArrayParam(source.refs)}) OR EXISTS (
-      SELECT 1 FROM (${fanoutRows(
-        declaration,
-        source.input,
-        sql`SELECT ${ref}::uuid AS id`,
-        source.select,
-      )}) affected(id)
-      WHERE affected.id = ANY(${uuidArrayParam(members)})
-    ))`,
-      ),
-      sql` `,
-    )}
-    ELSE true END`;
 }
 
 /**

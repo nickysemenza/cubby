@@ -2678,6 +2678,22 @@ const buildMetadataSchemas = () => {
         .optional()
         .default(null),
       /**
+       * Review families this entity owes beyond its fields' own `control.suggest`:
+       * a detector produces pending Suggestions touching these records, and the
+       * record scope of the Suggestions list reads this.
+       */
+      suggestions: z
+        .array(
+          z.enum([
+            "statement_transaction",
+            "transfer_pair",
+            "product_pair",
+            "image_description",
+          ]),
+        )
+        .optional()
+        .default([]),
+      /**
        * `readOnly`: the kernel serves get/list/search only, whatever the
        * other capabilities say; writes stay with the entity's own workflows.
        */
