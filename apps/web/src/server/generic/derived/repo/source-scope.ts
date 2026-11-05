@@ -78,7 +78,8 @@ function fanoutRows(
     const sourceRefs = input.selection.path
       ? pathSql(input.selection.path, refs)
       : refs;
-    return select(sourceRefs);
+    return sql`WITH derived_fanout_refs(id) AS MATERIALIZED (${sourceRefs})
+      SELECT current_targets.id FROM (${select(sql`SELECT id FROM derived_fanout_refs`)}) current_targets`;
   }
   if (input.targetWhere)
     return fixedTargetRows(declaration.table, input.targetWhere);

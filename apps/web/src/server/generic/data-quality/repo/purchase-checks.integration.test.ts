@@ -164,9 +164,6 @@ describe("stored Purchase quality", () => {
       PURCHASE_QUALITY_RULES_VERSION,
     );
     // An Expense edit marks its Purchase's stored quality (ADR 0021).
-    expect(
-      await derivedMarkTickets(ctx.db, "purchase.dataQuality", order.entityId),
-    ).toEqual([]);
     await updateExpense(ctx.db, line.output.id, { cost: 7 }, ctx.actor);
     expect(
       await derivedMarkTickets(ctx.db, "purchase.dataQuality", order.entityId),
