@@ -206,7 +206,8 @@ const integrationProject = {
   // database; this only changes whether the JS module registry is
   // fresh per file (it no longer is, per worker).
   isolate: false,
-  testTimeout: 10000,
+  // Shared CI runners regularly push unrelated service-backed cases past 10 s.
+  testTimeout: 30000,
   // First-test database provisioning is the long tail; resets use the
   // full-table reset documented in tooling/test-setup.ts.
   hookTimeout: 30000,
