@@ -2693,7 +2693,13 @@ edge and gets the toggle like any other.
 
 ### Background derived data
 
-ADR 0025 replaces per-value admission with one hourly deterministic pass. Entity
+ADR 0025 replaces per-value admission with SQL views for read-computable values
+and one hourly deterministic pass. Product service Cost reads its declared
+ProductCostView, so charge edits affect display, filters and ordering immediately.
+The view preserves the existing positive actual-charge selection, averaging,
+rounding and latest-charge evidence; it adds no financial judgment.
+
+The pass skips declared views. Entity
 stored declarations own their compute adapters and dependencies; the data-quality
 and search capabilities declare their phases. `rebuildPhase` orders facts,
 quality, search and household diagnostics. Self-dependencies describe domain

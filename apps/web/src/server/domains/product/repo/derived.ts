@@ -6,25 +6,17 @@ import { and, isNull, sql } from "drizzle-orm";
  * Product's stored derived values (ADR 0021): the effective price and the
  * ledger quantities, each the same SQL the list once evaluated per page.
  */
-import { alias } from "drizzle-orm/pg-core";
 
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
-import { actualExpenseSql, notDeleted } from "~/server/db/helpers/predicates";
-import { outer, quotedTable } from "~/server/db/helpers/related";
-import { product, expense } from "~/server/db/schema";
+import { product } from "~/server/db/schema";
 import { productOwnershipCompute } from "~/server/domains/inventory/repo/derived";
-import { serviceProductSqlText } from "~/server/domains/product/repo/service-category";
 import {
   sharedDerivedPreparation,
   type DerivedCompute,
-  type DerivedComputed,
 } from "~/server/generic/derived/repo/compute";
 
 import { loadProductPriceFacts } from "./pricing";
 import { loadProductQuantitySummaries } from "./quantity-ledger";
-
-const row = quotedTable(product);
-const charge = alias(expense, "e");
 
 const computeProductPrice: DerivedCompute = async (db, ids) => {
   const rows = await unwrapDb(db)
@@ -105,35 +97,20 @@ const computeProductQuantity = (
     );
   });
 
-/** Only services publish Cost; physical Cost projects the selected price read. */
+/** Legacy fixture adapters read the live view until the ticket engine retires. */
 const computeServiceCost: DerivedCompute = async (db, ids) => {
   const rows = await unwrapDb(db)
-    .select({
-      id: product.id,
-      value: sql`(SELECT CASE WHEN count(*) > 0 THEN jsonb_build_object(
-      ${productCost.options[1].keyof().enum.kind}::text, ${productCost.options[1].shape.kind.value}::text,
-      'amount', round(avg(e."cost")::numeric, 2)::double precision,
-      'chargeCount', count(*)::int,
-      'chargeTotal', sum(e."cost"::double precision),
-      'latestCharge', (array_agg(e."cost" ORDER BY e."date" DESC, e."id" DESC)
-        FILTER (WHERE e."date" IS NOT NULL))[1]::double precision) END
-      FROM "Expense" e WHERE e."productId" = ${outer(product.id)}
-        AND ${notDeleted(charge)} AND ${sql.raw(actualExpenseSql("e"))} AND e."cost" > 0)`,
-    })
-    .from(product)
-    .where(
-      and(
-        sql`${product.id} = ANY(${uuidArrayParam(ids)})`,
-        isNull(product.deletedAt),
-        sql.raw(serviceProductSqlText(`${row}."id"`)),
-      ),
-    );
-  const out = new Map<string, DerivedComputed>();
-  for (const result of rows) {
-    const value = productCost.nullable().parse(result.value);
-    out.set(String(result.id), { value, sort: value?.amount ?? null });
-  }
-  return out;
+    .execute(sql`SELECT "entityId", value, "sortNumber" FROM "ProductCostView"
+    WHERE "entityId" = ANY(${uuidArrayParam(ids)})`);
+  return new Map(
+    rows.rows.map((row) => [
+      String(row.entityId),
+      {
+        value: productCost.nullable().parse(row.value),
+        sort: typeof row.sortNumber === "number" ? row.sortNumber : null,
+      },
+    ]),
+  );
 };
 
 export const productDerivedComputes = {

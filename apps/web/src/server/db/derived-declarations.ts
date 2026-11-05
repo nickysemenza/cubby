@@ -14,6 +14,8 @@ const snapshotSource = z.object({
   value: z.union([z.string(), z.record(z.string(), z.string())]),
   computedAt: z.string(),
   decidedBy: z.string().optional(),
+  sort: z.string().optional(),
+  view: z.boolean().optional(),
 });
 
 /** One input: changes to `table` rows whose `tableColumn` equals the value's `entityColumn`. */

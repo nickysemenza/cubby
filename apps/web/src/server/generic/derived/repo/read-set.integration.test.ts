@@ -228,6 +228,11 @@ describe("deterministic cache rebuild", () => {
             value, "sortNumber", "sortDate", "sortText"
           FROM "DerivedValue" ORDER BY kind, "entityId", key`)
       ).rows,
+      views: (
+        await getDb(ctx.db).execute(
+          sql`SELECT "entityId", value, "sortNumber" FROM "ProductCostView" ORDER BY "entityId"`,
+        )
+      ).rows,
       quality: (
         await getDb(ctx.db).execute(sql`
         SELECT "entityId"::text, kind, "rulesVersion", checks FROM "QualitySnapshot" ORDER BY "entityId"`)
@@ -259,7 +264,13 @@ describe("deterministic cache rebuild", () => {
     );
     expect(
       storedDerivedDeclarations()
-        .filter((declaration) => declaration.publishes === "derivedValue")
+        .filter(
+          (declaration) =>
+            declaration.publishes === "derivedValue" &&
+            !(
+              declaration.kind === "entity" && declaration.snapshotSource?.view
+            ),
+        )
         .map((declaration) => declaration.target)
         .filter((target) => !targets.has(target)),
     ).toEqual([]);

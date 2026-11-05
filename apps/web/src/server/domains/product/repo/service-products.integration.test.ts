@@ -20,7 +20,6 @@ import {
   productStockSummary,
 } from "~/server/generic/entity-report/repo/summary";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
-import { updateWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
@@ -105,7 +104,7 @@ describe("category-based service Products", () => {
       expect(
         entityFieldEnvelopeSchemas.product.detail.parse(pending.item).fields
           .cost.result,
-      ).toEqual({ kind: "missing" });
+      ).toMatchObject({ kind: "cached", freshness: "fresh" });
       await drainStoredDerived(ctx.db);
       const detail = await getProductWithFood(
         ctx.db,
@@ -313,17 +312,9 @@ describe("category-based service Products", () => {
       expect(originals).toHaveLength(3);
       expect(originals).toContainEqual({ cost: 90, quantity: 30 });
 
-      // An unsuccessful refresh retains one complete published tuple for display and sorting.
+      // A service charge edit is reflected by the view without any background page.
       await getDb(ctx.db).execute(sql`UPDATE "Expense" SET cost = 190
         WHERE "productId" = ${service.entityId} AND cost = 90`);
-      await updateWorkItems(
-        ctx.db,
-        { target: "product.cost", refs: [service.entityId] },
-        {
-          lastError: "Synthetic Cost refresh failure",
-          readyAt: sql`now() + interval '1 hour'`,
-        },
-      );
       const readCanonical = async () =>
         entityFieldEnvelopeSchemas.product.detail.parse(
           (
@@ -342,24 +333,18 @@ describe("category-based service Products", () => {
             )
           ).item,
         );
-      const failed = await readCanonical();
-      expect(failed.fields.cost.result).toMatchObject({
+      const changed = await readCanonical();
+      expect(changed.fields.cost.result).toMatchObject({
         kind: "cached",
         freshness: "fresh",
-        computedAt:
-          published.fields.cost.result.kind === "cached"
-            ? published.fields.cost.result.computedAt
-            : null,
         decision: {
           outcome: {
             kind: "value",
-            value: { amount: 65, chargeCount: 2, latestCharge: 90 },
+            value: { amount: 115, chargeCount: 2, latestCharge: 190 },
           },
         },
       });
-      expect(failed.fields.cost.work).toMatchObject({
-        kind: "idle",
-      });
+      expect(changed.fields.cost.work).toEqual({ kind: "idle" });
       const explainCost = () =>
         explainField(
           entityKernelContextSchema.parse(
@@ -374,53 +359,9 @@ describe("category-based service Products", () => {
             surface: "detail",
           },
         );
-      const retainedExplanation = await explainCost();
-      expect(retainedExplanation.publication?.kind).toBe("current");
-      expect(retainedExplanation.sources).toContainEqual(
-        expect.objectContaining({ label: "Positive charge total", value: 130 }),
-      );
-      // A legacy snapshot must not borrow the newly edited live charge total.
-      await getDb(ctx.db).execute(sql`UPDATE "DerivedValue"
-        SET value=value-'chargeTotal'
-        WHERE "entityId"=${service.entityId} AND key='cost'`);
-      const legacyExplanation = await explainCost();
-      expect(legacyExplanation.publication?.kind).toBe("unavailable");
-      expect(legacyExplanation.sources).not.toContainEqual(
-        expect.objectContaining({ label: "Positive charge total" }),
-      );
-      expect(legacyExplanation.sources).toContainEqual(
-        expect.objectContaining({ label: "Positive charge count", value: 2 }),
-      );
-      const staleSort = await listProductsFixture(
-        ctx.db,
-        { ids: [service.id, physical.id] },
-        [{ orderBy: "cost", direction: "asc" }],
-        { pageIndex: 0, pageSize: 10 },
-      );
-      expect(staleSort.data.map((row) => row.id)).toEqual([
-        service.id,
-        physical.id,
-      ]);
-      await updateWorkItems(
-        ctx.db,
-        { target: "product.cost", refs: [service.entityId] },
-        { readyAt: sql`now()` },
-      );
-      await drainStoredDerived(ctx.db);
-      const refreshed = await readCanonical();
       expect((await explainCost()).sources).toContainEqual(
         expect.objectContaining({ label: "Positive charge total", value: 230 }),
       );
-      expect(refreshed.fields.cost.result).toMatchObject({
-        kind: "cached",
-        freshness: "fresh",
-        decision: {
-          outcome: {
-            kind: "value",
-            value: { amount: 115, chargeCount: 2, latestCharge: 190 },
-          },
-        },
-      });
       const refreshedSort = await listProductsFixture(
         ctx.db,
         { ids: [service.id, physical.id] },
@@ -435,11 +376,6 @@ describe("category-based service Products", () => {
       // A date edit changes latest-charge evidence even when the average is unchanged.
       await getDb(ctx.db).execute(sql`UPDATE "Expense" SET date = '2026-04-01'
         WHERE "productId" = ${service.entityId} AND cost = 40`);
-      expect((await readCanonical()).fields.cost.result).toMatchObject({
-        kind: "cached",
-        freshness: "fresh",
-      });
-      await drainStoredDerived(ctx.db);
       expect((await readCanonical()).fields.cost.result).toMatchObject({
         kind: "cached",
         freshness: "fresh",
@@ -481,7 +417,10 @@ describe("category-based service Products", () => {
           )
         ).item,
       );
-    expect((await read()).fields.cost.result).toEqual({ kind: "missing" });
+    expect((await read()).fields.cost.result).toMatchObject({
+      kind: "cached",
+      decision: { outcome: { kind: "empty", reason: "unset" } },
+    });
     await drainStoredDerived(ctx.db);
     expect((await read()).fields.cost.result).toMatchObject({
       kind: "cached",
@@ -532,7 +471,7 @@ describe("category-based service Products", () => {
     });
     await drainStoredDerived(ctx.db);
     const physicalCost = await getDb(ctx.db).execute(
-      sql`SELECT value FROM "DerivedValue" WHERE "entityId" = ${service.entityId} AND key = 'cost'`,
+      sql`SELECT value FROM "ProductCostView" WHERE "entityId" = ${service.entityId}`,
     );
     expect(physicalCost.rows).toEqual([]);
 
@@ -547,8 +486,12 @@ describe("category-based service Products", () => {
       kind: "live",
       decision: { outcome: { kind: "empty", reason: "not_applicable" } },
     });
-    expect(restored.fields.cost.result).toEqual({ kind: "missing" });
-    expect(restored.fields.cost.work).toMatchObject({ kind: "idle" });
+    expect(restored.fields.cost.result).toMatchObject({
+      kind: "cached",
+      freshness: "fresh",
+      decision: { outcome: { kind: "value", value: { amount: 40 } } },
+    });
+    expect(restored.fields.cost.work).toEqual({ kind: "idle" });
     const valued = await listProductsFixture(
       ctx.db,
       { ids: [service.id], pricePresenceFilter: "has" },

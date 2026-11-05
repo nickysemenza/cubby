@@ -1107,6 +1107,20 @@ const buildMetadataSchemas = () => {
   const derivedStoreSchema = z
     .object({
       compute: nonEmptyString(),
+      snapshotSource: z
+        .object({
+          table: nonEmptyString(),
+          value: z.union([
+            nonEmptyString(),
+            z.record(nonEmptyString(), nonEmptyString()),
+          ]),
+          computedAt: nonEmptyString(),
+          decidedBy: nonEmptyString().optional(),
+          sort: nonEmptyString().optional(),
+          view: z.boolean().optional(),
+        })
+        .strict()
+        .optional(),
       rebuildPhase: z
         .enum(["facts", "quality", "search", "diagnostics"])
         .optional(),

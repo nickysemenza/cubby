@@ -21,6 +21,7 @@ import {
   type EntityStoredDerivedDeclaration,
   storedDerived,
 } from "~/server/db/derived-declarations";
+import { storedSourceSql } from "~/server/db/derived-source-sql";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
@@ -49,22 +50,6 @@ const publishedOutcome = {
   value: storedFieldDecision.shape.outcome.options[0].shape.kind.value,
   empty: storedFieldDecision.shape.outcome.options[1].shape.kind.value,
 } satisfies { value: "value"; empty: "empty" };
-
-/** Keep publication identity and the kind/key index predicate together. */
-function storedPublicationMatch(
-  publication: {
-    entityId: AnyColumn | SQL;
-    kind: AnyColumn | SQL;
-    key: AnyColumn | SQL;
-  },
-  {
-    entity,
-    id,
-    key,
-  }: { entity: Entity; id: AnyColumn | SQL; key: string | SQL },
-): SQL {
-  return sql`(${publication.entityId} = ${id} AND ${publication.kind} = ${entity} AND ${publication.key} = ${key})`;
-}
 
 /** The typed sort projection of a stored value, for ORDER BY, WHERE and SUM. */
 export function storedDerivedSql(
@@ -99,11 +84,8 @@ export function storedDerivedSql(
         : declaration.sort === "text"
           ? sql.raw(`"sortText"`)
           : sql.raw(`"sortNumber"`);
-  const cached = sql`(SELECT ${column} FROM "DerivedValue" WHERE ${storedPublicationMatch(
-    { entityId: sql`"entityId"`, kind: sql`kind`, key: sql`key` },
-    { entity, id, key: storedKey },
-  )}
-    AND "decidedBy"#>>'{outcome,kind}' = 'value'
+  const cached = sql`(SELECT ${column} FROM (${storedSourceSql(declaration, sql`${id}`)}) projected
+    WHERE "decidedBy"#>>'{outcome,kind}' = 'value'
     ${
       currentAssignment
         ? sql`AND ("decidedBy"#>>'{provenance,kind}') IS NOT NULL
@@ -126,15 +108,11 @@ export function storedFieldAvailableSql(
     (field) => field.key === key,
   );
   const declaration = storedDerived(entity, field?.storedKey ?? key);
-  return declaration?.publishes === "derivedValue"
-    ? sql`EXISTS (
-    SELECT 1 FROM "DerivedValue" v WHERE ${storedPublicationMatch(
-      { entityId: sql`v."entityId"`, kind: sql`v.kind`, key: sql`v.key` },
-      { entity, id, key: declaration.key },
-    )}
-      AND v."computedAt" IS NOT NULL AND v."decidedBy"#>>'{outcome,kind}' IN (${publishedOutcome.value}, ${publishedOutcome.empty})
-      ${currentValue ? sql`AND (${currentValue} IS NOT NULL OR v."decidedBy"#>>'{outcome,kind}' = ${publishedOutcome.empty})` : sql``}
-  )`
+  return declaration &&
+    (declaration.publishes === "derivedValue" || declaration.snapshotSource)
+    ? sql`EXISTS (SELECT 1 FROM (${storedSourceSql(declaration, sql`${id}`)}) v
+      WHERE v."computedAt" IS NOT NULL AND v."decidedBy"#>>'{outcome,kind}' IN (${publishedOutcome.value}, ${publishedOutcome.empty})
+      ${currentValue ? sql`AND (${currentValue} IS NOT NULL OR v."decidedBy"#>>'{outcome,kind}' = ${publishedOutcome.empty})` : sql``})`
     : null;
 }
 
@@ -209,35 +187,6 @@ const valueRow = z.object({
   attribution: fieldWorkAttribution.nullable(),
 });
 
-/** A declared typed snapshot projects the same read contract without another value store. */
-function storedSourceSql(
-  declaration: EntityStoredDerivedDeclaration,
-  entity: Entity,
-  id: SQL,
-): SQL {
-  const source = declaration.snapshotSource;
-  if (!source)
-    return sql`SELECT v.value, v."decidedBy", v."computedAt" FROM "DerivedValue" v
-    WHERE v."entityId" = ${id} AND v.kind = ${entity} AND v.key = ${declaration.key}`;
-  const value =
-    typeof source.value === "string"
-      ? sql`q.${sql.identifier(source.value)}`
-      : sql`jsonb_build_object(${sql.join(
-          Object.entries(source.value).flatMap(([key, column]) => [
-            sql`${key}::text`,
-            sql`q.${sql.identifier(column)}`,
-          ]),
-          sql`, `,
-        )})`;
-  const decision = source.decidedBy
-    ? sql`q.${sql.identifier(source.decidedBy)}`
-    : sql`CASE WHEN ${value} IS NULL THEN
-      ${JSON.stringify(storedFieldDecision.parse({ outcome: { kind: "empty", reason: "unset" }, provenance: { kind: "computed" } }))}::jsonb
-      ELSE ${JSON.stringify(storedFieldDecision.parse({ outcome: { kind: "value" }, provenance: { kind: "computed" } }))}::jsonb END`;
-  return sql`SELECT ${value} AS value, ${decision} AS "decidedBy", q.${sql.identifier(source.computedAt)} AS "computedAt"
-    FROM ${sql.identifier(source.table)} q WHERE q."entityId" = ${id} AND q.kind = ${entity}`;
-}
-
 /** Page readers start this with their ids beside hydration, never once per row. */
 export function loadPageStoredMeta(
   db: RepositoryQueryInput,
@@ -298,7 +247,7 @@ export async function loadStoredDerived(
         ${sql.join(
           declarations.map(
             (declaration) => sql`
-          SELECT projected.* FROM LATERAL (${storedSourceSql(declaration, entity, sql`i.id`)}) projected
+          SELECT projected.* FROM LATERAL (${storedSourceSql(declaration, sql`i.id`)}) projected
           WHERE k.key = ${declaration.key}`,
           ),
           sql` UNION ALL `,

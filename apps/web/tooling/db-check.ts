@@ -7,6 +7,7 @@ import { sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Client } from "pg";
 
+import { renderDeclaredDerivedViews } from "../src/server/workflows/derived-views";
 import { renderDerivedDdl } from "../src/server/db/derived-ddl";
 import { drizzleSchema as schema } from "../src/server/db/drizzle-schema";
 import { diffSchemaCatalogs, readSchemaCatalog } from "./db-catalog";
@@ -118,6 +119,7 @@ async function buildFromModel(db: NodePgDatabase): Promise<void> {
   ]);
   await apply();
   await db.execute(sql.raw(renderDerivedDdl()));
+  await db.execute(sql.raw(renderDeclaredDerivedViews()));
 }
 
 async function checkCatalogEquality(adminUrl: string): Promise<string[]> {
