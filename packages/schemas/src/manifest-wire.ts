@@ -10,6 +10,25 @@ export const structuredTextFormats = [
   "opaque",
 ] as const;
 
+/**
+ * Display facts native reads under their declared key. A declared
+ * `display` key listed here reaches the Swift descriptor and catalog JSON with
+ * no other edit; web reads every declared key without being listed.
+ */
+export const fieldDisplayWire = {
+  detailOrder: "integer~",
+  listOrder: "integer~",
+  referencePreviewLimit: "integer~",
+  listHidden: "boolean",
+  width: "string~",
+  format: "string~",
+  readPath: "string~",
+  labelPath: "string~",
+  emptyLabel: "string~",
+  detailLabelPath: "string~",
+  itemsPath: "string~",
+} as const;
+
 const codable = ["Codable", "Sendable"] as const;
 const hashable = [...codable, "Hashable"] as const;
 const identifiable = [...hashable, "Identifiable"] as const;
@@ -139,17 +158,7 @@ export const manifestWire = {
       inUpdate: "boolean",
       showInList: "boolean",
       showInDetail: "boolean",
-      detailOrder: "integer~",
-      listOrder: "integer~",
-      referencePreviewLimit: "integer~",
-      listHidden: "boolean",
-      width: "string~",
-      format: "string~",
-      readPath: "string~",
-      labelPath: "string~",
-      emptyLabel: "string~",
-      detailLabelPath: "string~",
-      itemsPath: "string~",
+      ...fieldDisplayWire,
       listRenderer: "ListRendererID~",
       detailRenderer: "DetailRendererID~",
       mobileSlot: "string~",

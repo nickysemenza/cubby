@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/entity-media-raw-read";
 import type { RawReadSchemas } from "@cubby/schemas/entity-definitions/definition";
 import {
+  compiledFieldDisplay,
   resolveFieldDisplay,
   schemaAtReadPath,
   resolveRelationSectionPlans,
@@ -517,16 +518,6 @@ const validateFieldOverrides = (
     );
 };
 
-/** Omit unused table presentation so ordinary fields do not grow the manifest. */
-function columnPresentation(
-  display: EntityFieldModelMetadata["fields"][number]["display"],
-) {
-  return {
-    columnGroup: display.columnGroup ?? undefined,
-    columnBar: display.columnBar || undefined,
-  };
-}
-
 const validateEnumField = (
   field: EntityFieldModelMetadata["fields"][number],
   fieldContext: string,
@@ -713,29 +704,10 @@ const compileFieldModel = (
                   )
                 : field.control.options,
             },
-      display: {
-        columnId: field.display.columnId,
-        standard: field.display.standard,
-        width: field.display.width ?? null,
-        readPath: field.display.readPath ?? null,
-        readFields: field.display.readFields,
-        labelPath: field.display.labelPath ?? null,
-        emptyLabel: field.display.emptyLabel ?? null,
-        // Left undefined (so not emitted) unless declared: the model ships in the budgeted Worker bundle.
-        detailLabelPath: field.display.detailLabelPath ?? undefined,
-        itemsPath: field.display.itemsPath ?? undefined,
-        format: field.display.format ?? null,
-        renderer: field.display.renderer ?? null,
-        mobile: field.display.mobile ?? null,
+      display: compiledFieldDisplay(field.display, {
         detailOrder: key === titleField ? 0 : index + 1,
         listOrder:
           field.display.listOrder ?? (key === titleField ? 0 : index + 1),
-        list: false,
-        detail: false,
-        listHidden: field.display.listHidden ?? false,
-        referencePreviewLimit: field.display.referencePreviewLimit ?? null,
-        columnLabel: field.display.columnLabel ?? null,
-        ...columnPresentation(field.display),
         valueOptions: field.display.valueOptions
           ? compileEnumOptions(
               field.display.valueOptions,
@@ -747,8 +719,7 @@ const compileFieldModel = (
               `${entityKey}.${key}`,
             )
           : null,
-        preview: field.display.preview ?? false,
-      },
+      }),
       validation: field.validation,
     };
     const companion = model.fields.some(

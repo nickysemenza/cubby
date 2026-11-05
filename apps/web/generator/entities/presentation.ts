@@ -4,7 +4,10 @@ import {
   requireNativeCoverage,
   rendererReadInputs,
 } from "@cubby/schemas/compiler/native-coverage";
-import type { RawReadSchemas } from "@cubby/schemas/entity-definitions/definition";
+import type {
+  EntityFieldModelMetadata,
+  RawReadSchemas,
+} from "@cubby/schemas/entity-definitions/definition";
 import { relationshipProvenanceSchema } from "./list-fields.ts";
 import { curatedConnectionViews } from "@cubby/schemas/compiler/connected-view-definitions";
 import { listViewId } from "@cubby/schemas/entity-definitions/definition";
@@ -325,6 +328,38 @@ const coverage = (
     );
   }
 };
+
+/**
+ * Declared display facts pass through, so a new key needs no compiler edit.
+ * Roster inputs are consumed here, and rarely set keys are left out when unset
+ * because the model ships in the budgeted Worker bundle.
+ */
+export const compiledFieldDisplay = (
+  {
+    optionRole: _optionRole,
+    optionColor: _optionColor,
+    optionGlyph: _optionGlyph,
+    detailLabelPath,
+    itemsPath,
+    columnGroup,
+    columnBar,
+    ...declared
+  }: EntityFieldModelMetadata["fields"][number]["display"],
+  resolved: Pick<
+    EntityField["display"],
+    "detailOrder" | "listOrder" | "valueOptions"
+  > &
+    Partial<EntityField["display"]>,
+): EntityField["display"] => ({
+  ...declared,
+  list: false,
+  detail: false,
+  detailLabelPath: detailLabelPath ?? undefined,
+  itemsPath: itemsPath ?? undefined,
+  columnGroup: columnGroup ?? undefined,
+  columnBar: columnBar || undefined,
+  ...resolved,
+});
 
 export function resolveFieldDisplay(
   field: EntityField,
