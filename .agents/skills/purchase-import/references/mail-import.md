@@ -23,6 +23,8 @@ Claude or Codex session researches it later through the Research queue.
    lines or a total. If `content.truncated` is still true after the last page,
    evidence is missing: import only when every item line and the total are
    present; otherwise `purchase_import` `mail_resolve` it `unresolved` naming what is missing.
+   `disposition` is always an object, never a bare word:
+   `{"kind":"unresolved","reason":"what is missing"}`, and likewise `kind: "unrelated"`.
    The claim's `known` holds the lookups an Email usually starts with:
    `senderVendor`, the Vendor its sender proves (null when none), and
    `purchases`, the live Purchases (at most 5) whose order id is one of

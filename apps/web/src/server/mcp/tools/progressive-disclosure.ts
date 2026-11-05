@@ -102,6 +102,9 @@ export function withProgressiveDisclosure(
             },
           ],
           isError: true,
+          _meta: {
+            "cubby/error": { code: "BAD_REQUEST", reason: "INVALID_INPUT" },
+          },
         };
       }
     }

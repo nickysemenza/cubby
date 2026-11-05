@@ -43,6 +43,7 @@ import {
   type AiUsageTransport,
   type McpToolCallOutcome,
   type McpToolCallSurface,
+  type McpToolErrorKind,
 } from "@cubby/schemas/telemetry";
 import type { AiCostEvidence } from "@cubby/shared/ai/pricing";
 import { sql } from "drizzle-orm";
@@ -715,6 +716,9 @@ export const mcpToolCall = pgTable(
     runId: uuid("runId")
       .$type<RunId>()
       .references(() => run.id, { onDelete: "set null" }),
+    // Null on rows from before these were recorded: that history cannot be split.
+    action: text("action"),
+    errorKind: text("errorKind").$type<McpToolErrorKind>(),
   },
   (table) => [
     index("McpToolCall_tool_occurredAt_idx").on(

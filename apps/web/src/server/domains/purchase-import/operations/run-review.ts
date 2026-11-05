@@ -33,6 +33,7 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
+import { AiBudgetExhaustedError, readAiBudget } from "~/server/ai/budget";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   getDb,
@@ -54,6 +55,7 @@ import {
   readMailSourceTransfers,
   releaseUnsettledMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
+import { pauseForFunding } from "~/server/domains/run/repo/execution-context";
 import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
@@ -118,6 +120,8 @@ async function reconcileSettledRunOnce(
       failureCode: "agent_failed" | "agent_aborted";
       detail?: string;
     };
+    /** That submission's own last turn found no paid funding: wait instead of failing. */
+    fundingUnavailable?: boolean;
   },
 ) {
   const scope = await loadRunScope(db, input.runId);
@@ -156,6 +160,20 @@ async function reconcileSettledRunOnce(
   if (input.receivedEventIds && unreceivedWake(scope, input.receivedEventIds))
     return { reconciled: false as const, status: "running" as const };
   if (input.failure) {
+    // ADR 0017: with no funding the Run waits for the next window and keeps its
+    // Emails. Failing would release them to a discovery pass that fails the same way.
+    if (input.fundingUnavailable) {
+      await pauseForFunding(
+        db,
+        input.runId,
+        new AiBudgetExhaustedError(await readAiBudget(db)),
+        input.generation,
+      );
+      return {
+        reconciled: false as const,
+        status: (await loadRunScope(db, input.runId)).public.status,
+      };
+    }
     const { failed } = await markRunFailed(db, {
       runId: input.runId,
       ...input.failure,

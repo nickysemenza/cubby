@@ -54,6 +54,11 @@ const usageFields = (
   periodCalls: period?.calls ?? 0,
   periodSuccesses: period?.successes ?? 0,
   periodErrors: period?.errors ?? 0,
+  periodErrorKinds: {
+    input: period?.input ?? 0,
+    refusal: period?.refusal ?? 0,
+    failure: period?.failure ?? 0,
+  },
   firstUsedAt: lifetime?.firstUsedAt ?? null,
   lastUsedAt: lifetime?.lastUsedAt ?? null,
   lastRelease: lifetime?.lastRelease ?? null,

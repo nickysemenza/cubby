@@ -7,7 +7,7 @@ import {
   runStatus,
   STEP_RUN_PURPOSES,
 } from "@cubby/schemas/run-fields";
-import { and, eq, notInArray, sql } from "drizzle-orm";
+import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
 
 import type { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { Database } from "~/server/db";
@@ -61,12 +61,14 @@ export async function pauseExecutionRun(
   db: Database,
   runId: RunId,
   message: string,
-): Promise<void> {
+  /** When given, only this dispatch generation may pause: a stale report cannot fence newer work. */
+  generation?: string | null,
+): Promise<boolean> {
   // Recovery resumes these purposes in a later window: AI work through
   // Job execution, agent imports and Mail discovery through
   // `resumeFundingPausedRuns` (run/service/ai-work.ts).
   const recoverable = sql`${run.purpose} IN (${runPurpose.enum.mail_reclassify}, ${runPurpose.enum.suggestion_sweep}, ${runPurpose.enum.mail_import}, ${runPurpose.enum.photo_inventory}, ${runPurpose.enum.mail_discovery})`;
-  await unwrapDb(db)
+  const paused = await unwrapDb(db)
     .update(run)
     .set({
       status: sql`CASE WHEN ${recoverable} THEN ${runStatus.enum.paused_auth} ELSE ${runStatus.enum.needs_review} END`,
@@ -85,8 +87,16 @@ export async function pauseExecutionRun(
         // take the Run away from its current Job page mid-step.
         notInArray(run.purpose, [...STEP_RUN_PURPOSES]),
         notDeleted(run),
+        isNull(run.retiredAt),
+        generation === undefined
+          ? undefined
+          : generation === null
+            ? isNull(run.dispatchEventId)
+            : eq(run.dispatchEventId, generation),
       ),
-    );
+    )
+    .returning({ id: run.id });
+  return paused.length > 0;
 }
 
 const RESUME_MARGIN_MS = 60_000;
@@ -99,9 +109,17 @@ export async function pauseForFunding(
   db: Database,
   runId: RunId,
   error: AiBudgetExhaustedError,
+  generation?: string | null,
 ) {
   await withTransactionDatabase(db, async (tx) => {
-    await pauseExecutionRun(tx, runId, error.message);
+    const paused = await pauseExecutionRun(
+      tx,
+      runId,
+      error.message,
+      generation,
+    );
+    // A fenced caller that lost the race owes no resume.
+    if (generation !== undefined && !paused) return;
     const until = new Date(
       Date.parse(error.status.windowEnd) + RESUME_MARGIN_MS,
     );

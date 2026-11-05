@@ -1,6 +1,7 @@
 import { type Entity, entitySchema } from "@cubby/schemas/entity-core";
 import {
   mcpTelemetryIdentitySchema,
+  type McpToolErrorKind,
   telemetryMessageV1Schema,
 } from "@cubby/schemas/telemetry";
 import { createLogger } from "@cubby/worker-tracing";
@@ -57,6 +58,17 @@ export function toolCallResultTraceAttributes(result: CallToolResult) {
     "mcp.batch.succeeded": summary?.succeeded,
     "mcp.batch.failed": summary?.failed,
   };
+}
+
+/** The one reader of a tool error's kind; a result with no detail is a server failure. */
+function toolErrorKind(result: CallToolResult): McpToolErrorKind {
+  const error = z
+    .object({ code: z.string().optional(), reason: z.string().optional() })
+    .safeParse(result._meta?.["cubby/error"]).data;
+  if (error?.reason === "INVALID_INPUT") return "input";
+  return !error || error.code === "INTERNAL_SERVER_ERROR"
+    ? "failure"
+    : "refusal";
 }
 
 function observedToolName(request: CallToolRequest): string | undefined {
@@ -130,9 +142,12 @@ export function installToolCallTelemetryHandler(server: McpServer): void {
       });
 
       let outcome: "success" | "error" = "error";
+      // A dispatch that throws never produced a result to classify.
+      let errorKind: McpToolErrorKind | undefined = "failure";
       try {
         const result = await dispatch(request, extra);
         outcome = result.isError === true ? "error" : "success";
+        errorKind = result.isError === true ? toolErrorKind(result) : undefined;
         if (span.isRecording) {
           span.setAttributes(toolCallResultTraceAttributes(result));
         }
@@ -161,6 +176,10 @@ export function installToolCallTelemetryHandler(server: McpServer): void {
               outcome,
               registeredAtCall,
               entity: toolCallEntity(server, toolName, request),
+              ...(callName && callName !== toolName
+                ? { action: callName.slice(toolName.length + 1) }
+                : {}),
+              ...(errorKind ? { errorKind } : {}),
               ...telemetry.data.identity,
             });
           } catch (error) {

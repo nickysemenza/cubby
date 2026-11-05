@@ -144,7 +144,11 @@ signal stays inside the budget:
 3. The ChatGPT plan, while connected, not quota-refused, and the window's plan
    budget (standard cost of `plan` usage, default $2) has room.
 4. Paid models within the paid budget ($1 per window).
-5. Otherwise the Run pauses and resumes when the next window starts.
+5. Otherwise the Run pauses and resumes when the next window starts. A paid rung
+   with no balance or no stored key counts: the Run keeps its Emails rather than
+   failing. Automatic Mail admission waits while a Run is paused this way, and for
+   an hour after the latest Run failed on its own, because a failed Run releases
+   its Emails and admitting again at once would spin.
 
 The isolate shares concurrent reads of a Run's immutable lineage origin and
 retains only found roots. Missing roots and failed reads remain retryable.

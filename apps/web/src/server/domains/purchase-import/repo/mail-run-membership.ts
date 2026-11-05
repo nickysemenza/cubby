@@ -327,9 +327,10 @@ export async function transferMailRunSources(
  * review before claiming every Email, returns its still-researching Emails to
  * Mail discovery; nothing else would ever admit them again. Settled and
  * `blocked` Emails (the review's subject) stay. An Email an earlier Run already
- * left unsettled stays with this Run instead, so a message that keeps ending
- * its import unsettled does not spend a coordinator every discovery pass; a
- * member's retry still transfers it.
+ * left unsettled stays with this Run as `blocked` instead, so a message that
+ * keeps ending its import unsettled does not spend a coordinator every discovery
+ * pass and does not claim research nothing is doing; a member's retry still
+ * transfers it.
  */
 export async function releaseUnsettledMailRunSources(
   tx: DrizzleTransaction,
@@ -414,6 +415,21 @@ export async function releaseUnsettledMailRunSources(
       .filter((attempt) => attempt.unsettled)
       .map((attempt) => attempt.orderMailId),
   );
+  const kept = held.filter((source) => failedBefore.has(source.orderMailId));
+  if (kept.length)
+    await tx
+      .update(emailTable)
+      .set({ status: "blocked", updatedAt: new Date() })
+      .where(
+        and(
+          eq(emailTable.runId, runId),
+          eq(emailTable.status, "researching"),
+          inArray(
+            emailTable.id,
+            kept.map((source) => source.email.id),
+          ),
+        ),
+      );
   const released = held.filter(
     (source) => !failedBefore.has(source.orderMailId),
   );

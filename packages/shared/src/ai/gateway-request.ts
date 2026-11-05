@@ -486,7 +486,8 @@ export function isInferenceFundingRefusal(
   if (funding === "subscription")
     return (
       [400, 429].includes(status) &&
-      /"(?:code|type)"\s*:\s*"(?:usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded|subscription_sharing_unsupported_capability|subscription_unavailable|cubby_plan_budget_reached)"/u.test(
+      // The plan also rate limits with a bare `{"detail":"Rate limit exceeded"}`.
+      /"(?:code|type)"\s*:\s*"(?:usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded|subscription_sharing_unsupported_capability|subscription_unavailable|cubby_plan_budget_reached)"|"detail"\s*:\s*"Rate limit exceeded"/u.test(
         body,
       )
     );
@@ -498,6 +499,13 @@ export function isInferenceFundingRefusal(
     body,
   );
 }
+
+/**
+ * The paid rung has no money or no credential: no later attempt can answer until
+ * someone changes that, so the caller waits for funding rather than failing.
+ */
+export const isPaidFundingUnavailable = (failure: string) =>
+  /Insufficient unified billing balance|has no BYOK credential/u.test(failure);
 
 /**
  * The egress Durable Object's answer while a recorded provider credit refusal

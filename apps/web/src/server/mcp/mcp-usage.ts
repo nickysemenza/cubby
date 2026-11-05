@@ -1,10 +1,12 @@
 import type { Entity } from "@cubby/schemas/entity-core";
 import { userId } from "@cubby/schemas/identifiers";
-import type {
-  McpToolCallOutcome,
-  McpToolCallSurface,
-  McpUsageActivityOut,
-  McpUsageWindow,
+import {
+  mcpToolCallOutcomeSchema,
+  mcpToolErrorKind,
+  type McpToolCallOutcome,
+  type McpToolCallSurface,
+  type McpUsageActivityOut,
+  type McpUsageWindow,
 } from "@cubby/schemas/telemetry";
 import { encodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
 import {
@@ -70,8 +72,11 @@ export async function getMcpUsageAggregateData(
       .select({
         toolName: mcpToolCall.toolName,
         calls: countInt(),
-        successes: sql<number>`count(*) filter (where ${mcpToolCall.outcome} = 'success')::int`,
-        errors: sql<number>`count(*) filter (where ${mcpToolCall.outcome} = 'error')::int`,
+        successes: sql<number>`count(*) filter (where ${mcpToolCall.outcome} = ${mcpToolCallOutcomeSchema.enum.success})::int`,
+        errors: sql<number>`count(*) filter (where ${mcpToolCall.outcome} = ${mcpToolCallOutcomeSchema.enum.error})::int`,
+        input: sql<number>`count(*) filter (where ${mcpToolCall.errorKind} = ${mcpToolErrorKind.enum.input})::int`,
+        refusal: sql<number>`count(*) filter (where ${mcpToolCall.errorKind} = ${mcpToolErrorKind.enum.refusal})::int`,
+        failure: sql<number>`count(*) filter (where ${mcpToolCall.errorKind} = ${mcpToolErrorKind.enum.failure})::int`,
       })
       .from(mcpToolCall)
       .where(periodWhere)
@@ -80,8 +85,8 @@ export async function getMcpUsageAggregateData(
       .select({
         toolName: mcpToolCall.toolName,
         day: sql<string>`to_char(${householdDaySql(mcpToolCall.occurredAt)}, 'YYYY-MM-DD')`,
-        success: sql<number>`count(*) filter (where ${mcpToolCall.outcome} = 'success')::int`,
-        error: sql<number>`count(*) filter (where ${mcpToolCall.outcome} = 'error')::int`,
+        success: sql<number>`count(*) filter (where ${mcpToolCall.outcome} = ${mcpToolCallOutcomeSchema.enum.success})::int`,
+        error: sql<number>`count(*) filter (where ${mcpToolCall.outcome} = ${mcpToolCallOutcomeSchema.enum.error})::int`,
         total: countInt(),
       })
       .from(mcpToolCall)
@@ -122,7 +127,7 @@ export async function getMcpUsageAggregateData(
       .orderBy(desc(countInt())),
     drizzle
       .select({
-        key: sql<string>`coalesce(${mcpToolCall.clientId}, 'unknown')`,
+        key: sql<string>`coalesce(${mcpToolCall.clientId}, ${"unknown"})`,
         label: sql<string>`case when ${mcpToolCall.clientId} = 'cubby-agent' then 'Cubby in-app agent' else coalesce(${oauthClient.name}, ${mcpToolCall.clientId}, 'Unknown client') end`,
         count: countInt(),
       })

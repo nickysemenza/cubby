@@ -46,7 +46,15 @@ const port: McpUsageDashboardPort = {
       },
     ],
     periodTools: [
-      { toolName: "active_tool", calls: 4, successes: 3, errors: 1 },
+      {
+        toolName: "active_tool",
+        calls: 4,
+        successes: 3,
+        errors: 1,
+        input: 1,
+        refusal: 0,
+        failure: 0,
+      },
     ],
     daily: [
       {

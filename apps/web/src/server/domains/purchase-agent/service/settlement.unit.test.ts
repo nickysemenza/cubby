@@ -53,6 +53,7 @@ describe("reportSettlement", () => {
     reason?: string;
     status?: "done" | "unanswered";
     reviewDetail?: string;
+    fundingUnavailableFor?: string;
   }) => {
     const reports: Array<z.input<typeof reconcileSettledRunInput>> = [];
     const deps = {
@@ -88,6 +89,8 @@ describe("reportSettlement", () => {
         }),
         receivedEventIds: () => ["event-1"],
         reviewDetail: () => input.reviewDetail,
+        fundingUnavailable: (operationId: string) =>
+          operationId === input.fundingUnavailableFor,
       },
       onSettled: () => undefined,
       report: () => undefined,
@@ -126,6 +129,30 @@ describe("reportSettlement", () => {
       ]);
     },
   );
+  it("reports a funding stop only for the submission whose own turn found it", async () => {
+    const stopped = setup({
+      pending: [],
+      latest: "newest",
+      reason: "model_error",
+      fundingUnavailableFor: "newest",
+    });
+    await stopped.settle("newest");
+    expect(stopped.reports[0]).toMatchObject({ fundingUnavailable: true });
+
+    // A resumed submission that fails before any model turn stays a failure.
+    const resumed = setup({
+      pending: [],
+      latest: "newest",
+      reason: "model_error",
+      fundingUnavailableFor: "earlier",
+    });
+    await resumed.settle("newest");
+    expect(resumed.reports[0]).toMatchObject({
+      failure: { failureCode: "agent_failed" },
+    });
+    expect(resumed.reports[0]).not.toHaveProperty("fundingUnavailable");
+  });
+
   it("preserves an explicit abort even when a previous generation limit is retained", async () => {
     const { reports, settle } = setup({
       pending: [],

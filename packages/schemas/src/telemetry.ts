@@ -21,6 +21,13 @@ export const mcpToolCallSurfaceSchema = z.enum([
 ]);
 export type McpToolCallSurface = z.infer<typeof mcpToolCallSurfaceSchema>;
 
+/**
+ * Why a tool call failed: `input` the caller's call was malformed, `refusal` a
+ * designed guard said no, `failure` the server could not do valid work.
+ */
+export const mcpToolErrorKind = z.enum(["input", "refusal", "failure"]);
+export type McpToolErrorKind = z.infer<typeof mcpToolErrorKind>;
+
 export const mcpToolCallTelemetrySchema = z.strictObject({
   ...telemetryEnvelope,
   type: z.literal("mcp_tool_call"),
@@ -41,6 +48,9 @@ export const mcpToolCallTelemetrySchema = z.strictObject({
   // carrying it that an old isolate consumes during a deploy swap fails its
   // strict parse and is dropped: one lost telemetry row, accepted.
   runId: z.uuid().optional(),
+  // Optional for messages queued by the preceding deployment, like `runId`.
+  action: z.string().min(1).optional(),
+  errorKind: mcpToolErrorKind.optional(),
 });
 export type McpToolCallTelemetry = z.infer<typeof mcpToolCallTelemetrySchema>;
 
@@ -238,6 +248,11 @@ const mcpToolUsageRowSchema = z.strictObject({
   periodCalls: z.number().int().nonnegative(),
   periodSuccesses: z.number().int().nonnegative(),
   periodErrors: z.number().int().nonnegative(),
+  periodErrorKinds: z.strictObject({
+    input: z.number().int().nonnegative(),
+    refusal: z.number().int().nonnegative(),
+    failure: z.number().int().nonnegative(),
+  }),
   firstUsedAt: dateTime.nullable(),
   lastUsedAt: dateTime.nullable(),
   lastRelease: z.string().nullable(),

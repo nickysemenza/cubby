@@ -19,6 +19,7 @@ import {
 } from "@cubby/schemas/run-fields";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import type { GatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
+import { isPaidFundingUnavailable } from "@cubby/shared/ai/gateway-request";
 import type { SupportedChatModel } from "@cubby/shared/ai/models";
 import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
 import { createLogger } from "@cubby/worker-tracing";
@@ -109,6 +110,8 @@ const STATE_KEYS = {
   latestSubmission: "latest_submission",
   receivedEvents: "received_events",
   progressSequence: "progress_sequence",
+  /** The submission whose last model turn found no paid funding, if any. */
+  fundingUnavailable: "funding_unavailable",
 } as const;
 
 /**
@@ -160,6 +163,8 @@ export class PurchaseImportRunAgent
         return stamp;
       },
       receivedEventIds: () => this.receivedEventIds(),
+      fundingUnavailable: (operationId) =>
+        this.readState(STATE_KEYS.fundingUnavailable) === operationId,
     },
     () => this.agentEnv.settlementPollMs ?? SETTLEMENT_POLL_MS,
   );
@@ -427,6 +432,15 @@ export class PurchaseImportRunAgent
   }
 
   private async afterResponse(message: AssistantMessage) {
+    // Durable and bound to one submission, unlike the usage row below, which may
+    // not be written: a later attempt must not inherit this turn's funding stop.
+    this.writeState(
+      STATE_KEYS.fundingUnavailable,
+      message.stopReason === "error" &&
+        isPaidFundingUnavailable(message.errorMessage ?? "")
+        ? (this.readState(STATE_KEYS.latestSubmission) ?? "")
+        : "",
+    );
     await this.recorder.settled();
     const breakdown = this.recorder.take(CONTEXT_SCOPE);
     const responseKey = message.responseId ?? `t:${message.timestamp}`;
