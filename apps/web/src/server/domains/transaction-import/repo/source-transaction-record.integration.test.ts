@@ -2,6 +2,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   sourceOccurrenceReviewState,
   sourceIdentityResolution,
+  sourceOccurrenceClosure,
   type SourceIdentityResolution,
 } from "@cubby/schemas/source-occurrence-fields";
 import {
@@ -20,7 +21,11 @@ import {
   sourceHistoricalTransactionRows,
   sourceOccurrenceHasUnresolvedHistory,
 } from "~/server/db/computed/source-occurrence-history-sql";
-import { getDb } from "~/server/db/helpers";
+import {
+  databaseForTransaction,
+  getDb,
+  withTransaction,
+} from "~/server/db/helpers";
 import {
   sourceOccurrence,
   sourceObservationAnnotation,
@@ -44,6 +49,7 @@ import {
   kernelRequestContext,
 } from "~/server/testing/mcp-test-utils";
 
+import { sourceOccurrenceRepository } from "./source-occurrence-read";
 import {
   recordSourceTransactionRecords,
   updateSourceTransactionRecords,
@@ -128,6 +134,79 @@ describe("statement row ledger", () => {
     expect(before).toHaveLength(2);
     expect(new Set(before.map((row) => row.chargeKey)).size).toBe(2);
     expect(owners.map((owner) => owner.version)).toEqual([1, 1]);
+    await withTransaction(ctx.db, async (tx) => {
+      const ordinary = await sourceOccurrenceRepository.repository.read(
+        buildKernelContext(databaseForTransaction(tx), ctx.actor.userId),
+        owners.map((owner) =>
+          parseShortcodeFor("sourceOccurrence", owner.shortcode),
+        ),
+      );
+      expect(ordinary.data).toHaveLength(2);
+      expect(ordinary.data.every((row) => !Object.hasOwn(row, "closure"))).toBe(
+        true,
+      );
+      await expect(
+        sourceOccurrenceRepository.repository.read(
+          buildKernelContext(databaseForTransaction(tx), ctx.actor.userId),
+          owners.map((owner) =>
+            parseShortcodeFor("sourceOccurrence", owner.shortcode),
+          ),
+          ["closure"],
+        ),
+      ).rejects.toThrow(
+        "snapshot read outside a read-committed write transaction",
+      );
+    });
+    const closureRead = await sourceOccurrenceRepository.repository.read(
+      buildKernelContext(ctx.db, ctx.actor.userId),
+      owners.map((owner) =>
+        parseShortcodeFor("sourceOccurrence", owner.shortcode),
+      ),
+      ["closure"],
+    );
+    const closure = sourceOccurrenceClosure.parse(closureRead.data[0]?.closure);
+    expect(closure.scope).toHaveLength(2);
+    expect(
+      closureRead.data.filter((row) => row.closure !== undefined),
+    ).toHaveLength(1);
+    expect(
+      closure.sets.collections.every(
+        (row) => !Object.hasOwn(Object(row), "notes"),
+      ),
+    ).toBe(true);
+    expect(closure.sets.occurrences).toHaveLength(2);
+    expect(closure.sets.observations).toHaveLength(2);
+    expect(closure.sets.judgments).toHaveLength(2);
+    expect(closure.sets.memberships).toHaveLength(2);
+    expect(closure.sets.collections).toHaveLength(1);
+    expect(closure.sets.transactions).toEqual([]);
+    expect(closure.sets.effectiveExpenses).toEqual([]);
+    const reader = buildKernelContext(ctx.db, ctx.actor.userId);
+    const publicClosure = await callMcpTool(
+      createMcpServer(),
+      "entity_read",
+      {
+        action: "list",
+        entity: "sourceOccurrence",
+        filters: { ids: [closure.root] },
+        fields: ["closure"],
+      },
+      kernelRequestContext(reader),
+      { entityKernel: reader },
+    );
+    expect(publicClosure.isError).not.toBe(true);
+    expect(publicClosure.structuredContent).toMatchObject({
+      items: [
+        {
+          closure: {
+            root: closure.root,
+            scope: [closure.root],
+            sets: { observations: [expect.any(Object)] },
+          },
+        },
+      ],
+    });
+
     await expect(
       recordSourceTransactionRecords(ctx.db, input, ctx.actor),
     ).resolves.toMatchObject({
@@ -141,6 +220,81 @@ describe("statement row ledger", () => {
     );
     expect(await getDb(ctx.db).select().from(sourceOccurrence)).toEqual(owners);
     expect(await getDb(ctx.db).select().from(auditLog)).toEqual(audits);
+    const ordinary = await callMcpTool(
+      createMcpServer(),
+      "entity_read",
+      {
+        action: "get",
+        entity: "sourceOccurrence",
+        id: closure.root,
+      },
+      kernelRequestContext(reader),
+      { entityKernel: reader },
+    );
+    expect(ordinary.isError).not.toBe(true);
+    expect(ordinary.structuredContent).not.toHaveProperty("item.closure");
+    const [seedOwner, siblingOwner] = owners;
+    if (!seedOwner || !siblingOwner)
+      throw new Error("Synthetic sibling owners missing");
+    const seedAlias = (
+      await getDb(ctx.db)
+        .select()
+        .from(financialEvidenceAlias)
+        .where(eq(financialEvidenceAlias.occurrenceId, seedOwner.id))
+    ).find((alias) => alias.kind === "externalId");
+    if (!seedAlias) throw new Error("Synthetic root alias missing");
+    const weakAccount = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic historical sibling account",
+    });
+    const weakHistory = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: weakAccount.output.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-05-04",
+      amount: 128.5,
+      sourceRefs: [],
+    });
+    const [weakBinding] = await getDb(ctx.db)
+      .insert(financialEvidenceAlias)
+      .values({
+        source: seedAlias.source,
+        kind: "transaction_ref",
+        value: seedAlias.value,
+        historicalTransactionId: weakHistory.entityId,
+        provenanceKey: "synthetic-sibling-only-history",
+        provenance: { kind: "retained_legacy_binding" },
+        scopeEvidence: {},
+      })
+      .returning();
+    if (!weakBinding) throw new Error("Synthetic sibling binding missing");
+    const siblingClosure = sourceOccurrenceClosure.parse(
+      (
+        await sourceOccurrenceRepository.repository.read(
+          reader,
+          [parseShortcodeFor("sourceOccurrence", siblingOwner.shortcode)],
+          ["closure"],
+        )
+      ).data[0]?.closure,
+    );
+    expect(siblingClosure.sets.transactions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: weakHistory.entityId }),
+      ]),
+    );
+    expect(siblingClosure.sets.aliases).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: weakBinding.id })]),
+    );
+    expect(siblingClosure.sets.occurrences).toEqual([
+      expect.objectContaining({
+        id: siblingOwner.id,
+        acceptedTransactionId: null,
+      }),
+    ]);
+    await getDb(ctx.db)
+      .update(financialEvidenceAlias)
+      .set({ deletedAt: new Date() })
+      .where(eq(financialEvidenceAlias.id, weakBinding.id));
+
     await expect(
       recordSourceTransactionRecords(
         ctx.db,
@@ -479,6 +633,71 @@ describe("statement row ledger", () => {
     expect((await listSourceTransactionRecords(ctx.db, {})).data).toHaveLength(
       3,
     );
+    const root = owners[0];
+    if (!root) throw new Error("Synthetic closure boundary owner missing");
+    const [oversized] = await getDb(ctx.db)
+      .insert(financialEvidenceAlias)
+      .values({
+        source: root.source,
+        kind: "transaction_ref",
+        value: "synthetic-byte-bound",
+        occurrenceId: root.id,
+        provenanceKey: "synthetic-byte-bound",
+        provenance: { kind: "retained_legacy_binding" },
+        scopeEvidence: { oversized: "x".repeat(1048577) },
+      })
+      .returning({ id: financialEvidenceAlias.id });
+    await expect(
+      sourceOccurrenceRepository.repository.read(
+        buildKernelContext(ctx.db, ctx.actor.userId),
+        [parseShortcodeFor("sourceOccurrence", root.shortcode)],
+        ["closure"],
+      ),
+    ).rejects.toThrow(/one MiB/);
+    if (!oversized) throw new Error("Synthetic byte boundary missing");
+    await getDb(ctx.db)
+      .delete(financialEvidenceAlias)
+      .where(eq(financialEvidenceAlias.id, oversized.id));
+    await getDb(ctx.db)
+      .insert(financialEvidenceAlias)
+      .values(
+        Array.from({ length: 1001 }, (_, index) => ({
+          source: root.source,
+          kind: "transaction_ref",
+          value: `synthetic-closure-overflow-${index}`,
+          occurrenceId: root.id,
+          provenanceKey: `synthetic-closure-overflow-${index}`,
+          provenance: { kind: "retained_legacy_binding" },
+          scopeEvidence: {},
+        })),
+      );
+    const reader = buildKernelContext(ctx.db, ctx.actor.userId);
+    await expect(
+      sourceOccurrenceRepository.repository.read(
+        reader,
+        [parseShortcodeFor("sourceOccurrence", root.shortcode)],
+        ["closure"],
+      ),
+    ).rejects.toThrow("one thousand rows");
+    await record(
+      Array.from({ length: 11 }, (_, index) =>
+        rowInput({
+          rowPosition: index + 1,
+          merchant: "Synthetic closure boundary",
+        }),
+      ),
+      { fingerprint: "synthetic-eleven-owner-boundary" },
+    );
+    const tooManyOwners = await getDb(ctx.db).select().from(sourceOccurrence);
+    await expect(
+      sourceOccurrenceRepository.repository.read(
+        reader,
+        tooManyOwners.map((owner) =>
+          parseShortcodeFor("sourceOccurrence", owner.shortcode),
+        ),
+        ["closure"],
+      ),
+    ).rejects.toThrow("at most ten owners");
   });
 
   it("reuses unchanged provider facts across collections while freezing each request and local annotation", async () => {
@@ -688,6 +907,48 @@ describe("statement row ledger", () => {
       transactionId: transaction.id,
       amount: 128.5,
       accountId: account.id,
+    });
+    const linkedVendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic closure vendor",
+    });
+    const linkedPurchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: linkedVendor.output.id,
+      date: "2026-05-04",
+    });
+    await createRepoEntity(ctx, "expense", {
+      name: "Synthetic closure Expense",
+      trade: "other",
+      date: "2026-05-04",
+      cost: 128.5,
+      costType: "materials",
+      purchaseId: linkedPurchase.output.id,
+      beneficiaries: [{ partyId: null, weight: 1 }],
+    });
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "financialTransaction",
+      transaction.id,
+      {
+        allocations: [{ purchaseId: linkedPurchase.output.id, amount: 128.5 }],
+      },
+    );
+    const readBack = await sourceOccurrenceRepository.repository.read(
+      buildKernelContext(ctx.db, ctx.actor.userId),
+      [parseShortcodeFor("sourceOccurrence", row.chargeKey)],
+      ["closure"],
+    );
+    const bundle = sourceOccurrenceClosure.parse(readBack.data[0]?.closure);
+    expect(bundle.sets.transactions).toHaveLength(1);
+    expect(bundle.sets.allocations).toHaveLength(1);
+    expect(bundle.sets.purchases).toHaveLength(1);
+    expect(bundle.sets.expenses).toHaveLength(1);
+    expect(bundle.sets.recordedAttribution).toHaveLength(1);
+    expect(bundle.sets.effectiveExpenses).toHaveLength(1);
+    expect(bundle.sets.expenses[0]).toMatchObject({ cost: 128.5 });
+    expect(bundle.sets.recordedAttribution[0]).toMatchObject({
+      ledgerPartyId: null,
+      weight: "1",
     });
     await expect(
       deleteThroughKernel(ctx.db, ctx.actor, "sourceTransactionRecord", [

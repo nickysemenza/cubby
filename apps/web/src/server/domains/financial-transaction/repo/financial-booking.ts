@@ -31,7 +31,13 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
-import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";
+import { readExpenseAttributionParties } from "~/server/domains/expense/repo/expense-attribution";
+import {
+  spendingClassificationRevision,
+  expenseSpendingCategoryResolutionSql,
+  parseExpenseCategoryResolution,
+  resolveAggregateExpenseCategory,
+} from "~/server/domains/expense/repo/expense-category-resolution";
 import {
   accountPurchaserKey,
   liveHouseholdCard,
@@ -39,6 +45,7 @@ import {
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { createPurchase } from "~/server/domains/purchase/repo/purchase";
 import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { resolveNames } from "~/server/entity-kernel/resolve";
@@ -376,6 +383,44 @@ export async function previewFinancialBooking(
     );
   const capacity = await bookingAction(db, input, row, graph);
   const { action } = capacity;
+  if (input.beneficiaries !== undefined && action !== "create_aggregate")
+    return fail(
+      "Beneficiaries apply only to a new aggregate Expense; preserve existing spending attribution.",
+    );
+  const beneficiaries = await readExpenseAttributionParties(
+    db,
+    input.beneficiaries,
+  );
+  const overrideId = input.spendingCategoryId
+    ? await resolveOrThrow(db, "spendingCategory", input.spendingCategoryId)
+    : null;
+  const vendorId = input.vendorId
+    ? await resolveOrThrow(db, "vendor", input.vendorId)
+    : null;
+  const effectiveCategory =
+    action === "create_aggregate"
+      ? await resolveAggregateExpenseCategory(db, {
+          purchaseId,
+          vendorId,
+          spendingCategoryId: overrideId,
+          name: row.merchant || row.rawDescription || "Reviewed spending",
+        })
+      : undefined;
+  const existingCategories = graph.lines.length
+    ? (
+        await getDb(db)
+          .select({
+            shortcode: expense.shortcode,
+            resolution: expenseSpendingCategoryResolutionSql("Expense"),
+          })
+          .from(expense)
+          .where(and(eq(expense.purchaseId, purchaseId!), notDeleted(expense)))
+          .orderBy(expense.id)
+      ).map((line) => ({
+        expenseId: parseShortcodeFor("expense", line.shortcode),
+        resolution: parseExpenseCategoryResolution(line.resolution),
+      }))
+    : [];
   const account = await getDb(db).query.financialAccount.findFirst({
     where: (account, { eq }) => eq(account.id, row.accountId),
     with: { ledgerParty: true },
@@ -407,7 +452,12 @@ export async function previewFinancialBooking(
     spendingCategoryId: category
       ? parseShortcodeFor("spendingCategory", category.shortcode)
       : null,
+    candidateCategoryId: category
+      ? parseShortcodeFor("spendingCategory", category.shortcode)
+      : null,
+    existingCategories,
     action,
+    ...(effectiveCategory ? { effectiveCategory } : {}),
   };
   const snapshot = await digestValue({
     decision,
@@ -419,6 +469,7 @@ export async function previewFinancialBooking(
     category,
     merchantHistory: input.confirmsMerchant === false ? merchantHistory : null,
     classificationRevision: await spendingClassificationRevision(db),
+    ...(input.beneficiaries === undefined ? {} : { beneficiaries }),
   });
   return financialBookingPreview.parse({
     ...decision,
@@ -524,6 +575,12 @@ export async function commitFinancialBooking(
       const replayed = await replayBooking(txDb, review);
       if (replayed) return replayed;
       await lockFinancialTransactionSources(tx, [review.transactionId]);
+      await lockLedgerPartiesForReference(tx, [
+        ...(review.purchaserId ? [review.purchaserId] : []),
+        ...(review.beneficiaries?.flatMap((share) =>
+          share.partyId ? [share.partyId] : [],
+        ) ?? []),
+      ]);
       const fresh = await previewFinancialBooking(txDb, {
         ...review,
         spendingCategoryId: review.categoryOverride,
@@ -570,6 +627,7 @@ export async function commitFinancialBooking(
             trade: review.trade,
             lineKind: "principal",
             lineBasis: "allocation",
+            beneficiaries: review.beneficiaries,
           }),
           actor,
         );

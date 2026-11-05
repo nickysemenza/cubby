@@ -88,7 +88,7 @@ type ListReadPage<Row> = {
 };
 type ListReadBinding<Row> = {
   schema: z.ZodObject;
-  scope?: "detail";
+  scope?: "detail" | "explicit";
   prefetch?: (page: ListIdPage) => Promise<void>;
   prepare?: (page: ListReadPage<Row>) => Promise<void>;
   value: (
@@ -109,8 +109,8 @@ type ListBatch<Row, Page, Loaded> = {
     options?: BindingOptions,
   ) => ListReadBinding<Row>;
 };
-/** `scope: "detail"`: a page omits these keys unless a projection names them. */
-type BindingOptions = { scope?: "detail" };
+/** Detail fields default only on record reads; explicit fields require a named projection everywhere. */
+type BindingOptions = { scope?: "detail" | "explicit" };
 type BindListFields<Row> = {
   <Fields extends z.ZodRawShape>(
     schema: z.ZodObject<Fields>,
@@ -286,7 +286,7 @@ export function listReadPlan<Row>(
   // A key may have one page writer and one detail-scoped writer: the record
   // read takes the richer detail value, a page keeps its own.
   const overridden = new Set<string>();
-  const claim = (key: string, scope?: "detail") => {
+  const claim = (key: string, scope?: "detail" | "explicit") => {
     if (!Object.hasOwn(schema.shape, key))
       throw new Error(`Unknown list binding field: ${entity}.${key}`);
     if (written.has(key)) {
@@ -422,9 +422,18 @@ export function listReadPlan<Row>(
               overridden.has(key),
             ),
         );
+  // Verification bundles must not run as part of ordinary reads or write-response hydration.
+  const explicitOnly = new Set(
+    bindings.flatMap((binding) =>
+      binding.scope === "explicit" ? Object.keys(binding.schema.shape) : [],
+    ),
+  );
+  const defaultFields = Object.keys(schema.shape).filter(
+    (key) => !explicitOnly.has(key),
+  );
   const fields = {
-    detail: Object.keys(schema.shape),
-    list: Object.keys(schema.shape).filter((key) => !detailOnly.has(key)),
+    detail: defaultFields,
+    list: defaultFields.filter((key) => !detailOnly.has(key)),
   } as const;
   /**
    * The page loads that need only row ids. The scaffold starts them as soon

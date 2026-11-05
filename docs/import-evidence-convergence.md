@@ -1409,14 +1409,26 @@ verify unchanged source, ledger and attribution graphs. This API does not return
 the `replayed: true` flag used by direct `finance.commit_booking`; that writer has
 its own replay and current-lineage checks.
 
-Direct booking previews expose two category fields. `spendingCategoryId` is the
-resolved candidate category, while `categoryOverride` is the category input
-persisted on a newly created Expense. Preserve both fields in the commit request.
+Direct booking previews distinguish `candidateCategoryId` (also retained as
+`spendingCategoryId`) from `categoryOverride`, the category input persisted on a
+newly created Expense, and `effectiveCategory`, the canonical resolution of the
+prospective Expense and Purchase. Preserve these fields in the commit request.
 A null override stores no Expense category override; bare Purchase creation also
 leaves its category null. The Expense's effective category may inherit from its
 context or remain Uncategorized, so the preview's candidate label does not prove
-the resulting classification. Verify it through the owning category resolution
-after booking. `link_existing` does not rewrite existing categories.
+the resulting classification. The effective resolution includes its provenance
+and a null value means Uncategorized. `existingCategories` shows the canonical
+resolutions of the selected Purchase's existing lines; `link_existing` preserves
+them. Commit rechecks the live classification policy and projected result.
+
+Optional reviewed `beneficiaries` in direct booking and statement `booking`
+uses the existing attribution role format. Omission and an empty reset retain
+the normal beneficiary defaults; a null-party share explicitly records unknown
+beneficiaries, distinct from Household or a named member. Nonempty shares keep
+their exact parties and weights in the review fingerprint and are written by
+the Expense attribution owner in the same transaction as booking. A stale or
+deleted party refuses the booking. Linking or settling existing spending refuses
+creation-only beneficiary choices and preserves every recorded attribution.
 
 Source aggregate creation defaults ordinary purchases to `materials` and fees
 to `services`. Optional `booking.costType` in statement review chooses
@@ -1459,3 +1471,5 @@ statement command replay still returns its committed receipt. Never reset
 fingerprints or undo member edits to force convergence.
 
 Owner ruling for the source cutover: unproven observations stay held with unchanged money and retained advice. Applying held advice returns the held reason. Reviewed identity decisions can use `entity.commands` batches of up to50 independent SourceRecord updates, each with its own expectedDisposition, fingerprint/version/accepted-owner/history checks and explicit judgment. Assign refuses conflicting original account or disposition. Historical reconciliation uses this existing audited batch path; it does not guess identity or require a web action. Publishing a current occurrence review supersedes pending old-key advice for its observations without deleting paid labels or member decisions; dismissing held advice does not suppress a later proven occurrence. Paid labels may be reused across aliases only when their exact model inputs and policy still agree.
+
+Verification uses `entity_read.list` with `entity: sourceOccurrence`, `filters.ids` and `fields: ["closure"]` in groups of at most10 owners. Ordinary get/list reads omit the snapshot; get does not publish this explicit list projection. One snapshot loads shared observation/proof/judgment/membership/alias and accepted/historical money graphs once per page, including retained sibling-alias history. Alias context can name observations outside the selected owners; it never expands accepted ownership or authorizes a write; named sets retain stable storage handles, original relationships and tombstones. Canonical live Expense reads supply effective beneficiaries/funders and category provenance beside recorded weights and overrides. Each named set refuses overflow above1,000 rows rather than returning partial coverage. `scope` names the complete requested owner cohort; the first result alone carries the bounded cohort bundle, whose scope covers every requested owner; remaining results omit closure. TransactionImport notes are omitted. Raw and enriched bundles refuse above one MiB before returning; this bounds serialization as well as row count. Use versions inside the bundle for subsequent review fences. Historical links and receipt references remain read-only evidence. The projection is hidden from ordinary list/detail display and creates no money or work.
