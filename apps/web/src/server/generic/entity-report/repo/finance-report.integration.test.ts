@@ -87,7 +87,7 @@ describe("finance entity reports", () => {
       ctx.actor,
     ).then((result) => result.blocks);
 
-  it("separates retained observations from distinct matched transaction booking", async () => {
+  it("separates retained observations from accepted-owner transaction booking", async () => {
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic report cash",
       identity: { kind: "cash" },
@@ -262,7 +262,7 @@ describe("finance entity reports", () => {
       blocks.find(
         (block) =>
           block.kind === "stats" &&
-          block.title === "Matched transaction booking",
+          block.title === "Accepted-owner transaction booking",
       ),
     ).toMatchObject({
       figures: expect.arrayContaining([
