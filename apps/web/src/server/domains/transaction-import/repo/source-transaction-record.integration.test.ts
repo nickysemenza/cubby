@@ -137,7 +137,9 @@ describe("statement row ledger", () => {
     await withTransaction(ctx.db, async (tx) => {
       const ordinary = await sourceOccurrenceRepository.repository.read(
         buildKernelContext(databaseForTransaction(tx), ctx.actor.userId),
-        owners.map((owner) => owner.shortcode),
+        owners.map((owner) =>
+          parseShortcodeFor("sourceOccurrence", owner.shortcode),
+        ),
       );
       expect(ordinary.data).toHaveLength(2);
       expect(ordinary.data.every((row) => !Object.hasOwn(row, "closure"))).toBe(
@@ -146,7 +148,9 @@ describe("statement row ledger", () => {
       await expect(
         sourceOccurrenceRepository.repository.read(
           buildKernelContext(databaseForTransaction(tx), ctx.actor.userId),
-          owners.map((owner) => owner.shortcode),
+          owners.map((owner) =>
+            parseShortcodeFor("sourceOccurrence", owner.shortcode),
+          ),
           ["closure"],
         ),
       ).rejects.toThrow(
@@ -155,7 +159,9 @@ describe("statement row ledger", () => {
     });
     const closureRead = await sourceOccurrenceRepository.repository.read(
       buildKernelContext(ctx.db, ctx.actor.userId),
-      owners.map((owner) => owner.shortcode),
+      owners.map((owner) =>
+        parseShortcodeFor("sourceOccurrence", owner.shortcode),
+      ),
       ["closure"],
     );
     const closure = sourceOccurrenceClosure.parse(closureRead.data[0]?.closure);
@@ -734,7 +740,6 @@ describe("statement row ledger", () => {
     });
     const linkedPurchase = await createRepoEntity(ctx, "purchase", {
       vendorId: linkedVendor.output.id,
-      name: "Synthetic closure purchase",
       date: "2026-05-04",
     });
     await createRepoEntity(ctx, "expense", {
@@ -757,7 +762,7 @@ describe("statement row ledger", () => {
     );
     const readBack = await sourceOccurrenceRepository.repository.read(
       buildKernelContext(ctx.db, ctx.actor.userId),
-      [row.chargeKey],
+      [parseShortcodeFor("sourceOccurrence", row.chargeKey)],
       ["closure"],
     );
     const bundle = sourceOccurrenceClosure.parse(readBack.data[0]?.closure);
