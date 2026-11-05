@@ -772,9 +772,10 @@ Run steps; moving them onto drains comes later, with #3142.
 Pending suggestion lists, counts, bulk admission and Work read canonical family
 admission while ADR 0025 retires the publication pipeline. Empty or unavailable
 read publications must not turn existing review work into an empty queue.
-The derived drain retains but does not claim `assessment.reviewFacts` tickets:
-activation exhausted PostgreSQL memory and rolled back unrelated publications.
-Member decisions, evidence, paid work and all existing tickets remain retained.
+Activating `assessment.reviewFacts` tickets exhausted PostgreSQL memory and rolled
+back unrelated publications, so the drain never claimed them. `0082` deleted the
+88,198 left once nothing owed them; they held no member decision, evidence or paid
+work.
 
 Browse reads project from the Suggestion row and revalidate nothing beyond the
 requested page, so a count may include a stale row. Accept rechecks current

@@ -22,10 +22,7 @@ import {
   storedDerivedDeclarations,
   type StoredDerivedDeclaration,
 } from "~/server/db/derived-declarations";
-import {
-  DERIVED_DRAIN_JOB_KEY,
-  DERIVED_UNCLAIMED_TARGETS,
-} from "~/server/db/derived-trigger-ddl";
+import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
 import { derivedValue } from "~/server/db/derived-value-schema";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { unwrapDb } from "~/server/db/helpers";
@@ -54,7 +51,7 @@ import {
   workPendingWhere,
 } from "~/server/generic/jobs/repo/work-items";
 
-export { DERIVED_DRAIN_JOB_KEY, DERIVED_UNCLAIMED_TARGETS };
+export { DERIVED_DRAIN_JOB_KEY };
 export const DERIVED_DRAIN: Drain = {
   key: DERIVED_DRAIN_JOB_KEY,
   kind: "derived.drain",
