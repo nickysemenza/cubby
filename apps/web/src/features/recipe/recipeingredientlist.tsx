@@ -595,10 +595,10 @@ export const RecipeIngredientList: React.FC<{
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-semibold">Nutrition contributions</h3>
-            <p className="text-xs text-muted-foreground">
+            <Description size="xs">
               Select a nutrient to reveal its column and ingredient
               contributions.
-            </p>
+            </Description>
           </div>
           <div className="flex items-center gap-2 text-xs font-medium">
             <label htmlFor={nutrientPickerId}>Focused nutrient</label>

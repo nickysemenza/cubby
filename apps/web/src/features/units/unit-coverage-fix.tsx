@@ -12,6 +12,7 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import { Description } from "~/ui/text/description";
 
 import type { UnitCoverageItem } from "./unit-coverage-items";
 
@@ -178,9 +179,7 @@ function PriceFix({ id, close }: { id: string; close: () => void }) {
 
   return (
     <Stack gap="sm">
-      <p className="text-xs text-muted-foreground">
-        Not a food — just needs a price.
-      </p>
+      <Description size="xs">Not a food — just needs a price.</Description>
       <Row align="center" gap="sm" className="text-sm">
         <span>1 each = $</span>
         <NumberInput
@@ -260,9 +259,9 @@ function DisconnectedFix({
 
   return (
     <Stack gap="sm">
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         Add the missing conversion(s) to connect the groups.
-      </p>
+      </Description>
       {bridges.map((b, i) => (
         <Row
           key={`${b.from}-${b.to}`}

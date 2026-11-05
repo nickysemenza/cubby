@@ -41,6 +41,7 @@ import { sourceTransactionRecord } from "~/integrations/tanstack-query/generated
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Section } from "~/ui/layout/section";
 import { Button } from "~/ui/primitives/button";
@@ -1066,7 +1067,7 @@ function ConnectionEvidence({ row }: { row: ConnectionRow }) {
             ))}
           </ul>
         ) : (
-          <p className="text-xs text-muted-foreground">No stated basis.</p>
+          <EmptyState size="inline">No stated basis.</EmptyState>
         )}
       </EvidenceBox>
     </div>

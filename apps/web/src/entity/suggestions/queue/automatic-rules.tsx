@@ -21,6 +21,7 @@ import {
 import { Switch } from "~/ui/primitives/switch";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/records/ledger";
 import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 import { DateDisplay } from "~/ui/values/date-display";
 
 const RULE_NAME = {
@@ -56,11 +57,11 @@ export function AutomaticRulesSection({
       headingAs="h2"
       caption={rules.data ? `${on} of ${list.length} on` : null}
     >
-      <p className="mb-2 text-sm text-muted-foreground">
+      <Description className="mb-2">
         These switches control statement automation. Eligible empty-field
         filling follows its fixed policy; saved values and rejections remain
         protected.
-      </p>
+      </Description>
       {rules.error ? (
         <p
           role="alert"

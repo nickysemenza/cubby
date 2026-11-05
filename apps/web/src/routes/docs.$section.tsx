@@ -5,6 +5,7 @@ import { DEFAULT_DOC_SLUG, getDocSection } from "~/features/docs/docs-registry";
 import { pageTitle } from "~/lib/page-title";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 
 export const Route = createFileRoute("/docs/$section")({
   // The registry's own title, not the raw slug — the section is already
@@ -38,10 +39,10 @@ function DocsSectionNotFound() {
         <h2 id={headingId} className="text-lg font-semibold">
           Documentation section not found
         </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <Description className="mt-2">
           This link is no longer available. Browse the current documentation to
           continue.
-        </p>
+        </Description>
         <Button
           className="mt-4"
           render={

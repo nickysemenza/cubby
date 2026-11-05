@@ -7,6 +7,7 @@ import { usdaFood } from "~/integrations/tanstack-query/generated/domains/usdaFo
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Stack } from "~/ui/layout";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { Description } from "~/ui/text/description";
 
 type AlternateId = Parameters<typeof usdaFood.alternateId.queryOptions>[0];
 
@@ -61,7 +62,7 @@ export function UsdaAlternateIdRedirect({
 
   return (
     <Page variant="list" title="Redirecting to USDA food" entity="usda-food">
-      <p className="text-sm text-muted-foreground">Redirecting to USDA food…</p>
+      <Description>Redirecting to USDA food…</Description>
     </Page>
   );
 }

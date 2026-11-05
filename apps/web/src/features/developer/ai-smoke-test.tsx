@@ -14,6 +14,7 @@ import { Row, Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Spinner } from "~/ui/primitives/spinner";
 import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 
 import {
   AiSmokeForm,
@@ -172,9 +173,9 @@ function ScenarioCard({
           </p>
         )}
         {!parsed.success && !prerequisite && (
-          <p className="text-xs text-muted-foreground">
+          <Description size="xs">
             Select the required options to run this probe.
-          </p>
+          </Description>
         )}
         {validation && (
           <p role="alert" className="text-xs text-destructive">
@@ -211,8 +212,7 @@ export function AiSmokeTest({
     queryKey: ["ai-smoke", "catalog"],
     queryFn: operations.catalog,
   });
-  if (catalog.isLoading)
-    return <p className="text-sm text-muted-foreground">Loading AI probes…</p>;
+  if (catalog.isLoading) return <Description>Loading AI probes…</Description>;
   if (catalog.isError)
     return (
       <p role="alert" className="text-sm text-destructive">
@@ -222,10 +222,10 @@ export function AiSmokeTest({
   const scenarios = catalog.data ?? [];
   return (
     <div className="grid gap-6">
-      <p className="text-sm text-muted-foreground">
+      <Description>
         Choose a source and run one feature at a time. Each attempt creates a
         Run with its AI usage and diagnostics.
-      </p>
+      </Description>
       {groupOrder.map((group) => {
         const items = scenarios.filter((spec) => spec.group === group);
         if (!items.length) return null;

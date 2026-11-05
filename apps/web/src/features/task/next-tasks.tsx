@@ -20,6 +20,7 @@ import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 import { DateDisplay } from "~/ui/values/date-display";
 
 type ActionableTasksOut = Awaited<ReturnType<typeof task.listActionable.call>>;
@@ -244,20 +245,20 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
 
   return (
     <Stack gap="lg">
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         Next is an actionable-work renderer: it includes open top-level tasks
         and explains blockers. Compatible project, trade, search, and due-date
         filters are applied by the server.
-      </p>
+      </Description>
       <Section
         headingAs="h2"
         title="Next"
         caption="Unblocked tasks you can act on now."
       >
         {data.next.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <Description>
             Nothing next right now — everything open is blocked or set aside.
-          </p>
+          </Description>
         ) : (
           <TaskRows rows={data.next} displayImages={displayImages} />
         )}
@@ -275,7 +276,7 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
         caption="Open tasks waiting on something else, with the chain of why."
       >
         {data.blocked.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing is blocked.</p>
+          <Description>Nothing is blocked.</Description>
         ) : (
           <Stack gap="md">
             {data.blocked.map((bt) => (

@@ -18,6 +18,7 @@ import { formatInstant } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { StaticTable } from "~/ui/data-table/static-table";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { CloudflareIcon } from "~/ui/icons/cloudflare";
 import { Disclosure } from "~/ui/layout/disclosure";
@@ -115,7 +116,7 @@ const stateSummary = (group: JobGroup) =>
 /** Fan-out Jobs by kind: counts per state, wait reasons and the latest one. */
 function JobsTable({ groups }: { groups: readonly JobGroup[] }) {
   if (groups.length === 0)
-    return <p className="text-xs text-muted-foreground">No other Jobs.</p>;
+    return <EmptyState size="inline">No other Jobs.</EmptyState>;
   return (
     <StaticTable
       rows={groups}
@@ -394,9 +395,7 @@ export function JobDiagnostics({
           <JobFactsList facts={jobs.primary} />
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">
-          No Job executes this Run.
-        </p>
+        <EmptyState size="inline">No Job executes this Run.</EmptyState>
       )}
       <Section headingAs="h3" compact title="Jobs" count={jobs.groups.length}>
         <JobsTable groups={jobs.groups} />
@@ -450,9 +449,7 @@ function SubjectJobs({
     );
   const primary = jobs.data.primary;
   if (!primary)
-    return (
-      <p className="text-xs text-muted-foreground">No Jobs for this record.</p>
-    );
+    return <EmptyState size="inline">No Jobs for this record.</EmptyState>;
   const wait = jobWait(primary);
   return (
     <div className="grid gap-3">

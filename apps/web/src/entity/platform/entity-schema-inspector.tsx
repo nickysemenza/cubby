@@ -11,12 +11,14 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { StaticTable } from "~/ui/data-table/static-table";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { domainWayfinding } from "~/ui/navigation/domain-wayfinding";
 import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
 import { buttonVariants } from "~/ui/primitives/button";
 import { Facts as SharedFacts } from "~/ui/records/facts";
 import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 
 import {
   DETAIL_STATUS_LABEL,
@@ -183,9 +185,7 @@ function Overrides({
 }) {
   const overrides = presentation.overrides;
   if (overrides.length === 0)
-    return (
-      <p className="text-xs text-muted-foreground">No overrides declared.</p>
-    );
+    return <EmptyState size="inline">No overrides declared.</EmptyState>;
   if (!full)
     return (
       <ul className="border-t border-border/60 text-sm">
@@ -364,7 +364,7 @@ function Relations({
 function Filters({ presentation }: { presentation: SchemaEntity }) {
   const filters = presentation.filters;
   if (filters.length === 0)
-    return <p className="text-xs text-muted-foreground">No filters.</p>;
+    return <EmptyState size="inline">No filters.</EmptyState>;
   return (
     <StaticTable
       className="w-full table-auto border-collapse text-sm"
@@ -554,10 +554,10 @@ function SchemaDetail({ entity }: { entity: Entity }) {
           title="Declaration overrides"
           count={presentation.overrides.length}
         />
-        <p className="text-2xs text-muted-foreground">
+        <Description size="2xs">
           Explicit *Override inputs in the entity manifest. Each comparison
           compiles the manifest with that input removed.
-        </p>
+        </Description>
         <Overrides presentation={presentation} full />
       </section>
       <div className="grid gap-6 lg:grid-cols-2">

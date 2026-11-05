@@ -9,8 +9,10 @@ import { Picker } from "~/entity/picker/picker";
 import { vendor } from "~/integrations/tanstack-query/generated/domains/vendor.gen";
 import { broadcastSender } from "~/lib/vendor/domains";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { Button } from "~/ui/primitives/button";
 import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 
 /** Evidence remains on the original records; this control edits only the exact-address decision. */
 export function SenderAttributionDetails({
@@ -64,10 +66,10 @@ export function SenderAttributionDetails({
             : "Member address decision"}
         </p>
       ) : null}
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         An assigned address identifies one seller and is searched for that
         Vendor. A shared domain alone never identifies a seller.
-      </p>
+      </Description>
       {attribution.state === "disputed" ? (
         <p className="text-xs">
           Sender proof is suspended. Review the conflicting originals and
@@ -108,11 +110,11 @@ export function SenderAttributionDetails({
           Remove attribution · use receipt sellers
         </Button>
       ) : null}
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         Saved decisions apply to future and eligible unresolved retained mail.
         Paused, excluded or previously blocked imports keep their existing Run
         controls. Previously imported Purchases are never rewritten here.
-      </p>
+      </Description>
       <h3 className="text-sm font-semibold">
         Accepted receipt evidence · {attribution.evidenceCount}
       </h3>
@@ -141,10 +143,10 @@ export function SenderAttributionDetails({
           </ul>
         </>
       ) : (
-        <p className="text-xs text-muted-foreground">
+        <EmptyState size="inline">
           No current accepted receipt evidence is recorded for this exact
           address.
-        </p>
+        </EmptyState>
       )}
     </section>
   );

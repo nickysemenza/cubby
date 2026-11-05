@@ -1,4 +1,5 @@
 import { useHydrated } from "~/ui/hooks/use-hydrated";
+import { Description } from "~/ui/text/description";
 
 import { ErrorDisplay } from "./error-display";
 
@@ -16,9 +17,9 @@ export function QueryRefreshStatus({
   if (error)
     return (
       <div className="py-2">
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           This view may be out of date. Saved changes are retained.
-        </p>
+        </Description>
         <ErrorDisplay error={error} title="updated data" onRetry={onRetry} />
       </div>
     );

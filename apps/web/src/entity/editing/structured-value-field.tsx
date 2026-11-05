@@ -32,6 +32,7 @@ import {
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
+import { Description } from "~/ui/text/description";
 
 import {
   collectionEditSchema,
@@ -206,10 +207,10 @@ function CollectionEditor({
               </div>
             )}
             {row.value === null ? (
-              <p className="text-xs text-muted-foreground">
+              <Description size="xs">
                 Removal will be applied on Save. If this is primary, the saved
                 result selects a survivor.
-              </p>
+              </Description>
             ) : (
               <>
                 {editing ? (

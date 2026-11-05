@@ -6,6 +6,7 @@ import type {
 
 import { entityLabel } from "~/entity/entities";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 
 import { graphRefKey } from "./entity-graph-state";
 import { GraphRecordFacts, GraphRecordLink } from "./graph-record-content";
@@ -72,9 +73,9 @@ export function GraphPathsList({
             </Button>
           </div>
           {graphRefKey(node) === graphRefKey(root) ? (
-            <p className="mb-3 text-xs text-muted-foreground">
+            <Description size="xs" className="mb-3">
               Starting record
-            </p>
+            </Description>
           ) : (
             <GraphPathSteps
               steps={paths.get(graphRefKey(node)) ?? []}
@@ -85,9 +86,7 @@ export function GraphPathsList({
         </article>
       ))}
       {!matches.length ? (
-        <p className="py-4 text-sm text-muted-foreground">
-          No explored records match.
-        </p>
+        <Description className="py-4">No explored records match.</Description>
       ) : null}
     </div>
   );
@@ -146,10 +145,10 @@ export function GraphPathExplanation({
         steps={steps}
         byKey={new Map(nodes.map((node) => [graphRefKey(node), node]))}
       />
-      <p className="text-2xs text-muted-foreground">
+      <Description size="2xs">
         A recorded path through this map. Arrows retain the relationship’s
         stored direction.
-      </p>
+      </Description>
     </section>
   );
 }

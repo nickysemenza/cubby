@@ -25,6 +25,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 
 const MAPPING_MODE_OPTIONS: readonly PickerOption[] = [
   { value: "inherit", label: "Use ancestor mapping" },
@@ -169,10 +170,10 @@ function ClassificationReview({
             {review.unpricedExpenseCount > 0 &&
               `${review.unpricedExpenseCount} unpriced Expenses are excluded from dollar totals.`}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <Description size="xs">
             Amounts include recorded and planned Expenses. Expense totals stay
             the same.
-          </p>
+          </Description>
           <StaticTable
             rows={review.categoryDeltas}
             rowKey={(row) => row.spendingCategoryId ?? "unknown"}

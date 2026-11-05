@@ -49,6 +49,7 @@ import {
 import { Facts } from "~/ui/records/facts";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/records/ledger";
 import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 import { ExternalLinkText } from "~/ui/text/external-link";
 import JsonRenderer from "~/ui/text/json-renderer";
 import { NoneValue } from "~/ui/text/none-value";
@@ -398,9 +399,9 @@ function UnassessedQualityExplanation({
             Rule: {rule.ruleId} · r{rule.version}
           </p>
         ) : null}
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Evaluation: not performed; no checks are defined.
-        </p>
+        </Description>
       </section>
     </div>
   );

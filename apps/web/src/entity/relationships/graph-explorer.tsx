@@ -36,6 +36,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "~/ui/primitives/sheet";
+import { Description } from "~/ui/text/description";
 
 import { EntityGraphPicker } from "./entity-graph-picker";
 import { graphBranchKey, graphRefKey } from "./entity-graph-state";
@@ -680,9 +681,7 @@ function GraphRecordInspector({
           </Disclosure>
         </>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          Select a record to inspect its connections.
-        </p>
+        <Description>Select a record to inspect its connections.</Description>
       )}
     </Stack>
   );

@@ -24,6 +24,7 @@ import type {
 import { SectionPair } from "~/ui/data-table/indexed-sections";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 import { Eyebrow } from "~/ui/text/eyebrow";
 
 import {
@@ -129,9 +130,9 @@ function VitalsPanel({
                   />
                 ))}
               </div>
-              <p className="mt-1 text-2xs text-muted-foreground">
+              <Description size="2xs" className="mt-1">
                 Macro mix uses known lower amounts.
-              </p>
+              </Description>
             </>
           )}
           <dl className="mt-2 space-y-2">

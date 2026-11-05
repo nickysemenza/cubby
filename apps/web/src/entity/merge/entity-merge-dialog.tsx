@@ -231,11 +231,11 @@ function ProductMergeDecisions({
               ]}
             />
           </Panel>
-          <p className="text-2xs text-muted-foreground">
+          <Description size="2xs">
             Only fields with a value are shown. Kept values win; empty fields
             are filled. Names become searchable aliases; images and tags are
             combined, with exact duplicates removed.
-          </p>
+          </Description>
         </>
       )}
     </section>

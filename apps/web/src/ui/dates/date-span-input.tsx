@@ -14,6 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import { Description } from "~/ui/text/description";
 
 const Calendar = browserOnlyLazy<ComponentProps<typeof CalendarComponent>>(
   import.meta.env.SSR
@@ -133,9 +134,9 @@ export function DateSpanInput({
         </div>
         <Suspense
           fallback={
-            <p className="p-3 text-xs text-muted-foreground">
+            <Description size="xs" className="p-3">
               Loading calendar…
-            </p>
+            </Description>
           }
         >
           {mode === "range" ? (

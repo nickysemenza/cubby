@@ -7,6 +7,7 @@ import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-l
 import { formatCurrency } from "~/lib/number-format";
 import { Row, Stack } from "~/ui/layout";
 import { ChipCluster } from "~/ui/records/chip-cluster";
+import { Description } from "~/ui/text/description";
 
 const compactSummaryLabels = {
   ...spendingCategorySummaryLabels,
@@ -63,17 +64,15 @@ export function SpendingCategorySummaryValue({
         </Row>
       ))}
       {summary.categories.length > 0 && contextOnly && (
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Categories describe linked expenses. Settlement amounts are not
           attributed to categories.
-        </p>
+        </Description>
       )}
       {summary.categories.length > 0 &&
         !contextOnly &&
         !summary.amountsKnown && (
-          <p className="text-xs text-muted-foreground">
-            Some expense amounts are unknown.
-          </p>
+          <Description size="xs">Some expense amounts are unknown.</Description>
         )}
     </Stack>
   );

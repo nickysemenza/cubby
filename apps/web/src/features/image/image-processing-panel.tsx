@@ -26,13 +26,16 @@ import { image as imageOperations } from "~/integrations/tanstack-query/generate
 import { imageProcessing } from "~/integrations/tanstack-query/generated/domains/imageProcessing.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatInstant } from "~/lib/date-format";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Disclosure } from "~/ui/layout/disclosure";
+import { Section } from "~/ui/layout/section";
 import { Image } from "~/ui/media/image";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 import { Textarea } from "~/ui/primitives/textarea";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
+import { Description } from "~/ui/text/description";
 
 import { workStateLabel } from "./image-processing-state";
 
@@ -46,13 +49,12 @@ function ImageAnalysisHistory({
   );
   const pages = analyses.data?.pages ?? [];
   return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <h4 className="text-sm font-medium">Analysis history</h4>
-        <span className="text-xs text-muted-foreground">
-          {pages[0]?.total ?? 0} analyses
-        </span>
-      </div>
+    <Section
+      title="Analysis history"
+      headingAs="h4"
+      compact
+      count={`${pages[0]?.total ?? 0} analyses`}
+    >
       {pages
         .flatMap((page) => page.items)
         .map((analysis) => (
@@ -103,7 +105,7 @@ function ImageAnalysisHistory({
           Load more analysis
         </Button>
       ) : null}
-    </section>
+    </Section>
   );
 }
 
@@ -137,9 +139,7 @@ function DescriptionSummary({
           </p>
         </>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          No description available yet.
-        </p>
+        <EmptyState size="inline">No description available yet.</EmptyState>
       )}
       {status.analyses.length > 0 ? (
         <Disclosure
@@ -176,10 +176,10 @@ function IdentificationSummary({ image }: { image: ImageWithEntity }) {
     return (
       <section className="space-y-2" aria-label="Product identification">
         <h4 className="text-sm font-medium">Product identification</h4>
-        <p className="text-sm text-muted-foreground">
+        <Description>
           No current identification result. Queue missing processing to evaluate
           this image.
-        </p>
+        </Description>
       </section>
     );
   const reason =
@@ -241,11 +241,11 @@ function IdentificationSummary({ image }: { image: ImageWithEntity }) {
               />
             ))}
           </RecordList>
-          <p className="text-xs text-muted-foreground">
+          <Description size="xs">
             Suggestions need confirmation. Review the Product, then confirm to
             attach this image as an item photo. Confirmation does not change
             inventory.
-          </p>
+          </Description>
         </>
       ) : (
         <p className="text-sm text-muted-foreground">{reason}</p>

@@ -18,6 +18,7 @@ import { Stack, Row } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
+import { Description } from "~/ui/text/description";
 import { DateDisplay } from "~/ui/values/date-display";
 
 import { ScopedListPager } from "./scoped-list-pager";
@@ -72,10 +73,10 @@ export function AutomaticDecisions({
   return (
     <section aria-label="Automation history">
       <Stack gap="sm">
-        <p className="text-sm text-muted-foreground">
+        <Description>
           Automatic decisions and recorded correction attempts. A held attempt
           made no change. No review is required.
-        </p>
+        </Description>
         <Row gap="sm" className="flex-wrap">
           <Picker
             mode="choose"
@@ -211,11 +212,11 @@ export function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
             </pre>
           </Disclosure>
           {row.verdict === "wrong" ? (
-            <p className="text-xs text-muted-foreground">
+            <Description size="xs">
               Feedback recorded for reassessment where supported on the next
               suggestion run. Applied records stay as they are; open an affected
               record above if it needs editing. Automation remains unchanged.
-            </p>
+            </Description>
           ) : null}
           {review.error ? (
             <ErrorDisplay

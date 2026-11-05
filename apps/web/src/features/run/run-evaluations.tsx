@@ -19,6 +19,7 @@ import { formatCount } from "~/lib/number-format";
 import { useSectionCount } from "~/ui/data-table/detail-section-state";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
+import { Section } from "~/ui/layout/section";
 import { Button } from "~/ui/primitives/button";
 import {
   Progress,
@@ -225,9 +226,11 @@ export function RunEvaluations({ record }: { record: EvaluationRun }) {
         />
       ) : null}
 
-      <div className="grid gap-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Latest outcomes</h3>
+      <Section
+        title="Latest outcomes"
+        headingAs="h3"
+        compact
+        actions={
           <Button
             variant="ghost"
             size="sm"
@@ -236,7 +239,8 @@ export function RunEvaluations({ record }: { record: EvaluationRun }) {
           >
             {failedOnly ? "Show all outcomes" : "Failures only"}
           </Button>
-        </div>
+        }
+      >
         <RecordList
           state={{ status: "success" }}
           empty={
@@ -276,7 +280,7 @@ export function RunEvaluations({ record }: { record: EvaluationRun }) {
             );
           })}
         </RecordList>
-      </div>
+      </Section>
     </div>
   );
 }

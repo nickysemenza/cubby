@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
+import { Description } from "~/ui/text/description";
 
 /**
  * Short verb phrase for a disposition's `effect`, from the delete/merge
@@ -71,9 +72,7 @@ function ImpactRow({
 }) {
   const query = useConnectionImpact(id, operation, operations);
   if (query.isPending)
-    return (
-      <p className="text-xs text-muted-foreground">Checking connections…</p>
-    );
+    return <Description size="xs">Checking connections…</Description>;
   if (query.isError)
     return (
       <ErrorDisplay
@@ -153,9 +152,9 @@ function DeleteImpactPreview({
           </p>
         }
       />
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         This preview is advisory; the delete re-checks before it runs.
-      </p>
+      </Description>
     </Stack>
   );
 }
@@ -204,9 +203,9 @@ export function DeleteImpactPreviewList({
           Connections for {hidden} more selected rows are not previewed.
         </p>
       )}
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         This preview is advisory; the delete re-checks before it runs.
-      </p>
+      </Description>
     </Stack>
   );
 }
@@ -238,9 +237,9 @@ export function MergeImpactPreview({
           }
         />
       ))}
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         This preview is advisory; the merge re-checks before it runs.
-      </p>
+      </Description>
     </Stack>
   );
 }

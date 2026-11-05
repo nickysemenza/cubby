@@ -1,4 +1,3 @@
-import "./table.css";
 import {
   FILTER_ALL,
   FILTER_ANY,
@@ -22,6 +21,8 @@ import {
   relativeDateToken,
   UNRESOLVABLE_ENTITY_FILTER,
 } from "@cubby/shared";
+
+import "./table.css";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
@@ -56,6 +57,7 @@ import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import { Kbd } from "~/ui/primitives/kbd";
 import {
   Popover,
   PopoverContent,
@@ -63,6 +65,7 @@ import {
 } from "~/ui/primitives/popover";
 import { Switch } from "~/ui/primitives/switch";
 import { RecordPill } from "~/ui/records/record-pill";
+import { Description } from "~/ui/text/description";
 import { EnumPill } from "~/ui/text/enum-pill";
 import { Pill } from "~/ui/text/pill";
 
@@ -586,9 +589,7 @@ function TypedValuesEditor({
         placeholder={field.placeholder}
         aria-label={`Filter ${label}`}
       />
-      <p className="text-xs text-muted-foreground">
-        Separate values with commas.
-      </p>
+      <Description size="xs">Separate values with commas.</Description>
     </>
   );
 }
@@ -1507,12 +1508,12 @@ function FilterSearchField({
           <XIcon className="size-3.5" />
         </button>
       ) : dense ? (
-        <kbd
+        <Kbd
           aria-hidden
           className="pointer-events-none absolute right-1.5 flex h-4 min-w-4 items-center justify-center rounded-[3px] border border-border px-1 font-mono text-2xs text-muted-foreground"
         >
           /
-        </kbd>
+        </Kbd>
       ) : null}
     </div>
   );

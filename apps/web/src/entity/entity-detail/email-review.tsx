@@ -14,6 +14,7 @@ import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Facts, FactsDensityProvider } from "~/ui/records/facts";
+import { Description } from "~/ui/text/description";
 
 import type { DetailRecordOf } from "./detail-record";
 import { EntityReportSlot } from "./report-slot";
@@ -81,10 +82,10 @@ export function EmailReview({ record }: { record: DetailRecordOf<"email"> }) {
                 : "Preview classification"}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <Description size="xs">
             Refetches the Gmail original and runs the current classifier,
             including Luna when needed. Does not apply the result.
-          </p>
+          </Description>
           {isForRecord && preview.error && (
             <ErrorDisplay error={preview.error} />
           )}

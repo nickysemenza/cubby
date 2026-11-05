@@ -310,7 +310,7 @@ function Backlog({ status }: { status: MaintenanceStatus }) {
             },
           ]}
         />
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Inspect{" "}
           <Link
             to="/image-jobs"
@@ -329,7 +329,7 @@ function Backlog({ status }: { status: MaintenanceStatus }) {
           </Link>
           . These lists include retained revisions; the snapshot above counts
           only the current revision.
-        </p>
+        </Description>
       </Section>
     </Stack>
   );

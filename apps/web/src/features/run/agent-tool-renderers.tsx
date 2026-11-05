@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
+import { EmptyState } from "~/ui/feedback/empty-state";
 
 const jsonValue = z.json();
 type JsonValue = z.infer<typeof jsonValue>;
@@ -222,7 +223,7 @@ const entityReads: ToolRenderer = {
     const records = readRecords(output);
     if (!records) return null;
     if (!records.length)
-      return <p className="text-xs text-muted-foreground">No records.</p>;
+      return <EmptyState size="inline">No records.</EmptyState>;
     return (
       <ResultList label="Records">
         {records.map((record) => (

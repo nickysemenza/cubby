@@ -61,6 +61,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
+import { Description } from "~/ui/text/description";
 import { DenseCellContext } from "~/ui/values/stacked-value";
 
 import { listGroupBy } from "../list-grouping";
@@ -559,7 +560,9 @@ function BoardGroup({
         ))
       )}
       {!query.isLoading && rows.length === 0 && !query.error && (
-        <p className="px-1 py-0.5 text-xs text-muted-foreground">No records</p>
+        <Description size="xs" className="px-1 py-0.5">
+          No records
+        </Description>
       )}
       {/* One page needs no pager; a capped group says how much it shows. */}
       {(capped ? group.count > rows.length : group.count > view.pageSize) && (

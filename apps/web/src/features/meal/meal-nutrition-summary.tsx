@@ -278,10 +278,10 @@ function NutritionPeople({
         ))}
       </div>
       {partial && (
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           + means a known subtotal; some food nutrition is missing. — means
           unavailable.
-        </p>
+        </Description>
       )}
     </Stack>
   );

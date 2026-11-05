@@ -38,6 +38,7 @@ import { Panel } from "~/ui/layout";
 import { stickyRowHeaderCard } from "~/ui/matrix/matrix-chrome";
 import { Image } from "~/ui/media/image";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 
 import { compactRound } from "../recipe-scaling-pct";
 import {
@@ -325,10 +326,10 @@ export const RecipeCompareGrid: React.FC<{
         </span>
       </div>
 
-      <p className="px-2 py-2 text-xs text-muted-foreground">
+      <Description size="xs" className="px-2 py-2">
         Nutrition averages and ratios use complete estimates; ranges use their
         midpoint.
-      </p>
+      </Description>
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr>

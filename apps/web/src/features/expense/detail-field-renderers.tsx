@@ -7,6 +7,7 @@ import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useEntityMetadata } from "~/entity/metadata";
 import { formatCurrency } from "~/lib/number-format";
 import { Stack } from "~/ui/layout";
+import { Description } from "~/ui/text/description";
 
 import type { EntityDetailFieldRenderers } from "../../entity/display/detail-field-renderers/index";
 
@@ -48,9 +49,9 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
             </div>
           ))}
           {expense.projectAllocations?.some((share) => share.incomplete) ? (
-            <p className="text-xs text-muted-foreground">
+            <Description size="xs">
               Some items are unpriced and provide no allocation weight.
-            </p>
+            </Description>
           ) : null}
         </Stack>
       ) : projectField ? (

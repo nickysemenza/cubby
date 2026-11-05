@@ -52,6 +52,7 @@ import {
   RecordRow,
 } from "~/ui/records/record-list";
 import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 import { AiCost } from "~/ui/values/ai-cost";
 
@@ -226,10 +227,10 @@ function RunControls({ run }: { run: RunDetail }) {
         </RunActionButtons>
       </DetailAction>
       {runInputsErased(run.retirementReason) ? (
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Retired after an unrelated source: its inputs and targets were erased
           with that Email, so it can’t be retried or restarted.
-        </p>
+        </Description>
       ) : null}
       <RunLineageAndInputs run={run} />
     </Stack>
@@ -270,10 +271,10 @@ function RunLineageAndInputs({ run }: { run: RunDetail }) {
       {run.restartInputs ? (
         <Panel tone="default">
           <Disclosure summary="Restart inputs">
-            <p className="text-xs text-muted-foreground">
+            <Description size="xs">
               Exactly what “Start new run with same inputs” copies. Proposals,
               decisions, and the agent conversation are not carried over.
-            </p>
+            </Description>
             <pre
               aria-label="Restart inputs JSON"
               className="mt-2 max-h-96 overflow-auto bg-muted p-2 font-mono text-xs"
@@ -399,9 +400,7 @@ function AgentWorkOverview({
       </p>
       {usage.data ? (
         <div className="mt-1" aria-live="polite">
-          <p className="text-xs text-muted-foreground">
-            Run and all nested work
-          </p>
+          <Description size="xs">Run and all nested work</Description>
           <AiCost cost={usage.data} />
         </div>
       ) : null}
@@ -503,12 +502,12 @@ function AgentWorkOverview({
           ) : null}
         </RecordList>
       </div>
-      <p className="mt-2 text-2xs text-muted-foreground">
+      <Description size="2xs" className="mt-2">
         — means no timestamped interval was recorded. Agent model time includes
         reasoning and generation; it is measured per turn, then summed for the
         run, without attributing it to individual steps. Photo waiting is a
         lower bound; attempt time includes executor and network latency.
-      </p>
+      </Description>
     </Panel>
   );
 }

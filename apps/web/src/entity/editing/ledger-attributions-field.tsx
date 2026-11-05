@@ -16,6 +16,7 @@ import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import { Description } from "~/ui/text/description";
 
 type LedgerAttributionRow = ReturnType<typeof ledgerAttributions.parse>[number];
 
@@ -182,10 +183,10 @@ export function LedgerAttributionsField({
             >
               Add share
             </Button>
-            <p className="text-xs text-muted-foreground">
+            <Description size="xs">
               Weights specify relative shares. Beneficiaries and funders are
               independent.
-            </p>
+            </Description>
             {fieldState.error?.message ? (
               <p role="alert">{fieldState.error.message}</p>
             ) : null}

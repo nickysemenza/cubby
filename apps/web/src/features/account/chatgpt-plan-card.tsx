@@ -14,6 +14,7 @@ import { StaticTable } from "~/ui/data-table/static-table";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 
 import { aiFundingStatusQuery } from "./ai-funding";
@@ -70,10 +71,10 @@ export function ChatGptPlanSettings() {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         Use your ChatGPT subscription for Cubby’s OpenAI tasks and
         purchase-import agent. Cubby keeps its current Luna and Sol models.
-      </p>
+      </Description>
 
       {budget.data && connected && !status.data?.needsReauthorization ? (
         <p className="text-sm text-muted-foreground">

@@ -14,6 +14,7 @@ import { FileDropField } from "~/ui/file-upload/file-drop-field";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Label } from "~/ui/primitives/label";
+import { Description } from "~/ui/text/description";
 
 import type { PendingImage } from "./pending-image-upload";
 
@@ -212,7 +213,7 @@ export function PendingDocumentUpload({
         onFilesAdded={handleFilesAdded}
         disabled={uploading}
       />
-      {uploading && <p className="text-xs text-muted-foreground">Uploading…</p>}
+      {uploading && <Description size="xs">Uploading…</Description>}
       {(pendingDocuments.length > 0 || currentExistingDocuments.length > 0) && (
         <Stack gap="xs">
           {currentExistingDocuments.map((doc) => (

@@ -18,6 +18,7 @@ import {
   DisclosureTrigger,
 } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
+import { Kbd } from "~/ui/primitives/kbd";
 import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
 import { CopyableShortcode } from "~/ui/values/copyable-shortcode";
 
@@ -252,14 +253,6 @@ function stepCurrentTableRow(direction: -1 | 1): boolean {
   row.scrollIntoView({ block: "nearest" });
   row.click();
   return true;
-}
-
-function Kbd({ children }: { children: ReactNode }) {
-  return (
-    <kbd className="rounded-[4px] border border-border bg-background px-1 font-mono text-2xs leading-4 text-muted-foreground">
-      {children}
-    </kbd>
-  );
 }
 
 /**

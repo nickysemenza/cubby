@@ -18,6 +18,7 @@ import { useEntityMetadata } from "~/entity/metadata";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Button } from "~/ui/primitives/button";
 import { Facts } from "~/ui/records/facts";
+import { Description } from "~/ui/text/description";
 import { DateDisplay } from "~/ui/values/date-display";
 
 import {
@@ -227,11 +228,11 @@ export function DecisionChain({
         </section>
       ) : null}
       {data.envelope.result.kind === "cached" ? (
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Published snapshot sources describe the cached revision. Resolution
           evidence below describes current inputs and can differ from that
           revision.
-        </p>
+        </Description>
       ) : null}
       {pending}
     </div>

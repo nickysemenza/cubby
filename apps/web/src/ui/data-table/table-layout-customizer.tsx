@@ -24,6 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
+import { Description } from "~/ui/text/description";
 
 import {
   applyColumnLayout,
@@ -388,10 +389,10 @@ export default function TableLayoutCustomizer<TData extends RowData>({
       {table
         .getAllLeafColumns()
         .some((column) => column.columnDef.meta?.columnGroup) && (
-        <p className="px-1 text-xs text-muted-foreground">
+        <Description size="xs" className="px-1">
           Move columns within their group. Pinning a grouped column moves its
           whole group.
-        </p>
+        </Description>
       )}
       <DndContext {...dndProps} onDragEnd={onDragEnd}>
         <Zone

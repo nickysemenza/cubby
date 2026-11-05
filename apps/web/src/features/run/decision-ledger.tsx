@@ -33,6 +33,7 @@ import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
 import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 
 import { StatusPill } from "../job/job-status";
@@ -442,10 +443,10 @@ function RunDecisionQueue({
         </div>
       ) : null}
       {query.data?.next ? (
-        <p className="pb-2 text-xs text-muted-foreground">
+        <Description size="xs" className="pb-2">
           Review actions are available for the first 200 queued suggestions.
           Other decisions retain their source links and evidence.
-        </p>
+        </Description>
       ) : null}
       <QueueDecisionLedger
         {...props}

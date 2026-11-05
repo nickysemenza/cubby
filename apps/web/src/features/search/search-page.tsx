@@ -40,6 +40,7 @@ import {
 import { Input } from "~/ui/primitives/input";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 
 import {
   type EntityPreviewRowData,
@@ -262,9 +263,9 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                 onRetry={() => void related.refetch()}
               />
             ) : related.data?.status === "unavailable" ? (
-              <p className="text-xs text-muted-foreground">
+              <Description size="xs">
                 Related matches are temporarily unavailable.
-              </p>
+              </Description>
             ) : related.data?.complete === false ? (
               <p className="text-xs text-muted-foreground">
                 {related.data.gap === "pending"

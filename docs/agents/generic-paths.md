@@ -306,6 +306,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Page building blocks: `PageHeader`, `Section`, `Panel`, `Toolbar` and
   `Disclosure` (`ui/layout/`), `KeyNumbers` and `Facts` (`ui/records/`),
   `EmptyState` (`ui/feedback/empty-state.tsx`); DESIGN.md says when to use each.
+- Captions and helper paragraphs: `Description` (`ui/text/description.tsx`),
+  with its size variant; use `EmptyState` for absent results.
+- Keyboard hints: `Kbd` (`ui/primitives/kbd.tsx`) rather than raw `<kbd>`.
 - Chart, graph and tree states: `Visualization` (`ui/visualizations/visualization.tsx`).
 - Dialogs and workspace panels: `Overlay` (`ui/overlays/overlay.tsx`),
   `DeleteEntityDialog` + `useStagedDialogAction`, `LocationMoveDialog`.

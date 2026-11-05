@@ -90,6 +90,7 @@ import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { FieldRecordValue } from "~/ui/derived/record-value";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
@@ -107,6 +108,7 @@ import {
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 import { Input } from "~/ui/primitives/input";
+import { Kbd } from "~/ui/primitives/kbd";
 import {
   Tooltip,
   TooltipContent,
@@ -115,6 +117,7 @@ import {
 import { Facts } from "~/ui/records/facts";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
 import { Badge, type BadgeVariant } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 import { InlineTextDiff } from "~/ui/text/inline-text-diff";
 import { NoneValue } from "~/ui/text/none-value";
@@ -1518,10 +1521,10 @@ function ExistingProductChanges({
         Product changes ·{" "}
         {countLabel(photoProductChangeCount(changes), "selected field")}
       </h4>
-      <p className="mb-2 text-muted-foreground">
+      <Description className="mb-2">
         Only selected fields change when you attach the photos. Added text is
         green; removed text is red and struck through.
-      </p>
+      </Description>
       {current.isError ? (
         <StatusText tone="destructive">{current.error.message}</StatusText>
       ) : null}
@@ -1946,10 +1949,10 @@ function PhotoBrandEvidence({
               <Disclosure
                 summary={`Use ${item.name} for ${matching.length} matching items`}
               >
-                <p className="mb-2 text-muted-foreground">
+                <Description className="mb-2">
                   Only untouched new Products with matching photo evidence and
                   no selected brand. Member-reviewed choices stay unchanged.
-                </p>
+                </Description>
                 <RecordList aria-label="Matching brand proposals">
                   {matching.map((other) => (
                     <RecordRow
@@ -2030,10 +2033,10 @@ function PhotoBrandControl({
             )
           }
         />
-        <p className="mt-1 text-muted-foreground">
+        <Description className="mt-1">
           Propose a brand now; create it only when you approve this item. An
           exact existing name is reused.
-        </p>
+        </Description>
       </Disclosure>
     </Stack>
   );
@@ -2237,9 +2240,9 @@ function ProductPanel({
       {product.kind === "existing" &&
       !labelText.trim() &&
       !proposal.review?.unresolvedReason ? (
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           No label text — compare the photo with the product
-        </p>
+        </Description>
       ) : null}
       {product.kind === "create" ? (
         <>
@@ -2370,9 +2373,7 @@ function ProductPanel({
                 }
               />
             ) : !currentProduct.isError ? (
-              <p className="text-xs text-muted-foreground">
-                Loading Product evidence…
-              </p>
+              <Description size="xs">Loading Product evidence…</Description>
             ) : null
           ) : (
             <StatusText tone="warning">Choose a live Product.</StatusText>
@@ -2479,9 +2480,7 @@ function PhotoProductSuggestions({
   return (
     <Stack gap="xs">
       {selectedClosest ? null : !group ? (
-        <p className="text-xs text-muted-foreground">
-          Checking existing Products…
-        </p>
+        <Description size="xs">Checking existing Products…</Description>
       ) : closest && strongDuplicate ? (
         <Row
           gap="xs"
@@ -2509,9 +2508,7 @@ function PhotoProductSuggestions({
           {open ? "Hide existing Products" : "Compare existing Products"}
         </Button>
       ) : (
-        <p className="text-xs text-muted-foreground">
-          No matching existing Products.
-        </p>
+        <EmptyState size="inline">No matching existing Products.</EmptyState>
       )}
       {open ? (
         <RecordList>
@@ -2794,10 +2791,10 @@ function InventoryFields({
                 : `Create a count of ${quantity} at ${inventory.locationName}.`}
             </p>
           ) : (
-            <p className="mt-2 text-xs text-muted-foreground">
+            <Description size="xs" className="mt-2">
               Choose a location to receive stock, or choose a stock decision
               that leaves Inventory unchanged.
-            </p>
+            </Description>
           )}
           {proposal.product.kind === "existing" && proposal.product.existing ? (
             <EntityReferencePicker
@@ -2968,10 +2965,10 @@ function InventoryFields({
           )}
         </Stack>
       ) : (
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Attach photos with no Inventory write. Historical photos do not record
           a sale.
-        </p>
+        </Description>
       )}
     </div>
   );
@@ -3316,9 +3313,9 @@ function ProposalCard({
               : proposal.inventory
                 ? `${photoProductChangeCount(proposal.review?.productChanges) ? "Update product" : "Attach photos"} and add ${proposal.inventory.quantity}`
                 : `Apply and attach ${countLabel(proposal.images.length, "photo")}`}
-            <kbd aria-hidden="true" className="text-xs opacity-70">
+            <Kbd aria-hidden="true" className="text-xs opacity-70">
               Ctrl/⌘ Enter
-            </kbd>
+            </Kbd>
           </Button>
         </div>
       </div>
@@ -3725,10 +3722,10 @@ function ExpenseLinkReview({
   });
   return (
     <section aria-label="Unlinked purchase lines">
-      <p className="text-2xs text-muted-foreground">
+      <Description size="2xs">
         Attach an existing Expense to this Product · cost and quantity stay
         unchanged
-      </p>
+      </Description>
       <Input
         aria-label="Search unlinked purchase lines"
         placeholder="Search unlinked purchase lines"
@@ -3819,9 +3816,9 @@ function ExpenseLinkReview({
           ))}
         </div>
       ) : (
-        <p className="mt-2 text-xs text-muted-foreground">
+        <Description size="xs" className="mt-2">
           No eligible unlinked lines found. Search by a name or label phrase.
-        </p>
+        </Description>
       )}
       {review && "sourceOrderId" in review ? (
         <div

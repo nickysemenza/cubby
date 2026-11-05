@@ -36,6 +36,7 @@ import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import { Description } from "~/ui/text/description";
 
 import { FoodAmountEditor } from "./food-amount-editor";
 
@@ -609,9 +610,9 @@ function ManualFields({
         label="Serving amount"
         required={false}
       />
-      <p className="text-sm text-muted-foreground">
+      <Description>
         Macros for this entered serving. Leave unknown values blank.
-      </p>
+      </Description>
       <div className="grid grid-cols-2 gap-4">
         {MACRO_FIELDS.map(({ key, label }) => (
           <FoodField

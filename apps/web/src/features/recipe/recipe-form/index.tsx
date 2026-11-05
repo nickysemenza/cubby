@@ -4,10 +4,7 @@ import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { getErrorMessage } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
-import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useMutation } from "@tanstack/react-query";
 import { type FC, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -46,6 +43,7 @@ import {
   recipeFormValuesToUpdateInput,
   recipeToFormValues,
 } from "./adapters";
+import { FieldArrayItemControls } from "./field-array-item-controls";
 import { EditorTally, YieldServingsFields } from "./form-strips";
 import { ImportToolsPanel } from "./import-tools-panel";
 import { IngredientFieldArray } from "./ingredient-field-array";
@@ -496,60 +494,24 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             </Row>
 
             {sectionFields.map((sectionField, sectionIndex) => (
-              <Stack
+              <Section
                 key={sectionField.id}
-                gap="sm"
                 className="border border-[var(--border)] bg-card p-4"
+                title={`Section ${sectionIndex + 1}${sectionField.name ? `: ${sectionField.name}` : ""}`}
+                headingAs="h4"
+                compact
+                actions={
+                  <FieldArrayItemControls
+                    move={moveSection}
+                    remove={removeSection}
+                    index={sectionIndex}
+                    fieldsLength={sectionFields.length}
+                    itemLabel="section"
+                    className="flex items-center gap-2"
+                    removeDisabled={sectionFields.length === 1}
+                  />
+                }
               >
-                <Row align="center" justify="between">
-                  <h4 className="my-0 font-heading text-sm font-semibold">
-                    Section {sectionIndex + 1}
-                    {sectionField.name ? `: ${sectionField.name}` : ""}
-                  </h4>
-                  <Row gap="sm">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="max-sm:min-h-11 max-sm:min-w-11"
-                      aria-label={`Move section ${sectionIndex + 1} up`}
-                      onClick={() =>
-                        moveSection(sectionIndex, Math.max(0, sectionIndex - 1))
-                      }
-                      disabled={sectionIndex === 0}
-                    >
-                      <CaretUpIcon className="size-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="max-sm:min-h-11 max-sm:min-w-11"
-                      aria-label={`Move section ${sectionIndex + 1} down`}
-                      onClick={() =>
-                        moveSection(
-                          sectionIndex,
-                          Math.min(sectionFields.length - 1, sectionIndex + 1),
-                        )
-                      }
-                      disabled={sectionIndex === sectionFields.length - 1}
-                    >
-                      <CaretDownIcon className="size-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="max-sm:min-h-11 max-sm:min-w-11"
-                      aria-label={`Remove section ${sectionIndex + 1}`}
-                      onClick={() => removeSection(sectionIndex)}
-                      disabled={sectionFields.length === 1}
-                    >
-                      <TrashIcon className="size-4" />
-                    </Button>
-                  </Row>
-                </Row>
-
                 {/* Ingredients and Instructions side by side */}
                 <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-2">
                   {/* Ingredients */}
@@ -577,7 +539,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                     />
                   </div>
                 </div>
-              </Stack>
+              </Section>
             ))}
 
             <Row justify="center" className="mt-4">

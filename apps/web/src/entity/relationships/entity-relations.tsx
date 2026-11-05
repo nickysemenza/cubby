@@ -32,12 +32,14 @@ import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
+import { Description } from "~/ui/text/description";
 
 import {
   GRAPH_BRANCH_PAGE_SIZE,
@@ -813,29 +815,25 @@ function RelationshipBranches({
               </RecordList>
             )}
             {branch.totalCount === 0 && (
-              <p className="text-sm text-muted-foreground">
-                No linked records.
-              </p>
+              <EmptyState size="inline">No linked records.</EmptyState>
             )}
             {!neighborhoodKeys &&
               nodes.length === 0 &&
               branch.totalCount > 0 && (
-                <p className="text-sm text-muted-foreground">
+                <EmptyState size="inline">
                   No matching explored records.
-                </p>
+                </EmptyState>
               )}
           </section>
         );
       })}
       {shown.length === 0 && (current.entityKind || current.relationship) && (
-        <p className="text-sm text-muted-foreground">
+        <EmptyState size="inline">
           No relationships match the current filters.
-        </p>
+        </EmptyState>
       )}
       {branches.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          Loading this record’s connections…
-        </p>
+        <Description>Loading this record’s connections…</Description>
       )}
     </Stack>
   );
@@ -989,10 +987,10 @@ function GraphPathPanel({
             });
           }}
         />
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Path search checks both directions across all records. The filters
           above only affect explored records.
-        </p>
+        </Description>
         {paths.isFetching && <output>Searching for paths…</output>}
         {paths.isError && (
           <ErrorDisplay
@@ -1014,10 +1012,10 @@ function GraphPathPanel({
           paths.data &&
           !paths.data.shortestPathCertain &&
           paths.data.paths.length > 0 && (
-            <p className="text-xs text-muted-foreground">
+            <Description size="xs">
               Search capacity was reached; these candidate paths may not be the
               shortest.
-            </p>
+            </Description>
           )}
         {destination && paths.data && paths.data.paths.length > 0 && (
           <Row wrap gap="sm">
@@ -1188,9 +1186,9 @@ function VisitedRecords({
               </Button>
             ))}
           </nav>
-          <p className="text-xs text-muted-foreground">
+          <Description size="xs">
             Visit order does not imply a connecting relationship.
-          </p>
+          </Description>
           {graphFacts(selected).length > 0 && (
             <p className="mt-1 text-sm text-muted-foreground">
               {graphFacts(selected).join(" · ")}

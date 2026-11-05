@@ -15,6 +15,7 @@ import {
   PopoverTrigger,
   PopoverTitle,
 } from "~/ui/primitives/popover";
+import { Description } from "~/ui/text/description";
 
 import { SourceStack } from "./source-stack";
 import { ExplanationEntityLink } from "./why-value";
@@ -69,7 +70,7 @@ export function ImageChain({ chain }: { chain: Chain }) {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">No images</p>
+              <Description size="xs">No images</Description>
             )}
           </>
         ),
@@ -96,9 +97,7 @@ export function RecordImageChain({
   if (result.isError)
     return <ErrorDisplay error={result.error} title="display image chain" />;
   if (result.isPending)
-    return (
-      <p className="text-xs text-muted-foreground">Loading image sources…</p>
-    );
+    return <Description size="xs">Loading image sources…</Description>;
   return <ImageChain chain={result.data} />;
 }
 

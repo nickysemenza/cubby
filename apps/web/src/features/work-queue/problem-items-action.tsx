@@ -10,6 +10,7 @@ import { problems } from "~/integrations/tanstack-query/generated/domains/proble
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
+import { Description } from "~/ui/text/description";
 
 /**
  * A Problem's guided flow over its detector items. A diagnostic's queue row
@@ -84,9 +85,7 @@ function ProblemItems<K extends ProblemKey>({
       ? items.filter((item) => matches(item, recordId))
       : items;
   if (shown.length === 0)
-    return (
-      <p className="text-sm text-muted-foreground">Nothing left to fix.</p>
-    );
+    return <Description>Nothing left to fix.</Description>;
   return (
     <Stack gap="lg">
       {shown.map((item) => (

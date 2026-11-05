@@ -439,3 +439,30 @@ test("relative dialog imports resolve against the caller", () => {
     [1, 2, 3],
   );
 });
+
+test("raw keyboard elements are limited to primitive implementations", () => {
+  const roots = [
+    join(repoRoot, "apps/web/src/server"),
+    join(repoRoot, "apps/web/src/ui/primitives"),
+  ];
+  const directories = roots.map((root) =>
+    mkdtempSync(join(root, ".lint-fixture-")),
+  );
+  try {
+    const diagnostics = directories.map((directory) => {
+      const path = join(directory, "keyboard.tsx");
+      writeFileSync(
+        path,
+        "const hint = <kbd>Enter</kbd>; const shared = <Kbd />;\n",
+      );
+      return runOxlint(path).filter(
+        (diagnostic) => diagnostic.code === "cubby(no-raw-kbd)",
+      );
+    });
+    assert.equal(diagnostics[0]?.length, 1);
+    assert.equal(diagnostics[1]?.length, 0);
+  } finally {
+    for (const directory of directories)
+      rmSync(directory, { recursive: true, maxRetries: 5 });
+  }
+});

@@ -142,6 +142,7 @@ const FRAMED_NON_PANELS = new Set([
   "textarea",
   "select",
   "kbd",
+  "Kbd",
   "code",
   "span",
   "button",
@@ -294,3 +295,19 @@ export const noHandRolledPanelRule = visualRule(
     ),
   (node) => !FRAMED_NON_PANELS.has(owningElementName(node) ?? ""),
 );
+
+export const noRawKbdRule = defineRule({
+  meta: {
+    type: "suggestion",
+    docs: { description: "Use the shared Kbd primitive for keyboard hints." },
+    messages: { raw: "Use the Kbd primitive instead of a raw kbd element." },
+  },
+  createOnce(context) {
+    return {
+      JSXOpeningElement(node) {
+        if (node.name.type === "JSXIdentifier" && node.name.name === "kbd")
+          context.report({ node, messageId: "raw" });
+      },
+    };
+  },
+});

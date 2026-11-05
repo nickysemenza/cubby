@@ -17,6 +17,7 @@ import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 import { DialogTrigger } from "~/ui/primitives/dialog";
+import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 
 const FEEDS = [
@@ -129,18 +130,18 @@ function SetupNotes() {
       className="rounded border border-border bg-muted/25 px-4 py-3"
     >
       <span className="text-sm font-medium">Calendar.app setup</span>
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         On macOS, open Calendar → Settings → Accounts → + → Other CalDAV
         Account, choose Manual, then enter the server, username, and app
         password. Cubby exposes editable Tasks, Completed Tasks, and Meals
         calendars.
-      </p>
-      <p className="text-xs text-muted-foreground">
+      </Description>
+      <Description size="xs">
         Create, rename, and reschedule Tasks and Meals in Calendar. Delete
         events and complete or reopen Tasks in Cubby. Timed meals snap to Cubby
         meal slots; notes, locations, alerts, and other Calendar-only fields are
         discarded.
-      </p>
+      </Description>
     </Stack>
   );
 }
@@ -278,10 +279,10 @@ export function CalendarSubscriptionSection({
     <Stack gap="sm">
       <Stack gap="xs">
         <span className="text-sm font-medium">Read-only subscriptions</span>
-        <p className="text-xs text-muted-foreground">
+        <Description size="xs">
           Subscribe for an hourly view of planned meals and task due dates.
           These calendars cannot create or edit Cubby records.
-        </p>
+        </Description>
       </Stack>
       {token ? (
         <>

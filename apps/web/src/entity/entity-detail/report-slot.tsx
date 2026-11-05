@@ -26,6 +26,7 @@ import {
   StaticTable,
   type StaticTableColumn,
 } from "~/ui/data-table/static-table";
+import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { buttonVariants } from "~/ui/primitives/button";
@@ -611,7 +612,7 @@ export function EntityReportSlot({
       ) : (
         <>
           {query.blocks.length === 0 && (
-            <p className="text-sm text-muted-foreground">No items.</p>
+            <EmptyState size="inline">No items.</EmptyState>
           )}
           <ReportBlocks
             slot={input.slot}
