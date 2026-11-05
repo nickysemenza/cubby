@@ -13,7 +13,7 @@ import type { SQL } from "drizzle-orm";
  * removed. Adapters read authoritative inputs only, never another stored
  * derived value unless the declaration lists it in `dependsOn`.
  */
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db/database";
 import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 
 /** Current target IDs reached from an input's source-reference relation. */
@@ -65,7 +65,7 @@ export function validateComputedResult({
 
 export type DerivedCompute = {
   (
-    db: Database | DrizzleTransaction,
+    db: Database,
     ids: readonly string[],
   ): Promise<ReadonlyMap<string, DerivedComputed>>;
   /** Maximum same-adapter records sharing a preparation page; omitted keeps the conservative default. */
@@ -76,10 +76,7 @@ export type DerivedCompute = {
 
 export interface DerivedSharedPreparation<Prepared = unknown> {
   readonly source: object;
-  prepare(
-    db: Database | DrizzleTransaction,
-    ids: readonly string[],
-  ): Promise<Prepared>;
+  prepare(db: Database, ids: readonly string[]): Promise<Prepared>;
   project(
     prepared: Prepared,
     ids: readonly string[],
@@ -89,10 +86,7 @@ export interface DerivedSharedPreparation<Prepared = unknown> {
 /** One immutable authoritative input set, shared only by a preparation page. */
 export const sharedDerivedPreparation =
   <Prepared>(
-    prepare: (
-      db: Database | DrizzleTransaction,
-      ids: readonly string[],
-    ) => Promise<Prepared>,
+    prepare: (db: Database, ids: readonly string[]) => Promise<Prepared>,
   ) =>
   (
     project: (
@@ -101,7 +95,7 @@ export const sharedDerivedPreparation =
     ) => ReadonlyMap<string, DerivedComputed>,
   ): DerivedCompute =>
     Object.assign(
-      async (db: Database | DrizzleTransaction, ids: readonly string[]) =>
+      async (db: Database, ids: readonly string[]) =>
         project(await prepare(db, ids), ids),
       {
         sharedPreparation: {
