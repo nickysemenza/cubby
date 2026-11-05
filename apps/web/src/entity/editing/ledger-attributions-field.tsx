@@ -215,10 +215,10 @@ function LedgerAttributionsEditor({
       >
         Add share
       </Button>
-      <p className="text-xs text-muted-foreground">
+      <Description size="xs">
         Weights specify relative shares. Beneficiaries and funders are
         independent.
-      </p>
+      </Description>
     </fieldset>
   );
 }
