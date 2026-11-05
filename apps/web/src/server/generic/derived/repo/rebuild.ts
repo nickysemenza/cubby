@@ -28,7 +28,9 @@ const phases = ["facts", "quality", "search", "diagnostics"] as const;
 
 /** Manifest dependencies order each phase. Self-dependencies describe domain graphs, not scheduler work. */
 export function rebuildDeclarations(): readonly EntityStoredDerivedDeclaration[] {
-  const declarations = entityStoredDerivedDeclarations();
+  const declarations = entityStoredDerivedDeclarations().filter(
+    (entry) => !entry.snapshotSource?.view,
+  );
   const byTarget = new Map(declarations.map((entry) => [entry.target, entry]));
   const ordered: EntityStoredDerivedDeclaration[] = [];
   const visiting = new Set<string>();
@@ -85,7 +87,7 @@ export async function claimRebuild(
       error = CASE WHEN ${restart} THEN NULL ELSE "DerivedRebuild".error END,
       token = EXCLUDED.token, "leaseExpiresAt" = EXCLUDED."leaseExpiresAt"
     WHERE ("DerivedRebuild"."leaseExpiresAt" IS NULL OR "DerivedRebuild"."leaseExpiresAt" < now() AT TIME ZONE 'UTC' OR ("DerivedRebuild".token IS NULL AND ${force}))
-      AND ("DerivedRebuild".running OR "DerivedRebuild".failures > 0 OR ${force} OR "DerivedRebuild"."startedAt" IS NULL OR "DerivedRebuild"."startedAt" < date_trunc('hour', now() AT TIME ZONE 'UTC'))
+      AND ("DerivedRebuild".running OR ${force} OR "DerivedRebuild"."startedAt" IS NULL OR "DerivedRebuild"."startedAt" < date_trunc('hour', now() AT TIME ZONE 'UTC'))
     RETURNING target, "afterId", "cursorAttempts"`);
   const row = z.array(claimRow).parse(result.rows)[0];
   return row ? { ...row, token } : null;
@@ -150,7 +152,7 @@ export async function commitRebuildPage(
       await getDb(tx)
         .execute(sql`UPDATE "DerivedRebuild" SET running = false, target = NULL, "afterId" = NULL,
         token = NULL, "cursorAttempts" = 0,
-        "leaseExpiresAt" = CASE WHEN "passFailures" > 0 THEN (now() AT TIME ZONE 'UTC') + interval '5 minutes' ELSE NULL END,
+        "leaseExpiresAt" = NULL,
         failures = CASE WHEN "passFailures" = 0 THEN 0 ELSE failures END,
         error = CASE WHEN "passFailures" = 0 THEN NULL ELSE error END,
         "finishedAt" = now() AT TIME ZONE 'UTC',

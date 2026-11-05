@@ -145,7 +145,10 @@ const derivedRebuildDrain: BackgroundDrain = {
       const status = more ? null : await readDerivedRebuildStatus(db);
       return {
         more,
-        nextAt: status?.failures ? new Date(Date.now() + 5 * 60_000) : null,
+        nextAt:
+          status?.running && status.failures
+            ? new Date(Date.now() + 5 * 60_000)
+            : null,
       };
     } catch (error) {
       if (error instanceof DerivedRebuildBusyError)

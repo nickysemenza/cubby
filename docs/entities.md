@@ -2693,7 +2693,13 @@ edge and gets the toggle like any other.
 
 ### Background derived data
 
-ADR 0025 replaces per-value admission with one hourly deterministic pass. Entity
+ADR 0025 replaces per-value admission with SQL views for read-computable values
+and one hourly deterministic pass. Product service Cost reads its declared
+ProductCostView, so charge edits affect display, filters and ordering immediately.
+The view preserves the existing positive actual-charge selection, averaging,
+rounding and latest-charge evidence; it adds no financial judgment.
+
+The pass skips declared views. Entity
 stored declarations own their compute adapters and dependencies; the data-quality
 and search capabilities declare their phases. `rebuildPhase` orders facts,
 quality, search and household diagnostics. Self-dependencies describe domain
@@ -2706,14 +2712,17 @@ round deadline. Publication and cursor advancement commit together. Claims recor
 attempts before compute, so isolate termination counts too: after three attempts
 the page halves, down to one record. Three failed attempts at one record skip it,
 retain its prior output and record a failure. A thrown compute or publication
-fails its target, retains prior output and advances to the next target. Every
+fails only its page, retains prior output and advances to the next page. Later
+records in the target still refresh; a provider outage costs one failed call per
+bounded page. Every
 interrupted pass resumes its committed cursor across hour boundaries. Completed
-passes with failures retry after five minutes; only a fully healthy pass clears
-failures. A requested new pass clears the previous pass's error before starting.
+passes, including failed ones, wait for the next hourly slot; only a fully healthy
+pass clears failures. Five-minute retries resume interrupted running passes. A requested new pass clears the previous pass's error before starting.
 Incomplete diagnostic sources omit their counts, so Work reports unavailable
 rather than a partial healthy zero; other sources still publish. Source edits need no fences or generations; the next hourly pass repairs
 mixed-age reads. Own assignments and money/identity command validation remain
-immediate and live. Queue continuations and the hourly timer both enter the shared
+immediate and live. View explanations compare the displayed decision rather than
+the view query time, so an unchanged live value is never reported as superseded. Queue continuations and the hourly timer both enter the shared
 background drain. An interrupted isolate's duplicate delivery waits out the coarse
 lease. Worker logs record each claimed invocation's target and its yield or full
 completion, without record IDs or values, to correlate platform terminations. Drain errors are reported to Sentry and schedule a retry without preventing

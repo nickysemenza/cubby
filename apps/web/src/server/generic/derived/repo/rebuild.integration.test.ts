@@ -106,11 +106,22 @@ describe("hourly deterministic rebuild", () => {
   });
 
   it("retains a failed target and completes later quality and search with the failure visible", async () => {
-    const product = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic isolated provider failure" }),
-      ctx.actor,
+    const products = await Promise.all(
+      [
+        "Synthetic before failure",
+        "Synthetic failed page",
+        "Synthetic after failure",
+      ].map((name) =>
+        createProductIdentityFixture(
+          ctx.db,
+          makeProductInput({ name }),
+          ctx.actor,
+        ),
+      ),
     );
+    const ids = products.map((product) => product.entityId).sort();
+    const product = products[0];
+    if (!product) throw new Error("Expected synthetic product");
     const realPhases = new Set(
       rebuildDeclarations()
         .filter(
@@ -127,15 +138,23 @@ describe("hourly deterministic rebuild", () => {
           realPhases.has(key) ? adapter : async () => new Map(),
         ]),
       ),
-      "product.price": async () => {
-        throw new Error("Synthetic provider unavailable");
-      },
+      "product.price": Object.assign(
+        async (
+          _db: Parameters<typeof rebuildDerived>[0],
+          pageIds: readonly string[],
+        ) => {
+          if (pageIds.includes(ids[1] ?? ""))
+            throw new Error("Synthetic provider unavailable");
+          return new Map(pageIds.map((id) => [id, { value: 12, sort: 12 }]));
+        },
+        { preparationBatchSize: 1 },
+      ),
     };
     expect(
-      await rebuildDerived(ctx.db, computes, { force: true, pageLimit: 1 }),
+      await rebuildDerived(ctx.db, computes, { force: true, pageLimit: 2 }),
     ).toBe(true);
     const [failed] = await getDb(ctx.db).select().from(derivedRebuild);
-    expect(failed?.target).not.toBe("product.price");
+    expect(failed).toMatchObject({ target: "product.price", afterId: ids[1] });
     expect(failed?.failures).toBe(1);
     await getDb(ctx.db).execute(
       sql`UPDATE "DerivedRebuild" SET "startedAt" = (now() AT TIME ZONE 'UTC') - interval '2 hours'`,
@@ -155,6 +174,15 @@ describe("hourly deterministic rebuild", () => {
       EXISTS (SELECT 1 FROM "QualitySnapshot" WHERE "entityId" = ${product.entityId}::uuid) AS quality,
       EXISTS (SELECT 1 FROM "SearchDocument" WHERE "entityId" = ${product.entityId}::uuid AND "deletedAt" IS NULL) AS search`);
     expect(output.rows).toEqual([{ quality: true, search: true }]);
+    const later = await getDb(ctx.db).execute(
+      sql`SELECT value FROM "DerivedValue" WHERE "entityId" = ${ids[2]}::uuid AND key = ${"price"}`,
+    );
+    expect(later.rows).toEqual([{ value: 12 }]);
+    // A failed completed pass cannot bypass the hourly gate or schedule a new full pass.
+    await getDb(ctx.db).execute(
+      sql`UPDATE "DerivedRebuild" SET "startedAt" = now() AT TIME ZONE 'UTC'`,
+    );
+    expect(await claimRebuild(ctx.db)).toBeNull();
     // A requested new pass clears an earlier error before its repair stream starts.
     const restarted = await claimRebuild(ctx.db, true);
     expect(restarted?.target).toBe("product.price");

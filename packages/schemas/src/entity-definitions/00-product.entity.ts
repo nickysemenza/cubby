@@ -2525,6 +2525,14 @@ Rules:
           type: "number",
           stored: {
             compute: "product.cost",
+            snapshotSource: {
+              table: "ProductCostView",
+              value: "value",
+              computedAt: "computedAt",
+              decidedBy: "decidedBy",
+              sort: "sortNumber",
+              view: true,
+            },
             inputs: PRODUCT_PRICING_INPUTS,
           },
         },
