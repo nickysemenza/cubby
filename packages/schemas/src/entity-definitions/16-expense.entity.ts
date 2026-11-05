@@ -1,5 +1,6 @@
+import { borrowedImagesField } from "./image-fields";
 import { historicalDateRangePresets } from "../date-range";
-import { timestampField } from "./field-policy";
+import { idField, timestampField } from "./field-policy";
 import { expenseBeneficiaryResult } from "../expense-beneficiaries";
 import { EXPENSE_BENEFICIARY_INPUTS } from "./beneficiary-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
@@ -36,7 +37,6 @@ import {
 import { wholeCentAmount } from "@cubby/schemas/money";
 import { TRADE_SUGGEST_RULE, tradeSchema } from "@cubby/schemas/task-fields";
 import { FILTER_NONE } from "../filter-sentinel-fields.js";
-import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 import { optionalProjectAllocationsSchema } from "@cubby/schemas/field-resolution";
 export const { definition, readSchemas } = defineEntityModel({
@@ -1042,16 +1042,7 @@ Rules:
           update: ledgerSourceClaims.nullable().optional(),
         },
       },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: expenseShortcode,
-          create: null,
-          update: null,
-        },
-      },
+      idField(expenseShortcode),
       {
         display: { detail: false, list: false },
         key: "purchaseDate",
@@ -1132,20 +1123,10 @@ Rules:
       },
       timestampField("createdAt", { detail: false, list: false }),
       timestampField("updatedAt", { detail: false, list: false }),
-      {
-        output: false,
-        key: "images",
-        kind: "json",
-        display: { standard: "image" },
-        provenance: {
-          kind: "derived",
-          sources: [
-            { entity: "product", relation: "product" },
-            { entity: "purchase", relation: "purchase" },
-          ],
-        },
-        validation: { read: z.array(imageOut), create: null, update: null },
-      },
+      borrowedImagesField([
+        { entity: "product", relation: "product" },
+        { entity: "purchase", relation: "purchase" },
+      ]),
       { output: false, key: "shortcode", kind: "text" },
       { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
     ],

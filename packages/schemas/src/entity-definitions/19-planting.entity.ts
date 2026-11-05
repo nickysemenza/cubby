@@ -1,4 +1,4 @@
-import { timestampField } from "./field-policy";
+import { idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { defineEntity, defineEntityModel } from "./definition.js";
@@ -537,12 +537,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         validation: { read: z.string(), create: null, update: null },
       },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: { read: plantingShortcode, create: null, update: null },
-      },
+      idField(plantingShortcode),
       timestampField("createdAt", { detail: false, list: false }),
       timestampField("updatedAt", { detail: false, list: false }),
       { output: false, key: "shortcode", kind: "text" },

@@ -1,5 +1,6 @@
+import { borrowedImagesField } from "./image-fields";
 import { historicalDateRangePresets } from "../date-range";
-import { timestampField } from "./field-policy";
+import { idField, timestampField } from "./field-policy";
 import { INVENTORY_OWNERSHIP_INPUTS } from "./ownership-inputs";
 import { storedInventoryOwnership } from "@cubby/schemas/inventory-ownership";
 import { productPricingInputsFor } from "./product-pricing-inputs";
@@ -23,7 +24,6 @@ import {
   inventoryOwnershipModeValues,
 } from "@cubby/schemas/inventory-ownership";
 import { ledgerPartyShortcode } from "../identifier-fields.js";
-import { imageOut } from "./field-primitives.js";
 import {
   CURRENT_MEMBER_FILTER,
   OWNER_FILTER_HOUSEHOLD,
@@ -475,16 +475,7 @@ export const { definition, readSchemas } = defineEntityModel(
             update: null,
           },
         },
-        {
-          display: { detail: false, list: false },
-          key: "id",
-          kind: "identifier",
-          validation: {
-            read: inventoryShortcode,
-            create: null,
-            update: null,
-          },
-        },
+        idField(inventoryShortcode),
         {
           key: "valuation",
           kind: "json",
@@ -560,17 +551,7 @@ export const { definition, readSchemas } = defineEntityModel(
         },
         timestampField("createdAt", { detail: false, list: false }),
         timestampField("updatedAt", { detail: false, list: false }),
-        {
-          output: false,
-          key: "images",
-          kind: "json",
-          display: { standard: "image" },
-          provenance: {
-            kind: "derived",
-            sources: [{ entity: "product", relation: "product" }],
-          },
-          validation: { read: z.array(imageOut), create: null, update: null },
-        },
+        borrowedImagesField([{ entity: "product", relation: "product" }]),
         { output: false, key: "shortcode", kind: "text" },
         { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
       ],

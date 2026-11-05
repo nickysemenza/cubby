@@ -1,4 +1,4 @@
-import { timestampField } from "./field-policy";
+import { idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import {
   financialAccountAuthorizedUsers,
@@ -455,16 +455,7 @@ export const { definition, readSchemas } = defineEntityModel({
           update: z.string().nullable().optional(),
         },
       },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: financialAccountShortcode,
-          create: null,
-          update: null,
-        },
-      },
+      idField(financialAccountShortcode),
       {
         display: { detail: false, list: false },
         key: "ledgerPartyName",

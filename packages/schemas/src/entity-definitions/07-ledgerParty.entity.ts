@@ -1,4 +1,4 @@
-import { timestampField } from "./field-policy";
+import { idField, timestampField } from "./field-policy";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { ledgerPartyShortcode } from "../identifier-fields.js";
@@ -155,16 +155,7 @@ export const { definition, readSchemas } = defineEntityModel({
           update: z.string().nullable().optional(),
         },
       },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: ledgerPartyShortcode,
-          create: null,
-          update: null,
-        },
-      },
+      idField(ledgerPartyShortcode),
       timestampField("createdAt"),
       timestampField("updatedAt"),
       { output: false, key: "shortcode", kind: "text" },

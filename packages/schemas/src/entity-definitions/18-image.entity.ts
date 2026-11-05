@@ -1,5 +1,5 @@
 import { historicalDateRangePresets } from "../date-range";
-import { timestampField } from "./field-policy";
+import { idField, timestampField } from "./field-policy";
 import { imageReadSchemas } from "../image-processing";
 import { imageChildren } from "../child-tables/image.js";
 import {
@@ -174,16 +174,7 @@ export const { definition, readSchemas } = defineEntityModel(
             update: z.string().trim().min(1).max(255),
           },
         },
-        {
-          display: { detail: false, list: false },
-          key: "id",
-          kind: "identifier",
-          validation: {
-            read: imageShortcode,
-            create: null,
-            update: null,
-          },
-        },
+        idField(imageShortcode),
         {
           display: { detail: false, list: false },
           key: "representations",

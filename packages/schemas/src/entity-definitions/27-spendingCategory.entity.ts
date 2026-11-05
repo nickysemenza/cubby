@@ -1,4 +1,4 @@
-import { timestampField, aliasList } from "./field-policy";
+import { aliasList, idField, timestampField } from "./field-policy";
 import { productCategoryShortcode } from "../identifier-fields";
 import { recordEmojiField } from "../emoji";
 import { z } from "zod";
@@ -339,12 +339,7 @@ export const { definition, readSchemas } = defineEntityModel({
           update: z.boolean().nullable().optional(),
         },
       },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: { read: code, create: null, update: null },
-      },
+      idField(code),
       timestampField("createdAt", { detail: false, list: false }),
       timestampField("updatedAt", { detail: false, list: false }),
       { output: false, key: "shortcode", kind: "text" },

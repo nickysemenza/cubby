@@ -1,11 +1,11 @@
-import { timestampField } from "./field-policy";
+import { galleryImagesField, galleryWriteFields } from "./image-fields";
+import { idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
   gardenEntryShortcode,
-  imageShortcode,
   locationShortcode,
   plantingShortcode,
 } from "../identifier-fields.js";
@@ -222,65 +222,8 @@ export const { definition, readSchemas } = defineEntityModel({
           update: optionalText.optional(),
         },
       },
-      {
-        output: false,
-        audit: false,
-        key: "pendingImageIds",
-        kind: "identifier",
-        reference: { entity: "image", multiple: true },
-        validation: {
-          read: null,
-          create: z.array(imageShortcode).optional(),
-          update: z.array(imageShortcode).optional(),
-        },
-      },
-      {
-        output: false,
-        audit: false,
-        key: "removeImageIds",
-        kind: "identifier",
-        reference: { entity: "image", multiple: true },
-        validation: {
-          read: null,
-          create: null,
-          update: z.array(imageShortcode).optional(),
-        },
-      },
-      {
-        output: false,
-        audit: false,
-        key: "imageOrder",
-        semanticRole: "attachment",
-        kind: "text",
-        validation: {
-          read: null,
-          create: null,
-          update: z.array(imageShortcode).optional(),
-        },
-      },
-      {
-        key: "images",
-        kind: "json",
-        display: { detail: false, standard: "image" },
-        provenance: {
-          kind: "derived",
-          sources: [{ entity: "image", relation: "images" }],
-        },
-        explanation: {
-          ruleId: "gardenEntry.images",
-          description:
-            "Garden entry images are the current live Image attachments in canonical attachment order; list and summary surfaces use the same selected images through the display-image projection.",
-          projections: {
-            list: "displayImages",
-            detail: "images",
-            summary: "displayImages",
-          },
-          sourceDependencies: [
-            { path: "displayImages", label: "Selected garden entry images" },
-          ],
-        },
-        validation: { read: z.array(imageOut), create: null, update: null },
-      },
+      ...galleryWriteFields(),
+      galleryImagesField("gardenEntry", "Garden entry", z.array(imageOut)),
       {
         display: { detail: false, list: false },
         key: "locationName",
@@ -307,16 +250,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         validation: { read: z.string(), create: null, update: null },
       },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: gardenEntryShortcode,
-          create: null,
-          update: null,
-        },
-      },
+      idField(gardenEntryShortcode),
       timestampField("createdAt", { detail: false, list: false }),
       timestampField("updatedAt", { detail: false, list: false }),
       { output: false, key: "shortcode", kind: "text" },
@@ -588,12 +522,7 @@ export default defineEntity(
   (r) => [
     r.field("locationId").named("location", "Location"),
     r.link("gardenEntryPlanting", "outgoing").named("plantings", "Plantings"),
-    r
-      .path("image", "many", [
-        { edge: "EntityAttachment.entityId", direction: "incoming" },
-        { edge: "EntityAttachment.imageId", direction: "outgoing" },
-      ])
-      .named("images", "Images"),
+    r.images(),
   ],
   readSchemas,
 );

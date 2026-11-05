@@ -1,5 +1,5 @@
 import { historicalDateRangePresets } from "../date-range";
-import { timestampField, aliasList } from "./field-policy";
+import { aliasList, idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { vendorSpendingProfile } from "../spending-classification.js";
@@ -676,16 +676,7 @@ export const { definition, readSchemas } = defineEntityModel({
           update: z.number().int().nonnegative().nullable().optional(),
         },
       },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: vendorShortcode,
-          create: null,
-          update: null,
-        },
-      },
+      idField(vendorShortcode),
       {
         key: "role",
         kind: "enum",

@@ -1,5 +1,6 @@
+import { galleryWriteFields } from "./image-fields";
 import { historicalDateRangePresets } from "../date-range";
-import { timestampField } from "./field-policy";
+import { idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { labelField } from "./label-field.js";
@@ -895,62 +896,14 @@ export const { definition, readSchemas } = defineEntityModel({
           update: z.string().nullable().optional(),
         },
       },
-      {
-        output: false,
-        audit: false,
-        key: "pendingImageIds",
-        kind: "identifier",
-        reference: { entity: "image", multiple: true },
-        control: { kind: "specialized", renderer: "entity-multi-select" },
-        validation: {
-          read: null,
-          create: z.array(imageShortcode).optional(),
-          update: z.array(imageShortcode).optional(),
-        },
-      },
-      {
-        output: false,
-        audit: false,
-        key: "removeImageIds",
-        kind: "identifier",
-        reference: { entity: "image", multiple: true },
-        control: { kind: "specialized", renderer: "entity-multi-select" },
-        validation: {
-          read: null,
-          create: null,
-          update: z.array(imageShortcode).optional(),
-        },
-      },
-      {
-        output: false,
-        audit: false,
-        key: "imageOrder",
-        semanticRole: "attachment",
-        kind: "text",
-        control: { kind: "specialized", renderer: "image-order" },
-        provenance: {
-          kind: "relation",
-          sources: [{ entity: "image", relation: "images" }],
-        },
-        validation: {
-          read: null,
-          create: null,
-          update: z
-            .array(imageShortcode)
-            .describe("existing document ids in display order")
-            .optional(),
-        },
-      },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: purchaseShortcode,
-          create: null,
-          update: null,
-        },
-      },
+      ...galleryWriteFields({
+        pickers: true,
+        order: z
+          .array(imageShortcode)
+          .describe("existing document ids in display order")
+          .optional(),
+      }),
+      idField(purchaseShortcode),
       {
         display: {},
         // Resolved through the join; null only if the vendor was soft-deleted.
@@ -2351,12 +2304,7 @@ export default defineEntity(
       .named("spendingCategory", "Spending category"),
     r.field("vendorId").named("vendor", "Vendor"),
     r.field("vendorAccountId").named("vendor-account", "Vendor account"),
-    r
-      .path("image", "many", [
-        { edge: "EntityAttachment.entityId", direction: "incoming" },
-        { edge: "EntityAttachment.imageId", direction: "outgoing" },
-      ])
-      .named("images", "Images"),
+    r.images(),
     r
       .path("financialTransaction", "many", [
         {

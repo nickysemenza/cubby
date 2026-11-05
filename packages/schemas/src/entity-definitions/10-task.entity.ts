@@ -1,4 +1,5 @@
-import { timestampField } from "./field-policy";
+import { galleryImagesField, galleryWriteFields } from "./image-fields";
+import { idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { imageAssociationStorage } from "./image-associations";
@@ -7,7 +8,6 @@ import { MAX_PROJECT_TREE_DEPTH } from "../project-fields.js";
 import { selectControlOptions } from "./select-control-options.js";
 import {
   ledgerPartyShortcode,
-  imageShortcode,
   productShortcode,
   projectShortcode,
   taskShortcode,
@@ -665,75 +665,9 @@ export const { definition, readSchemas } = defineEntityModel({
           update: z.array(taskShortcode).optional(),
         },
       },
-      {
-        output: false,
-        audit: false,
-        key: "pendingImageIds",
-        kind: "identifier",
-        reference: { entity: "image", multiple: true },
-        validation: {
-          read: null,
-          create: z.array(imageShortcode).optional(),
-          update: z.array(imageShortcode).optional(),
-        },
-      },
-      {
-        output: false,
-        audit: false,
-        key: "removeImageIds",
-        kind: "identifier",
-        reference: { entity: "image", multiple: true },
-        validation: {
-          read: null,
-          create: null,
-          update: z.array(imageShortcode).optional(),
-        },
-      },
-      {
-        output: false,
-        audit: false,
-        key: "imageOrder",
-        semanticRole: "attachment",
-        kind: "text",
-        validation: {
-          read: null,
-          create: null,
-          update: z.array(imageShortcode).optional(),
-        },
-      },
-      {
-        key: "images",
-        kind: "json",
-        display: { detail: false, standard: "image" },
-        provenance: {
-          kind: "derived",
-          sources: [{ entity: "image", relation: "images" }],
-        },
-        explanation: {
-          ruleId: "task.images",
-          description:
-            "Task images are the current live Image attachments in canonical attachment order; list and summary surfaces use the same selected images through the display-image projection.",
-          projections: {
-            list: "displayImages",
-            detail: "images",
-            summary: "displayImages",
-          },
-          sourceDependencies: [
-            { path: "displayImages", label: "Selected task images" },
-          ],
-        },
-        validation: { read: z.array(imageOut), create: null, update: null },
-      },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: taskShortcode,
-          create: null,
-          update: null,
-        },
-      },
+      ...galleryWriteFields(),
+      galleryImagesField("task", "Task", z.array(imageOut)),
+      idField(taskShortcode),
       {
         display: { detail: false, list: false },
         key: "projectName",
@@ -2231,12 +2165,7 @@ export default defineEntity(
         defaultVisible: true,
       },
     }),
-    r
-      .path("image", "many", [
-        { edge: "EntityAttachment.entityId", direction: "incoming" },
-        { edge: "EntityAttachment.imageId", direction: "outgoing" },
-      ])
-      .named("images", "Images"),
+    r.images(),
   ],
   readSchemas,
 );

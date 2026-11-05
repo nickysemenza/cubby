@@ -1,10 +1,10 @@
-import { timestampField, aliasList } from "./field-policy";
+import { borrowedImagesField } from "./image-fields";
+import { aliasList, idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { ingredientReadSchemas } from "../ingredient-read-fields";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { ingredientShortcode, productShortcode } from "../identifier-fields.js";
 import { ingredientApplicabilityKey } from "../codec.js";
-import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 
 export const { definition, readSchemas } = defineEntityModel(
@@ -277,29 +277,10 @@ export const { definition, readSchemas } = defineEntityModel(
             update: z.boolean().optional(),
           },
         },
-        {
-          display: { detail: false, list: false },
-          key: "id",
-          kind: "identifier",
-          validation: {
-            read: ingredientShortcode,
-            create: null,
-            update: null,
-          },
-        },
+        idField(ingredientShortcode),
         timestampField("createdAt"),
         timestampField("updatedAt"),
-        {
-          output: false,
-          key: "images",
-          kind: "json",
-          display: { standard: "image" },
-          provenance: {
-            kind: "derived",
-            sources: [{ entity: "product", relation: "products" }],
-          },
-          validation: { read: z.array(imageOut), create: null, update: null },
-        },
+        borrowedImagesField([{ entity: "product", relation: "products" }]),
         { output: false, key: "shortcode", kind: "text" },
         { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
         {

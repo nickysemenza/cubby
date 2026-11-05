@@ -1,4 +1,4 @@
-import { timestampField, aliasList } from "./field-policy";
+import { aliasList, idField, timestampField } from "./field-policy";
 import { categoryMappingSchema } from "../spending-classification";
 import { recordEmojiField } from "../emoji";
 import { z } from "zod";
@@ -647,16 +647,7 @@ Rules:
           update: null,
         },
       },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: productCategoryShortcode,
-          create: null,
-          update: null,
-        },
-      },
+      idField(productCategoryShortcode),
       timestampField("createdAt"),
       timestampField("updatedAt"),
       { output: false, key: "shortcode", kind: "text" },
