@@ -28,6 +28,7 @@ import {
   sourceOrderObservation,
   vendorAccount,
 } from "~/server/db/schema";
+import { paymentEvidenceDollars } from "~/server/domains/purchase-import/repo/payment-evidence";
 import {
   isLiveSourceOrder,
   readImportSourceClaimFamily,
@@ -383,7 +384,7 @@ export async function loadSourceReconciliationState(
     expenses,
     attributions,
     ledgerClaims,
-    payments,
+    payments: payments.map(paymentEvidenceDollars),
     allocations,
     transactions,
     financialAccounts,

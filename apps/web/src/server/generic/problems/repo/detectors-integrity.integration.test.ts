@@ -871,7 +871,7 @@ const SOURCE_FACTORIES = {
     return insertAndReturn(db, purchasePaymentEvidence, {
       purchaseId: parseEntityId("purchase", targetId),
       sourceClaimId: claim.id,
-      amount: 1,
+      amountMinor: 100n,
       evidenceIndex: 0,
     });
   },

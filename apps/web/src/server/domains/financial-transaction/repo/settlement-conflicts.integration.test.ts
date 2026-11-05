@@ -362,7 +362,7 @@ describe("settlement conflicts", () => {
       .values({
         purchaseId: order.id,
         sourceClaimId: claim!.id,
-        amount: 13.59,
+        amountMinor: 1359n,
         chargedAt: new Date("2026-09-14T12:00:00Z"),
         tender: "stored_value",
         evidenceIndex: 0,

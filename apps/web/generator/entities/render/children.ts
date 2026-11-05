@@ -49,7 +49,7 @@ export const renderChildTables = (
             : column.kind === "date"
               ? ',{mode:"string"}'
               : column.kind === "bigint"
-                ? ',{mode:"number"}'
+                ? `,{mode:${JSON.stringify(column.bigintMode ?? "number")}}`
                 : column.values
                   ? `,{enum:${JSON.stringify(column.values)}}`
                   : "";

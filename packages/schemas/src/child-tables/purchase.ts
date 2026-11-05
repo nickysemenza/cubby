@@ -89,7 +89,12 @@ export const purchaseChildren = [
         notNull: true,
         reference: { table: "importSourceClaim", column: "id" },
       },
-      { key: "amount", kind: "doublePrecision", notNull: true },
+      {
+        key: "amountMinor",
+        kind: "bigint",
+        bigintMode: "bigint",
+        notNull: true,
+      },
       { key: "chargedAt", kind: "timestamp" },
       { key: "cardLastFour", kind: "text" },
       // What the source says paid this line. `stored_value` (gift card or
@@ -127,6 +132,10 @@ export const purchaseChildren = [
       { name: "PurchasePaymentEvidence_purchase_idx", on: ["purchaseId"] },
     ],
     checks: [
+      {
+        name: "PurchasePaymentEvidence_amount_minor_range_check",
+        sql: "abs({amountMinor}) <= 100000000000000",
+      },
       {
         name: "PurchasePaymentEvidence_tender_check",
         sql: "{tender} IN ('card', 'stored_value', 'unknown')",

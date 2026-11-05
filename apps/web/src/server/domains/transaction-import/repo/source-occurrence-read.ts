@@ -114,7 +114,11 @@ async function loadOccurrenceClosures(
           "claims",
           `to_jsonb(r)||jsonb_build_object('targetAmountMinor',r."targetAmountMinor"::text)`,
         ],
-        ["paymentEvidence", "payment_evidence", "to_jsonb(r)"],
+        [
+          "paymentEvidence",
+          "payment_evidence",
+          `to_jsonb(r)||jsonb_build_object('amountMinor',r."amountMinor"::text)`,
+        ],
         ["receiptReferences", "receipts", "to_jsonb(r)"],
       ];
       const sets = selections.map(

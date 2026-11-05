@@ -90,7 +90,10 @@ export async function loadPurchaseAuditBatch(
     getDb(db)
       .select({
         purchaseId: purchasePaymentEvidence.purchaseId,
-        amount: purchasePaymentEvidence.amount,
+        amount:
+          sql<string>`${purchasePaymentEvidence.amountMinor}::numeric / 100`.mapWith(
+            Number,
+          ),
         chargedAt: purchasePaymentEvidence.chargedAt,
         cardLastFour: purchasePaymentEvidence.cardLastFour,
         tender: purchasePaymentEvidence.tender,
