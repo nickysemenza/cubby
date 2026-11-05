@@ -20,7 +20,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { formatCurrency } from "~/lib/number-format";
-import { ChipCluster } from "~/ui/common/chip-cluster";
+import { ChipCluster } from "~/ui/records/chip-cluster";
 import { Badge } from "~/ui/reui/badge";
 import { NoneValue } from "~/ui/text/none-value";
 

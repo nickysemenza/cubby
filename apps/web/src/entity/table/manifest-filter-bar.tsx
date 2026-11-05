@@ -9,7 +9,7 @@ import {
   manifestFilterFields,
 } from "~/entity/filter-manifest";
 import { decodeFilters, encodeFilters } from "~/entity/filters";
-import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
+import type { RuntimeFilterOptions } from "~/ui/combobox/filter-option-types";
 
 import { FilterBar } from "../../ui/data-table/filter-bar";
 import { filterStateToBarFilters } from "../../ui/data-table/filter-bar-core";

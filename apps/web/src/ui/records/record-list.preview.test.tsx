@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { page } from "vitest/browser";
 
-import { DateDisplay } from "~/ui/common/date-display";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import {
   RecordDot,

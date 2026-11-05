@@ -3,7 +3,7 @@ import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
 
-import { Image } from "~/ui/common/image";
+import { Image } from "~/ui/media/image";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 import {
   Dialog,

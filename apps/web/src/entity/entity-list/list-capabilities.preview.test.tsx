@@ -21,7 +21,7 @@ import { getEntityListItemSchema } from "~/server/entity-reads/list-contracts";
 const productListItem = getEntityListItemSchema("product");
 const taskListItem = getEntityListItemSchema("task");
 
-import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
+import type { ListQueryOptionsFn } from "~/entity/table/use-paginated-table-core";
 
 installFeatures();
 let harness: ReturnType<typeof createBrowserTestHarness> | undefined;

@@ -8,7 +8,7 @@ import {
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Stack } from "~/ui/layout";
 import { NoneValue } from "~/ui/text/none-value";
-import { TruncatedList } from "~/ui/truncated-list";
+import { TruncatedList } from "~/ui/text/truncated-list";
 
 import type { InlineRefLinkProps } from "./inline";
 import { InlineRefLink } from "./inline";

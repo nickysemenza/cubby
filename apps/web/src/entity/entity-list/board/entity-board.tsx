@@ -39,7 +39,6 @@ import {
 import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { useTableState } from "~/entity/table/use-table-state";
 import { Picker } from "~/ui/combobox/picker";
-import { DenseCellContext } from "~/ui/common/stacked-value";
 import { FilterBar } from "~/ui/data-table/filter-bar";
 import {
   filterStateToBarFilters,
@@ -62,6 +61,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
+import { DenseCellContext } from "~/ui/values/stacked-value";
 
 import { listGroupBy } from "../list-grouping";
 import type { ListSlotProps } from "../list-slot-types";

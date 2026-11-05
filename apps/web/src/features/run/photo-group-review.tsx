@@ -88,16 +88,13 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { DateDisplay } from "~/ui/common/date-display";
-import { Facts } from "~/ui/common/facts";
-import { Image } from "~/ui/common/image";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
+import { Image } from "~/ui/media/image";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import {
@@ -115,11 +112,14 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { Facts } from "~/ui/records/facts";
+import { RecordList, RecordRow } from "~/ui/records/record-list";
 import { Badge, type BadgeVariant } from "~/ui/reui/badge";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 import { InlineTextDiff } from "~/ui/text/inline-text-diff";
 import { NoneValue } from "~/ui/text/none-value";
 import { StatusText } from "~/ui/text/status-text";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import {
   LIVE_RUN_STATUSES,

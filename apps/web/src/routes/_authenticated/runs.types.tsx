@@ -24,8 +24,6 @@ import {
 import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { formatDuration } from "~/lib/format-duration";
 import { pageTitle } from "~/lib/page-title";
-import { DateDisplay } from "~/ui/common/date-display";
-import { Facts } from "~/ui/common/facts";
 import {
   type IndexedSectionGroup,
   IndexedSections,
@@ -34,7 +32,9 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
+import { Facts } from "~/ui/records/facts";
 import { EnumPill } from "~/ui/text/enum-pill";
+import { DateDisplay } from "~/ui/values/date-display";
 
 export const Route = createFileRoute("/_authenticated/runs/types")({
   component: RunTypesPage,

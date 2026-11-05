@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from "vitest";
 import { page } from "vitest/browser";
 
 import { householdDaysFromNow } from "~/lib/household-date";
-import { ChipCluster } from "~/ui/common/chip-cluster";
 import {
   Table,
   TableBody,
@@ -15,6 +14,7 @@ import {
   TableRow,
   TableFooter,
 } from "~/ui/primitives/table";
+import { ChipCluster } from "~/ui/records/chip-cluster";
 import { Badge } from "~/ui/reui/badge";
 
 import { createPlainDateColumn } from "../../entity/table/column-helpers";

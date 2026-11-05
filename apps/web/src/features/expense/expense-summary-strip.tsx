@@ -1,5 +1,5 @@
 import { formatCurrency } from "~/lib/number-format";
-import { KeyNumbers } from "~/ui/common/key-numbers";
+import { KeyNumbers } from "~/ui/records/key-numbers";
 
 interface ExpenseSummary {
   actual: number;

@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 
 import { entityMetadata } from "~/entity/metadata";
 import { getAppErrorDetails } from "~/lib/error-utils";
-import { DateDisplay } from "~/ui/common/date-display";
 import { DecisionLevels } from "~/ui/derived/decision-levels";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
@@ -16,6 +15,7 @@ import {
   PopoverTrigger,
 } from "~/ui/primitives/popover";
 import { Description } from "~/ui/text/description";
+import { DateDisplay } from "~/ui/values/date-display";
 
 /** The manifest fields a field's decision reads: Jev and Clef return no
  * prose, so these, the runner-up and provenance are the suggestion's "why". */

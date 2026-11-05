@@ -3,8 +3,8 @@ import { Link } from "@tanstack/react-router";
 import type * as React from "react";
 
 import { preloadCommandMenu } from "~/features/command-menu/command-menu-loader";
+import { useNavAuthed } from "~/lib/use-nav-authed";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { useNavAuthed } from "~/ui/hooks/use-nav-authed";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

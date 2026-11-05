@@ -20,9 +20,9 @@ import { useState } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { meal } from "~/integrations/tanstack-query/generated/domains/meal.gen";
+import { useHouseholdToday } from "~/lib/use-household-today";
 import { Picker } from "~/ui/combobox/picker";
-import { DatePickerInput } from "~/ui/date-picker-input";
-import { useHouseholdToday } from "~/ui/hooks/use-household-today";
+import { DatePickerInput } from "~/ui/dates/date-picker-input";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";

@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { createTextColumn } from "~/entity/table/column-helpers";
 import { installFeatures } from "~/features/registry";
+import type { RuntimeFilterOptions } from "~/ui/combobox/filter-option-types";
 import { FilterBar } from "~/ui/data-table/filter-bar";
 import {
   barFieldFromConfig,
@@ -21,7 +22,6 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
-import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 
 import { useEntityList } from "./use-entity-list";
 

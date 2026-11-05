@@ -16,7 +16,7 @@ import {
 import { recordFilterOption } from "~/entity/filter-option-presentation";
 import { isPickerEntity, recordSource } from "~/entity/picker/picker";
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/domains/entityFilterOptions.gen";
-import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
+import type { RuntimeFilterOptions } from "~/ui/combobox/filter-option-types";
 
 /**
  * Generic live rosters for every manifest entity-reference filter, including

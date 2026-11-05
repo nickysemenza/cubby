@@ -9,11 +9,11 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { purchaseImport } from "~/integrations/tanstack-query/generated/domains/purchaseImport.gen";
 import { formatSmallCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
-import { Facts, FactsDensityProvider } from "~/ui/common/facts";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
+import { Facts, FactsDensityProvider } from "~/ui/records/facts";
 
 import type { DetailRecordOf } from "./detail-record";
 import { EntityReportSlot } from "./report-slot";

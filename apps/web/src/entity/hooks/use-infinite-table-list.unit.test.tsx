@@ -8,7 +8,7 @@ import { entityListFor } from "~/entity/entity-list";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
-import type { ListQueryResponse } from "../../ui/hooks/use-paginated-table-core";
+import type { ListQueryResponse } from "../table/use-paginated-table-core";
 import type { TableStateReturn } from "../table/use-table-state";
 import { useInfiniteTableList } from "./use-infinite-table-list";
 

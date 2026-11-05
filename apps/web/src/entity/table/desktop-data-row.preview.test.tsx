@@ -12,7 +12,7 @@ import {
   fieldValueFixture,
 } from "~/entity/fields/field-envelope.fixtures";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { DenseCellContext } from "~/ui/common/stacked-value";
+import { DenseCellContext } from "~/ui/values/stacked-value";
 
 import {
   createCubbyColumnHelper,

@@ -21,8 +21,6 @@ import { entityReport } from "~/integrations/tanstack-query/generated/domains/en
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
 import { formatCurrency } from "~/lib/number-format";
-import { CurrencyValue } from "~/ui/common/currency-value";
-import { KeyNumbers } from "~/ui/common/key-numbers";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import {
   StaticTable,
@@ -38,9 +36,11 @@ import {
   ProgressValue,
 } from "~/ui/primitives/progress";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { KeyNumbers } from "~/ui/records/key-numbers";
 import { Description } from "~/ui/text/description";
 import { EnumPill } from "~/ui/text/enum-pill";
 import { Eyebrow } from "~/ui/text/eyebrow";
+import { CurrencyValue } from "~/ui/values/currency-value";
 
 import { DetailAction, reportDetailActionsFor } from "./detail-action-bar";
 import { RecordsBlockView, RecordsDetailActions } from "./records-block";

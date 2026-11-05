@@ -23,12 +23,12 @@ import { createPortal } from "react-dom";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
-import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { WhyValue } from "~/ui/derived/why-value";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { Ledger, LedgerCell, LedgerRow } from "~/ui/records/ledger";
 
 import { useNeedsYouTarget } from "./needs-you";
 

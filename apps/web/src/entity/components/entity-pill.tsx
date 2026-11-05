@@ -3,7 +3,7 @@ import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { ReactNode } from "react";
 
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
-import { RecordPill } from "~/ui/common/record-pill";
+import { RecordPill } from "~/ui/records/record-pill";
 
 import { EntityIdentityMark } from "./entity-identity-mark";
 

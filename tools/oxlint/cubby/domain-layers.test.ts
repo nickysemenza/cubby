@@ -316,7 +316,7 @@ test("derived UI composes entity decisions without opening shared UI to features
   );
   assert.equal(
     violation(
-      "apps/web/src/ui/common/facts.tsx",
+      "apps/web/src/ui/records/facts.tsx",
       "apps/web/src/entity/fields/field-resolution.tsx",
       false,
     ),

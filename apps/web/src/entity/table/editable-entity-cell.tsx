@@ -10,8 +10,8 @@ import { entityLabel } from "~/entity/entities";
 import { Picker } from "~/entity/picker/picker";
 import type { FieldSuggestionSource } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-apply";
-import { useDenseCell } from "~/ui/common/stacked-value";
 import { Button } from "~/ui/primitives/button";
+import { useDenseCell } from "~/ui/values/stacked-value";
 
 import type {
   ComboboxItem,

@@ -6,12 +6,12 @@ import { Suspense } from "react";
 import { entitySearchFacts } from "~/entity/display/entity-display";
 import { entities } from "~/entity/entities";
 import { useEntityMetadata } from "~/entity/metadata";
-import { DenseCellContext } from "~/ui/common/stacked-value";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { DenseCellContext } from "~/ui/values/stacked-value";
 
 const denseSearchCell = { linksTo: null };
 

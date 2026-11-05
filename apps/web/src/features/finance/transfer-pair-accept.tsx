@@ -10,10 +10,10 @@ import {
 import { financialTransaction } from "~/integrations/tanstack-query/generated/domains/financialTransaction.gen";
 import { householdContribution } from "~/integrations/tanstack-query/generated/domains/householdContribution.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
+import { RecordList, RecordRow } from "~/ui/records/record-list";
 
 type Candidate =
   FinancialTransferPairSuggestionsOut["suggestions"][number]["candidates"][number];

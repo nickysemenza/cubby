@@ -304,7 +304,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 ## Web UI
 
 - Page building blocks: `PageHeader`, `Section`, `Panel`, `Toolbar` and
-  `Disclosure` (`ui/layout/`), `KeyNumbers` and `Facts` (`ui/common/`),
+  `Disclosure` (`ui/layout/`), `KeyNumbers` and `Facts` (`ui/records/`),
   `EmptyState` (`ui/feedback/empty-state.tsx`); DESIGN.md says when to use each.
 - Chart, graph and tree states: `Visualization` (`ui/visualizations/visualization.tsx`).
 - Dialogs and workspace panels: `Overlay` (`ui/overlays/overlay.tsx`),
@@ -344,11 +344,11 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   model (summary, child rows, destinations, keys, disclosure) behind both the
   search page and the command menu. Each surface keeps its own outer element
   and child limit.
-- Read-only record lists: `RecordList` (`ui/common/record-list.tsx`) for
+- Read-only record lists: `RecordList` (`ui/records/record-list.tsx`) for
   rows, groups with "+N more", folded absences, the Activity/timeline
   variant, and shared trailing formats; `columns` + row `facts` align
   labelled values under one header (inline labels below 40rem). Inline
-  labelled values anywhere else: `Facts layout="inline"` (`ui/common/facts.tsx`);
+  labelled values anywhere else: `Facts layout="inline"` (`ui/records/facts.tsx`);
   stacked label/value lists use `Facts layout="list"`. Detail-page connected records read
   `entity.connectedRecordsPreview` once per record; `/connections` and
   relation-table evidence page `entity.connectedRecords` per view. Audit

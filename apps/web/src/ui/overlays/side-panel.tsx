@@ -12,7 +12,6 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
 import {
   DisclosureBody,
   DisclosureRoot,
@@ -20,6 +19,7 @@ import {
 } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
+import { CopyableShortcode } from "~/ui/values/copyable-shortcode";
 
 /**
  * The docked panel's width, as one CSS custom property on the document root.

@@ -1,7 +1,7 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { useMemo } from "react";
 
-import { useEntityOptions } from "~/ui/hooks/use-entity-options";
+import { useEntityOptions } from "~/entity/hooks/use-entity-options";
 
 import { RecordEmoji } from "./record-emoji";
 

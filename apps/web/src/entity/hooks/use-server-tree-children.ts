@@ -7,7 +7,7 @@ import { z } from "zod";
 import type {
   ListQueryPlan,
   ListQueryResponse,
-} from "./use-paginated-table-core";
+} from "../table/use-paginated-table-core";
 
 export type ServerTreeRow<T> = T & { subRows?: ServerTreeRow<T>[] };
 

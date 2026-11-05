@@ -47,8 +47,6 @@ import { multiSelectFilterFn } from "~/entity/filters";
 import { readPathValue } from "~/entity/read-path";
 import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-suggestion";
 import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
-import { CurrencyValue } from "~/ui/common/currency-value";
-import { renderScalarValue } from "~/ui/common/scalar-value";
 import { ImageChainPopover } from "~/ui/derived/image-chain";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -66,6 +64,8 @@ import {
 import { EnumPill } from "~/ui/text/enum-pill";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 import { NoneValue } from "~/ui/text/none-value";
+import { CurrencyValue } from "~/ui/values/currency-value";
+import { renderScalarValue } from "~/ui/values/scalar-value";
 
 import type { UnitMappingDisplay } from "../../features/units/unit-mapping-display";
 import type { ComboboxItem } from "../../ui/combobox/combobox-types";
@@ -97,9 +97,9 @@ import {
   type FilterConfig,
   type MobileColumnMeta,
 } from "../../ui/data-table/table-meta";
-import { serverTreeChildCount } from "../../ui/hooks/use-server-tree-children";
 import { isOpenDeadline } from "../display/entity-display";
 import { useEntityDisplayImage } from "../entity-media/entity-display-images";
+import { serverTreeChildCount } from "../hooks/use-server-tree-children";
 import { buildRecordComboboxItem } from "../picker/combobox-builders";
 import { referenceEntitySearch } from "../picker/reference-entity-search";
 import type { SearchProviderProps } from "../picker/with-search-hook";

@@ -20,8 +20,6 @@ import {
 import { useEntityMetadata } from "~/entity/metadata";
 import { getEntityNavGroup } from "~/entity/navigation/nav-items";
 import { formatCount } from "~/lib/number-format";
-import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
-import { DateDisplay } from "~/ui/common/date-display";
 import { ImageChainPopover } from "~/ui/derived/image-chain";
 import { PageHeader } from "~/ui/layout/page-header";
 import {
@@ -30,6 +28,8 @@ import {
   type WayfindingDomain,
 } from "~/ui/navigation/domain-wayfinding";
 import { Badge, type BadgeVariant } from "~/ui/reui/badge";
+import { CopyableShortcode } from "~/ui/values/copyable-shortcode";
+import { DateDisplay } from "~/ui/values/date-display";
 
 /** Authored action hierarchy for a record header. */
 export interface DetailHeroActions {

@@ -7,13 +7,13 @@ import { useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
+import { useEntityOptions } from "~/entity/hooks/use-entity-options";
 import { project } from "~/integrations/tanstack-query/generated/domains/project.gen";
 import { householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { useEntityOptions } from "~/ui/hooks/use-entity-options";
 import { Row, Stack } from "~/ui/layout";
 
 import type {

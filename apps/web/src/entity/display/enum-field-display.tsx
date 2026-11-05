@@ -10,7 +10,7 @@ import {
   type FieldSuggestionSource,
 } from "~/entity/suggestions/field-suggestion";
 import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
-import type { ScalarDisplayValue } from "~/ui/common/scalar-value";
+import type { ScalarDisplayValue } from "~/ui/values/scalar-value";
 
 import {
   presentEntitySelectOptions,

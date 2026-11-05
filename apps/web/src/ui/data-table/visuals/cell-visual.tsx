@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { useDenseCell } from "~/ui/common/stacked-value";
+import { useDenseCell } from "~/ui/values/stacked-value";
 
 /** Signed values retain their text; the bar compares magnitude on one shared scale. */
 export function CellMagnitudeBar({

@@ -13,11 +13,11 @@ import {
   createEntityDisplayColumns,
   entityListHiddenColumns,
 } from "~/entity/display/entity-display";
-import { installFeatures } from "~/features/registry";
 import type {
   ListQueryOptionsFn,
   ListQueryResponse,
-} from "~/ui/hooks/use-paginated-table-core";
+} from "~/entity/table/use-paginated-table-core";
+import { installFeatures } from "~/features/registry";
 
 import {
   createCubbyColumnCollection,

@@ -26,7 +26,7 @@ layouts move an editor between a sidebar and sheet; the layout change must not
 reset action parameters.
 
 All human record dates, timestamps, and declared date ranges render through
-`DateDisplay` (`ui/common/date-display.tsx`): outside tables the absolute date
+`DateDisplay` (`ui/values/date-display.tsx`): outside tables the absolute date
 includes the year and, for an instant, its clock time, followed by a muted
 relative distance separated by a middle dot ("Oct 13, 2026, 11:50 AM · 2 minutes
 ago"). The instant is formatted in the household zone. Plain days never convert
@@ -82,7 +82,7 @@ chip, previews — and is inline-editable wherever the entity has an update
 command. Never read `control.options` directly for a label, and never add a
 hand-written column for an enum: declare shared labels/colors in
 `control.options` or `display.valueOptions`, including each option's `glyph`
-(Phosphor name + SF Symbol; the web map is `ui/common/option-glyph.tsx`), and
+(Phosphor name + SF Symbol; the web map is `ui/media/option-glyph.tsx`), and
 declare width/mobile on the field instead. `ENTITY_SELECT_OPTIONS` holds only
 web editor sentinels.
 Every `<Image>` declares `displayWidth` as the box's true maximum rendered CSS
@@ -237,7 +237,7 @@ form (`DenseCellContext`), and clipped codes use `MiddleTruncate`. Rendered enti
 readable: use `EntityRefLink` (all record links, one component with variants), a titled truncated link, or `createNameColumn`
 in RTable. Audit history can retain retired entity kinds; icon lookup tolerates
 absent metadata and leaves those references unlinked. Pages use the `Page`
-shell; detail bodies use `DetailSections`. Repeated read-only fact and record rows use `ui/common/ledger.tsx`; preserve their native description/list semantics and keep interactions with the caller. Scalar captions wrap within the value slot and actions stay in the trailing rail. An empty portaled table toolbar leaves no border or spacing above the records.
+shell; detail bodies use `DetailSections`. Repeated read-only fact and record rows use `ui/records/ledger.tsx`; preserve their native description/list semantics and keep interactions with the caller. Scalar captions wrap within the value slot and actions stay in the trailing rail. An empty portaled table toolbar leaves no border or spacing above the records.
 
 Record lists fill their available width, including inside a flex fact value;
 their size-contained ledger must not rely on intrinsic width from its children.
@@ -282,7 +282,7 @@ preserved web UI reference](web-ui-reference.md).
 
 ## Technical representations
 
-Use `InspectableValue` (`ui/common/inspectable-value.tsx`) for explicitly chosen
+Use `InspectableValue` (`ui/values/inspectable-value.tsx`) for explicitly chosen
 readable/raw pairs. Keep the readable label visible with a dotted underline;
 hover or keyboard focus reveals the exact raw value, and click/tap keeps the
 popover open for selection and Copy. Escape and outside interaction dismiss it.

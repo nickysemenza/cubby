@@ -2,8 +2,8 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { entityListFor, type EntityListParams } from "~/entity/entity-list";
+import { flattenUniquePageItems } from "~/entity/hooks/infinite-page-utils";
 import { useLoadAllPages } from "~/entity/hooks/use-all-entity-records";
-import { flattenUniquePageItems } from "~/ui/hooks/infinite-page-utils";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 
 const input = {

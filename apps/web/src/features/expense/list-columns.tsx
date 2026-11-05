@@ -14,11 +14,11 @@ import {
 } from "~/features/project/shared";
 import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { KeyNumbers } from "~/ui/common/key-numbers";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
+import { KeyNumbers } from "~/ui/records/key-numbers";
 
 import { defineListOverride } from "../../entity/list-columns/types";
 

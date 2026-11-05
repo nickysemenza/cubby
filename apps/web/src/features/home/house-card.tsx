@@ -12,12 +12,12 @@ import {
 } from "~/entity/entity-detail/report-commands";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityReport } from "~/integrations/tanstack-query/generated/domains/entityReport.gen";
-import { DateDisplay } from "~/ui/common/date-display";
-import { DenseCellContext } from "~/ui/common/stacked-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { Section } from "~/ui/layout";
+import { DateDisplay } from "~/ui/values/date-display";
+import { DenseCellContext } from "~/ui/values/stacked-value";
 
 import { HomeList, HomeRowsLoading } from "./home-list";
 

@@ -7,7 +7,7 @@ import {
 } from "react-hook-form";
 import { z } from "zod";
 
-import { DateSpanInput } from "~/ui/date-span-input";
+import { DateSpanInput } from "~/ui/dates/date-span-input";
 import { FieldError } from "~/ui/primitives/field";
 
 import { FormFieldGroup } from "./form-field-group";

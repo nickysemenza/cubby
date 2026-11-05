@@ -1,7 +1,7 @@
 import type { FC } from "react";
 
+import { useTagOptions } from "~/entity/hooks/use-entity-options";
 import { ChipsInput } from "~/ui/forms/chips-input";
-import { useTagOptions } from "~/ui/hooks/use-entity-options";
 import { Description } from "~/ui/text/description";
 
 import {

@@ -1,11 +1,11 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 
-import { DateDisplay } from "~/ui/common/date-display";
-import { RunWorkProgress } from "~/ui/common/run-work-progress";
 import { textCellData } from "~/ui/data-table/cell-data";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
+import { RunWorkProgress } from "~/ui/records/run-work-progress";
 import { NoneValue } from "~/ui/text/none-value";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import type { ListRenderer, ListRowOf } from "../list-renderer-types";
 

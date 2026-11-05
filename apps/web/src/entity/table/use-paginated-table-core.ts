@@ -8,7 +8,7 @@ import type { QueryKey, QueryMeta } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type { z } from "zod";
 
-import type { TableStateReturn } from "../../entity/table/use-table-state";
+import type { TableStateReturn } from "./use-table-state";
 
 export interface ListQueryResponse<TData> {
   items: TData[];

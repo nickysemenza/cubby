@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import {
   filterOptionItems,
   type RuntimeFilterOptions,
-} from "~/ui/hooks/filter-option-types";
+} from "~/ui/combobox/filter-option-types";
 
 /**
  * Stabilizes the `filterOptions` map every list page feeds `useEntityList`

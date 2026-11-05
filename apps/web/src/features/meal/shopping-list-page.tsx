@@ -8,7 +8,7 @@ import { match } from "ts-pattern";
 import { copyTextWithToast } from "~/lib/clipboard";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
-import { DatePickerInput } from "~/ui/date-picker-input";
+import { DatePickerInput } from "~/ui/dates/date-picker-input";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";

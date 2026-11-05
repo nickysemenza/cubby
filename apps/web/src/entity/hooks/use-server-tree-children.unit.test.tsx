@@ -4,7 +4,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { expect, it } from "vitest";
 
-import type { ListQueryPlan } from "./use-paginated-table-core";
+import type { ListQueryPlan } from "../table/use-paginated-table-core";
 import { useServerTreeChildren } from "./use-server-tree-children";
 
 it("loads complete expanded children in one request", async () => {

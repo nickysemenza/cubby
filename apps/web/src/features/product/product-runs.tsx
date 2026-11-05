@@ -9,8 +9,8 @@ import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { entityListFor } from "~/entity/entity-list";
 import { ProductRelatednessActions } from "~/entity/relatedness/relatedness-rail";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { RecordDot, RecordList, RecordRow } from "~/ui/common/record-list";
 import { Stack } from "~/ui/layout";
+import { RecordDot, RecordList, RecordRow } from "~/ui/records/record-list";
 import { StatusText } from "~/ui/text/status-text";
 
 function JourneyStep({

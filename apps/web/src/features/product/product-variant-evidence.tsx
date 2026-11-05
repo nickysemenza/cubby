@@ -1,7 +1,7 @@
 import type { ProductVariantComparison } from "@cubby/schemas/product-variant-comparison";
 
-import { Facts } from "~/ui/common/facts";
 import { Disclosure } from "~/ui/layout/disclosure";
+import { Facts } from "~/ui/records/facts";
 
 /** Closed-choice relations plus the original source text, for human review. */
 export function ProductVariantEvidence({

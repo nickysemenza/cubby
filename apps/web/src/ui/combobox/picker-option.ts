@@ -2,7 +2,7 @@ import { parseShortcode } from "@cubby/shared";
 import type React from "react";
 import { createElement } from "react";
 
-import { OPTION_GLYPH_NAMES, OptionGlyph } from "~/ui/common/option-glyph";
+import { OPTION_GLYPH_NAMES, OptionGlyph } from "~/ui/media/option-glyph";
 
 import type { ComboboxItem } from "./combobox-types";
 

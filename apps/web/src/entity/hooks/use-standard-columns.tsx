@@ -25,6 +25,7 @@ import {
   multiSelectFilterFn,
   type RowLinkResolver,
 } from "~/entity/table/column-helpers";
+import type { RuntimeFilterOptions } from "~/ui/combobox/filter-option-types";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
   createCubbyColumnCollection,
@@ -33,7 +34,6 @@ import {
   type CubbyColumnHelper as ColumnHelper,
 } from "~/ui/data-table/table-features";
 import { type FilterConfig } from "~/ui/data-table/table-meta";
-import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 
 /** Filter definition for use in useEntityList options */
 interface FilterDef {

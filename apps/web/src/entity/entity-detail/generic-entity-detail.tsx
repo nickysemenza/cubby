@@ -48,7 +48,6 @@ import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestio
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
-import { FactsAddProvider } from "~/ui/common/facts";
 import {
   RecordImageChain,
   type ImageChainQueryOptions,
@@ -58,12 +57,13 @@ import { DetailEditAction } from "~/ui/forms/detail-edit-action";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { VisibleContent } from "~/ui/hooks/visible-content";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { FactsAddProvider } from "~/ui/records/facts";
 
 import {
   SectionPair,
   SectionStack,
 } from "../../ui/data-table/indexed-sections";
-import { DocumentViewerList } from "../../ui/document-viewer-list";
+import { DocumentViewerList } from "../../ui/media/document-viewer-list";
 import {
   actionVerbs,
   type ActionVerbId,

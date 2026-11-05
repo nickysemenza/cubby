@@ -36,7 +36,7 @@ import {
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
 import { NoneValue } from "~/ui/text/none-value";
-import { TruncatedList } from "~/ui/truncated-list";
+import { TruncatedList } from "~/ui/text/truncated-list";
 
 import { useStableIds } from "../../entity/list-columns/stable-ids";
 import { defineListOverride } from "../../entity/list-columns/types";

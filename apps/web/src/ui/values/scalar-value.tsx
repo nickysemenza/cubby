@@ -3,8 +3,6 @@ import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { formatCount } from "~/lib/number-format";
-import { DateDisplay } from "~/ui/common/date-display";
-import { MiddleTruncate } from "~/ui/common/middle-truncate";
 import { Disclosure } from "~/ui/layout/disclosure";
 import {
   Popover,
@@ -14,6 +12,8 @@ import {
 import { BooleanValue, EnumPill } from "~/ui/text/enum-pill";
 import JsonRenderer from "~/ui/text/json-renderer";
 import { NoneValue } from "~/ui/text/none-value";
+import { DateDisplay } from "~/ui/values/date-display";
+import { MiddleTruncate } from "~/ui/values/middle-truncate";
 
 export type ScalarDisplayValue =
   | { kind: "empty"; raw: null | undefined }

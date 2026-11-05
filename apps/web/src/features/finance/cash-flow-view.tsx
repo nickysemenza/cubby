@@ -25,7 +25,6 @@ import { monthLabel } from "~/features/project/project-formatting";
 import { cashFlow } from "~/integrations/tanstack-query/generated/domains/cashFlow.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
-import { KeyNumbers } from "~/ui/common/key-numbers";
 import { IndexedSections } from "~/ui/data-table/indexed-sections";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
@@ -33,6 +32,7 @@ import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { Switch } from "~/ui/primitives/switch";
+import { KeyNumbers } from "~/ui/records/key-numbers";
 import {
   Visualization,
   visualizationState,

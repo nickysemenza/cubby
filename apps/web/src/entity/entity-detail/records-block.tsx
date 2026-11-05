@@ -2,14 +2,14 @@ import type { ReportBlock } from "@cubby/schemas/entity-report";
 import { type ReactNode, Suspense, useState } from "react";
 
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
-import { DateDisplay } from "~/ui/common/date-display";
-import { Image } from "~/ui/common/image";
-import { RecordDetail } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
+import { Image } from "~/ui/media/image";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { RecordDetail } from "~/ui/records/record-list";
 import { Description } from "~/ui/text/description";
 import { Eyebrow } from "~/ui/text/eyebrow";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import {
   DetailAction,

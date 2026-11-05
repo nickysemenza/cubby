@@ -36,12 +36,12 @@ import {
   NativeWorkspaceBridge,
 } from "~/lib/native-workspace";
 import { PerfProfiler } from "~/lib/perf/perf-profiler";
+import { useNavAuthed } from "~/lib/use-nav-authed";
 import { ErrorDetailsDialogHost } from "~/ui/feedback/error-details-dialog";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
 import { RouteNotFound } from "~/ui/feedback/route-not-found";
-import { AppFooter } from "~/ui/footer";
 import { useDebug } from "~/ui/hooks/use-debug";
-import { useNavAuthed } from "~/ui/hooks/use-nav-authed";
+import { AppFooter } from "~/ui/layout/footer";
 import { Toaster } from "~/ui/primitives/sonner";
 
 import { Provider } from "../integrations/tanstack-query/root-provider";

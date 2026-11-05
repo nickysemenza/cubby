@@ -37,6 +37,10 @@ import { Page, usePageCount } from "~/entity/page/page";
 import { FindSuggestionsDialog } from "~/entity/suggestions/find-suggestions-dialog";
 import { ListWorkbench } from "~/entity/table/list-workbench";
 import { useChildListWorkbench } from "~/entity/table/use-child-list-workbench";
+import type {
+  ListQueryOptionsFn,
+  ListQueryResponse,
+} from "~/entity/table/use-paginated-table-core";
 import {
   useTableState,
   type TableStateReturn,
@@ -58,10 +62,6 @@ import type { CubbyTable, CubbyRow } from "~/ui/data-table/table-features";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import type {
-  ListQueryOptionsFn,
-  ListQueryResponse,
-} from "~/ui/hooks/use-paginated-table-core";
 import { Panel } from "~/ui/layout/panel";
 import { Button } from "~/ui/primitives/button";
 import { Tabs, TabsList, TabsTrigger } from "~/ui/primitives/tabs";

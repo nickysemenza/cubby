@@ -52,11 +52,11 @@ import {
   createCubbyColumnCollection,
   type CubbyTable,
 } from "../../ui/data-table/table-features";
-import type { ListQueryOptionsFn } from "../../ui/hooks/use-paginated-table-core";
 import { type BaseListRow, useEntityList } from "../hooks/use-entity-list";
 import { useEntityFieldSave } from "../hooks/use-update-mutation";
 import { ListQueryProvider } from "../table/list-query-context";
 import { ListWorkbench } from "../table/list-workbench";
+import type { ListQueryOptionsFn } from "../table/use-paginated-table-core";
 import { RelationScopeContext } from "./relation-scope";
 import {
   relationshipMovementSource,

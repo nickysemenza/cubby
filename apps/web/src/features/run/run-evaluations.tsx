@@ -16,7 +16,6 @@ import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { runDetail } from "~/integrations/tanstack-query/generated/domains/runDetail.gen";
 import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionCount } from "~/ui/data-table/detail-section-state";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
@@ -26,6 +25,7 @@ import {
   ProgressLabel,
   ProgressValue,
 } from "~/ui/primitives/progress";
+import { RecordList, RecordRow } from "~/ui/records/record-list";
 
 /** "about 12 min", "about 3 h", "under a minute". */
 function formatMinutesLeft(minutes: number) {

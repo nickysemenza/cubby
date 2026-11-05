@@ -7,8 +7,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
-import { DateDisplay } from "~/ui/common/date-display";
-import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { Section } from "~/ui/layout/section";
 import {
   AlertDialog,
@@ -21,7 +19,9 @@ import {
   AlertDialogTitle,
 } from "~/ui/primitives/alert-dialog";
 import { Switch } from "~/ui/primitives/switch";
+import { Ledger, LedgerCell, LedgerRow } from "~/ui/records/ledger";
 import { Badge } from "~/ui/reui/badge";
+import { DateDisplay } from "~/ui/values/date-display";
 
 const RULE_NAME = {
   "field.addition": "Field assignment",

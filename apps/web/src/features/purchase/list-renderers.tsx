@@ -5,10 +5,10 @@ import { VendorCell } from "~/entity/components/vendor-cell";
 import { createTextColumn } from "~/entity/table/column-helpers";
 import { FinancialSettlementCell } from "~/features/purchase/financial-settlement";
 import { ReconciliationStatus } from "~/features/purchase/purchase-reconciliation";
-import { MiddleTruncate } from "~/ui/common/middle-truncate";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { Row } from "~/ui/layout";
 import { NoneValue } from "~/ui/text/none-value";
+import { MiddleTruncate } from "~/ui/values/middle-truncate";
 
 import type { ListRenderer } from "../../entity/display/list-renderer-types";
 

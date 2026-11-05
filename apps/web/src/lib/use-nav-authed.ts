@@ -2,7 +2,7 @@ import { useRouteContext } from "@tanstack/react-router";
 
 import { authClient } from "~/lib/auth-client";
 
-import { useHydrated } from "./use-hydrated";
+import { useHydrated } from "../ui/hooks/use-hydrated";
 
 /**
  * SSR-accurate auth state for nav chrome (MainNav, BottomNav).

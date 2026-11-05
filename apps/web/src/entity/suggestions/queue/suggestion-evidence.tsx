@@ -41,14 +41,14 @@ import { sourceTransactionRecord } from "~/integrations/tanstack-query/generated
 import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
-import { DateDisplay } from "~/ui/common/date-display";
-import { Facts, FactsDensityProvider } from "~/ui/common/facts";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Section } from "~/ui/layout/section";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Input } from "~/ui/primitives/input";
+import { Facts, FactsDensityProvider } from "~/ui/records/facts";
+import { RecordList, RecordRow } from "~/ui/records/record-list";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import {
   CounterpartyLine,

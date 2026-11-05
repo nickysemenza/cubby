@@ -21,6 +21,7 @@ import { ProductGtin } from "~/entity/components/product-gtin";
 import { entityListHiddenColumns } from "~/entity/display/entity-display";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
+import { useTagOptions } from "~/entity/hooks/use-entity-options";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { useNameEditable } from "~/entity/hooks/use-name-editable";
 import { useProductCategories } from "~/entity/hooks/use-product-categories";
@@ -53,7 +54,6 @@ import {
   createCubbyColumnHelper,
   type CubbyColumnCollection,
 } from "~/ui/data-table/table-features";
-import { useTagOptions } from "~/ui/hooks/use-entity-options";
 import { NoneValue } from "~/ui/text/none-value";
 
 import { useStableIds } from "../../entity/list-columns/stable-ids";

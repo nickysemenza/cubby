@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 
 import { entityListFor } from "~/entity/entity-list";
 
-import { flattenUniquePageItems } from "../../ui/hooks/infinite-page-utils";
+import { flattenUniquePageItems } from "../../entity/hooks/infinite-page-utils";
 
 export function useAllInventoryItems() {
   const firstPageOptions = entityListFor("inventory").infiniteQueryOptions({

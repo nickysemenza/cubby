@@ -27,7 +27,6 @@ import { MarkdownText } from "~/entity/prose/markdown";
 import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { DateDisplay } from "~/ui/common/date-display";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
@@ -43,6 +42,7 @@ import {
 } from "~/ui/reui/alert";
 import { Badge } from "~/ui/reui/badge";
 import { Description } from "~/ui/text/description";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import { CopyJsonButton } from "./copy-debug-button";
 import { RecipeFlowMap, RecipeFlowTable } from "./recipe-flow-renderers";

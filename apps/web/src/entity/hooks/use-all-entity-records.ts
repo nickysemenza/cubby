@@ -13,7 +13,7 @@ import type {
 } from "~/entity/model/list-contracts";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 
-import { flattenUniquePageItems } from "../../ui/hooks/infinite-page-utils";
+import { flattenUniquePageItems } from "./infinite-page-utils";
 
 /** One list row of entity E. */
 export type EntityListRecord<E extends ListEntity> =

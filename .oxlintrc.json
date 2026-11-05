@@ -154,7 +154,7 @@
         "apps/web/src/ui/combobox/**",
         "apps/web/src/ui/overlays/**",
         "apps/web/src/ui/reui/**",
-        "apps/web/src/ui/date-picker-input.tsx",
+        "apps/web/src/ui/dates/date-picker-input.tsx",
         "apps/web/src/ui/text/code-block.tsx",
         "apps/web/src/ui/text/pill.tsx",
         "apps/web/src/ui/feedback/empty-state.tsx",

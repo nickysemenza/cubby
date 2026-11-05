@@ -16,13 +16,13 @@ import { auditLog } from "~/integrations/tanstack-query/generated/domains/auditL
 import { formatCalendarDay } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
 import { getStatusBadgeProps } from "~/lib/status-colors";
-import { DateDisplay } from "~/ui/common/date-display";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { DateDisplay } from "~/ui/values/date-display";
 
 type AuditEntry = AuditLogListOut["entries"][number];
 

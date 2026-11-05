@@ -11,8 +11,8 @@ import { location } from "~/integrations/tanstack-query/generated/domains/locati
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCount, formatCurrency } from "~/lib/number-format";
-import { KeyNumbers, type KeyNumber } from "~/ui/common/key-numbers";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { KeyNumbers, type KeyNumber } from "~/ui/records/key-numbers";
 
 import type { HomeAsOfWindow } from "./home-as-of-window";
 import { useRecordedSpend } from "./home-money";

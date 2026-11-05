@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import type { ReactNode } from "react";
 
-import { Image } from "~/ui/common/image";
+import { Image } from "~/ui/media/image";
 import {
   Tooltip,
   TooltipContent,

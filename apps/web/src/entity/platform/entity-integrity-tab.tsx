@@ -21,9 +21,9 @@ import { entityIntegrity } from "~/integrations/tanstack-query/generated/domains
 import { integrityProblems } from "~/integrations/tanstack-query/generated/domains/integrityProblems.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { KeyNumbers } from "~/ui/common/key-numbers";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Grid, Panel, Row, Stack } from "~/ui/layout";
+import { KeyNumbers } from "~/ui/records/key-numbers";
 import { Badge, type BadgeVariant } from "~/ui/reui/badge";
 import { Eyebrow } from "~/ui/text/eyebrow";
 

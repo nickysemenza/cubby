@@ -1,7 +1,7 @@
 import { cn } from "cn";
 
 import { formatCount } from "~/lib/number-format";
-import { type KeyNumber, KeyNumbers } from "~/ui/common/key-numbers";
+import { type KeyNumber, KeyNumbers } from "~/ui/records/key-numbers";
 
 import {
   type RunOverview,

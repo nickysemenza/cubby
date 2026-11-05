@@ -1,7 +1,7 @@
 import { cn } from "cn";
 import type { ReactNode } from "react";
 
-import { useDenseCell } from "./stacked-value";
+import { useDenseCell } from "../values/stacked-value";
 
 /** Noninteractive identity shared by record links and selectable record rows. */
 export function RecordPill({ name, mark }: { name: string; mark: ReactNode }) {

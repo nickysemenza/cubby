@@ -4,7 +4,7 @@ import { useMemo } from "react";
 
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { OptionGlyph } from "~/ui/common/option-glyph";
+import { OptionGlyph } from "~/ui/media/option-glyph";
 
 /** Trade glyphs and choices share the canonical declaration's scoped roster. */
 function tradeRoster(queryClient: QueryClient) {

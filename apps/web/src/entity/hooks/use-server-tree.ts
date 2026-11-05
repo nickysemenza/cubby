@@ -9,12 +9,12 @@ import { useCallback } from "react";
 
 import { type EntityListParams, entityListFor } from "~/entity/entity-list";
 import type { EntityListRecord } from "~/entity/hooks/use-all-entity-records";
-import type { ListEntity } from "~/entity/model/list-contracts";
-import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import {
   type ServerTreeRow,
   serverTreeChildCount,
-} from "~/ui/hooks/use-server-tree-children";
+} from "~/entity/hooks/use-server-tree-children";
+import type { ListEntity } from "~/entity/model/list-contracts";
+import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 
 const TREE_PAGE_SIZE = 500;
 

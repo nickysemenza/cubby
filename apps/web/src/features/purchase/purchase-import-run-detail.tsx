@@ -40,20 +40,20 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { aiFunding } from "~/integrations/tanstack-query/generated/domains/aiFunding.gen";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { AiCost } from "~/ui/common/ai-cost";
-import { Facts, FactsDensityProvider } from "~/ui/common/facts";
+import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
+import { Panel, Row, Section, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
+import { Button } from "~/ui/primitives/button";
+import { Facts, FactsDensityProvider } from "~/ui/records/facts";
 import {
   RecordDetail,
   RecordDot,
   RecordList,
   RecordRow,
-} from "~/ui/common/record-list";
-import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
-import { Panel, Row, Section, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/primitives/button";
+} from "~/ui/records/record-list";
 import { Badge } from "~/ui/reui/badge";
 import { StatusText } from "~/ui/text/status-text";
+import { AiCost } from "~/ui/values/ai-cost";
 
 import { PaidRunButton } from "../account/ai-funding";
 import {

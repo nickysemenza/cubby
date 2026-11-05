@@ -37,8 +37,8 @@ import { NoneValue } from "~/ui/text/none-value";
 
 import { CoreNutrientCoverage } from "../../entity/presentation/core-nutrient-coverage";
 import { createEntityInlineLinkColumn } from "../../entity/table/column-helpers";
+import type { ListQueryOptionsFn } from "../../entity/table/use-paginated-table-core";
 import type { TableStateReturn } from "../../entity/table/use-table-state";
-import type { ListQueryOptionsFn } from "../../ui/hooks/use-paginated-table-core";
 import { UnitMappingDisplay } from "../units/unit-mapping-display";
 
 type USDAListRow = UsdaFoodListRow & {

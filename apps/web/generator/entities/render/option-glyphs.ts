@@ -35,7 +35,7 @@ export function renderOptionGlyphs(
   }
   const sorted = [...names].sort();
   return {
-    relativePath: "apps/web/src/ui/common/option-glyphs.gen.ts",
+    relativePath: "apps/web/src/ui/media/option-glyphs.gen.ts",
     source: rawSource(
       generatedHeader +
         'import type {Icon} from "@phosphor-icons/react/lib";\n' +

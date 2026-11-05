@@ -61,6 +61,7 @@ import { DataTableToolbar } from "~/entity/table/data-table-toolbar";
 import { TableEmptyState } from "~/entity/table/entity-empty-states";
 import { ListQueryProvider } from "~/entity/table/list-query-context";
 import { ListWorkbench } from "~/entity/table/list-workbench";
+import type { ListQueryOptionsFn } from "~/entity/table/use-paginated-table-core";
 import { formatCount } from "~/lib/number-format";
 import { DataTablePagination } from "~/ui/data-table/data-table-pagination";
 import {
@@ -68,7 +69,6 @@ import {
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
-import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

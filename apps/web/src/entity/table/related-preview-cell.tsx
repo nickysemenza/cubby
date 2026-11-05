@@ -3,7 +3,7 @@ import type { RelatedPreviewGroup } from "@cubby/schemas/related-view";
 import { Link } from "@tanstack/react-router";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { ChipCluster } from "~/ui/common/chip-cluster";
+import { ChipCluster } from "~/ui/records/chip-cluster";
 import { NoneValue } from "~/ui/text/none-value";
 
 export function RelatedPreviewCell({

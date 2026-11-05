@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { EntityIntentFields } from "~/entity/editing/entity-primitive-fields";
+import { useImageState } from "~/entity/entity-media/use-image-state";
 import { PickerField } from "~/entity/forms/picker-field";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
@@ -31,7 +32,6 @@ import {
   requiredProductField,
 } from "~/ui/forms/form-fields";
 import { NullableNumericField, UnifiedTextField } from "~/ui/forms/form-utils";
-import { useImageState } from "~/ui/hooks/use-image-state";
 import { Row } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";

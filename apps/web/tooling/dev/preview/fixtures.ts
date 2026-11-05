@@ -7,7 +7,7 @@ import { type ListEntity, listEntities } from "~/entity/model/list-contracts";
 import { getEntityListOutputSchema } from "~/server/entity-reads/list-contracts";
 import { mock } from "~/lib/test/mock-schema";
 import type { BaseListRow } from "~/entity/hooks/use-entity-list";
-import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
+import type { ListQueryOptionsFn } from "~/entity/table/use-paginated-table-core";
 
 export const PREVIEW_STATES = ["loading", "error", "empty", "edge"] as const;
 export const previewStateSchema = z.enum(PREVIEW_STATES).catch("edge");

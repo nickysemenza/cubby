@@ -4,7 +4,7 @@ import { cn } from "cn";
 import type { ReactNode } from "react";
 
 import { EntityCover } from "~/entity/components/entity-cover";
-import { PersonAvatar } from "~/ui/common/person-avatar";
+import { PersonAvatar } from "~/ui/records/person-avatar";
 
 import { RecordEmoji } from "./record-emoji";
 
