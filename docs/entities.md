@@ -3045,7 +3045,7 @@ needs no parent lookup in the trigger. NULL marks nothing, stored text is hashed
 unnormalized, and a collision only adds a recompute. A hash is not a target id, so
 `captureKey` requires `selection`, `path` or `paths`, and it refuses `json` and
 `targetWhere`. Manifest inputs cannot declare it.
-`reconcile: { table, where }` narrows the daily pass to rows that can still be
+`reconcile: { table, where }` narrows explicit repair enrollment to rows that can still be
 owed, for a source whose history is closed. `table` shares the source's UUID `id`,
 `where` holds literal column values bound as parameters, and the existing id
 slice still applies. A row outside the population converges only through its own
@@ -3445,16 +3445,15 @@ existing documents marked missing, preserving the latter's content. It then
 retires the observed missing documents in one update within the same transaction.
 This retains stable lock order without splitting mixed backfill pages into
 one write per record. Missing records without documents create no placeholders.
-Publication rings the existing reader notifications for every kind
-it touched. `derived.reconcile` pages through all 24 id buckets in the daily recovery pass at the
-lowest priority, so every stored value is rechecked daily, and logs `derived.drift` when a recompute changes a value:
-an undeclared input converges instead of staying silently wrong. The daily
-maintenance Run's search artifact cleanup step retires search documents of
-records removed before their triggers existed and queues retired embedding
-vectors for deletion. The read-set
-tracer (`derived/repo/read-set.integration.test.ts`) fails CI when a compute
-reads a table its declaration does not list. A deploy that
-changes a value's rules marks it in its migration.
+Publication rings the existing reader notifications for every kind it touched.
+The daily whole-population reconcile is retired under ADR 0025. Existing tickets
+still complete through the ordinary drain; they are not deleted. A retained
+`derived.reconcile` Job completes without enrolling work. New-target migrations
+enroll only rows missing that target's publication, using its declared owner;
+rule changes do not enqueue the whole population. Explicit search repair and
+synthetic rebuild coverage retain their existing scoped enrollment path.
+The read-set tracer (`derived/repo/read-set.integration.test.ts`) still checks
+that computes declare their source tables.
 
 That same synthetic corpus verifies reconciliation and empty-cache rebuilds
 for every stored-value target, every searchable entity, Product conversion

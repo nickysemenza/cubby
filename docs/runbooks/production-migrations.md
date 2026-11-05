@@ -6,8 +6,12 @@ runner uses only `PRODUCTION_DIRECT_DATABASE_URL` for production; it never
 falls back to `DATABASE_URL`. Default to one preserving migration followed by the
 matching Worker deploy. Old requests and Job attempts may fail; compatibility
 rollouts, timed retirement waits and feature-specific release procedures are not
-the default. Rebuildable derived caches use the existing daily consistency pass
-after deployment; temporary stale quality badges do not justify a staged cutover.
+the default. There is no daily whole-population consistency pass. A newly declared target
+enrolls only records missing its publication, using its declared source and
+publication owner in the migration. Existing publications and tickets stay
+intact; a changed rule does not re-enroll the entire population. Use an explicit
+scoped repair when a demonstrated defect requires recomputation. Temporary stale
+quality badges do not justify a staged cutover.
 Preserve source data, money and member decisions, verify with synthetic predecessor
 data before merge, then read back production data and schema after release. See the
 [domain rules](../agents/domain-rules.md#production-changes) for preservation
