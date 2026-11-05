@@ -25,6 +25,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { account as googleAccount } from "~/server/db/auth.schema";
+import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
 import {
   databaseForTransaction,
   getDb,
@@ -59,7 +60,6 @@ import {
 } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import {
@@ -75,6 +75,11 @@ import {
   callMcpTool,
   kernelRequestContext,
 } from "~/server/testing/mcp-test-utils";
+
+const DERIVED_DRAIN = {
+  key: DERIVED_DRAIN_JOB_KEY,
+  kind: "derived.drain",
+} as const;
 
 describe("Email Purchase links", () => {
   const ctx = withTestDb();
