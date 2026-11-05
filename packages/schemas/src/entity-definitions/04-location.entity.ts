@@ -1,6 +1,5 @@
 import { timestampField, aliasList } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { imageAssociationStorage } from "./image-associations";
 import {
   locationReadSchemas,
   MAX_LOCATION_TREE_DEPTH,
@@ -769,18 +768,6 @@ Rules:
     fields: {
       embedded: [
         {
-          path: ["images"],
-          entity: "image",
-          projections: [
-            "output",
-            "list",
-            "detail",
-            "mcpOutput",
-            "mcpList",
-            "mcpDetail",
-          ],
-        },
-        {
           path: ["product"],
           entity: "product",
           projections: [
@@ -1112,7 +1099,7 @@ Rules:
     },
     capabilities: {
       images: {
-        storage: imageAssociationStorage.shape.location.value,
+        storage: "gallery",
         displaySources: [
           {
             relationPath: ["product"],

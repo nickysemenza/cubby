@@ -2627,7 +2627,10 @@ export const compileEntity = (
             mcpList: contractValue.mcpList ?? list,
             mcpDetail:
               contractValue.mcpDetail ?? contractValue.mcpOutput ?? detail,
-            embedded: contractValue.embedded ?? [],
+            embedded: withGalleryEmbedding(
+              contractValue.embedded ?? [],
+              declaration,
+            ),
           };
         })();
 
@@ -2887,6 +2890,37 @@ const imagePolicyPathTarget = (
   }
   return current;
 };
+
+/**
+ * A gallery's public `images` read embeds live Images on every projection unless
+ * the declaration narrows it with its own binding.
+ */
+const withGalleryEmbedding = (
+  embedded: NonNullable<CompiledEntity["contract"]>["embedded"],
+  declaration: EntityDeclarationMetadata,
+): NonNullable<CompiledEntity["contract"]>["embedded"] =>
+  declaration.capabilities.images.storage === "gallery" &&
+  declaration.model?.fields.some(
+    ({ key, output, validation }) =>
+      key === "images" && output !== false && validation.read !== null,
+  ) &&
+  !embedded.some(({ path }) => path.length === 1 && path[0] === "images")
+    ? [
+        {
+          path: ["images"],
+          entity: "image",
+          projections: [
+            "output",
+            "list",
+            "detail",
+            "mcpOutput",
+            "mcpList",
+            "mcpDetail",
+          ],
+        },
+        ...embedded,
+      ]
+    : embedded;
 
 type ImageIngressRoute = CompiledEntity["imagePolicy"]["ingress"][number];
 type ImageIngressBinding = Extract<

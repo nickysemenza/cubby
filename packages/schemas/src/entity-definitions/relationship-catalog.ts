@@ -1,6 +1,6 @@
 /** Type-only physical graph assembled from independently owned declaration bodies. */
 import type { entityAttachmentStorage } from "../entity-attachment";
-import type { imageAssociationStorage } from "./image-associations";
+import type { imageAssociationStorage } from "./image-association-storage.gen";
 import type { ENTITY_LINK_KINDS } from "../entity-links";
 import type { modulesChildren } from "../child-tables/modules";
 import type {

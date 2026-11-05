@@ -524,7 +524,7 @@ export const renewCompanionImageProcessingOutput = z.discriminatedUnion("ok", [
   }),
 ]);
 
-import { imageAssociationStorage } from "./entity-definitions/image-associations";
+import { imageAssociationStorage } from "./entity-definitions/image-association-storage.gen";
 
 import { imageAnalysisSummarySchema } from "./image-identification";
 export const imageProcessingIssue = z.enum(["failed", "review_needed"]);

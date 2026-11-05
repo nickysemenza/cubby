@@ -5,7 +5,6 @@ import { PRODUCT_OWNERSHIP_INPUTS } from "./ownership-inputs";
 import { storedProductOwnership } from "@cubby/schemas/inventory-ownership";
 import { PRODUCT_PRICING_INPUTS } from "./product-pricing-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { imageAssociationStorage } from "./image-associations";
 import {
   productPrimaryPlacement,
   productReadSchemas,
@@ -2735,18 +2734,6 @@ Rules:
     fields: {
       embedded: [
         {
-          path: ["images"],
-          entity: "image",
-          projections: [
-            "output",
-            "list",
-            "detail",
-            "mcpOutput",
-            "mcpList",
-            "mcpDetail",
-          ],
-        },
-        {
           path: ["labelImages"],
           entity: "image",
           projections: [
@@ -3812,7 +3799,7 @@ Rules:
         ],
       },
       images: {
-        storage: imageAssociationStorage.shape.product.value,
+        storage: "gallery",
         displaySources: [{ relationPath: ["brand"] }],
         ingress: [
           { kind: "self", routeId: "product-self" },

@@ -1083,9 +1083,11 @@ update route or multi-select delete UI.
 `capabilities.images` is `false`, `"gallery"` (ordered `EntityAttachment` rows,
 bound by `galleryBinding(entity)` in `apps/web/src/server/db/helpers/crud.ts`),
 `"cover"` (a single `coverImageId` column, cookbook), or `"logo"` (a single
-direct logo FK, vendor). The source-only `entity-definitions/image-associations.ts`
-facet owns association targets and their storage modes; entity declarations and
-Image validators consume it directly, without generated policy imports.
+direct logo FK, vendor). The declaration owns it: bootstrap generation reads that
+literal into `entity-definitions/image-association-storage.gen.ts`, which Image
+validators import, so association targets need no hand-kept roster. A gallery's
+public `images` read embeds live Images on every projection unless the declaration
+narrows it with its own `fields.embedded` binding.
 The manifest keeps the storage boolean `hasImages`
 (`gallery`/`cover`) alongside `imageStorage`. Every public entity list and
 detail read carries server-resolved `displayImages: [{ id, url }]`; details

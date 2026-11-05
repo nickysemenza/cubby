@@ -1,6 +1,5 @@
 import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { imageAssociationStorage } from "./image-associations";
 import { mealReadSchemas } from "../meal-fields";
 import { mealChildren } from "../child-tables/meal.js";
 import { defineEntity, defineEntityModel } from "./definition.js";
@@ -589,18 +588,6 @@ Rules:
     fields: {
       embedded: [
         {
-          path: ["images"],
-          entity: "image",
-          projections: [
-            "output",
-            "list",
-            "detail",
-            "mcpOutput",
-            "mcpList",
-            "mcpDetail",
-          ],
-        },
-        {
           path: ["recipes", "recipe"],
           entity: "recipe",
           projections: [
@@ -796,7 +783,7 @@ Rules:
     },
     capabilities: {
       images: {
-        storage: imageAssociationStorage.shape.meal.value,
+        storage: "gallery",
         displaySources: [
           {
             relationPath: ["recipes"],

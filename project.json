@@ -48,6 +48,7 @@
         "{workspaceRoot}/apps/web/src/routes/_authenticated/*.tsx",
         "{workspaceRoot}/packages/schemas/src/generated",
         "{workspaceRoot}/packages/schemas/src/entity-definitions/definition-catalog.gen.ts",
+        "{workspaceRoot}/packages/schemas/src/entity-definitions/image-association-storage.gen.ts",
         "{workspaceRoot}/packages/shared/src/generated",
         "{workspaceRoot}/apps/apple/Generated",
         "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyKit/Generated",

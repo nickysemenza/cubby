@@ -1,6 +1,5 @@
 import { timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { imageAssociationStorage } from "./image-associations";
 import { recipeReadSchemas } from "../recipe-fields";
 import { recipeChildren } from "../child-tables/recipe.js";
 import { defineEntity, defineEntityModel } from "./definition.js";
@@ -1316,7 +1315,7 @@ export const { definition, readSchemas } = defineEntityModel(
     },
     capabilities: {
       images: {
-        storage: imageAssociationStorage.shape.recipe.value,
+        storage: "gallery",
         displaySources: [
           {
             relationPath: ["meals"],
