@@ -1,3 +1,4 @@
+import { groupForest } from "../../lib/forest";
 import type { ComboboxItem } from "./combobox-types";
 
 export interface TreePickerItemsOptions<T> {
@@ -24,24 +25,19 @@ export interface TreePickerItemsOptions<T> {
  * reordered, alphabetically unless `rootOrder` is given.
  *
  * A node whose declared parent is absent from `nodes` (a stale or foreign
- * id) is treated as its own root rather than dropped — every node in
- * `nodes` appears exactly once in the result.
+ * id) is treated as its own root. Cyclic components have no root and are
+ * omitted.
  */
 export function treePickerItems<T>(
   nodes: readonly T[],
   { idOf, parentIdOf, labelOf, detailOf, rootOrder }: TreePickerItemsOptions<T>,
 ): ComboboxItem[] {
-  const byId = new Map(nodes.map((node) => [idOf(node), node]));
-  const childrenOf = new Map<string | null, T[]>();
-  for (const node of nodes) {
-    const parentId = parentIdOf(node);
-    const key = parentId != null && byId.has(parentId) ? parentId : null;
-    const bucket = childrenOf.get(key);
-    if (bucket) bucket.push(node);
-    else childrenOf.set(key, [node]);
-  }
-
-  const roots = [...(childrenOf.get(null) ?? [])].sort(
+  const { roots: groupedRoots, childrenByParent } = groupForest(
+    nodes,
+    idOf,
+    parentIdOf,
+  );
+  const roots = groupedRoots.sort(
     rootOrder ?? ((a, b) => labelOf(a).localeCompare(labelOf(b))),
   );
 
@@ -73,7 +69,7 @@ export function treePickerItems<T>(
         rowLabel: labelOf(node),
       },
     });
-    for (const child of childrenOf.get(idOf(node)) ?? []) {
+    for (const child of childrenByParent.get(idOf(node)) ?? []) {
       walk(child, rootId, rootLabel, rootOrderIndex, depth + 1, [
         ...ancestorLabels,
         labelOf(node),

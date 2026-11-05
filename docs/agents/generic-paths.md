@@ -303,6 +303,10 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 
 ## Web UI
 
+- Parent-linked in-memory forests: `groupForest` (`apps/web/src/lib/forest.ts`)
+  preserves input order and promotes missing-parent rows. Callers own traversal,
+  cycle policy and sorting; project folds remain in `project-forest.ts`.
+
 - Icon-only removal: `RemoveButton` (`ui/forms/remove-button.tsx`) requires a label; choose delete only for records.
 - Previous/next navigation: `PrevNextButtons` (`ui/navigation/prev-next-buttons.tsx`) accepts optional shortcut metadata.
 - Dropdown overflow: `MoreMenuTrigger` (`ui/navigation/more-menu-trigger.tsx`).

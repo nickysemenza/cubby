@@ -37,6 +37,7 @@ import {
 } from "@cubby/schemas/work-raw-read";
 import { and, inArray } from "drizzle-orm";
 
+import { groupForest } from "~/lib/forest";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { project } from "~/server/db/schema";
@@ -93,30 +94,16 @@ export const projectTreePage = async (
       .totals(db, filters, context)
       .then((totals) => ({ costEstimate: totals?.costEstimate ?? 0 })),
   ]);
-  const matching = new Set(matchingRows.map((row) => row.id));
-
-  // The forest the CLIENT will draw: an edge exists only between a matching
-  // project and its matching DIRECT parent. So a root is a match whose direct
-  // parent doesn't match — including a grandchild whose parent was filtered
-  // out but whose grandparent survives. That's deliberately not "has no
-  // matching ancestor": the client's `buildProjectTree` promotes on the direct
-  // parent alone, and if the two rules disagreed the server would report a
-  // root count for a shape the browser doesn't render.
-  const matchingChildren = new Map<ProjectId, ProjectId[]>();
-  const roots: ProjectId[] = [];
-  for (const row of matchingRows) {
-    const parentId = row.parentProjectId;
-    if (parentId == null || !matching.has(parentId)) {
-      roots.push(row.id);
-      continue;
-    }
-    const siblings = matchingChildren.get(parentId);
-    if (siblings) {
-      siblings.push(row.id);
-    } else {
-      matchingChildren.set(parentId, [row.id]);
-    }
-  }
+  // Match the client's direct-parent promotion, preserving server sort order.
+  const { roots: rootRows, childrenByParent } = groupForest(
+    matchingRows,
+    (row) => row.id,
+    (row) => row.parentProjectId,
+  );
+  const roots = rootRows.map((row) => row.id);
+  const matchingChildren = new Map(
+    [...childrenByParent].map(([id, rows]) => [id, rows.map((row) => row.id)]),
+  );
 
   const { take, skip } = buildTakeSkip(pagination);
   const pageRoots = roots.slice(skip, skip + take);
