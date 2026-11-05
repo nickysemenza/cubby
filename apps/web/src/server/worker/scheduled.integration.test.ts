@@ -4,6 +4,8 @@ import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { CRON_SCHEDULES } from "~/server/worker-identity";
 
 import { handleScheduledInvocation } from "./scheduled";
@@ -23,7 +25,7 @@ it("rejects daily completion with both independent database failures", async () 
       handleScheduledInvocation(
         {
           scheduledTime: Date.parse("2026-01-15T15:00:00Z"),
-          cron: CRON_SCHEDULES.dailyMaintenance,
+          cron: CRON_SCHEDULES.hourly,
         },
         fromPartial<Env>({
           HYPERDRIVE_BACKGROUND: { connectionString: connection.toString() },
@@ -53,17 +55,32 @@ it("rejects daily completion with both independent database failures", async () 
   }
 });
 
-it.each(["2026-01-15T14:00:00Z", "2026-07-15T15:00:00Z"])(
-  "skips the non-household hour before opening Postgres (%s)",
-  async (instant) => {
-    await expect(
-      handleScheduledInvocation(
-        {
-          scheduledTime: Date.parse(instant),
-          cron: CRON_SCHEDULES.dailyMaintenance,
-        },
-        fromPartial<Env>({ CF_VERSION_METADATA: { id: "synthetic-version" } }),
-      ),
-    ).resolves.toBeUndefined();
-  },
-);
+// A wake sent to the queue can be lost after its intent commits. Nothing here
+// delivers one: only the hourly tick can reach this Job, and it must do so
+// without the daily pass, which runs at no other household hour.
+it("recovers committed work whose wake was dropped within one hourly tick", async () => {
+  await enqueueJob(ctx.db, {
+    key: "maintenance.purchase-discovery",
+    kind: "maintenance.purchase-discovery",
+    input: {
+      kind: "maintenance.purchase-discovery",
+      requestedAt: "2026-01-15T14:00:00.000Z",
+    },
+  });
+  await handleScheduledInvocation(
+    {
+      scheduledTime: Date.parse("2026-01-15T14:00:00Z"),
+      cron: CRON_SCHEDULES.hourly,
+    },
+    fromPartial<Env>({
+      HYPERDRIVE_BACKGROUND: { connectionString: ctx.databaseUrl },
+      CF_VERSION_METADATA: { id: "synthetic-version" },
+    }),
+  );
+  await expect(
+    readJobs(ctx.db, { key: "maintenance.purchase-discovery" }),
+  ).resolves.toMatchObject([{ state: "completed", attempts: 0 }]);
+  await expect(readJobs(ctx.db, { key: "jobs.maintenance" })).resolves.toEqual(
+    [],
+  );
+});

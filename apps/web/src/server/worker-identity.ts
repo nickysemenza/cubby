@@ -17,7 +17,7 @@ export const QUEUE_NAMES = {
 };
 
 export const CRON_SCHEDULES = {
-  dailyMaintenance: identityKey(identity.crons.dailyMaintenance),
+  hourly: identityKey(identity.crons.hourly),
 };
 
 export function localQueueNames(devId: string) {

@@ -61,7 +61,7 @@ owns the execution contract; mailbox page and retention behavior lives in the
 `cubby-background` carries only the version-3 wake envelope. Every delivery,
 including an unreadable envelope, attempts the same due-Job drain and acknowledges
 successful processing. Runtime or transport failures retry delivery up to three
-times; durable Job policy still owns execution retries. Daily recovery and
+times; durable Job policy still owns execution retries. The hourly cron and
 app-open catch-up repair lost wakes. Telemetry has its separate queue.
 
 One SQL window query interleaves due kinds, starting with the least recently
@@ -324,8 +324,10 @@ data; profile/provenance contracts belong in
 
 ### PostgreSQL and Hyperdrive
 
-Minute cron and app-open catch-up inspect Postgres Job intent and use the same
-drain as background wakes. Stateful Durable Objects retain only their provider
+The hourly cron and app-open catch-up inspect Postgres Job intent and use the same
+drain as background wakes. The cron runs that drain itself rather than sending a
+wake, so it is both the timer and the backstop: a dropped wake or broken queue
+delivery recovers within one hour. Stateful Durable Objects retain only their provider
 admission, cache or coordinator responsibilities. AI refresh policy details
 live in the [refresh runbook](runbooks/ai-refresh.md).
 

@@ -8,8 +8,8 @@
     }
   },
   "crons": {
-    "dailyMaintenance": {
-      "0 14,15 * * *": true
+    "hourly": {
+      "0 * * * *": true
     }
   }
 }
