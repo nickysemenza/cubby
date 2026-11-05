@@ -188,19 +188,13 @@ export function translateDatabaseError(
         const key = /\)=\(([^,]+), ([^,]+), (.+)\) already exists/u.exec(
           pg.detail ?? "",
         );
-        return key?.[2] === "settlement_ref"
-          ? createAppError(
-              "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT",
-              `Source transaction ${key[1]}/${key[3]} is already recorded.`,
-              error,
-            )
-          : createAppError(
-              "EXTERNAL_ID_CONFLICT",
-              key
-                ? `${key[1]} ${key[2]} ${key[3]} already belongs to another record.`
-                : "That identifier already belongs to another record.",
-              error,
-            );
+        return createAppError(
+          "EXTERNAL_ID_CONFLICT",
+          key
+            ? `${key[1]} ${key[2]} ${key[3]} already belongs to another record.`
+            : "That identifier already belongs to another record.",
+          error,
+        );
       }
       const cols = columnsFromDetail(pg.detail);
       const a = article(entity);

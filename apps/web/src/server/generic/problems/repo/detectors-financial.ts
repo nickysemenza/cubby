@@ -59,24 +59,10 @@ export async function findInvalidFinancialJson(
 export async function findDuplicateFinancialTransactionSourceRefs(
   db: Database,
 ): Promise<ProblemItem<"duplicateFinancialTransactionSourceRefs">[]> {
-  const result = await getDb(db).execute<{
-    source: string;
-    externalId: string;
-    transactionIds: string[];
-  }>(sql`
-    SELECT fx."source" AS source, fx."externalId" AS "externalId", array_agg(ft.shortcode) AS "transactionIds"
-    FROM "EntityExternalId" fx
-    JOIN "FinancialTransaction" ft ON ft."id" = fx."entityId" AND ${notDeleted("ft")}
-    WHERE fx."kind" = 'settlement_ref' AND ${notDeleted("fx")}
-    GROUP BY fx."source", fx."externalId"
-    HAVING count(*) > 1
-  `);
-  return result.rows.map((row) => ({
-    ...row,
-    transactionIds: row.transactionIds.map((id) =>
-      parseShortcodeFor("financialTransaction", id),
-    ),
-  }));
+  // Occurrence identity is unique and its single accepted FK cannot have competing owners.
+  // Retained ambiguous aliases are evidence holds, not actionable duplicate-owner Problems.
+  void db;
+  return [];
 }
 
 /**

@@ -29,6 +29,7 @@ export const localRelationshipEntities = [
   "email",
   "imageJob",
   "sourceTransactionRecord",
+  "sourceOccurrence",
   "transactionImport",
   "shipment",
 ] as const;
@@ -57,6 +58,24 @@ const relationshipQueryDefinitions = [
     "vendorAccountEmails",
   ),
   definition("memberPurchases", "ledgerParty", "purchase", "memberPurchases"),
+  definition(
+    "sourceObservationAccount",
+    "sourceTransactionRecord",
+    "financialAccount",
+    "sourceObservationAccount",
+  ),
+  definition(
+    "sourceObservationWithdrawal",
+    "sourceTransactionRecord",
+    "transactionImport",
+    "sourceObservationWithdrawal",
+  ),
+  definition(
+    "sourceObservationSuccessor",
+    "sourceTransactionRecord",
+    "sourceTransactionRecord",
+    "sourceObservationSuccessor",
+  ),
   definition(
     "transactionSourceRecords",
     "financialTransaction",

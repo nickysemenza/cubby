@@ -66,7 +66,8 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     purchaseId:
       "settlement link lives on FinancialTransactionAllocation, not the row",
     allocations: "writes FinancialTransactionAllocation rows",
-    sourceRefs: "writes settlement_ref EntityExternalId rows",
+    sourceRefs:
+      "assigns SourceOccurrence acceptance or appends evidence aliases",
   },
   ledgerTransfer: {
     sourceClaims: "writes LedgerSourceClaim provenance rows",

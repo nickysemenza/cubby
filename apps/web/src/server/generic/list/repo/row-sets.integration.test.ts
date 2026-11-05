@@ -275,11 +275,11 @@ describe("row-set filters", () => {
     const fixture = new Set<string>([split, paired, unrefd]);
     const inFixture = (ids: string[]) => ids.filter((id) => fixture.has(id));
     const retired = (sources?: string[], externalIds?: string[]) => sql`EXISTS (
-      SELECT 1 FROM "EntityExternalId" fx
-      WHERE fx."entityId" = "FinancialTransaction"."id"
-        AND fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
+      SELECT 1 FROM "FinancialEvidenceAlias" fx
+      WHERE fx."historicalTransactionId" = "FinancialTransaction"."id"
+        AND fx."deletedAt" IS NULL
         AND ${sources ? matchesValues(sql`fx."source"`, sources) : sql`true`}
-        AND ${externalIds ? matchesValues(sql`fx."externalId"`, externalIds) : sql`true`})`;
+        AND ${externalIds ? matchesValues(sql`fx."value"`, externalIds) : sql`true`})`;
     const cases: [ListFilterValues, SQL][] = [
       [{ source: ["rowset-bank"] }, retired(["rowset-bank"])],
       [{ externalId: ["RS-2"] }, retired(undefined, ["RS-2"])],

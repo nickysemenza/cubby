@@ -78,6 +78,8 @@ type Policy = Readonly<Record<string, OperationDisposition>>;
 type Tx = DrizzleTransaction;
 
 export interface DeleteHooks<E extends RemovableEntity> {
+  /** Domain command/identity reservations before the generic root row locks. */
+  beforeLock?: (tx: Tx, ids: EntityId<E>[]) => Promise<void>;
   /** Grow the removal set before any disposition runs (e.g. subtasks). */
   expand?: (tx: Tx, ids: EntityId<E>[]) => Promise<EntityId<E>[]>;
   /** Entity-specific guards or effects after locking, before any edge. */
@@ -377,6 +379,7 @@ export const deleteByPolicy = async <E extends RemovableEntity>(
         detachedImageKeys: [],
         deletedImageShortcodes: [],
       };
+    await args.beforeLock?.(tx, requested);
     const own: ShortcodeTable = SHORTCODE_TABLE[entity];
     const locked = await tx
       .select({ id: own.id })

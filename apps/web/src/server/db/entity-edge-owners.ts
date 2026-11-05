@@ -46,6 +46,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
   transactionImportRecord,
+  sourceObservationAnnotation,
 } from "./schema";
 
 // `edges()` holds each key to its column's literal `Table.column` name, so the
@@ -113,6 +114,12 @@ export const ENTITY_EDGE_OWNERS = {
     },
   },
   TransactionImportRecord: { owner: transactionImportRecord.importId },
+  SourceObservationAnnotation: {
+    owner: sourceObservationAnnotation.observationId,
+  },
+  FinancialEvidenceAlias: {
+    excluded: "Retained financial provenance, never current ownership.",
+  },
   // A run's target list is how a run relates to what it imported.
   PhotoRunImage: { owner: photoRunImage.runId },
   RunStep: { owner: runStep.runId },

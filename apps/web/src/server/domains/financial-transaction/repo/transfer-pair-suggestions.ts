@@ -21,6 +21,7 @@ import {
   type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
+import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import {
   transferPairJudgment,
   type StatementTransferPairRef,
@@ -47,6 +48,11 @@ import {
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { suggestionTable } from "~/server/db/schema";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
+import {
+  lockFinancialTransactionSources,
+  financialSourceRefsFor,
+} from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   prepareFinancialStatementPreview,
   previewFinancialTransactionImport,
@@ -54,6 +60,11 @@ import {
 import { createFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
 import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo";
+import {
+  sourceOccurrenceSuppressed,
+  sourceObservations,
+  sourceObservationFrom,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
   CHARGE_STATE,
@@ -77,7 +88,6 @@ import {
   suggestionLabelBacklog,
   type SuggestionLabelCursor,
 } from "~/server/generic/assessment/repo/suggestion-publication";
-import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import {
@@ -85,6 +95,8 @@ import {
   isWorkflowInterrupted,
 } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
+
+import { lockFinancialEvidenceKeys } from "./financial-evidence";
 
 /** Rule revision stamped on every published pair; bump with any policy change. */
 const TRANSFER_PAIR_REVISION = "2026-10-29.1";
@@ -342,7 +354,7 @@ async function loadTransactionLegs(
     const amount = Number(row.amount);
     return account && amount !== 0 ? [{ row, account, amount }] : [];
   });
-  const refs = await settlementRefsFor(
+  const refs = await financialSourceRefsFor(
     db,
     live.map(({ row }) => String(row.id)),
   );
@@ -374,6 +386,8 @@ async function loadTransactionLegs(
 }
 
 const observationRow = z.object({
+  occurrenceId: z.string().nullable(),
+  reviewState: z.string().nullable(),
   id: z.string(),
   source: z.string(),
   externalId: z.string(),
@@ -460,14 +474,14 @@ async function loadStatementLegs(
   // A scope selects whole charges; their state still reads every observation.
   const state = conditions.length
     ? chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (
-        SELECT seen.source, ${chargeKeyOf("seen")} FROM "SourceTransactionRecord" seen
+        SELECT seen.source, ${chargeKeyOf("seen")} FROM ${sourceObservations} seen
         WHERE ${notDeleted("seen")} AND ${sql.join(conditions, sql` AND `)}
       )`)
     : CHARGE_STATE;
   const { rows } = await unwrapDb(db).execute<
     z.input<typeof observationRow>
   >(sql`
-    SELECT r.id::text AS id, r.source, r."externalId", ${chargeKeyOf("r")} AS "chargeKey",
+    SELECT r."occurrenceId", r."reviewState", r.id::text AS id, r.source, r."externalId", ${chargeKeyOf("r")} AS "chargeKey",
       r."legacyReference", r.current, r."withdrawnAt"::text AS "withdrawnAt",
       r."rowPosition", r."providerTransactionId", r."providerAccountId", r."accountDescriptor",
       r."statementDate"::text AS "statementDate", r."providerAmount", r.merchant,
@@ -475,10 +489,11 @@ async function loadStatementLegs(
       r."accountId"::text AS "accountId", si.fingerprint AS "importFingerprint",
       ARRAY(SELECT m."importId"::text FROM ${transactionImportMembers} m WHERE m."statementRowId" = r.id) AS "importIds"
     FROM ${state} cs
-    JOIN "SourceTransactionRecord" r ON r.source = cs.source AND ${chargeKeyOf("r")} = cs."chargeKey"
+    JOIN ${sourceObservations} r ON r.source = cs.source AND ${chargeKeyOf("r")} = cs."chargeKey"
       AND ${notDeleted("r")}
     JOIN "TransactionImport" si ON si.id = r."batchId"
-    WHERE NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NULL
+    WHERE NOT ${sourceOccurrenceSuppressed(sql`cs."occurrenceId"`)} AND NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NULL
+      AND cs."acceptedTransactionId" IS NULL AND cs."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
     ORDER BY r."createdAt" DESC, r.id
   `);
   const byCharge = new Map<string, ObservationRow[]>();
@@ -553,23 +568,8 @@ async function loadStatementLegs(
         recordedKind: null,
         providerCategory: canonical.sourceCategory,
         ...entry.signals,
-        // Explicit retained aliases are settlement references; a provider charge
-        // key groups observations but never becomes a fabricated source ref.
-        refs: uniqBy(
-          [
-            ...observations.map((obs) => ({
-              source: obs.source,
-              externalId: obs.externalId,
-            })),
-            ...observations.flatMap((obs) =>
-              obs.legacyReference
-                ? [{ source: obs.source, externalId: obs.legacyReference }]
-                : [],
-            ),
-          ],
-          (ref) => `${ref.source}\0${ref.externalId}`,
-        ).sort((a, b) => a.externalId.localeCompare(b.externalId)),
-        // Identity and amount-correction candidates also block a duplicate create.
+        // One proven occurrence handle addresses acceptance; aliases stay retained evidence.
+        refs: [{ source: canonical.source, externalId: canonical.chargeKey }],
         transactionOverlaps: row.existingTransactions.map((existing) => ({
           transactionId: existing.id,
           charge: null,
@@ -992,7 +992,7 @@ async function potentialTransferSeeds(db: Database, keys: readonly string[]) {
       ? [
           sql`SELECT 'stmt:' || r.source || ':' || r."chargeKey" AS key,
           -r."providerAmount" AS amount, NULL::text AS "recordedKind", r."sourceCategory"
-        FROM "SourceTransactionRecord" r
+        FROM ${sourceObservations} r
         WHERE r.current AND ${notDeleted("r")}
           AND (r.source, r."chargeKey") IN (${sql.join(
             charges.map(
@@ -2084,7 +2084,7 @@ async function currentStatementStatus(db: Database, leg: TransferPairLeg) {
       "A new transfer leg requires retained source identity.",
     );
   const { rows } = await unwrapDb(db).execute<{ providerStatus: unknown }>(sql`
-    SELECT "providerStatus" FROM "SourceTransactionRecord" WHERE source=${leg.charge.source}
+    SELECT "providerStatus" FROM ${sourceObservationFrom} WHERE source=${leg.charge.source}
       AND "chargeKey"=${leg.charge.chargeKey} AND current AND "withdrawnAt" IS NULL AND ${notDeleted("SourceTransactionRecord")}
   `);
   if (rows.length !== 1)
@@ -2119,6 +2119,20 @@ export async function applyTransferPair(
     // Leg locks serialize every apply naming a leg, so a racing or replayed
     // accept rereads after the winner commits and finds the leg taken.
     await lockTransferPairLegs(txDb, input.key);
+    const initial = await buildTransferPair(txDb, input.key);
+    if (initial) {
+      const legs = [initial.judgment.outflow, initial.judgment.inflow];
+      await lockFinancialEvidenceKeys(
+        tx,
+        "source",
+        legs.flatMap((leg) => (leg.charge ? [leg.charge.source] : [])),
+      );
+      await lockFinancialTransactionSources(
+        tx,
+        legs.flatMap((leg) => (leg.transactionId ? [leg.transactionId] : [])),
+        legs.flatMap((leg) => leg.refs),
+      );
+    }
     const current = await buildTransferPair(txDb, input.key);
     if (!current)
       throw refused(

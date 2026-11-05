@@ -445,7 +445,6 @@ export const EXTERNAL_ID_KINDS = {
   catalog_number: { entities: ["product"], primarySlot: true },
   manufacturer_part: { entities: ["product"], primarySlot: true },
   gtin_14: { entities: ["product"], primarySlot: true },
-  settlement_ref: { entities: ["financialTransaction"], primarySlot: false },
   page: {
     entities: ["expense", "task", "project", "recipe"],
     primarySlot: true,

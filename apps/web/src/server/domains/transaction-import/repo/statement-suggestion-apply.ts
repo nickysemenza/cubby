@@ -19,6 +19,10 @@ import { runAfterCommit, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
+  lockFinancialTransactionSources,
+  financialSourceRefsIncluding,
+} from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import {
   previewFinancialSpending,
   commitFinancialSpending,
 } from "~/server/domains/financial-transaction/repo/financial-spending";
@@ -38,8 +42,8 @@ import {
   type SuggestionStateRow,
   transitionAssessmentState,
 } from "~/server/generic/assessment/repo/assessment-state";
-import { settlementRefsIncluding } from "~/server/generic/entity-links/repo/entity-external-ids";
 
+import { sourceObservationFrom } from "./source-observation-state";
 import {
   currentStatementApplication,
   loadStatementApplication,
@@ -85,16 +89,30 @@ export async function applyStatementTransactionSuggestion(
     await lockTransferPairLegs(db, published.transferPair.key);
   }
   await withTransaction(db, async (tx) => {
-    // Evidence keys before the transaction writers below take their rows. The
-    // keys name unmatched charges, which no other transaction's refs hold.
-    await lockFinancialEvidenceKeys(
-      tx,
-      "transaction-ref",
-      stored.refs.map((ref) => {
-        const split = ref.indexOf(":");
-        return `${ref.slice(0, split)}\0${ref.slice(split + 1)}`;
-      }),
-    );
+    // Source account judgments run later under this same reservation, before occurrence row locks.
+    const pairCreate =
+      published.transferPair &&
+      application.action === "create" &&
+      published.create &&
+      isMoneyMoveKind(published.create.kind);
+    if (!pairCreate) {
+      await lockFinancialEvidenceKeys(
+        tx,
+        "source",
+        stored.refs.map((ref) => ref.slice(0, ref.indexOf(":"))),
+      );
+      await lockFinancialTransactionSources(
+        tx,
+        published.candidates.map((candidate) => candidate.transactionId),
+        stored.refs.map((ref) => {
+          const split = ref.indexOf(":");
+          return {
+            source: ref.slice(0, split),
+            externalId: ref.slice(split + 1),
+          };
+        }),
+      );
+    }
     await transitionAssessmentState(tx, state.id, { status: "applied" });
   });
 
@@ -269,7 +287,11 @@ async function applyAttach(
 ) {
   const create = judgment.create!;
   const data: FinancialTransactionUpdateData = {
-    sourceRefs: await settlementRefsIncluding(db, targetId, create.sourceRef),
+    sourceRefs: await financialSourceRefsIncluding(
+      db,
+      targetId,
+      create.sourceRef,
+    ),
     ...statementTransactionPatch(judgment, application),
   };
   await effects.claimRows();
@@ -296,7 +318,7 @@ async function applySupersede(
     source: string;
     externalId: string;
   }>(sql`
-    SELECT source, "externalId" FROM "SourceTransactionRecord"
+    SELECT source, "externalId" FROM ${sourceObservationFrom}
     WHERE id IN (${sql.join(
       supersede.pendingRowIds.map((id) => sql`${id}::uuid`),
       sql`, `,
@@ -323,7 +345,7 @@ async function applySupersede(
     db,
     codeOf(transactionId),
     {
-      sourceRefs: await settlementRefsIncluding(
+      sourceRefs: await financialSourceRefsIncluding(
         db,
         transactionId,
         create.sourceRef,

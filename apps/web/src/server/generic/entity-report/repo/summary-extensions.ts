@@ -17,6 +17,7 @@ import { householdContributionLedger } from "~/server/domains/household-contribu
 import { inventoryScaffold } from "~/server/domains/inventory/repo/crud";
 import { financialTransactionBookingSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { sourceTransactionRecordScaffold } from "~/server/domains/transaction-import/repo/entity-repositories";
+import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   CHARGE_STATE,
   chargeKeyOf,
@@ -255,7 +256,7 @@ export async function importReconciliationSummary(
       WHERE ${notDeleted("ft")} AND ft.shortcode IN (
         SELECT cs.shortcode
         FROM "TransactionImportRecord" member
-        JOIN "SourceTransactionRecord" r ON r.id = member."statementRowId" AND ${notDeleted("r")}
+        JOIN ${sourceObservations} r ON r.id = member."statementRowId" AND ${notDeleted("r")}
         JOIN ${CHARGE_STATE} cs ON cs.source = r.source AND cs."chargeKey" = ${chargeKeyOf("r")}
         WHERE member."importId" = ${storedImportId}::uuid
           AND NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NOT NULL

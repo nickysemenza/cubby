@@ -14,6 +14,7 @@ import { sql, type SQL } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   pendingSuggestion,
   suggestionField,
@@ -73,7 +74,7 @@ const conditions = (filters: StatementSuggestionScope): SQL => {
 const FROM = sql`FROM "Suggestion" s
   JOIN "FinancialAccount" fa ON fa.id = (${suggestionField("accountId")})::uuid AND ${notDeleted("fa")}
   LEFT JOIN "LedgerParty" account_owner ON account_owner.id = fa."ledgerPartyId"
-  JOIN "SourceTransactionRecord" r ON r.id = s."recordId"`;
+  JOIN ${sourceObservations} r ON r.id = s."recordId"`;
 
 // List keys use the same first surviving candidate as hydration.
 const FIRST_CANDIDATE = sql`LEFT JOIN LATERAL (
@@ -144,7 +145,7 @@ export function statementSuggestionFacts(
             ]
           : []),
         ...(has("merchant", "providerCategory")
-          ? [sql`JOIN "SourceTransactionRecord" r ON r.id = s."recordId"`]
+          ? [sql`JOIN ${sourceObservations} r ON r.id = s."recordId"`]
           : []),
         ...(firstCandidate ? [FIRST_CANDIDATE] : []),
       ],
@@ -258,12 +259,12 @@ export async function readStatementSuggestions(
       UNION
       SELECT matched.id, observed.source, ${chargeKeyOf("observed")} AS "chargeKey"
       FROM matched JOIN ${LIVE_REFS} refs ON refs.shortcode = matched.shortcode
-      JOIN "SourceTransactionRecord" observed ON observed.source = refs.source
-        AND (observed."externalId" = refs."externalId" OR observed."legacyReference" = refs."externalId")
+      JOIN ${sourceObservations} observed ON observed.source = refs.source
+        AND observed."chargeKey" = refs."externalId"
         AND ${notDeleted("observed")}
     )
     SELECT DISTINCT members.id, r.source, r."sourceCategory"
-    FROM members JOIN "SourceTransactionRecord" r
+    FROM members JOIN ${sourceObservations} r
       ON r.source = members.source AND ${chargeKeyOf("r")} = members."chargeKey"
     WHERE ${notDeleted("r")}
     ORDER BY members.id, r.source, r."sourceCategory" NULLS FIRST

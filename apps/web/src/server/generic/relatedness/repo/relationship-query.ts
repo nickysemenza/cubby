@@ -11,6 +11,7 @@ import {
   emailPurchaseAssociationsSql,
 } from "~/server/domains/email/repo/email-sql";
 import { purchasePurchaserSetSql } from "~/server/domains/purchase/repo/purchase-purchaser";
+import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 
 const livePurchases = new QueryBuilder()
   .select({ id: purchaseTable.id, vendorId: purchaseTable.vendorId })
@@ -55,6 +56,18 @@ export function relationshipQueryCondition(
       return sql`EXISTS (SELECT 1 FROM (${purchasePurchaserSetSql}) purchaser WHERE purchaser.id = ${t("id")} AND purchaser.value = ${s("shortcode")})`;
     case "transactionSourceRecords":
       return sql`EXISTS (SELECT 1 FROM (${sourceTransactionSettlements}) accepted WHERE accepted."transaction" = ${s("id")} AND accepted."record" = ${t("id")})`;
+    case "sourceObservationAccount":
+    case "sourceObservationWithdrawal":
+    case "sourceObservationSuccessor": {
+      const field =
+        query.kind === "sourceObservationAccount"
+          ? "accountId"
+          : query.kind === "sourceObservationWithdrawal"
+            ? "withdrawalImportId"
+            : "supersededByRowId";
+      return sql`EXISTS (SELECT 1 FROM ${sourceObservations} observation
+        WHERE observation.id = ${s("id")} AND observation.${sql.identifier(field)} = ${t("id")})`;
+    }
     case "reviewedEmailTransactions":
       return sql`EXISTS (SELECT 1 FROM "EmailFinancialAssociation" evidence WHERE evidence."emailId" = ${s("id")} AND evidence."transactionId" = ${t("id")})`;
     case "reviewedEmailAccounts":

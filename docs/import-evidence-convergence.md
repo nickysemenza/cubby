@@ -599,27 +599,42 @@ or preservation guarantees leave the duplicate unresolved.
 
 [Terminology](guide/terminology.md#naming-policy) owns the names; the
 [README overview](../README.md#financial-evidence) owns the entity map.
-Both entities use generated list and detail routes in the Financial evidence
-area: `/source-transaction-records` and `/transaction-imports`.
+Source transaction records and Transaction imports retain their generated list
+and detail routes. `SourceOccurrence` is the internal, read-only owner of proven
+source identity, current judgment/account, selected observation, withdrawal and
+one nullable `acceptedTransactionId` FK. Multiple independent occurrences may
+support one FinancialTransaction; one occurrence has at most one accepted owner.
 
-Source transaction records enter through `finance.record`.
-New observations require an attested provider transaction ID in its account
-scope or a stable physical collection position. Equal dates, descriptions and
-amounts never establish occurrence identity. Unpositioned requests can only
-replay a uniquely retained historical collection member; they cannot add new
-observations. Existing historical identities, decisions and settlement references
-remain unchanged. Supply positions for every occurrence in new ID-less exports,
-including identical transactions across chunks.
-Generic create and merge are unavailable. Provider facts, identity, revisions,
-collection membership and source coverage remain intake-owned and immutable
-through generic commands. Generic updates edit only declared household judgment
-fields: account resolution, disposition and its explanation, supersession and
-notes. A successor is an explicit reviewed record relationship, not a match
-inferred from similar descriptions or amounts. These commands use the shared
-audit path. Import membership audits record the newly received record IDs for each chunk; public audit reads resolve the declared record relationship to shortcodes,
-without copying the collection’s growing membership into every audit entry.
-Prefer an explained ignore judgment when evidence should remain
-retained but leave reconciliation worklists.
+`finance.record` retains immutable normalized observations. Monarch provider
+identity requires matching string IDs in retained raw provider/account evidence;
+all present identity fields must agree. Otherwise an original collection fingerprint
+and positive physical position establish only collection-local identity. Neither
+account descriptors, resolved Cubby accounts, equal facts nor legacy aliases fill
+missing provider scope. A new unpositioned request without attestation refuses;
+a historical request can replay one uniquely retained collection member without
+creating identity or money. Distinct identical physical positions stay distinct.
+
+Generic create/merge remain unavailable. Existing judgment edits resolve to the
+one occurrence for proven observations. Unproven observations keep their own
+unresolved decisions; observation notes always stay local. Preserved historical
+annotations retain every original decision without copying it into new revisions.
+A reviewed replacement names its exact retained observation, with an occurrence
+FK when proven. It never copies accepted ownership. No alias-to-transaction
+resolver or charge-key aggregation controls current state.
+
+The public number shape is unchanged: source amounts store exact signed bigint
+minor units, with checked dollar-number reads for shipped clients. `chargeKey`
+is an opaque occurrence handle (`SOC-`) for proven records; a retained record's
+`STR-` handle is diagnostic when proof is absent. Original v1/v2/v3 references
+remain evidence aliases. Fresh source acceptance uses an SOC handle and rechecks
+its ready state, head, live target, exact amount and account. Old successful
+operation receipts replay before fresh guards; uncommitted legacy-reference
+applications require a new preview.
+
+Unproven identity blocks automatic acceptance/correction, with money unchanged.
+It creates no new member task for missing source proof. Original evidence and
+existing actionable member review remain retained. Prior member suppressions
+remain negative fences through retained alias provenance; they never prove identity.
 
 Transaction imports are read-only outside intake. Neither generic create,
 update, merge nor delete changes their metadata or membership. Intake owns
@@ -725,83 +740,38 @@ connection. Any recurring execution uses that same skill on an explicitly
 authorized host with verified credentials, after historical reconciliation;
 the skill itself installs no scheduler.
 
-Keep every source observation and original description. Provider identity is
-scoped to its source and account; immutable revisions retain one explicit
-charge key. A revision changes a fact (account, dates, amount, merchant,
-description, category, status or notes). `providerData` is an annotation: a
-re-observation with unchanged facts reuses the current head and its first
-annotation, so it is unchanged and reopens nothing. Provider status is optional metadata. ID-less file occurrences
-retain physical positions, including distinct identical rows and zero-value
-records. Separate ID-less observations remain independent across collections;
-content equality alone cannot establish that they are one charge. Zero evidence cannot create spending. Historical reference strings
-remain accepted links, with one explicit charge owning a legacy alias; the
-alias alone never spreads an ignore or settlement to coexisting charges.
-Cross-provider equality proposes reconciliation rather than establishing identity.
+Keep every observation and original description. Reobserving equal normalized
+facts under a proven identity can reuse their observation and first providerData
+annotation while adding collection membership. Each new membership freezes a
+request fingerprint, so exact replay cannot rewrite that collection's input.
+Historical unknown positions/fingerprints stay null; never infer ordinals across
+imports. Fact/request hashes establish equality only, never event identity.
 
-Same-source sibling review folds Unicode compatibility differences in account
-descriptors. Shared collection membership alone does not establish independent
-occurrences: historical membership may contain unpositioned surplus rows. The
-sibling exception requires attested provider identities (with the separate
-provider-scope guard still enforced), or distinct physical positions belonging
-to both observations' original shared collection. Genuine positioned purchases
-remain independent; unresolved overlaps remain review work without changing
-observations, member dispositions or financial records.
+A changed normalized fact appends an observation. Arrival time, current flags,
+lexical codes and collection timestamps cannot prove provider revision order.
+Unknown ordering leaves the occurrence without a selected head and blocks
+automatic actions. Explicit reviewed version selection can resolve that hold;
+it does not move accepted money. Older collection replay never advances a head.
+Zero observations remain evidence and cannot create spending.
 
-A Transaction suggestion cannot create or attach financial evidence for an
-observation without a provider ID or an original physical row position while it
-has no accepted FinancialTransaction identity. This hold applies even when no
-sibling can be detected; hashes and membership do not establish a separate
-occurrence. Transfer discovery and application enforce it for every source leg
-they can create, including an opposite leg reached from a supported observation.
-Generation, fresh preview and
-transactional application retain the hold, including for previously clean
-advice. Resolve the original occurrence through supported evidence or reviewed
-source lineage. Existing accepted transaction identities and member decisions
-remain intact, including otherwise supported booking of those transactions.
+Cross-collection positioned overlap stays independent and held when retained
+legacy evidence makes its economic identity uncertain. Scoped provider identities
+in distinct accounts stay separate. Aliases may widen candidates or block unsafe
+automatic work; they never establish accepted ownership. Complete retained
+bindings, including tombstones, must support any ownership promotion.
 
-Replaying a retained collection with newly supplied provider IDs cannot silently
-replace its ID-less charge identities. Intake refuses a provider identity that
-overlaps an ID-less member at the same physical position, or an unpositioned
-member's frozen reference. Exact existing provider observations can replay through
-the usual immutable-evidence checks, preserving frozen provider-bearing `v2`
-identities and charge keys within their original collection. A deleted or
-ambiguous retained provider member remains held; changed evidence requires a
-new collection rather than rewriting the retained observation.
-Resolve a new source identity explicitly before replay;
-this guard neither rewrites historical observations nor assigns identifiers from
-content equality. Distinct positioned occurrences remain independent, including
-identical rows delivered in later chunks.
+Acceptance and ordinary financial edits reserve command keys, then lock sorted
+occurrences before settlement-party, Purchase, FinancialTransaction and Expense
+rows. The source owner and money effects commit together. Graph expansion or
+stale review refuses/retries the DB-only snapshot; model calls stay outside.
+Existing successful receipts precede these fresh checks. A deleted accepted
+transaction keeps its source reservation and cannot be recreated by replay.
 
-When checking independent evidence for an amount correction or confirmed
-withdrawal, a superseded charge no longer corroborates the older booking.
-Unresolved references and genuinely independent current charges still require
-review; supersession does not grant authority to change money by itself.
-
-Retained provider identities that span multiple compatible charge keys remain
-review-required in statement discovery, fresh preview and financial application.
-The guard uses provider/source scope, complete known account-ID history and
-explicit live account aliases; it checks legacy null account scopes as well as
-known scopes. Distinct known provider account IDs and genuinely positioned
-ID-less occurrences stay independent. Equal amounts or merchant text grant no
-identity authority. Supersession, ignore, withdrawal and deleted observations do
-not prove event equivalence or release the successor's unresolved identity.
-Discovery and refusal preserve observations, keys, memberships, references and
-member judgments; identity resolution remains separate review work.
-
-The bounded charge page loads provider history and account facts before spending
-preparation. Its evidence fingerprint includes relevant retained scope and
-mutable alias facts, and publication rechecks those facts after model work.
-Application rebuilds them inside the existing snapshot write, including for old
-clean Assessments. A collision or scope change after preview refuses application
-without money or an application receipt while preserving the durable member
-command. Exact successful canonical receipt replay precedes the live guard and
-remains inert. Model labels and paid advice cannot release this evidence hold. A
-statement action that applies a transfer pair binds both source legs' provider
-identity facts to its preview/publication fingerprint. A collision on the
-opposite leg, including compatible deleted history excluded from transfer
-discovery, holds either statement proposal. Publication and application batch
-that complete source set again, and the transfer writer independently refuses
-unresolved source-leg identity inside its transaction before creating either leg.
+Corrections read the explicit accepted FK and independently corroborating
+occurrences. Unresolved historical bindings remain negative blockers. There is
+no observation → alias owner → transaction account → copied source judgment
+loop. Member suppression is read from its existing Suggestion owner, without
+copying another current decision ledger into the occurrence.
 
 A collection owns its immutable observation time, declared count and optional
 account/date/visibility scope. Chunks resume that collection. Membership is
@@ -831,9 +801,8 @@ archives. Recording retries read only the immutable collection header, so a larg
 historical archive does not repeat on every bounded chunk.
 
 Source-confirmed withdrawals require a completed all-visibility account/window
-and an explicit recheck. The retained current head records its withdrawal and
-proof collection. Old observations cannot reactivate it; only newer positive
-evidence can. A later-dated export alone never proves disappearance.
+and an explicit recheck. The occurrence records withdrawal and its proof collection.
+Old observations cannot reactivate it; reappearance remains held. A later-dated export alone never proves disappearance.
 
 Cubby reconciles accepted revisions in one snapshot transaction. An automatic
 amount correction or withdrawal requires the original automatic-decision and

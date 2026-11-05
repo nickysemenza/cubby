@@ -15,9 +15,9 @@ import {
   purchase,
   vendor,
 } from "~/server/db/schema";
+import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { solePurchaseForTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
 import { buildFinancialTransactionEmbeddingText } from "~/server/generic/embedding/repo/semantic/text";
-import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import type {
   EmbeddingLoadOptions,
   SearchableEntityText,
@@ -77,7 +77,7 @@ async function loadEmbeddingText(
     );
   const rows =
     options.limit == null ? await query : await query.limit(options.limit);
-  const sourceRefs = await settlementRefsFor(
+  const sourceRefs = await financialSourceRefsFor(
     db,
     rows.map((row) => row.id),
   );

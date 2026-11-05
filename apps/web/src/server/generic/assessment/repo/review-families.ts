@@ -10,7 +10,6 @@ import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-famil
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { entityExternalIdKind } from "@cubby/schemas/external-id";
 import { financialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import {
@@ -38,6 +37,7 @@ import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { outer, type RelatedColumns } from "~/server/db/helpers/related";
 import { suggestionTable, run } from "~/server/db/schema";
+import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import {
@@ -154,17 +154,17 @@ const leg = (end: "outflow" | "inflow") => sql`jsonb_build_array(
   ${ref(sql`${entities.financialTransaction}`, sql`s.judgment->${end}->>'transactionId'`)},
   ${ref(sql`${entities.ledgerParty}`, sql`s.judgment->${end}->'owner'->>'id'`)})`;
 
-const statementSettlementRelation = sql`"EntityExternalId" evidence
-  JOIN "FinancialTransaction" settled ON settled.id=evidence."entityId" AND ${notDeleted("settled")}
+const statementSettlementRelation = sql`"SourceOccurrence" evidence
+  JOIN "FinancialTransaction" settled ON settled.id=evidence."acceptedTransactionId" AND ${notDeleted("settled")}
   JOIN "FinancialAccount" account ON account.id=settled."accountId"
   LEFT JOIN "FinancialTransactionAllocation" allocation ON allocation."transactionId"=settled.id AND ${notDeleted("allocation")}
   LEFT JOIN "Purchase" booked ON booked.id=allocation."purchaseId" AND ${notDeleted("booked")}
   LEFT JOIN "Expense" line ON line."purchaseId"=booked.id AND ${notDeleted("line")}`;
 const statementSettlementFrom = sql`FROM ${statementSettlementRelation}`;
-const statementSettlementEligibility = sql`evidence.kind=${entityExternalIdKind.enum.settlement_ref} AND ${notDeleted("evidence")}`;
+const statementSettlementEligibility = sql`${notDeleted("evidence")}`;
 const statementSettlementScope = sql`${statementSettlementEligibility}
   AND evidence.source=s.judgment #>> '{create,sourceRef,source}'
-  AND evidence."externalId"=s.judgment #>> '{create,sourceRef,externalId}'`;
+  AND evidence.shortcode=s.judgment #>> '{create,sourceRef,externalId}'`;
 const statementSettlementRefs = [
   { entity: entities.financialTransaction, id: sql<string>`settled.id` },
   { entity: entities.purchase, id: sql<string>`booked.id` },
@@ -189,10 +189,10 @@ function statementRecordParts(
     AND ${chargeKeyOf("observed")} = s.data->>'chargeKey' AND ${notDeleted("observed")}`;
   if (includes(entities.sourceTransactionRecord))
     parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.sourceTransactionRecord}`, sql`observed.id::text`)})
-      FROM "SourceTransactionRecord" observed WHERE ${sourceScope}), '[]'::jsonb)`);
+      FROM ${sourceObservations} observed WHERE ${sourceScope}), '[]'::jsonb)`);
   if (includes(entities.transactionImport))
     parts.push(sql`COALESCE((SELECT jsonb_agg(DISTINCT ${ref(sql`${entities.transactionImport}`, sql`member."importId"::text`)})
-      FROM "SourceTransactionRecord" observed
+      FROM ${sourceObservations} observed
       JOIN ${transactionImportMembers} member ON member."statementRowId" = observed.id
       WHERE ${sourceScope}), '[]'::jsonb)`);
   add(entities.financialAccount, sql`s.data->>'accountId'`);
@@ -702,7 +702,7 @@ function settlementAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   const keys = reviewQueryBuilder
     .selectDistinct({
       source: sql<string>`evidence.source`.as("source"),
-      externalId: sql<string>`evidence."externalId"`.as("externalId"),
+      externalId: sql<string>`evidence.shortcode`.as("externalId"),
     })
     .from(statementSettlementRelation)
     .where(and(statementSettlementEligibility, match));

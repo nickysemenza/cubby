@@ -289,7 +289,7 @@ export const postedRefundTotal = (purchaseId: SQL) =>
 /**
  * What makes a settlement row count as *evidence* for the
  * `settlement_reference` data-quality check: posted, of a settlement kind, and
- * carrying either a live `settlement_ref` EntityExternalId or a cash account (cash leaves no
+ * carrying either a retained financial evidence alias or a cash account (cash leaves no
  * statement to reference, so the account itself is the evidence).
  *
  * **Account liveness belongs here**, unlike in `postedRefundPredicate` — the
@@ -309,11 +309,12 @@ export const settlementReferencePredicate = (
      AND ${liveAliasSqlText(accountAlias)}
      AND (
        EXISTS (
-         SELECT 1 FROM "EntityExternalId" settlement_ref
-         WHERE settlement_ref."entityId" = ${ftxAlias}."id"
-           AND settlement_ref."kind" = 'settlement_ref'
+         SELECT 1 FROM "FinancialEvidenceAlias" settlement_ref
+         WHERE settlement_ref."historicalTransactionId" = ${ftxAlias}."id"
            AND ${liveAliasSqlText("settlement_ref")}
        )
+       OR EXISTS (SELECT 1 FROM "SourceOccurrence" source_occurrence
+         WHERE source_occurrence."acceptedTransactionId"=${ftxAlias}."id" AND ${liveAliasSqlText("source_occurrence")})
        OR ${accountAlias}."identity"->>'kind' = 'cash'
      )`;
 

@@ -38,6 +38,7 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   purchase,
+  sourceOccurrence,
 } from "~/server/db/schema";
 import {
   emptySpendingCategorySummary,
@@ -46,6 +47,13 @@ import {
 import { allocationIntegrityDefectSql } from "~/server/domains/financial-transaction/repo/financial-allocation-integrity";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
+import {
+  assertFinancialSourceRefsAvailable,
+  financialSourceRefsFor,
+  financialSourceReferenceRows,
+  replaceFinancialSourceRefs,
+  lockFinancialSourceOccurrences,
+} from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   type AllocationInput,
   applyAllocationChanges,
@@ -66,6 +74,7 @@ import {
   financialTransactionEvidenceFieldResolutionsSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
+import { auditEvidenceRows } from "~/server/domains/transaction-import/repo/intake-audit";
 import { enrichFinancialTransactionVendorRead } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import {
   financialAllocationItems,
@@ -84,11 +93,6 @@ import {
   computeChanges,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
-import {
-  assertSettlementRefsAvailable,
-  replaceSettlementRefs,
-  settlementRefsFor,
-} from "~/server/generic/entity-links/repo/entity-external-ids";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import {
   resolveAllOrThrow,
@@ -118,6 +122,7 @@ export const financialTransactionScaffold = listScaffold(
   financialTransaction,
   {
     rows: {
+      settlementRefs: sql`SELECT owner,source,"externalId" FROM ${financialSourceReferenceRows} reference`,
       runStepInputs: runStepInputListRows("financialTransaction"),
       acceptedSourceRecords: sql`SELECT "transaction" AS "owner", "record" FROM (${sourceTransactionSettlements}) accepted`,
     },
@@ -177,7 +182,7 @@ export const financialTransactionScaffold = listScaffold(
           ),
         });
         const refs = bind.batch(({ db, rows }) =>
-          settlementRefsFor(
+          financialSourceRefsFor(
             db,
             rows.map((row) => row.id),
           ),
@@ -366,20 +371,26 @@ export const createFinancialTransaction = defineMutationWriter({
   ) => {
     const id = await withTransaction(db, async (tx) => {
       const foreign = await resolveForeignKeys(tx, data);
-      await lockFinancialEvidenceKeys(
-        tx,
-        "transaction-ref",
-        data.sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
-      );
-      // The global uniqueness guarantee that lets statement matching join on
-      // (source, externalId) without a DISTINCT; the live unique backstops it.
-      await assertSettlementRefsAvailable(tx, data.sourceRefs);
+      await lockFinancialSourceOccurrences(tx, data.sourceRefs);
+      // One locked occurrence FK owns acceptance; retained aliases never grant it.
+      await assertFinancialSourceRefsAvailable(tx, data.sourceRefs);
       const { allocations, sourceRefs, ...columns } = data;
       const created = await insertWithShortcode(tx, "financialTransaction", {
         ...columns,
         ...foreign,
       });
-      await replaceSettlementRefs(tx, created.id, sourceRefs);
+      const acceptedSourceChanges = await replaceFinancialSourceRefs(
+        tx,
+        created.id,
+        sourceRefs,
+      );
+      await auditEvidenceRows(
+        tx,
+        actor,
+        "sourceOccurrence",
+        acceptedSourceChanges.before,
+        acceptedSourceChanges.after,
+      );
       await logAuditEntry(tx, actor, {
         entityKind: "financialTransaction",
         entityId: created.id,
@@ -646,6 +657,14 @@ export const updateFinancialTransaction = defineMutationWriter({
       (field) => data[field] !== undefined,
     );
     await withTransaction(db, async (tx) => {
+      await lockFinancialEvidenceKeys(tx, "reviewed-booking", [
+        `transaction:${id}`,
+      ]);
+      const sourceOwners = await lockFinancialSourceOccurrences(
+        tx,
+        data.sourceRefs ?? [],
+        id,
+      );
       // Funding-evidence advisory keys precede both entity rows and account keys.
       // Evidence creation uses the same order, so it cannot validate an old row
       // while this mutation commits a new amount/status/account.
@@ -676,6 +695,19 @@ export const updateFinancialTransaction = defineMutationWriter({
           ),
         )
         .for("update");
+      const currentSourceOwners = await tx
+        .select({ id: sourceOccurrence.id })
+        .from(sourceOccurrence)
+        .where(eq(sourceOccurrence.acceptedTransactionId, id));
+      if (
+        currentSourceOwners.some(
+          (owner) => !sourceOwners.some((locked) => locked.id === owner.id),
+        )
+      )
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Source ownership expanded while locking the transaction; retry with current evidence.",
+        );
       const before = await tx.query.financialTransaction.findFirst({
         where: and(
           eq(financialTransaction.id, id),
@@ -718,20 +750,15 @@ export const updateFinancialTransaction = defineMutationWriter({
           : await resolveOrThrow(tx, "financialAccount", data.accountId);
       const inspectSourceRefs = data.sourceRefs !== undefined;
       const beforeSourceRefs = inspectSourceRefs
-        ? ((await settlementRefsFor(tx, [id])).get(id) ?? [])
+        ? ((await financialSourceRefsFor(tx, [id])).get(id) ?? [])
         : [];
       const sourceRefs = data.sourceRefs ?? beforeSourceRefs;
       if (inspectSourceRefs) {
-        await lockFinancialEvidenceKeys(
-          tx,
-          "transaction-ref",
-          sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
-        );
-        await assertSettlementRefsAvailable(tx, sourceRefs, id);
+        await assertFinancialSourceRefsAvailable(tx, sourceRefs, id);
       }
 
       // `purchaseId` is input sugar only — there is no such column any more, so it
-      // never reaches the physical update. `sourceRefs` lives in EntityExternalId.
+      // never reaches the physical update. `sourceRefs` addresses occurrences or retained evidence aliases.
       const {
         purchaseId: _sugarOnly,
         sourceRefs: _references,
@@ -758,11 +785,23 @@ export const updateFinancialTransaction = defineMutationWriter({
             notDeleted(financialTransaction),
           ),
         );
-      if (data.sourceRefs !== undefined)
-        await replaceSettlementRefs(tx, id, data.sourceRefs);
+      if (data.sourceRefs !== undefined) {
+        const acceptedSourceChanges = await replaceFinancialSourceRefs(
+          tx,
+          id,
+          data.sourceRefs,
+        );
+        await auditEvidenceRows(
+          tx,
+          actor,
+          "sourceOccurrence",
+          acceptedSourceChanges.before,
+          acceptedSourceChanges.after,
+        );
+      }
       const beforeState = { ...before, sourceRefs: beforeSourceRefs };
       // Stored references have no order; compare in the canonical order
-      // `settlementRefsFor` reads them in, so a reordered resubmission is no diff.
+      // `financialSourceRefsFor` reads them in, so a reordered resubmission is no diff.
       const canonicalRefs = sortBy(sourceRefs, [
         (ref) => ref.source,
         (ref) => ref.externalId,
@@ -822,11 +861,17 @@ const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
     description:
       "Deleting a settlement transaction soft-deletes the purchase allocations that decompose it. Those Purchases keep their expenses and their identity; they simply lose this piece of settlement evidence.",
   },
-  "EntityExternalId.entityId": {
-    code: "soft-delete-metadata",
-    effect: "soft-delete",
+  "SourceOccurrence.acceptedTransactionId": {
+    code: "preserve-accepted-source-reservation",
+    effect: "preserve",
     description:
-      "The transaction's settlement references are soft-deleted with it, releasing each (source, externalId) so the same statement line can be recorded again.",
+      "Deleting a transaction keeps its source reservation; it cannot recreate money through replay.",
+  },
+  "FinancialEvidenceAlias.historicalTransactionId": {
+    code: "preserve-financial-source-provenance",
+    effect: "preserve",
+    description:
+      "Original source bindings remain explainable after the transaction is deleted.",
   },
 } as const satisfies IncomingEdgePolicy<
   "financialTransaction",
@@ -886,12 +931,9 @@ export async function financialTransactionSourceOptions(
   db: Database,
 ): Promise<FinancialTransactionSourceOptionsOut> {
   const rows = await getDb(db).execute<{ source: string; count: number }>(sql`
-    SELECT fx."source" AS source, count(DISTINCT fx."entityId")::int AS count
-    FROM "EntityExternalId" fx
-    JOIN "FinancialTransaction" ft ON ft."id" = fx."entityId" AND ${notDeleted("ft")}
-    WHERE fx."kind" = 'settlement_ref' AND ${notDeleted("fx")}
-    GROUP BY 1
-    ORDER BY count(DISTINCT fx."entityId") DESC, 1 ASC
+    SELECT evidence.source,count(DISTINCT evidence.owner)::int AS count FROM ${financialSourceReferenceRows} evidence
+    JOIN "FinancialTransaction" ft ON ft.id=evidence.owner AND ${notDeleted("ft")}
+    GROUP BY evidence.source ORDER BY count(DISTINCT evidence.owner) DESC,evidence.source
   `);
   return rows.rows.map((row) => ({
     source: row.source,
@@ -922,6 +964,19 @@ export const financialTransactionRepository = defineRepository(
         ctx.actorContext,
       ),
     deleteHooks: {
+      beforeLock: async (tx, ids) => {
+        await lockFinancialEvidenceKeys(
+          tx,
+          "reviewed-booking",
+          ids.map((id) => `transaction:${id}`),
+        );
+        await tx
+          .select({ id: sourceOccurrence.id })
+          .from(sourceOccurrence)
+          .where(inArray(sourceOccurrence.acceptedTransactionId, ids))
+          .orderBy(sourceOccurrence.id)
+          .for("update");
+      },
       beforeDelete: refuseTransferEvidence,
       afterDelete: touchAllocatedPurchases,
     },

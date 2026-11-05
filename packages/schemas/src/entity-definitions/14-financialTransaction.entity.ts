@@ -892,7 +892,7 @@ export const { definition, readSchemas } = defineEntityModel(
           key: "sourceRefs",
           semanticRole: "externalIdentifier",
           kind: "json",
-          // Stored as `settlement_ref` EntityExternalId rows.
+          // Explicit occurrence handles plus retained evidence aliases; aliases do not resolve acceptance.
           provenance: {
             kind: "relation",
             sources: [{ label: "Settlement references" }],
@@ -1145,8 +1145,7 @@ export const { definition, readSchemas } = defineEntityModel(
         },
         settlementRefs: {
           label: "Settlement references",
-          path: [{ edge: "EntityExternalId.entityId", direction: "incoming" }],
-          where: { kind: "settlement_ref" },
+          repository: { source: "text", externalId: "text" },
         },
       },
       derived: {
@@ -1588,10 +1587,10 @@ export const { definition, readSchemas } = defineEntityModel(
           ],
         },
         {
-          table: "EntityExternalId",
-          match: { entityId: "id" },
-          where: { entityKind: "financialTransaction" },
+          table: "FinancialEvidenceAlias",
+          match: { historicalTransactionId: "id" },
         },
+        { table: "SourceOccurrence", match: { acceptedTransactionId: "id" } },
         { table: "FinancialAccount", match: { id: "accountId" } },
       ],
     },
@@ -1642,6 +1641,11 @@ export const { definition, readSchemas } = defineEntityModel(
       merge: false,
       dataQuality: {
         inputs: [
+          { table: "SourceOccurrence", match: { acceptedTransactionId: "id" } },
+          {
+            table: "FinancialEvidenceAlias",
+            match: { historicalTransactionId: "id" },
+          },
           {
             table: "FinancialTransactionAllocation",
             match: { transactionId: "id" },
@@ -2018,8 +2022,8 @@ export default defineEntity(
   (r) => [
     r
       .derived("sourceTransactionRecord", "many", "transactionId", [
-        "EntityExternalId.settlement_ref",
-        "SourceTransactionRecord.chargeKey",
+        "SourceOccurrence.acceptedTransactionId",
+        "SourceTransactionRecord.occurrenceId",
       ])
       .named("sourceRecords", "Source transaction records", {
         sources: [

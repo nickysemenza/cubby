@@ -687,6 +687,13 @@
       "when": 1793898237153,
       "tag": "0097_ledger_transfer_minor_units",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "when": 1793881502142,
+      "tag": "0089_source_occurrence_ownership",
+      "version": "7",
+      "breakpoints": true
     }
   ]
 }

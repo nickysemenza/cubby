@@ -523,3 +523,39 @@ Stored bigint cents must be converted before constructing receipt JSON. Note-onl
 transfer edits preserve omitted evidence; fresh or changed evidence must reject
 noisy amounts through the financial constraint boundary. Migration completion is not
 historical financial acceptance. No transfer is reclassified as Expense spend.
+
+## Source occurrence ownership (provisional 0089)
+
+`0089_source_occurrence_ownership` follows both minor-unit money migrations.
+The parent assigns its release number. It is a direct cutover, with the same
+RunStep gate: all retained financial refresh steps must be terminal.
+
+Retain `archive.SourceTransactionRecord_occurrence_preimage`,
+`archive.TransactionImportRecord_occurrence_preimage` and
+`archive.EntityExternalId_financial_preimage`. They preserve complete original
+rows, including tombstones and original source judgments. The migration rebuilds
+public facts, annotations, aliases and memberships, reconstructs every removed
+field independently, and refuses any mismatch. Exact source money must pass
+independent IEEE round-trip comparison. Incoming/outgoing FKs and row triggers
+are rebound; archives retain no live FK, trigger or nonessential index.
+
+Only pending machine advice without decisions or suppression is retired when
+its source-key contract is stale. Its complete preimage remains in
+`archive.Suggestion_occurrence_preimage`; judgment, evidence and all other
+fields remain identical. Successful receipts, paid-work checkpoints, member
+suppression and decisions are retained. Suppression remains a negative fence
+through legacy alias provenance, without copying it into source state.
+
+The measured baseline is 22,139 proven identity candidates covering 22,328 of
+56,208 observations; 33,880 observations are unproven. Never turn a sole alias
+owner into accepted identity. The migration promotes acceptance only with a
+ready proven occurrence, direct v2/v3 binding, complete unique retained binding
+closure, live target and exact account/amount agreement. Otherwise money stays
+unchanged and automatic actions remain held without new member tasks.
+
+Before release, independently review identity partitions, current-pointer and
+replacement membership FKs, all lock classes and stale receipts, money and
+relationship conservation, inert archives, and every retired alias/folding caller.
+After deploy, read back counts and full-row preservation aggregates and verify
+representative member reads/writes before historical booking or a Monarch pull.
+Do not run the SQL manually. Native installation remains unverified.

@@ -51,6 +51,7 @@ import {
   runOperation,
   runStep,
   sourceTransactionRecord,
+  sourceOccurrence,
   transactionImport,
   shipmentObservation,
   shipmentSourceCapture,
@@ -628,19 +629,6 @@ const SOURCE_FACTORIES = {
       sourceKey: uniq("synthetic-source"),
       packageKey: "package",
     }),
-  "SourceTransactionRecord.supersededByRowId": async (
-    db: Database,
-    targetId: string,
-  ) => {
-    const { record } = await createFinancialEvidenceFixture(db);
-    await getDb(db)
-      .update(sourceTransactionRecord)
-      .set({
-        supersededByRowId: parseEntityId("sourceTransactionRecord", targetId),
-      })
-      .where(eq(sourceTransactionRecord.id, record.id));
-    return record;
-  },
   "SourceTransactionRecord.batchId": async (db: Database, targetId: string) => {
     const { record } = await createFinancialEvidenceFixture(db);
     await getDb(db)
@@ -648,20 +636,6 @@ const SOURCE_FACTORIES = {
       .set({
         batchId: parseEntityId("transactionImport", targetId),
         rowPosition: null,
-      })
-      .where(eq(sourceTransactionRecord.id, record.id));
-    return record;
-  },
-  "SourceTransactionRecord.withdrawalImportId": async (
-    db: Database,
-    targetId: string,
-  ) => {
-    const { record } = await createFinancialEvidenceFixture(db);
-    await getDb(db)
-      .update(sourceTransactionRecord)
-      .set({
-        withdrawalImportId: parseEntityId("transactionImport", targetId),
-        withdrawnAt: new Date(),
       })
       .where(eq(sourceTransactionRecord.id, record.id));
     return record;
@@ -1258,13 +1232,7 @@ const SOURCE_FACTORIES = {
     const identifier =
       entityKind === "product"
         ? { source: "amazon", kind: "asin" as const, isPrimary: true }
-        : entityKind === "financialTransaction"
-          ? {
-              source: "monarch",
-              kind: "settlement_ref" as const,
-              isPrimary: null,
-            }
-          : { source: "notion", kind: "page" as const, isPrimary: true };
+        : { source: "notion", kind: "page" as const, isPrimary: true };
     await ensureExternalSources(db, [identifier.source]);
     return insertAndReturn(db, entityExternalId, {
       entityId: targetId,
@@ -1629,35 +1597,16 @@ const SOURCE_FACTORIES = {
       amount: 1,
     }),
 
-  "SourceTransactionRecord.accountId": async (db, targetId) => {
-    const retained = await recordSourceTransactionRecords(
-      db,
-      recordSourceTransactionRecordsInput.parse({
-        import: {
-          source: "monarch",
-          label: "liveness-fixture.csv",
-          fingerprint: `fp-${targetId}`,
-        },
-        rows: [
-          {
-            rowPosition: 1,
-            accountDescriptor: "Liveness Fixture Card",
-            statementDate: "2026-01-01",
-            providerAmount: -1,
-            rawDescription: "LIVENESS FIXTURE",
-          },
-        ],
-      }),
-      TEST_ACTOR,
-    );
-    if (!retained.batchId) throw new Error("Synthetic liveness import missing");
-    const [row] = await getDb(db)
-      .update(sourceTransactionRecord)
+  "SourceOccurrence.accountId": async (db, targetId) => {
+    const { record } = await createFinancialEvidenceFixture(db);
+    if (!record.occurrenceId) throw new Error("Synthetic occurrence missing");
+    const [owner] = await getDb(db)
+      .update(sourceOccurrence)
       .set({ accountId: parseEntityId("financialAccount", targetId) })
-      .where(eq(sourceTransactionRecord.batchId, retained.batchId))
+      .where(eq(sourceOccurrence.id, record.occurrenceId))
       .returning();
-    if (!row) throw new Error("Synthetic liveness record missing");
-    return row;
+    if (!owner) throw new Error("Synthetic occurrence missing");
+    return owner;
   },
 
   "FinancialTransactionAllocation.purchaseId": async (db, targetId) => {

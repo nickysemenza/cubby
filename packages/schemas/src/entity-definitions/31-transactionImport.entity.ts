@@ -345,12 +345,7 @@ export default defineEntity(
       ])
       .named("firstRecords", "First recorded here"),
     r
-      .path("sourceTransactionRecord", "many", [
-        {
-          edge: "SourceTransactionRecord.withdrawalImportId",
-          direction: "incoming",
-        },
-      ])
+      .query("sourceObservationWithdrawal", "many", true)
       .named("withdrawnRecords", "Withdrawal proof for"),
   ],
   readSchemas,

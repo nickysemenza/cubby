@@ -1263,10 +1263,12 @@ export const validateRelationSections = (
         for (const key of route) {
           const relation: CompiledEntity["relations"][number] | undefined =
             target?.relations.find((candidate) => candidate.key === key);
+          const provenance =
+            relation && relationshipProvenanceSchema.parse(relation.provenance);
           target =
             relation &&
-            relationshipProvenanceSchema.parse(relation.provenance).kind ===
-              "local-path"
+            (provenance?.kind === "local-path" ||
+              (chart.kind === "records" && provenance?.kind === "query"))
               ? byKey.get(relation.target)
               : undefined;
         }

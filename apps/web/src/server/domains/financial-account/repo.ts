@@ -33,6 +33,7 @@ import {
   buildPartialUpdateValues,
   notDeleted,
   unwrapDb,
+  uuidArrayParam,
   withTransaction,
 } from "~/server/db/helpers";
 import {
@@ -88,11 +89,17 @@ export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
     description:
       "A member's assertion that this account paid an order is soft-deleted with the account; the order's paying accounts fall back to its payment evidence.",
   },
-  "SourceTransactionRecord.accountId": {
+  "SourceOccurrence.accountId": {
     code: "block-live-source-transaction-records",
     effect: "block",
     description:
       "An account cannot be deleted while live statement rows are assigned to it. The column is nullable, so detaching would succeed silently — and it would discard the triage judgment that put the row on this account while leaving the row looking untriaged.",
+  },
+  "SourceObservationAnnotation.accountId": {
+    code: "preserve-source-account-history",
+    effect: "preserve",
+    description:
+      "Original observation judgments retain their account tombstone; current unresolved assignments are guarded before deletion.",
   },
 } as const satisfies IncomingEdgePolicy<
   "financialAccount",
@@ -715,6 +722,20 @@ export const updateFinancialAccount = defineMutationWriter({
 
 export const financialAccountRepository = defineRepository("financialAccount", {
   lifecycle: { delete: FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY },
+  deleteHooks: {
+    beforeDelete: async (tx, ids) => {
+      const { rows } = await unwrapDb(tx).execute<{ blocked: boolean }>(sql`
+        SELECT EXISTS (SELECT 1 FROM "SourceObservationAnnotation" annotation
+          JOIN "SourceTransactionRecord" observation ON observation.id=annotation."observationId"
+          WHERE observation."occurrenceId" IS NULL AND ${notDeleted("observation")}
+            AND annotation."accountId"=ANY(${uuidArrayParam(ids)})) AS blocked`);
+      if (rows[0]?.blocked)
+        throw createAppError(
+          "ENTITY_DELETE_BLOCKED",
+          "Unresolved source observations still retain an account assignment. Reassign those judgments before deleting the account.",
+        );
+    },
+  },
   scaffold: financialAccountScaffold,
   create: asActor(createFinancialAccount),
   update: asActor(updateFinancialAccount),

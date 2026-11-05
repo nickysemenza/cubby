@@ -29,7 +29,10 @@ export function evidenceChanges<T extends object>(
 export async function auditEvidenceRows<T extends { id: string }>(
   db: Database | DrizzleTransaction,
   actor: ActorContext,
-  entityKind: "sourceTransactionRecord" | "transactionImport",
+  entityKind:
+    | "sourceTransactionRecord"
+    | "transactionImport"
+    | "sourceOccurrence",
   before: readonly T[],
   after: readonly T[],
 ) {

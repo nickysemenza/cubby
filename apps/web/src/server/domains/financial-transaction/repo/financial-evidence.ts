@@ -18,7 +18,7 @@ import { createAppError } from "~/server/errors/app-error";
  */
 export async function lockFinancialEvidenceKeys(
   tx: DrizzleTransaction,
-  namespace: "account-alias" | "transaction-ref" | "reviewed-booking",
+  namespace: "account-alias" | "source" | "reviewed-booking",
   keys: readonly string[],
 ): Promise<void> {
   // JSON escaping keeps evidence values containing NUL delimiters valid UTF-8

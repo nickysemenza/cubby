@@ -37,11 +37,20 @@ resolves concepts whose names differ across layers.
   entries, and one real card line may settle several Purchases — a return desk
   processing two orders onto one receipt, or a statement posting one line for
   several same-day refunds.
+- A **Source occurrence** (`SourceOccurrence`, `SOC-`) is one proven event within
+  its original source and attested provider-account scope, or one original
+  physical position within one collection. It owns current source judgment,
+  account resolution, selected observation and explicit accepted transaction.
+  Fact hashes and equal-looking rows never prove event identity across collections.
+- An **Evidence alias** retains an original external reference and its binding
+  provenance. It explains history; it cannot establish current accepted ownership.
 - A **Source transaction record** (`SourceTransactionRecord`, `STR-`) is one
   retained provider observation or revision, including pending, withdrawn,
   incoming and zero-value evidence. It is distinct from a canonical
   FinancialTransaction and never adds spend. Equal-looking observations do not
-  by themselves prove one charge.
+  by themselves prove one charge. Observations retain original annotations and
+  local notes; proven occurrences share one current financial judgment. Unproven
+  history remains unresolved with money unchanged.
 - A **Transaction import** (`TransactionImport`, `TIM-`) is one immutable source
   collection: a file or bounded MCP snapshot, including resumed chunks. Membership
   does not establish complete account/window coverage or completed reconciliation.

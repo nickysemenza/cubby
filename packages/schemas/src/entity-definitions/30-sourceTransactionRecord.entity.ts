@@ -162,6 +162,24 @@ export const { definition, readSchemas } = defineEntityModel({
   model: {
     fields: [
       {
+        key: "occurrenceId",
+        kind: "identifier",
+        nullable: true,
+        reference: { entity: "sourceOccurrence" },
+        output: false,
+        validation: {
+          read: shortcodeSchema("sourceOccurrence").nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "factFingerprint",
+        kind: "text",
+        output: false,
+        validation: { read: z.string(), create: null, update: null },
+      },
+      {
         key: "id",
         kind: "identifier",
         display: { list: false },
@@ -196,6 +214,10 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         audit: true,
         key: "externalId",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Retained financial evidence alias" }],
+        },
         kind: "text",
         labelOverride: "Source reference",
         display: { columnGroup: "Source" },
@@ -220,6 +242,10 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         audit: true,
         key: "legacyExternalId",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Retained financial evidence alias" }],
+        },
         kind: "text",
         nullable: true,
         display: { list: false },
@@ -236,6 +262,15 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         audit: true,
         key: "chargeKey",
+        provenance: {
+          kind: "derived",
+          sources: [
+            {
+              label:
+                "Explicit source occurrence or retained unresolved observation decision",
+            },
+          ],
+        },
         kind: "text",
         display: { list: false },
         validation: readOnly(z.string()),
@@ -243,6 +278,15 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         audit: true,
         key: "current",
+        provenance: {
+          kind: "derived",
+          sources: [
+            {
+              label:
+                "Explicit source occurrence or retained unresolved observation decision",
+            },
+          ],
+        },
         kind: "boolean",
         display: { columnGroup: "Disposition" },
         validation: readOnly(z.boolean()),
@@ -250,6 +294,15 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         audit: true,
         key: "withdrawnAt",
+        provenance: {
+          kind: "derived",
+          sources: [
+            {
+              label:
+                "Explicit source occurrence or retained unresolved observation decision",
+            },
+          ],
+        },
         kind: "timestamp",
         nullable: true,
         display: { columnGroup: "Disposition", format: "timestamp" },
@@ -268,6 +321,15 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         audit: true,
         key: "lastObservedAt",
+        provenance: {
+          kind: "derived",
+          sources: [
+            {
+              label:
+                "Explicit source occurrence or retained unresolved observation decision",
+            },
+          ],
+        },
         kind: "timestamp",
         labelOverride: "Last observed",
         display: { list: false, format: "timestamp" },
@@ -393,6 +455,15 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       {
         key: "disposition",
+        provenance: {
+          kind: "relation",
+          sources: [
+            {
+              label:
+                "Explicit source occurrence or retained observation decision",
+            },
+          ],
+        },
         kind: "enum",
         display: {
           columnGroup: "Disposition",
@@ -417,6 +488,15 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       {
         key: "dispositionReason",
+        provenance: {
+          kind: "relation",
+          sources: [
+            {
+              label:
+                "Explicit source occurrence or retained observation decision",
+            },
+          ],
+        },
         kind: "enum",
         nullable: true,
         display: {
@@ -446,6 +526,15 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       {
         key: "dispositionNote",
+        provenance: {
+          kind: "relation",
+          sources: [
+            {
+              label:
+                "Explicit source occurrence or retained observation decision",
+            },
+          ],
+        },
         kind: "text",
         nullable: true,
         display: { list: false },
@@ -473,6 +562,15 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       {
         key: "notes",
+        provenance: {
+          kind: "relation",
+          sources: [
+            {
+              label:
+                "Explicit source occurrence or retained observation decision",
+            },
+          ],
+        },
         kind: "text",
         nullable: true,
         display: { list: false },
@@ -484,7 +582,13 @@ export const { definition, readSchemas } = defineEntityModel({
         },
       },
       timestampField("createdAt", { format: "timestamp" }),
-      timestampField("updatedAt", { list: false, format: "timestamp" }),
+      {
+        ...timestampField("updatedAt", { list: false, format: "timestamp" }),
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Current reconciliation update" }],
+        },
+      },
       {
         output: false,
         key: "deletedAt",
@@ -584,49 +688,40 @@ export const { definition, readSchemas } = defineEntityModel({
     storage: [
       { key: "id", specialized: "primary-key:SourceTransactionRecordId" },
       { key: "shortcode", specialized: "shortcode" },
+      "occurrenceId",
+      "factFingerprint",
       "batchId",
       {
         key: "source",
         reference: "externalSource",
         referenceOptions: { column: "slug", onUpdate: "cascade" },
       },
-      { key: "externalId" },
       { key: "rowPosition" },
       { key: "providerTransactionId" },
-      { key: "legacyExternalId" },
-      { key: "legacyReference" },
-      {
-        key: "chargeKey",
-        defaultOverride: "generated",
-        defaultSql: "gen_random_uuid()::text",
-      },
-      { key: "current", defaultValue: true },
-      { key: "withdrawnAt" },
-      "withdrawalImportId",
-      { key: "lastObservedAt", defaultOverride: "now" },
       { key: "providerAccountId" },
       { key: "providerData" },
       { key: "accountDescriptor" },
       { key: "statementDate" },
-      { key: "amount", specialized: "double-precision" },
-      { key: "providerAmount", specialized: "double-precision" },
+      { key: "amount", specialized: "minor-unit-money" },
+      { key: "providerAmount", specialized: "minor-unit-money" },
       { key: "merchant" },
       { key: "rawDescription" },
       { key: "sourceCategory" },
       { key: "providerStatus" },
       { key: "providerNotes" },
-      "accountId",
-      { key: "disposition", defaultValue: "open" },
-      { key: "dispositionReason" },
-      { key: "dispositionNote" },
-      "supersededByRowId",
-      { key: "notes" },
       { key: "createdAt" },
-      { key: "updatedAt", specialized: "updated-at" },
       { key: "deletedAt" },
     ],
 
     rows: {
+      reconciliation: {
+        label: "Current reconciliation",
+        repository: {
+          account: { reference: "financialAccount", connection: true },
+          withdrawal: { reference: "transactionImport", connection: true },
+          successor: { reference: "sourceTransactionRecord", connection: true },
+        },
+      },
       runStepInputs: {
         label: "Run step inputs",
         repository: { token: "text" },
@@ -643,6 +738,27 @@ export const { definition, readSchemas } = defineEntityModel({
       },
     },
     derived: {
+      externalId: { type: "text" },
+      legacyExternalId: { type: "text" },
+      chargeKey: { type: "text" },
+      current: { type: "boolean" },
+      withdrawnAt: { type: "date" },
+      lastObservedAt: { type: "date" },
+      updatedAt: { type: "date" },
+      notes: { type: "text" },
+      dispositionNote: { type: "text" },
+      disposition: {
+        type: "enum",
+        options: sourceTransactionRecordDisposition.options,
+      },
+      dispositionReason: {
+        type: "enum",
+        options: sourceTransactionRecordDispositionReason.options,
+      },
+      accountId: { via: "reconciliation.account" },
+      withdrawalImportId: { via: "reconciliation.withdrawal" },
+      supersededByRowId: { via: "reconciliation.successor" },
+
       runStepInput: { via: "runStepInputs.token" },
       importId: { via: "imports" },
       matchState: {
@@ -680,17 +796,16 @@ export const { definition, readSchemas } = defineEntityModel({
     create: null,
   },
   storage: {
-    indexes: [
-      // Invalidation reads include retained tombstones; the live unique key cannot serve them.
+    uniqueKeys: [
       {
-        name: "SourceTransactionRecord_source_externalId_lookup_idx",
-        on: ["source", "externalId"],
+        name: "SourceTransactionRecord_id_occurrence_key",
+        columns: ["id", "occurrenceId"],
       },
+    ],
+    indexes: [
       {
-        name: "SourceTransactionRecord_source_externalId_key",
-        unique: true,
-        on: ["source", "externalId"],
-        where: "{deletedAt} IS NULL",
+        name: "SourceTransactionRecord_occurrence_facts_idx",
+        on: ["occurrenceId", "factFingerprint"],
       },
       {
         name: "SourceTransactionRecord_batch_position_key",
@@ -703,37 +818,8 @@ export const { definition, readSchemas } = defineEntityModel({
         on: ["source", "providerTransactionId"],
       },
       {
-        name: "SourceTransactionRecord_source_charge_idx",
-        on: ["source", "chargeKey"],
-      },
-      {
-        name: "SourceTransactionRecord_source_legacyReference_idx",
-        on: ["source", "legacyReference"],
-        where: "{deletedAt} IS NULL AND {legacyReference} IS NOT NULL",
-      },
-      {
-        name: "SourceTransactionRecord_transfer_seed_idx",
-        on: [
-          {
-            sql: "('stmt:' || {source} || ':' || {chargeKey}) COLLATE \"C\"",
-          },
-        ],
-        where: "{deletedAt} IS NULL AND {sourceCategory} IS NOT NULL",
-      },
-      { name: "SourceTransactionRecord_batchId_idx", on: ["batchId"] },
-      {
         name: "SourceTransactionRecord_statementDate_idx",
         on: ["statementDate"],
-      },
-      {
-        name: "SourceTransactionRecord_worklist_idx",
-        on: [{ column: "statementDate", desc: true }],
-        where:
-          "{deletedAt} IS NULL AND {disposition} = 'open' AND {supersededByRowId} IS NULL",
-      },
-      {
-        name: "SourceTransactionRecord_account_date_amount_idx",
-        on: ["accountId", "statementDate", "amount"],
       },
       {
         name: "SourceTransactionRecord_descriptor_date_amount_idx",
@@ -755,29 +841,14 @@ export const { definition, readSchemas } = defineEntityModel({
         sql: "{source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND {source} = lower(trim({source}))",
       },
       {
-        name: "SourceTransactionRecord_amount_whole_cent_check",
-        sql: "abs({amount} * 100 - round({amount} * 100)) < 0.0000001",
+        name: "SourceTransactionRecord_amount_range_check",
+        sql: "abs({amount}) <= 100000000000000",
       },
       {
-        name: "SourceTransactionRecord_providerAmount_whole_cent_check",
-        sql: "abs({providerAmount} * 100 - round({providerAmount} * 100)) < 0.0000001",
+        name: "SourceTransactionRecord_providerAmount_range_check",
+        sql: "abs({providerAmount}) <= 100000000000000",
       },
-      {
-        name: "SourceTransactionRecord_providerStatus_check",
-        sql: "{providerStatus} IS NULL OR {providerStatus} IN ('posted', 'pending')",
-      },
-      {
-        name: "SourceTransactionRecord_disposition_check",
-        sql: "({disposition} = 'open' AND {dispositionReason} IS NULL AND {dispositionNote} IS NULL)\n          OR ({disposition} = 'ignored' AND {dispositionReason} IS NOT NULL AND {dispositionNote} IS NOT NULL)",
-      },
-      {
-        name: "SourceTransactionRecord_dispositionReason_check",
-        sql: "{dispositionReason} IS NULL OR {dispositionReason} IN\n          ('not_modeled', 'not_a_purchase', 'duplicate_of_other_source', 'pre_cubby', 'other')",
-      },
-      {
-        name: "SourceTransactionRecord_externalId_format_check",
-        sql: "{externalId} ~ '^v[123]:[0-9a-f]{64}$'",
-      },
+      { column: "providerStatus", nullClause: true },
     ],
   },
   filters: {
@@ -819,8 +890,8 @@ export const { definition, readSchemas } = defineEntityModel({
         columnId: "chargeKey",
         kind: "multiselect",
         deriveSchema: true,
-        stored: true,
-        placeholder: "Filter charge key...",
+        derived: true,
+        placeholder: "Filter source occurrence...",
       },
       {
         columnId: "providerTransactionId",
@@ -939,7 +1010,16 @@ export const { definition, readSchemas } = defineEntityModel({
     ],
   },
 
-  search: "lexical",
+  search: {
+    mode: "lexical",
+    inputs: [
+      {
+        table: "SourceObservationAnnotation",
+        match: { observationId: "id" },
+        columns: ["notes"],
+      },
+    ],
+  },
   capabilities: {
     images: { storage: false },
     delete: { mode: "soft", bulk: true },
@@ -960,17 +1040,16 @@ export const { definition, readSchemas } = defineEntityModel({
 export default defineEntity(
   definition,
   (r) => [
-    r.field("accountId").named("account", "Account"),
+    r.query("sourceObservationAccount", "one").named("account", "Account"),
     r.field("batchId").named("firstImport", "First import"),
-    r.field("withdrawalImportId").named("withdrawalProof", "Withdrawal proof"),
-    r.field("supersededByRowId").named("supersededByRecord", "Superseded by"),
     r
-      .path("sourceTransactionRecord", "many", [
-        {
-          edge: "SourceTransactionRecord.supersededByRowId",
-          direction: "incoming",
-        },
-      ])
+      .query("sourceObservationWithdrawal", "one")
+      .named("withdrawalProof", "Withdrawal proof"),
+    r
+      .query("sourceObservationSuccessor", "one")
+      .named("supersededByRecord", "Superseded by"),
+    r
+      .query("sourceObservationSuccessor", "many", true)
       .named("predecessors", "Superseded records"),
     r
       .path("transactionImport", "many", [
@@ -983,8 +1062,8 @@ export default defineEntity(
       .named("imports", "Imports"),
     r
       .derived("financialTransaction", "many", "sourceTransactionRecordId", [
-        "EntityExternalId.settlement_ref",
-        "SourceTransactionRecord.chargeKey",
+        "SourceTransactionRecord.occurrenceId",
+        "SourceOccurrence.acceptedTransactionId",
       ])
       .named("transactions", "Transactions", {
         sources: [

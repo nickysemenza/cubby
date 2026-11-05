@@ -72,6 +72,7 @@ export const tableDependencyClosure = (
     const dependencies = [
       ...entity.fieldModel.storage.map((field) => field.reference),
       ...entity.table.columns.map((column) => column.reference),
+      ...entity.table.foreignKeys.map((key) => key.table),
     ];
     for (const target of dependencies) {
       if (target === null) continue;
@@ -170,9 +171,17 @@ const renderTable = (
         ]
       : []),
     ...table.indexes.map(renderIndex),
+    ...table.uniqueKeys.map(
+      (key) =>
+        `unique(${JSON.stringify(key.name)}).on(${key.columns.map((column) => `table.${column}`).join(",")})`,
+    ),
     ...table.checks.map(
       (check) =>
         `check(${JSON.stringify(check.name)}, ${check.bare ? `sql.raw(${JSON.stringify(check.sql)})` : sqlTemplate(check.sql)})`,
+    ),
+    ...table.foreignKeys.map(
+      (key) =>
+        `foreignKey({ name: ${JSON.stringify(key.name)}, columns: [${key.columns.map((column) => `table.${column}`).join(",")}], foreignColumns: [${key.references.map((column) => `${exportOf(key.table)}.${column}`).join(",")}] })${key.onDelete ? `.onDelete(${JSON.stringify(key.onDelete)})` : ""}${key.onUpdate ? `.onUpdate(${JSON.stringify(key.onUpdate)})` : ""}`,
     ),
   ];
   return `export const ${table.exportName} = pgTable(${JSON.stringify(table.name)}, {${columns.join(",")}}, (${constraints.some((constraint) => /\btable\b/.test(constraint)) ? "table" : "_table"}) => [${constraints.join(",")}]);`;
@@ -318,7 +327,7 @@ export const renderEntityTableArtifacts = (
     storageColumnImportsFor(definitionSource, renderTypeImports(typeImports)) +
     referencedImports(
       'import { sql } from "drizzle-orm";\n' +
-        'import { type AnyPgColumn, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n' +
+        'import { type AnyPgColumn, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n' +
         sharedImports +
         retainedImports,
       definitionSource,
@@ -376,7 +385,7 @@ export const renderIdentityStorageTablesArtifact = (
       ) +
       'import { sql } from "drizzle-orm";\n' +
       referencedImports(
-        'import { type AnyPgColumn, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n',
+        'import { type AnyPgColumn, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n',
         source,
       ) +
       'import { entityIdentityFk } from "~/server/db/entity-identity-schema";\n\n' +
