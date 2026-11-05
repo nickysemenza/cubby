@@ -63,6 +63,7 @@ export const repositoryOwners = [
   "src/server/db/assessment-correction-lock-schema.ts",
   "src/server/generic/assessment/repo/correction-lock.ts",
   "src/server/db/derived-value-schema.ts",
+  "src/server/db/quality-snapshot-schema.ts",
   "src/server/db/derived-declarations.ts",
   "src/server/db/derived-trigger-ddl.ts",
   "src/server/db/derived-source-ref.ts",

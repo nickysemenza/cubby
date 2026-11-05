@@ -11,6 +11,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 
 import { derivedValue } from "~/server/db/derived-value-schema";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
+import { qualitySnapshot } from "~/server/db/quality-snapshot-schema";
 import type { RepositoryQueryTransaction } from "~/server/db/repository-access.boundary";
 import {
   findPgError,
@@ -91,6 +92,9 @@ export async function tombstoneEntityIdentities(
   // Publication locks its Job before projection rows; removal uses that order too.
   // A tombstone has no derived values; the drain never republishes one.
   await tx.delete(derivedValue).where(inArray(derivedValue.entityId, [...ids]));
+  await tx
+    .delete(qualitySnapshot)
+    .where(inArray(qualitySnapshot.entityId, [...ids]));
   await tx
     .update(entityIdentity)
     .set({ deletedAt: at })

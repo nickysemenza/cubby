@@ -14,7 +14,7 @@ import {
   type WorkSourceActionId,
 } from "@cubby/schemas/work-queue";
 import { workQueueGapChecks } from "@cubby/schemas/work-queue-policy";
-import { isNull, or, sql, type SQL } from "drizzle-orm";
+import { eq, isNull, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import {
@@ -25,10 +25,9 @@ import { compileProblemFilters } from "~/entity/problems/problem-filter-semantic
 import type { FilterAssembly } from "~/entity/problems/problem-query";
 import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import type { Database } from "~/server/db";
-import { derivedValue } from "~/server/db/retained-tables";
+import { qualitySnapshot } from "~/server/db/retained-tables";
 import { storedEntryFor } from "~/server/generic/data-quality/repo/entry";
 import { relatedGapCondition } from "~/server/generic/data-quality/repo/sql";
-import { storedPublicationMatch } from "~/server/generic/derived/repo/read";
 
 import {
   admittedReasons,
@@ -135,27 +134,23 @@ export const gapPublicationRead = ({
   const filters = gapFilters(scope, entity);
   if (!filters) return null;
   const { dataGap, ...otherFilters } = filters;
-  const publication = alias(derivedValue, `work_${entity}_quality`);
+  const publication = alias(qualitySnapshot, `work_${entity}_quality`);
   const own = new Set<DataCheck>(dataChecksByEntity[entity].options);
   const publishedGap = (check: DataCheck) =>
-    sql`coalesce(${publication.value}->'checks'->>${check} = ${entityQualityCheckState.enum.gap}, false)`;
+    sql`coalesce(${publication.checks}->>${check} = ${entityQualityCheckState.enum.gap}, false)`;
   const admittedChecks = (oneOrManyValues(dataGap) ?? []).map((check) =>
     dataCheck.parse(check),
   );
   return {
     filters: otherFilters,
     publication,
-    match: storedPublicationMatch(publication, {
-      entity,
-      id: storedEntryFor(entity).table.id,
-      key: "dataQuality",
-    }),
+    match: eq(publication.entityId, storedEntryFor(entity).table.id),
     columns: gapColumns(scope, entity, publishedGap),
     // Missing values cannot decide gap membership. Keep their routing and
     // possible reason text available for the queue's scoped completeness read.
     missingInputs: scope.record?.quality
       ? sql`false`
-      : isNull(publication.value),
+      : isNull(publication.checks),
     missingColumns: {
       reason: workQueueGapChecks(gapView(entity))
         .map((check) => dataCheckMessage[check])

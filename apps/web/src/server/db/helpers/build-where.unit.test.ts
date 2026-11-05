@@ -517,9 +517,9 @@ describe("mealScaffold.where", () => {
 
   it("recipeCostCoverage=true reads the stored recipe-cost gap", async () => {
     const rendered = await where({ recipeCostCoverage: true });
-    // Stored quality lives in DerivedValue (ADR 0021).
-    expect(rendered).toContain(`dq.value->'checks'->>`);
-    expect(rendered).toContain('FROM "DerivedValue" dq');
+    // Declared quality checks read the typed snapshot (ADR 0025).
+    expect(rendered).toContain(`dq.checks->>`);
+    expect(rendered).toContain('FROM "QualitySnapshot" dq');
     expect(rendered).toContain("= 'gap'");
   });
 });

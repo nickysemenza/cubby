@@ -54,7 +54,7 @@ const publishedOutcome = {
 } satisfies { value: "value"; empty: "empty" };
 
 /** Keep publication identity and the kind/key index predicate together. */
-export function storedPublicationMatch(
+function storedPublicationMatch(
   publication: {
     entityId: AnyColumn | SQL;
     kind: AnyColumn | SQL;
@@ -212,6 +212,35 @@ const valueRow = z.object({
   attribution: fieldWorkAttribution.nullable(),
 });
 
+/** A declared typed snapshot projects the same read contract without another value store. */
+function storedSourceSql(
+  declaration: EntityStoredDerivedDeclaration,
+  entity: Entity,
+  id: SQL,
+): SQL {
+  const source = declaration.snapshotSource;
+  if (!source)
+    return sql`SELECT v.value, v."decidedBy", v."computedAt" FROM "DerivedValue" v
+    WHERE v."entityId" = ${id} AND v.kind = ${entity} AND v.key = ${declaration.key}`;
+  const value =
+    typeof source.value === "string"
+      ? sql`q.${sql.identifier(source.value)}`
+      : sql`jsonb_build_object(${sql.join(
+          Object.entries(source.value).flatMap(([key, column]) => [
+            sql`${key}::text`,
+            sql`q.${sql.identifier(column)}`,
+          ]),
+          sql`, `,
+        )})`;
+  const decision = source.decidedBy
+    ? sql`q.${sql.identifier(source.decidedBy)}`
+    : sql`CASE WHEN ${value} IS NULL THEN
+      ${JSON.stringify(storedFieldDecision.parse({ outcome: { kind: "empty", reason: "unset" }, provenance: { kind: "computed" } }))}::jsonb
+      ELSE ${JSON.stringify(storedFieldDecision.parse({ outcome: { kind: "value" }, provenance: { kind: "computed" } }))}::jsonb END`;
+  return sql`SELECT ${value} AS value, ${decision} AS "decidedBy", q.${sql.identifier(source.computedAt)} AS "computedAt"
+    FROM ${sql.identifier(source.table)} q WHERE q."entityId" = ${id} AND q.kind = ${entity}`;
+}
+
 /** Page readers start this with their ids beside hydration, never once per row. */
 export function loadPageStoredMeta(
   db: RepositoryQueryInput,
@@ -233,7 +262,8 @@ export function loadPageStoredMeta(
         declaration.entity === entity &&
         exposed.has(declaration.key) &&
         (declaration.publishes === "derivedValue" ||
-          declaration.recordSource !== null),
+          declaration.recordSource !== null ||
+          declaration.snapshotSource !== undefined),
     )
     .map((declaration) => declaration.key);
   return loadStoredDerived(db, entity, ids, keys);
@@ -283,10 +313,16 @@ export async function loadStoredDerived(
            d."runningSince", d."leaseExpiresAt"
       FROM unnest(${uuidArrayParam(ids)}) AS i(id)
      CROSS JOIN keys k
-      LEFT JOIN "DerivedValue" v ON ${storedPublicationMatch(
-        { entityId: sql`v."entityId"`, kind: sql`v.kind`, key: sql`v.key` },
-        { entity, id: sql`i.id`, key: sql`k.key` },
-      )}
+      LEFT JOIN LATERAL (
+        ${sql.join(
+          declarations.map(
+            (declaration) => sql`
+          SELECT projected.* FROM LATERAL (${storedSourceSql(declaration, entity, sql`i.id`)}) projected
+          WHERE k.key = ${declaration.key}`,
+          ),
+          sql` UNION ALL `,
+        )}
+      ) v ON true
       LEFT JOIN LATERAL ${observedWorkItem(sql`k.target`, sql`i.id`)} d ON true`);
   for (const row of z.array(valueRow).parse(result.rows)) {
     const byKey = out.get(row.entityId) ?? new Map();

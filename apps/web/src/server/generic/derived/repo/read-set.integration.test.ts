@@ -57,7 +57,7 @@ import { derivedComputes } from "~/server/workflows/derived-computes";
  * Infrastructure every compute may read without declaring it: identity and
  * the derived cache itself (a `dependsOn` value is read from `DerivedValue`).
  */
-const UNDECLARED_READS = new Set(["Entity", "DerivedValue"]);
+const UNDECLARED_READS = new Set(["Entity", "DerivedValue", "QualitySnapshot"]);
 
 /** Full read models also load presentation fields these sinks never publish. */
 const INCIDENTAL_READS = {
@@ -388,6 +388,10 @@ describe("stored derived read sets", () => {
             value, "sortNumber", "sortDate", "sortText"
           FROM "DerivedValue" ORDER BY kind, "entityId", key`)
       ).rows,
+      quality: (
+        await getDb(ctx.db).execute(sql`
+        SELECT "entityId"::text, kind, "rulesVersion", checks FROM "QualitySnapshot" ORDER BY "entityId"`)
+      ).rows,
       search: (
         await getDb(ctx.db).execute(sql`
           SELECT "entityKind", "entityId"::text, title, body,
@@ -444,7 +448,12 @@ describe("stored derived read sets", () => {
             .map((declaration) => declaration.key),
         ),
       ].sort(),
-    ).toEqual(["conversionCoverage", "searchDocument", "totals"]);
+    ).toEqual([
+      "conversionCoverage",
+      "dataQuality",
+      "searchDocument",
+      "totals",
+    ]);
     expect(incremental.coverage.length).toBeGreaterThan(0);
     expect(incremental.recipes.some((row) => row.totals !== null)).toBe(true);
 
@@ -454,6 +463,7 @@ describe("stored derived read sets", () => {
 
     // Clear only disposable projections, leaving all household inputs in place.
     await getDb(ctx.db).execute(sql`DELETE FROM "DerivedValue"`);
+    await getDb(ctx.db).execute(sql`DELETE FROM "QualitySnapshot"`);
     await getDb(ctx.db).execute(sql`DELETE FROM "SearchDocument"`);
     await getDb(ctx.db).execute(sql`DELETE FROM "ProductConversionCoverage"`);
     await getDb(ctx.db).execute(

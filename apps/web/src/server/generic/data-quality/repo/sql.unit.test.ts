@@ -126,7 +126,7 @@ describe("gaps and status read only published quality rows", () => {
       ([, table]) => table,
     );
     expect(sources.length).toBeGreaterThan(0);
-    expect(sources.every((table) => table === "DerivedValue")).toBe(true);
+    expect(sources.every((table) => table === "QualitySnapshot")).toBe(true);
   });
 
   it("sorts unassessed records after every assessed record", () => {
@@ -148,7 +148,7 @@ describe("aliased evaluation", () => {
     const related = alias(product, "dq_r");
     const rendered = render(gapCondition("product", "product_brand", related));
     expect(rendered).toContain('"dq_r"."id"');
-    expect(rendered).toContain('"DerivedValue"');
+    expect(rendered).toContain('"QualitySnapshot"');
     expect(rendered).not.toContain('"Product"."brandId"');
     expect(getTableName(related)).toBe("dq_r");
   });
@@ -164,9 +164,9 @@ describe("purchase import expectations", () => {
   it("uses check inputs, not target timestamps, to keep an exception active", () => {
     const productSql = render(gapCondition("product", "product_brand"));
     const purchaseSql = render(gapCondition("purchase", "paperwork_mismatch"));
-    expect(productSql).toContain('"DerivedValue"');
+    expect(productSql).toContain('"QualitySnapshot"');
     expect(productSql).not.toContain("to_jsonb");
-    expect(purchaseSql).toContain('"DerivedValue"');
+    expect(purchaseSql).toContain('"QualitySnapshot"');
     expect(purchaseSql).not.toContain("to_jsonb");
     expect(productSql).not.toContain('"updatedAt"');
     expect(purchaseSql).not.toContain('"updatedAt"');
@@ -189,7 +189,7 @@ describe("dataQualityFilterPredicates", () => {
     });
     expect(predicates).toHaveLength(2);
     const gaps = render(predicates[1]!);
-    expect(gaps).toContain('"DerivedValue"');
+    expect(gaps).toContain('"QualitySnapshot"');
     expect(gaps).not.toContain('"Purchase"."orderId" IS NULL');
     expect(gaps).toContain('FROM "Product" "dq_r"');
     expect(gaps).not.toContain("not_a_check");

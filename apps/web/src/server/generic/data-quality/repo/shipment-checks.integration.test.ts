@@ -461,9 +461,8 @@ describe("Shipment evidence quality", () => {
     // An older version is stale even when the check states are unchanged:
     // reconciliation republishes it.
     await unwrapDb(ctx.db).execute(sql`
-      UPDATE "DerivedValue" SET value = jsonb_set(value, '{rulesVersion}', '0'),
-        "sortNumber" = 1
-       WHERE "entityId" = ${parcel.row.id} AND key = 'dataQuality'`);
+      UPDATE "QualitySnapshot" SET "rulesVersion" = 0
+       WHERE "entityId" = ${parcel.row.id}`);
     await markAllStoredDerived(ctx.db);
     await refresh();
     expect(await storedQuality(ctx.db, parcel.row.id)).toMatchObject({

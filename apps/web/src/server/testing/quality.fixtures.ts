@@ -42,8 +42,8 @@ export async function storedQuality(
   | undefined
 > {
   const result = await unwrapDb(db).execute(sql`
-    SELECT value FROM "DerivedValue"
-     WHERE "entityId" = ${entityId} AND key = 'dataQuality'`);
+    SELECT jsonb_build_object('rulesVersion', "rulesVersion", 'checks', checks) AS value FROM "QualitySnapshot"
+     WHERE "entityId" = ${entityId}`);
   const [row] = z
     .array(
       z.object({
@@ -64,8 +64,8 @@ export async function storedQualityIds(
 ): Promise<string[]> {
   const result = await unwrapDb(db).execute(
     kind
-      ? sql`SELECT "entityId"::text AS id FROM "DerivedValue" WHERE key = 'dataQuality' AND kind = ${kind} ORDER BY 1`
-      : sql`SELECT "entityId"::text AS id FROM "DerivedValue" WHERE key = 'dataQuality' ORDER BY 1`,
+      ? sql`SELECT "entityId"::text AS id FROM "QualitySnapshot" WHERE kind = ${kind} ORDER BY 1`
+      : sql`SELECT "entityId"::text AS id FROM "QualitySnapshot" ORDER BY 1`,
   );
   return z
     .array(z.object({ id: z.string() }))

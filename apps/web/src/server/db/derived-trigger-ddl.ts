@@ -103,7 +103,8 @@ const markStatement = (input: TriggerInput, table: string) => {
 
 /** Keep even fully disabled tables so their replacement trigger captures nothing. */
 function derivedTriggerInputs(): Map<string, TriggerInput[]> {
-  const byTable = new Map<string, TriggerInput[]>();
+  // Keep the legacy source trigger as a no-op until its separate retirement.
+  const byTable = new Map<string, TriggerInput[]>([["DerivedValue", []]]);
   for (const declaration of storedDerivedDeclarations())
     for (const [index, input] of declaration.inputs.entries()) {
       const entries = byTable.get(input.table) ?? [];
@@ -167,9 +168,10 @@ BEGIN
 END $$;`;
 
 /** Desired-state DDL: the mark function plus one function and trigger per source table. */
-export function derivedTriggerDdl(): string {
-  const parts = [derivedMarkFunctionSql()];
+export function derivedTriggerDdl(tables?: ReadonlySet<string>): string {
+  const parts = tables ? [] : [derivedMarkFunctionSql()];
   for (const [table, inputs] of derivedTriggerInputs()) {
+    if (tables && !tables.has(table)) continue;
     const fn = fnName(table);
     parts.push(`CREATE OR REPLACE FUNCTION ${fn}() RETURNS trigger
 LANGUAGE plpgsql AS $$

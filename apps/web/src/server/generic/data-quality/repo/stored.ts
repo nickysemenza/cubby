@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { dataExceptionRecord } from "~/server/db/retained-tables";
 import { liveQualityRow } from "~/server/generic/data-quality/repo/registry";
 import type { ScoredTable } from "~/server/generic/data-quality/repo/registry";
@@ -87,8 +88,8 @@ export async function loadPublishedQuality(
   const [result, exceptions] = await Promise.all([
     unwrapDb(db)
       .execute(sql`SELECT ${t.id}::text AS id, ${t.shortcode} AS shortcode,
-      coalesce(q.value->'checks', '{}'::jsonb) AS checks
-      FROM ${t} LEFT JOIN "DerivedValue" q ON q."entityId" = ${t.id} AND q.key = 'dataQuality'
+      coalesce(q.checks, '{}'::jsonb) AS checks
+      FROM ${t} LEFT JOIN "QualitySnapshot" q ON q."entityId" = ${t.id} AND q.kind = ${kind}
       WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}`),
     loadExceptions(db, kind, ids),
   ]);
@@ -137,4 +138,45 @@ export async function prepareQualityPublications(
       checks: row.checks,
     }))
     .sort((a, b) => a.entityId.localeCompare(b.entityId));
+}
+
+/** Publish changed check states, and remove absent/tombstoned outputs from the same page. */
+export async function publishQualitySnapshots(
+  db: ReaderDb,
+  {
+    kind,
+    ids,
+    rows,
+  }: {
+    kind: ScoredEntity;
+    ids: readonly string[];
+    rows: readonly QualityPublication[];
+  },
+): Promise<readonly string[]> {
+  if (!ids.length) return [];
+  const result = await unwrapDb(db).execute(sql`
+    WITH input AS MATERIALIZED (
+      SELECT * FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb)
+        AS r("entityId" uuid, kind text, "rulesVersion" integer, checks jsonb)
+    ), removed AS (
+      DELETE FROM "QualitySnapshot" q WHERE q.kind = ${kind} AND q."entityId" = ANY(${uuidArrayParam(ids)})
+        AND (NOT EXISTS (SELECT 1 FROM input i WHERE i."entityId" = q."entityId")
+          OR NOT EXISTS (SELECT 1 FROM "Entity" live WHERE live.id = q."entityId" AND ${notDeleted("live")}))
+      RETURNING q."entityId"
+    ), written AS (
+      INSERT INTO "QualitySnapshot" ("entityId", kind, "rulesVersion", checks, "computedAt")
+      SELECT r."entityId", r.kind, r."rulesVersion", r.checks, now() AT TIME ZONE 'UTC'
+      FROM input r JOIN "Entity" live ON live.id = r."entityId" AND live.kind = r.kind
+        AND ${notDeleted("live")}
+      ON CONFLICT ("entityId") DO UPDATE SET
+        kind = EXCLUDED.kind, "rulesVersion" = EXCLUDED."rulesVersion",
+        checks = EXCLUDED.checks, "computedAt" = EXCLUDED."computedAt"
+      WHERE ("QualitySnapshot".kind, "QualitySnapshot"."rulesVersion", "QualitySnapshot".checks)
+        IS DISTINCT FROM (EXCLUDED.kind, EXCLUDED."rulesVersion", EXCLUDED.checks)
+      RETURNING "entityId"
+    ) SELECT "entityId" FROM written UNION ALL SELECT "entityId" FROM removed`);
+  return z
+    .array(z.object({ entityId: z.string() }))
+    .parse(result.rows)
+    .map((row) => row.entityId);
 }
