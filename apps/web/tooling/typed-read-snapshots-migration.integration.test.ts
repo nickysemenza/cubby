@@ -6,7 +6,7 @@ import { withMigrationDatabase } from "./test-database-lease";
 it("carries SQL NULL and JSON null publications through every typed storage shape without changing member rows or tickets", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
-    await migrateDatabase(db, { through: "0081_derived_read_views" });
+    await migrateDatabase(db, { through: "0085_derived_read_views" });
     const emptyProduct = "00000000-0000-4000-8000-000000000011";
     const valuedProduct = "00000000-0000-4000-8000-000000000012";
     const project = "00000000-0000-4000-8000-000000000013";
@@ -54,7 +54,7 @@ it("carries SQL NULL and JSON null publications through every typed storage shap
       'tickets',(SELECT jsonb_agg(to_jsonb(w) ORDER BY target,ref) FROM "WorkItem" w)) AS value`)
       ).rows;
     const before = await preserved();
-    await migrateDatabase(db, { through: "0082_typed_read_snapshots" });
+    await migrateDatabase(db, { through: "0086_typed_read_snapshots" });
     expect(await preserved()).toEqual(before);
     expect(
       (
