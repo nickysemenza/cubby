@@ -357,6 +357,16 @@ Full payment-evidence rows for eligible candidates are read together, ordered
 by their existing IDs and reserved in the same page cache before concurrent
 previews can repeat the read. Review-only candidates still load no payment rows.
 
+Statement generation without an import scope selects at most 32 charges per page,
+including account/date-filtered work. Import-scoped generation retains its
+four-charge limit because it also admits serial financial
+applications. Retained generation failures use the same limits, including large
+failure sets. Both paths preserve the ordered population cursor and all remaining
+work; only a completed page publishes its checkpoint. Smaller pages reduce the
+proposal population retained through publication, but do not bound individual
+graphs or total Worker memory. No source, candidate, admission or money policy is
+relaxed by the page size.
+
 `Statement generation phase` logs enter selection, preparation, publication,
 and each charge's regeneration and application before awaiting that work.
 Publication reports aggregate observation and candidate counts, without source

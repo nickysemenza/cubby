@@ -357,7 +357,7 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
     const scope = scopeOf(run, "statement_transaction");
     const limit = scope.importId
       ? JOB_PAGE_LIMITS.statementApplicationsPerPage
-      : JOB_PAGE_LIMITS.suggestionsPerPage;
+      : JOB_PAGE_LIMITS.statementGenerationPerPage;
     const retried = await pageRetryRefs(context, limit, async (refs) => {
       const outcome = await retryStatementGenerationRefs(db, {
         runId: run.id,

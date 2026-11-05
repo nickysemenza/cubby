@@ -2702,13 +2702,12 @@ export async function retryStatementGenerationRefs(
   let published = 0;
   let labelsReused = 0;
   let unchanged = 0;
+  const batchSize = input.scope?.importId
+    ? JOB_PAGE_LIMITS.statementApplicationsPerPage
+    : JOB_PAGE_LIMITS.statementGenerationPerPage;
   // Keep the same bounded page size even for a large historical failure set.
-  for (
-    let offset = 0;
-    offset < input.refs.length;
-    offset += STATEMENT_SUGGESTION_PAGE
-  ) {
-    const refs = input.refs.slice(offset, offset + STATEMENT_SUGGESTION_PAGE);
+  for (let offset = 0; offset < input.refs.length; offset += batchSize) {
+    const refs = input.refs.slice(offset, offset + batchSize);
     const charges = refs.flatMap((ref) => {
       const charge = statementChargeFromWorkRef(ref);
       if (charge) return [charge];
@@ -2869,7 +2868,7 @@ export async function generateStatementSuggestionPage(
       // Import generation also admits serial money writes before its checkpoint.
       input.scope?.importId
         ? JOB_PAGE_LIMITS.statementApplicationsPerPage
-        : JOB_PAGE_LIMITS.suggestionsPerPage,
+        : JOB_PAGE_LIMITS.statementGenerationPerPage,
     ),
   );
   const startedAt = performance.now();
