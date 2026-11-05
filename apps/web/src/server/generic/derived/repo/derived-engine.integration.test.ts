@@ -1794,7 +1794,7 @@ describe("stored derived values", () => {
     expect(await marks("product.price")).toEqual([]);
   });
 
-  it("reconciles every record once across its daily buckets", async () => {
+  it("settles a retained reconcile without enrolling the population", async () => {
     const location = await makeLocation("Garage shelf");
     for (const name of ["Synthetic tape", "Synthetic glue", "Synthetic rope"])
       await makeEntry(await makeProduct(name, 1), location, 1);
@@ -1805,14 +1805,12 @@ describe("stored derived values", () => {
       input: {},
     });
     const handlers = { "derived.reconcile": derivedReconcileHandler };
-    // Consecutive claims resume the stored bucket cursor; no hourly clock is involved.
-    for (let page = 0; page < 24; page++)
-      expect(await advanceJob(ctx.db, reconciliation.id, handlers)).toBe(
-        "succeeded",
-      );
+    expect(await advanceJob(ctx.db, reconciliation.id, handlers)).toBe(
+      "succeeded",
+    );
     expect(await advanceJob(ctx.db, reconciliation.id, handlers)).toBe(
       "skipped",
     );
-    expect(await marks("inventory.valuation")).toHaveLength(3);
+    expect(await marks("inventory.valuation")).toHaveLength(0);
   });
 });

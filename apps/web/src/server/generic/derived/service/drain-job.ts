@@ -1,10 +1,4 @@
-/**
- * The two derived Jobs (ADR 0021). `derived.drain` drains dirty marks page by
- * page; generated triggers capture it once per writing transaction, so it is
- * due whenever marks exist. `derived.reconcile` pages through 24 id buckets
- * in the daily pass at the lowest priority: an undeclared input shows up as
- * drift and converges instead of staying silently wrong.
- */
+/** Dirty source writes wake the drain; no whole-population daily pass. */
 import { createLogger } from "@cubby/worker-tracing";
 import { and, notLike } from "drizzle-orm";
 import { z } from "zod";
@@ -27,7 +21,6 @@ import {
   type DerivedChunk,
   type DerivedPagePlan,
   lockDerivedChunk,
-  markAllStoredDerived,
   markExpiredClockDerived,
   hasClockDerived,
   prepareDerivedPage,
@@ -45,8 +38,6 @@ import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const log = createLogger("derived");
 
-const DERIVED_RECONCILE_JOB_KEY = "derived:reconcile";
-const RECONCILE_BUCKETS = 24;
 // Source expansion has no canonical preparation; retain its previous maximum
 // independently of the direct-only preparation allowance.
 const DERIVED_FANOUT_BATCH = 20;
@@ -250,47 +241,17 @@ export const derivedDrainHandler = (
   };
 };
 
+/** Settle an already-admitted legacy reconcile without enrolling more work. */
 export const derivedReconcileHandler: JobHandler = defineJobHandler(
   z.object({}).passthrough(),
-  async (_db, claim) => {
-    const bucket = z
-      .object({
-        bucket: z
-          .number()
-          .int()
-          .min(0)
-          .max(RECONCILE_BUCKETS - 1),
-      })
-      .parse(claim.cursor ?? { bucket: 0 }).bucket;
-    return {
-      page: {
-        done: bucket === RECONCILE_BUCKETS - 1,
-        cursor: { bucket: Math.min(bucket + 1, RECONCILE_BUCKETS - 1) },
-      },
-      publish: async (tx) => ({
-        marked: await markAllStoredDerived(tx, undefined, {
-          index: bucket,
-          count: RECONCILE_BUCKETS,
-        }),
-      }),
-    };
-  },
+  async () => ({ page: { done: true, result: { outcome: "retired" } } }),
 );
 
-/** Daily reconciliation covers every bucket; dirty items wake their own drain. */
-export async function scheduleDerivedJobs(
-  db: Database,
-  reconcile = true,
-): Promise<void> {
+/** Existing dirty tickets and clock deadlines retain their ordinary drain. */
+export async function scheduleDerivedJobs(db: Database): Promise<void> {
   await repeatJob(db, {
     key: DERIVED_DRAIN_JOB_KEY,
     kind: "derived.drain",
     input: {},
   });
-  if (reconcile)
-    await repeatJob(db, {
-      key: DERIVED_RECONCILE_JOB_KEY,
-      kind: "derived.reconcile",
-      input: {},
-    });
 }

@@ -85,9 +85,8 @@ and turned one Product save into a 115–147 second rollback; #2855 removed them
 - **One drain.** A single `derived.drain` Job kind claims dirty rows in
   batches, computes each field set-based, publishes only changed values, then
   marks dependents of changed values. It clears a dirty row only when its ticket
-  is unchanged. Member edits go first; an hourly reconciliation of one 24th of
-  the records (each record daily) and a CI read-set check cover undeclared
-  inputs.
+  is unchanged. Member edits go first. ADR 0025 retires daily whole-population
+  reconciliation; the CI read-set check still guards undeclared inputs.
 - **Internal records share the drain.** A publication about records that are not
   an Entity registers as a typed internal record with an explicit target and
   source table. It reuses the triggers, drain, fences and reconciliation, and

@@ -56,7 +56,7 @@ export async function recoverMissedWork(
     (async () => {
       const { scheduleDerivedJobs } =
         await import("~/server/generic/derived/service/drain-job");
-      await scheduleDerivedJobs(db, daily);
+      await scheduleDerivedJobs(db);
     })(),
     (async () => {
       const { scheduleDerivedDiscovery } =
