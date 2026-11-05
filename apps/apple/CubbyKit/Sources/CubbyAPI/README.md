@@ -1,9 +1,14 @@
 # CubbyAPI — generated native models
 
-`pnpm generate` derives the native interface directly from every query and
-mutation in Cubby's operation contracts, using the same JSON wire projections
-as the shared operation handler. There is no per-client operation allowlist or
-SwiftPM code-generation plugin.
+`pnpm generate` derives the native interface from Cubby's operation contracts,
+using the same JSON wire projections as the shared operation handler. There is no
+hand-kept operation allowlist or SwiftPM code-generation plugin.
+
+Typed methods and models cover what handwritten Swift, including tests, references
+by name (`swift-callers.ts`), plus `job.deviceBacklog` and `run.reportDeviceWork`.
+Calling a new operation means naming it in Swift and running `pnpm generate`.
+Removing a client's last reference removes only its typed code; the operation and
+its wire stay on the server.
 
 `apps/web/generator/http-api/native-contract.ts` collects the projected contracts;
 `swift-models.ts` emits plain Codable, Hashable, Sendable Swift models under
@@ -17,8 +22,9 @@ hidden behind named aliases; child arrays retain their ordinary value semantics.
 CubbyKit's `LenientISO8601DateTranscoder` preserves server milliseconds when
 encoding dates, including photo-review revisions used by stale-write guards.
 
-`NativeOperations.swift` contains methods for operation ids and
-`OperationCatalog.swift` lists those ids for the CLI. `NativeHTTPTransport` POSTs
+`NativeOperations.swift` contains methods for those operations.
+`OperationCatalog.swift` lists every operation id for the CLI, which calls them with
+raw JSON. `NativeHTTPTransport` POSTs
 to `/api/operations/{operationId}` with the operation envelope and owns URLSession
 requests, authentication snapshots, credential rotation, cancellation,
 diagnostics and request observation. Responses use `{ok: true, data}`; errors

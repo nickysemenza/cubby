@@ -15,6 +15,8 @@ export interface SwiftModels {
   artifacts: EntityArtifacts[];
   types: ReadonlyMap<string, string>;
   names: readonly string[];
+  /** The same models, limited to these roots and every model they name. */
+  prune: (roots: Iterable<string>) => SwiftModels;
 }
 const literal = (value: string) => JSON.stringify(value);
 const caseName = (value: string) => {
@@ -512,28 +514,58 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
   }
   for (const key of contract.records)
     mark(refType(`native://${key}`), "shared");
-  const groups = new Map<string, string[]>();
+  const groups = new Map<string, [string, string][]>();
   for (const [name, source] of [...declarations].sort(([left], [right]) =>
     left.localeCompare(right),
   )) {
     const uses = domains.get(name);
     const domain = uses?.size === 1 ? [...uses][0]! : "shared";
     const group = groups.get(domain) ?? [];
-    group.push(source);
+    group.push([name, source]);
     groups.set(domain, group);
   }
-  const artifacts = [...groups].map(([domain, sources]) => ({
-    relativePath: `apps/apple/CubbyKit/Sources/CubbyAPI/Models/${domain}.gen.swift`,
-    source: `${generatedHeader}// swift-format-ignore-file\nimport Foundation\nimport CubbyAPISupport\n\n${sources.join("\n\n")}\n`,
-  }));
-  artifacts.push({
-    relativePath:
-      "apps/apple/CubbyKit/Sources/CubbyAPI/Models/native-wire.gen.swift",
-    source: `${generatedHeader}// swift-format-ignore-file\nimport Foundation\nimport CubbyAPISupport\n\n${matcher.source()}\n`,
-  });
-  return {
-    artifacts,
-    types: references,
-    names: [...declarations.keys()].sort(),
+  const emitModels = (kept: ReadonlySet<string>): SwiftModels => {
+    const artifacts = [...groups].flatMap(([domain, entries]) => {
+      const sources = entries
+        .filter(([name]) => kept.has(name))
+        .map(([, source]) => source);
+      return sources.length === 0
+        ? []
+        : [
+            {
+              relativePath: `apps/apple/CubbyKit/Sources/CubbyAPI/Models/${domain}.gen.swift`,
+              source: `${generatedHeader}// swift-format-ignore-file\nimport Foundation\nimport CubbyAPISupport\n\n${sources.join("\n\n")}\n`,
+            },
+          ];
+    });
+    artifacts.push({
+      relativePath:
+        "apps/apple/CubbyKit/Sources/CubbyAPI/Models/native-wire.gen.swift",
+      source: `${generatedHeader}// swift-format-ignore-file\nimport Foundation\nimport CubbyAPISupport\n\n${matcher.source(
+        [...declarations]
+          .filter(([name]) => kept.has(name))
+          .map(([, source]) => source),
+      )}\n`,
+    });
+    return {
+      artifacts,
+      types: references,
+      names: [...kept].sort(),
+      // Declaration text is the authority: anything a kept model names must exist.
+      prune: (roots) => {
+        const reached = new Set<string>();
+        const visit = (name: string) => {
+          if (reached.has(name)) return;
+          const source = declarations.get(name);
+          if (source === undefined) return;
+          reached.add(name);
+          for (const [token] of source.matchAll(/[A-Za-z_][A-Za-z0-9_]*/gu))
+            visit(token);
+        };
+        for (const root of roots) visit(root);
+        return emitModels(reached);
+      },
+    };
   };
+  return emitModels(new Set(declarations.keys()));
 }

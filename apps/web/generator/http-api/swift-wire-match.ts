@@ -15,7 +15,7 @@ export function swiftWireMatcher(
   resolve: (schema: Schema | boolean) => Schema,
 ) {
   const names = new Map<Schema | boolean, string>();
-  const functions: string[] = [];
+  const functions = new Map<string, string>();
   const reference = (raw: Schema | boolean): string => {
     const schema = typeof raw === "object" ? resolve(raw) : raw;
     const existing = names.get(schema);
@@ -100,7 +100,8 @@ export function swiftWireMatcher(
         }
       }
     }
-    functions.push(
+    functions.set(
+      name,
       `    static func ${name}(_ value: JSONValue) -> Bool {\n${lines.join("\n")}\n        return true\n    }`,
     );
     return name;
@@ -108,6 +109,21 @@ export function swiftWireMatcher(
   return {
     reference: (schema: Schema | boolean) =>
       `NativeWireShapes.${reference(schema)}`,
-    source: () => `enum NativeWireShapes {\n${functions.join("\n\n")}\n}`,
+    /** The matchers these declarations call, with the matchers those call. */
+    source: (declarations: Iterable<string>) => {
+      const kept = new Set<string>();
+      const visit = (source: string) => {
+        for (const [, name] of source.matchAll(/\b(matches\d+)\(/gu)) {
+          if (kept.has(name!)) continue;
+          kept.add(name!);
+          visit(functions.get(name!) ?? "");
+        }
+      };
+      for (const declaration of declarations) visit(declaration);
+      const emitted = [...functions]
+        .filter(([name]) => kept.has(name))
+        .map(([, source]) => source);
+      return `enum NativeWireShapes {\n${emitted.join("\n\n")}\n}`;
+    },
   };
 }
