@@ -1,3 +1,4 @@
+import { cn } from "cn";
 /**
  * Shared inline markers for the recipe spec surfaces (RecipeSpecView and
  * RecipePrepSheetView). These small pill/badge/label
@@ -12,7 +13,6 @@ import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { cn } from "~/lib/utils";
 
 import { type RecipeTreeRow, recipeTreeDisplayImage } from "./recipe-tree";
 

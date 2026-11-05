@@ -1,6 +1,6 @@
+import { cn } from "cn";
 import { Fragment, type ReactNode, useId } from "react";
 
-import { cn } from "~/lib/utils";
 import { ChangedValue, type ValueChange } from "~/ui/derived/value-change";
 import { Skeleton } from "~/ui/primitives/skeleton";
 

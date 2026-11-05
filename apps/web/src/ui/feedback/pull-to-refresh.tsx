@@ -1,6 +1,6 @@
 import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
+import { cn } from "cn";
 import { useCallback, useRef, useState } from "react";
-import { cn } from "~/lib/utils";
 
 interface PullToRefreshProps {
   onRefresh: () => Promise<void>;
@@ -45,7 +45,7 @@ export function PullToRefresh({
         isPullingRef.current = true;
       }
     },
-    [disabled, isRefreshing],
+    [disabled, isRefreshing, getScrollTop],
   );
 
   const handleTouchMove = useCallback(
@@ -121,7 +121,10 @@ export function PullToRefresh({
           }}
         >
           <CircleNotchIcon
-            className={cn("size-5 text-muted-foreground", isRefreshing && "animate-spin")}
+            className={cn(
+              "size-5 text-muted-foreground",
+              isRefreshing && "animate-spin",
+            )}
           />
         </div>
       </div>
@@ -130,7 +133,9 @@ export function PullToRefresh({
       <div
         style={{
           transform: `translateY(${pullDistance}px)`,
-          transition: isPullingRef.current ? "none" : "transform 200ms ease-out",
+          transition: isPullingRef.current
+            ? "none"
+            : "transform 200ms ease-out",
         }}
       >
         {children}

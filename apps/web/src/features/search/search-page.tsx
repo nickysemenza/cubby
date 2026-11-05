@@ -8,6 +8,7 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGl
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { cn } from "cn";
 import { uniq } from "es-toolkit";
 import {
   useCallback,
@@ -24,13 +25,11 @@ import {
   SearchShortcode,
 } from "~/entity/presentation/search-facts";
 import { search } from "~/integrations/tanstack-query/generated/domains/search.gen";
-import { cn } from "~/lib/utils";
 import { MobileCard } from "~/ui/data-table/mobile-card";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { MobileCardSkeletonList } from "~/ui/feedback/mobile-card-skeleton";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -40,6 +39,7 @@ import {
 } from "~/ui/primitives/dropdown-menu";
 import { Input } from "~/ui/primitives/input";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { Badge } from "~/ui/reui/badge";
 
 import {
   type EntityPreviewRowData,

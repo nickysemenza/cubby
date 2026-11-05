@@ -1,5 +1,6 @@
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { useLocation, useNavigate } from "@tanstack/react-router";
+import { cn } from "cn";
 import {
   type ComponentProps,
   type ElementType,
@@ -12,7 +13,6 @@ import {
 } from "react";
 
 import { formatCount } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useSlidingIndicator } from "~/ui/hooks/use-sliding-indicator";

@@ -3,6 +3,7 @@ import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwis
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useQuery } from "@tanstack/react-query";
+import { cn } from "cn";
 import { useDeferredValue, useId, useMemo, useState } from "react";
 
 import {
@@ -15,10 +16,10 @@ import {
 import { job } from "~/integrations/tanstack-query/generated/domains/job.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import { type Fact, Facts } from "~/ui/common/facts";
 import { RecordList, type RecordListState } from "~/ui/common/record-list";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { CloudflareIcon } from "~/ui/icons/cloudflare";
 import { Disclosure } from "~/ui/layout/disclosure";
@@ -26,7 +27,6 @@ import { Panel } from "~/ui/layout/panel";
 import { Section } from "~/ui/layout/section";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { StaticTable } from "~/ui/primitives/static-table";
 
 import { jobWait } from "../run/run-view-model";
 import { JobDefinition } from "../run/work-definition";

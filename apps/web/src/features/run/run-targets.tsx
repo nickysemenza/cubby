@@ -17,9 +17,9 @@ import { useLocalTable } from "~/ui/data-table/use-local-table";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { StatusText } from "~/ui/primitives/status-text";
+import { Badge } from "~/ui/reui/badge";
+import { StatusText } from "~/ui/text/status-text";
 
 import {
   stableTargetRows,

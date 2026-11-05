@@ -16,7 +16,7 @@ import { EditableEntityCell } from "~/entity/table/editable-entity-cell";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 
 /**
  * The location search provider for every entry row's `EditableEntityCell` —

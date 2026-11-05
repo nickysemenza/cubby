@@ -1,11 +1,11 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { cn } from "cn";
 import { useRef, useState } from "react";
 
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import {
   Tooltip,

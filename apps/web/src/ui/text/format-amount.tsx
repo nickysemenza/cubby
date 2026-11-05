@@ -6,13 +6,13 @@ import type { ReadonlyDeep } from "type-fest";
 import { convertAmountToPrice } from "~/lib/recipe-costing";
 import { renderValueOrError } from "~/lib/result";
 import { wasm } from "~/lib/wasm";
-import { NoneValue } from "~/ui/primitives/none-value";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { NoneValue } from "~/ui/text/none-value";
 
 import ValidInvalidIcon from "../icons/valid-invalid";
 

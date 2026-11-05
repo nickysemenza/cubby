@@ -21,7 +21,7 @@ import { Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Progress } from "~/ui/primitives/progress";
-import { StatusText } from "~/ui/primitives/status-text";
+import { StatusText } from "~/ui/text/status-text";
 
 import { runHasAgent } from "./agent-observation";
 import { PhotoGroupReview, usePhotoRunReview } from "./photo-group-review";

@@ -28,8 +28,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/ui/primitives/alert-dialog";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
+import { Badge } from "~/ui/reui/badge";
 
 // A static sibling of /account/$accountView: TanStack ranks literal segments
 // above dynamic ones, so this wins over the better-auth-ui catch-all rather

@@ -7,6 +7,7 @@ import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { MinusCircleIcon } from "@phosphor-icons/react/dist/csr/MinusCircle";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useQuery } from "@tanstack/react-query";
+import { cn } from "cn";
 import { useState } from "react";
 
 import type { RunEvaluationsOut } from "~/contracts/run-detail.contract";
@@ -15,9 +16,9 @@ import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { runDetail } from "~/integrations/tanstack-query/generated/domains/runDetail.gen";
 import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionCount } from "~/ui/data-table/detail-section-state";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -25,7 +26,6 @@ import {
   ProgressLabel,
   ProgressValue,
 } from "~/ui/primitives/progress";
-import { StaticTable } from "~/ui/primitives/static-table";
 
 /** "about 12 min", "about 3 h", "under a minute". */
 function formatMinutesLeft(minutes: number) {

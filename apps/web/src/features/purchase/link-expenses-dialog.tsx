@@ -43,10 +43,10 @@ import { FieldRecordValue } from "~/ui/derived/record-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
-import { NoneValue } from "~/ui/primitives/none-value";
-import { StatusText } from "~/ui/primitives/status-text";
+import { Description } from "~/ui/text/description";
+import { NoneValue } from "~/ui/text/none-value";
+import { StatusText } from "~/ui/text/status-text";
 
 /** The table shows every candidate the server returns (it caps the list at 100). */
 const CANDIDATE_PAGE_SIZE = 100;

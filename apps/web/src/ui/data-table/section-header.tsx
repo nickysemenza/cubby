@@ -1,9 +1,8 @@
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
+import { cn } from "cn";
 import type { ReactNode } from "react";
-
-import { cn } from "~/lib/utils";
 
 import { ROW_DENSITY } from "./density";
 

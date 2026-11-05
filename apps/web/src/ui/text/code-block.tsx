@@ -1,9 +1,9 @@
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
+import { cn } from "cn";
 import { useEffect, useState, type ComponentProps } from "react";
 
 import { copyText } from "~/lib/clipboard";
-import { cn } from "~/lib/utils";
 import { Button } from "~/ui/primitives/button";
 
 // Adapted from the shadcn base-mira `code-block` registry item (AI Elements),

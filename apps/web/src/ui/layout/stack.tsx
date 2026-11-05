@@ -1,6 +1,6 @@
+import { cn } from "cn";
 import type * as React from "react";
 
-import { cn } from "~/lib/utils";
 import { type StackVariants, stackVariants } from "~/styles/layouts";
 
 interface StackProps extends React.HTMLAttributes<HTMLElement>, StackVariants {

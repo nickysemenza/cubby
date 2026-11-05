@@ -6,18 +6,18 @@ import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowsClockw
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { KeyIcon } from "@phosphor-icons/react/dist/csr/Key";
 import { useQuery } from "@tanstack/react-query";
+import { cn } from "cn";
 import { useRef, useState } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { calendar } from "~/integrations/tanstack-query/generated/domains/calendar.gen";
 import { copyTextWithToast } from "~/lib/clipboard";
-import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 import { DialogTrigger } from "~/ui/primitives/dialog";
-import { StatusText } from "~/ui/primitives/status-text";
+import { StatusText } from "~/ui/text/status-text";
 
 const FEEDS = [
   { file: "all.ics", label: "Everything" },

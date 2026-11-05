@@ -17,7 +17,7 @@ import { entityMutation } from "~/integrations/tanstack-query/generated/domains/
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 import { requiredLocationCode } from "~/ui/forms/form-fields";
 import { Stack } from "~/ui/layout";
-import { StatusText } from "~/ui/primitives/status-text";
+import { StatusText } from "~/ui/text/status-text";
 
 const formSchema = z.object({
   targetParent: requiredLocationCode,

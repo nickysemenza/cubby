@@ -17,8 +17,8 @@ import {
   servingBasisUnit,
   unitMappingsFromFood,
 } from "~/lib/unit-mapping-utils";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { Stack } from "~/ui/layout";
-import { StaticTable } from "~/ui/primitives/static-table";
 
 import { EntityActionButtons } from "../../entity/actions/entity-actions";
 import {

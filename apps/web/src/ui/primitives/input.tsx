@@ -2,7 +2,7 @@ import * as React from "react";
 import { Input as InputPrimitive } from "@base-ui/react/input";
 
 import { useHydrationGate } from "~/ui/hooks/use-hydrated";
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
 
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   const gate = useHydrationGate(props.disabled);

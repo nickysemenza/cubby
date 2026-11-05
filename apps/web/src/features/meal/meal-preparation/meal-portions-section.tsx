@@ -10,8 +10,8 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { Description } from "~/ui/text/description";
 
 type PortionsBlock = Extract<ReportBlock, { kind: "records" }> & {
   key: string;

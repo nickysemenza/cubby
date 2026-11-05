@@ -4,6 +4,7 @@ import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
+import { cn } from "cn";
 import {
   type ComponentProps,
   useEffect,
@@ -20,7 +21,6 @@ import {
 } from "~/entity/entities";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

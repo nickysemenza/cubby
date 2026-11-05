@@ -1,6 +1,6 @@
 import type { AmountKind } from "@cubby/recipebridge";
+import { cn } from "cn";
 
-import { cn } from "~/lib/utils";
 import {
   Tooltip,
   TooltipContent,

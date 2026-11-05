@@ -23,7 +23,7 @@ import type { MobileMetaValue } from "~/ui/data-table/mobile-card";
 import type { MobileColumnMeta, MobileSlot } from "~/ui/data-table/table-meta";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { WhyValue } from "~/ui/derived/why-value";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 
 import type {
   CubbyTable as ITable,

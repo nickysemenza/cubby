@@ -10,6 +10,7 @@ import {
   commitPreparedInput,
 } from "@cubby/schemas/report-choice";
 import { workflowCommandBody } from "@cubby/schemas/workflow-command";
+import { cn } from "cn";
 import { useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -22,7 +23,6 @@ import { Picker } from "~/entity/picker/picker";
 import { requireReferenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { readPathValue } from "~/entity/read-path";
 import { workflowCommandMetadata } from "~/integrations/tanstack-query/workflow-commands";
-import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { Row } from "~/ui/layout";

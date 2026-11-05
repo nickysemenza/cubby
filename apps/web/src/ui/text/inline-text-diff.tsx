@@ -1,6 +1,5 @@
+import { cn } from "cn";
 import { useMemo } from "react";
-
-import { cn } from "~/lib/utils";
 
 import { diffWords } from "./inline-text-diff.logic";
 

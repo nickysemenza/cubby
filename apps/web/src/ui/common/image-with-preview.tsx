@@ -1,12 +1,13 @@
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import type { ReactNode } from "react";
-import { Image } from "~/ui/primitives/image";
+
+import { Image } from "~/ui/common/image";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
-import { cn } from "~/lib/utils";
 
 /**
  * Every hover-preview popup renders at one size so the same photo previewed
@@ -41,9 +42,12 @@ export function ImagePreviewPopup({
       // is portalled over whatever surface the thumbnail sits in — on the
       // arrange board that surface is a drag-and-drop hit-test area, and on a
       // combobox it is the option list.
-      className="bg-popover pointer-events-none max-w-none border-[var(--border)] overflow-hidden rounded-none border p-0"
+      className="pointer-events-none max-w-none overflow-hidden rounded-none border border-[var(--border)] bg-popover p-0"
     >
-      <div className="relative" style={{ width: PREVIEW_PX, height: PREVIEW_PX }}>
+      <div
+        className="relative"
+        style={{ width: PREVIEW_PX, height: PREVIEW_PX }}
+      >
         <Image
           src={src}
           alt={alt}
@@ -119,7 +123,7 @@ export function ImageWithPreview({
 }: ImageWithPreviewProps) {
   const thumbnailDisplayWidth = displayWidth ?? size ?? 40;
   const thumbnailClasses = cn(
-    "bg-background relative flex-shrink-0 overflow-hidden rounded-none border transition-transform hover:scale-105",
+    "relative flex-shrink-0 overflow-hidden rounded-none border bg-background transition-transform hover:scale-105",
     className,
   );
 

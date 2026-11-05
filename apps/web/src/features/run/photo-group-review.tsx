@@ -90,13 +90,14 @@ import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Facts } from "~/ui/common/facts";
+import { Image } from "~/ui/common/image";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import {
@@ -108,18 +109,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
-import { Image } from "~/ui/primitives/image";
 import { Input } from "~/ui/primitives/input";
-import { NoneValue } from "~/ui/primitives/none-value";
-import { StaticTable } from "~/ui/primitives/static-table";
-import { StatusText } from "~/ui/primitives/status-text";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { Badge, type BadgeVariant } from "~/ui/reui/badge";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 import { InlineTextDiff } from "~/ui/text/inline-text-diff";
+import { NoneValue } from "~/ui/text/none-value";
+import { StatusText } from "~/ui/text/status-text";
 
 import {
   LIVE_RUN_STATUSES,

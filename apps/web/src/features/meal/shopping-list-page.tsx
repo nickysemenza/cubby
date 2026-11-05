@@ -1,21 +1,21 @@
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { useId } from "react";
 import { match } from "ts-pattern";
 
 import { copyTextWithToast } from "~/lib/clipboard";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Row, Section, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
+import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 
 import type { ShoppingListView } from "./meal-search";
 import { ShoppingCard } from "./shopping-card";

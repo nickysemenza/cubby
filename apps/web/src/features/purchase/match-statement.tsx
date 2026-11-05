@@ -22,8 +22,8 @@ import { purchase as purchaseOperations } from "~/integrations/tanstack-query/ge
 import { formatCurrency } from "~/lib/number-format";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
+import { Description } from "~/ui/text/description";
 
 import {
   SettlementCandidateList,

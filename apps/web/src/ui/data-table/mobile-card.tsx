@@ -1,6 +1,7 @@
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import {
   Children,
   Fragment,
@@ -9,15 +10,14 @@ import {
   type ReactNode,
 } from "react";
 
-import { cn } from "~/lib/utils";
 import {
   type LongPressHandlers,
   useLongPress,
 } from "~/ui/hooks/use-long-press";
 import { Row, Stack } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { Description } from "~/ui/primitives/description";
-import { Eyebrow } from "~/ui/primitives/eyebrow";
+import { Description } from "~/ui/text/description";
+import { Eyebrow } from "~/ui/text/eyebrow";
 
 /** One labeled spec line on a phone card. */
 export interface MobileMetaValue {

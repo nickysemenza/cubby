@@ -2,6 +2,7 @@
 
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { cn } from "cn";
 import type React from "react";
 import { useCallback, useState } from "react";
 
@@ -9,7 +10,6 @@ import { entityLabel } from "~/entity/entities";
 import { Picker } from "~/entity/picker/picker";
 import type { FieldSuggestionSource } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-apply";
-import { cn } from "~/lib/utils";
 import { useDenseCell } from "~/ui/common/stacked-value";
 import { Button } from "~/ui/primitives/button";
 

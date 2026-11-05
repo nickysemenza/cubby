@@ -17,6 +17,7 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { type ReactNode, useId, useMemo, useState } from "react";
 
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
@@ -33,7 +34,6 @@ import { formatCalendarDay } from "~/lib/date-format";
 import { formatDateSpan } from "~/lib/date-span";
 import { formatCount, formatCurrency } from "~/lib/number-format";
 import { parsePlainDate } from "~/lib/plain-date";
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -50,13 +50,13 @@ import { DateRangeShortcuts } from "~/ui/date-range-shortcuts";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { EnumPill } from "~/ui/primitives/enum-pill";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { Description } from "~/ui/text/description";
+import { EnumPill } from "~/ui/text/enum-pill";
 import {
   Visualization,
   visualizationState,

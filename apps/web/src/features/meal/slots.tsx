@@ -26,8 +26,8 @@ import { Panel, Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
+import { Description } from "~/ui/text/description";
 
 import { AddFoodDialog } from "./add-food-dialog";
 import { formatCostEstimate } from "./meal-nutrition";

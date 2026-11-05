@@ -2,7 +2,7 @@ import type { FC } from "react";
 
 import { ChipsInput } from "~/ui/forms/chips-input";
 import { useTagOptions } from "~/ui/hooks/use-entity-options";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import {
   getTagColor,

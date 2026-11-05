@@ -22,9 +22,9 @@ import { formatCurrency } from "~/lib/number-format";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Button } from "~/ui/primitives/button";
-import { StaticTable } from "~/ui/primitives/static-table";
 
 const MAPPING_MODE_OPTIONS: readonly PickerOption[] = [
   { value: "inherit", label: "Use ancestor mapping" },

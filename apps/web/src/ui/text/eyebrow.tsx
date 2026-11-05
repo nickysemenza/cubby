@@ -1,5 +1,5 @@
+import { cn } from "cn";
 import type { ElementType, ReactNode } from "react";
-import { cn } from "~/lib/utils";
 
 /**
  * The shared eyebrow label class. The look itself lives in the `eyebrow` CSS

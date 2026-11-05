@@ -25,7 +25,7 @@ import {
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import { AddFoodDialog } from "./add-food-dialog";
 import { FoodAmountReadout } from "./food-amount-editor";

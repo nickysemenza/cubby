@@ -1,8 +1,8 @@
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 
 import { EntityIcon, entities } from "~/entity/entities";
-import { cn } from "~/lib/utils";
 import { domainForEntity } from "~/ui/navigation/domain-wayfinding";
 import { Button } from "~/ui/primitives/button";
 import {

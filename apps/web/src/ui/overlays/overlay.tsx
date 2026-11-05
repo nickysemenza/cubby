@@ -1,4 +1,5 @@
 import { getErrorMessage } from "@cubby/shared";
+import { cn } from "cn";
 import {
   useEffect,
   useRef,
@@ -7,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 
-import { cn } from "~/lib/utils";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Button } from "~/ui/primitives/button";
 import {

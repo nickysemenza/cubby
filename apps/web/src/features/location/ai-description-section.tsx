@@ -12,7 +12,7 @@ import {
 import { useAiProposal } from "~/entity/suggestions/use-ai-proposal";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 interface AiDescriptionSectionProps {
   locationId: LocationShortcode;

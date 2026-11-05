@@ -9,8 +9,8 @@ import { Picker } from "~/entity/picker/picker";
 import { vendor } from "~/integrations/tanstack-query/generated/domains/vendor.gen";
 import { broadcastSender } from "~/lib/vendor/domains";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
+import { Badge } from "~/ui/reui/badge";
 
 /** Evidence remains on the original records; this control edits only the exact-address decision. */
 export function SenderAttributionDetails({

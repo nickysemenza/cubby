@@ -146,7 +146,7 @@
       }
     },
     {
-      // Primitives, controls, overlays, CodeBlock and vendored ReUI own their frame;
+      // shadcn copies, controls, overlays, Pill, CodeBlock and vendored ReUI own their frame;
       // EmptyState's dashed slot is the one non-Panel content box.
       // Home files are rewritten by the Home lane; drop them when it lands.
       "files": [
@@ -156,6 +156,7 @@
         "apps/web/src/ui/reui/**",
         "apps/web/src/ui/date-picker-input.tsx",
         "apps/web/src/ui/text/code-block.tsx",
+        "apps/web/src/ui/text/pill.tsx",
         "apps/web/src/ui/feedback/empty-state.tsx",
         "apps/web/src/features/home/entitycount.tsx",
         "apps/web/src/features/home/pinned-views.tsx"
@@ -556,8 +557,7 @@
         "**/*.spec.ts",
         "**/*.spec.tsx",
         "**/*.live-eval.ts",
-        "apps/web/src/lib/number-format.ts",
-        "apps/web/src/lib/utils.ts"
+        "apps/web/src/lib/number-format.ts"
       ],
       "rules": {
         "cubby/no-ad-hoc-number-format": "error",

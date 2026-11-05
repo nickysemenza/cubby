@@ -13,6 +13,7 @@ import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
 import { DownloadIcon } from "@phosphor-icons/react/dist/csr/Download";
 import { useQuery } from "@tanstack/react-query";
 import type { CellData, SortingState } from "@tanstack/react-table";
+import { cn } from "cn";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -24,7 +25,6 @@ import {
   formatCurrency,
   formatPercent,
 } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";

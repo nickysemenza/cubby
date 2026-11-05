@@ -28,11 +28,11 @@ import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { SidePanel, SidePanelLayout } from "~/ui/overlays/side-panel";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
+import { NoneValue } from "~/ui/text/none-value";
 
 import { fieldSuggestionBasisFromRecord } from "../../entity/suggestions/field-suggestion";
 import { suggestTargetsFor } from "../../entity/suggestions/suggestion-targets";

@@ -1,7 +1,7 @@
+import { cn } from "cn";
 import { type ReactNode, useId, useState } from "react";
 
 import { formatCurrency, formatExactCurrency } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import {
   Tooltip,
   TooltipContent,

@@ -32,9 +32,9 @@ import { formatDateSpan } from "~/lib/date-span";
 import { Row, Stack } from "~/ui/layout";
 import type { Overlay } from "~/ui/overlays/overlay";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
+import { Description } from "~/ui/text/description";
 
 import {
   EntityIntentFields,

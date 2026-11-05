@@ -5,6 +5,7 @@ import type {
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
 
@@ -14,15 +15,14 @@ import { maintenance } from "~/integrations/tanstack-query/generated/domains/mai
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
 import { Progress } from "~/ui/primitives/progress";
-import { StaticTable } from "~/ui/primitives/static-table";
+import { Description } from "~/ui/text/description";
 
 /** Poll while a pass runs; an idle card has nothing to watch. */
 export const maintenanceRefetchInterval = (

@@ -2,11 +2,11 @@ import type { UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { countLabel } from "@cubby/shared/pluralize";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { useMemo } from "react";
 
 import { entityDetailLink } from "~/entity/entities";
 import { formatCalendarDay } from "~/lib/date-format";
-import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
 import type { CrossTabColumn } from "~/ui/matrix/group-columns";

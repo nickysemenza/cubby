@@ -165,3 +165,13 @@ export function formatTimestamp(
     ? label
     : `${label} · ${formatRelative(value, now)}`;
 }
+
+// timeZone: "UTC" is load-bearing. The build date is an ISO string; without
+// pinning the zone, the CF edge (UTC) and the client (local tz) format it in
+// different zones and can land on different calendar days near a UTC midnight
+// boundary — server renders e.g. "Jun 12", client "Jun 11" → React #418
+// hydration text mismatch. Formatting both sides in UTC keeps the text stable.
+/** Format a UTC ISO build-date string as "Mon D" (e.g. "Jun 12"), zone-pinned. */
+export function formatBuildDate(iso: string): string {
+  return formatInstant(iso, "monthDay", "UTC");
+}

@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { useEntityMetadata } from "~/entity/metadata";
-import { EnumPill } from "~/ui/primitives/enum-pill";
+import { EnumPill } from "~/ui/text/enum-pill";
 
 import { TradeIcon } from "../../entity/presentation/trade-options";
 

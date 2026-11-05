@@ -11,7 +11,7 @@ import { useAiProposal } from "~/entity/suggestions/use-ai-proposal";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import type { PendingImage } from "../../entity/entity-media/pending-image-upload";
 import { useProductBrandIngress } from "./use-product-brand-ingress";

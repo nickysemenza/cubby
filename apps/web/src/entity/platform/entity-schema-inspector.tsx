@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 
 import {
@@ -9,14 +10,13 @@ import {
   browserEntityDefinition,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
-import { cn } from "~/lib/utils";
 import { Facts as SharedFacts } from "~/ui/common/facts";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { domainWayfinding } from "~/ui/navigation/domain-wayfinding";
 import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
-import { Badge } from "~/ui/primitives/badge";
 import { buttonVariants } from "~/ui/primitives/button";
-import { StaticTable } from "~/ui/primitives/static-table";
+import { Badge } from "~/ui/reui/badge";
 
 import {
   DETAIL_STATUS_LABEL,

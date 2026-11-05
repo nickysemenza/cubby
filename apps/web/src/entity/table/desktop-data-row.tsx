@@ -3,6 +3,7 @@ import { BugIcon } from "@phosphor-icons/react/dist/csr/Bug";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
+import { cn } from "cn";
 import {
   type FocusEvent,
   type MouseEvent,
@@ -17,7 +18,6 @@ import { isInspectableFieldProvenance } from "~/entity/fields/field-provenance";
 import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { ProposalCount } from "~/entity/suggestions/proposal-counts";
 import { RecordFieldSuggestion } from "~/entity/suggestions/record-suggestions";
-import { cn } from "~/lib/utils";
 import { DenseCellContext } from "~/ui/common/stacked-value";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { WhyValue } from "~/ui/derived/why-value";

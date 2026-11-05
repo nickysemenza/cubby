@@ -13,7 +13,7 @@ import { useDenseCell } from "~/ui/common/stacked-value";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 
 import {
   CELL_EDIT_GROUP_CLASS,

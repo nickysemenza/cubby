@@ -6,6 +6,7 @@ import {
   type NutrientKey,
 } from "@cubby/usda";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { mapValues } from "es-toolkit";
 import { useId, useMemo, useState } from "react";
 import { match } from "ts-pattern";
@@ -23,12 +24,11 @@ import type {
 } from "~/lib/recipe-costing";
 import type { RecipeTotalsGap } from "~/lib/recipe-totals-gaps";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { Description } from "~/ui/text/description";
+import { NoneValue } from "~/ui/text/none-value";
 
 import { getIngredientName } from "../../entity/presentation/recipe-utils";
 import {

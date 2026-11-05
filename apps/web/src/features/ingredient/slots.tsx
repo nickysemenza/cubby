@@ -7,7 +7,7 @@ import { useReparseUsage } from "~/features/recipe/use-reparse-usage";
 import { labelNutrientsPer100 } from "~/lib/label-nutrition";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 /**
  * The ingredient's nutrition, shown from the one product the server chose

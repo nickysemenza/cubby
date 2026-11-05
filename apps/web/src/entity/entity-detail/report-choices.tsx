@@ -20,11 +20,11 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
-import { StatusText } from "~/ui/primitives/status-text";
 import { Textarea } from "~/ui/primitives/textarea";
+import { Badge } from "~/ui/reui/badge";
+import { StatusText } from "~/ui/text/status-text";
 
 /**
  * The answers to a records block's choices. The operation id is the commit's idempotency key: it

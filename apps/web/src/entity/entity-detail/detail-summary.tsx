@@ -18,6 +18,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { useState, type ReactNode } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -32,7 +33,6 @@ import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { ConnectionPaths } from "~/entity/relationships/connection-paths";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { entityReport } from "~/integrations/tanstack-query/generated/domains/entityReport.gen";
-import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

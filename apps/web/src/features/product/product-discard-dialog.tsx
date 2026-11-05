@@ -40,7 +40,7 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import { NullableNumericField } from "../../ui/forms/form-utils";
 

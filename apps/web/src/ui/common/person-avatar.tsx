@@ -1,4 +1,4 @@
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
 
 /** Literal classes so Tailwind emits every category surface. */
 const AVATAR_TONES = [

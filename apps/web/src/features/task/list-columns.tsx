@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-import { Badge } from "~/ui/primitives/badge";
+import { Badge } from "~/ui/reui/badge";
 
 import { defineListOverride } from "../../entity/list-columns/types";
 

@@ -4,8 +4,8 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { formatCurrency } from "~/lib/number-format";
 import { formatPricingCountsSummary } from "~/lib/pricing-counts";
 import { FieldRecordValue } from "~/ui/derived/record-value";
-import { Description } from "~/ui/primitives/description";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { Description } from "~/ui/text/description";
+import { NoneValue } from "~/ui/text/none-value";
 
 type Variant = "compact" | "full";
 

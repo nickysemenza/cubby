@@ -1,6 +1,7 @@
-import { cn } from "~/lib/utils";
-import { Progress } from "./progress";
-import { Spinner } from "./spinner";
+import { cn } from "cn";
+
+import { Progress } from "~/ui/primitives/progress";
+import { Spinner } from "~/ui/primitives/spinner";
 
 /**
  * The shared "{verb} X of N" + bar shown while a streamed bulk operation runs
@@ -19,9 +20,11 @@ export function BulkProgressBar({
 }) {
   return (
     <div className={cn("space-y-1", className)}>
-      <p className="flex items-center gap-1 text-muted-foreground text-xs">
+      <p className="flex items-center gap-1 text-xs text-muted-foreground">
         <Spinner className="size-3" />{" "}
-        {progress ? `${verb} ${progress.done} of ${progress.total}` : `${verb}…`}
+        {progress
+          ? `${verb} ${progress.done} of ${progress.total}`
+          : `${verb}…`}
       </p>
       <Progress
         value={progress?.done ?? 0}

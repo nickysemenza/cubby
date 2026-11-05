@@ -1,11 +1,11 @@
 import { entityRoster } from "@cubby/schemas/entity-roster";
 import type { WorkQueueRow } from "@cubby/schemas/work-queue";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 
 import { EntityPill } from "~/entity/components/entity-pill";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
-import { cn } from "~/lib/utils";
 
 type WorkRowSource = Pick<
   WorkQueueRow,

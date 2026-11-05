@@ -1,7 +1,6 @@
 import type { Icon } from "@phosphor-icons/react/lib";
+import { cn } from "cn";
 import type { HTMLAttributes, ReactNode } from "react";
-
-import { cn } from "~/lib/utils";
 
 type EmptyStateProps = Omit<HTMLAttributes<HTMLDivElement>, "children"> & {
   /**

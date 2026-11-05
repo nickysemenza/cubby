@@ -2,8 +2,8 @@
 import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 
-import { cn } from "~/lib/utils";
-import { popoverElevationClassName } from "~/ui/primitives/popover-elevation";
+import { cn } from "cn";
+import { popoverElevationClassName } from "~/ui/overlays/popover-elevation";
 import { Button } from "~/ui/primitives/button";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 
@@ -134,6 +134,37 @@ function DialogDescription({
   );
 }
 
+function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
+  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
+}
+
+function DialogFooter({
+  className,
+  showCloseButton = false,
+  children,
+  ...props
+}: React.ComponentProps<"div"> & {
+  showCloseButton?: boolean
+}) {
+  return (
+    <div
+      data-slot="dialog-footer"
+      className={cn(
+        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        className
+      )}
+      {...props}
+    >
+      {children}
+      {showCloseButton && (
+        <DialogPrimitive.Close render={<Button variant="outline" />}>
+          Close
+        </DialogPrimitive.Close>
+      )}
+    </div>
+  )
+}
+
 export {
   Dialog,
 
@@ -144,4 +175,9 @@ export {
 
   DialogTitle,
   DialogTrigger,
+
+  DialogClose,
+  DialogFooter,
+  DialogOverlay,
+  DialogPortal,
 };

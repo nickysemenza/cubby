@@ -1,7 +1,6 @@
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { cn } from "cn";
 import type { ReactNode } from "react";
-
-import { cn } from "~/lib/utils";
 
 /**
  * Outbound links to somewhere that isn't Cubby — a vendor's order page, an

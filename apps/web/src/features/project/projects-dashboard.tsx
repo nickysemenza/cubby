@@ -9,6 +9,7 @@ import { HammerIcon } from "@phosphor-icons/react/dist/csr/Hammer";
 import { WalletIcon } from "@phosphor-icons/react/dist/csr/Wallet";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import {
   lazy,
   type MouseEvent,
@@ -33,8 +34,8 @@ import { entityReport } from "~/integrations/tanstack-query/generated/domains/en
 import { image } from "~/integrations/tanstack-query/generated/domains/image.gen";
 import { project } from "~/integrations/tanstack-query/generated/domains/project.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
+import { Image } from "~/ui/common/image";
 import { type KeyNumber, KeyNumbers } from "~/ui/common/key-numbers";
 import type { CubbyRow } from "~/ui/data-table/table-features";
 import { FieldValueMark } from "~/ui/derived/value-mark";
@@ -42,10 +43,9 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { DashboardSectionLoading } from "~/ui/feedback/loading-skeletons";
 import { Grid, Panel, Row, Section, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { Image } from "~/ui/primitives/image";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { Badge } from "~/ui/reui/badge";
 
 import {
   defaultFilters,

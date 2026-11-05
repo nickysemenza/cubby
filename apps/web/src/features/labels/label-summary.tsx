@@ -1,4 +1,4 @@
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 export function LabelSummary({
   labelCount,

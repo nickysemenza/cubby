@@ -4,11 +4,11 @@ import type {
 } from "@cubby/schemas/recipe-flow";
 import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
+import { cn } from "cn";
 import { useRef, useState } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { MarkdownText } from "~/entity/prose/markdown";
-import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";

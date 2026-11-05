@@ -6,13 +6,13 @@ import { match } from "ts-pattern";
 import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatEstimate, formatKcal } from "~/lib/nutrition-format";
-import { Row, Section } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import {
   StaticTable,
   type StaticTableColumn,
-} from "~/ui/primitives/static-table";
-import { StatusText } from "~/ui/primitives/status-text";
+} from "~/ui/data-table/static-table";
+import { Row, Section } from "~/ui/layout";
+import { Badge } from "~/ui/reui/badge";
+import { StatusText } from "~/ui/text/status-text";
 
 import { CopyJsonButton } from "./copy-debug-button";
 

@@ -2,6 +2,7 @@
 
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { cn } from "cn";
 import type { ComponentProps } from "react";
 import {
   type FocusEvent,
@@ -17,8 +18,7 @@ import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { parsePlainDateInput } from "~/lib/plain-date-input";
-import { cn } from "~/lib/utils";
-import type { Calendar as CalendarComponent } from "~/ui/primitives/calendar";
+import type { Calendar as CalendarComponent } from "~/ui/calendar";
 import {
   Popover,
   PopoverContent,
@@ -31,7 +31,7 @@ const Calendar = browserOnlyLazy<ComponentProps<typeof CalendarComponent>>(
   import.meta.env.SSR
     ? null
     : () =>
-        import("~/ui/primitives/calendar").then((mod) => ({
+        import("~/ui/calendar").then((mod) => ({
           default: mod.Calendar,
         })),
 );

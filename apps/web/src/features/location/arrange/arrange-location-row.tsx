@@ -5,13 +5,13 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { useDraggable } from "@dnd-kit/core";
 import { CrosshairIcon } from "@phosphor-icons/react/dist/csr/Crosshair";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
+import { cn } from "cn";
 import { useEffect, useRef } from "react";
 
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { LocationIcon } from "~/entity/presentation/location-icons";
 import { resolveLocationPrimaryVisual } from "~/entity/presentation/location-visual-resolver";
 import { LocationTreeRow } from "~/features/location/location-tree-row";
-import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import {
   Tooltip,

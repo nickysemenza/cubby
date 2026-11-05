@@ -2,9 +2,9 @@ import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { SignInIcon } from "@phosphor-icons/react/dist/csr/SignIn";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { Link, useLocation } from "@tanstack/react-router";
+import { cn } from "cn";
 import * as React from "react";
 
-import { cn } from "~/lib/utils";
 import { BackgroundRefreshStatus } from "~/ui/feedback/background-refresh-status";
 import { useNavAuthed } from "~/ui/hooks/use-nav-authed";
 import { useVirtualKeyboard } from "~/ui/hooks/use-virtual-keyboard";

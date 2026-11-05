@@ -4,6 +4,7 @@ import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { cva } from "class-variance-authority";
+import { cn } from "cn";
 import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
@@ -25,14 +26,13 @@ import {
   type HoverPreviewEntity,
 } from "~/entity/preview/preview-entities";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
-import { cn } from "~/lib/utils";
 import { useIdentityCell } from "~/ui/common/stacked-value";
 import { ExternalLinkIcon } from "~/ui/external-link";
 import {
-  PreviewCard,
-  PreviewCardContent,
-  PreviewCardTrigger,
-} from "~/ui/primitives/preview-card";
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "~/ui/primitives/hover-card";
 import { Spinner } from "~/ui/primitives/spinner";
 import {
   Tooltip,
@@ -107,8 +107,8 @@ function PreviewRefLink({
   const inspected = useIsInspected(entity, id);
   return (
     // Controlled closed, not unmounted, so the link keeps its focus and place.
-    <PreviewCard {...(inspected ? { open: false } : {})}>
-      <PreviewCardTrigger
+    <HoverCard {...(inspected ? { open: false } : {})}>
+      <HoverCardTrigger
         // Open a touch faster than the 600ms default; close promptly.
         delay={300}
         closeDelay={150}
@@ -144,8 +144,8 @@ function PreviewRefLink({
           />
         )}
         {children}
-      </PreviewCardTrigger>
-      <PreviewCardContent>
+      </HoverCardTrigger>
+      <HoverCardContent>
         <Suspense
           fallback={
             <div className="flex justify-center py-4">
@@ -155,8 +155,8 @@ function PreviewRefLink({
         >
           <EntityPreviewContent entity={entity} id={id} />
         </Suspense>
-      </PreviewCardContent>
-    </PreviewCard>
+      </HoverCardContent>
+    </HoverCard>
   );
 }
 

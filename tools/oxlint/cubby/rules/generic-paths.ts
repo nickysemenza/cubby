@@ -70,10 +70,12 @@ export const noRawConsoleRule = defineRule({
 export const noAdHocNumberFormatRule = defineRule({
   meta: {
     type: "suggestion",
-    docs: { description: "Format and round numbers through lib/utils." },
+    docs: {
+      description: "Format and round numbers through lib/number-format.",
+    },
     messages: {
-      intl: `Use the lib/utils formatters (formatCurrency, formatCount, formatPercent, compact variants) instead of new Intl.NumberFormat. ${CATALOG}`,
-      toFixed: `Use roundTo / the lib/utils formatters instead of toFixed. ${CATALOG}`,
+      intl: `Use the lib/number-format formatters (formatCurrency, formatCount, formatPercent, compact variants) instead of new Intl.NumberFormat. ${CATALOG}`,
+      toFixed: `Use roundTo / the lib/number-format formatters instead of toFixed. ${CATALOG}`,
     },
   },
   createOnce(context) {

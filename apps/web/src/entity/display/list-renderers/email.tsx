@@ -1,11 +1,11 @@
 import { EMAIL_LINK_STATE_LABEL } from "@cubby/schemas/email-fields";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { cn } from "cn";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { cn } from "~/lib/utils";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { FieldValueMark } from "~/ui/derived/value-mark";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 import { TruncatedList } from "~/ui/truncated-list";
 
 import type { ListRenderer } from "../list-renderer-types";

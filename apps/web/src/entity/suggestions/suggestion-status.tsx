@@ -6,12 +6,12 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 
 import { Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import { Description } from "~/ui/text/description";
 
 import { describeOutcome } from "./suggestion-outcome-mark";
 import { actionableSuggestion } from "./suggestion-review";

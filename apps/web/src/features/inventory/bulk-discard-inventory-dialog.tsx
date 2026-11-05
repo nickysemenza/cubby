@@ -37,8 +37,8 @@ import type { InventoryDialogItem } from "~/features/inventory/dialog-item";
 import { inventory } from "~/integrations/tanstack-query/generated/domains/inventory.gen";
 import { wasm } from "~/lib/wasm";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
+import { QuantityInput } from "~/ui/forms/quantity-input";
 import { Stack } from "~/ui/layout";
-import { QuantityInput } from "~/ui/primitives/quantity-input";
 
 import { DiscardLineFields } from "./discard-line-fields";
 

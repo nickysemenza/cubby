@@ -12,13 +12,13 @@ import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { imageProcessing } from "~/integrations/tanstack-query/generated/domains/imageProcessing.gen";
+import { Image } from "~/ui/common/image";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { Image } from "~/ui/primitives/image";
-import { StaticTable } from "~/ui/primitives/static-table";
+import { Description } from "~/ui/text/description";
 
 const labelValue = (nutrition: ProductLabelNutrition, key: NutrientKey) => {
   const measured = nutrition.nutrients[key];

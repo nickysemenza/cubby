@@ -32,12 +32,17 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { Textarea } from "~/ui/primitives/textarea";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "~/ui/reui/alert";
+import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 
 import { CopyJsonButton } from "./copy-debug-button";
 import { RecipeFlowMap, RecipeFlowTable } from "./recipe-flow-renderers";
@@ -109,20 +114,19 @@ function FlowAvailability({
       <AlertTitle>Could not generate recipe flow</AlertTitle>
       <AlertDescription>
         {generationError ?? "No valid flow is available for this recipe."}
-        <DetailAction>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            className="mt-2"
-            onClick={onRetry}
-            disabled={isGenerating}
-          >
-            <ArrowClockwiseIcon />
-            Retry
-          </Button>
-        </DetailAction>
       </AlertDescription>
+      <AlertAction>
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          onClick={onRetry}
+          disabled={isGenerating}
+        >
+          <ArrowClockwiseIcon />
+          Retry
+        </Button>
+      </AlertAction>
     </Alert>
   );
 }

@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/nutrition";
 import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
+import { cn } from "cn";
 import { sumBy } from "es-toolkit";
 import { useMemo, useState } from "react";
 
@@ -20,11 +21,10 @@ import type {
   CalculateTotalsResult,
   RecipeCosting,
 } from "~/lib/recipe-costing";
-import { cn } from "~/lib/utils";
 import { SectionPair } from "~/ui/data-table/indexed-sections";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Eyebrow } from "~/ui/primitives/eyebrow";
+import { Eyebrow } from "~/ui/text/eyebrow";
 
 import {
   buildRecipeKicker,

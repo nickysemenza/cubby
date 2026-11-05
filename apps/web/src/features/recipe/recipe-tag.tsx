@@ -1,10 +1,10 @@
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { cn } from "cn";
 import type { FC } from "react";
 
 import { EntityFilterLink } from "~/entity/components/entity-ref-link";
-import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
+import { Badge } from "~/ui/reui/badge";
 
 import {
   getTagColor,

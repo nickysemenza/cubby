@@ -7,6 +7,7 @@ import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { PrinterIcon } from "@phosphor-icons/react/dist/csr/Printer";
 import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
 
@@ -23,7 +24,6 @@ import {
   flattenSections,
 } from "~/lib/recipe-costing";
 import { deriveRecipeTotalsGaps } from "~/lib/recipe-totals-gaps";
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";

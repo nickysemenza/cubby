@@ -1,9 +1,9 @@
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { actionItems } from "~/entity/actions/action-items";
-import { cn } from "~/lib/utils";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Input } from "~/ui/primitives/input";

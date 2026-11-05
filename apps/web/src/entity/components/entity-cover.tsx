@@ -4,12 +4,12 @@ import {
   type ImageUrlSummary,
 } from "@cubby/schemas/image-summary";
 import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 
 import { EntityIcon } from "~/entity/entities";
-import { cn } from "~/lib/utils";
-import { Image } from "~/ui/primitives/image";
-import { ImageWithPreview } from "~/ui/primitives/image-with-preview";
+import { Image } from "~/ui/common/image";
+import { ImageWithPreview } from "~/ui/common/image-with-preview";
 
 interface EntityCoverProps {
   images: readonly ImageUrlSummary[];

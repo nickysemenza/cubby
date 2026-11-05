@@ -1,4 +1,5 @@
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
+import { cn } from "cn";
 import {
   createContext,
   type CSSProperties,
@@ -6,7 +7,6 @@ import {
   useContext,
 } from "react";
 
-import { cn } from "~/lib/utils";
 import { Button } from "~/ui/primitives/button";
 import {
   Popover,

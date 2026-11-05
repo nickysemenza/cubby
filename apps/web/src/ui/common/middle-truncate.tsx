@@ -1,4 +1,4 @@
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
 
 /** A label keeps this many characters at its end, and a code at each end. */
 const ENDS = 4;

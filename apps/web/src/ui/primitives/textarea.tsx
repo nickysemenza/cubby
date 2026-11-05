@@ -1,7 +1,7 @@
 import * as React from "react";
 
 import { useHydrationGate } from "~/ui/hooks/use-hydrated";
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
 
 function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
   const gate = useHydrationGate(props.disabled);

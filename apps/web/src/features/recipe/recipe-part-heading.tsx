@@ -1,4 +1,4 @@
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
 
 /**
  * A recipe part's name, shown when a recipe has more than one part or names

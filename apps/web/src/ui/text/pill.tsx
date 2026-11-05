@@ -1,7 +1,7 @@
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
 
 const pillVariants = cva(
   "inline-flex h-(--pill-height) max-w-full min-w-0 items-center gap-1 rounded-[var(--brand-web-radius-chip)] border px-1.5 py-0.5 text-(length:--pill-font-size) leading-none font-medium",

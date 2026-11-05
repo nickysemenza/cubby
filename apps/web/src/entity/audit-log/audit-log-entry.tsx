@@ -4,6 +4,7 @@ import { identifierEffects } from "@cubby/schemas/external-id";
 import { parseShortcode } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
+import { cn } from "cn";
 import { sortBy } from "es-toolkit";
 
 import {
@@ -14,7 +15,6 @@ import { categoryReference } from "~/entity/presentation/category-reference";
 import { dateSpanParts } from "~/lib/date-span";
 import { formatCount } from "~/lib/number-format";
 import { getStatusBadgeProps } from "~/lib/status-colors";
-import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import { DateDisplay } from "~/ui/common/date-display";
 import type { Fact } from "~/ui/common/facts";

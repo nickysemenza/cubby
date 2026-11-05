@@ -1,11 +1,11 @@
 import type { SearchDestination, SearchHit } from "@cubby/schemas/search";
 import { locationTypeValues } from "@cubby/shared";
+import { cn } from "cn";
 
 import { EntityCover } from "~/entity/components/entity-cover";
 import { RecordEmoji } from "~/entity/components/record-emoji";
 import { EntityIcon, entities, entityDetailParams } from "~/entity/entities";
-import { cn } from "~/lib/utils";
-import { IconTile } from "~/ui/primitives/icon-tile";
+import { IconTile } from "~/ui/common/icon-tile";
 
 import { getLocationIcon, getLocationTypeColor } from "./location-type-theme";
 

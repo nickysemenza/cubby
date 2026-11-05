@@ -2,13 +2,14 @@ import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOu
 import { DotsThreeVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsThreeVertical";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
+import { cn } from "cn";
 import type { FC, KeyboardEvent } from "react";
 import { useState } from "react";
 import { Controller, type UseFormReturn, useFieldArray } from "react-hook-form";
 
 import { PickerField } from "~/entity/forms/picker-field";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
-import { cn } from "~/lib/utils";
+import { QuantityInput } from "~/ui/forms/quantity-input";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -19,7 +20,6 @@ import {
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 import { Input } from "~/ui/primitives/input";
-import { QuantityInput } from "~/ui/primitives/quantity-input";
 
 import { IngredientReparse } from "./ingredient-reparse";
 import type { IngItem, RecipeFormValues } from "./types";

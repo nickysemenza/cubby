@@ -12,6 +12,7 @@ import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowC
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { cn } from "cn";
 import { useId } from "react";
 import type React from "react";
 import {
@@ -26,7 +27,6 @@ import { toast } from "sonner";
 
 import type { FieldSuggestionSource } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-apply";
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { CellEditorPendingContext } from "~/ui/data-table/cell-editor-overlay";

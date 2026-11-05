@@ -54,7 +54,7 @@ import {
   type CubbyColumnCollection,
 } from "~/ui/data-table/table-features";
 import { useTagOptions } from "~/ui/hooks/use-entity-options";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 
 import { useStableIds } from "../../entity/list-columns/stable-ids";
 import {

@@ -1,9 +1,9 @@
+import { cn } from "cn";
 import { uniq } from "es-toolkit";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
-import { cn } from "~/lib/utils";
 import { Overlay } from "~/ui/overlays/overlay";
 
 /**

@@ -7,7 +7,7 @@ import type { z } from "zod";
 
 import type { generatedEntityRelationListOutputSchema } from "~/entity/generated/entity-relation-lists.gen";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
-import { Badge } from "~/ui/primitives/badge";
+import { Badge } from "~/ui/reui/badge";
 
 import { CellFrame } from "../../ui/data-table/cell-frame";
 type MovementEvidence = Pick<

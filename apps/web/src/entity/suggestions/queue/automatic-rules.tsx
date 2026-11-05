@@ -20,8 +20,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/ui/primitives/alert-dialog";
-import { Badge } from "~/ui/primitives/badge";
 import { Switch } from "~/ui/primitives/switch";
+import { Badge } from "~/ui/reui/badge";
 
 const RULE_NAME = {
   "field.addition": "Field assignment",

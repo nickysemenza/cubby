@@ -36,9 +36,9 @@ import { FieldRecordValue } from "~/ui/derived/record-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { Description } from "~/ui/text/description";
+import { NoneValue } from "~/ui/text/none-value";
 
 const isRowSelectionUpdater = (
   value: Updater<RowSelectionState>,

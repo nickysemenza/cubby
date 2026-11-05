@@ -38,11 +38,11 @@ import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { Description } from "~/ui/primitives/description";
-import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Input } from "~/ui/primitives/input";
-import { NoneValue } from "~/ui/primitives/none-value";
-import { StatusText } from "~/ui/primitives/status-text";
+import { Description } from "~/ui/text/description";
+import { Eyebrow } from "~/ui/text/eyebrow";
+import { NoneValue } from "~/ui/text/none-value";
+import { StatusText } from "~/ui/text/status-text";
 
 import { useActionMutation } from "../../entity/hooks/use-action-mutation";
 

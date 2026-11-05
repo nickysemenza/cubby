@@ -1,9 +1,9 @@
+import { cn } from "cn";
 import { Children, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { z } from "zod";
 
-import { cn } from "~/lib/utils";
 import { selfLinkLabel } from "~/ui/text/link-label";
 
 import { ShortcodeProse } from "./shortcode-prose";

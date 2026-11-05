@@ -20,6 +20,7 @@ import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { useMemo } from "react";
 import { z } from "zod";
 
@@ -33,13 +34,12 @@ import {
   useQueuePass,
 } from "~/features/work-queue/use-queue-pass";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
-import { cn } from "~/lib/utils";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Panel, Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { Button, buttonVariants } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
 import { Spinner } from "~/ui/primitives/spinner";
+import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
 
 import { useProductViewSnapshot } from "../worklist/use-product-view-snapshot";
 import { TriageBounds, type TriageBoundsValue } from "./triage-bounds";

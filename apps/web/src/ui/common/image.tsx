@@ -1,12 +1,13 @@
 import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken";
+import { cn } from "cn";
 import {
   type ComponentProps,
   type ReactNode,
   useCallback,
   useState,
 } from "react";
+
 import { transformedImageUrl } from "~/lib/image-url";
-import { cn } from "~/lib/utils";
 
 export type ImageProps = Omit<
   ComponentProps<"img">,
@@ -16,20 +17,20 @@ export type ImageProps = Omit<
     | { displayWidth: number; unoptimized?: never }
     | { displayWidth?: never; unoptimized: true }
   ) & {
-  /**
-   * Rendered in place of the image when the src is missing or fails to load.
-   * Should fill its box (h-full w-full). Defaults to a quiet muted icon tile.
-   */
-  fallback?: ReactNode;
-  /**
-   * Optional content shown in the reserved image box until decoding finishes.
-   * The default remains the quiet paper tint; identity marks supply their
-   * semantic entity icon so an image never creates a blank intermediate state.
-   */
-  loadingFallback?: ReactNode;
-  /** Skip transformations for a known non-bucket URL or an intentional test. */
-  unoptimized?: true;
-};
+    /**
+     * Rendered in place of the image when the src is missing or fails to load.
+     * Should fill its box (h-full w-full). Defaults to a quiet muted icon tile.
+     */
+    fallback?: ReactNode;
+    /**
+     * Optional content shown in the reserved image box until decoding finishes.
+     * The default remains the quiet paper tint; identity marks supply their
+     * semantic entity icon so an image never creates a blank intermediate state.
+     */
+    loadingFallback?: ReactNode;
+    /** Skip transformations for a known non-bucket URL or an intentional test. */
+    unoptimized?: true;
+  };
 
 // URLs that have successfully loaded this session. Virtualized tables
 // unmount/remount rows while scrolling; without remembering, every remount
@@ -60,6 +61,7 @@ export function Image({
   ...props
 }: ImageProps) {
   const hasSrc = typeof src === "string" && src.length > 0;
+  const srcUrl = hasSrc ? src : undefined;
 
   // If a CF transform fails (e.g. transformation outage), retry once with the
   // original URL before giving up to the fallback tile. Failures are keyed to
@@ -73,16 +75,14 @@ export function Image({
 
   const transformedSrc =
     hasSrc && displayWidth != null
-      ? transformedImageUrl(src as string, displayWidth)
-      : (src as string | undefined);
+      ? transformedImageUrl(src, displayWidth)
+      : srcUrl;
   const transformApplied = hasSrc && transformedSrc !== src;
   const useTransform = transformApplied && !triedOriginal;
 
   // No srcSet: the helper already requests 2× the rendered width, so every
   // device pixel ratio fetches the same URL and shares one cache entry.
-  const effectiveSrc = useTransform
-    ? transformedSrc
-    : (src as string | undefined);
+  const effectiveSrc = useTransform ? transformedSrc : srcUrl;
 
   // Skip the placeholder entirely for images already loaded this session.
   // Keyed on the final (transformed) URL, so two placements that snap to the
@@ -112,7 +112,10 @@ export function Image({
       typeof alt === "string" && alt.length > 0 ? alt : undefined;
     return (
       <div
-        className={cn("flex items-center justify-center bg-muted/30", className)}
+        className={cn(
+          "flex items-center justify-center bg-muted/30",
+          className,
+        )}
         style={style}
         role={accessibleAlt ? "img" : undefined}
         aria-label={accessibleAlt}
@@ -152,10 +155,10 @@ export function Image({
         onError={() => {
           // First failure of a transformed URL → fall back to the original.
           if (useTransform) {
-            setTriedOriginalFor(src as string);
+            setTriedOriginalFor(srcUrl ?? null);
             return;
           }
-          setErroredFor(src as string);
+          setErroredFor(srcUrl ?? null);
           setIsLoading(false);
         }}
         className={cn(

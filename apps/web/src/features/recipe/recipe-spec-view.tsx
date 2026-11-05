@@ -1,4 +1,5 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { cn } from "cn";
 import { uniq } from "es-toolkit";
 import { Fragment, memo, useMemo, useState } from "react";
 
@@ -6,7 +7,6 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { MarkdownText } from "~/entity/prose/markdown";
 import { renderValueOrMissing } from "~/lib/result";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
-import { cn } from "~/lib/utils";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 

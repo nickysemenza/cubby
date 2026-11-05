@@ -1,6 +1,5 @@
+import { cn } from "cn";
 import type { HTMLAttributes, ReactNode } from "react";
-
-import { cn } from "~/lib/utils";
 
 type ToolbarProps = Omit<HTMLAttributes<HTMLDivElement>, "children"> & {
   /** Accessible name ("Purchase filters", "Photo review actions"). */

@@ -1,5 +1,6 @@
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { cn } from "cn";
 import {
   type CSSProperties,
   type FC,
@@ -10,11 +11,10 @@ import {
   useState,
 } from "react";
 
-import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import { Badge } from "~/ui/reui/badge";
 
 export interface ChipsInputProps {
   id?: string;

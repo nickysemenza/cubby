@@ -19,6 +19,7 @@ import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import type { QueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
+import { cn } from "cn";
 import { uniqBy } from "es-toolkit";
 import type { ReactNode } from "react";
 import { z } from "zod";
@@ -46,7 +47,6 @@ import { multiSelectFilterFn } from "~/entity/filters";
 import { readPathValue } from "~/entity/read-path";
 import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-suggestion";
 import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
-import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { renderScalarValue } from "~/ui/common/scalar-value";
 import { ImageChainPopover } from "~/ui/derived/image-chain";
@@ -58,14 +58,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
-import { EnumPill } from "~/ui/primitives/enum-pill";
-import { NoneValue } from "~/ui/primitives/none-value";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { EnumPill } from "~/ui/text/enum-pill";
 import { tryFormatAmount } from "~/ui/text/format-amount";
+import { NoneValue } from "~/ui/text/none-value";
 
 import type { UnitMappingDisplay } from "../../features/units/unit-mapping-display";
 import type { ComboboxItem } from "../../ui/combobox/combobox-types";

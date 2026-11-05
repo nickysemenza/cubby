@@ -3,8 +3,8 @@ import { Link } from "@tanstack/react-router";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
-import { Badge } from "~/ui/primitives/badge";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { Badge } from "~/ui/reui/badge";
+import { NoneValue } from "~/ui/text/none-value";
 import { TruncatedList } from "~/ui/truncated-list";
 
 import type { ListRenderer } from "../list-renderer-types";

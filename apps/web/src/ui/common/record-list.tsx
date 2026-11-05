@@ -1,6 +1,7 @@
 import type { ReportRowState } from "@cubby/schemas/entity-report";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link, type LinkProps } from "@tanstack/react-router";
+import { cn } from "cn";
 import {
   createContext,
   type CSSProperties,
@@ -8,7 +9,6 @@ import {
   useContext,
 } from "react";
 
-import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Skeleton } from "~/ui/primitives/skeleton";

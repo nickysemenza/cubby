@@ -1,6 +1,5 @@
 import { type DataType, dataTypeLabel } from "@cubby/usda";
-
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
 
 // Color per USDA data_type, encoding BOTH identity and the generic/branded
 // grouping along the monochrome ink ladder. The richest reference foods take

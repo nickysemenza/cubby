@@ -1,9 +1,9 @@
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { cn } from "cn";
 import type * as React from "react";
 import { type Control, type FieldValues, useFieldArray } from "react-hook-form";
 
-import { cn } from "~/lib/utils";
 import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

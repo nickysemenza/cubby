@@ -14,8 +14,8 @@ import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Panel, Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
+import { Badge } from "~/ui/reui/badge";
 
 // Only the two params this screen renders from. The rest of the signed
 // authorize query stays in the address bar untouched — the oauthProviderClient

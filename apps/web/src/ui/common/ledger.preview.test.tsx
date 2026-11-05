@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { page } from "vitest/browser";
 
 import { Picker } from "~/ui/combobox/picker";
-import { Image } from "~/ui/primitives/image";
+import { Image } from "~/ui/common/image";
 
 import { Ledger, LedgerCell, LedgerRow } from "./ledger";
 

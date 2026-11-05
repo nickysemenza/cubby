@@ -1,11 +1,11 @@
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import type React from "react";
 import type { ReactNode } from "react";
 
-import { cn } from "~/lib/utils";
-import { Image } from "~/ui/primitives/image";
-import { ImagePreviewPopup } from "~/ui/primitives/image-with-preview";
+import { Image } from "~/ui/common/image";
+import { ImagePreviewPopup } from "~/ui/common/image-with-preview";
 import { Tooltip, TooltipTrigger } from "~/ui/primitives/tooltip";
 
 interface ArrangeThumbProps {

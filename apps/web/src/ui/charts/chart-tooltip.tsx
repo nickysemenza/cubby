@@ -1,6 +1,5 @@
+import { cn } from "cn";
 import type { CSSProperties, ReactNode } from "react";
-
-import { cn } from "~/lib/utils";
 
 /**
  * The shared nivo/chart tooltip surface. Porcelain separation uses a hairline

@@ -6,14 +6,14 @@ import { formatCount } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
 import { MiddleTruncate } from "~/ui/common/middle-truncate";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { BooleanValue, EnumPill } from "~/ui/primitives/enum-pill";
-import { NoneValue } from "~/ui/primitives/none-value";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import { BooleanValue, EnumPill } from "~/ui/text/enum-pill";
 import JsonRenderer from "~/ui/text/json-renderer";
+import { NoneValue } from "~/ui/text/none-value";
 
 export type ScalarDisplayValue =
   | { kind: "empty"; raw: null | undefined }

@@ -11,9 +11,9 @@ import { z } from "zod";
 
 import { formatDuration } from "~/lib/format-duration";
 import { Row, Section } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Spinner } from "~/ui/primitives/spinner";
+import { Badge } from "~/ui/reui/badge";
 
 import {
   AiSmokeForm,

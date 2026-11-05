@@ -8,8 +8,8 @@ import {
 } from "~/entity/display/entity-display";
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import { useEntityMetadata } from "~/entity/metadata";
+import { Image } from "~/ui/common/image";
 import { QuerySection } from "~/ui/feedback/query-section";
-import { Image } from "~/ui/primitives/image";
 
 /** All graph links use already hydrated identity and cover; hover resolves detail on demand. */
 export function GraphRecordLink({

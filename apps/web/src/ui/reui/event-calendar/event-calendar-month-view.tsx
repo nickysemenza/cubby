@@ -52,7 +52,7 @@ import {
   PopoverTrigger,
 } from "~/ui/primitives/popover";
 import { ScrollArea } from "~/ui/primitives/scroll-area";
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
 
 // Layout-effect on the client (measure before paint, no flash), plain effect on
 // the server (never runs there) to avoid the SSR useLayoutEffect warning.

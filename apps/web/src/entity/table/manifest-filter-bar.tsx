@@ -1,4 +1,5 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
+import { cn } from "cn";
 import { useCallback, useMemo } from "react";
 import { z } from "zod";
 
@@ -8,7 +9,6 @@ import {
   manifestFilterFields,
 } from "~/entity/filter-manifest";
 import { decodeFilters, encodeFilters } from "~/entity/filters";
-import { cn } from "~/lib/utils";
 import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 
 import { FilterBar } from "../../ui/data-table/filter-bar";

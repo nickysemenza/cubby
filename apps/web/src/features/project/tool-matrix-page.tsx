@@ -38,6 +38,7 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGl
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { cn } from "cn";
 import { format } from "date-fns";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { match } from "ts-pattern";
@@ -53,16 +54,15 @@ import { project } from "~/integrations/tanstack-query/generated/domains/project
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/number-format";
 import { toolTimelineConflict } from "~/lib/tool-timeline";
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { cellMonoDense, stickyRowHeaderPage } from "~/ui/matrix/matrix-chrome";
-import { Badge } from "~/ui/primitives/badge";
 import { Input } from "~/ui/primitives/input";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { Badge } from "~/ui/reui/badge";
 
 /**
  * How long a cell waits before it commits. A click-and-revert inside this

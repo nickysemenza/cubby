@@ -10,11 +10,11 @@ import { z } from "zod";
 
 import { copyTextWithToast } from "~/lib/clipboard";
 import { formatCurrency } from "~/lib/number-format";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { StaticTable } from "~/ui/primitives/static-table";
-import { StatusText } from "~/ui/primitives/status-text";
+import { StatusText } from "~/ui/text/status-text";
 
 import { aiFundingStatusQuery } from "./ai-funding";
 

@@ -3,9 +3,9 @@ import {
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
 import { fieldMissingLabel } from "@cubby/schemas/field-envelope-presentation";
+import { cn } from "cn";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { cn } from "~/lib/utils";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import {
   Tooltip,

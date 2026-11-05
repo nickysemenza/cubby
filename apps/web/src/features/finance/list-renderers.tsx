@@ -2,7 +2,7 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 
 import { PossibleVendor } from "~/features/finance/possible-vendor";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 
 import type { ListRenderer } from "../../entity/display/list-renderer-types";
 

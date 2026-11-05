@@ -4,7 +4,7 @@ import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 
 import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
+import { Badge } from "~/ui/reui/badge";
 
 import { macroCoverage } from "./macro-coverage";
 

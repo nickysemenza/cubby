@@ -7,7 +7,7 @@ import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { formatTimestamp } from "~/lib/date-format";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { StatusText } from "~/ui/primitives/status-text";
+import { StatusText } from "~/ui/text/status-text";
 
 export function PurchaseImportAgentConnection({
   feedback,

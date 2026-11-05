@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 
-import { cn } from "~/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,

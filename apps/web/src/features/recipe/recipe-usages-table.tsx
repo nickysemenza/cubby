@@ -10,8 +10,8 @@ import {
   type ParseDrift,
 } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { Button } from "~/ui/primitives/button";
-import { StaticTable } from "~/ui/primitives/static-table";
 import {
   Tooltip,
   TooltipContent,

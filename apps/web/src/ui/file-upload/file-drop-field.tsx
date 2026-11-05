@@ -1,10 +1,10 @@
 import { FileArrowUpIcon } from "@phosphor-icons/react/dist/csr/FileArrowUp";
 import { UploadIcon } from "@phosphor-icons/react/dist/csr/Upload";
+import { cn } from "cn";
 import { useCallback, useState } from "react";
 import { type Accept, type FileRejection, useDropzone } from "react-dropzone";
 
 import { roundTo } from "~/lib/round-to";
-import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

@@ -1,6 +1,6 @@
+import { cn } from "cn";
 import type { ReactNode } from "react";
 
-import { cn } from "~/lib/utils";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { Spinner } from "~/ui/primitives/spinner";
 

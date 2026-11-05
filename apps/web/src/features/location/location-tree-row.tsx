@@ -1,10 +1,10 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { LocationTreeNode } from "@cubby/schemas/location";
+import { cn } from "cn";
 import type * as React from "react";
 
-import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import { LocationIcon } from "../../entity/presentation/location-icons";
 

@@ -5,7 +5,7 @@ import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { EnumPill } from "~/ui/primitives/enum-pill";
+import { EnumPill } from "~/ui/text/enum-pill";
 
 type WorkOwners = Pick<WorkQueueRow, "owners" | "shared">;
 

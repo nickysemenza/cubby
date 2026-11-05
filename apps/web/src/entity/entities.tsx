@@ -14,12 +14,12 @@ import { duplicateProductIdentitySchema } from "@cubby/schemas/problems";
 import { countLabel } from "@cubby/shared/pluralize";
 import type { IconProps } from "@phosphor-icons/react/lib";
 import type { QueryClient } from "@tanstack/react-query";
+import { cn } from "cn";
 import { z } from "zod";
 
 import { entityListFor } from "~/entity/entity-list";
 import { formatCurrency } from "~/lib/number-format";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { cn } from "~/lib/utils";
 import {
   domainForEntity,
   domainIconClass,

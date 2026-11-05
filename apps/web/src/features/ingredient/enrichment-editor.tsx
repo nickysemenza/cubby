@@ -6,6 +6,7 @@ import { TIER1_NUTRIENT_KEYS, TIER1_NUTRIENTS } from "@cubby/usda";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { cn } from "cn";
 import {
   type ReactNode,
   type Ref,
@@ -26,12 +27,11 @@ import { UnitMappingGraph } from "~/features/units/unit-mapping-graph";
 import { UnitMappingsTable } from "~/features/units/unitmappingstable";
 import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
+import { Description } from "~/ui/text/description";
 
 import type { EquivalenceDraft } from "./equivalence-workbench-link";
 import {

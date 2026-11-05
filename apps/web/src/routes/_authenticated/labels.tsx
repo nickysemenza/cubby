@@ -32,8 +32,8 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { StatusText } from "~/ui/primitives/status-text";
+import { Description } from "~/ui/text/description";
+import { StatusText } from "~/ui/text/status-text";
 
 const searchParamsSchema = z.object({
   codes: urlStringParam,

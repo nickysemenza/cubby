@@ -8,6 +8,7 @@ import {
 import { capitalize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
+import { cn } from "cn";
 import { useMemo } from "react";
 
 import {
@@ -17,7 +18,6 @@ import {
 } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/number-format";
 import { getCostTypeColor } from "~/lib/status-colors";
-import { cn } from "~/lib/utils";
 import { ChartTooltip } from "~/ui/charts/chart-tooltip";
 import { HorizontalBarChart } from "~/ui/charts/kit";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";

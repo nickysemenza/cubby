@@ -1,4 +1,4 @@
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
 import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 
 const sizeClasses = {
@@ -17,6 +17,7 @@ interface SpinnerProps extends Omit<React.ComponentProps<"svg">, "size"> {
 function Spinner({ className, size = "default", ...props }: SpinnerProps) {
   return (
     <CircleNotchIcon
+      data-slot="spinner"
       role="status"
       aria-label="Loading"
       className={cn("animate-spin", sizeClasses[size], className)}

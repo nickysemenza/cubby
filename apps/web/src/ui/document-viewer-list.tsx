@@ -1,8 +1,8 @@
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { cn } from "cn";
 import prettyBytes from "pretty-bytes";
 import { type FC, useEffect, useRef } from "react";
 
-import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { buttonVariants } from "~/ui/primitives/button";
 

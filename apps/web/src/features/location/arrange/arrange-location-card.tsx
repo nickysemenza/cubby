@@ -3,11 +3,11 @@ import type { LocationTreeNode } from "@cubby/schemas/location";
 import { useDraggable } from "@dnd-kit/core";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
+import { cn } from "cn";
 
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { LocationIcon } from "~/entity/presentation/location-icons";
 import { resolveLocationPrimaryVisual } from "~/entity/presentation/location-visual-resolver";
-import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 
 import { ArrangeMoveTo } from "./arrange-move-to";

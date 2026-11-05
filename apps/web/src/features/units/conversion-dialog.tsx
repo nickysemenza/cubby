@@ -18,7 +18,6 @@ import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { Description } from "~/ui/primitives/description";
 import { DialogTrigger } from "~/ui/primitives/dialog";
 import { Label } from "~/ui/primitives/label";
 import {
@@ -26,6 +25,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { Description } from "~/ui/text/description";
 
 import { ConversionCapabilitiesSummary } from "./conversion-capabilities-summary";
 import { kindIconFor } from "./kind-icons";

@@ -1,9 +1,9 @@
 import type { LocationTreeNode } from "@cubby/schemas/location";
 import { QuestionIcon } from "@phosphor-icons/react/dist/csr/Question";
+import { cn } from "cn";
 
-import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import { ArrangeItemChip } from "./arrange-item-chip";
 import { ArrangeLocationRow } from "./arrange-location-row";

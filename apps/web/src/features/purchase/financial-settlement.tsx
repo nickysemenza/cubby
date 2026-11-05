@@ -18,8 +18,8 @@ import { useEntityMetadata } from "~/entity/metadata";
 import { formatCurrency } from "~/lib/number-format";
 import { TableCellWorkbench } from "~/ui/data-table/table-cell-workbench";
 import { Row, Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
-import { EnumPill } from "~/ui/primitives/enum-pill";
+import { Description } from "~/ui/text/description";
+import { EnumPill } from "~/ui/text/enum-pill";
 
 import { LinkedTransactions } from "../finance/linked-transactions";
 import { MatchStatementButton } from "./match-statement";

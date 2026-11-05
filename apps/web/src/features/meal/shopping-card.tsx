@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 
 import { entityDetailLink } from "~/entity/entities";
-import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
 

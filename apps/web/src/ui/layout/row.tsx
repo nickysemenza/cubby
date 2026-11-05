@@ -1,6 +1,6 @@
+import { cn } from "cn";
 import type * as React from "react";
 
-import { cn } from "~/lib/utils";
 import { type RowVariants, rowVariants } from "~/styles/layouts";
 
 interface RowProps extends React.HTMLAttributes<HTMLElement>, RowVariants {

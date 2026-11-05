@@ -49,7 +49,7 @@ import {
   type ColumnExplanation,
 } from "~/ui/data-table/table-meta";
 import { Stack } from "~/ui/layout";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 
 import {
   defineListOverride,

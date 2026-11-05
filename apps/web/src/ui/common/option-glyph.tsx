@@ -1,7 +1,6 @@
 import type { Icon, IconWeight } from "@phosphor-icons/react/lib";
+import { cn } from "cn";
 import { useEffect, useState } from "react";
-
-import { cn } from "~/lib/utils";
 
 import { EAGER, LAZY } from "./option-glyphs.gen";
 

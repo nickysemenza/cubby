@@ -1,4 +1,5 @@
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { cn } from "cn";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -11,7 +12,6 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { cn } from "~/lib/utils";
 import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
 import {
   DisclosureBody,

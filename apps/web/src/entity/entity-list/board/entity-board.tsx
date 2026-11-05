@@ -12,6 +12,7 @@ import {
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { cn } from "cn";
 import { useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -37,7 +38,6 @@ import {
 } from "~/entity/model/list-contracts";
 import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { useTableState } from "~/entity/table/use-table-state";
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import { DenseCellContext } from "~/ui/common/stacked-value";
 import { FilterBar } from "~/ui/data-table/filter-bar";

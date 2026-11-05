@@ -63,9 +63,9 @@ import type {
   ListQueryResponse,
 } from "~/ui/hooks/use-paginated-table-core";
 import { Panel } from "~/ui/layout/panel";
-import { Alert } from "~/ui/primitives/alert";
 import { Button } from "~/ui/primitives/button";
 import { Tabs, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
+import { Alert, AlertAction } from "~/ui/reui/alert";
 
 import { useAcceptClean, type CleanTarget } from "./accept-clean";
 import { AutomaticDecisions } from "./automatic-decisions";
@@ -903,14 +903,15 @@ function SuggestionsTableBody({
                 {countLabel(review.failures.length, "suggestion")} could not be
                 settled
               </span>
-              <Button
-                size="xs"
-                variant="ghost"
-                className="ml-auto"
-                onClick={review.clearFailures}
-              >
-                Clear
-              </Button>
+              <AlertAction className="ml-auto">
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  onClick={review.clearFailures}
+                >
+                  Clear
+                </Button>
+              </AlertAction>
             </div>
             <ul aria-label="Review failures" className="flex flex-col gap-0.5">
               {review.failures.map((failure) => (

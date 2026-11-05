@@ -49,7 +49,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/ui/primitives/alert-dialog";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import { BookGroupCard } from "./book-group-card";
 import type { CookbookBundleWorker } from "./bundle-worker";

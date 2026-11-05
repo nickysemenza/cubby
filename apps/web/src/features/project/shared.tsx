@@ -30,8 +30,8 @@ import {
 } from "~/ui/data-table/table-features";
 import { type MobileColumnMeta } from "~/ui/data-table/table-meta";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
-import { badgeVariantColor } from "~/ui/primitives/badge";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { badgeVariantColor } from "~/ui/reui/badge";
+import { NoneValue } from "~/ui/text/none-value";
 
 export { TASK_STATUS_LABELS } from "~/entity/presentation/task-options";
 

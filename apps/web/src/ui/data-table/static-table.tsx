@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import type { ComponentProps, ReactNode } from "react";
 
 import {
@@ -8,7 +9,6 @@ import {
   TableHeader,
   TableRow,
 } from "~/ui/primitives/table";
-import { cn } from "~/lib/utils";
 
 export interface StaticTableColumn<T> {
   id: string;

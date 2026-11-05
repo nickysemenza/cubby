@@ -1,7 +1,8 @@
+import { cn } from "cn";
 import { type FC, type KeyboardEvent, useEffect, useState } from "react";
-import { Input } from "~/ui/primitives/input";
-import { cn } from "~/lib/utils";
+
 import { wasm } from "~/lib/wasm";
+import { Input } from "~/ui/primitives/input";
 
 interface QuantityInputProps {
   /** The numeric quantity, or null when empty. */
@@ -65,7 +66,8 @@ export const QuantityInput: FC<QuantityInputProps> = ({
       setText(wasm.format_quantity(parsed)); // normalize "0.5" → "1/2"
       onChange(parsed);
     } catch {
-      setInvalid(true); // keep the typed text; surface it as invalid
+      // SILENT: the invalid state is the surfaced error; the typed text stays for correction.
+      setInvalid(true);
     }
   };
 

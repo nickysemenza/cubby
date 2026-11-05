@@ -2,7 +2,7 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ImageSightingOut } from "@cubby/schemas/image-sighting";
 
 import { householdLocalDate } from "~/lib/household-date";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 
 import type { EntityDetailFieldRenderers } from "./index";
 

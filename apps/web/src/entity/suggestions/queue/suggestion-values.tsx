@@ -13,16 +13,16 @@ import type {
 import type { TransferPairJudgment } from "@cubby/schemas/transfer-pair-suggestion";
 import { humanize, mapRecord } from "@cubby/shared";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { cn } from "cn";
 import { match } from "ts-pattern";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { formatCurrency } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { ChipCluster } from "~/ui/common/chip-cluster";
-import { Badge } from "~/ui/primitives/badge";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { Badge } from "~/ui/reui/badge";
+import { NoneValue } from "~/ui/text/none-value";
 
 /** Older saved projections retain their original provider observation. */
 export const providerCategories = (

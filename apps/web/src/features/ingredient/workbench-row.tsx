@@ -10,7 +10,7 @@ import { RecipeUsagesTable } from "~/features/recipe/recipe-usages-table";
 import { ingredient } from "~/integrations/tanstack-query/generated/domains/ingredient.gen";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import { EnrichmentEditor } from "./enrichment-editor";
 import type { EquivalenceDraft } from "./equivalence-workbench-link";

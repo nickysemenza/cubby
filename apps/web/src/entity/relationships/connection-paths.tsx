@@ -3,11 +3,11 @@ import type {
   ConnectedRecordsOutput,
 } from "@cubby/schemas/connected-records";
 import type { EntityRef } from "@cubby/schemas/entity";
+import { cn } from "cn";
 import { useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { isBrowserRoutedEntity } from "~/entity/entities";
-import { cn } from "~/lib/utils";
 
 type ConnectedItem = ConnectedRecordsOutput["items"][number];
 

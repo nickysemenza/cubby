@@ -2,8 +2,8 @@ import type { ProductCategorySummary as ProductCategory } from "@cubby/schemas/p
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { useProductCategories } from "~/entity/hooks/use-product-categories";
-import { NoneValue } from "~/ui/primitives/none-value";
 import { Spinner } from "~/ui/primitives/spinner";
+import { NoneValue } from "~/ui/text/none-value";
 
 import { categoryText } from "./category-text";
 

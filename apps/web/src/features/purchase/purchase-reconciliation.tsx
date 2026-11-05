@@ -8,7 +8,7 @@ import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useEntityMetadata } from "~/entity/metadata";
 import { formatCurrency } from "~/lib/number-format";
-import { EnumPill } from "~/ui/primitives/enum-pill";
+import { EnumPill } from "~/ui/text/enum-pill";
 
 /**
  * `statedTotal` vs `SUM(expense.cost)`, as a **soft** cue.

@@ -7,8 +7,8 @@ import { formatMinutesSeconds } from "~/lib/format-duration";
 import { formatSmallCurrency } from "~/lib/number-format";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
 import { Spinner } from "~/ui/primitives/spinner";
+import { Description } from "~/ui/text/description";
 
 import { formatMinuteRange } from "./import-helpers";
 import type { Book } from "./types";

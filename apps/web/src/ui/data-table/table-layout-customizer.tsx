@@ -15,8 +15,8 @@ import { PushPinSlashIcon } from "@phosphor-icons/react/dist/csr/PushPinSlash";
 import { SidebarIcon } from "@phosphor-icons/react/dist/csr/Sidebar";
 import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import type { RowData } from "@tanstack/react-table";
+import { cn } from "cn";
 
-import { cn } from "~/lib/utils";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,

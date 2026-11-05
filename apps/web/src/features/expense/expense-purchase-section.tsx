@@ -17,8 +17,8 @@ import { FieldRecordValue } from "~/ui/derived/record-value";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { Description } from "~/ui/text/description";
+import { NoneValue } from "~/ui/text/none-value";
 
 // Module-level so the fallback keeps a stable reference across renders.
 const NO_OTHER_EXPENSES: ExpenseOut[] = [];

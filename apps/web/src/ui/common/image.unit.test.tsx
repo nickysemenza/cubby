@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
 import { Image } from "./image";
 
 describe("Image", () => {
@@ -65,7 +66,9 @@ describe("Image", () => {
   });
 
   it("leaves non-bucket URLs untransformed even with displayWidth", () => {
-    render(<Image src="https://example.com/a.jpg" alt="p" displayWidth={400} />);
+    render(
+      <Image src="https://example.com/a.jpg" alt="p" displayWidth={400} />,
+    );
     expect(screen.getByRole("img", { name: "p" }).getAttribute("src")).toBe(
       "https://example.com/a.jpg",
     );

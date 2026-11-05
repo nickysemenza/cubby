@@ -7,21 +7,21 @@ import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOu
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { uniq } from "es-toolkit";
 import { memo, useMemo } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { MarkdownText } from "~/entity/prose/markdown";
-import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
+import { Image } from "~/ui/common/image";
 import { Panel, Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { Description } from "~/ui/primitives/description";
-import { Image } from "~/ui/primitives/image";
 import { Spinner } from "~/ui/primitives/spinner";
-import { StatusText } from "~/ui/primitives/status-text";
+import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
+import { StatusText } from "~/ui/text/status-text";
 
 import {
   entityDisplayImageKey,

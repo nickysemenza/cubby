@@ -8,15 +8,15 @@ import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { GitMergeIcon } from "@phosphor-icons/react/dist/csr/GitMerge";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { useId, useMemo } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-import { cn } from "~/lib/utils";
 import { Panel } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { Table, TableBody, TableCell, TableRow } from "~/ui/primitives/table";
+import { Badge } from "~/ui/reui/badge";
 
 import {
   buildDisplayQuantities,

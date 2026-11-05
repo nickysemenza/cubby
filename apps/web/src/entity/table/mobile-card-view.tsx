@@ -8,6 +8,7 @@ import {
   type Range,
   useWindowVirtualizer,
 } from "@tanstack/react-virtual";
+import { cn } from "cn";
 import {
   type CSSProperties,
   Fragment,
@@ -25,7 +26,6 @@ import {
   RecordRowSuggestions,
   RecordSuggestionBoundary,
 } from "~/entity/suggestions/record-suggestions";
-import { cn } from "~/lib/utils";
 import { DenseCellContext } from "~/ui/common/stacked-value";
 import { useDebug } from "~/ui/hooks/use-debug";
 import {

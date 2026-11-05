@@ -5,10 +5,10 @@ import {
   fieldValueOf,
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
+import { cn } from "cn";
 import { z } from "zod";
 
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
-import { cn } from "~/lib/utils";
 import { useDenseCell } from "~/ui/common/stacked-value";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { WhyValue } from "~/ui/derived/why-value";

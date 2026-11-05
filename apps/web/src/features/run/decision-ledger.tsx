@@ -33,7 +33,7 @@ import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
 import { Button } from "~/ui/primitives/button";
-import { StatusText } from "~/ui/primitives/status-text";
+import { StatusText } from "~/ui/text/status-text";
 
 import { StatusPill } from "../job/job-status";
 import type { DecisionPresenter } from "./decision-presenters";

@@ -23,7 +23,7 @@ import { toZoned } from "~/ui/reui/event-calendar/event-calendar-lib";
 import type {
   EventCalendarSegment,
 } from "~/ui/reui/event-calendar/event-calendar-types";
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
 
 /**
  * Standardized drag-ghost surface treatment, shared by Month and Week. One

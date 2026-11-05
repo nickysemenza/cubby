@@ -1,14 +1,14 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
-import { cn } from "~/lib/utils";
+import { Image } from "~/ui/common/image";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Panel } from "~/ui/layout/panel";
 import { Button } from "~/ui/primitives/button";
-import { Image } from "~/ui/primitives/image";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { SectionHeader } from "../../ui/data-table/section-header";

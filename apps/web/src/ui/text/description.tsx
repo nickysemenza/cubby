@@ -1,6 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 import type * as React from "react";
-import { cn } from "~/lib/utils";
 
 /**
  * Secondary/muted body text — the canonical replacement for standalone
@@ -15,7 +15,8 @@ const descriptionVariants = cva("text-muted-foreground", {
 });
 
 interface DescriptionProps
-  extends React.HTMLAttributes<HTMLParagraphElement>,
+  extends
+    React.HTMLAttributes<HTMLParagraphElement>,
     VariantProps<typeof descriptionVariants> {
   as?: React.ElementType;
   ref?: React.Ref<HTMLParagraphElement>;

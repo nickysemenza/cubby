@@ -7,11 +7,11 @@ import { agentUsageEvent } from "@cubby/schemas/purchase-agent-services";
 import { useMemo } from "react";
 
 import { formatCompactCount, formatCount } from "~/lib/number-format";
-import { Disclosure } from "~/ui/layout/disclosure";
 import {
   StaticTable,
   type StaticTableColumn,
-} from "~/ui/primitives/static-table";
+} from "~/ui/data-table/static-table";
+import { Disclosure } from "~/ui/layout/disclosure";
 
 import {
   contextCallsFromMessages,

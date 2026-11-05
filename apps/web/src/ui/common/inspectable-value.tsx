@@ -1,7 +1,7 @@
+import { cn } from "cn";
 import { type ReactNode, useId, useState } from "react";
 
 import { copyTextWithToast } from "~/lib/clipboard";
-import { cn } from "~/lib/utils";
 import { Button } from "~/ui/primitives/button";
 import {
   Popover,

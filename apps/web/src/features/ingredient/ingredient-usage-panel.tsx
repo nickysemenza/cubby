@@ -4,9 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
-import { StaticTable } from "~/ui/primitives/static-table";
+import { Description } from "~/ui/text/description";
 import {
   Visualization,
   visualizationState,

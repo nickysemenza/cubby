@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 
-import { Badge } from "~/ui/primitives/badge";
-import { NoneValue } from "~/ui/primitives/none-value";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import { Badge } from "~/ui/reui/badge";
+import { NoneValue } from "~/ui/text/none-value";
 
 interface TruncatedListProps<T> {
   items: T[];

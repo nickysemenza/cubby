@@ -1,6 +1,7 @@
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { useEffect } from "react";
 
 import {
@@ -8,10 +9,8 @@ import {
   TOTALS_MISSING_MEASURES as MISSING_CHIPS,
   type RecipeTotalsGap,
 } from "~/lib/recipe-totals-gaps";
-import { cn } from "~/lib/utils";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { buttonVariants } from "~/ui/primitives/button";
 import {
   Popover,
@@ -20,6 +19,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import { Badge } from "~/ui/reui/badge";
 
 /**
  * The deep-link target that fixes a gap: an ingredient row routes to the

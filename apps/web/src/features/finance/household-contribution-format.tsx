@@ -6,8 +6,8 @@ import { Link } from "@tanstack/react-router";
 
 import { entityDetailLink } from "~/entity/entities";
 import { formatCurrency } from "~/lib/number-format";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { Row } from "~/ui/layout";
-import { StaticTable } from "~/ui/primitives/static-table";
 
 /** Both EXP- and LTR- records now have browser detail routes. */
 function ContributionGapTargets({

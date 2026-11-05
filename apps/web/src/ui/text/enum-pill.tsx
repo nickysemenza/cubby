@@ -1,16 +1,16 @@
+import type { EnumIcon } from "@cubby/shared/enum-palette";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";
-import type { EnumIcon } from "@cubby/shared/enum-palette";
+import { cn } from "cn";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 
-import { cn } from "~/lib/utils";
 import { OptionGlyph } from "~/ui/common/option-glyph";
-import { Pill } from "~/ui/primitives/pill";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { Pill } from "~/ui/text/pill";
 
 /**
  * Shared chip geometry for both roles. `border-transparent` keeps the 1px
@@ -19,13 +19,13 @@ import {
 const CHIP = "overflow-hidden border-transparent whitespace-nowrap";
 
 /** Tone surfaces are rendering styles; the supplied role decides when to use them. */
-const STATUS_TONES: Readonly<Record<string, string>> = {
-  "var(--positive)": "bg-positive-surface text-positive",
-  "var(--warning)": "bg-warning-surface text-warning-ink",
-  "var(--destructive)": "bg-destructive-surface text-destructive",
-  "var(--info)": "bg-info-surface text-info",
-  "var(--neutral-status)": "bg-muted text-muted-foreground",
-};
+const STATUS_TONES = new Map([
+  ["var(--positive)", "bg-positive-surface text-positive"],
+  ["var(--warning)", "bg-warning-surface text-warning-ink"],
+  ["var(--destructive)", "bg-destructive-surface text-destructive"],
+  ["var(--info)", "bg-info-surface text-info"],
+  ["var(--neutral-status)", "bg-muted text-muted-foreground"],
+]);
 
 function optionTint(color: string) {
   return `color-mix(in srgb, ${color} 12%, var(--background))`;
@@ -87,24 +87,36 @@ const EXCEPTION_TONES: ReadonlySet<string> = new Set([
 
 /** Render supplied presentation; raw unrecognized values stay neutral and readable. */
 export function EnumPill({
-  optionRole = "category", value: _value,
-  color = "var(--neutral-status)", glyph, icon, description, children, className,
-}: ValueProps & {optionRole?: string | null; value?: string}) {
-  const tone = optionRole === "status" ? STATUS_TONES[color] : undefined;
+  optionRole = "category",
+  value: _value,
+  color = "var(--neutral-status)",
+  glyph,
+  icon,
+  description,
+  children,
+  className,
+}: ValueProps & { optionRole?: string | null; value?: string }) {
+  const tone = optionRole === "status" ? STATUS_TONES.get(color) : undefined;
   const exception = optionRole === "status" && EXCEPTION_TONES.has(color);
   return withDescription(
-    <Pill data-enum-role={optionRole ?? "category"}
+    <Pill
+      data-enum-role={optionRole ?? "category"}
       data-enum-tone={exception ? "exception" : "quiet"}
       className={cn(CHIP, tone ?? "text-foreground", className)}
-      style={{
-        "--enum-color": color,
-        ...(tone ? {} : {backgroundColor: optionTint(color)}),
-      } as CSSProperties}>
+      // SAFETY: CSSProperties has no index signature for the --enum-color custom property.
+      style={
+        {
+          "--enum-color": color,
+          ...(tone ? {} : { backgroundColor: optionTint(color) }),
+        } as CSSProperties
+      }
+    >
       <span data-enum-lead="" className="contents">
         <Lead glyph={glyph} icon={icon} color={color} />
       </span>
       <span className="min-w-0 truncate">{children}</span>
-    </Pill>, description,
+    </Pill>,
+    description,
   );
 }
 

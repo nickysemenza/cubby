@@ -55,9 +55,9 @@ import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { requiredLocationCode } from "~/ui/forms/form-fields";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
+import { Alert, AlertDescription, AlertTitle } from "~/ui/reui/alert";
+import { Description } from "~/ui/text/description";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 
 const formSchema = z.object({

@@ -4,11 +4,10 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
+import { cn } from "cn";
 import type { ComponentProps } from "react";
 import type { ChevronProps } from "react-day-picker";
 import { DayPicker } from "react-day-picker";
-
-import { cn } from "~/lib/utils";
 
 /**
  * Field Guide wrapper over react-day-picker v10's `DayPicker`.
@@ -64,8 +63,7 @@ function Calendar({
         outside: "opacity-70 [&_button]:text-muted-foreground",
         disabled: "[&_button]:pointer-events-none [&_button]:opacity-30",
         hidden: "invisible",
-        range_start:
-          "[&_button]:bg-primary [&_button]:text-primary-foreground",
+        range_start: "[&_button]:bg-primary [&_button]:text-primary-foreground",
         range_middle: "[&_button]:bg-accent [&_button]:text-accent-foreground",
         range_end: "[&_button]:bg-primary [&_button]:text-primary-foreground",
         ...classNames,

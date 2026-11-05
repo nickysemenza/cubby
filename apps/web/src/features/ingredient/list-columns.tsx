@@ -30,12 +30,12 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { Row } from "~/ui/layout";
-import { NoneValue } from "~/ui/primitives/none-value";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { NoneValue } from "~/ui/text/none-value";
 import { TruncatedList } from "~/ui/truncated-list";
 
 import { useStableIds } from "../../entity/list-columns/stable-ids";

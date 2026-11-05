@@ -3,8 +3,8 @@
 import * as React from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 
-import { cn } from "~/lib/utils"
-import { popoverElevationClassName } from "~/ui/primitives/popover-elevation"
+import { cn } from "cn"
+import { popoverElevationClassName } from "~/ui/overlays/popover-elevation"
 
 function Popover<Payload = unknown>({
   ...props
@@ -81,6 +81,19 @@ type PopoverHandle<Payload> = ReturnType<
   typeof PopoverPrimitive.createHandle<Payload>
 >
 
+function PopoverDescription({
+  className,
+  ...props
+}: PopoverPrimitive.Description.Props) {
+  return (
+    <PopoverPrimitive.Description
+      data-slot="popover-description"
+      className={cn("text-muted-foreground", className)}
+      {...props}
+    />
+  )
+}
+
 export {
   Popover,
   PopoverContent,
@@ -88,5 +101,7 @@ export {
   PopoverTitle,
   PopoverTrigger,
   createPopoverHandle,
+
+  PopoverDescription,
 }
 export type { PopoverHandle }

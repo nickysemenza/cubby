@@ -29,7 +29,6 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useDebug } from "~/ui/hooks/use-debug";
 import { useLocalStorage } from "~/ui/hooks/use-local-storage";
 import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import {
   CommandDialog,
   CommandGroup,
@@ -39,6 +38,7 @@ import {
   CommandSeparator,
 } from "~/ui/primitives/command";
 import { Spinner } from "~/ui/primitives/spinner";
+import { Badge } from "~/ui/reui/badge";
 
 import { completeNavLeaves } from "../../entity/navigation/nav-items";
 import type { NavItem } from "../../entity/navigation/nav-items";

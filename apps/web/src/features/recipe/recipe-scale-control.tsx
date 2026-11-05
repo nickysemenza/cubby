@@ -11,7 +11,6 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
 import {
@@ -19,6 +18,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import { Description } from "~/ui/text/description";
 
 import { getIngredientName } from "../../entity/presentation/recipe-utils";
 import { resolveScaleFactor, type ScaleAnchor } from "./recipe-scaling";

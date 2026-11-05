@@ -6,6 +6,7 @@ import { PlayIcon } from "@phosphor-icons/react/dist/csr/Play";
 import { PulseIcon } from "@phosphor-icons/react/dist/csr/Pulse";
 import { SelectionIcon } from "@phosphor-icons/react/dist/csr/Selection";
 import { useQueryClient } from "@tanstack/react-query";
+import { cn } from "cn";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -19,9 +20,8 @@ import {
   startCollectors,
   stopCollectors,
 } from "~/lib/perf/perf-store";
-import { cn } from "~/lib/utils";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { Row, Stack } from "~/ui/layout";
-import { StaticTable } from "~/ui/primitives/static-table";
 
 import { type LiveQueryStats, readLiveQueryStats } from "./use-query-stats";
 

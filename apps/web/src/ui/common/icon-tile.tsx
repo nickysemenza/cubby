@@ -1,6 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 import type * as React from "react";
-import { cn } from "~/lib/utils";
 
 /**
  * Icon-in-a-shape tile — the canonical replacement for the repeated
@@ -26,7 +26,8 @@ const iconTileVariants = cva(
 );
 
 interface IconTileProps
-  extends React.HTMLAttributes<HTMLElement>,
+  extends
+    React.HTMLAttributes<HTMLElement>,
     VariantProps<typeof iconTileVariants> {
   as?: React.ElementType;
   ref?: React.Ref<HTMLElement>;

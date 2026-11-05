@@ -1,9 +1,9 @@
 "use client";
 
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
+import { cn } from "cn";
 import * as React from "react";
 
-import { cn } from "~/lib/utils";
 import { useHydrationGate } from "~/ui/hooks/use-hydrated";
 
 import {

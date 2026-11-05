@@ -1,11 +1,11 @@
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { LockSimpleIcon } from "@phosphor-icons/react/dist/csr/LockSimple";
+import { cn } from "cn";
 import { type ReactNode, useState } from "react";
 
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { InspectableValue } from "~/ui/common/inspectable-value";
 import { type KeyNumber, KeyNumbers } from "~/ui/common/key-numbers";
 import {

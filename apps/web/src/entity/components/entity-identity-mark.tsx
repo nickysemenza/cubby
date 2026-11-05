@@ -1,9 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 
 import { EntityCover } from "~/entity/components/entity-cover";
-import { cn } from "~/lib/utils";
 import { PersonAvatar } from "~/ui/common/person-avatar";
 
 import { RecordEmoji } from "./record-emoji";

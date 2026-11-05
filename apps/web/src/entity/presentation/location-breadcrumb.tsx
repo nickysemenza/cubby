@@ -2,10 +2,10 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { LocationTreeNode, LocationType } from "@cubby/schemas/location";
 import { SquaresFourIcon } from "@phosphor-icons/react/dist/csr/SquaresFour";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import * as React from "react";
 
 import { getDefaultLocationType } from "~/entity/presentation/location-path";
-import { cn } from "~/lib/utils";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -14,7 +14,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "~/ui/primitives/breadcrumb";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import { LocationIcon } from "./location-icons";
 
