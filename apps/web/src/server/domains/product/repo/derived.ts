@@ -144,8 +144,13 @@ export const productDerivedComputes = {
   "product.price": Object.assign(computeProductPrice, {
     preparationBatchSize: 200,
   }),
-  "product.ledgerExpectedQuantity": computeProductQuantity(
-    "ledgerExpectedQuantity",
+  // Quantity folds aggregate in SQL; bounded pages amortize the full-pass round trips.
+  "product.ledgerExpectedQuantity": Object.assign(
+    computeProductQuantity("ledgerExpectedQuantity"),
+    { preparationBatchSize: 200 },
   ),
-  "product.quantityVariance": computeProductQuantity("quantityVariance"),
+  "product.quantityVariance": Object.assign(
+    computeProductQuantity("quantityVariance"),
+    { preparationBatchSize: 200 },
+  ),
 };

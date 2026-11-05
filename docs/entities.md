@@ -2702,7 +2702,8 @@ hierarchies handled by the computation, never scheduler tickets.
 `DerivedRebuild` holds one coarse pass cursor (target and last committed UUID),
 a single-writer lease, cursor attempts, pass failures and the last three wall-clock
 durations. Each Worker invocation publishes bounded pages until its 20-second
-round deadline. Publication and cursor advancement commit together. Claims record
+round deadline. SQL-backed Product quantity adapters prepare 200 identities per
+page to amortize corpus-wide round trips. Publication and cursor advancement commit together. Claims record
 attempts before compute, so isolate termination counts too: after three attempts
 the page halves, down to one record. Three failed attempts at one record skip it,
 retain its prior output and record a failure. A thrown compute or publication
