@@ -15,8 +15,6 @@ deployment never waits for post-merge CI.
 `ci.yaml` holds the required checks and informational jobs: the
 purchase-import browser after relevant import changes or explicit manual
 opt-in, and live Email decisions only with the separate manual opt-in.
-[Web Tester Army journeys](tester-army.md) run locally on demand; CI does not
-start them or collect their reports.
 Validation exposes generation, tokens, TypeScript, lint, Knip, bindings,
 tooling tests, Worker tests, Swift lint, formatting and the link check as named
 steps on one runner. Once setup succeeds, independent steps run despite earlier
@@ -63,11 +61,7 @@ redispatching cancels the older run.
 
 Native journeys restore SPM and DerivedData caches before their build and take
 macOS slots beyond the required Apple host tests and simulator build.
-Web Tester Army outcome journeys run locally on demand through the shared
-browser runtime, with real internal processing and scripted app-side model peers.
-[Their coverage accounting](tester-army.md#retired-coverage-accounting) maps the
-retired catalog to the recovered outcomes and intentional omissions. Native
-agent navigation, visual snapshots, exploration and coupled live-model
+Native agent navigation, visual snapshots, exploration and coupled live-model
 evaluations remain retired. Required merge checks remain unchanged.
 
 ## Cache keys and the remote cache

@@ -154,23 +154,6 @@
         "{projectRoot}/blob-report"
       ]
     },
-    "tester-army": {
-      "command": "pnpm run test:e2e:ci:agent:web",
-      "options": { "cwd": "apps/web" },
-      "cache": true,
-      "dependsOn": [
-        { "projects": ["cubby-checks"], "target": "wasm" },
-        { "projects": ["cubby-checks"], "target": "generate" },
-        "build-cf"
-      ],
-      "inputs": [
-        "webGate",
-        { "env": "TESTER_ARMY_FRESH" },
-        { "env": "TESTER_ARMY_WRONG" },
-        { "env": "CUBBY_TESTER_ARMY_SHARD" }
-      ],
-      "outputs": ["{projectRoot}/artifacts/tester-army"]
-    },
     // Informative only (never a merge gate); keyed like the other web lanes.
     "e2e-purchase-import": {
       "command": "pnpm run test:e2e:ci:purchase-import",
