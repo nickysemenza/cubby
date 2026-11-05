@@ -51,7 +51,7 @@ progress sources, AI ownership and ordered steps (purpose, action, input mode,
 units and suggestion families) directly from `RUN_KINDS`. Metadata and recent
 activity use the shared `Facts` list and canonical Run entity links; ordered
 steps use columnar `RecordList` rows, with shared technical headers on wide
-surfaces and labeled inline facts on narrow ones, matching `/design`.
+surfaces and labeled inline facts on narrow ones.
 Types marked historical
 appear under “No longer created”; their retained history remains accessible.
 Types without fixed steps say so rather than inventing a sequence.

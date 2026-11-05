@@ -365,24 +365,9 @@ export const SIDEBAR_SECTIONS = [
     defaultFolded: true,
     destinations: [
       {
-        label: "Design",
-        route: "/design",
-        sfSymbol: "paintpalette",
-      },
-      {
         label: "AI",
         route: "/ai",
         sfSymbol: "sparkles",
-      },
-      {
-        label: "Search debug",
-        route: "/search/debug",
-        sfSymbol: "magnifyingglass",
-      },
-      {
-        label: "MCP tools",
-        route: "/mcp",
-        sfSymbol: "puzzlepiece.extension",
       },
     ],
   },

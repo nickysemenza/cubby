@@ -68,15 +68,11 @@ describe("WorkspaceNavigator interactions", () => {
     const search = screen.getByRole("textbox", {
       name: "Find a workspace destination",
     });
-    fireEvent.change(search, { target: { value: "search debug" } });
-    expect(
-      screen.getByRole("link", { name: /Search debug/ }),
-    ).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: "AI" } });
+    expect(screen.getByRole("link", { name: "AIDev" })).toBeInTheDocument();
     expect(screen.getByText("Dev")).toBeInTheDocument();
     fireEvent.change(search, { target: { value: "" } });
     expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Search debug" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "AI" })).toBeInTheDocument();
   });
 });

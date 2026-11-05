@@ -20,7 +20,7 @@ import {
   visualizationState,
 } from "~/ui/visualizations/visualization";
 
-export function LocationTree({ data }: { data: LocationTreeNode[] }) {
+function LocationTree({ data }: { data: LocationTreeNode[] }) {
   const inventoryId = useId();
   const [query, setQuery] = useState("");
   const [showInventory, setShowInventory] = useState(false);

@@ -17,9 +17,7 @@ import { LightbulbIcon } from "@phosphor-icons/react/dist/csr/Lightbulb";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
-import { PaletteIcon } from "@phosphor-icons/react/dist/csr/Palette";
 import { PlantIcon } from "@phosphor-icons/react/dist/csr/Plant";
-import { PlugIcon } from "@phosphor-icons/react/dist/csr/Plug";
 import { PulseIcon } from "@phosphor-icons/react/dist/csr/Pulse";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
@@ -80,10 +78,7 @@ const routeIcons = {
   "/suggestions": LightbulbIcon,
   "/entities": NetworkIcon,
   "/graph": NetworkIcon,
-  "/design": PaletteIcon,
   "/ai": SparkleIcon,
-  "/search/debug": MagnifyingGlassIcon,
-  "/mcp": PlugIcon,
 };
 const sectionIcons = {
   top: HouseIcon,
