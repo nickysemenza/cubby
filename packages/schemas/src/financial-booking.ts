@@ -20,7 +20,7 @@ import {
 } from "./financial-transaction-fields";
 import { plainDate } from "./project";
 import { ledgerAttributions } from "./ledger-party-fields";
-import { fieldResolutionSchema } from "./field-resolution";
+import { publicFieldResolutionSchema } from "./field-resolution";
 
 export const FINANCIAL_SPENDING_POLICY = "2026-10-29.2";
 
@@ -98,7 +98,7 @@ export const financialSpendingPlan = z.discriminatedUnion("status", [
     vendorName: z.string(),
     spendingCategoryId: spendingCategoryShortcode.nullable(),
     categoryOverride: spendingCategoryShortcode.nullable().optional(),
-    effectiveCategory: fieldResolutionSchema.optional(),
+    effectiveCategory: publicFieldResolutionSchema.optional(),
     purchaseId: purchaseShortcode.nullable(),
   }),
 ]);
@@ -126,13 +126,13 @@ export const financialBookingPreview = financialBookingInput.extend({
   spendingCategoryId: spendingCategoryShortcode.nullable().default(null),
   categoryOverride: spendingCategoryShortcode.nullable().default(null),
   /** Optional only so completed predecessor receipts keep their exact parsed bytes. */
-  effectiveCategory: fieldResolutionSchema.optional(),
+  effectiveCategory: publicFieldResolutionSchema.optional(),
   candidateCategoryId: spendingCategoryShortcode.nullable().optional(),
   existingCategories: z
     .array(
       z.object({
         expenseId: expenseShortcode,
-        resolution: fieldResolutionSchema,
+        resolution: publicFieldResolutionSchema,
       }),
     )
     .optional(),
