@@ -2716,6 +2716,13 @@ ProductCostView, so charge edits affect display, filters and ordering immediatel
 The view preserves the existing positive actual-charge selection, averaging,
 rounding and latest-charge evidence; it adds no financial judgment.
 
+Project effective start reads its declared ProjectStartDateView. An explicit
+start is read directly from the Project; otherwise the view reuses the canonical
+`rollups.dateWindow.derivedStart` typed fact, on the hourly cadence. It uses the
+derived side so clearing an explicit override cannot reuse that old override.
+An unpublished rollup remains missing, rather than becoming a successful empty
+date. This avoids repeating the household Expense allocation on each page.
+
 The pass skips declared views. Named read snapshots hold Product, Inventory,
 Location, Project, Expense, Email and Shipment results. Each manifest declaration
 names its typed value, decision, sort and publication-time columns; there is no
@@ -2757,7 +2764,9 @@ the same snapshot. `DataException` owns waivers. SearchDocument, Recipe totals
 and ProductConversionCoverage retain their existing typed storage. Remaining
 legacy values temporarily publish in `DerivedValue` until their typed/view
 cutovers; their retained source tickets are neither claimed nor deleted.
-Project start-date ordering/filtering already reads canonical recursive SQL.
+Project start-date ordering/filtering reads canonical recursive SQL. Its display
+view folds all requested roots as a set, sharing one Expense allocation and
+Task-date aggregation across the page instead of repeating the ledger per row.
 
 Typed result slots distinguish an absent publication from a published null through
 their own publication time. A published SQL NULL becomes JSON null on the generic

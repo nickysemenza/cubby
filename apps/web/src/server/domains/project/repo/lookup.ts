@@ -3,14 +3,12 @@ import {
   parseShortcodeFor,
   type ProjectId,
 } from "@cubby/schemas/identifiers";
-import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
 import type { ProjectOptionsOut } from "@cubby/schemas/project";
 import { rawProjectListItemOut } from "@cubby/schemas/work-raw-read";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   getDb,
   databaseForTransaction,
@@ -18,11 +16,9 @@ import {
   notDeleted,
 } from "~/server/db/helpers";
 import { entityAttachment, image, project } from "~/server/db/schema";
-import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { withProjectExternalUrls } from "~/server/domains/project/repo/external-links";
 import { projectSearch } from "~/server/domains/project/repo/search-read-project";
-import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -83,28 +79,6 @@ const attentionFilterOf = (type: string) =>
     ([, attention]) => attention === type,
   )?.[0];
 
-/**
- * The live effective start (ADR 0025). Stop at explicit starts:
- * descendants behind an override must not influence an ancestor's folded date.
- */
-export const projectStartDateSql = sql`(
-      WITH RECURSIVE date_tree AS (
-        SELECT p."id", p."startDate", 0 AS depth
-        FROM "Project" p WHERE p."id" = "Project"."id" AND ${notDeleted("p")}
-        UNION ALL
-        SELECT child."id", child."startDate", parent.depth + 1
-        FROM "Project" child JOIN date_tree parent ON child."parentProjectId" = parent."id"
-        WHERE ${notDeleted("child")} AND parent."startDate" IS NULL
-          AND parent.depth < ${MAX_PROJECT_TREE_DEPTH}
-      ), allocations AS (${expenseDerivedReadSql("projects")})
-      SELECT min(coalesce(node."startDate", LEAST(
-        (SELECT min(${effectiveTaskDueDateSql("t")}) FROM "Task" t
-         WHERE ${effectiveFieldSql("task", "projectId", "t")} = node."id" AND ${notDeleted("t")}),
-        (SELECT min(e."date") FROM "Expense" e JOIN allocations a ON a."expenseId" = e."id"
-         WHERE a."projectId" = node."id" AND ${notDeleted("e")})
-      ))) FROM date_tree node
-    )`;
-
 export const projectScaffold = listScaffold("project", project, {
   derived: {
     image: inArray(project.id, projectIdsWithImages),
@@ -115,7 +89,7 @@ export const projectScaffold = listScaffold("project", project, {
       }),
     // Stored (ADR 0021): the TS subtree fold no longer runs per list read.
     completionYear: storedDerivedSql("project", "completionYear", project.id),
-    startDate: projectStartDateSql,
+    startDate: storedDerivedSql("project", "startDate", project.id),
   },
   rows: {
     attentionItems: projectAttention.rows(({ items }) => {

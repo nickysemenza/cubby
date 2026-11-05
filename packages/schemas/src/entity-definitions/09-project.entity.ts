@@ -1194,23 +1194,24 @@ Rules:
       // Orders by the effective assignee's name.
       assigneeId: { via: "assignee" },
       // The effective start: the stored date, else the earliest task or
-      // expense date in the subtree below an unset start. Reads use live SQL
-      // (ADR 0025); retain the old target until the deployed reader cutover
+      // expense date in the subtree below an unset start. The view reuses the
+      // hourly rollup date fold; retain the old target until the reader cutover
       // is verified and its source triggers and tickets can retire separately.
       startDate: {
         type: "date",
         stored: {
           compute: "project.startDate",
           snapshotSource: {
-            table: "ProjectReadSnapshot",
-            value: "startDate",
-            computedAt: "startDateComputedAt",
-            decidedBy: "startDateDecision",
-            storage: "text",
-            sort: "startDateSort",
+            table: "ProjectStartDateView",
+            value: "value",
+            computedAt: "computedAt",
+            decidedBy: "decidedBy",
+            sort: "sortDate",
+            view: true,
           },
           inputs: PROJECT_DATE_INPUTS,
           dependsOn: [
+            { entity: "project", key: "rollups", match: { id: "id" } },
             {
               entity: "project",
               key: "startDate",

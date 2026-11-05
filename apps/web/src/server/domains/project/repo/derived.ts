@@ -1,22 +1,16 @@
-import { fieldProvenance } from "@cubby/schemas/field-envelope";
 /**
- * Project's stored folded dates (ADR 0021): the effective start (the list's
- * recursive SQL, evaluated for changed projects only) and the completion year
- * (the whole-tree TS fold, read once per batch).
+ * Project snapshot folds: completion year and subtree rollups. Effective
+ * start reads the declared SQL view.
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import { sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { isTransaction } from "~/server/db/helpers";
-import { project } from "~/server/db/schema";
 import type {
   DerivedCompute,
   DerivedComputed,
 } from "~/server/generic/derived/repo/compute";
-import { sqlColumnCompute } from "~/server/generic/derived/repo/sql-compute";
 
-import { projectStartDateSql } from "./lookup";
 import {
   loadProjectDateWindows,
   loadProjectSubtreeRollups,
@@ -72,14 +66,5 @@ const rollupsCompute: DerivedCompute = async (db, ids) => {
 
 export const projectDerivedComputes = {
   "project.rollups": rollupsCompute,
-  "project.startDate": sqlColumnCompute(
-    { table: project, id: project.id, deletedAt: project.deletedAt },
-    sql`(${projectStartDateSql})::text`,
-    {
-      provenance: sql`CASE WHEN ${project.startDate} IS NOT NULL
-        THEN ${JSON.stringify(fieldProvenance.parse({ kind: "own", ownership: { kind: "record" } }))}::jsonb
-        ELSE ${JSON.stringify(fieldProvenance.parse({ kind: "computed" }))}::jsonb END`,
-    },
-  ),
   "project.completionYear": completionYearCompute,
 };
