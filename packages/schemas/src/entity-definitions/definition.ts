@@ -282,6 +282,20 @@ export const listViewId = (view: EntityListView): string =>
  * cloning, or reconstructing those instances, so defaults and refinements
  * continue to belong to their declaration modules.
  */
+// Metadata vocabularies, never stored in SQL. `no-raw-enum-literal-in-sql` reads
+// inline `z.enum([...])` lists as stored values, so these stay named tuples.
+const columnWidths = ["xs", "sm", "md", "lg", "xl"] as const;
+const pivotShares = ["count", "row", "column", "total"] as const;
+const exceptionPolicies = ["inherit", "forbidden"] as const;
+const timelineModes = ["default", "custom"] as const;
+
+/** An optional declaration fact that reads as null when left out. */
+const orNull = <T extends z.ZodType>(schema: T) =>
+  schema.nullable().optional().default(null);
+/** An optional switch with its declared default. */
+const flag = (defaultValue: boolean) =>
+  z.boolean({ error: "must be a boolean" }).optional().default(defaultValue);
+
 const buildMetadataSchemas = () => {
   const declaredZodSchema = z.instanceof(z.ZodType, {
     error: "must be a Zod schema",
@@ -290,59 +304,52 @@ const buildMetadataSchemas = () => {
   const nonEmptyString = (message = "must be a non-empty string") =>
     z.string({ error: message }).min(1, { error: message });
 
-  const entityFieldValidationMetadataSchema = z
-    .object({
-      read: declaredZodSchema.nullable().optional().default(null),
-      publicRead: declaredZodSchema.optional(),
-      create: declaredZodSchema.nullable().optional().default(null),
-      update: declaredZodSchema.nullable().optional().default(null),
-    })
-    .strict();
+  const entityFieldValidationMetadataSchema = z.strictObject({
+    read: orNull(declaredZodSchema),
+    publicRead: declaredZodSchema.optional(),
+    create: orNull(declaredZodSchema),
+    update: orNull(declaredZodSchema),
+  });
 
-  const entityFieldReferenceMetadataSchema = z
-    .object({
-      entity: nonEmptyString(),
-      multiple: z
-        .boolean({ error: "must be a boolean" })
-        .optional()
-        .default(false),
-      /**
-       * Values from the owning record that constrain a dependent reference
-       * picker.  `sourceField` is read from the editor form and `targetField`
-       * is the corresponding field/filter on the referenced entity.
-       */
-      scope: z
-        .array(
-          z
-            .object({
-              sourceField: nonEmptyString(),
-              targetField: nonEmptyString(),
-            })
-            .strict(),
-        )
-        .optional()
-        .default([]),
-      filters: z
-        .array(
-          z.strictObject({
-            field: nonEmptyString(),
-            values: z.array(nonEmptyString()).min(1),
-          }),
-        )
-        .optional()
-        .default([]),
-    })
-    .strict();
+  const entityFieldReferenceMetadataSchema = z.strictObject({
+    entity: nonEmptyString(),
+    multiple: flag(false),
+    /**
+     * Values from the owning record that constrain a dependent reference
+     * picker.  `sourceField` is read from the editor form and `targetField`
+     * is the corresponding field/filter on the referenced entity.
+     */
+    scope: z
+      .array(
+        z
+          .object({
+            sourceField: nonEmptyString(),
+            targetField: nonEmptyString(),
+          })
+          .strict(),
+      )
+      .optional()
+      .default([]),
+    filters: z
+      .array(
+        z.strictObject({
+          field: nonEmptyString(),
+          values: z.array(nonEmptyString()).min(1),
+        }),
+      )
+      .optional()
+      .default([]),
+  });
 
   /** One glyph for web (Phosphor component name) and Apple (SF Symbol). */
   const enumOptionIconSchema = enumIconSchema;
 
   const entityFieldControlMetadataSchema = z
-    .object({
+    .strictObject({
       kind: z.enum(entityFieldControlKinds),
-      renderer: nonEmptyString().nullable().optional().default(null),
-      options: z
-        .array(
+      renderer: orNull(nonEmptyString()),
+      options: orNull(
+        z.array(
           z
             .object({
               value: nonEmptyString(),
@@ -357,44 +364,36 @@ const buildMetadataSchemas = () => {
               role: z.enum(enumRoles).optional(),
             })
             .strict(),
-        )
-        .nullable()
-        .optional()
-        .default(null),
+        ),
+      ),
       /** A short field the generic editor pairs with the next consecutive
        * `"half"` field on one row (`SideBySideFields`), instead of the
        * default full-width control. */
-      width: z.literal("half").nullable().optional().default(null),
+      width: orNull(z.literal("half")),
       /** Editor placeholder text, generic-editor only. */
-      placeholder: nonEmptyString().nullable().optional().default(null),
+      placeholder: orNull(nonEmptyString()),
       /**
        * A create-only initial value the generic editor uses at draft time
        * instead of the field's record/schema default: `"today"` (the
        * household's local calendar date) or a literal `{ value }`.
        */
-      initial: z
-        .union([
+      initial: orNull(
+        z.union([
           z.literal("today"),
           z
             .object({
               value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
             })
             .strict(),
-        ])
-        .nullable()
-        .optional()
-        .default(null),
+        ]),
+      ),
       /**
        * Whether the editor refuses a blank value. `null` derives it from the
        * create schema (required there means required here); `true` requires
        * a value the schema merely allows (a brandName); `false` exempts a
        * value the schema requires but a more specific validator reports.
        */
-      required: z
-        .boolean({ error: "must be a boolean" })
-        .nullable()
-        .optional()
-        .default(null),
+      required: orNull(z.boolean({ error: "must be a boolean" })),
       /**
        * A field whose value the decision tier infers from the named
        * sibling fields (`basis`, model field keys of the same entity). The
@@ -408,34 +407,32 @@ const buildMetadataSchemas = () => {
        * entries are the thing being judged), which the compiler allows only
        * for prune.
        */
-      suggest: z
-        .object({
-          basis: z.array(nonEmptyString()).min(1),
-          backedBy: z
-            .array(
-              z.union([
-                z.object({ column: nonEmptyString() }).strict(),
-                z
-                  .object({
-                    entity: nonEmptyString(),
-                    column: nonEmptyString(),
-                    via: nonEmptyString(),
-                  })
-                  .strict(),
-              ]),
-            )
-            .optional(),
-          rules: z.array(nonEmptyString()).optional(),
-          allowNone: z.boolean().optional().default(false),
-          mode: z.enum(["fill", "prune"]).optional().default("fill"),
-          reviewRequired: z.boolean().optional().default(false),
-        })
-        .strict()
-        .nullable()
-        .optional()
-        .default(null),
+      suggest: orNull(
+        z
+          .object({
+            basis: z.array(nonEmptyString()).min(1),
+            backedBy: z
+              .array(
+                z.union([
+                  z.object({ column: nonEmptyString() }).strict(),
+                  z
+                    .object({
+                      entity: nonEmptyString(),
+                      column: nonEmptyString(),
+                      via: nonEmptyString(),
+                    })
+                    .strict(),
+                ]),
+              )
+              .optional(),
+            rules: z.array(nonEmptyString()).optional(),
+            allowNone: z.boolean().optional().default(false),
+            mode: z.enum(["fill", "prune"]).optional().default("fill"),
+            reviewRequired: z.boolean().optional().default(false),
+          })
+          .strict(),
+      ),
     })
-    .strict()
     .transform(
       ({
         kind,
@@ -459,39 +456,29 @@ const buildMetadataSchemas = () => {
     );
 
   const entityFieldDisplayMetadataSchema = z
-    .object({
+    .strictObject({
       list: z.boolean({ error: "must be a boolean" }).optional(),
       detail: z.boolean({ error: "must be a boolean" }).optional(),
-      columnIdOverride: nonEmptyString().nullable().optional().default(null),
-      standard: z.enum(["name", "image"]).nullable().optional().default(null),
+      columnIdOverride: orNull(nonEmptyString()),
+      standard: orNull(z.enum(["name", "image"])),
       /**
        * Orders generated list columns independently of model order (which
        * also drives form field order, so it cannot be re-sequenced). Ordered
        * columns come first, ascending; the rest keep model order.
        */
-      listOrderOverride: z
-        .number()
-        .int()
-        .nonnegative()
-        .nullable()
-        .optional()
-        .default(null),
+      listOrderOverride: orNull(z.number().int().nonnegative()),
       /**
        * List column width bucket; the shared table maps it to a class and the
        * Mac table to a width range. `xl` is for long prose such as notes.
        */
-      width: z
-        .enum(["xs", "sm", "md", "lg", "xl"])
-        .nullable()
-        .optional()
-        .default(null),
+      width: orNull(z.enum(columnWidths)),
       /**
        * Where a field with no flat read key (`readKeyOverride: null`) is read
        * from on a list or detail row: a dotted path with `[n]` indexing and
        * an optional `[]` projection over an array (`quantityLedger.locationCount`,
        * `sourceRefs[].source`, `category.path[0].name`).
        */
-      readPath: nonEmptyString().nullable().optional().default(null),
+      readPath: orNull(nonEmptyString()),
       /** Additional canonical envelopes consumed by the list renderer. */
       readFields: z.array(nonEmptyString()).optional(),
       /**
@@ -502,9 +489,9 @@ const buildMetadataSchemas = () => {
        * print it instead of re-deriving the figure, so a computed cell has one
        * rule. The field's own value stays the sort and filter value.
        */
-      labelPath: nonEmptyString().nullable().optional().default(null),
+      labelPath: orNull(nonEmptyString()),
       /** An explained absence may be Unknown rather than an undifferentiated dash. */
-      emptyLabel: nonEmptyString().nullable().optional().default(null),
+      emptyLabel: orNull(nonEmptyString()),
       /**
        * Where the detail record carries this field's human-readable text, in
        * `readPath`'s grammar: the detail-surface twin of `labelPath` for a
@@ -512,7 +499,7 @@ const buildMetadataSchemas = () => {
        * span lines). Clients print it instead of re-deriving the sentence from
        * the structure.
        */
-      detailLabelPath: nonEmptyString().nullable().optional().default(null),
+      detailLabelPath: orNull(nonEmptyString()),
       /**
        * Where the detail record carries a list of display items
        * (`displayItems`: a record each, or plain text) the field shows as rows,
@@ -520,60 +507,49 @@ const buildMetadataSchemas = () => {
        * titles and figures, so a client draws a reference list without
        * restating the structure.
        */
-      itemsPath: nonEmptyString().nullable().optional().default(null),
+      itemsPath: orNull(nonEmptyString()),
       /** List cell formatter chosen by the shared column compiler. */
-      format: z.enum(displayFormats).nullable().optional().default(null),
+      format: orNull(z.enum(displayFormats)),
       /**
        * Semantic renderer ids for values whose presentation cannot be derived
        * from kind/reference/format alone. The manifest chooses the renderer;
        * each platform keeps the executable component in its typed registry.
        */
-      renderer: z
-        .object({
-          list: nonEmptyString().nullable().optional().default(null),
-          detail: nonEmptyString().nullable().optional().default(null),
-        })
-        .strict()
-        .nullable()
-        .optional()
-        .default(null),
+      renderer: orNull(
+        z
+          .object({
+            list: nonEmptyString().nullable().optional().default(null),
+            detail: nonEmptyString().nullable().optional().default(null),
+          })
+          .strict(),
+      ),
       /** Mobile card placement for the list column. */
-      mobile: z
-        .object({
-          slot: nonEmptyString(),
-          priority: z.number().int().nonnegative(),
-          interactive: z.boolean({ error: "must be a boolean" }).optional(),
-        })
-        .strict()
-        .nullable()
-        .optional()
-        .default(null),
+      mobile: orNull(
+        z
+          .object({
+            slot: nonEmptyString(),
+            priority: z.number().int().nonnegative(),
+            interactive: z.boolean({ error: "must be a boolean" }).optional(),
+          })
+          .strict(),
+      ),
       /**
        * Hidden by default in the generated column's initial visibility, but
        * still toggleable via the View menu — the one per-field fact the old
        * per-page `initialColumnVisibility` literal actually carried; everything
        * else in those objects was a plain columnId echo of `display.list`.
        */
-      referencePreviewLimit: z
-        .number()
-        .int()
-        .positive()
-        .nullable()
-        .optional()
-        .default(null),
-      listHidden: z
-        .boolean({ error: "must be a boolean" })
-        .optional()
-        .default(false),
+      referencePreviewLimit: orNull(z.number().int().positive()),
+      listHidden: flag(false),
       /**
        * A table header's short form when the label is longer than its
        * column's values ("Itemized" for "Itemization coverage"). The label
        * stays the header's accessible name and tooltip, and names the field
        * everywhere else.
        */
-      columnLabel: nonEmptyString().max(14).nullable().optional().default(null),
+      columnLabel: orNull(nonEmptyString().max(14)),
       /** Optional thematic column band; identical labels form one movable group. */
-      columnGroup: nonEmptyString().nullable().optional().default(null),
+      columnGroup: orNull(nonEmptyString()),
       /** Supplement the numeric value with a shared loaded-row magnitude scale. */
       columnBar: z.boolean().optional().default(false),
       /**
@@ -582,8 +558,8 @@ const buildMetadataSchemas = () => {
        * `kind`/`status` member of a JSON field. Enum fields with a select
        * control keep declaring `control.options`.
        */
-      valueOptions: z
-        .array(
+      valueOptions: orNull(
+        z.array(
           z
             .object({
               value: nonEmptyString(),
@@ -594,30 +570,24 @@ const buildMetadataSchemas = () => {
               role: z.enum(enumRoles).optional(),
             })
             .strict(),
-        )
-        .nullable()
-        .optional()
-        .default(null),
+        ),
+      ),
       /**
        * Whether this field's roster reads as states (`status`: tinted fill and
        * a glyph) or kinds (`category`: quiet tint and semantic glyph). Every
        * roster declares this here or on its shared options.
        */
-      optionRole: z.enum(enumRoles).nullable().optional().default(null),
+      optionRole: orNull(z.enum(enumRoles)),
       /** Explicit defaults shared by this field's choices; individual options may override. */
-      optionColor: colorTokenSchema.nullable().optional().default(null),
-      optionGlyph: enumIconSchema.nullable().optional().default(null),
+      optionColor: orNull(colorTokenSchema),
+      optionGlyph: orNull(enumIconSchema),
       /**
        * A fact on the entity's hover preview card. An entity that declares
        * any shows exactly those, in model order; one that declares none falls
        * back to its hero stats and first detail section.
        */
-      preview: z
-        .boolean({ error: "must be a boolean" })
-        .optional()
-        .default(false),
+      preview: flag(false),
     })
-    .strict()
     .transform(({ columnIdOverride, listOrderOverride, ...display }) => ({
       ...display,
       columnId: columnIdOverride,
@@ -625,24 +595,20 @@ const buildMetadataSchemas = () => {
     }));
 
   const entityFieldProvenanceSourceMetadataSchema = z.union([
-    z
-      .object({
-        entity: nonEmptyString(),
-        relation: nonEmptyString().nullable().optional().default(null),
-      })
-      .strict(),
-    z.object({ label: nonEmptyString() }).strict(),
+    z.strictObject({
+      entity: nonEmptyString(),
+      relation: orNull(nonEmptyString()),
+    }),
+    z.strictObject({ label: nonEmptyString() }),
   ]);
 
-  const entityFieldProvenanceMetadataSchema = z
-    .object({
-      kind: z.enum(["relation", "derived"]),
-      sources: z.array(entityFieldProvenanceSourceMetadataSchema).min(1),
-    })
-    .strict();
+  const entityFieldProvenanceMetadataSchema = z.strictObject({
+    kind: z.enum(["relation", "derived"]),
+    sources: z.array(entityFieldProvenanceSourceMetadataSchema).min(1),
+  });
 
   const entityFieldMetadataSchema = z
-    .object({
+    .strictObject({
       key: nonEmptyString(),
       kind: z.enum(entityFieldKinds),
       /** Raw record membership; storage-only and write-only fields explicitly opt out. */
@@ -650,23 +616,18 @@ const buildMetadataSchemas = () => {
       /** Writable fields audit by default; retained source facts can opt in explicitly. */
       audit: z.boolean().optional(),
       /** One public value backed by existing calendar-date columns. */
-      dateRange: z
-        .strictObject({
+      dateRange: orNull(
+        z.strictObject({
           start: nonEmptyString(),
           end: nonEmptyString(),
           semantics: z.enum(["deadline", "period"]),
-        })
-        .nullable()
-        .optional()
-        .default(null),
+        }),
+      ),
       /** Identity or owned-resource semantics; these values cannot be shared by bulk assignment. */
       semanticRole: z.enum(["externalIdentifier", "attachment"]).optional(),
-      nullable: z
-        .boolean({ error: "must be a boolean" })
-        .optional()
-        .default(false),
+      nullable: flag(false),
       labelOverride: nonEmptyString().optional(),
-      description: nonEmptyString().nullable().optional().default(null),
+      description: orNull(nonEmptyString()),
       readKeyOverride: nonEmptyString().nullable().optional(),
       /** Existing DerivedValue key supplying this public field snapshot. */
       storedKey: nonEmptyString().optional(),
@@ -674,14 +635,8 @@ const buildMetadataSchemas = () => {
       storedPath: z.array(nonEmptyString()).min(1).optional(),
       /** A cheap scope projection supplies its value with the owning result revision. */
       storedProjection: z.literal(true).optional(),
-      reference: entityFieldReferenceMetadataSchema
-        .nullable()
-        .optional()
-        .default(null),
-      provenance: entityFieldProvenanceMetadataSchema
-        .nullable()
-        .optional()
-        .default(null),
+      reference: orNull(entityFieldReferenceMetadataSchema),
+      provenance: orNull(entityFieldProvenanceMetadataSchema),
       /**
        * A collection field `entity.update` can patch item by item
        * (`@cubby/schemas/entity-collection`). `key` names the item identity:
@@ -691,8 +646,8 @@ const buildMetadataSchemas = () => {
        * list patches are resolved generically. `readPath` supplies their
        * authoritative value when detail and input use different shapes.
        */
-      collection: z
-        .strictObject({
+      collection: orNull(
+        z.strictObject({
           key: z.union([z.literal("value"), z.array(nonEmptyString()).min(1)]),
           readPath: nonEmptyString().optional(),
           primary: z
@@ -701,12 +656,10 @@ const buildMetadataSchemas = () => {
               scope: z.array(nonEmptyString()).min(1),
             })
             .optional(),
-        })
-        .nullable()
-        .optional()
-        .default(null),
-      explanation: z
-        .strictObject({
+        }),
+      ),
+      explanation: orNull(
+        z.strictObject({
           ruleId: nonEmptyString(),
           version: z.number().int().positive().default(1),
           description: nonEmptyString(),
@@ -741,10 +694,8 @@ const buildMetadataSchemas = () => {
               }),
             )
             .optional(),
-        })
-        .nullable()
-        .optional()
-        .default(null),
+        }),
+      ),
       /** Declarative assignment semantics for fields whose effective read value
        * may differ from stored intent. UI cleanup actions execute these exact
        * ordinary update patches; `inherit` declares the effective value that
@@ -801,41 +752,27 @@ const buildMetadataSchemas = () => {
                 .min(1),
             })
             .optional(),
-          none: z
-            .record(z.string(), z.json())
-            .nullable()
-            .optional()
-            .default(null),
+          none: orNull(z.record(z.string(), z.json())),
           redundancy: z.enum(["eligible", "intentional"]).default("eligible"),
           /** "Keep this value" pins the selected effective value: this patch plus
            * the current result under the field key. Absent = no action. */
-          confirm: z
-            .record(z.string(), z.json())
-            .nullable()
-            .optional()
-            .default(null),
+          confirm: orNull(z.record(z.string(), z.json())),
           /** What a null value reads as, per resolution mode (`none` is a
            * deliberate empty; `unresolved` an inherit with no fallback). */
-          labels: z
-            .strictObject({
+          labels: orNull(
+            z.strictObject({
               none: nonEmptyString().optional(),
               unresolved: nonEmptyString().optional(),
-            })
-            .nullable()
-            .optional()
-            .default(null),
+            }),
+          ),
         })
         .nullable()
         .optional()
         .default(null),
-      control: entityFieldControlMetadataSchema
-        .nullable()
-        .optional()
-        .default(null),
+      control: orNull(entityFieldControlMetadataSchema),
       display: entityFieldDisplayMetadataSchema.prefault({}),
       validation: entityFieldValidationMetadataSchema.prefault({}),
     })
-    .strict()
     .transform(
       ({
         key,
@@ -856,9 +793,10 @@ const buildMetadataSchemas = () => {
       }),
     );
 
-  const sourceRefMetadataSchema = z
-    .object({ module: nonEmptyString(), export: nonEmptyString() })
-    .strict();
+  const sourceRefMetadataSchema = z.strictObject({
+    module: nonEmptyString(),
+    export: nonEmptyString(),
+  });
 
   const entityStorageMetadataSchema = z.union([
     nonEmptyString().transform((key) => ({
@@ -870,7 +808,7 @@ const buildMetadataSchemas = () => {
       specialized: undefined,
     })),
     z
-      .object({
+      .strictObject({
         key: nonEmptyString(),
         nullableOverride: z.boolean({ error: "must be a boolean" }).optional(),
         defaultOverride: z.enum(entityStorageDefaultKinds).optional(),
@@ -913,7 +851,6 @@ const buildMetadataSchemas = () => {
           .optional(),
         specialized: nonEmptyString().nullable().optional(),
       })
-      .strict()
       .transform(
         ({
           key,
@@ -946,14 +883,13 @@ const buildMetadataSchemas = () => {
    * related-view columns.
    */
   const entityFieldModelSortMetadataSchema = z
-    .object({
+    .strictObject({
       fields: z.array(nonEmptyString()).min(1),
       /** Defaults to `createdAt` when sortable, otherwise the first field. */
       defaultOverride: nonEmptyString().optional(),
       /** Text and enum defaults open ascending; other fields open descending. */
       directionOverride: sortDirection.optional(),
     })
-    .strict()
     .transform(({ defaultOverride, directionOverride, ...sort }) => ({
       ...sort,
       default: defaultOverride,
@@ -967,22 +903,20 @@ const buildMetadataSchemas = () => {
    * flattened discriminated identity) that intents may name without a model
    * field.
    */
-  const entityFieldModelIntentsMetadataSchema = z
-    .object({
-      fields: z.record(nonEmptyString(), z.array(nonEmptyString()).min(1)),
-      create: z.array(nonEmptyString()),
-      update: z.array(nonEmptyString()).min(1),
-      editorFields: z.array(nonEmptyString()).optional().default([]),
-      /**
-       * Fields an intent's editor refuses to leave blank although the
-       * canonical contract allows it (`schedule` needs its `dueDate`).
-       */
-      required: z
-        .record(nonEmptyString(), z.array(nonEmptyString()).min(1))
-        .optional()
-        .default({}),
-    })
-    .strict();
+  const entityFieldModelIntentsMetadataSchema = z.strictObject({
+    fields: z.record(nonEmptyString(), z.array(nonEmptyString()).min(1)),
+    create: z.array(nonEmptyString()),
+    update: z.array(nonEmptyString()).min(1),
+    editorFields: z.array(nonEmptyString()).optional().default([]),
+    /**
+     * Fields an intent's editor refuses to leave blank although the
+     * canonical contract allows it (`schedule` needs its `dueDate`).
+     */
+    required: z
+      .record(nonEmptyString(), z.array(nonEmptyString()).min(1))
+      .optional()
+      .default({}),
+  });
 
   const derivedKey = nonEmptyString().regex(
     /^[A-Za-z_][A-Za-z0-9_]*$/,
@@ -1030,7 +964,7 @@ const buildMetadataSchemas = () => {
   const derivedPathSchema = z
     .array(
       z
-        .object({
+        .strictObject({
           table: nonEmptyString(),
           from: nonEmptyString(),
           to: nonEmptyString(),
@@ -1045,7 +979,6 @@ const buildMetadataSchemas = () => {
             .strict()
             .optional(),
         })
-        .strict()
         .refine(
           (step) => !step.recursive || (!step.jsonKey && !step.fromJsonKey),
           "recursive paths require ordinary UUID columns",
@@ -1053,7 +986,7 @@ const buildMetadataSchemas = () => {
     )
     .min(1);
   const derivedInputSchema = z
-    .object({
+    .strictObject({
       table: nonEmptyString(),
       match: derivedMatchSchema,
       columns: z.array(nonEmptyString()).min(1).optional(),
@@ -1094,7 +1027,6 @@ const buildMetadataSchemas = () => {
         .strict()
         .optional(),
     })
-    .strict()
     .refine(
       (input) => !input.paths || (!input.path && !input.targetWhere),
       "paths cannot be combined with path or targetWhere",
@@ -1104,85 +1036,81 @@ const buildMetadataSchemas = () => {
         !input.selection || (input.targetWhere && !input.path && !input.paths),
       "selection requires targetWhere and cannot be combined with path or paths",
     );
-  const derivedStoreSchema = z
-    .object({
-      compute: nonEmptyString(),
-      snapshotSource: z
-        .object({
-          table: nonEmptyString(),
-          value: z.union([
-            nonEmptyString(),
-            z.record(nonEmptyString(), nonEmptyString()),
-          ]),
-          computedAt: nonEmptyString(),
-          decidedBy: nonEmptyString().optional(),
-          sort: nonEmptyString().optional(),
-          storage: z.enum(["json", "number", "text"]).optional(),
-          view: z.boolean().optional(),
-        })
-        .strict()
-        .optional(),
-      rebuildPhase: z
-        .enum(["facts", "quality", "search", "diagnostics"])
-        .optional(),
-      clock: z.literal("householdDay").optional(),
-      inputs: z.array(derivedInputSchema).min(1),
-      dependsOn: z
-        .array(
-          z.union([
-            z
-              .object({
-                entity: nonEmptyString(),
-                key: derivedKey,
-                targetWhere: derivedTargetWhereSchema,
-              })
-              .strict(),
-            z
-              .object({
-                entity: nonEmptyString(),
-                key: derivedKey,
-                match: derivedMatchSchema,
-              })
-              .strict(),
-            /** From the changed record's id along a join path to the records to mark. */
-            z
-              .object({
-                entity: nonEmptyString(),
-                key: derivedKey,
-                path: derivedPathSchema,
-              })
-              .strict(),
-            /** Through a link table: `source` holds the changed record, `dependent` the record to mark. */
-            z
-              .object({
-                entity: nonEmptyString(),
-                key: derivedKey,
-                through: z
-                  .object({
-                    table: nonEmptyString(),
-                    source: nonEmptyString(),
-                    dependent: nonEmptyString(),
-                    where: z
-                      .record(nonEmptyString(), nonEmptyString())
-                      .optional(),
-                  })
-                  .strict(),
-              })
-              .strict(),
-          ]),
-        )
-        .optional()
-        .default([]),
-    })
-    .strict();
-  const entityDerivedFieldMetadataSchema = z.union([
-    z
+  const derivedStoreSchema = z.strictObject({
+    compute: nonEmptyString(),
+    snapshotSource: z
       .object({
-        via: nonEmptyString(),
-        /** An unmatched row set is unresolved until this result is available. */
-        requiresResult: derivedKey.optional(),
+        table: nonEmptyString(),
+        value: z.union([
+          nonEmptyString(),
+          z.record(nonEmptyString(), nonEmptyString()),
+        ]),
+        computedAt: nonEmptyString(),
+        decidedBy: nonEmptyString().optional(),
+        sort: nonEmptyString().optional(),
+        storage: z.enum(["json", "number", "text"]).optional(),
+        view: z.boolean().optional(),
       })
-      .strict(),
+      .strict()
+      .optional(),
+    rebuildPhase: z
+      .enum(["facts", "quality", "search", "diagnostics"])
+      .optional(),
+    clock: z.literal("householdDay").optional(),
+    inputs: z.array(derivedInputSchema).min(1),
+    dependsOn: z
+      .array(
+        z.union([
+          z
+            .object({
+              entity: nonEmptyString(),
+              key: derivedKey,
+              targetWhere: derivedTargetWhereSchema,
+            })
+            .strict(),
+          z
+            .object({
+              entity: nonEmptyString(),
+              key: derivedKey,
+              match: derivedMatchSchema,
+            })
+            .strict(),
+          /** From the changed record's id along a join path to the records to mark. */
+          z
+            .object({
+              entity: nonEmptyString(),
+              key: derivedKey,
+              path: derivedPathSchema,
+            })
+            .strict(),
+          /** Through a link table: `source` holds the changed record, `dependent` the record to mark. */
+          z
+            .object({
+              entity: nonEmptyString(),
+              key: derivedKey,
+              through: z
+                .object({
+                  table: nonEmptyString(),
+                  source: nonEmptyString(),
+                  dependent: nonEmptyString(),
+                  where: z
+                    .record(nonEmptyString(), nonEmptyString())
+                    .optional(),
+                })
+                .strict(),
+            })
+            .strict(),
+        ]),
+      )
+      .optional()
+      .default([]),
+  });
+  const entityDerivedFieldMetadataSchema = z.union([
+    z.strictObject({
+      via: nonEmptyString(),
+      /** An unmatched row set is unresolved until this result is available. */
+      requiresResult: derivedKey.optional(),
+    }),
     /**
      * A correlated aggregate the list compiler builds from a declared
      * relation path: `count` of the related records, or `sum`/`min`/`max` of
@@ -1190,61 +1118,55 @@ const buildMetadataSchemas = () => {
      * live rows; `absent` keeps only related rows whose listed stored fields
      * are NULL (an unpriced line count). The repository passes no SQL.
      */
-    z
-      .object({
-        // Literals, not z.enum: aggregate names are SQL words, not schema
-        // vocabulary for no-raw-enum-literal-in-sql.
-        rollup: z.union([
-          z.literal("count"),
-          z.literal("sum"),
-          z.literal("min"),
-          z.literal("max"),
-        ]),
-        via: nonEmptyString(),
-        absent: z.array(nonEmptyString()).min(1).optional(),
-        stored: derivedStoreSchema.optional(),
-      })
-      .strict(),
-    z
-      .object({
-        type: z.enum([
-          "text",
-          "number",
-          "date",
-          "dateInterval",
-          "boolean",
-          "enum",
-        ]),
-        options: z.array(nonEmptyString()).min(1).optional(),
-        stored: derivedStoreSchema.optional(),
-        /** A scalar projection of one atomically published typed result. */
-        fromResult: z
-          .object({
-            key: derivedKey,
-            path: z.array(nonEmptyString()).min(1),
-          })
-          .strict()
-          .optional(),
-        /** A contextual SQL value whose membership needs this published result. */
-        requiresResult: derivedKey.optional(),
-      })
-      .strict(),
-    z
-      .object({
-        predicate: z.enum([
-          "text",
-          "multiselect",
-          "idMulti",
-          "boolean",
-          "presence",
-          "range",
-        ]),
-        options: z.array(nonEmptyString()).min(1).optional(),
-        reason: nonEmptyString(),
-        /** The predicate returns SQL NULL while its required result is unavailable. */
-        requiresResult: derivedKey.optional(),
-      })
-      .strict(),
+    z.strictObject({
+      // Literals, not z.enum: aggregate names are SQL words, not schema
+      // vocabulary for no-raw-enum-literal-in-sql.
+      rollup: z.union([
+        z.literal("count"),
+        z.literal("sum"),
+        z.literal("min"),
+        z.literal("max"),
+      ]),
+      via: nonEmptyString(),
+      absent: z.array(nonEmptyString()).min(1).optional(),
+      stored: derivedStoreSchema.optional(),
+    }),
+    z.strictObject({
+      type: z.enum([
+        "text",
+        "number",
+        "date",
+        "dateInterval",
+        "boolean",
+        "enum",
+      ]),
+      options: z.array(nonEmptyString()).min(1).optional(),
+      stored: derivedStoreSchema.optional(),
+      /** A scalar projection of one atomically published typed result. */
+      fromResult: z
+        .object({
+          key: derivedKey,
+          path: z.array(nonEmptyString()).min(1),
+        })
+        .strict()
+        .optional(),
+      /** A contextual SQL value whose membership needs this published result. */
+      requiresResult: derivedKey.optional(),
+    }),
+    z.strictObject({
+      predicate: z.enum([
+        "text",
+        "multiselect",
+        "idMulti",
+        "boolean",
+        "presence",
+        "range",
+      ]),
+      options: z.array(nonEmptyString()).min(1).optional(),
+      reason: nonEmptyString(),
+      /** The predicate returns SQL NULL while its required result is unavailable. */
+      requiresResult: derivedKey.optional(),
+    }),
   ]);
 
   /**
@@ -1253,12 +1175,10 @@ const buildMetadataSchemas = () => {
    * is the depth a well-formed tree reaches: it bounds tree displays and the
    * hierarchy levels Group by offers.
    */
-  const entityHierarchyMetadataSchema = z
-    .object({
-      parentField: nonEmptyString(),
-      maxDepth: z.number().int().positive(),
-    })
-    .strict();
+  const entityHierarchyMetadataSchema = z.strictObject({
+    parentField: nonEmptyString(),
+    maxDepth: z.number().int().positive(),
+  });
 
   /**
    * A to-many set of rows a `via` may start at (`<row>.<column>`, or
@@ -1275,45 +1195,41 @@ const buildMetadataSchemas = () => {
    * independent matching needs a second row set over the same storage.
    */
   const entityRowSetMetadataSchema = z.union([
-    z
-      .object({
-        label: nonEmptyString(),
-        path: z
-          .array(
-            z
-              .object({
-                edge: nonEmptyString(),
-                direction: z.enum(["incoming", "outgoing"]),
-              })
-              .strict(),
-          )
-          .min(1),
-        where: z.record(nonEmptyString(), nonEmptyString()).optional(),
-      })
-      .strict(),
-    z.object({ label: nonEmptyString(), json: nonEmptyString() }).strict(),
-    z.object({ label: nonEmptyString(), relation: nonEmptyString() }).strict(),
-    z
-      .object({
-        label: nonEmptyString(),
-        repository: z.record(
-          derivedKey,
-          z.union([
-            z.enum(["text", "number", "date", "boolean"]),
-            z
-              .object({
-                reference: nonEmptyString(),
-                connection: z.boolean().optional(),
-              })
-              .strict(),
-          ]),
-        ),
-      })
-      .strict(),
+    z.strictObject({
+      label: nonEmptyString(),
+      path: z
+        .array(
+          z
+            .object({
+              edge: nonEmptyString(),
+              direction: z.enum(["incoming", "outgoing"]),
+            })
+            .strict(),
+        )
+        .min(1),
+      where: z.record(nonEmptyString(), nonEmptyString()).optional(),
+    }),
+    z.strictObject({ label: nonEmptyString(), json: nonEmptyString() }),
+    z.strictObject({ label: nonEmptyString(), relation: nonEmptyString() }),
+    z.strictObject({
+      label: nonEmptyString(),
+      repository: z.record(
+        derivedKey,
+        z.union([
+          z.enum(["text", "number", "date", "boolean"]),
+          z
+            .object({
+              reference: nonEmptyString(),
+              connection: z.boolean().optional(),
+            })
+            .strict(),
+        ]),
+      ),
+    }),
   ]);
 
   const entityFieldModelMetadataSchema = z
-    .object({
+    .strictObject({
       fields: z.array(entityFieldMetadataSchema),
       storage: z.array(entityStorageMetadataSchema),
       /** Evidence-backed research may fill these ordinary editable fields. */
@@ -1364,7 +1280,6 @@ const buildMetadataSchemas = () => {
       groupingOmit: z.array(nonEmptyString()).optional().default([]),
       intents: entityFieldModelIntentsMetadataSchema.optional(),
     })
-    .strict()
     .transform((model) => ({
       ...model,
       create: model.fields
@@ -1398,7 +1313,7 @@ const buildMetadataSchemas = () => {
    * `routes.new`; `createOverride: null` omits the generic entry point.
    */
   const entityRouteMetadataSchema = z
-    .object({
+    .strictObject({
       basePath: nonEmptyString(),
       detailParamOverride: nonEmptyString().optional(),
       /** Replaces the capture-dialog default; null opts out. */
@@ -1418,7 +1333,6 @@ const buildMetadataSchemas = () => {
        */
       detail: z.literal(true).nullable().optional().default(true),
     })
-    .strict()
     .transform(
       ({
         basePath,
@@ -1439,15 +1353,13 @@ const buildMetadataSchemas = () => {
       }),
     );
 
-  const entityIdentifiersMetadataSchema = z
-    .object({
-      brand: nonEmptyString().nullable(),
-      shortcode: nonEmptyString().nullable(),
-      shortcodeLength: z.int().min(5).max(32).optional(),
-      /** References to this entity may select the requesting member. */
-      currentMember: z.literal(true).optional(),
-    })
-    .strict();
+  const entityIdentifiersMetadataSchema = z.strictObject({
+    brand: nonEmptyString().nullable(),
+    shortcode: nonEmptyString().nullable(),
+    shortcodeLength: z.int().min(5).max(32).optional(),
+    /** References to this entity may select the requesting member. */
+    currentMember: z.literal(true).optional(),
+  });
 
   const fieldKey = nonEmptyString("must name a declared field");
   const actionKey = nonEmptyString("must name an action verb");
@@ -1481,570 +1393,524 @@ const buildMetadataSchemas = () => {
    * hand-written fill, rendered only where a registry provides it.
    */
   const detailSectionSchema = z.discriminatedUnion("kind", [
-    z
-      .object({
-        kind: z.literal("fields"),
-        ...sectionBase,
-        fields: z.array(fieldKey).min(1),
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("relation"),
-        ...sectionBase,
-        /** Scalar context displayed above this relation table. */
-        contextFields: z.array(fieldKey).optional().default([]),
-        relation: nonEmptyString("must name a declared relation"),
-        filter: z.object({ descriptor: nonEmptyString() }).strict(),
-        columns: z
-          .array(nonEmptyString())
-          .min(1)
-          .nullable()
-          .optional()
-          .default(null),
-        /** Explicit create-field prefill for relation sections whose target
-         * reference is not named by the target filter descriptor (including
-         * multiple-reference fields such as `plantingIds`). */
-        prefill: z
+    z.strictObject({
+      kind: z.literal("fields"),
+      ...sectionBase,
+      fields: z.array(fieldKey).min(1),
+    }),
+    z.strictObject({
+      kind: z.literal("relation"),
+      ...sectionBase,
+      /** Scalar context displayed above this relation table. */
+      contextFields: z.array(fieldKey).optional().default([]),
+      relation: nonEmptyString("must name a declared relation"),
+      filter: z.object({ descriptor: nonEmptyString() }).strict(),
+      columns: orNull(z.array(nonEmptyString()).min(1)),
+      /** Explicit create-field prefill for relation sections whose target
+       * reference is not named by the target filter descriptor (including
+       * multiple-reference fields such as `plantingIds`). */
+      prefill: orNull(
+        z
           .object({
             field: fieldKey,
             intent: nonEmptyString().optional(),
           })
-          .strict()
-          .nullable()
-          .optional()
-          .default(null),
-        sort: z
+          .strict(),
+      ),
+      sort: orNull(
+        z
           .object({
             field: nonEmptyString(),
             direction: sortDirection,
           })
-          .strict()
-          .nullable()
-          .optional()
-          .default(null),
-        limit: z.number().int().positive().nullable().optional().default(null),
-        /**
-         * The target's `model.grouping` field this section opens grouped by
-         * (a Project's Tasks by status). Omitted, the section is ungrouped.
-         */
-        groupBy: nonEmptyString().nullable().optional().default(null),
-        /** Section-specific empty-state copy, replacing the generic
-         * "No <plural> yet." sentence both platforms otherwise render — for
-         * a section whose target's plural name reads awkwardly or
-         * uninformatively on its own (e.g. "No products yet." under "Kit
-         * components"). */
-        empty: nonEmptyString().nullable().optional().default(null),
-        /** Set by the compiler on a section it derived from a `many`
-         * relation nobody declared or omitted; never declared by hand. */
-        derived: z
-          .boolean({ error: "must be a boolean" })
-          .optional()
-          .default(false),
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("timeline"),
-        ...sectionBase,
-        mode: z.enum(["events", "lifecycles"]).optional().default("events"),
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("slot"),
-        id: sectionId,
-        title: nonEmptyString().nullable().optional().default(null),
-        /** Declared computed field whose explanation applies to this slot. */
-        explanationField: fieldKey.nullable().optional().default(null),
-        workspace: sectionWorkspace.optional(),
-        placement: sectionPlacement,
-        surfaces: detailSurfacesSchema,
-      })
-      .strict(),
+          .strict(),
+      ),
+      limit: orNull(z.number().int().positive()),
+      /**
+       * The target's `model.grouping` field this section opens grouped by
+       * (a Project's Tasks by status). Omitted, the section is ungrouped.
+       */
+      groupBy: orNull(nonEmptyString()),
+      /** Section-specific empty-state copy, replacing the generic
+       * "No <plural> yet." sentence both platforms otherwise render — for
+       * a section whose target's plural name reads awkwardly or
+       * uninformatively on its own (e.g. "No products yet." under "Kit
+       * components"). */
+      empty: orNull(nonEmptyString()),
+      /** Set by the compiler on a section it derived from a `many`
+       * relation nobody declared or omitted; never declared by hand. */
+      derived: flag(false),
+    }),
+    z.strictObject({
+      kind: z.literal("timeline"),
+      ...sectionBase,
+      mode: z.enum(["events", "lifecycles"]).optional().default("events"),
+    }),
+    z.strictObject({
+      kind: z.literal("slot"),
+      id: sectionId,
+      title: orNull(nonEmptyString()),
+      /** Declared computed field whose explanation applies to this slot. */
+      explanationField: orNull(fieldKey),
+      workspace: sectionWorkspace.optional(),
+      placement: sectionPlacement,
+      surfaces: detailSurfacesSchema,
+    }),
   ]);
 
-  const boardListViewSchema = z
-    .object({
-      kind: z.literal("board"),
-      id: sectionId,
-      label: nonEmptyString(),
-      /** Web-only board: generated Swift omits it. */
-      webOnly: z.boolean().optional(),
-      groupBy: nonEmptyString(),
-      groupings: z.array(nonEmptyString()).min(1),
-      cardFields: z.array(fieldKey),
-      filters: z.record(z.string(), z.unknown()).optional().default({}),
-      pageSize: z.number().int().min(1).max(100).optional().default(50),
-      caps: z
-        .array(
-          z.object({
-            field: fieldKey,
-            value: z.string(),
-            limit: z.number().int().min(1).max(100),
-            orderBy: fieldKey.optional(),
-            direction: z.enum(["asc", "desc"]).optional(),
-          }),
-        )
-        .optional()
-        .default([]),
-      sort: z
-        .array(
-          z.object({ orderBy: fieldKey, direction: z.enum(["asc", "desc"]) }),
-        )
-        .min(1),
-      reorder: z
-        .object({ operation: nonEmptyString() })
-        .nullable()
-        .optional()
-        .default(null),
-    })
-    .strict();
+  const boardListViewSchema = z.strictObject({
+    kind: z.literal("board"),
+    id: sectionId,
+    label: nonEmptyString(),
+    /** Web-only board: generated Swift omits it. */
+    webOnly: z.boolean().optional(),
+    groupBy: nonEmptyString(),
+    groupings: z.array(nonEmptyString()).min(1),
+    cardFields: z.array(fieldKey),
+    filters: z.record(z.string(), z.unknown()).optional().default({}),
+    pageSize: z.number().int().min(1).max(100).optional().default(50),
+    caps: z
+      .array(
+        z.object({
+          field: fieldKey,
+          value: z.string(),
+          limit: z.number().int().min(1).max(100),
+          orderBy: fieldKey.optional(),
+          direction: z.enum(["asc", "desc"]).optional(),
+        }),
+      )
+      .optional()
+      .default([]),
+    sort: z
+      .array(
+        z.object({ orderBy: fieldKey, direction: z.enum(["asc", "desc"]) }),
+      )
+      .min(1),
+    reorder: orNull(z.object({ operation: nonEmptyString() })),
+  });
   const listViewSchema = z.union([
     boardListViewSchema,
     z.enum(["table", "shelf", "timeline"]),
-    z
-      .object({
-        kind: z.literal("slot"),
-        id: sectionId,
-        label: nonEmptyString(),
-        /** Route-only search keys the slot view reads (`urlStringParam`). */
-        searchKeys: z.array(nonEmptyString()).optional().default([]),
-      })
-      .strict(),
+    z.strictObject({
+      kind: z.literal("slot"),
+      id: sectionId,
+      label: nonEmptyString(),
+      /** Route-only search keys the slot view reads (`urlStringParam`). */
+      searchKeys: z.array(nonEmptyString()).optional().default([]),
+    }),
   ]);
 
   // Everything a generic surface needs to present an entity — and nothing a
   // surface computes. Kept data-only (strings and enums) so the eager client
   // roster and the Swift catalog can carry it verbatim; one declaration, two
   // renderers.
-  const entityPresentationMetadataSchema = z
-    .object({
-      titleField: nonEmptyString(),
-      /** Ordered disambiguating list fields for Cmd+K and full search; no fallbacks. */
-      searchFacts: z.array(nonEmptyString()).max(2).default([]),
-      /**
-       * The wayfinding line an entity's records live on, or `null` for one
-       * that belongs to no line (image). Drives nav grouping, domain colours
-       * and the native shell's sections.
-       */
-      domain: z.enum(WAYFINDING_DOMAINS).nullable(),
-      /** One sentence for the records catalog and nav. */
-      description: nonEmptyString(),
-      /**
-       * `false` keeps a web-only root (operator plumbing) out of native
-       * Browse and the native sidebar; its records still open natively from
-       * links. Web navigation ignores it.
-       */
-      nativeBrowse: z
-        .boolean({ error: "must be a boolean" })
-        .optional()
-        .default(true),
-      emptyState: z
-        .object({
-          title: nonEmptyString(),
-          description: nonEmptyString(),
-          actionLabel: nonEmptyString().optional(),
-        })
-        .strict(),
-      recordEmojiField: fieldKey.nullable().optional().default(null),
-      /** Read projection naming the entity whose standard glyph represents this record. */
-      recordIconEntityField: fieldKey.nullable().optional().default(null),
-      icons: z
-        .object({
-          /** A `@phosphor-icons/react` export name; the browser registry resolves it. */
-          phosphor: nonEmptyString(),
-          /** An SF Symbol name for the native app. */
-          sfSymbol: nonEmptyString(),
-          /** Text fallback where an SF Symbol can't render: CLI output, notifications, share text. */
-          emoji: nonEmptyString(),
-        })
-        .strict(),
-      detail: z
-        .object({
-          summary: detailSummarySchema.optional().default([]),
-          /**
-           * `journal`: the first (relation) section renders before the
-           * supporting fields, with a "Log entry" create button prefilled
-           * from its filter.
-           */
-          variantOverride: z
-            .enum(["standard", "journal"])
-            .optional()
-            .default("standard"),
-          hero: z
-            .object({
-              /** An enum or boolean field rendered as the title chip. */
-              chip: fieldKey.nullable().optional().default(null),
-              /**
-               * The field the detail read's `breadcrumb` projection walks: a
-               * reference (a location's ancestry, else the one record), or a
-               * placement object carrying `locationId`.
-               */
-              breadcrumb: fieldKey.nullable().optional().default(null),
-              /**
-               * A date or timestamp field recording when the thing happened,
-               * shown before the ingest `createdAt`. `label` defaults to the
-               * field's label.
-               */
-              when: z
+  const entityPresentationMetadataSchema = z.strictObject({
+    titleField: nonEmptyString(),
+    /** Ordered disambiguating list fields for Cmd+K and full search; no fallbacks. */
+    searchFacts: z.array(nonEmptyString()).max(2).default([]),
+    /**
+     * The wayfinding line an entity's records live on, or `null` for one
+     * that belongs to no line (image). Drives nav grouping, domain colours
+     * and the native shell's sections.
+     */
+    domain: z.enum(WAYFINDING_DOMAINS).nullable(),
+    /** One sentence for the records catalog and nav. */
+    description: nonEmptyString(),
+    /**
+     * `false` keeps a web-only root (operator plumbing) out of native
+     * Browse and the native sidebar; its records still open natively from
+     * links. Web navigation ignores it.
+     */
+    nativeBrowse: flag(true),
+    emptyState: z
+      .object({
+        title: nonEmptyString(),
+        description: nonEmptyString(),
+        actionLabel: nonEmptyString().optional(),
+      })
+      .strict(),
+    recordEmojiField: orNull(fieldKey),
+    /** Read projection naming the entity whose standard glyph represents this record. */
+    recordIconEntityField: orNull(fieldKey),
+    icons: z
+      .object({
+        /** A `@phosphor-icons/react` export name; the browser registry resolves it. */
+        phosphor: nonEmptyString(),
+        /** An SF Symbol name for the native app. */
+        sfSymbol: nonEmptyString(),
+        /** Text fallback where an SF Symbol can't render: CLI output, notifications, share text. */
+        emoji: nonEmptyString(),
+      })
+      .strict(),
+    detail: z
+      .object({
+        summary: detailSummarySchema.optional().default([]),
+        /**
+         * `journal`: the first (relation) section renders before the
+         * supporting fields, with a "Log entry" create button prefilled
+         * from its filter.
+         */
+        variantOverride: z
+          .enum(["standard", "journal"])
+          .optional()
+          .default("standard"),
+        hero: z
+          .object({
+            /** An enum or boolean field rendered as the title chip. */
+            chip: orNull(fieldKey),
+            /**
+             * The field the detail read's `breadcrumb` projection walks: a
+             * reference (a location's ancestry, else the one record), or a
+             * placement object carrying `locationId`.
+             */
+            breadcrumb: orNull(fieldKey),
+            /**
+             * A date or timestamp field recording when the thing happened,
+             * shown before the ingest `createdAt`. `label` defaults to the
+             * field's label.
+             */
+            when: orNull(
+              z
                 .object({ field: fieldKey, label: z.string().optional() })
-                .strict()
-                .nullable()
-                .optional()
-                .default(null),
-              /** Workflow verbs after the derived `edit` (present with an update contract). */
-              extraActions: z.array(actionKey).optional().default([]),
-            })
-            .strict()
-            .prefault({})
-            .transform(({ chip, breadcrumb, when, extraActions }) => ({
-              chip,
-              breadcrumb,
-              when,
-              actions: extraActions,
-            })),
-          /**
-           * One or two `hero.extraActions` verbs every client offers as the
-           * record's leading buttons, ahead of the More menu.
-           */
-          quickActions: z.array(actionKey).max(2).optional().default([]),
-          /** Only these relations contribute dated records to merged activity. */
-          activityRelations: z
-            .array(
-              z
-                .object({
-                  relation: nonEmptyString(),
-                  dateField: fieldKey,
-                })
                 .strict(),
-            )
-            .optional()
-            .default([]),
-          /** Null includes every declared section in Overview. A whitelist keeps
-           * supporting detail reachable through its existing section id. */
-          overviewSections: z
-            .array(sectionId)
-            .nullable()
-            .optional()
-            .default(null),
-          /**
-           * Sections that answer the record's job, leading the web page ahead
-           * of Needs you and Activity. Native keeps `sections` order and never
-           * reads this.
-           */
-          lead: z.array(sectionId).optional().default([]),
-          /**
-           * Two sections the web page sets side by side where width allows,
-           * stacking below about 1000px. Relation tables stay full width, and
-           * declared `sections` order is unchanged.
-           */
-          pairs: z
-            .array(z.tuple([sectionId, sectionId]))
-            .optional()
-            .default([]),
-          /**
-           * The detail page's authored reading order. Edit sections group a
-           * form; these group a record for reading, so neither derives from
-           * the other. Undeclared `many` relations append derived sections.
-           */
-          sections: z.array(detailSectionSchema, {
-            error: "must author the detail page's sections",
-          }),
-          /** Ambiguous relation back-filters, keyed by relation name. */
-          relationFilterOverrides: z
-            .record(
-              nonEmptyString(),
-              z
-                .object({
-                  descriptor: nonEmptyString(),
-                  prefill: z
-                    .object({
-                      field: nonEmptyString(),
-                      intent: nonEmptyString().optional(),
-                    })
-                    .strict()
-                    .nullable()
-                    .optional(),
-                })
-                .strict(),
-            )
-            .optional()
-            .default({}),
-          /**
-           * `many` relations this page deliberately renders no table for,
-           * each with the reason. Every other `many` relation onto a list
-           * entity gets a derived relation section; a relation whose target
-           * has no list is recorded here by the compiler.
-           */
-          omitRelations: z
-            .record(nonEmptyString(), nonEmptyString("must give a reason"))
-            .optional()
-            .default({}),
-        })
-        .strict()
-        .transform(
-          ({
-            sections,
-            summary,
-            activityRelations,
-            overviewSections,
-            lead,
-            pairs,
-            relationFilterOverrides,
-            variantOverride,
-            hero,
-            quickActions,
-            omitRelations,
-          }) => ({
-            variant: variantOverride,
-            summary,
-            hero,
-            quickActions,
-            sections,
-            activityRelations,
-            overviewSections,
-            lead,
-            pairs,
-            relationFilterOverrides,
-            omitRelations,
-          }),
-        ),
-      list: z
-        .object({
-          /** The first view is the default; `table` when omitted. */
-          views: z.array(listViewSchema).min(1).optional().default(["table"]),
-          /** URL-compatible aliases for retired view ids, mapped before rendering. */
-          viewAliases: z
-            .record(nonEmptyString(), nonEmptyString())
-            .optional()
-            .default({}),
-          /** Full-filter server aggregates to present on every list client. */
-          totals: z
-            .array(
-              z
-                .object({
-                  id: nonEmptyString(),
-                  label: nonEmptyString(),
-                  keys: z.union([
-                    z.tuple([nonEmptyString()]),
-                    z.tuple([nonEmptyString(), nonEmptyString()]),
-                  ]),
-                  format: z.enum(["currency", "currencyRange", "integer"]),
-                  /**
-                   * Also sum the key per list group, over distinct records.
-                   * Needs a canonical additive SQL value (Expense-derived for
-                   * money).
-                   */
-                  group: z.boolean().optional().default(false),
-                  /** Cached contributors required before this total is complete. */
-                  requiresResults: z.array(derivedKey).min(1).optional(),
-                })
-                .strict()
-                .refine(
-                  (total) =>
-                    (total.format === "currencyRange") ===
-                    (total.keys.length === 2),
-                  "currencyRange requires two sum keys; other totals require one",
-                ),
-            )
-            .optional()
-            .default([]),
-          /** Replaces the subtitle inferred from mobile card placement. */
-          shelfSubtitleOverride: z.array(fieldKey).optional(),
-          /**
-           * Native presentation may show the first populated shelf subtitle.
-           * Web RTable identity columns always contain only the name.
-           */
-          titleSubtitle: z.boolean().optional().default(false),
-          /**
-           * The filter a fresh list opens with, as column filters (`id` is a
-           * field key, the value what its filter control would hold). Applies
-           * only while the URL names no filter of its own; clearing it writes
-           * `filters=none`, so the person's choice to see everything survives a
-           * reload. Positive on purpose: to hide ephemeral runs, select the
-           * triggers people start.
-           */
-          initialFilter: z
-            .array(
-              z
-                .object({
-                  id: fieldKey,
-                  value: z.union([z.string(), z.array(z.string()).min(1)]),
-                })
-                .strict(),
-            )
-            .optional()
-            .default([]),
-          /**
-           * Named starting points for the list: pinned filters plus an
-           * optional sort and curated column visibility. Applying one sets
-           * real column-filter state, so a view and a shared link are the
-           * same thing. The compiler checks every filter id and value against
-           * `filters.descriptors` and every layout column against the
-           * declared list columns. `problem` additionally publishes the view
-           * as a Problems section.
-           */
-          savedViews: z
-            .array(
-              z
-                .object({
-                  id: nonEmptyString(),
-                  label: nonEmptyString(),
-                  description: nonEmptyString(),
-                  filters: z
-                    .array(
-                      z
-                        .object({
-                          id: nonEmptyString(),
-                          value: z.union([
-                            z.string(),
-                            z.array(z.string()).min(1),
-                          ]),
-                        })
-                        .strict(),
-                    )
-                    .min(1),
-                  /** A guided pass the view leads into. */
-                  flow: z
+            ),
+            /** Workflow verbs after the derived `edit` (present with an update contract). */
+            extraActions: z.array(actionKey).optional().default([]),
+          })
+          .strict()
+          .prefault({})
+          .transform(({ chip, breadcrumb, when, extraActions }) => ({
+            chip,
+            breadcrumb,
+            when,
+            actions: extraActions,
+          })),
+        /**
+         * One or two `hero.extraActions` verbs every client offers as the
+         * record's leading buttons, ahead of the More menu.
+         */
+        quickActions: z.array(actionKey).max(2).optional().default([]),
+        /** Only these relations contribute dated records to merged activity. */
+        activityRelations: z
+          .array(
+            z
+              .object({
+                relation: nonEmptyString(),
+                dateField: fieldKey,
+              })
+              .strict(),
+          )
+          .optional()
+          .default([]),
+        /** Null includes every declared section in Overview. A whitelist keeps
+         * supporting detail reachable through its existing section id. */
+        overviewSections: orNull(z.array(sectionId)),
+        /**
+         * Sections that answer the record's job, leading the web page ahead
+         * of Needs you and Activity. Native keeps `sections` order and never
+         * reads this.
+         */
+        lead: z.array(sectionId).optional().default([]),
+        /**
+         * Two sections the web page sets side by side where width allows,
+         * stacking below about 1000px. Relation tables stay full width, and
+         * declared `sections` order is unchanged.
+         */
+        pairs: z
+          .array(z.tuple([sectionId, sectionId]))
+          .optional()
+          .default([]),
+        /**
+         * The detail page's authored reading order. Edit sections group a
+         * form; these group a record for reading, so neither derives from
+         * the other. Undeclared `many` relations append derived sections.
+         */
+        sections: z.array(detailSectionSchema, {
+          error: "must author the detail page's sections",
+        }),
+        /** Ambiguous relation back-filters, keyed by relation name. */
+        relationFilterOverrides: z
+          .record(
+            nonEmptyString(),
+            z
+              .object({
+                descriptor: nonEmptyString(),
+                prefill: z
+                  .object({
+                    field: nonEmptyString(),
+                    intent: nonEmptyString().optional(),
+                  })
+                  .strict()
+                  .nullable()
+                  .optional(),
+              })
+              .strict(),
+          )
+          .optional()
+          .default({}),
+        /**
+         * `many` relations this page deliberately renders no table for,
+         * each with the reason. Every other `many` relation onto a list
+         * entity gets a derived relation section; a relation whose target
+         * has no list is recorded here by the compiler.
+         */
+        omitRelations: z
+          .record(nonEmptyString(), nonEmptyString("must give a reason"))
+          .optional()
+          .default({}),
+      })
+      .strict()
+      .transform(
+        ({
+          sections,
+          summary,
+          activityRelations,
+          overviewSections,
+          lead,
+          pairs,
+          relationFilterOverrides,
+          variantOverride,
+          hero,
+          quickActions,
+          omitRelations,
+        }) => ({
+          variant: variantOverride,
+          summary,
+          hero,
+          quickActions,
+          sections,
+          activityRelations,
+          overviewSections,
+          lead,
+          pairs,
+          relationFilterOverrides,
+          omitRelations,
+        }),
+      ),
+    list: z
+      .object({
+        /** The first view is the default; `table` when omitted. */
+        views: z.array(listViewSchema).min(1).optional().default(["table"]),
+        /** URL-compatible aliases for retired view ids, mapped before rendering. */
+        viewAliases: z
+          .record(nonEmptyString(), nonEmptyString())
+          .optional()
+          .default({}),
+        /** Full-filter server aggregates to present on every list client. */
+        totals: z
+          .array(
+            z
+              .object({
+                id: nonEmptyString(),
+                label: nonEmptyString(),
+                keys: z.union([
+                  z.tuple([nonEmptyString()]),
+                  z.tuple([nonEmptyString(), nonEmptyString()]),
+                ]),
+                format: z.enum(["currency", "currencyRange", "integer"]),
+                /**
+                 * Also sum the key per list group, over distinct records.
+                 * Needs a canonical additive SQL value (Expense-derived for
+                 * money).
+                 */
+                group: z.boolean().optional().default(false),
+                /** Cached contributors required before this total is complete. */
+                requiresResults: z.array(derivedKey).min(1).optional(),
+              })
+              .strict()
+              .refine(
+                (total) =>
+                  (total.format === "currencyRange") ===
+                  (total.keys.length === 2),
+                "currencyRange requires two sum keys; other totals require one",
+              ),
+          )
+          .optional()
+          .default([]),
+        /** Replaces the subtitle inferred from mobile card placement. */
+        shelfSubtitleOverride: z.array(fieldKey).optional(),
+        /**
+         * Native presentation may show the first populated shelf subtitle.
+         * Web RTable identity columns always contain only the name.
+         */
+        titleSubtitle: z.boolean().optional().default(false),
+        /**
+         * The filter a fresh list opens with, as column filters (`id` is a
+         * field key, the value what its filter control would hold). Applies
+         * only while the URL names no filter of its own; clearing it writes
+         * `filters=none`, so the person's choice to see everything survives a
+         * reload. Positive on purpose: to hide ephemeral runs, select the
+         * triggers people start.
+         */
+        initialFilter: z
+          .array(
+            z
+              .object({
+                id: fieldKey,
+                value: z.union([z.string(), z.array(z.string()).min(1)]),
+              })
+              .strict(),
+          )
+          .optional()
+          .default([]),
+        /**
+         * Named starting points for the list: pinned filters plus an
+         * optional sort and curated column visibility. Applying one sets
+         * real column-filter state, so a view and a shared link are the
+         * same thing. The compiler checks every filter id and value against
+         * `filters.descriptors` and every layout column against the
+         * declared list columns. `problem` additionally publishes the view
+         * as a Problems section.
+         */
+        savedViews: z
+          .array(
+            z
+              .object({
+                id: nonEmptyString(),
+                label: nonEmptyString(),
+                description: nonEmptyString(),
+                filters: z
+                  .array(
+                    z
+                      .object({
+                        id: nonEmptyString(),
+                        value: z.union([
+                          z.string(),
+                          z.array(z.string()).min(1),
+                        ]),
+                      })
+                      .strict(),
+                  )
+                  .min(1),
+                /** A guided pass the view leads into. */
+                flow: orNull(
+                  z
                     .object({
                       kind: z.literal("shelf-triage"),
                       label: nonEmptyString(),
                     })
-                    .strict()
-                    .nullable()
-                    .optional()
-                    .default(null),
-                  sort: z
-                    .array(
-                      z
-                        .object({
-                          id: nonEmptyString(),
-                          desc: z.boolean({ error: "must be a boolean" }),
-                        })
-                        .strict(),
-                    )
-                    .nullable()
-                    .optional()
-                    .default(null),
-                  /** The list view (`table`, `shelf`, ...) the view opens in. */
-                  view: nonEmptyString().nullable().optional().default(null),
-                  /** The `model.grouping` field the view opens grouped by. */
-                  groupBy: listGroupByDimensionsSchema.optional().default([]),
-                  /** The Pivot cell share (`?share=`) the view opens with. */
-                  share: z
-                    .enum(["count", "row", "column", "total"])
-                    .nullable()
-                    .optional()
-                    .default(null),
-                  /**
-                   * A shortcut on another surface. `home` lists the view in
-                   * the home "Your views" row on web and Apple, by `order`.
-                   */
-                  pin: z
+                    .strict(),
+                ),
+                sort: orNull(
+                  z.array(
+                    z
+                      .object({
+                        id: nonEmptyString(),
+                        desc: z.boolean({ error: "must be a boolean" }),
+                      })
+                      .strict(),
+                  ),
+                ),
+                /** The list view (`table`, `shelf`, ...) the view opens in. */
+                view: orNull(nonEmptyString()),
+                /** The `model.grouping` field the view opens grouped by. */
+                groupBy: listGroupByDimensionsSchema.optional().default([]),
+                /** The Pivot cell share (`?share=`) the view opens with. */
+                share: orNull(z.enum(pivotShares)),
+                /**
+                 * A shortcut on another surface. `home` lists the view in
+                 * the home "Your views" row on web and Apple, by `order`.
+                 */
+                pin: orNull(
+                  z
                     .object({
                       surface: z.literal("home"),
                       order: z.number().int().nonnegative(),
                     })
-                    .strict()
-                    .nullable()
-                    .optional()
-                    .default(null),
-                  /** Columns the view reveals (or hides) when applied. */
-                  layout: z
+                    .strict(),
+                ),
+                /** Columns the view reveals (or hides) when applied. */
+                layout: orNull(
+                  z
                     .object({
                       columnVisibility: z.record(
                         nonEmptyString(),
                         z.boolean({ error: "must be a boolean" }),
                       ),
                     })
-                    .strict()
-                    .nullable()
-                    .optional()
-                    .default(null),
-                  problem: z
+                    .strict(),
+                ),
+                problem: orNull(
+                  z
                     .object({
                       key: nonEmptyString(),
                       title: nonEmptyString(),
                       description: nonEmptyString(),
                       emptyMessage: nonEmptyString(),
                     })
-                    .strict()
-                    .nullable()
-                    .optional()
-                    .default(null),
-                })
-                .strict(),
-            )
-            .optional()
-            .default([]),
-          /** A custom list transport's search parameter (for example USDA's nameFilter). */
-          primarySearch: z
+                    .strict(),
+                ),
+              })
+              .strict(),
+          )
+          .optional()
+          .default([]),
+        /** A custom list transport's search parameter (for example USDA's nameFilter). */
+        primarySearch: orNull(
+          z
             .object({ key: nonEmptyString(), placeholder: nonEmptyString() })
-            .strict()
-            .nullable()
-            .optional()
-            .default(null),
-          /**
-           * Stored fields pinned to NULL on every list and count read: the
-           * list's static row scope (an ingredient list holds standalone rows,
-           * never a recipe's own). It shows no chip, and a request cannot
-           * lift it.
-           */
-          scope: z.array(fieldKey).optional().default([]),
-          /**
-           * Related scopes: a request key whose value is the `filters`
-           * entity's own list filter record, matched through `via` (a path or
-           * a row-set terminal that leads to that entity). A project page
-           * scopes its task and expense lists by the projects its filters
-           * select. A scope is not a filter descriptor: no chip, Exclude,
-           * any-of, sort or group.
-           */
-          scopes: z
-            .record(
-              nonEmptyString(),
-              z
-                .object({ via: nonEmptyString(), filters: nonEmptyString() })
-                .strict(),
-            )
-            .optional()
-            .default({}),
-          /**
-           * Nest the table under the declared `model.hierarchy`: each row
-           * sits under its parent. The server pages the roots and each
-           * parent's children (`nesting` on every list read); a row whose
-           * parent does not match the filters stays a root, so filtering
-           * never hides it. `toggle` offers a nested/flat switch whose
-           * opening state is `defaultNested`.
-           */
-          tree: z
+            .strict(),
+        ),
+        /**
+         * Stored fields pinned to NULL on every list and count read: the
+         * list's static row scope (an ingredient list holds standalone rows,
+         * never a recipe's own). It shows no chip, and a request cannot
+         * lift it.
+         */
+        scope: z.array(fieldKey).optional().default([]),
+        /**
+         * Related scopes: a request key whose value is the `filters`
+         * entity's own list filter record, matched through `via` (a path or
+         * a row-set terminal that leads to that entity). A project page
+         * scopes its task and expense lists by the projects its filters
+         * select. A scope is not a filter descriptor: no chip, Exclude,
+         * any-of, sort or group.
+         */
+        scopes: z
+          .record(
+            nonEmptyString(),
+            z
+              .object({ via: nonEmptyString(), filters: nonEmptyString() })
+              .strict(),
+          )
+          .optional()
+          .default({}),
+        /**
+         * Nest the table under the declared `model.hierarchy`: each row
+         * sits under its parent. The server pages the roots and each
+         * parent's children (`nesting` on every list read); a row whose
+         * parent does not match the filters stays a root, so filtering
+         * never hides it. `toggle` offers a nested/flat switch whose
+         * opening state is `defaultNested`.
+         */
+        tree: orNull(
+          z
             .object({
               toggle: z.boolean().optional().default(false),
               defaultNested: z.boolean().optional().default(true),
             })
-            .strict()
-            .nullable()
-            .optional()
-            .default(null),
-          /**
-           * Workflow verbs from `action-verbs.ts`, ahead of the verbs derived
-           * from eligible updates (`bulkEdit`) and capabilities (kernel `merge`, kernel `delete`).
-           */
-          extraActions: z.array(actionKey).optional().default([]),
-          /**
-           * One or two `extraActions` verbs a row offers first: the leading
-           * swipe and the first row-menu items.
-           */
-          quickActions: z.array(actionKey).max(2).optional().default([]),
-          links: z
-            .array(
-              z
-                .object({ label: nonEmptyString(), path: nonEmptyString() })
-                .strict(),
-            )
-            .optional()
-            .default([]),
-          timeline: z
+            .strict(),
+        ),
+        /**
+         * Workflow verbs from `action-verbs.ts`, ahead of the verbs derived
+         * from eligible updates (`bulkEdit`) and capabilities (kernel `merge`, kernel `delete`).
+         */
+        extraActions: z.array(actionKey).optional().default([]),
+        /**
+         * One or two `extraActions` verbs a row offers first: the leading
+         * swipe and the first row-menu items.
+         */
+        quickActions: z.array(actionKey).max(2).optional().default([]),
+        links: z
+          .array(
+            z
+              .object({ label: nonEmptyString(), path: nonEmptyString() })
+              .strict(),
+          )
+          .optional()
+          .default([]),
+        timeline: orNull(
+          z
             .object({
               /** Date fields the default timeline emits `field:<key>` events for. */
               fields: z.array(fieldKey).optional().default([]),
@@ -2067,134 +1933,128 @@ const buildMetadataSchemas = () => {
                 .optional()
                 .default(null),
             })
-            .strict()
-            .nullable()
-            .optional()
-            .default(null),
-        })
-        .strict()
-        .prefault({})
-        .transform(
-          ({
-            extraActions,
-            quickActions,
-            views,
-            viewAliases,
-            totals,
-            shelfSubtitleOverride,
-            titleSubtitle,
-            initialFilter,
-            savedViews,
-            primarySearch,
-            scope,
-            scopes,
-            tree,
-            links,
-            timeline,
-          }) => ({
-            savedViews,
-            views,
-            viewAliases,
-            totals,
-            metrics: totals.flatMap((total) => (total.group ? total.keys : [])),
-            shelf:
-              shelfSubtitleOverride === undefined
-                ? null
-                : { subtitle: shelfSubtitleOverride },
-            titleSubtitle,
-            initialFilter,
-            primarySearch,
-            scope,
-            scopes,
-            tree,
-            actions: extraActions,
-            quickActions,
-            links,
-            timeline,
-          }),
+            .strict(),
         ),
-      edit: z
-        .object({
-          /**
-           * Titled editor sections, in order. Every controlled field no
-           * section names joins the untitled `main` section, which leads
-           * unless a bare `{ id: "main" }` entry places it.
-           */
-          sections: z
-            .array(
-              z
-                .object({
-                  id: sectionId,
-                  title: nonEmptyString().optional(),
-                  fields: z.array(fieldKey).min(1).optional(),
-                  /** Render the section's body behind a disclosure that
-                   * starts closed (a rarely-used section, e.g. Nutrition). */
-                  collapsed: z.boolean().optional().default(false),
-                })
-                .strict()
-                .superRefine((section, context) => {
-                  const named =
-                    section.title !== undefined || section.fields !== undefined;
-                  if (section.id === "main" && named)
-                    context.addIssue({
-                      code: "custom",
-                      message:
-                        'main is reserved for the untitled remainder; place it with a bare { id: "main" }',
-                    });
-                  if (
-                    section.id !== "main" &&
-                    (section.title === undefined ||
-                      section.fields === undefined)
-                  )
-                    context.addIssue({
-                      code: "custom",
-                      message: "needs a title and fields",
-                    });
-                })
-                .transform(({ id, title, fields, collapsed }) =>
-                  title === undefined || fields === undefined
-                    ? { id, title: null, fields: null, collapsed }
-                    : { id, title, fields, collapsed },
-                ),
-            )
-            .optional()
-            .default([]),
-          /**
-           * Fields hidden from the generic editor while `field` is
-           * present/absent in the **live form** (not the record), evaluated
-           * reactively in create and update mode (e.g. hide `lineKind`
-           * once `productId` is picked). "Present" means a non-empty
-           * trimmed string / non-null id, mirroring `control.suggest`'s
-           * basis-presence rule.
-           */
-          hiddenWhen: z
-            .array(
-              z
-                .object({
-                  field: fieldKey,
-                  present: z.boolean({ error: "must be a boolean" }),
-                  fields: z.array(fieldKey).min(1),
-                })
-                .strict(),
-            )
-            .optional()
-            .default([]),
-        })
-        .strict()
-        .prefault({})
-        .transform(({ sections, hiddenWhen }) => ({
-          sections,
-          hiddenWhen,
-        })),
-    })
-    .strict();
+      })
+      .strict()
+      .prefault({})
+      .transform(
+        ({
+          extraActions,
+          quickActions,
+          views,
+          viewAliases,
+          totals,
+          shelfSubtitleOverride,
+          titleSubtitle,
+          initialFilter,
+          savedViews,
+          primarySearch,
+          scope,
+          scopes,
+          tree,
+          links,
+          timeline,
+        }) => ({
+          savedViews,
+          views,
+          viewAliases,
+          totals,
+          metrics: totals.flatMap((total) => (total.group ? total.keys : [])),
+          shelf:
+            shelfSubtitleOverride === undefined
+              ? null
+              : { subtitle: shelfSubtitleOverride },
+          titleSubtitle,
+          initialFilter,
+          primarySearch,
+          scope,
+          scopes,
+          tree,
+          actions: extraActions,
+          quickActions,
+          links,
+          timeline,
+        }),
+      ),
+    edit: z
+      .object({
+        /**
+         * Titled editor sections, in order. Every controlled field no
+         * section names joins the untitled `main` section, which leads
+         * unless a bare `{ id: "main" }` entry places it.
+         */
+        sections: z
+          .array(
+            z
+              .object({
+                id: sectionId,
+                title: nonEmptyString().optional(),
+                fields: z.array(fieldKey).min(1).optional(),
+                /** Render the section's body behind a disclosure that
+                 * starts closed (a rarely-used section, e.g. Nutrition). */
+                collapsed: z.boolean().optional().default(false),
+              })
+              .strict()
+              .superRefine((section, context) => {
+                const named =
+                  section.title !== undefined || section.fields !== undefined;
+                if (section.id === "main" && named)
+                  context.addIssue({
+                    code: "custom",
+                    message:
+                      'main is reserved for the untitled remainder; place it with a bare { id: "main" }',
+                  });
+                if (
+                  section.id !== "main" &&
+                  (section.title === undefined || section.fields === undefined)
+                )
+                  context.addIssue({
+                    code: "custom",
+                    message: "needs a title and fields",
+                  });
+              })
+              .transform(({ id, title, fields, collapsed }) =>
+                title === undefined || fields === undefined
+                  ? { id, title: null, fields: null, collapsed }
+                  : { id, title, fields, collapsed },
+              ),
+          )
+          .optional()
+          .default([]),
+        /**
+         * Fields hidden from the generic editor while `field` is
+         * present/absent in the **live form** (not the record), evaluated
+         * reactively in create and update mode (e.g. hide `lineKind`
+         * once `productId` is picked). "Present" means a non-empty
+         * trimmed string / non-null id, mirroring `control.suggest`'s
+         * basis-presence rule.
+         */
+        hiddenWhen: z
+          .array(
+            z
+              .object({
+                field: fieldKey,
+                present: z.boolean({ error: "must be a boolean" }),
+                fields: z.array(fieldKey).min(1),
+              })
+              .strict(),
+          )
+          .optional()
+          .default([]),
+      })
+      .strict()
+      .prefault({})
+      .transform(({ sections, hiddenWhen }) => ({
+        sections,
+        hiddenWhen,
+      })),
+  });
 
-  const entityDeleteMetadataSchema = z
-    .object({
-      mode: z.enum(["soft", "hard"]),
-      bulk: z.boolean({ error: "must be a boolean" }),
-    })
-    .strict();
+  const entityDeleteMetadataSchema = z.strictObject({
+    mode: z.enum(["soft", "hard"]),
+    bulk: z.boolean({ error: "must be a boolean" }),
+  });
 
   /**
    * The kernel `resolve` action: names → live rows, matched case-insensitively
@@ -2203,14 +2063,12 @@ const buildMetadataSchemas = () => {
    * contains-matches a miss offers; `scope` pins stored columns to NULL (an
    * ingredient resolves among standalone rows, never a recipe's own).
    */
-  const entityResolveMetadataSchema = z
-    .object({
-      match: z.array(nonEmptyString()).min(1),
-      createMissing: z.boolean({ error: "must be a boolean" }),
-      candidates: z.number().int().positive().optional(),
-      scope: z.array(nonEmptyString()).optional().default([]),
-    })
-    .strict();
+  const entityResolveMetadataSchema = z.strictObject({
+    match: z.array(nonEmptyString()).min(1),
+    createMissing: z.boolean({ error: "must be a boolean" }),
+    candidates: z.number().int().positive().optional(),
+    scope: z.array(nonEmptyString()).optional().default([]),
+  });
 
   /**
    * Image policy deliberately lives beside the entity declaration.  Storage,
@@ -2222,20 +2080,16 @@ const buildMetadataSchemas = () => {
     { error: 'must be false, "gallery", "cover" or "logo"' },
   );
   const imageRelationPathSchema = z.array(nonEmptyString()).min(1);
-  const imageDisplaySourceMetadataSchema = z
-    .object({
-      relationPath: imageRelationPathSchema,
-      ordering: z.enum(["declared", "newest", "oldest"]).default("declared"),
-    })
-    .strict();
-  const imageVisualEvidenceMetadataSchema = z
-    .object({
-      // An empty path is the record's own gallery images (no relation hop).
-      relationPath: z.array(nonEmptyString()),
-      priority: z.number().int().nonnegative(),
-      ordering: z.enum(["declared", "newest", "oldest"]),
-    })
-    .strict();
+  const imageDisplaySourceMetadataSchema = z.strictObject({
+    relationPath: imageRelationPathSchema,
+    ordering: z.enum(["declared", "newest", "oldest"]).default("declared"),
+  });
+  const imageVisualEvidenceMetadataSchema = z.strictObject({
+    // An empty path is the record's own gallery images (no relation hop).
+    relationPath: z.array(nonEmptyString()),
+    priority: z.number().int().nonnegative(),
+    ordering: z.enum(["declared", "newest", "oldest"]),
+  });
   const imageIngressBindingValueSchema = z.union([
     z.string(),
     z.number(),
@@ -2243,56 +2097,49 @@ const buildMetadataSchemas = () => {
     z.null(),
   ]);
   const imageIngressBindingMetadataSchema = z.discriminatedUnion("from", [
-    z
-      .object({ field: nonEmptyString(), from: z.literal("source-id") })
-      .strict(),
-    z
-      .object({ field: nonEmptyString(), from: z.literal("source-id-list") })
-      .strict(),
-    z
-      .object({
-        field: nonEmptyString(),
-        from: z.literal("source-field"),
-        sourceField: nonEmptyString(),
-      })
-      .strict(),
-    z
-      .object({ field: nonEmptyString(), from: z.literal("capture-date") })
-      .strict(),
-    z
-      .object({
-        field: nonEmptyString(),
-        from: z.literal("constant"),
-        value: imageIngressBindingValueSchema,
-      })
-      .strict(),
-    z
-      .object({
-        field: nonEmptyString(),
-        from: z.literal("relation-items"),
-        item: z
-          .object({
-            field: nonEmptyString(),
-            from: z.enum(["source-id", "source-field", "constant"]),
-            sourceField: nonEmptyString().optional(),
-            value: imageIngressBindingValueSchema.optional(),
-          })
-          .strict(),
-      })
-      .strict(),
+    z.strictObject({ field: nonEmptyString(), from: z.literal("source-id") }),
+    z.strictObject({
+      field: nonEmptyString(),
+      from: z.literal("source-id-list"),
+    }),
+    z.strictObject({
+      field: nonEmptyString(),
+      from: z.literal("source-field"),
+      sourceField: nonEmptyString(),
+    }),
+    z.strictObject({
+      field: nonEmptyString(),
+      from: z.literal("capture-date"),
+    }),
+    z.strictObject({
+      field: nonEmptyString(),
+      from: z.literal("constant"),
+      value: imageIngressBindingValueSchema,
+    }),
+    z.strictObject({
+      field: nonEmptyString(),
+      from: z.literal("relation-items"),
+      item: z
+        .object({
+          field: nonEmptyString(),
+          from: z.enum(["source-id", "source-field", "constant"]),
+          sourceField: nonEmptyString().optional(),
+          value: imageIngressBindingValueSchema.optional(),
+        })
+        .strict(),
+    }),
   ]);
   /** `createSelf` has no source record, so its bindings may only draw from the photo itself. */
   const imageIngressSelfBindingMetadataSchema = z.discriminatedUnion("from", [
-    z
-      .object({ field: nonEmptyString(), from: z.literal("capture-date") })
-      .strict(),
-    z
-      .object({
-        field: nonEmptyString(),
-        from: z.literal("constant"),
-        value: imageIngressBindingValueSchema,
-      })
-      .strict(),
+    z.strictObject({
+      field: nonEmptyString(),
+      from: z.literal("capture-date"),
+    }),
+    z.strictObject({
+      field: nonEmptyString(),
+      from: z.literal("constant"),
+      value: imageIngressBindingValueSchema,
+    }),
   ]);
   /**
    * A route's resolved order is normally a fixed enum. A conditional-primary route instead
@@ -2301,122 +2148,110 @@ const buildMetadataSchemas = () => {
    * compiler enforces `field` is an enum field on the source entity and every value is a member
    * of it (`validateImageIngress` in `apps/web/generator/entities/compile.ts`).
    */
-  const imageIngressConditionalChoiceMetadataSchema = z
-    .object({
-      primary: z
-        .object({
-          when: z
-            .object({
-              field: nonEmptyString(),
-              oneOf: z.array(nonEmptyString()).min(1),
-            })
-            .strict(),
-        })
-        .strict(),
-      otherwise: z.enum(["alternate", "prompt"]),
-    })
-    .strict();
+  const imageIngressConditionalChoiceMetadataSchema = z.strictObject({
+    primary: z
+      .object({
+        when: z
+          .object({
+            field: nonEmptyString(),
+            oneOf: z.array(nonEmptyString()).min(1),
+          })
+          .strict(),
+      })
+      .strict(),
+    otherwise: z.enum(["alternate", "prompt"]),
+  });
   const imageIngressChoiceMetadataSchema = z.union([
     z.enum(["primary", "alternate", "prompt"]),
     imageIngressConditionalChoiceMetadataSchema,
   ]);
   const imageIngressMetadataSchema = z.discriminatedUnion("kind", [
-    z
-      .object({
-        kind: z.literal("self"),
-        routeId: nonEmptyString(),
-        /** How this storage route is resolved after the natural source record. */
-        choice: imageIngressChoiceMetadataSchema.default("primary"),
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("existingRelated"),
-        routeId: nonEmptyString(),
-        relationPath: imageRelationPathSchema,
-        choice: imageIngressChoiceMetadataSchema.default("alternate"),
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("createRelated"),
-        routeId: nonEmptyString(),
-        relationPath: imageRelationPathSchema,
-        bindings: z.array(imageIngressBindingMetadataSchema).min(1),
-        choice: imageIngressChoiceMetadataSchema.default("alternate"),
-      })
-      .strict(),
-    z
-      .object({
-        kind: z.literal("createSelf"),
-        routeId: nonEmptyString(),
-        /** Overrides the created record's own `imagePolicy.storage` for this route only; omit
-         * to use the entity's declared storage (the common case — target === source here). */
-        storage: imageStorageMetadataSchema.optional(),
-        bindings: z.array(imageIngressSelfBindingMetadataSchema).default([]),
-        enabled: z.boolean({ error: "must be a boolean" }),
-        /** Required exactly when `enabled` is false (`validateImageIngress` enforces this). */
-        disabledReason: nonEmptyString().optional(),
-        choice: imageIngressChoiceMetadataSchema.default("alternate"),
-      })
-      .strict(),
+    z.strictObject({
+      kind: z.literal("self"),
+      routeId: nonEmptyString(),
+      /** How this storage route is resolved after the natural source record. */
+      choice: imageIngressChoiceMetadataSchema.default("primary"),
+    }),
+    z.strictObject({
+      kind: z.literal("existingRelated"),
+      routeId: nonEmptyString(),
+      relationPath: imageRelationPathSchema,
+      choice: imageIngressChoiceMetadataSchema.default("alternate"),
+    }),
+    z.strictObject({
+      kind: z.literal("createRelated"),
+      routeId: nonEmptyString(),
+      relationPath: imageRelationPathSchema,
+      bindings: z.array(imageIngressBindingMetadataSchema).min(1),
+      choice: imageIngressChoiceMetadataSchema.default("alternate"),
+    }),
+    z.strictObject({
+      kind: z.literal("createSelf"),
+      routeId: nonEmptyString(),
+      /** Overrides the created record's own `imagePolicy.storage` for this route only; omit
+       * to use the entity's declared storage (the common case — target === source here). */
+      storage: imageStorageMetadataSchema.optional(),
+      bindings: z.array(imageIngressSelfBindingMetadataSchema).default([]),
+      enabled: z.boolean({ error: "must be a boolean" }),
+      /** Required exactly when `enabled` is false (`validateImageIngress` enforces this). */
+      disabledReason: nonEmptyString().optional(),
+      choice: imageIngressChoiceMetadataSchema.default("alternate"),
+    }),
   ]);
-  const imageRoutingMetadataSchema = z
-    .object({
-      candidateFields: z.array(nonEmptyString()).default([]),
-      temporalFields: z.array(nonEmptyString()).default([]),
-      lifecycleFilters: z
-        .array(
-          z.union([
-            z
-              .object({
-                field: nonEmptyString(),
-                equals: z.union([z.string(), z.boolean()]),
-              })
-              .strict(),
-            z
-              .object({
-                field: nonEmptyString(),
-                oneOf: z.array(z.union([z.string(), z.boolean()])).min(1),
-              })
-              .strict(),
-          ]),
-        )
-        .default([]),
-      signals: z
-        .object({
-          ocrFields: z.array(nonEmptyString()).default([]),
-          classifierLabels: z.array(nonEmptyString()).default([]),
-        })
-        .strict()
-        .default({ ocrFields: [], classifierLabels: [] }),
-      /**
-       * The photo category (`packages/schemas/src/photo-categories.ts`) this entity's
-       * routing belongs to. Optional here — not because a routing entity may omit it, but
-       * so a missing value reaches `validateImageRouting` (apps/web/generator/entities/compile.ts)
-       * with the entity's key still in hand, for a message that names the entity instead of
-       * a bare declaration index. An unrecognized value still fails here, at the enum.
-       */
-      category: z.enum(photoCategoryKeys).optional(),
-      /**
-       * Authoritative visual evidence for photo routing. This is deliberately
-       * separate from borrowed display imagery, which can never become an
-       * identity assertion by being displayed.
-       */
-      visualEvidence: z
-        .array(imageVisualEvidenceMetadataSchema)
-        .optional()
-        .default([]),
-      abstention: z
-        .object({
-          minimumScore: z.number().min(0).max(1),
-          minimumMargin: z.number().min(0).max(1),
-        })
-        .strict(),
-    })
-    .strict();
+  const imageRoutingMetadataSchema = z.strictObject({
+    candidateFields: z.array(nonEmptyString()).default([]),
+    temporalFields: z.array(nonEmptyString()).default([]),
+    lifecycleFilters: z
+      .array(
+        z.union([
+          z
+            .object({
+              field: nonEmptyString(),
+              equals: z.union([z.string(), z.boolean()]),
+            })
+            .strict(),
+          z
+            .object({
+              field: nonEmptyString(),
+              oneOf: z.array(z.union([z.string(), z.boolean()])).min(1),
+            })
+            .strict(),
+        ]),
+      )
+      .default([]),
+    signals: z
+      .object({
+        ocrFields: z.array(nonEmptyString()).default([]),
+        classifierLabels: z.array(nonEmptyString()).default([]),
+      })
+      .strict()
+      .default({ ocrFields: [], classifierLabels: [] }),
+    /**
+     * The photo category (`packages/schemas/src/photo-categories.ts`) this entity's
+     * routing belongs to. Optional here — not because a routing entity may omit it, but
+     * so a missing value reaches `validateImageRouting` (apps/web/generator/entities/compile.ts)
+     * with the entity's key still in hand, for a message that names the entity instead of
+     * a bare declaration index. An unrecognized value still fails here, at the enum.
+     */
+    category: z.enum(photoCategoryKeys).optional(),
+    /**
+     * Authoritative visual evidence for photo routing. This is deliberately
+     * separate from borrowed display imagery, which can never become an
+     * identity assertion by being displayed.
+     */
+    visualEvidence: z
+      .array(imageVisualEvidenceMetadataSchema)
+      .optional()
+      .default([]),
+    abstention: z
+      .object({
+        minimumScore: z.number().min(0).max(1),
+        minimumMargin: z.number().min(0).max(1),
+      })
+      .strict(),
+  });
   const imagePolicyMetadataSchema = z
-    .object({
+    .strictObject({
       storage: imageStorageMetadataSchema,
       /**
        * Related records whose images stand in when this entity's own storage
@@ -2432,9 +2267,8 @@ const buildMetadataSchemas = () => {
         .array(imageDisplaySourceMetadataSchema)
         .optional(),
       ingress: z.array(imageIngressMetadataSchema).optional().default([]),
-      routing: imageRoutingMetadataSchema.nullable().optional().default(null),
+      routing: orNull(imageRoutingMetadataSchema),
     })
-    .strict()
     .superRefine((policy, context) => {
       if (policy.storage === false && policy.displaySources !== undefined)
         context.addIssue({
@@ -2477,91 +2311,76 @@ const buildMetadataSchemas = () => {
       }),
     );
 
-  const entityDataQualityCheckMetadataSchema = z
-    .object({
-      /** Globally unique across entities; also the `dataGap` filter value. */
-      id: z.string().regex(/^[a-z][a-z0-9_]*$/, "must be snake_case"),
-      facet: dataQualityFacetName,
-      kind: dataQualityCheckKind.optional().default("missing"),
-      /** An `unscored` diagnostic alone never makes a record assessed. */
-      scoring: z.enum(["weighted", "unscored"]).optional().default("weighted"),
-      exceptions: z
-        .enum(["inherit", "forbidden"])
-        .optional()
-        .default("inherit"),
-      /** Result wording when the check is satisfied, never the name of a defect. */
-      satisfiedLabel: nonEmptyString(),
-      /** One field or section owns the contribution; null keeps it in Quality. */
-      placement: z
-        .union([
-          z.object({ field: nonEmptyString() }).strict(),
-          z.object({ section: nonEmptyString() }).strict(),
-        ])
-        .nullable()
-        .default(null),
-      /** Filter-option label. */
-      label: nonEmptyString(),
-      /** `gap.message` shown beside the check. */
-      message: nonEmptyString(),
-      /**
-       * The Problems coverage meter (`coverageTotalsSchema` key) whose
-       * denominator is this check's `expected` population; the generator
-       * counts it instead of a hand-written query.
-       */
-      coverage: nonEmptyString().optional(),
-    })
-    .strict();
+  const entityDataQualityCheckMetadataSchema = z.strictObject({
+    /** Globally unique across entities; also the `dataGap` filter value. */
+    id: z.string().regex(/^[a-z][a-z0-9_]*$/, "must be snake_case"),
+    facet: dataQualityFacetName,
+    kind: dataQualityCheckKind.optional().default("missing"),
+    /** An `unscored` diagnostic alone never makes a record assessed. */
+    scoring: z.enum(["weighted", "unscored"]).optional().default("weighted"),
+    exceptions: z.enum(exceptionPolicies).optional().default("inherit"),
+    /** Result wording when the check is satisfied, never the name of a defect. */
+    satisfiedLabel: nonEmptyString(),
+    /** One field or section owns the contribution; null keeps it in Quality. */
+    placement: z
+      .union([
+        z.object({ field: nonEmptyString() }).strict(),
+        z.object({ section: nonEmptyString() }).strict(),
+      ])
+      .nullable()
+      .default(null),
+    /** Filter-option label. */
+    label: nonEmptyString(),
+    /** `gap.message` shown beside the check. */
+    message: nonEmptyString(),
+    /**
+     * The Problems coverage meter (`coverageTotalsSchema` key) whose
+     * denominator is this check's `expected` population; the generator
+     * counts it instead of a hand-written query.
+     */
+    coverage: nonEmptyString().optional(),
+  });
 
-  const entityDataQualityMetadataSchema = z
-    .object({
-      checks: z.array(entityDataQualityCheckMetadataSchema).min(1),
-      /** Disable when quality measures evidence completeness independently of imagery. */
-      displayImage: z.boolean().optional().default(true),
-      /**
-       * True where the entity may record `DataException` rows: durable member
-       * waivers that hold until cleared.
-       */
-      exceptions: z
-        .boolean({ error: "must be a boolean" })
-        .optional()
-        .default(false),
-      /** Scored entities whose gaps roll up into this one (`relatedGaps`). */
-      related: z.array(nonEmptyString()).optional().default([]),
-      /**
-       * Rows the stored quality evaluation reads beyond the record's own row,
-       * its waivers and its attachments (ADR 0021): a change marks the
-       * record's stored quality for recompute.
-       */
-      inputs: z.array(derivedInputSchema).optional().default([]),
-      /** Where the synthesized `dataQuality` list column sits; unordered = last. */
-      listOrder: z.number().int().nonnegative().optional(),
-    })
-    .strict();
+  const entityDataQualityMetadataSchema = z.strictObject({
+    checks: z.array(entityDataQualityCheckMetadataSchema).min(1),
+    /** Disable when quality measures evidence completeness independently of imagery. */
+    displayImage: z.boolean().optional().default(true),
+    /**
+     * True where the entity may record `DataException` rows: durable member
+     * waivers that hold until cleared.
+     */
+    exceptions: flag(false),
+    /** Scored entities whose gaps roll up into this one (`relatedGaps`). */
+    related: z.array(nonEmptyString()).optional().default([]),
+    /**
+     * Rows the stored quality evaluation reads beyond the record's own row,
+     * its waivers and its attachments (ADR 0021): a change marks the
+     * record's stored quality for recompute.
+     */
+    inputs: z.array(derivedInputSchema).optional().default([]),
+    /** Where the synthesized `dataQuality` list column sits; unordered = last. */
+    listOrder: z.number().int().nonnegative().optional(),
+  });
 
-  const classificationFieldPolicyMetadataSchema = z
-    .object({
-      /** A field of the classified (target) entity, or with `relation`, a
-       * relation it may be linked through (a link kind or reference role). */
-      field: nonEmptyString(),
-      /**
-       * `field` names a relation the classified record may take part in (a
-       * Planting source, a project tool) rather than a stored field. Relation
-       * entries never imply a classification.
-       */
-      relation: z
-        .boolean({ error: "must be a boolean" })
-        .optional()
-        .default(false),
-      /** The policy where the effective classifier value is a listed key. */
-      byValue: z.record(z.string().min(1), fieldPolicyValue),
-      /** The policy for every other value, and for no value at all. */
-      otherwise: fieldPolicyValue,
-      /** Actionable explanation shown when this policy refuses the field. */
-      refusal: nonEmptyString().optional(),
-      /** Public data-quality check id for same-record required/refused values. */
-      gap: nonEmptyString().optional(),
-    })
-    .strict();
+  const classificationFieldPolicyMetadataSchema = z.strictObject({
+    /** A field of the classified (target) entity, or with `relation`, a
+     * relation it may be linked through (a link kind or reference role). */
+    field: nonEmptyString(),
+    /**
+     * `field` names a relation the classified record may take part in (a
+     * Planting source, a project tool) rather than a stored field. Relation
+     * entries never imply a classification.
+     */
+    relation: flag(false),
+    /** The policy where the effective classifier value is a listed key. */
+    byValue: z.record(z.string().min(1), fieldPolicyValue),
+    /** The policy for every other value, and for no value at all. */
+    otherwise: fieldPolicyValue,
+    /** Actionable explanation shown when this policy refuses the field. */
+    refusal: nonEmptyString().optional(),
+    /** Public data-quality check id for same-record required/refused values. */
+    gap: nonEmptyString().optional(),
+  });
 
   /**
    * A fixed classification (an enum field on this entity) declares, per field
@@ -2569,50 +2388,36 @@ const buildMetadataSchemas = () => {
    * allowed. `fields` order is precedence: when evidence in two fields implies
    * different classifications, the earlier field wins.
    */
-  const classificationPolicyMetadataSchema = z
-    .object({
-      /** This entity's enum field whose (effective) value classifies. */
-      classifier: nonEmptyString(),
-      /** Omit target to classify fields on this same record. */
-      target: z
-        .object({ entity: nonEmptyString(), reference: nonEmptyString() })
-        .strict()
-        .optional(),
-      /**
-       * Same-record policies only: generate a CHECK so every write path
-       * refuses `not_allowed` and enforces `required`. Enabling it on existing
-       * data needs a migration that first resolves violators.
-       */
-      enforced: z
-        .boolean({ error: "must be a boolean" })
-        .optional()
-        .default(false),
-      fields: z.array(classificationFieldPolicyMetadataSchema).min(1),
-    })
-    .strict();
+  const classificationPolicyMetadataSchema = z.strictObject({
+    /** This entity's enum field whose (effective) value classifies. */
+    classifier: nonEmptyString(),
+    /** Omit target to classify fields on this same record. */
+    target: z
+      .object({ entity: nonEmptyString(), reference: nonEmptyString() })
+      .strict()
+      .optional(),
+    /**
+     * Same-record policies only: generate a CHECK so every write path
+     * refuses `not_allowed` and enforces `required`. Enabling it on existing
+     * data needs a migration that first resolves violators.
+     */
+    enforced: flag(false),
+    fields: z.array(classificationFieldPolicyMetadataSchema).min(1),
+  });
 
   const entityCapabilitiesMetadataSchema = z
-    .object({
+    .strictObject({
       /** Writes land in the audit log; opt out with `false`. */
-      auditable: z
-        .boolean({ error: "must be a boolean" })
-        .optional()
-        .default(true),
+      auditable: flag(true),
       /**
        * Direct image storage only. Display imagery is universal and resolved
        * independently from this storage declaration.
        */
       images: imagePolicyMetadataSchema,
       /** Contributes a live row count; opt out with `false`. */
-      countable: z
-        .boolean({ error: "must be a boolean" })
-        .optional()
-        .default(true),
+      countable: flag(true),
       /** Rows carry `deletedAt`; opt out with `false`. */
-      softDelete: z
-        .boolean({ error: "must be a boolean" })
-        .optional()
-        .default(true),
+      softDelete: flag(true),
       delete: entityDeleteMetadataSchema.nullable(),
       merge: z.boolean({ error: "must be a boolean" }),
       /**
@@ -2640,11 +2445,7 @@ const buildMetadataSchemas = () => {
        * `resources.<entity>.timeline`: `default` is the audit log plus the
        * declared date fields; `custom` binds `extensions.ports.timeline`.
        */
-      timeline: z
-        .enum(["default", "custom"])
-        .nullable()
-        .optional()
-        .default(null),
+      timeline: orNull(z.enum(timelineModes)),
       /**
        * Review families this entity owes beyond its fields' own `control.suggest`:
        * a detector produces pending Suggestions touching these records, and the
@@ -2666,17 +2467,14 @@ const buildMetadataSchemas = () => {
        * other capabilities say; writes stay with the entity's own workflows.
        */
       lifecycle: z.enum(["mutable", "readOnly"]).optional().default("mutable"),
-      resolve: entityResolveMetadataSchema.nullable().optional().default(null),
+      resolve: orNull(entityResolveMetadataSchema),
       /**
        * Data-quality checks: the compiler synthesizes the `dataQuality` and
        * `dataGaps` model fields, the `dataStatus`/`dataGap` filter descriptors
        * and the `dataQualityScore` sort from this one block; the web repo binds
        * each check id to SQL in `server/generic/data-quality/repo/checks`.
        */
-      dataQuality: entityDataQualityMetadataSchema
-        .nullable()
-        .optional()
-        .default(null),
+      dataQuality: orNull(entityDataQualityMetadataSchema),
       /**
        * Field policies keyed by this entity's classifier values; compiled to
        * `classification-field-policies.gen.ts` and read by one evaluator
@@ -2687,7 +2485,6 @@ const buildMetadataSchemas = () => {
         .optional()
         .default([]),
     })
-    .strict()
     .transform(({ operationOwners, ...capabilities }) => ({
       ...capabilities,
       operationOwners: operationOwners ?? {
@@ -2696,238 +2493,230 @@ const buildMetadataSchemas = () => {
       },
     }));
 
-  const entityContractMetadataSchema = z
-    .object({
-      create: sourceRefMetadataSchema.nullable().optional(),
-      update: sourceRefMetadataSchema.nullable().optional(),
-      output: sourceRefMetadataSchema.optional(),
-      list: sourceRefMetadataSchema.optional(),
-      detail: sourceRefMetadataSchema.optional(),
-      mcpOutput: sourceRefMetadataSchema.optional(),
-      mcpList: sourceRefMetadataSchema.optional(),
-      mcpDetail: sourceRefMetadataSchema.optional(),
-      embedded: z
-        .array(
-          z
-            .object({
-              path: z.array(nonEmptyString()).min(1),
-              entity: nonEmptyString(),
-              recursive: z.boolean().optional(),
-              projections: z
-                .array(
-                  z.enum([
-                    "output",
-                    "list",
-                    "detail",
-                    "mcpOutput",
-                    "mcpList",
-                    "mcpDetail",
-                  ]),
-                )
-                .min(1),
-            })
-            .strict(),
-        )
-        .optional(),
-    })
-    .strict();
+  const entityContractMetadataSchema = z.strictObject({
+    create: sourceRefMetadataSchema.nullable().optional(),
+    update: sourceRefMetadataSchema.nullable().optional(),
+    output: sourceRefMetadataSchema.optional(),
+    list: sourceRefMetadataSchema.optional(),
+    detail: sourceRefMetadataSchema.optional(),
+    mcpOutput: sourceRefMetadataSchema.optional(),
+    mcpList: sourceRefMetadataSchema.optional(),
+    mcpDetail: sourceRefMetadataSchema.optional(),
+    embedded: z
+      .array(
+        z
+          .object({
+            path: z.array(nonEmptyString()).min(1),
+            entity: nonEmptyString(),
+            recursive: z.boolean().optional(),
+            projections: z
+              .array(
+                z.enum([
+                  "output",
+                  "list",
+                  "detail",
+                  "mcpOutput",
+                  "mcpList",
+                  "mcpDetail",
+                ]),
+              )
+              .min(1),
+          })
+          .strict(),
+      )
+      .optional(),
+  });
 
-  const entityFilterDescriptorMetadataSchema = z
-    .object({
-      columnId: nonEmptyString(),
-      field: nonEmptyString().nullable().optional(),
-      urlKey: nonEmptyString().nullable().optional(),
-      kind: nonEmptyString(),
-      placeholder: nonEmptyString(),
-      options: z
-        .array(
-          z
-            .object({
-              value: nonEmptyString(),
-              label: nonEmptyString(),
-              meta: z.boolean({ error: "must be a boolean" }).optional(),
-              color: nonEmptyString().optional(),
-              role: z.enum(enumRoles).optional(),
-              glyph: enumIconSchema.optional(),
-              /**
-               * The filter fields this preset sets on a `range` descriptor
-               * (`{ costMin: 500 }`); the generator turns the roster into the
-               * descriptor's expander. Dynamic presets (today-relative dates,
-               * open-ended counts) keep an `expandRef`.
-               */
-              expand: z
-                .record(
-                  nonEmptyString(),
-                  z.union([z.string(), z.number(), z.boolean()]),
-                )
-                .optional(),
-            })
-            .strict(),
-        )
-        .nullable()
-        .optional(),
-      optionsRef: sourceRefMetadataSchema.nullable().optional(),
-      optionsKey: nonEmptyString().nullable().optional(),
-      label: nonEmptyString().nullable().optional(),
-      schemaDescription: nonEmptyString().nullable().optional(),
-      deriveSchema: z.boolean({ error: "must be a boolean" }).optional(),
-      schemaFromRead: z.boolean({ error: "must be a boolean" }).optional(),
-      brandRef: z
-        .object({
-          entity: nonEmptyString(),
-          optionsKind: z
-            .enum([
-              "locationWithInventory",
-              "ingredientWithProduct",
-              "locationIdentityProduct",
-            ])
-            .optional(),
-        })
-        .strict()
-        .nullable()
-        .optional(),
-      expandRef: sourceRefMetadataSchema.nullable().optional(),
-      /** A named schema for select/multiselect values (an enum export). */
-      schemaRef: sourceRefMetadataSchema.nullable().optional(),
-      /**
-       * The filter is the standard predicate over a stored column, so the
-       * repository composes it from the declaration. A value filter that
-       * derives its schema and whose `columnId` names a stored field gets
-       * this binding without declaring it; declare it only for the object
-       * form: `columns` names the stored field when the descriptor id is
-       * virtual, `array` marks a multiselect over a `text-array` column
-       * (overlap, not membership). A text filter declares `anyOf` instead.
-       */
-      stored: z
-        .union([
-          z.boolean({ error: "must be a boolean" }),
-          z
-            .object({
-              columns: z.array(nonEmptyString()).min(1).optional(),
-              array: z.boolean({ error: "must be a boolean" }).optional(),
-            })
-            .strict(),
-        ])
-        .optional(),
-      /**
-       * A text filter that matches when any of these list fields does: a
-       * stored model field (its effective value when inherited, a `text[]`
-       * field by element) or a `model.derived` key (a `via` path, to-many as
-       * `EXISTS`, or a `type: "text"` value).
-       */
-      anyOf: z
-        .array(
-          nonEmptyString().regex(
-            /^[A-Za-z_][A-Za-z0-9_]*$/,
-            "must be an identifier",
-          ),
-        )
-        .min(1)
-        .optional(),
-      /**
-       * The filter compiles through a `model.derived` entry (a related path, a
-       * repository value, or a declared predicate). An unbound value filter
-       * binds to the entry keyed by its `columnId` without declaring it.
-       * `true` names that entry where the inferred stored binding would win
-       * (a stored field shares the key); a string names another entry when
-       * the column's own key already orders by a different value.
-       */
-      derived: z
-        .union([
-          z.literal(true),
-          nonEmptyString().regex(
-            /^[A-Za-z_][A-Za-z0-9_]*$/,
-            "must be an identifier",
-          ),
-        ])
-        .optional(),
-      /**
-       * A text filter's term expander, an entry of the server's
-       * `listTermExpanders`: the trimmed input becomes the terms the filter
-       * ORs as contains-matches (a barcode in its other encodings).
-       */
-      terms: nonEmptyString().optional(),
-      /** Range bounds; `kind` is inferred from the model field when omitted. */
-      range: z
-        .object({
-          kind: z.enum(["number", "date"]).optional(),
-          int: z.boolean({ error: "must be a boolean" }).optional(),
-          nonnegative: z.boolean({ error: "must be a boolean" }).optional(),
-          finite: z.boolean({ error: "must be a boolean" }).optional(),
-          /** MCP prose for the two bounds the range derives. */
-          describe: z
-            .object({ lower: nonEmptyString(), upper: nonEmptyString() })
-            .strict()
-            .optional(),
-        })
-        .strict()
-        .nullable()
-        .optional(),
-      /**
-       * The Any value / No value request key of a hand-written value filter.
-       * A compiled (`stored`/`derived`) filter over a nullable field gets it
-       * generated (`<columnId>PresenceFilter`) and never declares it.
-       */
-      nullable: z
-        .object({ field: nonEmptyString(), label: nonEmptyString() })
-        .strict()
-        .nullable()
-        .optional(),
-      /**
-       * A Ledger Party filter that also accepts `@me`, the signed-in member
-       * (ADR 0018). Clients offer it as "Me"; the entity kernel resolves it.
-       */
-      currentMember: z.literal(true).optional(),
-      /**
-       * A declared exception to any-of: the filter accepts one value, and
-       * `reason` says why (Email's scope record anchors `linkState`).
-       * Clients pick one record. Filters naming the same `group` share that
-       * one value: picking one clears the rest.
-       */
-      singleValue: z
-        .object({
-          reason: nonEmptyString(),
-          group: nonEmptyString().optional(),
-        })
-        .strict()
-        .optional(),
-      /**
-       * Named states an `idMulti` filter accepts beside entity codes (an
-       * Owner filter's `@household`). Clients offer each as a meta option;
-       * the derived schema accepts each literal; the repository owns meaning.
-       */
-      sentinels: z
-        .array(
-          z
-            .object({ value: nonEmptyString(), label: nonEmptyString() })
-            .strict(),
-        )
-        .min(1)
-        .nullable()
-        .optional(),
-      /**
-       * The list-route query parameter(s) the filter binds to. Compiled as
-       * `field ?? columnId` (a range as `<columnId>From/To`); declared only
-       * where the hand-written filter schema diverges from that rule.
-       */
-      wire: z
-        .union([
-          z
-            .object({ kind: z.literal("param"), name: nonEmptyString() })
-            .strict(),
-          z
-            .object({
-              kind: z.literal("range"),
-              from: nonEmptyString(),
-              to: nonEmptyString(),
-              presence: nonEmptyString().optional(),
-            })
-            .strict(),
-        ])
-        .nullable()
-        .optional(),
-    })
-    .strict();
+  const entityFilterDescriptorMetadataSchema = z.strictObject({
+    columnId: nonEmptyString(),
+    field: nonEmptyString().nullable().optional(),
+    urlKey: nonEmptyString().nullable().optional(),
+    kind: nonEmptyString(),
+    placeholder: nonEmptyString(),
+    options: z
+      .array(
+        z
+          .object({
+            value: nonEmptyString(),
+            label: nonEmptyString(),
+            meta: z.boolean({ error: "must be a boolean" }).optional(),
+            color: nonEmptyString().optional(),
+            role: z.enum(enumRoles).optional(),
+            glyph: enumIconSchema.optional(),
+            /**
+             * The filter fields this preset sets on a `range` descriptor
+             * (`{ costMin: 500 }`); the generator turns the roster into the
+             * descriptor's expander. Dynamic presets (today-relative dates,
+             * open-ended counts) keep an `expandRef`.
+             */
+            expand: z
+              .record(
+                nonEmptyString(),
+                z.union([z.string(), z.number(), z.boolean()]),
+              )
+              .optional(),
+          })
+          .strict(),
+      )
+      .nullable()
+      .optional(),
+    optionsRef: sourceRefMetadataSchema.nullable().optional(),
+    optionsKey: nonEmptyString().nullable().optional(),
+    label: nonEmptyString().nullable().optional(),
+    schemaDescription: nonEmptyString().nullable().optional(),
+    deriveSchema: z.boolean({ error: "must be a boolean" }).optional(),
+    schemaFromRead: z.boolean({ error: "must be a boolean" }).optional(),
+    brandRef: z
+      .object({
+        entity: nonEmptyString(),
+        optionsKind: z
+          .enum([
+            "locationWithInventory",
+            "ingredientWithProduct",
+            "locationIdentityProduct",
+          ])
+          .optional(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
+    expandRef: sourceRefMetadataSchema.nullable().optional(),
+    /** A named schema for select/multiselect values (an enum export). */
+    schemaRef: sourceRefMetadataSchema.nullable().optional(),
+    /**
+     * The filter is the standard predicate over a stored column, so the
+     * repository composes it from the declaration. A value filter that
+     * derives its schema and whose `columnId` names a stored field gets
+     * this binding without declaring it; declare it only for the object
+     * form: `columns` names the stored field when the descriptor id is
+     * virtual, `array` marks a multiselect over a `text-array` column
+     * (overlap, not membership). A text filter declares `anyOf` instead.
+     */
+    stored: z
+      .union([
+        z.boolean({ error: "must be a boolean" }),
+        z
+          .object({
+            columns: z.array(nonEmptyString()).min(1).optional(),
+            array: z.boolean({ error: "must be a boolean" }).optional(),
+          })
+          .strict(),
+      ])
+      .optional(),
+    /**
+     * A text filter that matches when any of these list fields does: a
+     * stored model field (its effective value when inherited, a `text[]`
+     * field by element) or a `model.derived` key (a `via` path, to-many as
+     * `EXISTS`, or a `type: "text"` value).
+     */
+    anyOf: z
+      .array(
+        nonEmptyString().regex(
+          /^[A-Za-z_][A-Za-z0-9_]*$/,
+          "must be an identifier",
+        ),
+      )
+      .min(1)
+      .optional(),
+    /**
+     * The filter compiles through a `model.derived` entry (a related path, a
+     * repository value, or a declared predicate). An unbound value filter
+     * binds to the entry keyed by its `columnId` without declaring it.
+     * `true` names that entry where the inferred stored binding would win
+     * (a stored field shares the key); a string names another entry when
+     * the column's own key already orders by a different value.
+     */
+    derived: z
+      .union([
+        z.literal(true),
+        nonEmptyString().regex(
+          /^[A-Za-z_][A-Za-z0-9_]*$/,
+          "must be an identifier",
+        ),
+      ])
+      .optional(),
+    /**
+     * A text filter's term expander, an entry of the server's
+     * `listTermExpanders`: the trimmed input becomes the terms the filter
+     * ORs as contains-matches (a barcode in its other encodings).
+     */
+    terms: nonEmptyString().optional(),
+    /** Range bounds; `kind` is inferred from the model field when omitted. */
+    range: z
+      .object({
+        kind: z.enum(["number", "date"]).optional(),
+        int: z.boolean({ error: "must be a boolean" }).optional(),
+        nonnegative: z.boolean({ error: "must be a boolean" }).optional(),
+        finite: z.boolean({ error: "must be a boolean" }).optional(),
+        /** MCP prose for the two bounds the range derives. */
+        describe: z
+          .object({ lower: nonEmptyString(), upper: nonEmptyString() })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
+    /**
+     * The Any value / No value request key of a hand-written value filter.
+     * A compiled (`stored`/`derived`) filter over a nullable field gets it
+     * generated (`<columnId>PresenceFilter`) and never declares it.
+     */
+    nullable: z
+      .object({ field: nonEmptyString(), label: nonEmptyString() })
+      .strict()
+      .nullable()
+      .optional(),
+    /**
+     * A Ledger Party filter that also accepts `@me`, the signed-in member
+     * (ADR 0018). Clients offer it as "Me"; the entity kernel resolves it.
+     */
+    currentMember: z.literal(true).optional(),
+    /**
+     * A declared exception to any-of: the filter accepts one value, and
+     * `reason` says why (Email's scope record anchors `linkState`).
+     * Clients pick one record. Filters naming the same `group` share that
+     * one value: picking one clears the rest.
+     */
+    singleValue: z
+      .object({
+        reason: nonEmptyString(),
+        group: nonEmptyString().optional(),
+      })
+      .strict()
+      .optional(),
+    /**
+     * Named states an `idMulti` filter accepts beside entity codes (an
+     * Owner filter's `@household`). Clients offer each as a meta option;
+     * the derived schema accepts each literal; the repository owns meaning.
+     */
+    sentinels: z
+      .array(
+        z.object({ value: nonEmptyString(), label: nonEmptyString() }).strict(),
+      )
+      .min(1)
+      .nullable()
+      .optional(),
+    /**
+     * The list-route query parameter(s) the filter binds to. Compiled as
+     * `field ?? columnId` (a range as `<columnId>From/To`); declared only
+     * where the hand-written filter schema diverges from that rule.
+     */
+    wire: z
+      .union([
+        z.object({ kind: z.literal("param"), name: nonEmptyString() }).strict(),
+        z
+          .object({
+            kind: z.literal("range"),
+            from: nonEmptyString(),
+            to: nonEmptyString(),
+            presence: nonEmptyString().optional(),
+          })
+          .strict(),
+      ])
+      .nullable()
+      .optional(),
+  });
 
   /**
    * Everything about an entity's own table beyond its model columns, so the
@@ -2943,46 +2732,42 @@ const buildMetadataSchemas = () => {
    * on every reference column that no declared full (non-partial) index
    * leads with (opt out with `unindexedReferences`).
    */
-  const entityTableColumnMetadataSchema = z
-    .object({
-      key: nonEmptyString(),
-      kind: z.enum(["text", "identifier", "timestamp", "json"]),
-      notNull: z.literal(true).optional(),
-      defaultValue: nonEmptyString().optional(),
-      /** An entity key, declared child-table export, or `user`. */
-      reference: nonEmptyString().optional(),
-      /** The TypeScript type the column is narrowed to (`$type<T>()`). */
-      type: sourceRefMetadataSchema.optional(),
-    })
-    .strict();
+  const entityTableColumnMetadataSchema = z.strictObject({
+    key: nonEmptyString(),
+    kind: z.enum(["text", "identifier", "timestamp", "json"]),
+    notNull: z.literal(true).optional(),
+    defaultValue: nonEmptyString().optional(),
+    /** An entity key, declared child-table export, or `user`. */
+    reference: nonEmptyString().optional(),
+    /** The TypeScript type the column is narrowed to (`$type<T>()`). */
+    type: sourceRefMetadataSchema.optional(),
+  });
 
   const entityTableIndexMetadataSchema = z.union([
     /** `<Table>_<column>_gin_idx`: a trigram GIN index for ILIKE search. */
-    z.object({ trigram: nonEmptyString() }).strict(),
-    z
-      .object({
-        /** Defaults to `<Table>_<columns>_key` (unique) or `_idx`. */
-        name: nonEmptyString().optional(),
-        on: z
-          .array(
-            z.union([
-              nonEmptyString().transform((column) => ({ column, desc: false })),
-              z
-                .object({ column: nonEmptyString(), desc: z.literal(true) })
-                .strict(),
-              z.object({ sql: nonEmptyString() }).strict(),
-            ]),
-          )
-          .min(1),
-        unique: z.literal(true).optional(),
-        using: z.literal("gin").optional(),
-        where: nonEmptyString().optional(),
-      })
-      .strict(),
+    z.strictObject({ trigram: nonEmptyString() }),
+    z.strictObject({
+      /** Defaults to `<Table>_<columns>_key` (unique) or `_idx`. */
+      name: nonEmptyString().optional(),
+      on: z
+        .array(
+          z.union([
+            nonEmptyString().transform((column) => ({ column, desc: false })),
+            z
+              .object({ column: nonEmptyString(), desc: z.literal(true) })
+              .strict(),
+            z.object({ sql: nonEmptyString() }).strict(),
+          ]),
+        )
+        .min(1),
+      unique: z.literal(true).optional(),
+      using: z.literal("gin").optional(),
+      where: nonEmptyString().optional(),
+    }),
   ]);
 
   const entityTableCheckMetadataSchema = z.union([
-    z.object({ name: nonEmptyString(), sql: nonEmptyString() }).strict(),
+    z.strictObject({ name: nonEmptyString(), sql: nonEmptyString() }),
     /**
      * `<Table>_<column>_check`: the column stays inside a closed value set.
      * Values default to the field's declared read enum. A CHECK already
@@ -2991,15 +2776,13 @@ const buildMetadataSchemas = () => {
      * constraint's text — which Drizzle's snapshot compares, so existing
      * constraints keep the spelling they were created with.
      */
-    z
-      .object({
-        name: nonEmptyString().optional(),
-        column: nonEmptyString(),
-        values: z.array(nonEmptyString()).min(1).optional(),
-        nullClause: z.literal(true).optional(),
-        bare: z.literal(true).optional(),
-      })
-      .strict(),
+    z.strictObject({
+      name: nonEmptyString().optional(),
+      column: nonEmptyString(),
+      values: z.array(nonEmptyString()).min(1).optional(),
+      nullClause: z.literal(true).optional(),
+      bare: z.literal(true).optional(),
+    }),
   ]);
 
   /**
@@ -3012,41 +2795,33 @@ const buildMetadataSchemas = () => {
       field,
       relationName: undefined,
     })),
-    z
-      .object({ field: nonEmptyString(), relationName: nonEmptyString() })
-      .strict(),
-    z
-      .object({
-        one: nonEmptyString(),
-        field: nonEmptyString().optional(),
-        references: nonEmptyString().optional(),
-      })
-      .strict(),
-    z
-      .object({
-        many: nonEmptyString(),
-        relationName: nonEmptyString().optional(),
-      })
-      .strict(),
+    z.strictObject({ field: nonEmptyString(), relationName: nonEmptyString() }),
+    z.strictObject({
+      one: nonEmptyString(),
+      field: nonEmptyString().optional(),
+      references: nonEmptyString().optional(),
+    }),
+    z.strictObject({
+      many: nonEmptyString(),
+      relationName: nonEmptyString().optional(),
+    }),
   ]);
 
-  const entityTableStorageMetadataSchema = z
-    .object({
-      /** Operational columns no model field declares. */
-      columns: z.array(entityTableColumnMetadataSchema).optional().default([]),
-      indexes: z.array(entityTableIndexMetadataSchema).optional().default([]),
-      checks: z.array(entityTableCheckMetadataSchema).optional().default([]),
-      /** Reference column key → why it has no index of its own. */
-      unindexedReferences: z
-        .record(nonEmptyString(), nonEmptyString())
-        .optional()
-        .default({}),
-      relations: z
-        .record(nonEmptyString(), entityTableRelationMetadataSchema)
-        .optional()
-        .default({}),
-    })
-    .strict();
+  const entityTableStorageMetadataSchema = z.strictObject({
+    /** Operational columns no model field declares. */
+    columns: z.array(entityTableColumnMetadataSchema).optional().default([]),
+    indexes: z.array(entityTableIndexMetadataSchema).optional().default([]),
+    checks: z.array(entityTableCheckMetadataSchema).optional().default([]),
+    /** Reference column key → why it has no index of its own. */
+    unindexedReferences: z
+      .record(nonEmptyString(), nonEmptyString())
+      .optional()
+      .default({}),
+    relations: z
+      .record(nonEmptyString(), entityTableRelationMetadataSchema)
+      .optional()
+      .default({}),
+  });
 
   const documentSearchPorts = {
     read: null,
@@ -3060,90 +2835,77 @@ const buildMetadataSchemas = () => {
     },
   };
 
-  const entityExtensionsMetadataSchema = z
-    .object({
-      relatednessSignals: z
-        .array(
-          z.union([
-            z
-              .object({
-                kind: z.literal("semantic"),
-                label: nonEmptyString(),
-                pair: nonEmptyString(),
-                weight: z.number(),
-                limit: z.number().int().positive(),
-              })
-              .strict(),
-            z
-              .object({
-                kind: z.literal("scalarOverlap"),
-                label: nonEmptyString(),
-                pair: nonEmptyString(),
-                column: nonEmptyString(),
-                popularityCap: z.number().int().positive(),
-                scoring: z.literal("displayOnly"),
-              })
-              .strict(),
-          ]),
-        )
-        .nullable()
-        .optional()
-        .default(null),
-      ports: z
-        .object({
-          repository: sourceRefMetadataSchema
-            .nullable()
-            .optional()
-            .default(null),
-          /** Pure final projection over selected envelopes and already loaded facts. */
-          fieldEnvelope: sourceRefMetadataSchema
-            .nullable()
-            .optional()
-            .default(null),
-          references: z
+  const entityExtensionsMetadataSchema = z.strictObject({
+    relatednessSignals: orNull(
+      z.array(
+        z.union([
+          z
             .object({
-              label: sourceRefMetadataSchema.nullable(),
-              resolver: sourceRefMetadataSchema.nullable(),
+              kind: z.literal("semantic"),
+              label: nonEmptyString(),
+              pair: nonEmptyString(),
+              weight: z.number(),
+              limit: z.number().int().positive(),
             })
-            .strict()
-            .optional()
-            .default({
-              label: { module: "~/entity/entities", export: "entityLabel" },
-              resolver: {
-                module: "~/server/generic/shortcode/repo/shortcode-resolver",
-                export: "resolveLiveShortcode",
-              },
-            }),
-          filters: sourceRefMetadataSchema.nullable().optional().default({
-            module: "~/entity/filter-manifest",
-            export: "getEntityFilters",
+            .strict(),
+          z
+            .object({
+              kind: z.literal("scalarOverlap"),
+              label: nonEmptyString(),
+              pair: nonEmptyString(),
+              column: nonEmptyString(),
+              popularityCap: z.number().int().positive(),
+              scoring: z.literal("displayOnly"),
+            })
+            .strict(),
+        ]),
+      ),
+    ),
+    ports: z
+      .object({
+        repository: orNull(sourceRefMetadataSchema),
+        /** Pure final projection over selected envelopes and already loaded facts. */
+        fieldEnvelope: orNull(sourceRefMetadataSchema),
+        references: z
+          .object({
+            label: sourceRefMetadataSchema.nullable(),
+            resolver: sourceRefMetadataSchema.nullable(),
+          })
+          .strict()
+          .optional()
+          .default({
+            label: { module: "~/entity/entities", export: "entityLabel" },
+            resolver: {
+              module: "~/server/generic/shortcode/repo/shortcode-resolver",
+              export: "resolveLiveShortcode",
+            },
           }),
-          search: z
-            .union([
-              z.literal("document").transform(() => documentSearchPorts),
-              z
-                .object({
-                  read: sourceRefMetadataSchema
-                    .nullable()
-                    .optional()
-                    .default(null),
-                  projection: sourceRefMetadataSchema.nullable(),
-                  semanticText: sourceRefMetadataSchema.nullable(),
-                })
-                .strict(),
-            ])
-            .optional()
-            .default({
-              read: null,
-              projection: null,
-              semanticText: null,
-            }),
-          /** `(context, input) => EntityTimelineOut` for `capabilities.timeline: "custom"`. */
-          timeline: sourceRefMetadataSchema.nullable().optional().default(null),
-        })
-        .strict(),
-    })
-    .strict();
+        filters: sourceRefMetadataSchema.nullable().optional().default({
+          module: "~/entity/filter-manifest",
+          export: "getEntityFilters",
+        }),
+        search: z
+          .union([
+            z.literal("document").transform(() => documentSearchPorts),
+            z
+              .object({
+                read: orNull(sourceRefMetadataSchema),
+                projection: sourceRefMetadataSchema.nullable(),
+                semanticText: sourceRefMetadataSchema.nullable(),
+              })
+              .strict(),
+          ])
+          .optional()
+          .default({
+            read: null,
+            projection: null,
+            semanticText: null,
+          }),
+        /** `(context, input) => EntityTimelineOut` for `capabilities.timeline: "custom"`. */
+        timeline: orNull(sourceRefMetadataSchema),
+      })
+      .strict(),
+  });
 
   /**
    * The compiler imports executable literals, so this schema covers every
@@ -3152,7 +2914,7 @@ const buildMetadataSchemas = () => {
    * diagnostic-rich semantic validation depends on the whole catalog.
    */
   const entityDeclarationMetadataSchema = z
-    .object({
+    .strictObject({
       key: nonEmptyString(),
       names: z
         .object({
@@ -3217,7 +2979,6 @@ const buildMetadataSchemas = () => {
       capabilities: entityCapabilitiesMetadataSchema,
       extensions: entityExtensionsMetadataSchema,
     })
-    .strict()
     .transform((declaration) => ({
       ...declaration,
       route:
