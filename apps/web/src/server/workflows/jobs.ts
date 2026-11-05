@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/background-tasks";
 import { jobWaitReason, type JOB_KIND_POLICY } from "@cubby/schemas/job";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { captureException } from "@sentry/tanstackstart-react";
 import { z } from "zod";
 
 import { aiEvaluationDrain } from "~/server/ai/evaluation/service/ai-evaluation-drain";
@@ -21,6 +22,7 @@ import {
   runDrains,
   type BackgroundDrain,
 } from "~/server/generic/background/drains";
+import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
 import { derivedReconcileHandler } from "~/server/generic/derived/service/drain-job";
 import {
   rebuildDerived,
@@ -136,16 +138,22 @@ export const productionJobHandlers: JobHandlers = {
 /** Work owned by its domain's rows: no Job row, one registration here. */
 const derivedRebuildDrain: BackgroundDrain = {
   name: "derived-rebuild",
-  page: async (db) => {
+  page: async (db, { deadline }) => {
     try {
-      return { more: await rebuildDerived(db, derivedComputes), nextAt: null };
+      const more = await rebuildDerived(db, derivedComputes, { deadline });
+      const status = more ? null : await readDerivedRebuildStatus(db);
+      return {
+        more,
+        nextAt: status?.failures ? new Date(Date.now() + 5 * 60_000) : null,
+      };
     } catch (error) {
       if (error instanceof DerivedRebuildBusyError)
         return {
           more: false,
           nextAt: new Date(Date.now() + DERIVED_REBUILD_LEASE_SECONDS * 1000),
         };
-      throw error;
+      captureException(error);
+      return { more: false, nextAt: new Date(Date.now() + 5 * 60_000) };
     }
   },
 };

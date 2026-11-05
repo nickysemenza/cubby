@@ -1,16 +1,13 @@
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
 import { TEXT_WHITESPACE } from "~/lib/text-whitespace";
 import { normalizeSearchTextSql } from "~/server/db/computed/search-normalization";
-import {
-  fanoutTarget,
-  isFanoutInput,
-  storedDerived,
-} from "~/server/db/derived-declarations";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
+import { isDerivedSink } from "~/server/generic/derived/repo/compute";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
   deleteWorkItems,
@@ -27,6 +24,8 @@ import {
   createLocationFixture,
   makeLocationInput,
 } from "~/server/testing/repo.fixtures";
+import { productionEmbeddingRefreshPort } from "~/server/workflows/background-tasks/embedding";
+import { derivedComputes } from "~/server/workflows/derived-computes";
 
 import {
   prepareSearchDocuments,
@@ -51,16 +50,17 @@ describe("search source selection", () => {
     expect(await searchCoverageIncomplete(ctx.db, config, ["product"])).toBe(
       false,
     );
-    const product = storedDerived("product", "searchDocument")!;
-    const fanout = product.inputs.findIndex(isFanoutInput);
-    await mark(fanoutTarget(product.target, fanout));
+    const product = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic uncovered source" }),
+      ctx.actor,
+    );
     expect(await searchCoverageIncomplete(ctx.db, config, ["product"])).toBe(
       true,
     );
-    await deleteWorkItems(ctx.db, {
-      target: fanoutTarget(product.target, fanout),
-    });
-    await mark(product.target);
+    // Retained tickets do not establish coverage; an eligible source still needs its embedding.
+    await refreshSearchDocument(ctx.db, "product", product.entityId);
+    await mark("product.searchDocument");
     expect(await searchCoverageIncomplete(ctx.db, config, ["product"])).toBe(
       true,
     );
@@ -201,12 +201,53 @@ describe("search source selection", () => {
     });
     const page = await publishPreparedSearchDocuments(ctx.db, prepared);
     expect(page).toHaveLength(8);
-    expect(page.every((row) => row.status === "upserted")).toBe(true);
+    expect(page.filter((row) => row.status === "upserted")).toHaveLength(7);
+    expect(page.filter((row) => row.status === "unchanged")).toHaveLength(1);
     const stored = await unwrapDb(ctx.db).execute<{ count: number }>(sql`
       SELECT count(*)::int AS count FROM "SearchDocument"
        WHERE "entityId" = ANY(${uuidArrayParam(refs.map((ref) => ref.entityId))})
          AND "deletedAt" IS NULL`);
     expect(stored.rows[0]?.count).toBe(8);
+    const first = prepared.entries[0];
+    if (!first) throw new Error("Expected synthetic prepared document");
+    const adapter = derivedComputes["search.product"];
+    if (!adapter || !isDerivedSink(adapter))
+      throw new Error("Expected search sink");
+    const changed = {
+      entries: [{ ...first, body: "Synthetic changed embedding text" }],
+      missing: [],
+    };
+    const configured = vi
+      .spyOn(productionEmbeddingRefreshPort, "configured")
+      .mockReturnValue(true);
+    try {
+      const publish = () =>
+        repositoryTransactionDatabase(ctx.db, (tx) =>
+          adapter.publish(tx, [first.source.entityId], changed, {
+            tickets: new Map(),
+            notify: () => {},
+          }),
+        );
+      await publish();
+      await unwrapDb(ctx.db).execute(
+        sql`UPDATE "SearchDocument" SET "embeddingAttempts" = 3, "embeddingError" = 'Synthetic provider backoff', "embeddingDueAt" = '2099-01-01' WHERE "entityId" = ${first.source.entityId}::uuid`,
+      );
+      await publish();
+      const backoff = await unwrapDb(ctx.db).execute(
+        sql`SELECT "embeddingGeneration", "embeddingAttempts", "embeddingError", "embeddingDueAt" = '2099-01-01' AS delayed FROM "SearchDocument" WHERE "entityId" = ${first.source.entityId}::uuid AND "deletedAt" IS NULL`,
+      );
+      expect(backoff.rows).toEqual([
+        {
+          embeddingGeneration: 1,
+          embeddingAttempts: 3,
+          embeddingError: "Synthetic provider backoff",
+          delayed: true,
+        },
+      ]);
+    } finally {
+      configured.mockRestore();
+    }
+    await publishPreparedSearchDocuments(ctx.db, prepared);
     const ordered = [...prepared.entries].sort((a, b) =>
       a.source.entityId.localeCompare(b.source.entityId),
     );
@@ -219,7 +260,7 @@ describe("search source selection", () => {
       missing,
     });
     expect(mixed.filter((row) => row.status === "missing")).toHaveLength(4);
-    expect(mixed.filter((row) => row.status === "upserted")).toHaveLength(4);
+    expect(mixed.filter((row) => row.status === "unchanged")).toHaveLength(4);
     const removed = await unwrapDb(ctx.db).execute<{ count: number }>(sql`
       SELECT count(*)::int AS count FROM "SearchDocument"
        WHERE "entityId" = ANY(${uuidArrayParam(missing.map((ref) => ref.entityId))})

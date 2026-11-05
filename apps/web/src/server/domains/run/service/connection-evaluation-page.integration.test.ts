@@ -1,7 +1,7 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -31,11 +31,9 @@ import { readEntityConnections } from "~/server/domains/connection/repo/entity-c
 import * as connectionService from "~/server/domains/connection/service/entity-connections";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
-import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
-import { markWork } from "~/server/generic/jobs/repo/work-items";
 import { readRunEvaluationsByCode } from "~/server/generic/run-detail/repo/run-evaluations";
 import {
   refreshSearchDocument,
@@ -644,7 +642,7 @@ describe("connection evaluation pages", () => {
     for (const ref of [...products, chargeRef])
       await refreshSearchDocument(ctx.db, ref.entityKind, ref.entityId);
     await reconcileDerivedRefreshInputs(ctx.db);
-    // Expenses have no selected embeddings; a real search mark holds coverage.
+    // Expenses have no selected embeddings; a missing eligible document holds coverage.
     await embed(products);
     const [sibling] = await emails(base, 1, "pending-sibling");
     if (!sibling) throw new Error("Synthetic sibling Email missing");
@@ -678,13 +676,9 @@ describe("connection evaluation pages", () => {
       attempts: 1,
       error: "Synthetic earlier failure",
     });
-    await markWork(ctx.db, DERIVED_DRAIN, [
-      {
-        target: "expense.searchDocument",
-        ref: charge.entityId,
-        reason: "Synthetic pending search refresh",
-      },
-    ]);
+    await getDb(ctx.db).execute(
+      sql`UPDATE "SearchDocument" SET "deletedAt" = now() WHERE "entityId" = ${charge.entityId}::uuid`,
+    );
 
     expect(await runPage(ids)).toBe("succeeded");
 
@@ -709,6 +703,7 @@ describe("connection evaluation pages", () => {
     });
 
     await drainDerivedRefreshFrontier(ctx.db);
+    await refreshSearchDocument(ctx.db, "expense", charge.entityId);
     expect(await runPage([waitingId])).toBe("succeeded");
 
     expect(await states([waitingId])).toEqual(["completed"]);

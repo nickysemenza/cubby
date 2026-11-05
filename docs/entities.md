@@ -2698,16 +2698,23 @@ quality, search and household diagnostics. Self-dependencies describe domain
 hierarchies handled by the computation, never scheduler tickets.
 
 `DerivedRebuild` holds one coarse pass cursor (target and last committed UUID),
-a single-writer lease, last success, consecutive failures and the last three
-wall-clock durations. Each Worker invocation publishes at most five bounded
-pages. Publication and cursor advancement commit together. A failed page keeps
-the previous cursor and output; an expired invocation resumes there. A failed pass
-from an earlier hourly cycle starts over so new upstream rows can repair a late
-phase. Source edits
-need no fences or generations; the next hourly pass repairs mixed-age reads.
-Own assignments and money/identity command validation remain immediate and live.
-Queue continuations and the hourly timer both enter the shared background drain.
-An interrupted isolate's duplicate delivery waits out the coarse lease.
+a single-writer lease, cursor attempts, pass failures and the last three wall-clock
+durations. Each Worker invocation publishes bounded pages until its 20-second
+round deadline. Publication and cursor advancement commit together. Claims record
+attempts before compute, so isolate termination counts too: after three attempts
+the page halves, down to one record. Three failed attempts at one record skip it,
+retain its prior output and record a failure. A thrown compute or publication
+fails its target, retains prior output and advances to the next target. Every
+interrupted pass resumes its committed cursor across hour boundaries. Completed
+passes with failures retry after five minutes; only a fully healthy pass clears
+failures. A requested new pass clears the previous pass's error before starting.
+Source edits need no fences or generations; the next hourly pass repairs
+mixed-age reads. Own assignments and money/identity command validation remain
+immediate and live. Queue continuations and the hourly timer both enter the shared
+background drain. An interrupted isolate's duplicate delivery waits out the coarse
+lease. Drain errors are reported to Sentry and schedule a retry without preventing
+purchase dispatch reconciliation. Search publication re-marks embeddings only for
+changed, embeddable documents, preserving unchanged documents' failure backoff.
 
 Quality's 28 declared evaluators publish `QualitySnapshot` check states, rules
 version and publication time. Browse, gap-count ordering, filters and Work use

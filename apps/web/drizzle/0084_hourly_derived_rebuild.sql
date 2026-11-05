@@ -11,6 +11,8 @@ CREATE TABLE "DerivedRebuild" (
 	"token" uuid,
 	"leaseExpiresAt" timestamp,
 	"failures" integer DEFAULT 0 NOT NULL,
+	"cursorAttempts" integer DEFAULT 0 NOT NULL,
+	"passFailures" integer DEFAULT 0 NOT NULL,
 	"error" text,
 	"durationsMs" double precision[] DEFAULT '{}' NOT NULL
 );

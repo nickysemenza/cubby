@@ -1282,6 +1282,20 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'"
+        },
+        "cursorAttempts": {
+          "name": "cursorAttempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "passFailures": {
+          "name": "passFailures",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         }
       },
       "indexes": {},

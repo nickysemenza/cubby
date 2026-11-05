@@ -54,10 +54,14 @@ export function rebuildDeclarations(): readonly EntityStoredDerivedDeclaration[]
   return ordered;
 }
 
-const claimRow = z.object({ target: z.string(), afterId: z.uuid().nullable() });
+const claimRow = z.object({
+  target: z.string(),
+  afterId: z.uuid().nullable(),
+  cursorAttempts: z.number().int(),
+});
 export type RebuildClaim = z.infer<typeof claimRow> & { token: string };
 
-/** Expired invocations resume their committed cursor; a failed older hourly cycle starts afresh. */
+/** Every abandoned cursor claim is durable, including isolate termination. A pass always resumes. */
 export async function claimRebuild(
   db: Database,
   force = false,
@@ -66,25 +70,40 @@ export async function claimRebuild(
   const first = declarations[0];
   if (!first) return null;
   const token = crypto.randomUUID();
-  // A failed late phase may need output for newly inserted upstream rows. The
-  // next hourly cycle starts over; transient retries within a cycle resume.
-  const restart = sql`(NOT "DerivedRebuild".running OR
-    ("DerivedRebuild".failures > 0 AND "DerivedRebuild"."startedAt" < date_trunc('hour', now() AT TIME ZONE 'UTC')))`;
+  const restart = sql`NOT "DerivedRebuild".running`;
   const result = await getDb(db).execute(sql`
-    INSERT INTO "DerivedRebuild" (key, running, target, "startedAt", token, "leaseExpiresAt")
+    INSERT INTO "DerivedRebuild" (key, running, target, "startedAt", token, "leaseExpiresAt", "cursorAttempts", "passFailures")
     VALUES (${DERIVED_REBUILD_KEY}, true, ${first.target}, now() AT TIME ZONE 'UTC', ${token}::uuid,
-      (now() AT TIME ZONE 'UTC') + interval '1 second' * ${DERIVED_REBUILD_LEASE_SECONDS})
+      (now() AT TIME ZONE 'UTC') + interval '1 second' * ${DERIVED_REBUILD_LEASE_SECONDS}, 1, 0)
     ON CONFLICT (key) DO UPDATE SET
       running = true,
       target = CASE WHEN ${restart} THEN EXCLUDED.target ELSE "DerivedRebuild".target END,
       "afterId" = CASE WHEN ${restart} THEN NULL ELSE "DerivedRebuild"."afterId" END,
       "startedAt" = CASE WHEN ${restart} THEN EXCLUDED."startedAt" ELSE "DerivedRebuild"."startedAt" END,
+      "cursorAttempts" = CASE WHEN ${restart} THEN 1 ELSE "DerivedRebuild"."cursorAttempts" + 1 END,
+      "passFailures" = CASE WHEN ${restart} THEN 0 ELSE "DerivedRebuild"."passFailures" END,
+      error = CASE WHEN ${restart} THEN NULL ELSE "DerivedRebuild".error END,
       token = EXCLUDED.token, "leaseExpiresAt" = EXCLUDED."leaseExpiresAt"
-    WHERE ("DerivedRebuild"."leaseExpiresAt" IS NULL OR "DerivedRebuild"."leaseExpiresAt" < now() AT TIME ZONE 'UTC')
-      AND ("DerivedRebuild".running OR ${force} OR "DerivedRebuild"."startedAt" IS NULL OR "DerivedRebuild"."startedAt" < date_trunc('hour', now() AT TIME ZONE 'UTC'))
-    RETURNING target, "afterId"`);
+    WHERE ("DerivedRebuild"."leaseExpiresAt" IS NULL OR "DerivedRebuild"."leaseExpiresAt" < now() AT TIME ZONE 'UTC' OR ("DerivedRebuild".token IS NULL AND ${force}))
+      AND ("DerivedRebuild".running OR "DerivedRebuild".failures > 0 OR ${force} OR "DerivedRebuild"."startedAt" IS NULL OR "DerivedRebuild"."startedAt" < date_trunc('hour', now() AT TIME ZONE 'UTC'))
+    RETURNING target, "afterId", "cursorAttempts"`);
   const row = z.array(claimRow).parse(result.rows)[0];
   return row ? { ...row, token } : null;
+}
+
+/** Additional pages in one invocation count attempts before reading or computing. */
+export async function beginRebuildPage(
+  db: Database,
+  token: string,
+): Promise<number | null> {
+  const result = await getDb(db)
+    .execute(sql`UPDATE "DerivedRebuild" SET "cursorAttempts" = "cursorAttempts" + 1
+    WHERE key = ${DERIVED_REBUILD_KEY} AND token = ${token}::uuid RETURNING "cursorAttempts"`);
+  return (
+    z
+      .array(z.object({ cursorAttempts: z.number().int() }))
+      .parse(result.rows)[0]?.cursorAttempts ?? null
+  );
 }
 
 export async function rebuildIds(
@@ -110,6 +129,7 @@ export async function commitRebuildPage(
   claim: RebuildClaim,
   next: { target: string; afterId: string | null } | null,
   publish: (tx: Database) => Promise<void>,
+  problem?: string,
 ): Promise<boolean> {
   return repositoryTransactionDatabase(db, async (tx) => {
     const held = await getDb(tx).execute(
@@ -117,15 +137,22 @@ export async function commitRebuildPage(
     );
     if (!held.rows.length) return false;
     await publish(tx);
+    if (problem)
+      await getDb(tx)
+        .execute(sql`UPDATE "DerivedRebuild" SET failures = failures + 1,
+      "passFailures" = "passFailures" + 1, error = ${problem} WHERE key = ${DERIVED_REBUILD_KEY}`);
     if (next) {
       await getDb(tx)
-        .execute(sql`UPDATE "DerivedRebuild" SET target = ${next.target}, "afterId" = ${next.afterId}::uuid,
+        .execute(sql`UPDATE "DerivedRebuild" SET target = ${next.target}, "afterId" = ${next.afterId}::uuid, "cursorAttempts" = 0,
         "leaseExpiresAt" = (now() AT TIME ZONE 'UTC') + interval '1 second' * ${DERIVED_REBUILD_LEASE_SECONDS}
         WHERE key = ${DERIVED_REBUILD_KEY}`);
     } else {
       await getDb(tx)
         .execute(sql`UPDATE "DerivedRebuild" SET running = false, target = NULL, "afterId" = NULL,
-        token = NULL, "leaseExpiresAt" = NULL, failures = 0, error = NULL,
+        token = NULL, "cursorAttempts" = 0,
+        "leaseExpiresAt" = CASE WHEN "passFailures" > 0 THEN (now() AT TIME ZONE 'UTC') + interval '5 minutes' ELSE NULL END,
+        failures = CASE WHEN "passFailures" = 0 THEN 0 ELSE failures END,
+        error = CASE WHEN "passFailures" = 0 THEN NULL ELSE error END,
         "finishedAt" = now() AT TIME ZONE 'UTC',
         "durationsMs" = ("durationsMs" || ARRAY[extract(epoch FROM ((now() AT TIME ZONE 'UTC') - "startedAt"))::double precision * 1000])[greatest(cardinality("durationsMs") - 1, 1):]
         WHERE key = ${DERIVED_REBUILD_KEY}`);
@@ -142,6 +169,7 @@ export async function releaseRebuild(
   await getDb(db)
     .execute(sql`UPDATE "DerivedRebuild" SET token = NULL, "leaseExpiresAt" = NULL,
     failures = CASE WHEN ${error}::text IS NULL THEN failures ELSE failures + 1 END,
+    "passFailures" = CASE WHEN ${error}::text IS NULL THEN "passFailures" ELSE "passFailures" + 1 END,
     error = coalesce(${error}::text, error)
     WHERE key = ${DERIVED_REBUILD_KEY} AND token = ${token}::uuid`);
 }

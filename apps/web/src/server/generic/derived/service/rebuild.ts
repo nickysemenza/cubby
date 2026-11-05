@@ -8,6 +8,7 @@ import {
   type DerivedComputes,
 } from "~/server/generic/derived/repo/compute";
 import {
+  beginRebuildPage,
   claimRebuild,
   commitRebuildPage,
   publishRebuiltValues,
@@ -30,8 +31,9 @@ export async function rebuildDerived(
   computes: DerivedComputes,
   {
     force = false,
-    pageLimit = 5,
-  }: { force?: boolean; pageLimit?: number } = {},
+    pageLimit = Number.POSITIVE_INFINITY,
+    deadline = Date.now() + 20_000,
+  }: { force?: boolean; pageLimit?: number; deadline?: number } = {},
 ): Promise<boolean> {
   const claim = await claimRebuild(db, force);
   if (!claim) {
@@ -40,9 +42,14 @@ export async function rebuildDerived(
   }
   const declarations = rebuildDeclarations();
   let current = { target: claim.target, afterId: claim.afterId };
-  const started = Date.now();
+
   try {
     for (let page = 0; page < pageLimit; page++) {
+      const attempts =
+        page === 0
+          ? claim.cursorAttempts
+          : await beginRebuildPage(db, claim.token);
+      if (attempts === null) return false;
       const index = declarations.findIndex(
         (entry) => entry.target === current.target,
       );
@@ -57,34 +64,60 @@ export async function rebuildDerived(
         current = next;
         continue;
       }
-      const compute = computes[declaration.compute];
-      if (!compute)
-        throw new Error(`Rebuild compute missing: ${declaration.compute}`);
-      const limit = Math.min(
-        200,
-        Math.max(1, compute.preparationBatchSize ?? 20),
-      );
-      const ids = await rebuildIds(db, declaration, current.afterId, limit);
       const following = declarations[index + 1];
-      const lastId = ids.at(-1);
-      const next =
-        ids.length === limit && lastId
-          ? { target: declaration.target, afterId: lastId }
-          : following
-            ? { target: following.target, afterId: null }
-            : null;
-      if (isDerivedSink(compute)) {
-        const prepared = ids.length
-          ? await compute.prepare(db, ids)
-          : undefined;
+      const followingTarget = following
+        ? { target: following.target, afterId: null }
+        : null;
+      let next = followingTarget;
+      try {
+        const compute = computes[declaration.compute];
+        if (!compute)
+          throw new Error(`Rebuild compute missing: ${declaration.compute}`);
+        const configured = Math.min(
+          200,
+          Math.max(1, compute.preparationBatchSize ?? 20),
+        );
+        // Counts are committed before compute, so CPU/memory termination also shrinks the retry.
+        const limit = Math.max(
+          1,
+          Math.floor(configured / 2 ** Math.floor((attempts - 1) / 3)),
+        );
+        const ids = await rebuildIds(db, declaration, current.afterId, limit);
+        const lastId = ids.at(-1);
+        next =
+          ids.length === limit && lastId
+            ? { target: declaration.target, afterId: lastId }
+            : followingTarget;
         if (
-          prepared !== undefined &&
-          compute.preparationFailures?.(prepared).size
-        )
-          throw new Error(`Rebuild preparation failed: ${declaration.target}`);
-        if (
-          !(await commitRebuildPage(db, claim, next, async (tx) => {
-            if (prepared !== undefined) {
+          ids.length &&
+          attempts > 3 * (Math.floor(Math.log2(configured)) + 1)
+        ) {
+          if (
+            !(await commitRebuildPage(
+              db,
+              claim,
+              next,
+              async () => {},
+              `Rebuild skipped one record after repeated isolate termination: ${declaration.target}`,
+            ))
+          )
+            return false;
+        } else if (isDerivedSink(compute)) {
+          const prepared = ids.length
+            ? await compute.prepare(db, ids)
+            : undefined;
+          const failures =
+            prepared === undefined
+              ? undefined
+              : compute.preparationFailures?.(prepared);
+          if (failures?.size)
+            throw new AggregateError(
+              [...failures.values()],
+              `Rebuild preparation failed: ${declaration.target}`,
+            );
+          if (
+            !(await commitRebuildPage(db, claim, next, async (tx) => {
+              if (prepared === undefined) return;
               const outcome = await compute.publish(tx, ids, prepared, {
                 tickets: new Map(),
                 notify: () => {},
@@ -97,22 +130,35 @@ export async function rebuildDerived(
                 throw new Error(
                   `Rebuild sink retained output: ${declaration.target}`,
                 );
-            }
-          }))
-        )
-          return false;
-      } else {
-        const values = ids.length ? await compute(db, ids) : new Map();
+            }))
+          )
+            return false;
+        } else {
+          const values = ids.length ? await compute(db, ids) : new Map();
+          if (
+            !(await commitRebuildPage(db, claim, next, (tx) =>
+              publishRebuiltValues(tx, declaration, ids, values),
+            ))
+          )
+            return false;
+        }
+      } catch (error) {
+        // Keep prior output for this target; a provider outage cannot block quality or search.
+        next = followingTarget;
         if (
-          !(await commitRebuildPage(db, claim, next, (tx) =>
-            publishRebuiltValues(tx, declaration, ids, values),
+          !(await commitRebuildPage(
+            db,
+            claim,
+            next,
+            async () => {},
+            scrubErrorMessage(JSON.stringify(describeErrorCauses(error))),
           ))
         )
           return false;
       }
       if (!next) return false;
       current = next;
-      if (Date.now() - started >= 20_000) break;
+      if (Date.now() >= deadline) break;
     }
     await releaseRebuild(db, claim.token);
     return true;

@@ -43,7 +43,7 @@ interface SearchDocumentSource {
 }
 
 export interface SearchDocumentRefreshResult {
-  status: "upserted" | "softDeleted" | "missing";
+  status: "upserted" | "unchanged" | "softDeleted" | "missing";
   entityKind: SearchableEntity;
   entityId: string;
 }
@@ -564,15 +564,17 @@ async function upsertSearchDocumentBatch(
       OR "SearchDocument".body IS DISTINCT FROM EXCLUDED.body
       OR "SearchDocument"."semanticText" IS DISTINCT FROM EXCLUDED."semanticText"
       OR "SearchDocument".title IS DISTINCT FROM EXCLUDED.title)
-    RETURNING "entityKind"
-    ) SELECT (SELECT count(*)::int FROM written) AS changed,
+    RETURNING "entityKind", "entityId"
+    ) SELECT coalesce((SELECT jsonb_agg(jsonb_build_object('entityKind', "entityKind", 'entityId', "entityId")) FROM written), '[]'::jsonb) AS changed,
       coalesce(jsonb_agg(jsonb_build_object('entityKind', input."entityKind", 'entityId', input."entityId"))
         FILTER (WHERE input.missing), '[]'::jsonb) AS missing
       FROM input
   `);
   const publication = z
     .object({
-      changed: z.number(),
+      changed: z.array(
+        z.object({ entityKind: searchableEntitySchema, entityId: z.string() }),
+      ),
       missing: z.array(
         z.object({ entityKind: searchableEntitySchema, entityId: z.string() }),
       ),
@@ -582,13 +584,20 @@ async function upsertSearchDocumentBatch(
   // text. Retire only those observed rows after every publication lock is held;
   // missing records that had no document never acquire placeholder documents.
   await markSearchDocumentsMissing(db, publication.missing);
-  if (publication.changed)
+  if (publication.changed.length)
     await recordChange(db, {
       kind: "projection",
       categories: ["search", "relatedData", "problems"],
     });
+  const changedRefs = new Set(
+    publication.changed.map((ref) =>
+      entityRefKey(ref.entityKind, ref.entityId),
+    ),
+  );
   return entries.map(({ source }) => ({
-    status: "upserted",
+    status: changedRefs.has(entityRefKey(source.entityKind, source.entityId))
+      ? "upserted"
+      : "unchanged",
     entityKind: source.entityKind,
     entityId: source.entityId,
   }));

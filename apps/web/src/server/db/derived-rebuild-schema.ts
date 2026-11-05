@@ -23,6 +23,8 @@ export const derivedRebuild = pgTable("DerivedRebuild", {
   token: uuid("token"),
   leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),
   failures: integer("failures").notNull().default(0),
+  cursorAttempts: integer("cursorAttempts").notNull().default(0),
+  passFailures: integer("passFailures").notNull().default(0),
   error: text("error"),
   durationsMs: doublePrecision("durationsMs").array().notNull().default([]),
 });
