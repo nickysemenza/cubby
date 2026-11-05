@@ -268,6 +268,7 @@ export async function resolveSourceIdentity(
       at: new Date().toISOString(),
     },
   });
+  const createdOwner = !owner;
   if (!owner)
     owner = await insertWithShortcode(tx, "sourceOccurrence", {
       source: observation.source,
