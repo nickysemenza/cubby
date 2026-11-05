@@ -142,6 +142,25 @@ per-entity code as possible.
   remainder in a shrink-only baseline and a GitHub issue. Lint rules in `tools/oxlint/cubby/` and shrink-only
   boundary tests enforce the common cases.
 
+### Entity capabilities
+
+Each entity feature has one owner and is adopted on the entity's declaration. The
+compiler expands it for web, MCP and native; `capabilities.dataQuality` is the
+model. "Beyond the declaration" lists the code an adoption still needs, and why.
+
+| Capability               | Declare                                                                 | Beyond the declaration                                                                                                                                                                        |
+| ------------------------ | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Timeline                 | `capabilities.timeline: "default"`                                      | None. `custom` binds `extensions.ports.timeline`. Agents read change history through `activity_read.list`.                                                                                    |
+| Relations                | `r.field(...)`, `r.path(...)`, `r.link(...)`, `r.images()`              | None. A `many` relation with no id filter on its target declares a section filter or `detail.omitRelations`. New edges need their stored column.                                              |
+| Bulk edit                | A field's `validation.update`                                           | None. The roster derives from update fields, excluding names, identifiers and attachments.                                                                                                    |
+| Borrowed display images  | `capabilities.images.displaySourceOverrides`                            | None. List, detail, MCP and native read `displayImages`.                                                                                                                                      |
+| Gallery and cover images | `capabilities.images.storage`, `image-fields.ts`, `r.images()`          | The entity's writer calls `syncEntityImages`, its delete policy states the attachment disposition, and `attachmentAssociation` names it. Deletion stays an explicit choice.                   |
+| External ids             | `externalIds` field and an `identifiers` row set, as Product declares   | The domain writer. Identifier writes own barcode normalization, collision refusal and merge handling, which Product alone needs.                                                              |
+| Data-quality checks      | `capabilities.dataQuality`                                              | An evaluator in `generic/data-quality/repo/checks/<entity>.ts`: a check is a domain rule over loaded records.                                                                                 |
+| Suggestions              | A field's `control.suggest`, or `capabilities.suggestions` for a family | A family's detector and apply handler. Field suggestions need neither.                                                                                                                        |
+| Derived values           | `model.derived`, `model.stored`                                         | Rollups and `via` paths need nothing. `compute` functions and snapshots are domain code; [Background derived data](#background-derived-data) owns them.                                       |
+| List and detail sections | `presentation.list`, `presentation.detail`                              | None for `fields`, `relation` and `timeline` sections or `fields`, `records` and `chart` summary cells. A `slot` needs its renderer on each platform, and a `report` cell its server builder. |
+
 ### Search result facts
 
 `presentation.searchFacts` declares zero to two ordered existing list-field keys
