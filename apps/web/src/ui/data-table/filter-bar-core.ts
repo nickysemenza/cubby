@@ -30,7 +30,7 @@ export type FilterValueType =
   | "boolean"
   | "presence";
 
-export type FilterFieldConfig = {
+type FilterFieldConfig = {
   key: string;
   label?: string;
   type: "text" | "select" | "multiselect";
@@ -176,7 +176,7 @@ export function withSideValues(
  * anything else clears Any value. No value combines with specific values.
  * Mode tokens (Match all, Include sub-… off) carry through untouched.
  */
-export function nextPickedValues(
+function nextPickedValues(
   previous: readonly string[],
   picked: readonly string[],
 ): string[] {
@@ -229,7 +229,7 @@ export function filterStateToBarFilters(
   });
 }
 
-export function barFiltersToFilterState(
+function barFiltersToFilterState(
   filters: Filter[],
   fields: FilterBarField[],
 ): ColumnFiltersState {

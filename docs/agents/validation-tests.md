@@ -230,9 +230,7 @@ Primary entity-list search uses the generated `searchQuery` URL key. Use
 value when narrowing a fixture cohort. Obsolete `q` or view aliases can be
 discarded by route validation and leave a large unfiltered virtualized list.
 Routes with their own explicit `q` schema, such as combined records, retain it.
-Browser grouping journeys use the visible list Group control. Header-menu
-dispatch remains in `table-header-layout.unit.test.tsx`; do not duplicate its
-hover/focus disclosure in a backend-connected grouping journey.
+Browser grouping journeys use the visible list Group control.
 Testing Library role queries use exact string names by default; Playwright's
 `exact` option is not a Testing Library option.
 Shopping-list quantity assertions scope to the named Ingredient row’s Need cell; worker-shared
@@ -935,9 +933,7 @@ has processed drag-over. Keep the actual final header-order assertion.
 
 The column-layout browser journey owns native header pointer/keyboard ordering,
 locked edges, pointer pin transfer, downward customizer drag placement and
-session reset. `table-layout-customizer.unit.test.tsx` and
-`column-layout.unit.test.tsx` own shared visibility, pinning and structural
-policy. Repeated per-route audit timestamp formatting and pin/unpin permutations
+session reset. Repeated per-route audit timestamp formatting and pin/unpin permutations
 are omitted; the date composition journey retains the browser timestamp tooltip.
 The removed pinned-order round trip no longer has a dedicated browser regression.
 

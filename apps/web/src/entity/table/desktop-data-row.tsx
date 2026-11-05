@@ -239,7 +239,7 @@ function DesktopDataCell<TItem extends RowData>({
   );
 }
 
-export interface DesktopDataRowProps<TItem extends RowData> {
+interface DesktopDataRowProps<TItem extends RowData> {
   row: Row<TItem>;
   /**
    * Flat index of this row within the controller's `rows` array — the

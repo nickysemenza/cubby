@@ -2811,8 +2811,8 @@ editor checks each typed bound against the declared `range` (`nonnegative`,
 `int`), shows `describe.lower`/`upper` beside it, rejects a minimum above the
 maximum, and the URL codec drops a bound the declaration rejects instead of
 failing the list. A range over a hand-written request schema declares the
-same `range` limits for clients; `filter-manifest.unit.test.tsx` fails when an
-editor would accept a bound its request schema rejects.
+same `range` limits for clients, so an editor never accepts a bound its request
+schema rejects.
 
 `model.derived` declares a list field that is not a stored column, or the
 value a stored field orders and groups by when its column is not that value
