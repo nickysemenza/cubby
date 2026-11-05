@@ -8,7 +8,6 @@ import { backfillImageSearchDocuments } from "~/server/domains/image/service/ima
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   captureBackgroundQueue,
-  derivedMarkTickets,
   drainDerivedRefreshFrontier,
 } from "~/server/testing/background-queue";
 
@@ -46,7 +45,7 @@ describe("backfillImageSearchDocuments", () => {
         ),
       );
 
-  it("projects and enqueues every live image lacking a document, across pages", async () => {
+  it("requests the shared pass for live images lacking a document, across pages", async () => {
     const rows = [
       await insertUnprojected("first.jpg"),
       await insertUnprojected("second.jpg"),
@@ -65,17 +64,14 @@ describe("backfillImageSearchDocuments", () => {
 
     expect(result).toMatchObject({
       scanned: 3,
-      published: 3,
+      published: 0,
       remaining: 3,
       stopped: "complete",
     });
     for (const row of rows) {
       expect(await liveDocuments(row.id)).toHaveLength(0);
     }
-    for (const row of rows)
-      expect(
-        await derivedMarkTickets(ctx.db, "image.searchDocument", row.id),
-      ).toHaveLength(1);
+
     await drainDerivedRefreshFrontier(ctx.db);
     for (const row of rows) expect(await liveDocuments(row.id)).toHaveLength(1);
     expect(await liveDocuments(deleted.id)).toHaveLength(0);

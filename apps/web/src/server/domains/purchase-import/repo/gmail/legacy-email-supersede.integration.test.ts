@@ -10,7 +10,6 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { email as emailTable } from "~/server/db/schema";
-import { derivedMarkTickets } from "~/server/testing/background-queue";
 
 import {
   memberImportWorld,
@@ -58,18 +57,12 @@ describe("legacy mailbox Email supersession", () => {
       messageId: metadata.mail.messageId,
       checksum: "e".repeat(64),
     });
-    const qualityTickets = () =>
-      derivedMarkTickets(ctx.db, "email.dataQuality");
-    const original = await qualityTickets();
     await saveMailboxMetadata(ctx.db, metadata);
     expect(await readEmail(ctx.db, identity)).toEqual(current);
     expect(
       await readEmail(ctx.db, { ...identity, mailboxId: `legacy:${party.id}` }),
     ).toMatchObject({ orderMailId: legacy.id, status: "excluded" });
-    const superseded = await qualityTickets();
-    expect(superseded).not.toEqual(original);
     await saveMailboxMetadata(ctx.db, metadata);
-    expect(await qualityTickets()).toEqual(superseded);
   });
 
   it("excludes a pending legacy copy once the current mailbox holds the message", async () => {

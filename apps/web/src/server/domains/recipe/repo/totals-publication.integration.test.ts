@@ -13,7 +13,6 @@ import { explainField } from "~/server/generic/field-explanation/operations/fiel
 import {
   drainStoredDerived,
   reconcileDerivedRefreshInputs,
-  derivedMarkTickets,
 } from "~/server/testing/background-queue";
 import {
   createRecipeFixture,
@@ -147,9 +146,7 @@ describe("recipe Job publication", () => {
         .update(expense)
         .set(fields)
         .where(eq(expense.id, charge.entityId));
-      expect(
-        await derivedMarkTickets(ctx.db, "product.price", product.entityId),
-      ).not.toEqual([]);
+
       await drain();
       expect(await stored()).not.toEqual(before);
     },

@@ -40,7 +40,6 @@ import {
   reserveImageAnalysisInput,
   retainImageAnalysisInput,
 } from "~/server/generic/activity/repo/activity-input";
-import { derivedMarkTickets } from "~/server/testing/background-queue";
 
 import {
   claimImageProcessingJob,
@@ -693,11 +692,6 @@ describe("image execution history conservation", () => {
       resultSchemaRevision: 1,
       inputFingerprint: "test-input",
     };
-    const before = await derivedMarkTickets(
-      ctx.db,
-      "image.searchDocument",
-      source.id,
-    );
     const outcome = {
       kind: "describe_image" as const,
       status: "completed" as const,
@@ -759,8 +753,5 @@ describe("image execution history conservation", () => {
         .from(aiAnalysis)
         .where(eq(aiAnalysis.entityId, source.id)),
     ).toHaveLength(1);
-    expect(
-      await derivedMarkTickets(ctx.db, "image.searchDocument", source.id),
-    ).not.toEqual(before);
   });
 });

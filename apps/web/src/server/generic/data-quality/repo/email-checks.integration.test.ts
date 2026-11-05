@@ -26,10 +26,7 @@ import {
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import {
-  derivedMarkTickets,
-  drainStoredDerived,
-} from "~/server/testing/background-queue";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   storedQuality,
   storedQualityIds,
@@ -260,32 +257,23 @@ describe("Email data quality", () => {
     const stored = await storedQuality(ctx.db, message.id);
     expect(stored?.rulesVersion).toBe(EMAIL_QUALITY_RULES_VERSION);
     // A source write marks the Email's stored quality with a fresh ticket.
-    const generation = async () =>
-      Math.max(0, ...(await derivedMarkTickets(ctx.db, "email.dataQuality")));
-    const enrolled = async <T>(write: () => Promise<T>) => {
-      const before = await generation();
-      const result = await write();
-      expect(await generation()).toBeGreaterThan(before);
-      return result;
-    };
-    const originalId = await enrolled(() =>
-      upsertOrderMail(
-        ctx.db,
-        party.entityId,
-        {
-          ...identity,
-          sourceKey: `gmail:${identity.mailboxId}:${identity.messageId}`,
-          threadId: null,
-          historyId: null,
-          internalDate: null,
-          labelIds: [],
-          headers: {},
-          snippet: "Synthetic retained original",
-          bodyText: null,
-          bodyHtml: null,
-        },
-        input.checksum,
-      ),
+
+    const originalId = await upsertOrderMail(
+      ctx.db,
+      party.entityId,
+      {
+        ...identity,
+        sourceKey: `gmail:${identity.mailboxId}:${identity.messageId}`,
+        threadId: null,
+        historyId: null,
+        internalDate: null,
+        labelIds: [],
+        headers: {},
+        snippet: "Synthetic retained original",
+        bodyText: null,
+        bodyHtml: null,
+      },
+      input.checksum,
     );
     expect((await published()).gaps.map((gap) => gap.check)).toContain(
       "email_original_missing",
@@ -299,45 +287,37 @@ describe("Email data quality", () => {
     expect((await published()).gaps.map((gap) => gap.check)).not.toContain(
       "email_original_missing",
     );
-    await enrolled(() =>
-      confirmEmailClassification(ctx.db, message.id, {
-        stage: "model",
-        reason: "Synthetic stage update",
-      }),
-    );
-    const prediction = await enrolled(() =>
-      recordEmailClassificationObservation(ctx.db, {
-        emailId: message.id,
-        checksum: input.checksum,
-        classification: "related",
-        stage: "model",
-        reason: "Synthetic observed classification",
-        classificationVersion: "synthetic-v1",
-      }),
-    );
-    await enrolled(() =>
-      seedEmailClassificationFeedback(ctx.db, {
-        predictionId: prediction.id,
-        classification: "related",
-        reason: null,
-        actorUserId: ctx.actor.userId,
-      }),
-    );
+    await confirmEmailClassification(ctx.db, message.id, {
+      stage: "model",
+      reason: "Synthetic stage update",
+    });
+    const prediction = await recordEmailClassificationObservation(ctx.db, {
+      emailId: message.id,
+      checksum: input.checksum,
+      classification: "related",
+      stage: "model",
+      reason: "Synthetic observed classification",
+      classificationVersion: "synthetic-v1",
+    });
+    await seedEmailClassificationFeedback(ctx.db, {
+      predictionId: prediction.id,
+      classification: "related",
+      reason: null,
+      actorUserId: ctx.actor.userId,
+    });
     await refresh();
     expect((await published()).gaps.map((gap) => gap.check)).not.toContain(
       "email_relevance_unreviewed",
     );
-    await enrolled(() =>
-      ensureRun(ctx.db, ctx.actor, {
-        purpose: "mail_import",
-        trigger: "manual",
-        status: "completed",
-        input: {
-          kind: "mail_research",
-          sources: [{ orderMailId: originalId, checksum: input.checksum }],
-        },
-      }),
-    );
+    await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_import",
+      trigger: "manual",
+      status: "completed",
+      input: {
+        kind: "mail_research",
+        sources: [{ orderMailId: originalId, checksum: input.checksum }],
+      },
+    });
     expect((await published()).gaps.map((gap) => gap.check)).toContain(
       "email_not_imported",
     );

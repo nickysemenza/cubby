@@ -243,67 +243,9 @@ export async function lockWork(
   return items.filter(({ target, ref }) => held.has(`${target}\0${ref}`));
 }
 
-/** A target's items whose ref is in `refs` (a subquery or array), as composable rows. */
-export async function workItemsFor(
-  db: RepositoryQueryInput,
-  target: string,
-  refs: readonly string[] | SQL,
-): Promise<WorkItem[]> {
-  if (Array.isArray(refs) && !refs.length) return [];
-  return repositoryQueries(db)
-    .select(itemColumns)
-    .from(workItem)
-    .where(
-      and(
-        eq(workItem.target, target),
-        Array.isArray(refs)
-          ? inArray(workItem.ref, refs)
-          : sql`${workItem.ref} IN (${refs})`,
-      ),
-    );
-}
-
-/** Items with their drain and retry state, for operator reads and fixtures. */
-export const workItemStates = (
-  db: RepositoryQueryInput,
-  target: string,
-  refs: readonly string[],
-) =>
-  refs.length
-    ? repositoryQueries(db)
-        .select({
-          ...itemColumns,
-          drain: workItem.drain,
-          lastError: workItem.lastError,
-          readyAt: workItem.readyAt,
-          waitCause: workItem.waitCause,
-          waitStartedAt: workItem.waitStartedAt,
-        })
-        .from(workItem)
-        .where(
-          and(eq(workItem.target, target), inArray(workItem.ref, [...refs])),
-        )
-    : Promise.resolve([]);
-
 /** Whether a drain (a key or a correlated key column) still owes any item. */
 export const drainPending = (drain: string | SQL) =>
   sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${workItem.drain} = ${drain})`;
-
-/**
- * The live tickets of a drain's items whose target matches, for a page that
- * must later tell observed items from newer ones.
- */
-export async function workTicketsWhere(
-  db: RepositoryQueryInput,
-  drain: string,
-  target: (column: SQL) => SQL,
-): Promise<number[]> {
-  const rows = await repositoryQueries(db)
-    .select({ ticket: workItem.ticket })
-    .from(workItem)
-    .where(and(eq(workItem.drain, drain), target(sql`${workItem.target}`)));
-  return rows.map((row) => row.ticket);
-}
 
 /** Whether an item matching `target` exists whose ticket is not among `observed`. */
 export const unobservedWork = (

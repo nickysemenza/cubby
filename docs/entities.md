@@ -2728,7 +2728,10 @@ clock admission are removed. Recipe invalidation only marks totals stale; USDA
 release activation and selected image descriptions converge through the same
 hourly pass without explicit SQL ticket admission. Explicit search repair joins the same pass and
 survives a disconnected status reader. Retained source triggers and predecessor
-tickets retire only after deployed replacement coverage. The Assessment source
+tickets retire only after deployed replacement coverage. Explicit image-search
+backfill joins the coarse pass and reports zero publications until that pass
+actually writes output. Tests assert resulting values and retained evidence,
+rather than obsolete source-ticket generations. The Assessment source
 relevance adapter is removed after the Suggestion cutover retired its last caller.
 
 The pass skips declared views. Named read snapshots hold Product, Inventory,

@@ -25,7 +25,6 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { account as googleAccount } from "~/server/db/auth.schema";
-import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
 import {
   databaseForTransaction,
   getDb,
@@ -62,10 +61,6 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
-import {
-  markWork,
-  workItemStates,
-} from "~/server/generic/jobs/repo/work-items";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
@@ -75,11 +70,6 @@ import {
   callMcpTool,
   kernelRequestContext,
 } from "~/server/testing/mcp-test-utils";
-
-const DERIVED_DRAIN = {
-  key: DERIVED_DRAIN_JOB_KEY,
-  kind: "derived.drain",
-} as const;
 
 describe("Email Purchase links", () => {
   const ctx = withTestDb();
@@ -409,13 +399,6 @@ describe("Email Purchase links", () => {
       const replacement = await createRepoEntity(ctx, "purchase", {
         vendorId: vendor.shortcode,
       });
-      const unrelatedSource = await syntheticRetainedMail(ctx.db, {
-        ledgerPartyId: party.id,
-        mailboxId: "synthetic-unrelated-source-order-mailbox",
-        messageId: "synthetic-unrelated-source-order-message",
-        rawChecksum: "d".repeat(64),
-        vendorId: null,
-      });
       await drainStoredDerived(ctx.db);
       const [accepted] = await getDb(ctx.db)
         .select({ id: importSourceOrder.id })
@@ -426,35 +409,12 @@ describe("Email Purchase links", () => {
             eq(importSourceOrder.orderKey, "synthetic-accepted-review-order"),
           ),
         );
-      const [unrelatedEmail] = await getDb(ctx.db)
-        .select({ id: emailTable.id })
-        .from(emailTable)
-        .where(eq(emailTable.orderMailId, unrelatedSource.id));
       const [originalEmail] = await getDb(ctx.db)
         .select({ id: emailTable.id })
         .from(emailTable)
         .where(eq(emailTable.orderMailId, original.id));
-      if (!accepted || !unrelatedEmail || !originalEmail)
+      if (!accepted || !originalEmail)
         throw new Error("Synthetic source-order identities missing");
-      await markWork(
-        ctx.db,
-        DERIVED_DRAIN,
-        [
-          {
-            target: "email.relationshipFacts",
-            ref: unrelatedEmail.id,
-            priority: 2,
-          },
-        ],
-        { readyAt: new Date(Date.now() + 86_400_000) },
-      );
-      const unrelatedWork = async () =>
-        (
-          await getDb(ctx.db).execute(
-            sql`SELECT to_jsonb(w) value FROM "WorkItem" w WHERE target = 'email.relationshipFacts' AND ref = ${unrelatedEmail.id}::uuid`,
-          )
-        ).rows;
-      const deferred = await unrelatedWork();
       const drainEmail = () => drainStoredDerived(ctx.db);
       const facts = async () => {
         const [row] = await getDb(ctx.db)
@@ -479,28 +439,14 @@ describe("Email Purchase links", () => {
         })
         .returning();
       if (!emptyRoot) throw new Error("Synthetic empty source family missing");
-      expect(
-        await workItemStates(ctx.db, "email.relationshipFacts@7", [
-          emptyRoot.id,
-        ]),
-      ).toEqual([]);
       await drainEmail();
       expect(await facts()).toEqual(unchangedAccepted);
-      expect(await unrelatedWork()).toEqual(deferred);
       // Move the matching identity onto an alias with no accepted associations.
       // Its old parent is the only path to the former family's Purchase after a move.
       await getDb(ctx.db)
         .update(importSourceClaim)
         .set({ externalKey: "synthetic:renamed-family-root" })
         .where(eq(importSourceClaim.id, root.id));
-      expect(
-        await workItemStates(ctx.db, "email.relationshipFacts@10", [root.id]),
-      ).toHaveLength(1);
-      expect(
-        await workItemStates(ctx.db, "email.relationshipFacts@11", [
-          "00000000-0000-4000-8000-000000000000",
-        ]),
-      ).toHaveLength(1);
       await drainEmail();
       expect(await facts()).toEqual([]);
       const [identityAlias] = await getDb(ctx.db)
@@ -536,12 +482,8 @@ describe("Email Purchase links", () => {
           .update(importSourceClaim)
           .set({ canonicalClaimId: parent })
           .where(eq(importSourceClaim.id, identityAlias.id));
-        expect(
-          await workItemStates(ctx.db, "email.relationshipFacts@11", [root.id]),
-        ).toHaveLength(1);
         await drainEmail();
         expect(await facts()).toEqual([]);
-        expect(await unrelatedWork()).toEqual(deferred);
         await getDb(ctx.db)
           .update(importSourceClaim)
           .set({ canonicalClaimId: root.id })
@@ -549,7 +491,7 @@ describe("Email Purchase links", () => {
         await drainEmail();
         expect(await facts()).toEqual(unchangedAccepted);
       }
-      // Invalid cyclic families lose canonical evidence but must finish expansion.
+      // Invalid cyclic families lose canonical evidence but the pass must complete.
       await getDb(ctx.db)
         .update(importSourceClaim)
         .set({ canonicalClaimId: identityAlias.id })
@@ -572,7 +514,6 @@ describe("Email Purchase links", () => {
           .where(eq(importSourceClaim.id, root.id));
         await drainEmail();
         expect(await facts()).toEqual([]);
-        expect(await unrelatedWork()).toEqual(deferred);
         await getDb(ctx.db)
           .update(importSourceClaim)
           .set({ ledgerPartyId: party.id, kind })
@@ -585,7 +526,6 @@ describe("Email Purchase links", () => {
         .where(eq(importSourceClaim.id, identityAlias.id));
       await drainEmail();
       expect(await facts()).toEqual([]);
-      expect(await unrelatedWork()).toEqual(deferred);
       await getDb(ctx.db)
         .update(importSourceClaim)
         .set({ externalKey })
@@ -596,28 +536,16 @@ describe("Email Purchase links", () => {
         .update(importSourceOrder)
         .set({ checksum: "b".repeat(64) })
         .where(eq(importSourceOrder.id, accepted.id));
-      expect(
-        await workItemStates(ctx.db, "email.relationshipFacts@8", [
-          accepted.id,
-        ]),
-      ).toEqual([]);
-      expect(
-        await workItemStates(ctx.db, "email.relationshipFacts@9", [
-          purchase.id,
-        ]),
-      ).toHaveLength(1);
       await drainEmail();
       expect(await facts()).toEqual([
         { purchaseId: purchase.id, changed: true },
       ]);
-      expect(await unrelatedWork()).toEqual(deferred);
       await getDb(ctx.db)
         .update(importSourceOrder)
         .set({ sourceClaimId: foreignClaim.id })
         .where(eq(importSourceOrder.id, accepted.id));
       await drainEmail();
       expect(await facts()).toEqual([]);
-      expect(await unrelatedWork()).toEqual(deferred);
       await getDb(ctx.db)
         .update(importSourceOrder)
         .set({
@@ -625,31 +553,16 @@ describe("Email Purchase links", () => {
           purchaseId: replacement.entityId,
         })
         .where(eq(importSourceOrder.id, accepted.id));
-      expect(
-        await workItemStates(ctx.db, "email.relationshipFacts@9", [
-          purchase.id,
-          replacement.entityId,
-        ]),
-      ).toHaveLength(2);
       await drainEmail();
       expect(await facts()).toEqual([
         { purchaseId: replacement.entityId, changed: true },
       ]);
-      expect(await unrelatedWork()).toEqual(deferred);
       await getDb(ctx.db)
         .update(importSourceOrder)
         .set({ purchaseId: null })
         .where(eq(importSourceOrder.id, accepted.id));
-      // Detach preserves the old Purchase ref beside the fixed-target null sentinel.
-      expect(
-        await workItemStates(ctx.db, "email.relationshipFacts@9", [
-          replacement.entityId,
-          "00000000-0000-4000-8000-000000000000",
-        ]),
-      ).toHaveLength(2);
       await drainEmail();
       expect(await facts()).toEqual([]);
-      expect(await unrelatedWork()).toEqual(deferred);
       await getDb(ctx.db)
         .update(importSourceOrder)
         .set({ purchaseId: purchase.id })
@@ -663,7 +576,6 @@ describe("Email Purchase links", () => {
         .where(eq(importSourceOrder.id, accepted.id));
       await drainEmail();
       expect(await facts()).toEqual([]);
-      expect(await unrelatedWork()).toEqual(deferred);
     },
   );
 

@@ -15,7 +15,6 @@ import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocuments,
 } from "~/server/generic/search/repo/search-document";
-import { derivedMarkTickets } from "~/server/testing/background-queue";
 import {
   drainDerivedRefreshFrontier,
   captureBackgroundQueue,
@@ -188,33 +187,5 @@ describe("bounded entity writes", () => {
       id: transaction.output.id,
       notes: "Synthetic bounded note",
     });
-  });
-
-  it("coalesces repeated edits into one search mark", async () => {
-    const product = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic coalesced product" }),
-      ctx.actor,
-    );
-    const context = buildKernelContext(ctx.db, testUserId(TEST_USER_ID));
-    await executeEntity(context, {
-      action: "update",
-      entity: "product",
-      id: product.id,
-      data: { name: "Synthetic second name" },
-    });
-    await executeEntity(context, {
-      action: "update",
-      entity: "product",
-      id: product.id,
-      data: { name: "Synthetic third name" },
-    });
-    expect(
-      await derivedMarkTickets(
-        ctx.db,
-        "product.searchDocument",
-        product.entityId,
-      ),
-    ).toHaveLength(1);
   });
 });
