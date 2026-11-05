@@ -5097,3 +5097,9 @@ Spending Categories. The server count query and web navigation derive their
 keys from that schema, rather than separate supplemental entity lists. Each
 server entry uses its entity's unfiltered list predicate. Missing responses
 remain absent; loaded zero counts remain visible.
+
+Diagnostic-phase declarations admit no per-source legacy tickets, including
+priority-zero Entity and Suggestion fan-out. The shared `derived_mark` function
+returns before ticket/capture writes for those declared targets and indexed
+fan-out addresses. Existing tickets remain until the hourly pass has published
+the replacement target; stopping admission alone does not prove coverage.

@@ -139,11 +139,19 @@ function derivedTriggerInputs(): Map<string, TriggerInput[]> {
 }
 
 /** The shared mark function: upsert a fresh ticket and capture the drain Job once per transaction. */
-const derivedMarkFunctionSql =
-  () => `DROP FUNCTION IF EXISTS derived_mark(text, uuid[]);
+const derivedMarkFunctionSql = () => {
+  // Diagnostic declarations are rebuilt by the hourly pass, never by per-source tickets.
+  const hourly = storedDerivedDeclarations()
+    .filter(
+      (entry) =>
+        "rebuildPhase" in entry && entry.rebuildPhase === "diagnostics",
+    )
+    .map((entry) => literal(entry.target));
+  return `DROP FUNCTION IF EXISTS derived_mark(text, uuid[]);
 CREATE OR REPLACE FUNCTION derived_mark(p_target text, p_refs uuid[], p_reason text DEFAULT 'Refresh requested') RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN
+${hourly.length ? `  IF split_part(p_target, '@', 1) IN (${hourly.join(", ")}) THEN RETURN; END IF;` : ""}
   INSERT INTO "WorkItem" (target, ref, priority, reason)
     SELECT DISTINCT p_target, r,
       CASE current_setting('cubby.derived_priority', true) WHEN '1' THEN 1 ELSE 0 END, p_reason
@@ -164,6 +172,7 @@ BEGIN
     PERFORM set_config('cubby.derived_capture', txid_current()::text, true);
   END IF;
 END $$;`;
+};
 
 /** Desired-state DDL: the mark function plus one function and trigger per source table. */
 export function derivedTriggerDdl(tables?: ReadonlySet<string>): string {

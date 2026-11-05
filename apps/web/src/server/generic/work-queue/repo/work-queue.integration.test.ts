@@ -436,6 +436,15 @@ describe("composed Work queue engine", () => {
         `DO $install$ BEGIN EXECUTE $ddl$${derivedTriggerDdl()}$ddl$; END $install$;`,
       ),
     );
+    await getDb(ctx.db).execute(sql`SELECT derived_mark(
+      ${"project.workDiagnosticFacts@50"}, ARRAY[gen_random_uuid()], ${"Synthetic entity removed"})`);
+    expect(
+      (
+        await getDb(ctx.db)
+          .execute(sql`SELECT count(*)::int AS count FROM "WorkItem"
+      WHERE target LIKE ${"project.workDiagnosticFacts%"}`)
+      ).rows,
+    ).toEqual([{ count: 0 }]);
     const before = await getDb(ctx.db).execute(
       sql`SELECT target, ref, ticket FROM "WorkItem" ORDER BY target, ref`,
     );
