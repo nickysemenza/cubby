@@ -201,6 +201,7 @@ const read = {
               "Occurrence closure was not captured for this owner; refresh the evidence read.",
             ),
         }),
+        { scope: "explicit" },
       ),
     ];
   },

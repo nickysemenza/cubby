@@ -2035,7 +2035,7 @@ its outer mutation supplies loading state and presentation only.
 
 Each repository supplies `listScaffold` as its read port to
 `defineRepository`. Its `read` declaration supplies columns and bindings;
-`{ scope: "detail" }` bindings load only for record reads. `scaffold.get`
+`{ scope: "detail" }` bindings default only on record reads; an explicit page projection can request them. `{ scope: "explicit" }` bindings load only when a projection names their keys, including record reads and write-response hydration. Use explicit scope for bounded verification bundles that require their own snapshot. `scaffold.get`
 and `getByIds` use the same read plan as pages, including for get-by-id.
 See [ADR 0024](adr/0024-repository-read-declaration.md).
 

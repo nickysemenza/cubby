@@ -21,7 +21,11 @@ import {
   sourceHistoricalTransactionRows,
   sourceOccurrenceHasUnresolvedHistory,
 } from "~/server/db/computed/source-occurrence-history-sql";
-import { getDb } from "~/server/db/helpers";
+import {
+  databaseForTransaction,
+  getDb,
+  withTransaction,
+} from "~/server/db/helpers";
 import {
   sourceOccurrence,
   sourceObservationAnnotation,
@@ -130,6 +134,25 @@ describe("statement row ledger", () => {
     expect(before).toHaveLength(2);
     expect(new Set(before.map((row) => row.chargeKey)).size).toBe(2);
     expect(owners.map((owner) => owner.version)).toEqual([1, 1]);
+    await withTransaction(ctx.db, async (tx) => {
+      const ordinary = await sourceOccurrenceRepository.repository.read(
+        buildKernelContext(databaseForTransaction(tx), ctx.actor.userId),
+        owners.map((owner) => owner.shortcode),
+      );
+      expect(ordinary.data).toHaveLength(2);
+      expect(ordinary.data.every((row) => !Object.hasOwn(row, "closure"))).toBe(
+        true,
+      );
+      await expect(
+        sourceOccurrenceRepository.repository.read(
+          buildKernelContext(databaseForTransaction(tx), ctx.actor.userId),
+          owners.map((owner) => owner.shortcode),
+          ["closure"],
+        ),
+      ).rejects.toThrow(
+        "snapshot read outside a read-committed write transaction",
+      );
+    });
     const closureRead = await sourceOccurrenceRepository.repository.read(
       buildKernelContext(ctx.db, ctx.actor.userId),
       owners.map((owner) => owner.shortcode),
