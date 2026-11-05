@@ -413,6 +413,12 @@ export const { definition, readSchemas } = defineEntityModel({
       timestampField("updatedAt"),
       { output: false, key: "shortcode", kind: "text" },
       { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
+      // Execution state: this row is the only owner (docs/jobs.md#image-processing).
+      { output: false, key: "lane", kind: "text" },
+      { output: false, key: "runAt", kind: "timestamp" },
+      { output: false, key: "leaseUntil", kind: "timestamp", nullable: true },
+      { output: false, key: "failures", kind: "number" },
+      { output: false, key: "waitReason", kind: "text", nullable: true },
     ],
     storage: [
       { key: "id", specialized: "primary-key:ImageJobId" },
@@ -429,6 +435,11 @@ export const { definition, readSchemas } = defineEntityModel({
       "createdAt",
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
+      "lane",
+      { key: "runAt", defaultSql: "now()" },
+      "leaseUntil",
+      { key: "failures", defaultValue: 0 },
+      "waitReason",
     ],
 
     rows: {
@@ -449,8 +460,8 @@ export const { definition, readSchemas } = defineEntityModel({
     derived: {
       // Every submission that scheduled or retried the job, not only its first.
       submissionId: { via: "submissions.publicId" },
-      // Displayed state derives from the universal Job that owns execution;
-      // the stored column keeps only the outcome (docs/jobs.md#image-processing).
+      // Displayed state derives from the lease, failures and lane; the stored
+      // column keeps only the outcome (docs/jobs.md#image-processing).
       state: {
         type: "enum",
         options: [...imageProcessingJobState.options],
@@ -488,8 +499,22 @@ export const { definition, readSchemas } = defineEntityModel({
         on: ["imageId", "kind", "sourceContentHash", "processorRevision"],
       },
       { on: ["imageId", { column: "createdAt", desc: true }] },
+      {
+        name: "ImageProcessingJob_open_idx",
+        on: ["lane", "runAt"],
+        where: "{state} = 'pending'",
+      },
     ],
     checks: [
+      {
+        name: "ImageProcessingJob_lane_check",
+        sql: "{lane} IN ('cloud', 'device')",
+      },
+      {
+        name: "ImageProcessingJob_waitReason_check",
+        sql: "{waitReason} IN ('provider_capacity', 'ai_funding_window', 'device', 'rate_limit')",
+      },
+      { name: "ImageProcessingJob_failures_check", sql: "{failures} >= 0" },
       { name: "ImageProcessingJob_kind_check", column: "kind", bare: true },
       { name: "ImageProcessingJob_state_check", column: "state", bare: true },
       { name: "ImageProcessingJob_attempts_check", sql: "{attempts} >= 0" },

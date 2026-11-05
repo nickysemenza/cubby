@@ -6,10 +6,7 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { withJobExecution } from "~/server/generic/jobs/context";
-import {
-  claimExternal,
-  settleExternalClaim,
-} from "~/server/generic/jobs/repo/external-claim";
+import { claimJob, publishJobPage } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { pauseJob } from "~/server/generic/jobs/repo/operator";
 import { claimContext } from "~/server/generic/jobs/service/jobs";
@@ -41,7 +38,7 @@ describe("Run Job admission", () => {
     expect(launches[0]?.instanceId).toBe(launches[1]?.instanceId);
     const [execution] = await readJobs(ctx.db, { key: `run:${id}` });
     if (!execution) throw new Error("Missing execution");
-    const claimed = await claimExternal(ctx.db, execution.id);
+    const claimed = await claimJob(ctx.db, execution.id);
     if (!claimed) throw new Error("Missing claim");
     const [owner] = await getDb(ctx.db)
       .select()
@@ -56,7 +53,7 @@ describe("Run Job admission", () => {
     );
     let published = false;
     expect(
-      await settleExternalClaim(ctx.db, claimed, { done: true }, async () => {
+      await publishJobPage(ctx.db, claimed, { done: true }, async () => {
         published = true;
       }),
     ).toBe(false);
@@ -77,7 +74,7 @@ describe("Run Job admission", () => {
     });
     const [execution] = await readJobs(ctx.db, { key: `run:${id}` });
     if (!execution) throw new Error("Missing execution");
-    const claim = await claimExternal(ctx.db, execution.id);
+    const claim = await claimJob(ctx.db, execution.id);
     if (!claim) throw new Error("Missing claim");
     await expect(
       withJobExecution(ctx.db, claim, () =>

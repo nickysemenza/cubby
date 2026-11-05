@@ -512,6 +512,13 @@
       "when": 1793810336600,
       "tag": "0072_assessment_read_publications",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1793862278240,
+      "tag": "0073_image_jobs_own_execution",
+      "breakpoints": true
     }
   ]
 }

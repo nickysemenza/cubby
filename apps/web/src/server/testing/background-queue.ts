@@ -22,11 +22,7 @@ import {
 } from "~/server/generic/derived/repo/drain";
 import { derivedDrainHandler } from "~/server/generic/derived/service/drain-job";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import {
-  claimExternal,
-  heldExternalClaim,
-  releaseExternalClaim,
-} from "~/server/generic/jobs/repo/external-claim";
+import { claimJob, releaseJobClaim } from "~/server/generic/jobs/jobs.fixtures";
 import { readJob, readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { wakeJob } from "~/server/generic/jobs/repo/producer";
 import {
@@ -334,8 +330,18 @@ export async function withJobFixtureExecution<T>(
   const { claimContext } = await import("~/server/generic/jobs/service/jobs");
   const { withJobExecution } = await import("~/server/generic/jobs/context");
   const saved = await enqueueJob(db, input);
-  const existing = await heldExternalClaim(db, saved.key);
-  const claim = existing ?? (await claimExternal(db, saved.id));
+  const existing =
+    saved.state === "running" &&
+    saved.leaseToken &&
+    saved.leaseExpiresAt &&
+    saved.leaseExpiresAt.getTime() > Date.now()
+      ? {
+          ...saved,
+          leaseToken: saved.leaseToken,
+          leaseExpiresAt: saved.leaseExpiresAt,
+        }
+      : null;
+  const claim = existing ?? (await claimJob(db, saved.id));
   if (!claim)
     throw new Error(`Synthetic execution ${saved.key} is ${saved.state}`);
   const context = claimContext(db, claim);
@@ -360,7 +366,6 @@ export async function withJobFixtureExecution<T>(
   } finally {
     // Completed fixture work can free admission capacity. Multi-step fence
     // fixtures retain their token by default; borrowed claims stay with their caller.
-    if (options.releaseClaim && !existing)
-      await releaseExternalClaim(db, claim);
+    if (options.releaseClaim && !existing) await releaseJobClaim(db, claim);
   }
 }

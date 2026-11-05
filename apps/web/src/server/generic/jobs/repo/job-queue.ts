@@ -3,6 +3,7 @@ import {
   parseEntityId,
   type RunId,
 } from "@cubby/schemas/identifiers";
+import { imageProcessingJobState } from "@cubby/schemas/image-processing";
 import {
   JOB_NEEDS_ATTENTION_ATTEMPTS,
   jobLane,
@@ -36,6 +37,7 @@ import { getDb, withTransactionDatabase, eqAny } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
 import { job } from "~/server/db/retained-tables";
 import { run } from "~/server/db/schema";
+import { imageJobWaitingOnReasonSql } from "~/server/domains/image-processing/repo/image-job-state";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   JOB_KIND_POLICY,
@@ -97,14 +99,21 @@ function runDemandPairs(runIds: readonly RunId[] | SQL): SQL {
 export function runStalledSql(now = new Date()): SQL<boolean> {
   const demand = runDemandPairs(sql`SELECT ${outer(run.id)}`);
   const at = sql`${now.toISOString()}::timestamp`;
+  // A Run's open image rows are demand too, on their own execution columns.
+  const images = sql`"ImageProcessingJob" p WHERE p."runId" = ${outer(run.id)}`;
   return sql<boolean>`(
     NOT (${run.failureCode} IS NOT DISTINCT FROM 'execution_limit' AND ${run.status} IN (${runStatus.enum.paused_auth}, ${runStatus.enum.needs_review}))
-    AND EXISTS (SELECT 1 FROM ${demand} d JOIN "Job" j ON j.id = d.job_id
+    AND (EXISTS (SELECT 1 FROM ${demand} d JOIN "Job" j ON j.id = d.job_id
       WHERE j.state IN (${jobState.enum.queued},${jobState.enum.retry_wait},${jobState.enum.running},${jobState.enum.paused}))
+      OR EXISTS (SELECT 1 FROM ${images} AND p.state = ${imageProcessingJobState.enum.pending}))
     AND NOT EXISTS (SELECT 1 FROM ${demand} d JOIN "Job" j ON j.id = d.job_id
       WHERE j.state = ${jobState.enum.running} AND j."leaseExpiresAt" > ${at})
-    AND coalesce((SELECT max(greatest(j."lastClaimedAt", CASE WHEN j.state = ${jobState.enum.completed} THEN j."updatedAt" END))
-      FROM ${demand} d JOIN "Job" j ON j.id = d.job_id), ${run.startedAt}) <= ${at} - ${RUN_STALL_MS} * interval '1 millisecond'
+    AND NOT EXISTS (SELECT 1 FROM ${images} AND p.state = ${imageProcessingJobState.enum.pending} AND p."leaseUntil" > ${at})
+    AND coalesce(greatest(
+      (SELECT max(greatest(j."lastClaimedAt", CASE WHEN j.state = ${jobState.enum.completed} THEN j."updatedAt" END))
+        FROM ${demand} d JOIN "Job" j ON j.id = d.job_id),
+      (SELECT max(greatest(p."dispatchedAt", p."completedAt")) FROM ${images})
+    ), ${run.startedAt}) <= ${at} - ${RUN_STALL_MS} * interval '1 millisecond'
   )`;
 }
 
@@ -339,13 +348,18 @@ export async function readRunRollups(
   const reason = jobWaitingOnReasonSql(undefined, now);
   const at = sql`${now.toISOString()}::timestamp`;
   const demand = runDemandPairs(ids);
-  const [tallies, progress, owners] = await Promise.all([
-    getDb(db).execute<{
-      runId: RunId;
-      reason: JobWaitingOnReason | null;
-      expired: boolean;
-      count: number;
-    }>(sql`SELECT d.run_id AS "runId", ${reason} AS reason,
+  const runList = sql.join(
+    ids.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  );
+  const [tallies, imageTallies, progress, imageProgress, owners] =
+    await Promise.all([
+      getDb(db).execute<{
+        runId: RunId;
+        reason: JobWaitingOnReason | null;
+        expired: boolean;
+        count: number;
+      }>(sql`SELECT d.run_id AS "runId", ${reason} AS reason,
         ("Job".state = ${jobState.enum.running} AND "Job"."leaseExpiresAt" <= ${at}) AS expired,
         count(*)::int AS count
       FROM ${demand} d JOIN "Job" ON "Job".id = d.job_id
@@ -354,33 +368,47 @@ export async function readRunRollups(
         sql`, `,
       )})
       GROUP BY 1, 2, 3`),
-    // Epoch milliseconds: the driver would read a zoneless timestamp as local time.
-    getDb(db).execute<{ runId: RunId; last: number | null }>(sql`
+      getDb(db).execute<{
+        runId: RunId;
+        reason: JobWaitingOnReason | null;
+        expired: boolean;
+        count: number;
+      }>(sql`SELECT p."runId" AS "runId", ${imageJobWaitingOnReasonSql("p", now)} AS reason,
+        coalesce(p."leaseUntil" <= ${at}, false) AS expired,
+        count(*)::int AS count
+      FROM "ImageProcessingJob" p
+      WHERE p."runId" IN (${runList}) AND p.state = ${imageProcessingJobState.enum.pending}
+      GROUP BY 1, 2, 3`),
+      // Epoch milliseconds: the driver would read a zoneless timestamp as local time.
+      getDb(db).execute<{ runId: RunId; last: number | null }>(sql`
       SELECT d.run_id AS "runId", (extract(epoch FROM max(greatest("Job"."lastClaimedAt",
           CASE WHEN "Job".state = ${jobState.enum.completed} THEN "Job"."updatedAt" END))) * 1000)::float8 AS last
       FROM ${demand} d JOIN "Job" ON "Job".id = d.job_id GROUP BY 1`),
-    getDb(db)
-      .select({
-        id: run.id,
-        status: run.status,
-        failureCode: run.failureCode,
-        startedAt: run.startedAt,
-        stalled: runStalledSql(now),
-      })
-      .from(run)
-      .where(inArray(run.id, ids)),
-  ]);
-  const lastById = new Map(
-    progress.rows.map((row) => [
-      row.runId,
-      row.last === null ? null : new Date(row.last),
-    ]),
-  );
+      getDb(db).execute<{ runId: RunId; last: number | null }>(sql`
+      SELECT p."runId" AS "runId", (extract(epoch FROM max(greatest(p."dispatchedAt", p."completedAt"))) * 1000)::float8 AS last
+      FROM "ImageProcessingJob" p WHERE p."runId" IN (${runList}) GROUP BY 1`),
+      getDb(db)
+        .select({
+          id: run.id,
+          status: run.status,
+          failureCode: run.failureCode,
+          startedAt: run.startedAt,
+          stalled: runStalledSql(now),
+        })
+        .from(run)
+        .where(inArray(run.id, ids)),
+    ]);
+  const lastById = new Map<RunId, Date>();
+  for (const row of [...progress.rows, ...imageProgress.rows]) {
+    const known = lastById.get(row.runId);
+    if (row.last !== null && (!known || known.getTime() < row.last))
+      lastById.set(row.runId, new Date(row.last));
+  }
   const ownerById = new Map(owners.map((row) => [row.id, row]));
   return runs.map((entry) => {
     const counts: RunRollup["counts"] = {};
     let expiredLeases = 0;
-    for (const tally of tallies.rows) {
+    for (const tally of [...tallies.rows, ...imageTallies.rows]) {
       if (tally.runId !== entry.id) continue;
       const parsed = jobWaitingOnReason.safeParse(tally.reason);
       if (!parsed.success) continue;

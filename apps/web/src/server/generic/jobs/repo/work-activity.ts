@@ -1,4 +1,8 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
+import {
+  imageProcessingAttemptState,
+  imageProcessingJobState,
+} from "@cubby/schemas/image-processing";
 import { jobState } from "@cubby/schemas/job";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { sql } from "drizzle-orm";
@@ -16,11 +20,73 @@ const RECENT_MINUTES = { pace: 5, completed: 15, failed: 60 } as const;
 /** Active Runs named per stream, newest first. */
 const STREAM_RUNS = 3;
 
+type StreamRow = {
+  kind: string;
+  running: number;
+  due: number;
+  backingOff: number;
+  scheduled: number;
+  paused: number;
+  completedPace: number;
+  completed: number;
+  failed: number;
+  lastCompletedAt: string | null;
+  oldestDueAt: string | null;
+  runs: string[] | null;
+};
+
 /**
- * Live and recent work per Job kind: what runs now, what waits and why, and
- * how fast recent work finished. Internal maintenance kinds are omitted.
- * Only Jobs that are live or were claimed within the failure window are read,
- * so cost follows current work, not retained history.
+ * Image work owns its execution on `ImageProcessingJob`: one stream per lane, with
+ * failures counted from its attempts. Only open rows and rows finished within the
+ * failure window are read.
+ */
+async function readImageStreams(db: Database, now: Date): Promise<StreamRow[]> {
+  const at = sql`${now.toISOString()}::timestamp`;
+  const since = (minutes: number) =>
+    sql`${at} - ${minutes} * interval '1 minute'`;
+  const pending = imageProcessingJobState.enum.pending;
+  const finished = sql`p.state IN (${imageProcessingJobState.enum.ready}, ${imageProcessingJobState.enum.skipped})`;
+  const claimable = sql`p.state = ${pending} AND coalesce(p."leaseUntil", p."runAt") <= ${at}`;
+  const later = sql`p.state = ${pending} AND p."leaseUntil" IS NULL AND p."runAt" > ${at}`;
+  const { rows } = await getDb(db).execute<StreamRow>(sql`
+    SELECT 'image.' || p.lane AS kind,
+      count(*) FILTER (WHERE p.state = ${pending} AND p."leaseUntil" > ${at})::int AS "running",
+      count(*) FILTER (WHERE ${claimable})::int AS "due",
+      count(*) FILTER (WHERE ${later} AND p.failures > 0)::int AS "backingOff",
+      count(*) FILTER (WHERE ${later} AND p.failures = 0)::int AS "scheduled",
+      0 AS "paused",
+      count(*) FILTER (WHERE ${finished} AND p."completedAt" > ${since(RECENT_MINUTES.pace)})::int AS "completedPace",
+      count(*) FILTER (WHERE ${finished} AND p."completedAt" > ${since(RECENT_MINUTES.completed)})::int AS "completed",
+      (SELECT count(*)::int FROM "ImageProcessingAttempt" a
+        JOIN "ImageProcessingJob" job ON job.id = a."jobId"
+        WHERE job.lane = p.lane AND a.state = ${imageProcessingAttemptState.enum.failed}
+          AND a."completedAt" > ${since(RECENT_MINUTES.failed)}) AS "failed",
+      max(p."completedAt") FILTER (WHERE ${finished}) AS "lastCompletedAt",
+      min(coalesce(p."leaseUntil", p."runAt")) FILTER (WHERE ${claimable}) AS "oldestDueAt",
+      ARRAY(
+        SELECT r.shortcode FROM "ImageProcessingJob" stream
+        JOIN "Run" r ON r.id = stream."runId"
+        WHERE stream.lane = p.lane AND stream.state = ${pending} AND ${notDeleted("r")}
+          AND r.status IN (${sql.join(
+            ACTIVE_RUN_STATUSES.map((status) => sql`${status}`),
+            sql`, `,
+          )})
+        GROUP BY r.id ORDER BY r."createdAt" DESC, r.id LIMIT ${STREAM_RUNS}
+      ) AS "runs"
+    FROM "ImageProcessingJob" p
+    WHERE p.state = ${pending} OR p."completedAt" > ${since(RECENT_MINUTES.failed)}
+      OR EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a
+        WHERE a."jobId" = p.id AND a.state = ${imageProcessingAttemptState.enum.failed}
+          AND a."completedAt" > ${since(RECENT_MINUTES.failed)})
+    GROUP BY p.lane`);
+  return rows;
+}
+
+/**
+ * Live and recent work per Job kind and domain-owned stream: what runs now, what
+ * waits and why, and how fast recent work finished. Internal maintenance kinds are
+ * omitted. Only Jobs that are live or were claimed within the failure window are
+ * read, so cost follows current work, not retained history.
  */
 export async function readWorkActivity(
   db: Database,
@@ -35,20 +101,7 @@ export async function readWorkActivity(
   const waiting = sql`${due} AND NOT ("Job".state = ${jobState.enum.running} AND "Job"."leaseExpiresAt" > ${at})`;
   const live = sql`"Job".state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}, ${jobState.enum.paused})`;
   const requester = alias(run, "r");
-  const rows = await getDb(db).execute<{
-    kind: string;
-    running: number;
-    due: number;
-    backingOff: number;
-    scheduled: number;
-    paused: number;
-    completedPace: number;
-    completed: number;
-    failed: number;
-    lastCompletedAt: string | null;
-    oldestDueAt: string | null;
-    runs: string[] | null;
-  }>(sql`
+  const rows = await getDb(db).execute<StreamRow>(sql`
     WITH activity_jobs AS MATERIALIZED (
       SELECT "Job".* FROM "Job"
       WHERE (${live} OR "Job"."lastClaimedAt" > ${since(RECENT_MINUTES.failed)})
@@ -92,7 +145,8 @@ export async function readWorkActivity(
       completedMinutes: RECENT_MINUTES.completed,
       failedMinutes: RECENT_MINUTES.failed,
     },
-    streams: rows.rows
+    streams: [...rows.rows, ...(await readImageStreams(db, now))]
+      .sort((left, right) => left.kind.localeCompare(right.kind))
       .map((row) => ({
         kind: row.kind,
         running: row.running,

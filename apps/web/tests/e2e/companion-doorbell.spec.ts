@@ -6,7 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { doorbellUrl } from "~/lib/doorbell";
-import { image, job } from "~/server/db/schema";
+import { image, imageProcessingJob } from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { persistAppleImageDescriptionSubmission } from "~/server/domains/image-processing/repo/image-processing-submission";
@@ -100,16 +100,14 @@ test.describe("companion doorbell", () => {
         id: source.shortcode,
       });
       if (!jobId) throw new Error("Apple description job was not scheduled");
-      // Parked device work: the row stays open and its Job is due for a pull.
+      // Parked device work: the row stays open and is due for a pull.
       await database
-        .update(job)
+        .update(imageProcessingJob)
         .set({
-          state: "queued",
-          leaseToken: null,
-          leaseExpiresAt: null,
-          availableAt: sql`now() - interval '1 minute'`,
+          leaseUntil: null,
+          runAt: sql`now() - interval '1 minute'`,
         })
-        .where(eq(job.key, `image-processing:${jobId}`));
+        .where(eq(imageProcessingJob.id, jobId));
       jobIds.push(jobId);
     }
     await page.goto("/");

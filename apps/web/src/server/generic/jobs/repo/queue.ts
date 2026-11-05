@@ -1,13 +1,13 @@
 /**
  * The Job queue's private core: due selection, claims, leases, publication
  * and failure. Producers, operators and external executors reach it only
- * through `producer.ts`, `operator.ts` and `external-claim.ts`; the drain
- * executor (`service/jobs.ts`) is its one internal caller.
+ * through `producer.ts` and `operator.ts`; the drain executor
+ * (`service/jobs.ts`) is its one internal caller.
  */
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { jobPage, type JobPage, type JobWaitReason } from "@cubby/schemas/job";
 import { runStatus, VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
-import { and, eq, gt, inArray, not, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, not, or, sql } from "drizzle-orm";
 
 import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
@@ -25,11 +25,7 @@ import { job, jobInvalidationCapture, run } from "~/server/db/retained-tables";
 
 import { JobSupersededError } from "../errors";
 import { classifyJobFailure } from "../failure";
-import {
-  jobKindPolicy,
-  jobRetryDelayMs,
-  UNDRAINED_JOB_KINDS,
-} from "../kind-policy";
+import { jobKindPolicy, jobRetryDelayMs } from "../kind-policy";
 import { JOB_DRAIN } from "../limits";
 
 /** How long a claim holds a Job before another worker may take it over. */
@@ -38,24 +34,18 @@ export type JobRow = typeof job.$inferSelect;
 export type JobClaim = JobRow & {
   leaseToken: string;
   leaseExpiresAt: Date;
-  /**
-   * An external executor reporting after its lease expired still owns the
-   * Job while no newer claim replaced its token; only such a claim may
-   * publish past `leaseExpiresAt`.
-   */
-  lateAdoption?: true;
 };
 
-/** Whether `row` is still owned by `claim`: same token and generation, live unless adopted late. */
+/** Whether `row` is still owned by `claim`: same token and generation, live. */
 const ownsLease = (
   row: Pick<JobRow, "state" | "leaseToken" | "leaseExpiresAt" | "generation">,
-  claim: Pick<JobClaim, "leaseToken" | "generation" | "lateAdoption">,
+  claim: Pick<JobClaim, "leaseToken" | "generation">,
 ) =>
   row.state === "running" &&
   row.leaseToken === claim.leaseToken &&
   row.generation === claim.generation &&
   row.leaseExpiresAt !== null &&
-  (claim.lateAdoption === true || row.leaseExpiresAt.getTime() > Date.now());
+  row.leaseExpiresAt.getTime() > Date.now();
 
 /**
  * A wake this Job has not observed yet. OFFSET keeps the finite key set out
@@ -96,22 +86,6 @@ const due = (now: Date) =>
 
 /** Whether a Job is claimable now: the one predicate the drain, claims and diagnostics share. */
 export const jobDue = (now: Date) => due(now);
-
-/** A running, member-visible Run that owns the outer `"Job"` row. */
-const runOwningJob = () =>
-  related(run, (r) => sql`${r.id} = ${outer(job.runId)}`)
-    .where(
-      (r) =>
-        sql`${r.status} = ${runStatus.enum.running} AND ${r.purpose} IN (${sql.join(
-          VISIBLE_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
-          sql`, `,
-        )})`,
-    )
-    .exists();
-
-/** Whether the outer `"Job"` row belongs to a running, member-visible Run. */
-export const jobRunOwned = () =>
-  sql<boolean>`("Job"."runId" IS NOT NULL AND ${runOwningJob()})`;
 
 /** Run execution and work of any active Run bypass kind admission. */
 const jobCapExempt = () =>
@@ -171,11 +145,11 @@ export async function dueJobs(
       -- Timed work and wakes scan separately: terminal history never enters
       -- the timed scan just to test the wake predicate.
       SELECT id, kind, priority, "updatedAt", "runId" FROM "Job"
-      WHERE ${scheduledDue(now)} AND ${notInArray(job.kind, [...UNDRAINED_JOB_KINDS])}
+      WHERE ${scheduledDue(now)}
       UNION ALL
       SELECT "Job".id, "Job".kind, "Job".priority, "Job"."updatedAt", "Job"."runId"
       FROM pending JOIN "Job" USING (key)
-      WHERE ${wakeDue()} AND ${notInArray(job.kind, [...UNDRAINED_JOB_KINDS])}
+      WHERE ${wakeDue()}
         AND (${scheduledDue(now)}) IS NOT TRUE
     ), candidates AS (
       SELECT due.id, due.kind, due.priority, due."updatedAt",
@@ -359,7 +333,7 @@ export async function releaseJobClaim(
 /** Used by domain receipt transactions before applying externally prepared results. */
 export async function assertJobClaim(
   db: RepositoryQueryInput,
-  claim: Pick<JobClaim, "id" | "leaseToken" | "generation" | "lateAdoption">,
+  claim: Pick<JobClaim, "id" | "leaseToken" | "generation">,
   lock?: "update",
 ) {
   const query = repositoryQueries(db)
@@ -376,7 +350,7 @@ export async function assertJobClaim(
   const [current] = await (lock ? query.for(lock) : query);
   if (
     !current?.leaseExpiresAt ||
-    (!claim.lateAdoption && current.leaseExpiresAt.getTime() <= Date.now())
+    current.leaseExpiresAt.getTime() <= Date.now()
   )
     throw new JobSupersededError();
 }
@@ -389,7 +363,7 @@ export async function assertJobClaim(
  */
 export async function fenceJob(
   tx: RepositoryQueryInput,
-  claim: Pick<JobClaim, "id" | "leaseToken" | "generation" | "lateAdoption">,
+  claim: Pick<JobClaim, "id" | "leaseToken" | "generation">,
 ) {
   await assertJobClaim(tx, claim);
   await repositoryBeforeCommit(
@@ -534,37 +508,4 @@ export async function pauseClaimedJob(
       updatedAt: new Date(),
     })
     .where(ownedBy(claim));
-}
-
-/**
- * Companion receipts use the exact universal claim that authorized their
- * capability. `lateAdoption` also returns an expired lease no newer claim has
- * replaced, so a late result is adopted rather than dropped.
- */
-export async function externalJobClaim(
-  db: RepositoryQueryInput,
-  key: string,
-  token?: string,
-  lock = false,
-  { lateAdoption = false }: { lateAdoption?: boolean } = {},
-): Promise<JobClaim | null> {
-  const query = repositoryQueries(db)
-    .select()
-    .from(job)
-    .where(
-      and(
-        eq(job.key, key),
-        eq(job.state, "running"),
-        token ? eq(job.leaseToken, token) : undefined,
-      ),
-    );
-  const [row] = await (lock ? query.for("update") : query);
-  if (!row?.leaseToken || !row.leaseExpiresAt) return null;
-  const claim = {
-    ...row,
-    leaseToken: row.leaseToken,
-    leaseExpiresAt: row.leaseExpiresAt,
-  };
-  if (row.leaseExpiresAt.getTime() > Date.now()) return claim;
-  return lateAdoption ? { ...claim, lateAdoption: true as const } : null;
 }

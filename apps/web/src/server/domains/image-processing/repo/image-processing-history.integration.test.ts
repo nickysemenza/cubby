@@ -23,6 +23,10 @@ import {
   updateDevice,
 } from "~/server/domains/device/repo/device";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
+import {
+  readImageExecutions,
+  updateImageExecution,
+} from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import * as cloudDescription from "~/server/domains/image-processing/service/cloud-description";
 import {
   scheduleImageProcessingJobs,
@@ -36,8 +40,6 @@ import {
   reserveImageAnalysisInput,
   retainImageAnalysisInput,
 } from "~/server/generic/activity/repo/activity-input";
-import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { derivedMarkTickets } from "~/server/testing/background-queue";
 
 import {
@@ -97,17 +99,15 @@ describe("image execution history conservation", () => {
       },
     });
 
-  // Both native pulls and queue dispatch must claim the same execution row;
+  // Both native pulls and the cloud drain claim this one row;
   // history/processing payloads cannot retain an independent retry owner.
-  it("uses the committed universal Job lease for native capabilities", async () => {
+  it("uses the row's committed lease for native capabilities", async () => {
     const { jobId } = await setup();
-    const [intent] = await readJobs(ctx.db, {
-      key: `image-processing:${jobId}`,
-    });
+    const [intent] = await readImageExecutions(ctx.db, jobId);
     // A JPEG cloud description runs in the server's cloud lane.
-    expect(intent?.kind).toBe("image.cloud");
+    expect(intent?.kind).toBe("cloud");
     const lease = await claim(jobId);
-    const [running] = await readJobs(ctx.db, { id: intent!.id });
+    const [running] = await readImageExecutions(ctx.db, jobId);
     expect(running?.leaseToken).toBe(lease.attemptId);
     expect(running?.leaseExpiresAt).toEqual(lease.leaseExpiresAt);
     expect(
@@ -272,11 +272,7 @@ describe("image execution history conservation", () => {
       }),
     ).toBe(false);
     // The lease expires and another claim replaces the attempt.
-    await updateJobs(
-      ctx.db,
-      { key: `image-processing:${jobId}` },
-      { leaseExpiresAt: new Date(0) },
-    );
+    await updateImageExecution(ctx.db, jobId, { leaseUntil: new Date(0) });
     await claim(jobId);
     const result = {
       jobId,
@@ -418,18 +414,10 @@ describe("image execution history conservation", () => {
         await reserveImageAnalysisInput(ctx.db, lease.attemptId, key),
       ).toBe(true);
       if (change === "reclaimed") {
-        await updateJobs(
-          ctx.db,
-          { key: `image-processing:${jobId}` },
-          { leaseExpiresAt: new Date(0) },
-        );
+        await updateImageExecution(ctx.db, jobId, { leaseUntil: new Date(0) });
         await claim(jobId);
       } else if (change === "stopped") {
-        await updateJobs(
-          ctx.db,
-          { key: `image-processing:${jobId}` },
-          { state: "paused" },
-        );
+        await updateImageExecution(ctx.db, jobId, { leaseUntil: null });
       } else if (change === "replaced") {
         await getDb(ctx.db)
           .update(image)
@@ -636,9 +624,7 @@ describe("image execution history conservation", () => {
       read.mockRestore();
       describe.mockRestore();
     }
-    const [execution] = await readJobs(ctx.db, {
-      key: `image-processing:${jobId}`,
-    });
+    const [execution] = await readImageExecutions(ctx.db, jobId);
     expect(execution).toMatchObject({
       waitReason: "ai_funding_window",
       attempts: 0,
@@ -697,16 +683,8 @@ describe("image execution history conservation", () => {
   it("adopts cloud analysis only with its live lease and keeps rejected output in attempt history", async () => {
     const { source, jobId } = await setup();
     const old = await claim(jobId);
-    await updateJobs(
-      ctx.db,
-      { key: `image-processing:${jobId}` },
-      { leaseExpiresAt: new Date(0) },
-    );
-    await updateJobs(
-      ctx.db,
-      { key: `image-processing:${jobId}` },
-      { availableAt: new Date(0) },
-    );
+    await updateImageExecution(ctx.db, jobId, { leaseUntil: new Date(0) });
+    await updateImageExecution(ctx.db, jobId, { runAt: new Date(0) });
     const current = await claim(jobId);
     const cloudAnalysis = {
       provider: "test",

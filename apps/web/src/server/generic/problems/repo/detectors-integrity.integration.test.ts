@@ -751,6 +751,7 @@ const SOURCE_FACTORIES = {
 
   "ImageProcessingJob.imageId": (db, targetId) =>
     insertWithShortcode(db, "imageJob", {
+      lane: "device",
       imageId: parseEntityId("image", targetId),
       kind: "subject_lift",
       state: "pending",

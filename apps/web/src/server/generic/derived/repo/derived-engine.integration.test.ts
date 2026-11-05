@@ -55,7 +55,7 @@ import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { derivedReconcileHandler } from "~/server/generic/derived/service/drain-job";
 import { attachLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { withJobExecution } from "~/server/generic/jobs/context";
-import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
+import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import {
   drainItems,
@@ -292,10 +292,10 @@ describe("stored derived values", () => {
     const member = await makeProduct("Synthetic member source", 3);
     const saved = await enqueueJob(ctx.db, {
       key: "synthetic:derived-source-priority",
-      kind: "image.cloud",
+      kind: "synthetic.derived-scope",
       input: {},
     });
-    const claim = await claimExternal(ctx.db, saved.id);
+    const claim = await claimJob(ctx.db, saved.id);
     if (!claim) throw new Error("Expected synthetic Job claim");
     // Job identity creation is fixture setup, before the source writes under test.
     await clearMarks();
@@ -331,10 +331,10 @@ describe("stored derived values", () => {
     await clearMarks();
     const saved = await enqueueJob(ctx.db, {
       key: "synthetic:derived-nested-priority",
-      kind: "image.cloud",
+      kind: "synthetic.derived-scope",
       input: {},
     });
-    const claim = await claimExternal(ctx.db, saved.id);
+    const claim = await claimJob(ctx.db, saved.id);
     if (!claim) throw new Error("Expected synthetic Job claim");
     await withTransaction(ctx.db, (outer) => {
       const db = databaseForTransaction(outer);

@@ -22,7 +22,6 @@ import {
   type StepPlan,
 } from "~/server/domains/run/service/step-run";
 import { deleteWorkItems } from "~/server/generic/jobs/jobs.fixtures";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
@@ -235,13 +234,7 @@ describe("maintenance Run", () => {
     const payloads = await getDb(ctx.db).select().from(imageProcessingJob);
     expect(payloads.length).toBeGreaterThanOrEqual(3);
     expect(payloads.every((payload) => payload.attemptId === null)).toBe(true);
-    const admitted = await readJobs(ctx.db, {
-      kinds: ["image.cloud", "image.device"],
-    });
-    expect(admitted).toHaveLength(payloads.length);
-    expect(admitted.every((execution) => execution.state === "queued")).toBe(
-      true,
-    );
+    expect(payloads.every((payload) => payload.leaseUntil === null)).toBe(true);
     expect(await readRun(id)).toMatchObject({ status: "completed" });
     expect((await readRunSteps(ctx.db, id))[0]).toMatchObject({
       state: "done",

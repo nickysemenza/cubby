@@ -1,4 +1,4 @@
-import { entityIdSchema, type ImageJobId } from "@cubby/schemas/identifiers";
+import type { ImageJobId } from "@cubby/schemas/identifiers";
 import { IMAGE_IDENTIFICATION_MODEL } from "@cubby/schemas/image-identification";
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
@@ -8,7 +8,6 @@ import {
 import type { ImageProcessingCommand } from "@cubby/schemas/image-processing";
 import { jobWaitReason } from "@cubby/schemas/job";
 import { providerFor } from "@cubby/shared/ai/models";
-import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
@@ -22,6 +21,7 @@ import {
 import type { Database } from "~/server/db";
 import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  assertImageLeaseHeld,
   claimImageProcessingJob,
   completeImageProcessingJob,
   SERVER_FAILURE_RETRYABLE,
@@ -33,17 +33,23 @@ import {
 import { getVerifiedImageRenditionKey } from "~/server/domains/image/repo/image-identification";
 import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activity-input";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
+import { withJobFence } from "~/server/workflows/runs/execution";
 
 import { completeCloudImageDescription } from "./cloud-description";
 import { completeCloudImageIdentification } from "./cloud-identification";
-import { COMPANION_LEASE_MS } from "./contracts";
 import { safeImageProcessingError } from "./safe-error";
 
 export type CloudImageDispatchOptions = {
   /** External storage/provider boundary; adoption still uses the real job ledger. */
   describe?: Parameters<typeof completeCloudImageDescription>[2];
 };
+
+/**
+ * A cloud attempt holds its row longer than one consumer can live (15 minutes), so
+ * an expired lease means its invocation is gone. Nothing renews it. A crashed page
+ * waits this long to retry, and the attempt fence protects a late publication.
+ */
+export const CLOUD_IMAGE_LEASE_MS = 16 * 60_000;
 
 /** An AVIF identification waits this long for a device to prepare its rendition. */
 const RENDITION_WAIT_MS = 10 * 60_000;
@@ -58,9 +64,9 @@ const cloudExecutor = (name: string) => ({
 });
 
 /**
- * Run one cloud-lane row under the drain's `image.cloud` claim. Device work
- * never reaches here: it is parked for device pulls. A typed wait releases
- * the claim without an attempt; any other failure is retried with backoff.
+ * Run one cloud-lane row. Device work never reaches here: it is parked for
+ * device pulls. A typed wait releases the lease without a failure; any other
+ * failure is retried with backoff.
  */
 export async function dispatchImageProcessingWakeup(
   db: Database,
@@ -70,82 +76,89 @@ export async function dispatchImageProcessingWakeup(
   const claimed = await claimImageProcessingJob(db, {
     jobId,
     kinds: ["identify_image", "describe_image"],
-    leaseMs: COMPANION_LEASE_MS,
+    leaseMs: CLOUD_IMAGE_LEASE_MS,
   });
   if (!claimed) return "skipped";
-  try {
-    if (claimed.kind === "identify_image") {
-      if (
-        claimed.originalContentType === "image/avif" &&
-        !(await getVerifiedImageRenditionKey(db, claimed.imageId))
-      ) {
-        await deferImageProcessingJob(db, {
+  // Stops the next paid request, and any fenced publication, once the row is lost.
+  const fence = {
+    check: () => assertImageLeaseHeld(db, claimed),
+    fence: (client: Database) => assertImageLeaseHeld(client, claimed),
+  };
+  return withJobFence(fence, async () => {
+    try {
+      if (claimed.kind === "identify_image") {
+        if (
+          claimed.originalContentType === "image/avif" &&
+          !(await getVerifiedImageRenditionKey(db, claimed.imageId))
+        ) {
+          await deferImageProcessingJob(db, {
+            jobId: claimed.id,
+            attemptId: claimed.attemptId,
+            until: new Date(Date.now() + RENDITION_WAIT_MS),
+            reason: "Waiting for an Apple device to prepare a JPEG rendition",
+            waitReason: jobWaitReason.enum.device,
+          });
+          return "deferred";
+        }
+        const assigned = await assignImageProcessingExecutor(db, {
           jobId: claimed.id,
           attemptId: claimed.attemptId,
-          until: new Date(Date.now() + RENDITION_WAIT_MS),
-          reason: "Waiting for an Apple device to prepare a JPEG rendition",
-          waitReason: jobWaitReason.enum.device,
+          executor: cloudExecutor(providerFor(IMAGE_IDENTIFICATION_MODEL)),
         });
-        return "deferred";
+        if (!assigned) return "skipped";
+        return (await completeCloudImageIdentification(db, {
+          jobId: claimed.id,
+          attemptId: claimed.attemptId,
+          imageId: claimed.imageId,
+          runId: claimed.runId,
+        }))
+          ? "completed"
+          : "skipped";
       }
       const assigned = await assignImageProcessingExecutor(db, {
         jobId: claimed.id,
         attemptId: claimed.attemptId,
-        executor: cloudExecutor(providerFor(IMAGE_IDENTIFICATION_MODEL)),
+        executor: cloudExecutor(providerFor(IMAGE_DESCRIPTION_FEATURE.model)),
       });
       if (!assigned) return "skipped";
-      return (await completeCloudImageIdentification(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        imageId: claimed.imageId,
-        runId: claimed.runId,
-      }))
+      return (await completeCloudImageDescription(
+        db,
+        {
+          jobId: claimed.id,
+          attemptId: claimed.attemptId,
+          imageId: claimed.imageId,
+          runId: claimed.runId,
+        },
+        options.describe,
+      ))
         ? "completed"
         : "skipped";
-    }
-    const assigned = await assignImageProcessingExecutor(db, {
-      jobId: claimed.id,
-      attemptId: claimed.attemptId,
-      executor: cloudExecutor(providerFor(IMAGE_DESCRIPTION_FEATURE.model)),
-    });
-    if (!assigned) return "skipped";
-    return (await completeCloudImageDescription(
-      db,
-      {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        imageId: claimed.imageId,
-        runId: claimed.runId,
-      },
-      options.describe,
-    ))
-      ? "completed"
-      : "skipped";
-  } catch (error) {
-    if (
-      await deferCloudAttemptForTypedWait(
-        db,
-        { jobId: claimed.id, attemptId: claimed.attemptId },
-        error,
+    } catch (error) {
+      if (
+        await deferCloudAttemptForTypedWait(
+          db,
+          { jobId: claimed.id, attemptId: claimed.attemptId },
+          error,
+        )
       )
-    )
-      return "deferred";
-    await completeImageProcessingJob(db, {
-      result: {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        completedAt: new Date().toISOString(),
-        outcome: {
-          kind: claimed.kind,
-          status: "failed",
-          retryable: SERVER_FAILURE_RETRYABLE,
-          reason: safeImageProcessingError(error),
+        return "deferred";
+      await completeImageProcessingJob(db, {
+        result: {
+          jobId: claimed.id,
+          attemptId: claimed.attemptId,
+          completedAt: new Date().toISOString(),
+          outcome: {
+            kind: claimed.kind,
+            status: "failed",
+            retryable: SERVER_FAILURE_RETRYABLE,
+            reason: safeImageProcessingError(error),
+          },
         },
-      },
-    });
-    // The cause is on the row and its Job backs off; the next claim retries.
-    return "failed";
-  }
+      });
+      // The cause is on the row and it backs off; the next claim retries.
+      return "failed";
+    }
+  });
 }
 
 /**
@@ -272,12 +285,3 @@ export async function reserveCompanionAnalysisOutput(
     ))
   );
 }
-
-/** The server drain's `image.cloud` handler; device work is claimed by device pulls. */
-export const imageProcessingJobHandler = defineJobHandler(
-  z.object({ processingId: entityIdSchema("imageJob") }),
-  async (db, _claim, input) => {
-    const outcome = await dispatchImageProcessingWakeup(db, input.processingId);
-    return { page: { done: true, result: { outcome } } };
-  },
-);

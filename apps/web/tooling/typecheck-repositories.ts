@@ -85,7 +85,6 @@ export const repositoryOwners = [
   "src/server/generic/jobs/repo/queue.ts",
   "src/server/generic/jobs/repo/deadlines.ts",
   "src/server/generic/jobs/repo/producer.ts",
-  "src/server/generic/jobs/repo/external-claim.ts",
   "src/server/generic/jobs/repo/job-reads.ts",
   "src/server/generic/jobs/repo/work-items.ts",
   "src/server/generic/jobs/limits.ts",
@@ -93,7 +92,6 @@ export const repositoryOwners = [
   "src/server/entity-kernel/repo/entity-identity-writer.ts",
   "src/server/generic/jobs/context.ts",
   "src/server/generic/jobs/repo/work-claims.ts",
-  "src/server/domains/image-processing/repo/device-admission.ts",
   "src/server/errors/db-errors.ts",
   "src/server/operation-runtime/operation.contract.ts",
 

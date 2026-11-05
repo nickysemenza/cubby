@@ -242,8 +242,6 @@ export type JobBackoff = { readonly baseMs: number; readonly maxMs: number };
 export type JobKindPolicy = {
   readonly internal: boolean;
   readonly lane: JobLane;
-  /** False: only an external executor's pull claims it; the server drain never does. */
-  readonly drained: boolean;
   /**
    * Consecutive reported failures before the Job fails. Null never exhausts:
    * subject-owned work and drains back off forever. Reclaiming an expired
@@ -255,13 +253,11 @@ export type JobKindPolicy = {
   readonly maxInFlight?: number;
 };
 
-const IMAGE_BACKOFF = { baseMs: 30_000, maxMs: 24 * 60 * 60_000 };
 const MAINTENANCE_BACKOFF = { baseMs: 60_000, maxMs: 15 * 60_000 };
 
 const SERVER: JobKindPolicy = {
   internal: false,
   lane: "server",
-  drained: true,
   maxAttempts: 3,
   backoff: { baseMs: 1_000, maxMs: 60_000 },
 };
@@ -295,55 +291,6 @@ export type JobKindDeclaration = JobKindPolicy & {
 };
 
 export const JOB_KIND_POLICY = {
-  // Image processing is never abandoned (docs/jobs.md#image-processing).
-  "image.cloud": {
-    activityLabel: "Photo processing in the cloud",
-    label: "Cloud image processing",
-    purpose: "Describes eligible images using the configured vision model.",
-    trigger: "Image processing admission.",
-    targets: "An uploaded Image and its current processor revision.",
-    effects: "Records image analysis and its source evidence.",
-    dependencies: "Readable original; configured AI model and funding.",
-    cost: "Paid AI work uses the current funding policy.",
-    exclusions: "Deleted, replaced or superseded image work is retired.",
-
-    ...SERVER,
-    lane: "frontier_ai",
-    maxAttempts: null,
-    backoff: IMAGE_BACKOFF,
-  },
-  // Parked for Apple devices: their pull claims it; enqueue and connect ring them.
-  "image.device": {
-    activityLabel: "Photo processing on Apple devices",
-    label: "Apple image processing",
-    purpose: "Processes an Image using an available Apple companion.",
-    trigger: "Image processing admission and device pull.",
-    targets: "An uploaded Image and its current device processor revision.",
-    effects:
-      "Produces the requested cutout or on-device analysis while retaining the original.",
-    dependencies: "A compatible connected Apple device and the original image.",
-    cost: "On-device work; cloud work, if separately requested, has its own policy.",
-    exclusions:
-      "Only supported device work is claimed; moot work is retired by the server.",
-
-    ...SERVER,
-    lane: "apple_device",
-    drained: false,
-    maxAttempts: null,
-    backoff: IMAGE_BACKOFF,
-  },
-  // Rings companions when parked device work comes due (docs/jobs.md#image-processing).
-  "image.device.wake": {
-    ...MAINTENANCE,
-    label: "Wake Apple companions",
-    purpose: "Notifies connected companions that device work is due.",
-    trigger: "Device work admission, connection and due-time wake.",
-    targets: "Connections eligible to receive a device-work notification.",
-    effects: "Sends a wake notification; does not process images itself.",
-    dependencies: "A connected companion can receive the notification.",
-    cost: "No AI call is made by this wake Job.",
-    exclusions: "No open connection is not an execution failure.",
-  },
   "jobs.maintenance": {
     ...MAINTENANCE,
     label: "Internal queue upkeep",
@@ -351,9 +298,9 @@ export const JOB_KIND_POLICY = {
     trigger:
       "Daily repair and retention; finishes when its backlog is drained.",
     targets:
-      "Missing image execution and old completed or cancelled Jobs eligible for retention cleanup.",
+      "Moot image work and old completed or cancelled Jobs eligible for retention cleanup.",
     effects:
-      "Repairs image execution and device wake, and prunes retained queue records in bounded daily pages.",
+      "Retires moot image work, rings for due device work, and prunes retained queue records in bounded daily pages.",
     dependencies: "Database and queue execution.",
     cost: "No AI call is made by queue upkeep.",
     exclusions:

@@ -23,7 +23,7 @@ import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, run, runControlEvent } from "~/server/db/schema";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
+import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
@@ -572,7 +572,7 @@ describe("household AI funding at the paid transport boundary", () => {
       status: "paused_auth",
       failureCode: "execution_limit",
     });
-    expect(await claimExternal(ctx.db, discoveryJob.id)).toMatchObject({
+    expect(await claimJob(ctx.db, discoveryJob.id)).toMatchObject({
       id: discoveryJob.id,
       generation: discoveryJob.generation,
     });

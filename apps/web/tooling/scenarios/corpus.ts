@@ -990,6 +990,7 @@ async function seedHouseholdPhotos(
     // One finished description job, so the Image job list has a household row.
     if (index === 0)
       await insertWithShortcode(db, "imageJob", {
+        lane: "cloud",
         imageId: parseEntityId("image", image.id),
         runId: parseEntityId("run", run.id),
         kind: "describe_image",

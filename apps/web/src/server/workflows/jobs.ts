@@ -12,12 +12,15 @@ import { z } from "zod";
 import { aiEvaluationJobHandler } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import { getPurchaseDispatchHostEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import { deviceWakeHandler } from "~/server/domains/image-processing/service/device-wake";
-import { imageProcessingJobHandler } from "~/server/domains/image-processing/service/dispatch";
+import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
 import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
+import {
+  runDrains,
+  type BackgroundDrain,
+} from "~/server/generic/background/drains";
 import {
   derivedDrainHandler,
   derivedReconcileHandler,
@@ -80,12 +83,9 @@ export const productionJobHandlers: JobHandlers = {
   "discovery.connections": connectionDiscoveryJobHandler,
   "embedding.refresh": embeddingRefreshHandler(),
   "embedding.cleanup": embeddingCleanupHandler(),
-  // `image.device` has no server handler: Apple devices claim it by pull.
-  "image.cloud": providerFenced(imageProcessingJobHandler),
   "run.execute": runJobHandler,
   "ai.evaluation": aiEvaluationJobHandler(runAiEvaluationExecution()),
   "ai-refresh.activate": aiRefreshActivationHandler,
-  "image.device.wake": deviceWakeHandler,
   "jobs.maintenance": jobMaintenanceHandler,
   "purchase.dispatch": defineJobHandler(
     purchaseAgentEvent,
@@ -130,15 +130,22 @@ export const productionJobHandlers: JobHandlers = {
       return { page: { done: true } };
     },
   ),
-} satisfies Record<
-  Exclude<keyof typeof JOB_KIND_POLICY, "image.device">,
-  JobHandler
->;
+} satisfies Record<keyof typeof JOB_KIND_POLICY, JobHandler>;
+
+/** Work owned by its domain's rows: no Job row, one registration here. */
+const productionDrains: readonly BackgroundDrain[] = [cloudImageDrain];
+
 export async function drainProductionJobs(
   db: Database,
   limit = JOB_DRAIN.pageLimit,
 ) {
-  const outcomes = await drainDueJobs(db, productionJobHandlers, limit);
+  const [jobs, drains] = await Promise.allSettled([
+    drainDueJobs(db, productionJobHandlers, limit),
+    runDrains(db, productionDrains),
+  ]);
+  if (jobs.status === "rejected") throw jobs.reason;
+  if (drains.status === "rejected") throw drains.reason;
+  const outcomes = jobs.value;
   await (
     await import("~/server/domains/purchase-import/repo/dispatch")
   ).reconcilePurchaseDispatches(db);

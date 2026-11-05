@@ -12,15 +12,12 @@ import {
 } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
-import { deviceOwnedStreak } from "~/server/domains/image-processing/repo/device-admission";
-import { DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE } from "~/server/domains/image-processing/repo/device-admission";
+import {
+  readImageExecution,
+  updateImageExecution,
+} from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import { claimCompanionImageCommands } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import {
-  seedJobLaneAdmission,
-  updateJobs,
-} from "~/server/generic/jobs/jobs.fixtures";
-import { readJob } from "~/server/generic/jobs/repo/job-reads";
 
 import { imageJobDisplayStateSql } from "./image-job-state";
 import {
@@ -71,9 +68,7 @@ describe("image job retry policy", () => {
       })
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, jobId));
-    const execution = await readJob(ctx.db, {
-      key: `image-processing:${jobId}`,
-    });
+    const execution = await readImageExecution(ctx.db, jobId);
     if (!job || !execution) throw new Error("Missing job");
     return {
       ...job,
@@ -83,11 +78,7 @@ describe("image job retry policy", () => {
     };
   };
   const makeDue = (jobId: ImageJobId) =>
-    updateJobs(
-      ctx.db,
-      { key: `image-processing:${jobId}` },
-      { availableAt: new Date(0) },
-    );
+    updateImageExecution(ctx.db, jobId, { runAt: new Date(0) });
   const devicePull = () =>
     claimImageProcessingJob(ctx.db, {
       kinds: ["subject_lift"],
@@ -189,12 +180,8 @@ describe("image job retry policy", () => {
           maxCommands: 1,
         }).then((commands) => commands[0] ?? null);
     };
-    // Backfill's turn is due; the refused hand-off must leave it owed.
-    const DEVICE_OWNED_STREAK = Math.ceil(1 / JOB_BACKFILL_SHARE) - 1;
-    await seedJobLaneAdmission(ctx.db, "image.device", DEVICE_OWNED_STREAK);
     const optedOut = await device(false);
     expect(await optedOut()).toBeNull();
-    expect(await deviceOwnedStreak(ctx.db)).toBe(DEVICE_OWNED_STREAK);
     expect(await jobOf(jobId)).toMatchObject({
       state: "pending",
       executionState: "queued",

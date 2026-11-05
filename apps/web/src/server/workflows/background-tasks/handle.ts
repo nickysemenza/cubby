@@ -138,5 +138,5 @@ export async function handleBackgroundTask(
 
 export type ExecutableBackgroundTask = Exclude<
   BackgroundTask,
-  { kind: "entity-embedding.refresh" | "image-processing.wakeup" }
+  { kind: "entity-embedding.refresh" }
 >;

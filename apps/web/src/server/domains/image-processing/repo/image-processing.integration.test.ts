@@ -29,6 +29,10 @@ import {
 } from "~/server/db/schema";
 import { imageDescriptionInputFingerprint } from "~/server/domains/image-processing/repo/description-policy";
 import {
+  readImageExecutions,
+  updateImageExecution,
+} from "~/server/domains/image-processing/repo/image-execution.fixtures";
+import {
   createUploadedImageRecord,
   deleteImages,
   imageScaffold,
@@ -46,9 +50,6 @@ import {
 } from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
-import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
@@ -56,7 +57,7 @@ import {
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
 
-import { imageProcessingJobHandler } from "../service/dispatch";
+import { dispatchImageProcessingWakeup } from "../service/dispatch";
 import {
   claimImageProcessingJob,
   completeImageProcessingJob,
@@ -139,7 +140,7 @@ describe("durable image representations", () => {
       .set({ sha256: "b".repeat(64) })
       .where(eq(image.id, row.id));
     const execution = async (jobId: ImageJobId) =>
-      (await readJobs(ctx.db, { key: `image-processing:${jobId}` }))[0]!;
+      (await readImageExecutions(ctx.db, jobId))[0]!;
     const payload = async (jobId: ImageJobId) =>
       (
         await getDb(ctx.db)
@@ -147,10 +148,8 @@ describe("durable image representations", () => {
           .from(imageProcessingJob)
           .where(eq(imageProcessingJob.id, jobId))
       )[0]!;
-    // Cloud work is settled by its own drain claim.
-    await advanceJob(ctx.db, (await execution(cloudJobId)).id, {
-      "image.cloud": imageProcessingJobHandler,
-    });
+    // Cloud work is settled by the claim of its drain.
+    await dispatchImageProcessingWakeup(ctx.db, cloudJobId);
     expect((await payload(cloudJobId)).state).toBe("skipped");
     expect((await execution(cloudJobId)).state).toBe("completed");
     // Parked device work no device would claim is settled by the watchdog.
@@ -301,18 +300,12 @@ describe("durable image representations", () => {
           leaseMs: 60000,
         }),
       ).toBeNull();
-      await updateJobs(
+      await updateImageExecution(
         ctx.db,
-        { key: `image-processing:${row.jobId}` },
+        row.jobId,
         transition === "expired"
-          ? { leaseExpiresAt: new Date(0) }
-          : {
-              state: "queued",
-              leaseToken: null,
-              leaseExpiresAt: null,
-              attempts: 0,
-              availableAt: new Date(0),
-            },
+          ? { leaseUntil: new Date(0) }
+          : { leaseUntil: null, failures: 0, runAt: new Date(0) },
       );
       expect(
         (
@@ -970,11 +963,7 @@ describe("durable image representations", () => {
     const failure = await legacy("context_size_exceeded");
     const unsupported = await legacy("unsupported_format");
     const active = await legacy("no_subject");
-    await updateJobs(
-      ctx.db,
-      { key: `image-processing:${active.jobId}` },
-      { availableAt: new Date(0) },
-    );
+    await updateImageExecution(ctx.db, active.jobId, { runAt: new Date(0) });
     const activeLease = await claimImageProcessingJob(ctx.db, {
       jobId: active.jobId,
       kinds: ["subject_lift"],
@@ -1058,10 +1047,9 @@ describe("durable image representations", () => {
       imageProcessingJobState.enum.skipped,
     ]);
     for (const row of [first, second]) {
-      expect(
-        (await readJobs(ctx.db, { key: `image-processing:${row.jobId}` }))[0]
-          ?.state,
-      ).toBe("completed");
+      expect((await readImageExecutions(ctx.db, row.jobId))[0]?.state).toBe(
+        "completed",
+      );
       expect(
         (
           await getDb(ctx.db)
@@ -1072,19 +1060,16 @@ describe("durable image representations", () => {
       ).toBe("skipped");
     }
     for (const row of [failure, unsupported]) {
-      expect(
-        (await readJobs(ctx.db, { key: `image-processing:${row.jobId}` }))[0]
-          ?.state,
-      ).toBe("retry_wait");
+      expect((await readImageExecutions(ctx.db, row.jobId))[0]?.state).toBe(
+        "retry_wait",
+      );
     }
-    expect(
-      (await readJobs(ctx.db, { key: `image-processing:${descriptionId}` }))[0]
-        ?.state,
-    ).toBe("retry_wait");
-    expect(
-      (await readJobs(ctx.db, { key: `image-processing:${active.jobId}` }))[0]
-        ?.state,
-    ).toBe("running");
+    expect((await readImageExecutions(ctx.db, descriptionId))[0]?.state).toBe(
+      "retry_wait",
+    );
+    expect((await readImageExecutions(ctx.db, active.jobId))[0]?.state).toBe(
+      "running",
+    );
     expect(
       await retryImageProcessingNow(ctx.db, {
         imageId: parseEntityId("image", first.id),
@@ -1141,9 +1126,7 @@ describe("durable image representations", () => {
         lastError: null,
         result: { kind: "subject_lift", status: "skipped", reason },
       });
-      const [execution] = await readJobs(ctx.db, {
-        key: `image-processing:${row.jobId}`,
-      });
+      const [execution] = await readImageExecutions(ctx.db, row.jobId);
       expect(execution).toMatchObject({ state: "completed", leaseToken: null });
       const [attempt] = await getDb(ctx.db)
         .select()
@@ -1251,11 +1234,9 @@ describe("durable image representations", () => {
           })
         ).data,
       ).toEqual([]);
-      await updateJobs(
-        ctx.db,
-        { key: `image-processing:${failed.jobId}` },
-        { attempts: JOB_NEEDS_ATTENTION_ATTEMPTS },
-      );
+      await updateImageExecution(ctx.db, failed.jobId, {
+        failures: JOB_NEEDS_ATTENTION_ATTEMPTS,
+      });
       const problems = await imageScaffold.read(ctx.db, {
         filters: { processingIssue: "failed" },
         sorts: [],

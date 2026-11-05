@@ -344,6 +344,11 @@ statements/batches can replay after a failure before the final journal receipt.
 `-- cubby:repeat-batch` repeats a statement whose result is `{ remaining: boolean }`;
 `-- cubby:outside-transaction` is reserved here for concurrent index creation/drop.
 The same journal hash/prefix checks and deployment serialization still apply.
+Each statement has a 2-second lock timeout, and the runner retries a statement that
+hits a lock timeout or deadlock whole, about two minutes in all, then stops the
+deployment. Everything committed so far must stay compatible with the running Worker,
+because the next Deploy resumes from there. One statement can hold several commands
+in one transaction, so a cutover's copy and retirement stay atomic.
 
 `0043_activity_indexes` uses the same opt-ins for its DerivedValue and Job
 indexes: `CREATE INDEX CONCURRENTLY IF NOT EXISTS` runs outside a transaction.

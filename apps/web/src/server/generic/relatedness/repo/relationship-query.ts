@@ -1,5 +1,4 @@
 import { imageProcessingJobState } from "@cubby/schemas/image-processing";
-import { jobState } from "@cubby/schemas/job";
 import { relationshipQueryDefinition } from "@cubby/schemas/relationship-query-definitions";
 import { sql, type SQL } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
@@ -32,15 +31,11 @@ export function relationshipQueryCondition(
   switch (query.kind) {
     case "jobSubject":
       return sql`${s("subjectKind")} = ${query.target} AND ${s("subjectId")} = ${t("id")}::text`;
-    case "imageExecution":
-      return sql`${s("kind")} IN ('image.cloud', 'image.device') AND ${s("key")} = 'image-processing:' || ${t("id")}::text`;
     case "imageLeaseDevice":
       // Expired leases still identify their holder until reclaimed or released.
-      return sql`${s("state")} = ${imageProcessingJobState.enum.pending} AND EXISTS (
-        SELECT 1 FROM "Job" execution
-        JOIN "ImageProcessingAttempt" attempt ON attempt.id = execution."leaseToken"
-        WHERE execution.kind IN ('image.cloud', 'image.device') AND execution.state = ${jobState.enum.running}
-          AND execution.key = 'image-processing:' || ${s("id")}::text
+      return sql`${s("state")} = ${imageProcessingJobState.enum.pending} AND ${s("leaseUntil")} IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "ImageProcessingAttempt" attempt
+        WHERE attempt.id = ${s("attemptId")}
           AND attempt.executor->>'deviceId' = ${t("installationId")}
       )`;
     case "purchaseEmails":

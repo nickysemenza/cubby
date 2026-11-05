@@ -198,6 +198,7 @@ describe("photo run lifecycle", () => {
           .where(eq(image.id, parseEntityId("image", entry.id)));
         await insertEntityFixtures(ctx.db, imageProcessingJob, "imageJob", [
           {
+            lane: "cloud",
             shortcode: generateShortcode("imageJob"),
             imageId: parseEntityId("image", entry.id),
             kind: "describe_image",
@@ -835,6 +836,7 @@ describe("photo run lifecycle", () => {
     for (const cloud of cloudJobs)
       await insertEntityFixtures(ctx.db, imageProcessingJob, "imageJob", [
         {
+          lane: "cloud",
           shortcode: generateShortcode("imageJob"),
           imageId: cloud.imageId,
           kind: "describe_image",

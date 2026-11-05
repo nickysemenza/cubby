@@ -273,7 +273,7 @@
               },
               {
                 "regex": "(^|/)generic/jobs/repo/(queue|work-claims)(\\.ts)?$",
-                "message": "The queue scheduler and item claiming are private to generic/jobs. Use producer.ts, operator.ts, job-reads.ts, work-items.ts, defineDrain, or external-claim.ts."
+                "message": "The queue scheduler and item claiming are private to generic/jobs. Use producer.ts, operator.ts, job-reads.ts, work-items.ts or defineDrain; tests use jobs.fixtures.ts."
               }
             ]
           }

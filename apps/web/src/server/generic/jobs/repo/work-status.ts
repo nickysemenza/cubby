@@ -1,3 +1,4 @@
+import { imageProcessingJobState } from "@cubby/schemas/image-processing";
 import {
   JOB_NEEDS_ATTENTION_ATTEMPTS,
   jobKindDeclaration,
@@ -20,7 +21,6 @@ import {
 } from "~/server/db/derived-trigger-ddl";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
-import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import {
   readRunRollups,
   runStalledSql,
@@ -253,14 +253,13 @@ async function readDrains(
 /**
  * Jobs with their own rows. Live and failed rows are few and the completion
  * probes walk `Job_kind_claimed_idx` backward, so retained history costs
- * nothing. `drained: false` kinds wait for something outside the server (the
- * Apple device rule owns those), so only their failures count here.
+ * nothing.
  */
 async function readJobKinds(
   db: Database,
   now: Date,
   drainKinds: ReadonlySet<string>,
-): Promise<StatusFacts & { deviceDueSince: Date | null }> {
+): Promise<StatusFacts> {
   const at = stamp(now);
   const live = [
     jobState.enum.queued,
@@ -311,22 +310,15 @@ async function readJobKinds(
     SELECT "updatedAt" AS at FROM "Job"
     WHERE "lastClaimedAt" IS NOT NULL AND state = ${jobState.enum.completed}
     ORDER BY "lastClaimedAt" DESC LIMIT 1`);
-  const facts: StatusFacts & { deviceDueSince: Date | null } = {
+  const facts: StatusFacts = {
     stuck: [],
     behind: false,
     lastFinishedAt: utc(lastAny.rows[0]?.at ?? null),
-    deviceDueSince: null,
   };
   for (const row of rows) {
     const lastCompletedAt = utc(row.lastCompletedAt);
     const dueSince = utc(row.dueSince);
-    if (!jobKindPolicy(row.kind).drained) {
-      if (
-        dueSince &&
-        (!facts.deviceDueSince || dueSince < facts.deviceDueSince)
-      )
-        facts.deviceDueSince = dueSince;
-    } else if (!drainKinds.has(row.kind) && dueSince) {
+    if (!drainKinds.has(row.kind) && dueSince) {
       if (
         dueSince <= minutesAgo(now, STUCK_WINDOW_MINUTES) &&
         !(
@@ -362,6 +354,90 @@ async function readJobKinds(
         ),
       );
   }
+  return facts;
+}
+
+/**
+ * Image rows own their execution. Cloud work stops like any other kind; device
+ * work waits for something outside the server, so the Apple device rule reads its
+ * `deviceDueSince`. Repeated failures of either lane show once.
+ */
+async function readImageWork(
+  db: Database,
+  now: Date,
+): Promise<StatusFacts & { deviceDueSince: Date | null }> {
+  const at = stamp(now);
+  const due = sql`coalesce("leaseUntil", "runAt")`;
+  const pending = imageProcessingJobState.enum.pending;
+  const { rows } = await getDb(db).execute<{
+    deviceDueSince: string | null;
+    cloudDueSince: string | null;
+    lastCompletedAt: string | null;
+    failedAt: string | null;
+    failedError: string | null;
+    failedAttempts: number | null;
+  }>(sql`
+    WITH failing AS (
+      SELECT "updatedAt", "lastError", failures FROM "ImageProcessingJob"
+      WHERE state = ${pending} AND failures >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
+      ORDER BY "updatedAt" DESC LIMIT 1
+    )
+    SELECT
+      (SELECT min(${due}) FROM "ImageProcessingJob" WHERE state = ${pending} AND lane = ${"device"} AND ${due} <= ${at}) AS "deviceDueSince",
+      (SELECT min(${due}) FROM "ImageProcessingJob" WHERE state = ${pending} AND lane = ${"cloud"} AND ${due} <= ${at}) AS "cloudDueSince",
+      (SELECT max("completedAt") FROM "ImageProcessingJob" WHERE lane = ${"cloud"}) AS "lastCompletedAt",
+      (SELECT "updatedAt" FROM failing) AS "failedAt",
+      (SELECT "lastError" FROM failing) AS "failedError",
+      (SELECT failures FROM failing) AS "failedAttempts"`);
+  const row = rows[0];
+  const lastCompletedAt = utc(row?.lastCompletedAt ?? null);
+  const cloudDueSince = utc(row?.cloudDueSince ?? null);
+  const failedAt = utc(row?.failedAt ?? null);
+  const facts: StatusFacts & { deviceDueSince: Date | null } = {
+    stuck: [],
+    behind: false,
+    lastFinishedAt: lastCompletedAt,
+    deviceDueSince: utc(row?.deviceDueSince ?? null),
+  };
+  const moving =
+    lastCompletedAt && lastCompletedAt > minutesAgo(now, STUCK_WINDOW_MINUTES);
+  if (
+    cloudDueSince &&
+    cloudDueSince <= minutesAgo(now, STUCK_WINDOW_MINUTES) &&
+    !moving
+  )
+    facts.stuck.push({
+      ...stoppedItem(
+        "image.cloud",
+        lastCompletedAt ?? cloudDueSince,
+        now,
+        row?.failedError ?? null,
+      ),
+      title: "Photo processing in the cloud stopped",
+      action: {
+        type: "link",
+        label: "View photos",
+        href: "/image-jobs?state=pending",
+      },
+    });
+  else if (cloudDueSince && cloudDueSince <= minutesAgo(now, BEHIND_MINUTES))
+    facts.behind = true;
+  if (failedAt)
+    facts.stuck.push({
+      ...failingItem(
+        "image",
+        failedAt,
+        row?.failedAttempts ?? 1,
+        row?.failedError ?? null,
+        false,
+      ),
+      title: "Photo processing keeps failing",
+      action: {
+        type: "link",
+        label: "View photos",
+        href: "/image-jobs?state=failed",
+      },
+    });
   return facts;
 }
 
@@ -479,22 +555,29 @@ async function readStoppedRuns(db: Database, now: Date) {
 
 export async function readBackgroundWorkStatus(db: Database, now = new Date()) {
   const drains = await readDrains(db, now);
-  const [kinds, runs] = await Promise.all([
+  const [kinds, images, runs] = await Promise.all([
     readJobKinds(db, now, drains.kinds),
+    readImageWork(db, now),
     readStoppedRuns(db, now),
   ]);
   // A kind that stopped says so once, whichever row noticed first.
   const seen = new Set<string>();
-  const stuck = [...drains.stuck, ...kinds.stuck].filter((item) => {
-    const kind = item.key.replace(/:failing$/, "");
-    if (seen.has(kind)) return false;
-    seen.add(kind);
-    return true;
-  });
+  const stuck = [...drains.stuck, ...kinds.stuck, ...images.stuck].filter(
+    (item) => {
+      const kind = item.key.replace(/:failing$/, "");
+      if (seen.has(kind)) return false;
+      seen.add(kind);
+      return true;
+    },
+  );
   return {
     stuck: [...stuck, ...runs],
-    behind: drains.behind || kinds.behind,
-    lastFinishedAt: latest(drains.lastFinishedAt, kinds.lastFinishedAt),
-    deviceDueSince: kinds.deviceDueSince,
+    behind: drains.behind || kinds.behind || images.behind,
+    lastFinishedAt: latest(
+      drains.lastFinishedAt,
+      kinds.lastFinishedAt,
+      images.lastFinishedAt,
+    ),
+    deviceDueSince: images.deviceDueSince,
   };
 }

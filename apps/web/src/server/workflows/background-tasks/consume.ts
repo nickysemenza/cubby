@@ -26,9 +26,15 @@ export async function handleBackgroundQueueMessage(
   db: Database,
   message: BackgroundQueueDeliveredMessage,
   ports: BackgroundQueueConsumerPorts,
+  ring: boolean = backgroundTaskMessageSchema.safeParse(message.body).data
+    ?.ring ?? false,
 ): Promise<BackgroundQueueMessageOutcome> {
   const parsed = backgroundTaskMessageSchema.safeParse(message.body);
   try {
+    if (ring)
+      await (
+        await import("~/server/domains/image-processing/repo/image-processing-ring")
+      ).ringDueDeviceWork(db);
     if (ports.handlers)
       await (
         await import("~/server/generic/jobs/service/jobs")
@@ -49,13 +55,21 @@ export async function handleBackgroundQueueBatch(
   ports: BackgroundQueueConsumerPorts,
 ) {
   let succeeded = false;
+  const ring = batch.messages.some(
+    (message) => backgroundTaskMessageSchema.safeParse(message.body).data?.ring,
+  );
   // One wake drains a bounded fair budget; duplicate wake messages need no second drain.
   for (const message of batch.messages) {
     if (succeeded) {
       message.ack();
       continue;
     }
-    const outcome = await handleBackgroundQueueMessage(db, message, ports);
+    const outcome = await handleBackgroundQueueMessage(
+      db,
+      message,
+      ports,
+      ring,
+    );
     succeeded ||= outcome === "succeeded" || outcome === "unreadable";
   }
   if (succeeded) await ports.afterSuccess?.();

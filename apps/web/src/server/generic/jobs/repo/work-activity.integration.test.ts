@@ -1,10 +1,16 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import { generateShortcode } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { job, run } from "~/server/db/schema";
+import { imageProcessingJob, job, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import {
+  createImageFixture,
+  insertEntityFixtures,
+} from "~/server/testing/repo.fixtures";
 
 import { enqueueJob } from "./producer";
 import { readWorkActivity } from "./work-activity";
@@ -97,5 +103,54 @@ describe("work activity", () => {
     );
     expect(stream).toMatchObject({ running: 0, due: 1 });
     expect(stream?.oldestDueAt).toBe(expiredAt.toISOString());
+  });
+
+  it("reports image work from its own rows, one stream per lane", async () => {
+    const now = new Date();
+    const image = await createImageFixture(ctx.db, "synthetic-activity-image", {
+      sha256: "b".repeat(64),
+    });
+    const seed = (
+      lane: "cloud" | "device",
+      kind: "describe_image" | "subject_lift" | "identify_image",
+      set: Partial<typeof imageProcessingJob.$inferInsert>,
+    ) =>
+      insertEntityFixtures(ctx.db, imageProcessingJob, "imageJob", [
+        {
+          shortcode: generateShortcode("imageJob"),
+          imageId: parseEntityId("image", image.id),
+          kind,
+          lane,
+          state: "pending",
+          sourceContentHash: "b".repeat(64),
+          processorRevision: 1,
+          ...set,
+        },
+      ]);
+    await seed("device", "subject_lift", { runAt: new Date(0) });
+    await seed("cloud", "describe_image", {
+      leaseUntil: new Date(now.getTime() + 60_000),
+      attemptId: crypto.randomUUID(),
+    });
+    await seed("cloud", "identify_image", {
+      state: "ready",
+      completedAt: new Date(now.getTime() - 60_000),
+    });
+
+    const { streams } = await readWorkActivity(ctx.db, now);
+    expect(
+      streams.find((entry) => entry.kind === "image.device"),
+    ).toMatchObject({
+      due: 1,
+      running: 0,
+      oldestDueAt: new Date(0).toISOString(),
+    });
+    expect(streams.find((entry) => entry.kind === "image.cloud")).toMatchObject(
+      {
+        due: 0,
+        running: 1,
+        completed: 1,
+      },
+    );
   });
 });

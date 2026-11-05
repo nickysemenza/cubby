@@ -31,7 +31,7 @@ import {
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { withJobExecution } from "~/server/generic/jobs/context";
-import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
+import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import {
   createProductIdentityFixture,
@@ -378,7 +378,7 @@ describe("Product page transport packing", () => {
       kind: "synthetic.cache",
       input: {},
     });
-    const claim = await claimExternal(ctx.db, saved.id);
+    const claim = await claimJob(ctx.db, saved.id);
     if (!claim) throw new Error("Synthetic cache wave claim missing");
     let settled;
     try {

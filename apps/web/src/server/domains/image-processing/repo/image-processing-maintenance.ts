@@ -16,7 +16,8 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
+import { runAfterCommit } from "~/server/db/helpers/core";
+import { wakeJobs } from "~/server/workflows/background-tasks/publish";
 
 import { imageJobDisplayStateSql } from "./image-job-state";
 import {
@@ -45,7 +46,7 @@ export async function imageProcessingMaintenanceSummary(db: Database) {
     const result = await getDb(db).execute(sql`
       WITH current_images AS (
         SELECT i.id,
-          CASE WHEN j.id IS NULL THEN NULL ELSE ${imageJobDisplayStateSql({ id: sql`j.id`, state: sql`j.state` })} END AS state,
+          CASE WHEN j.id IS NULL THEN NULL ELSE ${imageJobDisplayStateSql("j")} END AS state,
           j.result
         FROM "Image" i
         LEFT JOIN "ImageProcessingJob" j ON j."imageId" = i.id AND ${notDeleted("j")}
@@ -165,19 +166,13 @@ export async function pruneExecutorlessWaitingAttempts(
 
 const IMAGE_PROCESSING_WAKEUP_SOURCE = "image-processing";
 
-/** Queue payloads only wake durable rows, so repeats and repairs are harmless. */
+/** The wake only reaches durable rows, so repeats and repairs are harmless. */
 export async function publishImageProcessingWakeups(
   db: Database,
   jobIds: readonly string[],
 ): Promise<void> {
   if (jobIds.length === 0) return;
-  await publishBackgroundTasks(
-    db,
-    [...new Set(jobIds)].map((jobId) => ({
-      kind: "image-processing.wakeup" as const,
-      requestedAt: new Date().toISOString(),
-      jobId,
-    })),
-    { source: IMAGE_PROCESSING_WAKEUP_SOURCE },
+  await runAfterCommit(db, () =>
+    wakeJobs({ source: IMAGE_PROCESSING_WAKEUP_SOURCE }),
   );
 }

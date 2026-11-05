@@ -16,7 +16,7 @@ import { aiEvaluation, run, task } from "~/server/db/schema";
 import { claimDerivedDiscovery } from "~/server/domains/run/repo/derived-discovery";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
+import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { claimContext } from "~/server/generic/jobs/service/jobs";
 import { wakeAiEvaluationRequesters } from "~/server/workflows/runs/wake";
@@ -434,7 +434,7 @@ describe("connection discovery pacing", () => {
       CONNECTION_DISCOVERY_PENDING_CAP,
     );
     const saved = await claimDerivedDiscovery(ctx.db);
-    const claim = await claimExternal(ctx.db, saved.id);
+    const claim = await claimJob(ctx.db, saved.id);
     if (!claim) throw new Error("Synthetic discovery Job was not claimable");
     const prepared = await connectionDiscoveryJobHandler.prepare(
       ctx.db,
@@ -500,7 +500,7 @@ describe("connection discovery pacing", () => {
       return pending(db);
     });
     const saved = await claimDerivedDiscovery(ctx.db);
-    const claim = await claimExternal(ctx.db, saved.id);
+    const claim = await claimJob(ctx.db, saved.id);
     if (!claim) throw new Error("Synthetic discovery Job was not claimable");
     const before = Date.now();
     const prepared = await connectionDiscoveryJobHandler.prepare(

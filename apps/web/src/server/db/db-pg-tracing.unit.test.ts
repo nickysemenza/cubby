@@ -8,7 +8,7 @@ import {
   withJobPhase,
   type JobExecutionDetails,
 } from "../generic/jobs/context";
-import type { ExternalClaim as JobClaim } from "../generic/jobs/repo/external-claim";
+import type { JobClaim } from "../generic/jobs/jobs.fixtures";
 import * as tracing from "../observability/tracing";
 import type { Database } from "./database";
 import { withDatabaseOperationMetrics } from "./db-observability";

@@ -13,7 +13,6 @@ import {
 import {
   job,
   jobInvalidationCapture,
-  jobLaneAdmission,
   workItem,
 } from "~/server/db/retained-tables";
 import {
@@ -61,15 +60,6 @@ export const replaceJobGeneration = (
     .set({ generation: sql`${job.generation} + 1` })
     .where(jobWhere(filter));
 
-/** Time passes: every Job's availability and lease move `interval` back. */
-export const elapseJobTime = (db: RepositoryQueryInput, interval: string) =>
-  repositoryQueries(db)
-    .update(job)
-    .set({
-      availableAt: sql`${job.availableAt} - ${interval}::interval`,
-      leaseExpiresAt: sql`${job.leaseExpiresAt} - ${interval}::interval`,
-    });
-
 /** Invalidation captures per Job key (all keys, or one), in key order. */
 export const jobInvalidationCaptureCounts = (
   db: RepositoryQueryInput,
@@ -84,20 +74,6 @@ export const jobInvalidationCaptureCounts = (
     .where(key === undefined ? undefined : eq(jobInvalidationCapture.key, key))
     .groupBy(jobInvalidationCapture.key)
     .orderBy(jobInvalidationCapture.key);
-
-/** Set a lane's fairness streak, as earlier device pulls would have. */
-export const seedJobLaneAdmission = (
-  db: RepositoryQueryInput,
-  lane: string,
-  ownedStreak: number,
-) =>
-  repositoryQueries(db)
-    .insert(jobLaneAdmission)
-    .values({ lane, ownedStreak })
-    .onConflictDoUpdate({
-      target: jobLaneAdmission.lane,
-      set: { ownedStreak },
-    });
 
 /** WorkItems by drain, target and refs; every key narrows, an empty filter is every item. */
 type WorkItemFilter = {
@@ -147,3 +123,11 @@ export const deleteWorkItems = (
   db: RepositoryQueryInput,
   filter: WorkItemFilter = {},
 ) => repositoryQueries(db).delete(workItem).where(workItemWhere(filter));
+
+/** Claim, hand back and settle a Job in a test, as the drain executor would. */
+export {
+  claimJob,
+  publishJobPage,
+  releaseJobClaim,
+  type JobClaim,
+} from "~/server/generic/jobs/repo/queue";
