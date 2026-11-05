@@ -70,15 +70,18 @@ describe("EntityPhotosSection", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Remove plate.jpg" }));
 
-    await waitFor(() =>
-      expect(commands).toEqual([
-        {
-          action: "update",
-          entity: "meal",
-          id: mealId,
-          data: { removeImageIds: [existing.id] },
-        },
-      ]),
+    // The first mutation loads its operation module lazily, over 1 s on a cold shard.
+    await waitFor(
+      () =>
+        expect(commands).toEqual([
+          {
+            action: "update",
+            entity: "meal",
+            id: mealId,
+            data: { removeImageIds: [existing.id] },
+          },
+        ]),
+      { timeout: 10_000 },
     );
   });
 
