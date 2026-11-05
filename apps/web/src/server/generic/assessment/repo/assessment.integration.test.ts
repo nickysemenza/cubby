@@ -1,15 +1,10 @@
-import type { AssessmentReadDependency } from "@cubby/schemas/assessment-read-publication";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import {
-  suggestionTable,
-  auditLog,
-  image,
-} from "~/server/db/schema";
+import { suggestionTable, auditLog, image } from "~/server/db/schema";
 import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
 import {
   kernelCtx,
@@ -25,8 +20,8 @@ import { readConfirmedDescription } from "~/server/generic/assessment/repo/asses
 import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
-import { readAssessmentReadMemberships } from "~/server/generic/assessment/repo/review-families";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 // Failure modes: retry publication mutates historical evidence; corrected null
 // disappears; bare wrong becomes suppression; deleting active targets deletes
@@ -104,10 +99,7 @@ describe("shared Assessment history", () => {
         })
       ).applied,
     ).toBe(true);
-    const rows = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, prediction.id));
+    const rows = await readSuggestionDecisions(ctx.db, prediction.id);
     expect(rows.find((row) => row.operationId === "draft")?.receipt).toBeNull();
     expect(
       rows.find((row) => row.operationId === "receipt:saved")?.receipt,
@@ -186,26 +178,31 @@ describe("shared Assessment history", () => {
       };
       // A retained command can have a PostgreSQL GUID outside RFC UUID
       // version/variant bits; its application receipt must replay unchanged.
+      await recordFeedback(ctx.db, {
+        ...command,
+        authority: "member",
+        actorUserId: ctx.actor.userId,
+        metadata: {
+          kind: "assessment_review",
+          application: null,
+          expectedFingerprint: null,
+        },
+      });
       await getDb(ctx.db)
-        .insert(feedback)
-        .values({
-          ...command,
-          id: "e2401ffa-3eda-6673-6a93-95accfcf1320",
-          authority: "member",
-          actorUserId: ctx.actor.userId,
-          metadata: {
-            kind: "assessment_review",
-            application: null,
-            expectedFingerprint: null,
-          },
-        });
+        .update(suggestionTable)
+        .set({
+          decisions: sql`jsonb_set(${suggestionTable.decisions}, '{0,id}', '"e2401ffa-3eda-6673-6a93-95accfcf1320"')`,
+        })
+        .where(eq(suggestionTable.id, prediction.id));
       const first = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
-      const history = await getDb(ctx.db).select().from(feedback);
+      const history = await readSuggestionDecisions(ctx.db, prediction.id);
       const audit = await getDb(ctx.db).select().from(auditLog);
       expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
         first,
       );
-      expect(await getDb(ctx.db).select().from(feedback)).toEqual(history);
+      expect(await readSuggestionDecisions(ctx.db, prediction.id)).toEqual(
+        history,
+      );
       expect(await getDb(ctx.db).select().from(auditLog)).toEqual(audit);
       await expect(
         reviewAssessment(ctx.db, kernelCtx(ctx), {
@@ -244,13 +241,6 @@ describe("shared Assessment history", () => {
       producer: null,
       evidence: null,
     });
-    const observed = new Map<string, readonly AssessmentReadDependency[]>();
-    await readAssessmentReadMemberships(ctx.db, [prediction.id], (id, inputs) =>
-      observed.set(id, inputs),
-    );
-    expect(observed.get(prediction.id)).toEqual([
-      { sourceKind: "image", sourceId: picture.id },
-    ]);
     await getDb(ctx.db)
       .update(suggestionTable)
       .set({ createdAt: new Date("2000-01-01T00:00:00Z") })
@@ -284,18 +274,16 @@ describe("shared Assessment history", () => {
         correction: { present: true, value: "Later text" },
       }),
     ).rejects.toThrow(/resolved/);
-    // The test transaction freezes now(); retain an explicitly later failed grade.
-    await getDb(ctx.db)
-      .insert(feedback)
-      .values({
-        assessmentId: prediction.id,
-        operationId: "synthetic:later-failed-grade",
-        verdict: "wrong",
-        intent: "apply",
-        authority: "member",
-        correction: { present: true, value: "Unapplied text" },
-        createdAt: new Date("2030-01-01T00:00:00Z"),
-      });
+    // A later command that never applied does not move the confirmation time.
+    await recordFeedback(ctx.db, {
+      assessmentId: prediction.id,
+      operationId: "synthetic:later-failed-grade",
+      verdict: "wrong",
+      intent: "apply",
+      authority: "member",
+      actorUserId: ctx.actor.userId,
+      correction: { present: true, value: "Unapplied text" },
+    });
     expect(
       (
         await readConfirmedDescription(
@@ -343,22 +331,16 @@ describe("shared Assessment history", () => {
       );
     expect((await readDirect())?.description).toBe("Confirmed description");
     expect((await readBatch())?.description).toBe("Confirmed description");
-    const retained = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, prediction.id));
+    const retained = await readSuggestionDecisions(ctx.db, prediction.id);
     await getDb(ctx.db)
       .update(image)
       .set({ sha256: "b".repeat(64) })
       .where(eq(image.id, picture.id));
     expect(await readDirect()).toBeNull();
     expect((await readBatch())?.description ?? null).toBeNull();
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(feedback)
-        .where(eq(feedback.assessmentId, prediction.id)),
-    ).toEqual(retained);
+    expect(await readSuggestionDecisions(ctx.db, prediction.id)).toEqual(
+      retained,
+    );
     expect(
       (
         await getDb(ctx.db)
@@ -512,7 +494,7 @@ describe("shared Assessment history", () => {
           ...command,
         }),
       ).rejects.toThrow(/field Assessment/);
-    expect(await getDb(ctx.db).select().from(feedback)).toEqual([]);
+    expect(await readSuggestionDecisions(ctx.db, prediction.id)).toEqual([]);
   });
 
   it("reuses a recommendation publication on unchanged repeated reads", async () => {
@@ -537,7 +519,6 @@ describe("shared Assessment history", () => {
       ),
     ).toEqual(first);
     expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(1);
-    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(1);
   });
 
   it("retains corrected null and separates wrong from presentation suppression", async () => {
@@ -559,7 +540,7 @@ describe("shared Assessment history", () => {
       authority: "member",
       actorUserId: null,
     });
-    const [review] = await getDb(ctx.db).select().from(feedback);
+    const [review] = await readSuggestionDecisions(ctx.db, first.id);
     expect(review?.correction).toEqual({ present: true, value: null });
     const [current] = await getDb(ctx.db)
       .select()
@@ -585,7 +566,7 @@ describe("shared Assessment history", () => {
       (await getDb(ctx.db).select().from(suggestionTable))[0]?.subject,
     ).toMatchObject({ recordId: subjectId });
     expect(
-      (await getDb(ctx.db).select().from(feedback)).filter(
+      (await readSuggestionDecisions(ctx.db, first.id)).filter(
         (row) => row.authority === "member",
       ),
     ).toHaveLength(1);

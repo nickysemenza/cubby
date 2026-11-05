@@ -5,9 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import {
-  suggestionTable,
-} from "~/server/db/schema";
+import { suggestionTable } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   publishSuggestion,
@@ -122,12 +120,12 @@ describe("Suggestion publication", () => {
         rule(second),
       ),
     ).toMatchObject({ outcome: "published" });
-    expect(await rows("synthetic-a")).toMatchObject([
-      { id: original!.id, active: false, status: "superseded" },
-      { active: true, status: "pending" },
-    ]);
+    // A replaced opinion with no decision of its own is not history.
+    const replaced = await rows("synthetic-a");
+    expect(replaced).toMatchObject([{ active: true, status: "pending" }]);
+    expect(replaced[0]?.id).not.toBe(original!.id);
 
-    // Suppression belongs to retained history even after its projection retires.
+    // A member's suppression holds the slot against changed evidence.
     await getDb(ctx.db)
       .update(suggestionTable)
       .set({
@@ -137,7 +135,7 @@ describe("Suggestion publication", () => {
           fingerprint: null,
         },
       })
-      .where(eq(suggestionTable.id, original!.id));
+      .where(eq(suggestionTable.id, replaced[0]!.id));
     expect(
       await publishSuggestion(
         ctx.db,
@@ -146,7 +144,7 @@ describe("Suggestion publication", () => {
         rule(null),
       ),
     ).toEqual({ outcome: "suppressed" });
-    expect(await rows("synthetic-a")).toHaveLength(2);
+    expect(await rows("synthetic-a")).toHaveLength(1);
   });
 
   it("isolates one failing candidate when its batch falls back", async () => {

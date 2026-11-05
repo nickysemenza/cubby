@@ -1,5 +1,5 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { assessmentFamily, feedbackAuthority } from "@cubby/schemas/assessment";
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { AutomaticRuleKey } from "@cubby/schemas/automatic-rule";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
@@ -97,7 +97,7 @@ const ruleOf = async (ctx: Ctx, key: AutomaticRuleKey) =>
     (rule) => rule.ruleKey === key,
   )!;
 
-/** Judgments and application receipts; projection maintenance events are not decisions. */
+/** Judgments and application receipts retained on a Suggestion. */
 const feedbackFor = async (ctx: Ctx, assessmentId: string) =>
   (
     await getDb(ctx.db).execute<{
@@ -105,7 +105,9 @@ const feedbackFor = async (ctx: Ctx, assessmentId: string) =>
       verdict: string;
       metadata: { kind?: string; rule?: { key: string; stamp: string } };
     }>(
-      sql`SELECT authority, verdict, metadata FROM "Feedback" WHERE "assessmentId" = ${assessmentId}::uuid AND authority <> ${feedbackAuthority.enum.system} ORDER BY "createdAt"`,
+      sql`SELECT decision->>${"authority"} AS authority, decision->>${"verdict"} AS verdict, decision->${"metadata"} AS metadata
+        FROM "Suggestion" s CROSS JOIN LATERAL jsonb_array_elements(s.decisions) decision
+        WHERE s.id = ${assessmentId}::uuid ORDER BY decision->>${"createdAt"}`,
     )
   ).rows;
 
