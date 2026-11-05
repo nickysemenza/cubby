@@ -1,6 +1,10 @@
+import {
+  imageMetadataJobKey,
+  locationAiJobKey,
+} from "@cubby/schemas/background-tasks";
 import { type RunId } from "@cubby/schemas/identifiers";
 import { jobState, type JobWaitReason } from "@cubby/schemas/job";
-import { and, asc, count, desc, eq, ne, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne, type SQL } from "drizzle-orm";
 
 import type {
   JobGroup,
@@ -112,12 +116,14 @@ export async function listSubjectJobs(
   subject: { kind: JobSubjectEntity; id: string },
 ) {
   const recordId = await resolveOrThrow(db, subject.kind, subject.id);
-  return readJobs(
-    db,
-    and(eq(job.subjectKind, subject.kind), eq(job.subjectId, recordId))!,
-    null,
-    null,
-  );
+  const keys =
+    subject.kind === "image"
+      ? [imageMetadataJobKey(recordId)]
+      : [
+          locationAiJobKey("location-ai.description.refresh", recordId),
+          locationAiJobKey("location-ai.inventory.refresh", recordId),
+        ];
+  return readJobs(db, inArray(job.key, keys), null, null);
 }
 
 /** One Job's identity and active window, for its log query. */

@@ -198,7 +198,6 @@ const jobs: JobListOut = {
     leaseExpiresAt: ago(-4),
     error: null,
     cursor: null,
-    subject: null,
     createdAt: ago(20),
     updatedAt: ago(0),
     lane: "server",

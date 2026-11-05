@@ -41,7 +41,6 @@ import { handleBackgroundTask } from "~/server/workflows/background-tasks/handle
 import { withJobFence } from "~/server/workflows/runs/execution";
 import { runJobHandler } from "~/server/workflows/runs/job-execution";
 
-import { aiRefreshActivationHandler } from "./ai-refresh-startup";
 import { derivedComputes } from "./derived-computes";
 import { jobMaintenanceHandler } from "./job-maintenance";
 
@@ -85,7 +84,6 @@ export const productionJobHandlers: JobHandlers = {
   "derived.reconcile": derivedReconcileHandler,
   "discovery.connections": connectionDiscoveryJobHandler,
   "run.execute": runJobHandler,
-  "ai-refresh.activate": aiRefreshActivationHandler,
   "jobs.maintenance": jobMaintenanceHandler,
   "purchase.dispatch": defineJobHandler(
     purchaseAgentEvent,
@@ -130,11 +128,7 @@ export const productionJobHandlers: JobHandlers = {
       return { page: { done: true } };
     },
   ),
-} satisfies Record<
-  // Completed correction Jobs stay readable; none can be claimed.
-  Exclude<keyof typeof JOB_KIND_POLICY, "assessment.correction">,
-  JobHandler
->;
+} satisfies Record<keyof typeof JOB_KIND_POLICY, JobHandler>;
 
 /** Work owned by its domain's rows: no Job row, one registration here. */
 const derivedRebuildDrain: BackgroundDrain = {

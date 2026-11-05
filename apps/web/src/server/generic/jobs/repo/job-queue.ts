@@ -174,10 +174,6 @@ export async function jobFactsOf(
       leaseExpiresAt: iso(row.leaseExpiresAt),
       error: row.error === null ? null : scrubErrorMessage(row.error),
       cursor: row.cursor,
-      subject:
-        row.subjectKind && row.subjectId
-          ? { kind: row.subjectKind, id: row.subjectId }
-          : null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       lane: jobKindPolicy(row.kind).lane,

@@ -17,6 +17,25 @@ import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
 
 describe("Run Job admission", () => {
   const ctx = withTestDb();
+  it("refuses a finished Run whose pruned Job no longer does", async () => {
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "maintenance",
+      trigger: "manual",
+      status: "completed",
+    });
+    await expect(
+      launchWorkflowRun(ctx.db, {
+        runId: id,
+        purpose: "maintenance",
+        automatic: true,
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      launchWorkflowRun(ctx.db, { runId: id, purpose: "maintenance" }),
+    ).rejects.toThrow("Completed Run cannot be relaunched");
+    expect(await readJobs(ctx.db, { key: `run:${id}` })).toEqual([]);
+  });
+
   it("commits Run and execution together, coalesces launches, and fences cancellation", async () => {
     const id = await ensureRun(ctx.db, ctx.actor, {
       purpose: "maintenance",

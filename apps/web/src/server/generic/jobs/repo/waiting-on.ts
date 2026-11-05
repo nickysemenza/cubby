@@ -8,7 +8,6 @@ import {
   type WorkWaitCause,
 } from "@cubby/schemas/job";
 import { sql, type SQL } from "drizzle-orm";
-import { z } from "zod";
 
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import {
@@ -160,8 +159,8 @@ function loadJobWaitingOn(
       row.id,
       deriveJobWaitingOn(row, {
         now,
-        executor: leaseHolder(row)?.name ?? "Cubby server",
-        executorDeviceId: leaseHolder(row)?.deviceId ?? null,
+        executor: "Cubby server",
+        executorDeviceId: null,
         workWait: workWaits.get(row.key),
       }),
     );
@@ -195,15 +194,3 @@ export async function loadDrainJobWaitingOn(
     ),
   );
 }
-
-const leaseHolderSchema = z.object({
-  name: z.string().nullable().catch(null),
-  deviceId: z.string().nullable().catch(null),
-});
-
-/** Who holds a running Job's lease, recorded at external hand-off. */
-const leaseHolder = (row: JobRow) => {
-  if (row.state !== jobState.enum.running || !row.leaseHolder) return null;
-  const holder = leaseHolderSchema.safeParse(row.leaseHolder);
-  return holder.success ? holder.data : null;
-};

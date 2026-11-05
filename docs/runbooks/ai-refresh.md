@@ -25,9 +25,9 @@ applies to production paid inference independently.
    legacy work, repeated activation, no-proposal completion and member decisions
    during inference. No live source belongs in repository fixtures, reports or
    PR text.
-4. The hourly cron admits `ai-refresh.activate` under the current deployment version
-   and a transactionally recorded occurrence. The gateway DO supplies its running
-   version; a stale publisher or Job cannot replace a later occurrence. A rollback
+4. The hourly cron activates once under the current deployment version and a
+   transactionally recorded occurrence. The gateway DO supplies its running
+   version; a stale publisher cannot replace a later occurrence. A rollback
    A → B → A gets a new occurrence. Policy fingerprints preserve existing feature
    generations when unchanged; changed policy creates a new discovery owner.
    Admission and discovery launch are durable Job intent, independent of member

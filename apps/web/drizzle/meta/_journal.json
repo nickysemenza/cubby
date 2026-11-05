@@ -652,6 +652,13 @@
       "when": 1793893808982,
       "tag": "0092_drop_job_identities",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1793896798455,
+      "tag": "0093_retire_two_job_kinds",
+      "breakpoints": true
     }
   ]
 }

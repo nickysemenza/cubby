@@ -5,9 +5,18 @@ import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { job, jobInvalidationCapture } from "~/server/db/retained-tables";
 import { drainPending } from "~/server/generic/jobs/repo/work-items";
+import { FAILURE_LOOKBACK_DAYS } from "~/server/generic/jobs/repo/work-status";
 
-/** Completed and cancelled execution retention; failed executions retain 30 days. */
-export const JOB_RETENTION_MS = 14 * 24 * 60 * 60_000;
+const DAY_MS = 24 * 60 * 60_000;
+/**
+ * A completed row dedupes its key and feeds Work's pace, and a later success suppresses an
+ * older failure in Work. It has to outlast that failure lookback, or a recovered kind reads
+ * as failed again. Its owner holds the result.
+ */
+export const JOB_RETENTION_MS = (FAILURE_LOOKBACK_DAYS + 1) * DAY_MS;
+/** A cancelled row records a member's stop. */
+const CANCELLED_RETENTION_MS = 14 * DAY_MS;
+const FAILED_RETENTION_MS = 30 * DAY_MS;
 
 /**
  * Delete one bounded batch of finished execution rows. Domain evidence lives
@@ -17,8 +26,8 @@ export async function pruneFinishedJobs(
   db: Database,
   { limit, now = new Date() }: { limit: number; now?: Date },
 ): Promise<number> {
-  const before = new Date(now.getTime() - JOB_RETENTION_MS);
-  const failedBefore = new Date(now.getTime() - 30 * 24 * 60 * 60_000);
+  const olderThan = (retentionMs: number) =>
+    lt(job.updatedAt, new Date(now.getTime() - retentionMs));
   return withTransaction(db, async (tx) => {
     const doomed = tx
       .select({ id: job.id })
@@ -27,15 +36,16 @@ export async function pruneFinishedJobs(
         and(
           or(
             and(
-              inArray(job.state, [
-                jobState.enum.completed,
-                jobState.enum.cancelled,
-              ]),
-              lt(job.updatedAt, before),
+              eq(job.state, jobState.enum.completed),
+              olderThan(JOB_RETENTION_MS),
+            ),
+            and(
+              eq(job.state, jobState.enum.cancelled),
+              olderThan(CANCELLED_RETENTION_MS),
             ),
             and(
               eq(job.state, jobState.enum.failed),
-              lt(job.updatedAt, failedBefore),
+              olderThan(FAILED_RETENTION_MS),
             ),
           ),
           // Producers hold a key-share lock through their wake transaction;

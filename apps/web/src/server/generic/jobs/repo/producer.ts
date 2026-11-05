@@ -27,8 +27,6 @@ const rowValues = (input: EnqueueJobInput) => ({
   key: input.key,
   kind: input.kind,
   input: input.input,
-  subjectKind: input.subjectKind ?? null,
-  subjectId: input.subjectId ?? null,
   runId: input.runId ? parseEntityId("run", input.runId) : null,
   priority: input.priority ?? 0,
   maxAttempts:

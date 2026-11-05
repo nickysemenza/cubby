@@ -542,11 +542,26 @@ The `jobs.maintenance` Job (`workflows/job-maintenance.ts`) is admitted by daily
 recovery and completes after draining its pages. Each pass repairs image execution in bounded
 batches (retires moot work, gives open rows without a live execution one;
 failed image executions count as live) and keeps the device wake armed. Every
-six hours it also prunes completed and cancelled Jobs older than
-`JOB_RETENTION_MS`, and observed captures, in
-bounded batches, continuing at once while a batch fills. Failed Jobs prune after
-30 days under the same pending-work, wake and identity safeguards. Domain evidence
-(image attempts, AI evaluations, Run history, audit) stays.
+six hours it also prunes Jobs and observed captures in bounded batches, continuing at
+once while a batch fills: completed after 8 days (past Work's seven-day failure lookback, where a later success
+suppresses an older failure), cancelled after 14 days, failed after 30 days, under the same pending-work, wake and identity safeguards. Domain evidence
+(image attempts, AI evaluations, Run history, audit) stays. A pruned row removes no
+guard: `launchWorkflowRun` reads the Run's own status, so a finished Run stays refused
+for automatic work and needs pending work to relaunch.
+
+| Job kind                                                                         | Why a row                                         | Owner of the result           |
+| -------------------------------------------------------------------------------- | ------------------------------------------------- | ----------------------------- |
+| `run.execute`                                                                    | Lease, pause and retry for a Run                  | The Run                       |
+| `purchase.dispatch`                                                              | Durable handoff to the agent, deduped by event    | The Run and its agent session |
+| `run.funding-resume`                                                             | Waits for a funding window to end                 | The paused Runs               |
+| `image-metadata.extract`, `location-ai.*`                                        | One per record, replaced on re-admission          | The Image or Location         |
+| `calendar-feed.mark-dirty`, `maintenance.purchase-discovery`, `jobs.maintenance` | Keyed single passes                               | The feed, Vendor or queue     |
+| `discovery.connections`                                                          | Repeating pass with a cursor                      | Suggestions                   |
+| `derived.drain`, `derived.reconcile`                                             | Old identities, retired with the derived triggers | Derived snapshots             |
+
+Everything else is a drain over its owner's rows and has no row here. AI refresh activation
+is a function of the cron tick. The table stays named `Job` because `Task` is the household
+entity's table.
 There is no per-kind queue health or alerting: with a few dozen coarse Jobs,
 Activity's counts and a stalled Run show a stuck queue directly.
 
@@ -572,9 +587,6 @@ record (~55k), which starved every other kind for days.
   There is no 30-second idle polling. It walks the newest records first. Its work has no Run, so a
   member's Stop for automatic AI work holds its cursor. A changed record updates its queued slot in
   place, retaining its Job.
-- Publication correction work is one `assessment.correction` Job per
-  publication commit (`targetAssessmentIds`), not one per assessment; sources are
-  still resolved after commit under serializable isolation.
 - `run.funding-resume` is one Job per funding window; its handler resumes every
   paused Run.
 

@@ -13,8 +13,6 @@ import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import {
   activateAiRefresh,
   admitAiRefreshDeployment,
-  activateAiRefreshDeployment,
-  aiRefreshDeploymentInput,
   readAiRefreshActivation,
   readAiDiscoveryCursor,
   saveAiDiscoveryCursor,
@@ -33,90 +31,29 @@ describe("application-owned AI feature observation", () => {
       })
       .onConflictDoNothing();
   });
-  it("admits one activation per deployment occurrence, fences old cron work and reactivates rollback", async () => {
+  it("activates once per deployment occurrence, fences old cron work and keeps mail controls", async () => {
     const mailboxId = "synthetic-mailbox";
     await setMailImport(ctx.db, { mailboxId, enabled: true });
     let current = "synthetic-version-a";
     const readVersion = async () => current;
-    const a = await admitAiRefreshDeployment(
-      ctx.db,
-      current,
-      "synthetic-commit-a",
-      readVersion,
-    );
-    expect(
-      await admitAiRefreshDeployment(
-        ctx.db,
-        current,
-        "synthetic-commit-a",
-        readVersion,
-      ),
-    ).toMatchObject({ id: a?.id });
-    if (!a) throw new Error("Expected deployment admission");
-    const first = await activateAiRefreshDeployment(
-      ctx.db,
-      aiRefreshDeploymentInput.parse(a.input),
-    );
+    const admit = (version: string, release: string) =>
+      admitAiRefreshDeployment(ctx.db, version, release, readVersion);
+    const first = await admit(current, "synthetic-commit-a");
+    if (!first) throw new Error("Expected deployment activation");
+    expect(await admit(current, "synthetic-commit-a")).toBeNull();
     current = "synthetic-version-b";
-    expect(
-      await admitAiRefreshDeployment(
-        ctx.db,
-        "synthetic-version-a",
-        "synthetic-commit-a",
-        readVersion,
-      ),
-    ).toBeNull();
-    const b = await admitAiRefreshDeployment(
-      ctx.db,
-      current,
-      "synthetic-commit-b",
-      readVersion,
-    );
-    if (!b) throw new Error("Expected second deployment");
-    expect(
-      await activateAiRefreshDeployment(
-        ctx.db,
-        aiRefreshDeploymentInput.parse(a.input),
-      ),
-    ).toBeNull();
-    await activateAiRefreshDeployment(
-      ctx.db,
-      aiRefreshDeploymentInput.parse(b.input),
-    );
+    expect(await admit("synthetic-version-a", "synthetic-commit-a")).toBeNull();
+    expect(await admit(current, "synthetic-commit-b")).not.toBeNull();
     current = "synthetic-version-a";
-    const rollback = await admitAiRefreshDeployment(
-      ctx.db,
-      current,
-      "synthetic-commit-a",
-      readVersion,
-    );
-    expect(rollback?.id).not.toBe(a.id);
-    if (!rollback) throw new Error("Expected rollback admission");
-    expect(
-      await activateAiRefreshDeployment(
-        ctx.db,
-        aiRefreshDeploymentInput.parse(b.input),
-      ),
-    ).toBeNull();
-    const restored = await activateAiRefreshDeployment(
-      ctx.db,
-      aiRefreshDeploymentInput.parse(rollback.input),
-    );
-    expect(restored?.observationEpoch).toBeGreaterThan(first!.observationEpoch);
+    const restored = await admit(current, "synthetic-commit-a");
+    expect(restored?.observationEpoch).toBeGreaterThan(first.observationEpoch);
     expect(await readMailImportSettings(ctx.db)).toEqual({
       enabledMailboxes: [mailboxId],
       controlledPauses: [],
     });
     await setMailImport(ctx.db, { mailboxId, enabled: false });
-    expect(
-      await admitAiRefreshDeployment(
-        ctx.db,
-        current,
-        "synthetic-commit-a",
-        readVersion,
-      ),
-    ).toMatchObject({ id: rollback.id });
-    expect(restored?.manifest).toEqual(first?.manifest);
+    expect(await admit(current, "synthetic-commit-a")).toBeNull();
+    expect(restored?.manifest).toEqual(first.manifest);
   });
 
   it("skips code-only redeploys, restarts discovery for changed features and follows rollback versions", async () => {
