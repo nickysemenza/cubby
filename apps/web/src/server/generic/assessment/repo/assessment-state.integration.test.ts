@@ -122,7 +122,7 @@ describe("Suggestion publication and transitions", () => {
         { input: { ...input, evidence: { changed: true } } },
       ]),
     ).rejects.toThrow(
-      "Assessment publication retry changed immutable evidence",
+      "Suggestion publication retry changed immutable evidence",
     );
     expect(
       await getDb(ctx.db)
@@ -148,7 +148,7 @@ describe("Suggestion publication and transitions", () => {
         { input: { ...duplicate, judgment: { candidateKey: "changed" } } },
       ]),
     ).rejects.toThrow(
-      "Assessment publication retry changed immutable evidence",
+      "Suggestion publication retry changed immutable evidence",
     );
     expect(
       await getDb(ctx.db)

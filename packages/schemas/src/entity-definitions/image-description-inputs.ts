@@ -5,7 +5,7 @@ import type { DerivedStoredInput } from "./definition";
  * Only an automatic correction receipt can change selected description text.
  * `currentImageDescriptionConfirmation` and `indexCorrectionReceipts` require
  * these literals; change them together. Member and projection Feedback reach
- * search through their AssessmentState transition.
+ * search through their Suggestion transition.
  */
 export const imageDescriptionReceiptWhere = {
   authority: "automatic",

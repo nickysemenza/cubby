@@ -28,7 +28,7 @@ const DIMENSION_LABEL = { color: "Color", size: "Size", pack: "Pack" } as const;
 
 /**
  * Reads the detector's stored projection of one `product_pair`
- * (`Assessment.evidence` / `AssessmentState.data`). Reasons quote the stored
+ * (`Suggestion.evidence` / `Suggestion.data`). Reasons quote the stored
  * values verbatim; `firstId` orders each reason's sides for the caller.
  */
 export function readStoredProductPair(data: unknown, firstId?: string) {

@@ -174,7 +174,7 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
     await softDeleteEntitySearchArtifactsTx(tx, entity, [...ids]);
   }
   // Retirement covers every review family, including import findings: their
-  // Assessments and Feedback stay as history.
+  // Suggestions and their decisions stay as history.
   await retireAssessmentTargetsTx(tx, entity, [...ids]);
   await retireRunFindingTargetsTx(tx, entity, [...ids]);
   await retireEmailDecisionTargetsTx(tx, entity, [...ids]);

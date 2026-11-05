@@ -369,7 +369,7 @@ function DecisionLedgerBody({
         table={table}
         embedded
         ariaLabel="Decisions"
-        withoutImages="Assessment publications are judgments, not image-bearing records."
+        withoutImages="Suggestions are judgments, not image-bearing records."
         currentRowId={open?.id}
         onRowClick={(row) => setOpenId(row.id)}
         disableMobileDetailsHref

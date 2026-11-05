@@ -84,8 +84,7 @@ const FIRST_CANDIDATE = sql`LEFT JOIN LATERAL (
     ) first_candidate ON true`;
 
 /**
- * Browse columns over AssessmentState. Assessment, the source record and the
- * account are joined only when a filter or sort reads them, and current
+ * Browse columns over Suggestion. The source record and the account are joined only when a filter or sort reads them, and current
  * evidence is rechecked for page rows rather than for the whole family.
  */
 export function statementSuggestionFacts(
@@ -390,7 +389,7 @@ export async function readStatementSuggestions(
   });
 }
 
-/** Statement outcome counts by AssessmentState status, optionally for one Run. */
+/** Statement outcome counts by Suggestion status, optionally for one Run. */
 export async function statementSuggestionStatusCounts(
   db: Database,
   runCode?: string,

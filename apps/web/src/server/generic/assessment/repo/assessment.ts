@@ -75,7 +75,7 @@ export const automaticApplicationRule = (assessmentId: SQL) => sql<
   ORDER BY f."createdAt" DESC, f.id DESC
   LIMIT 1)`;
 
-/** The rule stamps an AssessmentState's publication matched. */
+/** The rule stamps a Suggestion's publication matched. */
 export const matchedRulesOf = (data: SQL) =>
   sql<unknown>`CASE WHEN jsonb_typeof(${data}->'matchedRules') = 'array' THEN ${data}->'matchedRules' ELSE '[]'::jsonb END`;
 
@@ -120,7 +120,7 @@ export async function publishAssessments(
     const previous = publications.get(entry.input.publicationKey);
     if (previous && !isEqual(previous.input, entry.input))
       throw new Error(
-        "Assessment publication retry changed immutable evidence",
+        "Suggestion publication retry changed immutable evidence",
       );
     // Sequential replays keep the first creation projection for this key.
     if (!previous) publications.set(entry.input.publicationKey, entry);
@@ -158,7 +158,7 @@ export async function publishAssessments(
     }
     const rows = prepared.map(({ input }) => {
       const row = rowsByKey.get(input.publicationKey);
-      if (!row) throw new Error("Assessment publication returned no row");
+      if (!row) throw new Error("Suggestion publication returned no row");
       // State may later take its own fingerprint; a retry compares what it proposed.
       if (
         !isEqual(
@@ -167,7 +167,7 @@ export async function publishAssessments(
         )
       )
         throw new Error(
-          "Assessment publication retry changed immutable evidence",
+          "Suggestion publication retry changed immutable evidence",
         );
       return row;
     });
@@ -194,7 +194,7 @@ export async function publishAssessment(
   projection: Partial<typeof suggestionTable.$inferInsert> = {},
 ) {
   const [row] = await publishAssessments(db, [{ input: raw, projection }]);
-  if (!row) throw new Error("Assessment publication returned no row");
+  if (!row) throw new Error("Suggestion publication returned no row");
   return row;
 }
 

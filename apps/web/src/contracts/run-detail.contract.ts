@@ -39,7 +39,7 @@ export type RunDetailStepsOut = z.infer<typeof runDetailStepsOut>;
 
 /** Assessments a Run published in one family, newest first, bounded. */
 export const RUN_DECISION_LIMIT = 500;
-/** AssessmentState's stored statuses (`resolved`: answered without applying). */
+/** A Suggestion's stored statuses (`resolved`: answered without applying). */
 export const runDecisionStatus = z.enum([
   "pending",
   "applied",

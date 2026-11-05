@@ -47,6 +47,10 @@ of two roles:
   and security boundaries, concurrency and queue fairness, and stored-data
   migrations. Anything else belongs in a journey or nowhere.
 
+A stored-data migration test migrates `through` its own migration, so a later
+migration cannot change what it asserts. A change adding a migration runs the
+`tooling/` migration tests, which migrate past every older fixture.
+
 Share the plumbing: seeded worlds (`tooling/factories`), isolated IntegreSQL
 leases, the Worker runtime and cleanup serve every lane; do not build a separate
 harness for one lane or spec. Keep local iteration narrow: run the affected

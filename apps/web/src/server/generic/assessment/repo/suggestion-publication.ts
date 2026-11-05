@@ -29,7 +29,7 @@ const suggestionData = z.record(z.string(), z.json());
 /** Candidates one publication transaction admits together. */
 const SUGGESTION_BATCH = 32;
 
-/** One locked AssessmentState row of a slot, newest first. */
+/** One locked Suggestion row of a slot, newest first. */
 export type SuggestionRow = {
   id: string;
   status: string;
@@ -46,7 +46,7 @@ export type SuggestionRow = {
 /**
  * The rows one subject's Suggestions occupy: an advisory lock key every
  * publisher of the subject takes, and the `data` text fields that select its
- * AssessmentState history. Every slot of a family names the same fields.
+ * history. Every slot of a family names the same fields.
  */
 type SuggestionSlot = {
   lock: string;
@@ -128,7 +128,7 @@ export type SuggestionFamily<
   ): Promise<void>;
   /** False publishes the candidate one at a time, outside any batch. */
   batchable?(candidate: Candidate): boolean;
-  /** Pending work a label pass owns, over `AssessmentState s`. */
+  /** Pending work a label pass owns, over `Suggestion s`. */
   labelBacklog: SQL;
 };
 
@@ -524,7 +524,7 @@ export async function publishSuggestionBatches<
 /** A label pass's position in `(createdAt, id)` order. */
 export type SuggestionLabelCursor = { createdAt: string; id: string };
 
-/** Family label predicates read the backlog as `AssessmentState s`. */
+/** Family label predicates read the backlog as `Suggestion s`. */
 const backlogState = alias(suggestionTable, "s");
 const backlogCreatedAt = sql<string>`to_char(${backlogState.createdAt}, 'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const backlogWhere = (

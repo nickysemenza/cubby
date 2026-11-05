@@ -11,7 +11,7 @@ import {
 import { image } from "~/server/db/schema";
 import { lockCorrectionKey } from "~/server/generic/assessment/repo/correction-lock";
 
-/** Shared content fence precedes every Image and AssessmentState lock. */
+/** Shared content fence precedes every Image and Suggestion lock. */
 async function lockImageCorrectionContent(db: Database, contentHash: string) {
   await lockCorrectionKey(db, `image-description:${contentHash}`);
 }

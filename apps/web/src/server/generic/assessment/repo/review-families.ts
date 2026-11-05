@@ -463,7 +463,7 @@ export const UNAPPLIED_CORRECTION_REASON = "unapplied_correction";
 
 /**
  * Record tokens per pending suggestion for Work. The large families read only
- * AssessmentState; small families use their declared records. Tokens are UUIDs
+ * Suggestion columns; small families use their declared records. Tokens are UUIDs
  * or shortcodes, as stored. Current evidence is rechecked when a row is opened.
  */
 export function pendingSuggestionRecordsSql(ids?: readonly string[]) {
@@ -831,7 +831,7 @@ export async function touchingAssessmentIds(
 }
 
 /** Pending image admission shared by Suggestions and record-scoped Work summaries.
- * Callers join immutable Assessment a and current AssessmentState s.
+ * Callers select from Suggestion s.
  */
 export function pendingImageDescriptionEligibility() {
   return sql`s.family = ${assessmentFamily.enum.image_description} AND s.served

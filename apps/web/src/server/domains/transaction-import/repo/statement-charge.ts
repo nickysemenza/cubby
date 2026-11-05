@@ -70,7 +70,7 @@ export function hasStatementOccurrence(row: {
 export const suggestionRefKey = (source: string, externalId: string) =>
   `${source}:${externalId}`;
 
-/** A projection field of a statement suggestion's AssessmentState row. */
+/** A projection field of a statement suggestion's row. */
 export const suggestionField = (
   key:
     | "source"
