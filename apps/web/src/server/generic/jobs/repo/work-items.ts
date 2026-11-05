@@ -5,7 +5,7 @@
  * producer and adapter interface; claiming and settlement belong to
  * `defineDrain` (`work-claims.ts`).
  */
-import { jobState, type WorkWaitCause } from "@cubby/schemas/job";
+import type { WorkWaitCause } from "@cubby/schemas/job";
 import { and, asc, eq, inArray, lte, sql, type SQL } from "drizzle-orm";
 
 import { uuidArrayParam } from "~/server/db/helpers/query";
@@ -13,7 +13,7 @@ import {
   repositoryQueries,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
-import { job, workItem } from "~/server/db/retained-tables";
+import { workItem } from "~/server/db/retained-tables";
 
 import { wakeJob } from "./producer";
 
@@ -398,12 +398,6 @@ export async function drainReady(db: RepositoryQueryInput, drain: string) {
 /** Whether any item whose target matches `target` is still owed. */
 export const workPendingWhere = (target: (column: SQL) => SQL) =>
   sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${target(sql`${workItem.target}`)})`;
-
-/** Shared by point reads and the drain aggregate; aliases name the indexed item and its Job. */
-const currentWorkExecution = sql`j.state = ${jobState.enum.running}
-  AND j."leaseToken" = w."executionLeaseToken" AND j."leaseExpiresAt" > now()
-  AND w."executionTicket" = w.ticket
-  AND w."executionStartedAt" >= w."readyAt" AND w."readyAt" <= now()`;
 
 /**
  * Owed work is an input to derived computations; Job execution is not. An
