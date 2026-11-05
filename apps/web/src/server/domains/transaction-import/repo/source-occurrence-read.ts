@@ -59,7 +59,13 @@ async function loadOccurrenceClosures(
       const definitions = sql`
       WITH owners AS MATERIALIZED (SELECT * FROM "SourceOccurrence" WHERE id IN (${ids})),
       observations AS MATERIALIZED (SELECT * FROM "SourceTransactionRecord" WHERE "occurrenceId" IN (SELECT id FROM owners)),
-      observation_aliases AS MATERIALIZED (SELECT * FROM "FinancialEvidenceAlias" WHERE "observationId" IN (SELECT id FROM observations) OR "occurrenceId" IN (SELECT id FROM owners)),
+      root_aliases AS MATERIALIZED (SELECT * FROM "FinancialEvidenceAlias" WHERE "observationId" IN (SELECT id FROM observations) OR "occurrenceId" IN (SELECT id FROM owners)),
+      siblings AS MATERIALIZED (SELECT DISTINCT sibling.* FROM "FinancialEvidenceAlias" sibling JOIN root_aliases root ON sibling.source=root.source AND sibling.value=root.value WHERE sibling."observationId" IS NOT NULL),
+      observation_aliases AS MATERIALIZED (
+        SELECT * FROM root_aliases
+        UNION SELECT * FROM "FinancialEvidenceAlias" WHERE "observationId" IN (SELECT "observationId" FROM siblings)
+        UNION SELECT * FROM "FinancialEvidenceAlias" WHERE "occurrenceId" IN (SELECT "occurrenceId" FROM siblings WHERE "occurrenceId" IS NOT NULL)
+      ),
       bindings AS MATERIALIZED (SELECT DISTINCT binding.* FROM "FinancialEvidenceAlias" binding JOIN observation_aliases evidence ON evidence.source=binding.source AND evidence.value=binding.value WHERE binding."historicalTransactionId" IS NOT NULL),
       transactions AS MATERIALIZED (SELECT * FROM "FinancialTransaction" WHERE id IN (SELECT "acceptedTransactionId" FROM owners UNION SELECT "historicalTransactionId" FROM bindings)),
       allocations AS MATERIALIZED (SELECT * FROM "FinancialTransactionAllocation" WHERE "transactionId" IN (SELECT id FROM transactions)),

@@ -173,6 +173,31 @@ describe("statement row ledger", () => {
     expect(closure.sets.collections).toHaveLength(1);
     expect(closure.sets.transactions).toEqual([]);
     expect(closure.sets.effectiveExpenses).toEqual([]);
+    const reader = buildKernelContext(ctx.db, ctx.actor.userId);
+    const publicClosure = await callMcpTool(
+      createMcpServer(),
+      "entity_read",
+      {
+        action: "list",
+        entity: "sourceOccurrence",
+        filters: { ids: [closure.root] },
+        fields: ["closure"],
+      },
+      kernelRequestContext(reader),
+      { entityKernel: reader },
+    );
+    expect(publicClosure.isError).not.toBe(true);
+    expect(publicClosure.structuredContent).toMatchObject({
+      items: [
+        {
+          closure: {
+            root: closure.root,
+            scope: [closure.root],
+            sets: { observations: [expect.any(Object)] },
+          },
+        },
+      ],
+    });
 
     await expect(
       recordSourceTransactionRecords(ctx.db, input, ctx.actor),
@@ -187,6 +212,81 @@ describe("statement row ledger", () => {
     );
     expect(await getDb(ctx.db).select().from(sourceOccurrence)).toEqual(owners);
     expect(await getDb(ctx.db).select().from(auditLog)).toEqual(audits);
+    const ordinary = await callMcpTool(
+      createMcpServer(),
+      "entity_read",
+      {
+        action: "get",
+        entity: "sourceOccurrence",
+        id: closure.root,
+      },
+      kernelRequestContext(reader),
+      { entityKernel: reader },
+    );
+    expect(ordinary.isError).not.toBe(true);
+    expect(ordinary.structuredContent).not.toHaveProperty("item.closure");
+    const [seedOwner, siblingOwner] = owners;
+    if (!seedOwner || !siblingOwner)
+      throw new Error("Synthetic sibling owners missing");
+    const seedAlias = (
+      await getDb(ctx.db)
+        .select()
+        .from(financialEvidenceAlias)
+        .where(eq(financialEvidenceAlias.occurrenceId, seedOwner.id))
+    ).find((alias) => alias.kind === "externalId");
+    if (!seedAlias) throw new Error("Synthetic root alias missing");
+    const weakAccount = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic historical sibling account",
+    });
+    const weakHistory = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: weakAccount.output.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-05-04",
+      amount: 128.5,
+      sourceRefs: [],
+    });
+    const [weakBinding] = await getDb(ctx.db)
+      .insert(financialEvidenceAlias)
+      .values({
+        source: seedAlias.source,
+        kind: "transaction_ref",
+        value: seedAlias.value,
+        historicalTransactionId: weakHistory.entityId,
+        provenanceKey: "synthetic-sibling-only-history",
+        provenance: { kind: "retained_legacy_binding" },
+        scopeEvidence: {},
+      })
+      .returning();
+    if (!weakBinding) throw new Error("Synthetic sibling binding missing");
+    const siblingClosure = sourceOccurrenceClosure.parse(
+      (
+        await sourceOccurrenceRepository.repository.read(
+          reader,
+          [parseShortcodeFor("sourceOccurrence", siblingOwner.shortcode)],
+          ["closure"],
+        )
+      ).data[0]?.closure,
+    );
+    expect(siblingClosure.sets.transactions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: weakHistory.entityId }),
+      ]),
+    );
+    expect(siblingClosure.sets.aliases).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: weakBinding.id })]),
+    );
+    expect(siblingClosure.sets.occurrences).toEqual([
+      expect.objectContaining({
+        id: siblingOwner.id,
+        acceptedTransactionId: null,
+      }),
+    ]);
+    await getDb(ctx.db)
+      .update(financialEvidenceAlias)
+      .set({ deletedAt: new Date() })
+      .where(eq(financialEvidenceAlias.id, weakBinding.id));
+
     await expect(
       recordSourceTransactionRecords(
         ctx.db,
@@ -525,6 +625,48 @@ describe("statement row ledger", () => {
     expect((await listSourceTransactionRecords(ctx.db, {})).data).toHaveLength(
       3,
     );
+    const root = owners[0];
+    if (!root) throw new Error("Synthetic closure boundary owner missing");
+    await getDb(ctx.db)
+      .insert(financialEvidenceAlias)
+      .values(
+        Array.from({ length: 1001 }, (_, index) => ({
+          source: root.source,
+          kind: "transaction_ref",
+          value: `synthetic-closure-overflow-${index}`,
+          occurrenceId: root.id,
+          provenanceKey: `synthetic-closure-overflow-${index}`,
+          provenance: { kind: "retained_legacy_binding" },
+          scopeEvidence: {},
+        })),
+      );
+    const reader = buildKernelContext(ctx.db, ctx.actor.userId);
+    await expect(
+      sourceOccurrenceRepository.repository.read(
+        reader,
+        [parseShortcodeFor("sourceOccurrence", root.shortcode)],
+        ["closure"],
+      ),
+    ).rejects.toThrow("one thousand rows");
+    await record(
+      Array.from({ length: 11 }, (_, index) =>
+        rowInput({
+          rowPosition: index + 1,
+          merchant: "Synthetic closure boundary",
+        }),
+      ),
+      { fingerprint: "synthetic-eleven-owner-boundary" },
+    );
+    const tooManyOwners = await getDb(ctx.db).select().from(sourceOccurrence);
+    await expect(
+      sourceOccurrenceRepository.repository.read(
+        reader,
+        tooManyOwners.map((owner) =>
+          parseShortcodeFor("sourceOccurrence", owner.shortcode),
+        ),
+        ["closure"],
+      ),
+    ).rejects.toThrow("at most ten owners");
   });
 
   it("reuses unchanged provider facts across collections while freezing each request and local annotation", async () => {
