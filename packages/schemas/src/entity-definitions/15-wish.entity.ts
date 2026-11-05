@@ -1,4 +1,4 @@
-import { timestampField } from "./field-policy";
+import { idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { displayItemsField } from "./label-field.js";
@@ -162,16 +162,7 @@ export const { definition, readSchemas } = defineEntityModel({
           update: z.boolean().optional(),
         },
       },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: wishShortcode,
-          create: null,
-          update: null,
-        },
-      },
+      idField(wishShortcode),
       {
         audit: true,
         key: "acquiredAt",

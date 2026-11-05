@@ -335,6 +335,16 @@ export const createRelationships = <const O extends Owner>(owner: O) => ({
       steps: [...steps],
     });
   },
+  /** The record's own attached images. */
+  images() {
+    return traversable(owner.key, "image", "many", {
+      kind: "local-path",
+      steps: [
+        { edge: "EntityAttachment.entityId", direction: "incoming" },
+        { edge: "EntityAttachment.imageId", direction: "outgoing" },
+      ],
+    }).named("images", "Images");
+  },
   query<
     const K extends RelationshipQueryKey,
     const C extends Cardinality,

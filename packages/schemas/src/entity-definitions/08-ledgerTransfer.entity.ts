@@ -1,4 +1,4 @@
-import { timestampField } from "./field-policy";
+import { idField, timestampField } from "./field-policy";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
@@ -241,16 +241,7 @@ export const { definition, readSchemas } = defineEntityModel({
           update: ledgerTransferEvidenceTransactionIds.nullable().optional(),
         },
       },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: ledgerTransferShortcode,
-          create: null,
-          update: null,
-        },
-      },
+      idField(ledgerTransferShortcode),
       {
         key: "classification",
         kind: "json",

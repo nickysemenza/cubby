@@ -52,6 +52,14 @@ export const timestampField = <
   validation: readOnly(timestampedFields[key]),
 });
 
+/** The public shortcode id, a record fact rather than a column to show. */
+export const idField = <const Schema extends z.ZodType>(read: Schema) => ({
+  display: { detail: false as const, list: false as const },
+  key: "id" as const,
+  kind: "identifier" as const,
+  validation: readOnly(read),
+});
+
 /** Alias writes retain spelling and first occurrence after trimming and dropping blanks. */
 export const normalizeAliases = (aliases: readonly string[]): string[] => [
   ...new Set(aliases.map((alias) => alias.trim()).filter(Boolean)),

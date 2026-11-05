@@ -1,4 +1,4 @@
-import { timestampField } from "./field-policy";
+import { idField, timestampField } from "./field-policy";
 import { workDiagnosticFacts } from "../work-diagnostic-facts";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import {
@@ -883,16 +883,7 @@ Rules:
             .optional(),
         },
       },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: projectShortcode,
-          create: null,
-          update: null,
-        },
-      },
+      idField(projectShortcode),
       {
         key: "parentProjectName",
         kind: "text",
@@ -2181,12 +2172,7 @@ export default defineEntity(
           inverseKey: "vendor.projects",
         },
       }),
-    r
-      .path("image", "many", [
-        { edge: "EntityAttachment.entityId", direction: "incoming" },
-        { edge: "EntityAttachment.imageId", direction: "outgoing" },
-      ])
-      .named("images", "Images"),
+    r.images(),
   ],
   readSchemas,
 );

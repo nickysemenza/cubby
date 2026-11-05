@@ -1,3 +1,4 @@
+import { galleryImagesField } from "./image-fields";
 import { historicalDateRangePresets } from "../date-range";
 import { MAX_LOCATION_TREE_DEPTH } from "../location-fields";
 import { timestampField, aliasList } from "./field-policy";
@@ -1650,33 +1651,11 @@ Rules:
             update: null,
           },
         },
-        {
-          key: "images",
-          kind: "json",
-          display: { detail: false, standard: "image" },
-          provenance: {
-            kind: "derived",
-            sources: [{ entity: "image", relation: "images" }],
-          },
-          explanation: {
-            ruleId: "product.images",
-            description:
-              "Product images are the current live Image attachments in canonical attachment order; list and summary surfaces use the same selected images through the display-image projection.",
-            projections: {
-              list: "displayImages",
-              detail: "images",
-              summary: "displayImages",
-            },
-            sourceDependencies: [
-              { path: "displayImages", label: "Selected product images" },
-            ],
-          },
-          validation: {
-            read: z.array(productAttachmentImageOut),
-            create: null,
-            update: null,
-          },
-        },
+        galleryImagesField(
+          "product",
+          "Product",
+          z.array(productAttachmentImageOut),
+        ),
         {
           display: { detail: false, list: false },
           key: "pricing",
@@ -4006,12 +3985,7 @@ export default defineEntity(
         { edge: "Location.productId", direction: "incoming" },
       ])
       .named("locations", "Serving as locations"),
-    r
-      .path("image", "many", [
-        { edge: "EntityAttachment.entityId", direction: "incoming" },
-        { edge: "EntityAttachment.imageId", direction: "outgoing" },
-      ])
-      .named("images", "Images"),
+    r.images(),
     r.link("productComponent", "outgoing").named("components", "Components", {
       empty: "This isn't a kit yet — no components added.",
       sourceKey: "explicit",

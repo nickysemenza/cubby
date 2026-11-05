@@ -1,5 +1,5 @@
 import { historicalDateRangePresets } from "../date-range";
-import { timestampField } from "./field-policy";
+import { idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { financialTransactionReadSchemas } from "../financial-transaction-fields";
 import { financialTransactionChildren } from "../child-tables/financialTransaction.js";
@@ -1043,16 +1043,7 @@ export const { definition, readSchemas } = defineEntityModel(
             update: null,
           },
         },
-        {
-          display: { detail: false, list: false },
-          key: "id",
-          kind: "identifier",
-          validation: {
-            read: financialTransactionShortcode,
-            create: null,
-            update: null,
-          },
-        },
+        idField(financialTransactionShortcode),
         {
           display: { detail: false, list: false },
           key: "ledgerTransferId",

@@ -1,11 +1,12 @@
-import { timestampField } from "./field-policy";
+import { galleryImagesField, galleryWriteFields } from "./image-fields";
+import { idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { mealReadSchemas } from "../meal-fields";
 import { mealChildren } from "../child-tables/meal.js";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
-import { imageShortcode, mealShortcode } from "../identifier-fields.js";
+import { mealShortcode } from "../identifier-fields.js";
 import {
   mealKindSchema,
   mealTypeSchema,
@@ -335,65 +336,8 @@ Rules:
             update: null,
           },
         },
-        {
-          output: false,
-          audit: false,
-          key: "pendingImageIds",
-          kind: "identifier",
-          reference: { entity: "image", multiple: true },
-          validation: {
-            read: null,
-            create: z.array(imageShortcode).optional(),
-            update: z.array(imageShortcode).optional(),
-          },
-        },
-        {
-          output: false,
-          audit: false,
-          key: "removeImageIds",
-          kind: "identifier",
-          reference: { entity: "image", multiple: true },
-          validation: {
-            read: null,
-            create: null,
-            update: z.array(imageShortcode).optional(),
-          },
-        },
-        {
-          output: false,
-          audit: false,
-          key: "imageOrder",
-          semanticRole: "attachment",
-          kind: "text",
-          validation: {
-            read: null,
-            create: null,
-            update: z.array(imageShortcode).optional(),
-          },
-        },
-        {
-          key: "images",
-          kind: "json",
-          display: { detail: false, standard: "image" },
-          provenance: {
-            kind: "derived",
-            sources: [{ entity: "image", relation: "images" }],
-          },
-          explanation: {
-            ruleId: "meal.images",
-            description:
-              "Meal images are the current live Image attachments in canonical attachment order; list and summary surfaces use the same selected images through the display-image projection.",
-            projections: {
-              list: "displayImages",
-              detail: "images",
-              summary: "displayImages",
-            },
-            sourceDependencies: [
-              { path: "displayImages", label: "Selected meal images" },
-            ],
-          },
-          validation: { read: z.array(imageOut), create: null, update: null },
-        },
+        ...galleryWriteFields(),
+        galleryImagesField("meal", "Meal", z.array(imageOut)),
         {
           // `name?.trim() || date` — `name` is nullable, so this is the
           // canonical non-null title.
@@ -402,16 +346,7 @@ Rules:
           display: { detail: false, list: false, width: "lg" },
           validation: { read: z.string(), create: null, update: null },
         },
-        {
-          display: { detail: false, list: false },
-          key: "id",
-          kind: "identifier",
-          validation: {
-            read: mealShortcode,
-            create: null,
-            update: null,
-          },
-        },
+        idField(mealShortcode),
         {
           display: { detail: false, list: false },
           key: "totals",
@@ -991,12 +926,7 @@ export default defineEntity(
             .source("portions", "Served portions"),
         ],
       }),
-    r
-      .path("image", "many", [
-        { edge: "EntityAttachment.entityId", direction: "incoming" },
-        { edge: "EntityAttachment.imageId", direction: "outgoing" },
-      ])
-      .named("images", "Images"),
+    r.images(),
   ],
   readSchemas,
 );

@@ -11,7 +11,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Declarations: `packages/schemas/src/entity-definitions/*.entity.ts`, source/read
   construction in `defineEntityModel`, typed relationship factories in
   `relationships.ts`, common field policy in `field-policy.ts`, compiled by
-  `apps/web/generator/entities/*`. Raw-read facades import named read schemas
+  `apps/web/generator/entities/*`. Record and gallery fields come from `idField` and
+  `image-fields.ts`, and a record's images relation from `r.images()`. Raw-read facades import named read schemas
   independently of relationship inference. Relation sections consume one compiled
   scope/create/sort/page plan on web and Apple. Presentation metadata changes also update the compiled contract in
   `apps/web/generator/entities/declarations.ts`, the web field-model emitter, and

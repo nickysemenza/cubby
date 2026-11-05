@@ -1,3 +1,4 @@
+import { galleryImagesField, galleryWriteFields } from "./image-fields";
 import { timestampField, aliasList } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
@@ -406,59 +407,13 @@ Rules:
             update: locationShortcode.nullable().optional(),
           },
         },
-        {
-          output: false,
-          audit: false,
-          // No editor `control`: the generic dialog shell renders the shared
-          // photo-capture field itself for any intent whose roster includes
-          // this key (`entity-edit-dialog-content.tsx`) — same convention as
-          // meal's `pendingImageIds`.
-          key: "pendingImageIds",
-          kind: "identifier",
-          reference: { entity: "image", multiple: true },
-          validation: {
-            read: null,
-            create: z.array(imageShortcode).optional(),
-            update: z.array(imageShortcode).optional(),
-          },
-        },
-        {
-          output: false,
-          audit: false,
-          key: "removeImageIds",
-          kind: "identifier",
-          reference: { entity: "image", multiple: true },
-          validation: {
-            read: null,
-            create: null,
-            update: z
-              .array(imageShortcode)
-              .optional()
-              .describe(
-                "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-              ),
-          },
-        },
-        {
-          output: false,
-          audit: false,
-          key: "imageOrder",
-          semanticRole: "attachment",
-          kind: "text",
-          control: { kind: "specialized", renderer: "image-order" },
-          provenance: {
-            kind: "relation",
-            sources: [{ entity: "image", relation: "images" }],
-          },
-          validation: {
-            read: null,
-            create: null,
-            update: z
-              .array(imageShortcode)
-              .optional()
-              .describe("existing image ids in display order; first = cover"),
-          },
-        },
+        ...galleryWriteFields({
+          orderControl: true,
+          order: z
+            .array(imageShortcode)
+            .optional()
+            .describe("existing image ids in display order; first = cover"),
+        }),
         {
           key: "id",
           kind: "identifier",
@@ -541,33 +496,7 @@ Rules:
             update: null,
           },
         },
-        {
-          key: "images",
-          kind: "json",
-          display: { detail: false, standard: "image" },
-          provenance: {
-            kind: "derived",
-            sources: [{ entity: "image", relation: "images" }],
-          },
-          explanation: {
-            ruleId: "location.images",
-            description:
-              "Location images are the current live Image attachments in canonical attachment order; list and summary surfaces use the same selected images through the display-image projection.",
-            projections: {
-              list: "displayImages",
-              detail: "images",
-              summary: "displayImages",
-            },
-            sourceDependencies: [
-              { path: "displayImages", label: "Selected location images" },
-            ],
-          },
-          validation: {
-            read: z.array(imageOut),
-            create: null,
-            update: null,
-          },
-        },
+        galleryImagesField("location", "Location", z.array(imageOut)),
         {
           ...labelField("valuationLabel", "Inventory valuation"),
           output: false,
@@ -1313,12 +1242,7 @@ export default defineEntity(
         { edge: "Product.ingredientId", direction: "outgoing" },
       ])
       .named("ingredients", "Ingredients", { view: { columnGroup: "Stock" } }),
-    r
-      .path("image", "many", [
-        { edge: "EntityAttachment.entityId", direction: "incoming" },
-        { edge: "EntityAttachment.imageId", direction: "outgoing" },
-      ])
-      .named("images", "Images"),
+    r.images(),
     r
       .path("planting", "many", [
         { edge: "Planting.locationId", direction: "incoming" },

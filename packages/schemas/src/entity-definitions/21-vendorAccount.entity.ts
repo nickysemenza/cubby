@@ -1,4 +1,4 @@
-import { timestampField } from "./field-policy";
+import { idField, timestampField } from "./field-policy";
 import { z } from "zod";
 import { dateTime } from "../codec";
 import {
@@ -241,16 +241,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         validation: { read: z.string(), create: null, update: null },
       },
-      {
-        display: { detail: false, list: false },
-        key: "id",
-        kind: "identifier",
-        validation: {
-          read: vendorAccountShortcode,
-          create: null,
-          update: null,
-        },
-      },
+      idField(vendorAccountShortcode),
       timestampField("createdAt"),
       timestampField("updatedAt"),
       { output: false, key: "shortcode", kind: "text" },

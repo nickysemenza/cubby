@@ -1,11 +1,11 @@
-import { timestampField } from "./field-policy";
+import { borrowedImagesField } from "./image-fields";
+import { idField, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { cookbookReadSchemas } from "../cookbook-fields";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { cookbookProductSummary } from "@cubby/schemas/cookbook-fields";
 import { cookbookShortcode } from "../identifier-fields.js";
-import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 export const { definition, readSchemas } = defineEntityModel(
   {
@@ -106,16 +106,7 @@ export const { definition, readSchemas } = defineEntityModel(
     },
     model: {
       fields: [
-        {
-          display: { detail: false, list: false },
-          key: "id",
-          kind: "identifier",
-          validation: {
-            read: cookbookShortcode,
-            create: null,
-            update: null,
-          },
-        },
+        idField(cookbookShortcode),
         { output: false, key: "shortcode", kind: "text" },
         {
           key: "name",
@@ -226,17 +217,7 @@ export const { definition, readSchemas } = defineEntityModel(
             update: null,
           },
         },
-        {
-          output: false,
-          key: "images",
-          kind: "json",
-          display: { standard: "image" },
-          provenance: {
-            kind: "derived",
-            sources: [{ entity: "image", relation: "cover" }],
-          },
-          validation: { read: z.array(imageOut), create: null, update: null },
-        },
+        borrowedImagesField([{ entity: "image", relation: "cover" }]),
         {
           key: "sourceRecipeCount",
           kind: "number",
