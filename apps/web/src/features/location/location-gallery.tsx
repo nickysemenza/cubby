@@ -60,7 +60,7 @@ export function LocationGallery() {
 }
 
 /** A compact outline indexes one continuous gallery; disclosure only hides contents. */
-export function LocationBrowser({ data }: { data: LocationTreeNode[] }) {
+function LocationBrowser({ data }: { data: LocationTreeNode[] }) {
   const index = useMemo(() => indexLocations(data), [data]);
   const isMobile = useIsMobile();
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>();

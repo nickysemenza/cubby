@@ -220,7 +220,7 @@ web typography needs no bundled font faces.
 
 ### Page building blocks
 
-One look per job: a page composes these instead of styling its own header, figure strip, box or empty message. Each has layouts on `/design` (`#page-header` through `#facts`), and `cubby/no-hand-rolled-panel` keeps rounded bordered boxes inside `Panel`.
+One look per job: a page composes these instead of styling its own header, figure strip, box or empty message. `cubby/no-hand-rolled-panel` keeps rounded bordered boxes inside `Panel`.
 
 - **`PageHeader`** (`ui/layout/page-header.tsx`) — every page's identity row. `stacked` puts a breadcrumb over the title and a fact line under it (record details, Home); `inline` keeps facts beside the title (list and tool pages). One status chip, actions that wrap before squeezing the title.
 - **`KeyNumbers`** (`ui/common/key-numbers.tsx`) — headline figures. `strip` is a hairline-ruled row of label, value and context that reflows on narrow widths (detail pages, dashboards); `inline` is one muted line of bold values (the inspector, compact summaries). `onSelect` and `active` make a figure a drill-through filter.
@@ -233,11 +233,11 @@ One look per job: a page composes these instead of styling its own header, figur
 
 ### Custom-built signature components
 
-These are Cubby's own components, designed and built here rather than adopted from a component library; the headless pieces under them (Base UI popups and focus, TanStack Table state) carry no visual design. Each has a live, synthetic showcase on `/design`, which is also the home for any new component demo:
+These are Cubby's own components, designed and built here rather than adopted from a component library; the headless pieces under them (Base UI popups and focus, TanStack Table state) carry no visual design. Required native-browser previews own their rendering:
 
-- **`Picker`** (`ui/combobox/picker.tsx`) with `PickerField`, `PickerVisual` and `PickerOption` — every value choice: choose, search and segmented modes, single and multiple values, records with pictures and options with glyphs (`/design#picker`).
-- **Records ledger and timeline** — `RecordsBlockView` (`entity/entity-detail/records-block.tsx`), `Ledger`/`LedgerRow`/`LedgerCell` (`ui/common/ledger.tsx`), and `RecordList` with its `Record*` parts (`ui/common/record-list.tsx`) (`/design#records`).
-- **`RTable`** (`entity/table/table.tsx`), reached through `ListWorkbench` (`/design#rtable`).
+- **`Picker`** (`ui/combobox/picker.tsx`) with `PickerField`, `PickerVisual` and `PickerOption` — every value choice: choose, search and segmented modes, single and multiple values, records with pictures and options with glyphs.
+- **Records ledger and timeline** — `RecordsBlockView` (`entity/entity-detail/records-block.tsx`), `Ledger`/`LedgerRow`/`LedgerCell` (`ui/common/ledger.tsx`), and `RecordList` with its `Record*` parts (`ui/common/record-list.tsx`).
+- **`RTable`** (`entity/table/table.tsx`), reached through `ListWorkbench`.
   Thematic column groups are metadata, not a header band. Columns exposes whole-group visibility and
   movement; leaf sorting, filtering and sizing stay on individual headers.
   Its synthetic showcase compares plain and visual cells alongside editing,
@@ -253,17 +253,10 @@ These are Cubby's own components, designed and built here rather than adopted fr
   Run lists show recorded current-phase work, purpose-specific items per minute
   when supported, and the latest progress/heartbeat time. Unknown totals omit
   the bar; paused and stale samples do not advertise a live rate.
-- **`IndexedSections`** (`ui/data-table/indexed-sections.tsx`) — the continuous grouped page with its sticky contents index and Jump to menu; record details and `/design` both render through it (`/design#indexed-sections`).
-- **`LocationTree`**, `DateDisplay`, `EnumPill`, `GapChipCluster` and `FilterBar` (`/design#location-tree`, `/design#values`).
+- **`IndexedSections`** (`ui/data-table/indexed-sections.tsx`) — the continuous grouped page with its sticky contents index and Jump to menu; record details render through it.
+- **`LocationTree`**, `DateDisplay`, `EnumPill` and `FilterBar`.
 
-The showcase is a curated reference using fixed synthetic fixtures and real
-module interactions, without fixture editors. Working compositions cover
-command actions and responsive workflow retry (`/design#action-workflows`),
-long action labels and scrollable raw diagnostics, inline/cell suggestion review (`/design#suggestion-review`), owner-held form
-state and shared Section disclosure (`/design#section-compositions`), and quality
-states with signed/empty chart data (`/design#quality-charts`). Source labels
-name current modules rather than historical locations. Debug JSON remains
-read-only and expandable through `ui/text/json-renderer.tsx`.
+Debug JSON remains read-only and expandable through `ui/text/json-renderer.tsx`.
 
 ### Shared headings and actions
 
