@@ -3,17 +3,14 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-import { Badge } from "~/ui/reui/badge";
+import { SubtaskProgress } from "~/features/task/subtask-progress";
 
 import { defineListOverride } from "../../entity/list-columns/types";
 
 /** `N/M` checklist chip after a parent task's name. */
-const subtaskCountSuffix = (row: TaskOut): ReactNode =>
-  row.subtaskCount > 0 ? (
-    <Badge variant="outline">
-      {row.doneSubtaskCount}/{row.subtaskCount}
-    </Badge>
-  ) : undefined;
+const subtaskCountSuffix = (row: TaskOut): ReactNode => (
+  <SubtaskProgress done={row.doneSubtaskCount} total={row.subtaskCount} />
+);
 
 export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
   use() {

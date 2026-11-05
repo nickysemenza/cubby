@@ -5,7 +5,6 @@ import { getErrorMessage } from "@cubby/shared";
 import { TIER1_NUTRIENT_KEYS, TIER1_NUTRIENTS } from "@cubby/usda";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { cn } from "cn";
 import {
   type ReactNode,
@@ -27,6 +26,7 @@ import { UnitMappingGraph } from "~/features/units/unit-mapping-graph";
 import { UnitMappingsTable } from "~/features/units/unitmappingstable";
 import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Checkbox } from "~/ui/primitives/checkbox";
@@ -161,14 +161,12 @@ function ConversionRowsField({
             ariaLabel="To unit"
           />
           {rows.length > 1 && (
-            <button
+            <RemoveButton
               type="button"
               onClick={() => onRemove(c.id)}
-              className="text-muted-foreground hover:text-destructive"
+              className="text-muted-foreground"
               aria-label="Remove conversion"
-            >
-              <XIcon className="size-3.5" />
-            </button>
+            />
           )}
         </Row>
       ))}

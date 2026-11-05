@@ -10,8 +10,8 @@ import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
 import { badgeToneTextClass, statusTone } from "~/lib/status-tone";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Kbd } from "~/ui/primitives/kbd";
 import { Description } from "~/ui/text/description";
+import { KeyHint } from "~/ui/text/key-hint";
 import { DateDisplay } from "~/ui/values/date-display";
 
 /** Confidence → text color, from the shared status tone so every AI-suggestion
@@ -220,16 +220,8 @@ export function AiProposalCard({
               gap="sm"
               className="ml-auto hidden text-2xs text-muted-foreground sm:flex"
             >
-              {onAccept && (
-                <span>
-                  <Kbd>↵</Kbd> {acceptLabel}
-                </span>
-              )}
-              {onDismiss && (
-                <span>
-                  <Kbd>esc</Kbd> {dismissLabel}
-                </span>
-              )}
+              {onAccept && <KeyHint keys={["↵"]}>{acceptLabel}</KeyHint>}
+              {onDismiss && <KeyHint keys={["esc"]}>{dismissLabel}</KeyHint>}
             </Row>
           </Row>
         )}

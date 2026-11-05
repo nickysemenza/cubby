@@ -1,5 +1,4 @@
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { DotsThreeVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsThreeVertical";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { cn } from "cn";
@@ -10,14 +9,15 @@ import { Controller, type UseFormReturn, useFieldArray } from "react-hook-form";
 import { PickerField } from "~/entity/forms/picker-field";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { QuantityInput } from "~/ui/forms/quantity-input";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Row } from "~/ui/layout";
+import { MoreMenuTrigger } from "~/ui/navigation/more-menu-trigger";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 import { Input } from "~/ui/primitives/input";
 
@@ -300,18 +300,11 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                   />
 
                   <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Ingredient ${ingredientIndex + 1} options`}
-                        />
-                      }
-                    >
-                      <DotsThreeVerticalIcon className="size-3.5" />
-                    </DropdownMenuTrigger>
+                    <MoreMenuTrigger
+                      type="button"
+                      size="icon-sm"
+                      aria-label={`Ingredient ${ingredientIndex + 1} options`}
+                    />
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
                         disabled={ingredientIndex === 0}
@@ -413,9 +406,8 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                       <span className="font-mono text-2xs text-muted-foreground">
                         alt. amount
                       </span>
-                      <Button
+                      <RemoveButton
                         type="button"
-                        variant="ghost"
                         size="icon-sm"
                         aria-label="Remove this amount"
                         onClick={() => {
@@ -425,9 +417,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                             current.filter((_, i) => i !== extraIdx + 1),
                           );
                         }}
-                      >
-                        <TrashIcon className="size-3.5" />
-                      </Button>
+                      />
                     </div>
                   );
                 })}

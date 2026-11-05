@@ -303,6 +303,14 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 
 ## Web UI
 
+- Icon-only removal: `RemoveButton` (`ui/forms/remove-button.tsx`) requires a label; choose delete only for records.
+- Previous/next navigation: `PrevNextButtons` (`ui/navigation/prev-next-buttons.tsx`) accepts optional shortcut metadata.
+- Dropdown overflow: `MoreMenuTrigger` (`ui/navigation/more-menu-trigger.tsx`).
+- Inline cell save/cancel: `InlineEditActions` (`ui/forms/inline-edit-actions.tsx`).
+- Image count and removal overlays: `TileOverlay` (`ui/media/tile-overlay.tsx`).
+- Keyboard legends: `KeyHint` (`ui/text/key-hint.tsx`).
+- Task checklist counts: `SubtaskProgress` (`features/task/subtask-progress.tsx`).
+
 - Page building blocks: `PageHeader`, `Section`, `Panel`, `Toolbar` and
   `Disclosure` (`ui/layout/`), `KeyNumbers` and `Facts` (`ui/records/`),
   `EmptyState` (`ui/feedback/empty-state.tsx`); DESIGN.md says when to use each.

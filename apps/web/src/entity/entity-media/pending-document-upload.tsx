@@ -1,7 +1,6 @@
 import type { EntityImage } from "@cubby/schemas/entity";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation } from "@tanstack/react-query";
 import prettyBytes from "pretty-bytes";
 import { useCallback, useState } from "react";
@@ -11,8 +10,8 @@ import { imageUpload } from "~/integrations/tanstack-query/generated/domains/ima
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { FileDropField } from "~/ui/file-upload/file-drop-field";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
 import { Label } from "~/ui/primitives/label";
 import { Description } from "~/ui/text/description";
 
@@ -68,15 +67,11 @@ function DocumentRow({
           {prettyBytes(document.size)}
         </span>
       )}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="size-6 shrink-0 text-muted-foreground hover:text-destructive"
+      <RemoveButton
+        aria-label="Remove document"
+        className="size-6 shrink-0 text-muted-foreground"
         onClick={onRemove}
-      >
-        <XIcon className="size-4" />
-      </Button>
+      />
     </Row>
   );
 }

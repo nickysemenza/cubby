@@ -10,7 +10,6 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
-import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
 import { useMemo, useState, type ReactNode } from "react";
@@ -51,6 +50,7 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { ListLoadingSkeleton } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Panel } from "~/ui/layout/panel";
+import { MoreMenuTrigger } from "~/ui/navigation/more-menu-trigger";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -59,7 +59,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 import { Description } from "~/ui/text/description";
 import { DenseCellContext } from "~/ui/values/stacked-value";
@@ -492,19 +491,12 @@ function BoardGroup({
             menu={
               canMove ? (
                 <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        disabled={pending}
-                        aria-label={`Move ${String(row[metadata.summary.titleField] ?? row.id)}`}
-                        className="shrink-0 opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100 data-[popup-open]:opacity-100 pointer-coarse:opacity-100"
-                      />
-                    }
-                  >
-                    <DotsThreeIcon className="size-3.5" />
-                  </DropdownMenuTrigger>
+                  <MoreMenuTrigger
+                    size="icon-xs"
+                    disabled={pending}
+                    aria-label={`Move ${String(row[metadata.summary.titleField] ?? row.id)}`}
+                    className="shrink-0 opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100 data-[popup-open]:opacity-100 pointer-coarse:opacity-100"
+                  />
                   <DropdownMenuContent align="end" className="w-auto min-w-40">
                     {view.reorder && !capped && acceptsPlacement && (
                       <>

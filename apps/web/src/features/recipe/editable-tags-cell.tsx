@@ -1,11 +1,9 @@
 "use client";
 
-import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type React from "react";
 import { useCallback, useState } from "react";
 
-import { Button } from "~/ui/primitives/button";
+import { InlineEditActions } from "~/ui/forms/inline-edit-actions";
 
 import {
   useCellEditState,
@@ -132,22 +130,11 @@ function EditableTagsEditor({
         // whole edit is type → Enter → Enter without reaching for the ✓.
         onEmptyEnter={isPending ? undefined : () => void handleSave()}
       />
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={() => void handleSave()}
+      <InlineEditActions
+        onSave={() => void handleSave()}
+        onCancel={onCancel}
         disabled={isPending}
-      >
-        <CheckIcon className="size-3.5" />
-      </Button>
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={onCancel}
-        disabled={isPending}
-      >
-        <XIcon className="size-3.5" />
-      </Button>
+      />
     </div>
   );
 }

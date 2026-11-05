@@ -6,6 +6,8 @@ import {
   FILTER_NONE,
   splitTypedList,
 } from "@cubby/schemas/filter-sentinel-fields";
+
+import "./table.css";
 import {
   describeNumberRangeBounds,
   describeRangeBounds,
@@ -34,7 +36,6 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGl
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TextTIcon } from "@phosphor-icons/react/dist/csr/TextT";
 import { ToggleLeftIcon } from "@phosphor-icons/react/dist/csr/ToggleLeft";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { RowData } from "@tanstack/react-table";
 import { cn } from "cn";
 import {
@@ -53,6 +54,7 @@ import { formatCount } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { pickerOptionItem } from "~/ui/combobox/picker-option";
 import { PickerVisual } from "~/ui/combobox/picker-visual";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
@@ -1275,14 +1277,12 @@ function FilterChip({
           {editor}
         </PopoverContent>
       </Popover>
-      <button
+      <RemoveButton
         type="button"
         aria-label={`Clear ${label} filter`}
-        className="flex size-4 shrink-0 items-center justify-center border-l border-hairline-soft text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex size-4 shrink-0 items-center justify-center border-l border-hairline-soft text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
         onClick={clearSide}
-      >
-        <XIcon className="size-3" />
-      </button>
+      />
     </span>
   );
 }
@@ -1499,14 +1499,12 @@ function FilterSearchField({
         }
       />
       {value && onClear ? (
-        <button
+        <RemoveButton
           type="button"
           aria-label="Clear search"
-          className="absolute right-1.5 text-muted-foreground hover:text-foreground"
+          className="absolute right-1.5 text-muted-foreground"
           onClick={onClear}
-        >
-          <XIcon className="size-3.5" />
-        </button>
+        />
       ) : dense ? (
         <Kbd
           aria-hidden
@@ -1856,13 +1854,11 @@ export function MobileFilterTier<TData extends RowData>({
                   <b className="font-medium">{label}</b>
                   {filterSummary(field, filter)}
                 </button>
-                <button
+                <RemoveButton
                   type="button"
                   aria-label={`Clear ${label} filter`}
                   onClick={() => clear(field)}
-                >
-                  <XIcon className="size-3" />
-                </button>
+                />
               </Pill>
             );
           })}

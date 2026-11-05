@@ -9,7 +9,6 @@ import {
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { cn } from "cn";
@@ -31,6 +30,7 @@ import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { CellEditorPendingContext } from "~/ui/data-table/cell-editor-overlay";
 import { DateSpanInput } from "~/ui/dates/date-span-input";
+import { InlineEditActions } from "~/ui/forms/inline-edit-actions";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
@@ -634,24 +634,11 @@ function EditableInputEditor<T>({
           disabled={isPending}
         />
       )}
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={() => void handleSave()}
+      <InlineEditActions
+        onSave={() => void handleSave()}
+        onCancel={onCancel}
         disabled={isPending}
-        aria-label="Save value"
-      >
-        <CheckIcon className="size-3.5" />
-      </Button>
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={onCancel}
-        disabled={isPending}
-        aria-label="Cancel editing"
-      >
-        <XIcon className="size-3.5" />
-      </Button>
+      />
       {clearLabel && value !== null && (
         <Tooltip>
           <TooltipTrigger
@@ -1046,24 +1033,11 @@ export function EditableAmountCell({
               placeholder="unit"
               disabled={isPending}
             />
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => void save()}
+            <InlineEditActions
+              onSave={() => void save()}
+              onCancel={edit.cancel}
               disabled={isPending}
-              aria-label="Save value"
-            >
-              <CheckIcon className="size-3.5" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={edit.cancel}
-              disabled={isPending}
-              aria-label="Cancel editing"
-            >
-              <XIcon className="size-3.5" />
-            </Button>
+            />
           </div>
         </CellEditorOverlay>
       )}
@@ -1143,24 +1117,11 @@ function DateRangeCellEditor({
         end={draft?.end ?? null}
         onChange={({ start, end }) => setDraft(dateRangeFromDates(start, end))}
       />
-      <Button
-        size="icon"
-        variant="ghost"
-        aria-label="Save value"
+      <InlineEditActions
+        onSave={() => void commit(draft)}
+        onCancel={onCancel}
         disabled={isPending}
-        onClick={() => void commit(draft)}
-      >
-        <CheckIcon className="size-3.5" />
-      </Button>
-      <Button
-        size="icon"
-        variant="ghost"
-        aria-label="Cancel editing"
-        disabled={isPending}
-        onClick={onCancel}
-      >
-        <XIcon className="size-3.5" />
-      </Button>
+      />
     </div>
   );
 }

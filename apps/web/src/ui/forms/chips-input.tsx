@@ -1,5 +1,4 @@
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { cn } from "cn";
 import {
   type CSSProperties,
@@ -11,6 +10,7 @@ import {
   useState,
 } from "react";
 
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
@@ -167,14 +167,12 @@ export const ChipsInput: FC<ChipsInputProps> = ({
               style={chipStyle?.(tag)}
             >
               {renderChip ? renderChip(tag) : <span>{tag}</span>}
-              <button
+              <RemoveButton
                 type="button"
                 aria-label={`Remove ${tag}`}
                 onClick={() => removeTag(tag)}
                 className="ml-1 rounded hover:bg-muted"
-              >
-                <XIcon size={12} />
-              </button>
+              />
             </Badge>
           ))}
         </Row>

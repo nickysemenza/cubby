@@ -1,6 +1,5 @@
 import type { LocationTreeNode } from "@cubby/schemas/location";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useId, useMemo, useState } from "react";
 
 import { useLocationTree } from "~/entity/hooks/use-location-tree";
@@ -9,6 +8,7 @@ import {
   indexLocations,
 } from "~/features/location/location-browser-model";
 import { LocationOutline } from "~/features/location/location-outline";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -80,14 +80,12 @@ function LocationTree({ data }: { data: LocationTreeNode[] }) {
             className="pr-8 pl-7"
           />
           {query && (
-            <button
+            <RemoveButton
               type="button"
               onClick={() => setQuery("")}
               aria-label="Clear tree search"
               className="absolute inset-y-0 right-0 flex w-8 items-center justify-center text-muted-foreground"
-            >
-              <XIcon aria-hidden className="size-3.5" />
-            </button>
+            />
           )}
         </div>
         <Label

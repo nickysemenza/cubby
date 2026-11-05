@@ -1,6 +1,4 @@
 import type { ListSlotId } from "@cubby/schemas/entity-manifest";
-import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
@@ -19,6 +17,7 @@ import { usePlantingScheduleLabel } from "~/features/garden/planting-schedule-la
 import { ScheduleGrid } from "~/features/schedule/schedule-grid";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
+import { PrevNextButtons } from "~/ui/navigation/prev-next-buttons";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 
@@ -59,29 +58,22 @@ function PlantingsScheduleSlot({ search, navigate }: ListSlotProps) {
           </Description>
         </div>
         <Row align="center" gap="sm">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-label="Previous year"
-            disabled={year <= 2000}
-            onClick={() => navigate({ year: year - 1 })}
+          <PrevNextButtons
+            previous={{
+              label: "Previous year",
+              disabled: year <= 2000,
+              onClick: () => navigate({ year: year - 1 }),
+            }}
+            next={{
+              label: "Next year",
+              disabled: year >= 2100,
+              onClick: () => navigate({ year: year + 1 }),
+            }}
           >
-            <CaretLeftIcon className="size-3.5" />
-          </Button>
-          <span className="min-w-12 text-center text-sm tabular-nums">
-            {year}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-label="Next year"
-            disabled={year >= 2100}
-            onClick={() => navigate({ year: year + 1 })}
-          >
-            <CaretRightIcon className="size-3.5" />
-          </Button>
+            <span className="min-w-12 text-center text-sm tabular-nums">
+              {year}
+            </span>
+          </PrevNextButtons>
           <Button
             variant="outline"
             size="sm"

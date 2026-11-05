@@ -2,13 +2,13 @@ import { assessmentReviewInput } from "@cubby/schemas/assessment";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { useState, type ReactNode } from "react";
 
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import { formatCurrency } from "~/lib/number-format";
 import type { CubbyRow } from "~/ui/data-table/table-features";
+import { MoreMenuTrigger } from "~/ui/navigation/more-menu-trigger";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -20,7 +20,6 @@ import {
   DropdownMenuSubmenu,
   DropdownMenuSubmenuContent,
   DropdownMenuSubmenuTrigger,
-  DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 import { Textarea } from "~/ui/primitives/textarea";
 
@@ -248,18 +247,11 @@ export function SuggestionActions({
       </Button>
       {hasMenu ? (
         <DropdownMenu>
-          <DropdownMenuTrigger
+          <MoreMenuTrigger
             disabled={busy}
-            render={
-              <Button
-                size="icon-xs"
-                variant="ghost"
-                aria-label="More review choices"
-              />
-            }
-          >
-            <DotsThreeIcon aria-hidden />
-          </DropdownMenuTrigger>
+            size="icon-xs"
+            aria-label="More review choices"
+          />
           <DropdownMenuContent align="end" className="min-w-52">
             <DropdownMenuGroup>
               {statement?.create &&

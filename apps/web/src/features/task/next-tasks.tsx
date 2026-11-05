@@ -13,6 +13,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { useEntityMetadata } from "~/entity/metadata";
 import { renderOptionCell } from "~/entity/table/column-helpers";
+import { SubtaskProgress } from "~/features/task/subtask-progress";
 import { task } from "~/integrations/tanstack-query/generated/domains/task.gen";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -124,11 +125,10 @@ function TaskRows({
                 entity="task"
                 data={{ id: t.id, name: t.name }}
               />
-              {t.subtaskCount > 0 && (
-                <Badge variant="outline">
-                  {t.doneSubtaskCount}/{t.subtaskCount}
-                </Badge>
-              )}
+              <SubtaskProgress
+                done={t.doneSubtaskCount}
+                total={t.subtaskCount}
+              />
             </Row>
           ),
         },
@@ -298,11 +298,10 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
                     }}
                   />
                   {renderOptionCell(bt.task.status, statusOptions)}
-                  {bt.task.subtaskCount > 0 && (
-                    <Badge variant="outline">
-                      {bt.task.doneSubtaskCount}/{bt.task.subtaskCount}
-                    </Badge>
-                  )}
+                  <SubtaskProgress
+                    done={bt.task.doneSubtaskCount}
+                    total={bt.task.subtaskCount}
+                  />
                 </Row>
                 <Stack gap="tight" className="pl-6">
                   {bt.reasons.map((reason, i) => (

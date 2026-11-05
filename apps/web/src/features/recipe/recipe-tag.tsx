@@ -1,8 +1,8 @@
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { cn } from "cn";
 import type { FC } from "react";
 
 import { EntityFilterLink } from "~/entity/components/entity-ref-link";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/reui/badge";
 
@@ -61,17 +61,17 @@ export const RecipeTag: FC<RecipeTagProps> = ({
       )}
       <span>{displayLabel}</span>
       {onRemove && (
-        <button
+        <RemoveButton
+          aria-label={`Remove ${displayLabel}`}
           type="button"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
             onRemove();
           }}
-          className="ml-1 rounded hover:bg-muted"
-        >
-          <XIcon size={size === "sm" ? 10 : 12} />
-        </button>
+          size="icon-xs"
+          className="ml-1"
+        />
       )}
     </Badge>
   );

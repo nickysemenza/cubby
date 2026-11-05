@@ -13,7 +13,6 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { locationType } from "@cubby/schemas/location";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
-import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import type { QueryClient } from "@tanstack/react-query";
@@ -49,12 +48,12 @@ import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-sugge
 import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
 import { ImageChainPopover } from "~/ui/derived/image-chain";
 import { Row } from "~/ui/layout";
+import { MoreMenuTrigger } from "~/ui/navigation/more-menu-trigger";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 import {
   Tooltip,
@@ -845,15 +844,10 @@ export function createActionsColumnBase<T extends RowData>(
       const row = info.row.original;
       return (
         <DropdownMenu>
-          <DropdownMenuTrigger
-            // icon-sm fits inside the row at every density; anything larger
-            // stretches every row and the virtualizer's fixed row height.
-            render={<Button variant="ghost" size="icon-sm" />}
+          <MoreMenuTrigger
+            size="icon-sm"
             onClick={(e) => e.stopPropagation()}
-          >
-            <DotsThreeIcon className="size-3.5" />
-            <span className="sr-only">Open menu</span>
-          </DropdownMenuTrigger>
+          />
           {/* The mobile card's row is a click-through to the detail page —
               without this, an item click (React's synthetic events bubble
               through the portal's React-tree parent, not just the real DOM)

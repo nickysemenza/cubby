@@ -1,7 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
-import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
-import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { Link } from "@tanstack/react-router";
 import { useId, useEffect, useState, type ReactNode } from "react";
 
@@ -12,6 +10,7 @@ import {
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { PrevNextButtons } from "~/ui/navigation/prev-next-buttons";
 import {
   SidePanel,
   SidePanelIconTile,
@@ -60,30 +59,11 @@ function RecordStepButtons({
   onNext: () => void;
 }) {
   return (
-    <>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        mobileSize="compact"
-        aria-label={`Previous ${noun}`}
-        aria-keyshortcuts="K"
-        title="Previous (K)"
-        onClick={onPrev}
-      >
-        <CaretUpIcon />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        mobileSize="compact"
-        aria-label={`Next ${noun}`}
-        aria-keyshortcuts="J"
-        title="Next (J)"
-        onClick={onNext}
-      >
-        <CaretDownIcon />
-      </Button>
-    </>
+    <PrevNextButtons
+      previous={{ label: `Previous ${noun}`, onClick: onPrev, shortcut: "K" }}
+      next={{ label: `Next ${noun}`, onClick: onNext, shortcut: "J" }}
+      compact
+    />
   );
 }
 

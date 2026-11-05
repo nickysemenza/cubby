@@ -15,7 +15,6 @@ import { humanize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import {
   useQuery,
   useQueryClient,
@@ -62,6 +61,7 @@ import type { CubbyTable, CubbyRow } from "~/ui/data-table/table-features";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Panel } from "~/ui/layout/panel";
 import { Button } from "~/ui/primitives/button";
 import { Tabs, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
@@ -406,14 +406,12 @@ function ScopeChips({
     <span className="inline-flex items-center gap-1 rounded-md border bg-card px-1.5 py-0.5 text-xs">
       <span className="text-muted-foreground">{label}</span>
       {link}
-      <button
+      <RemoveButton
         type="button"
         aria-label={`Clear ${label.toLowerCase()} scope`}
         onClick={clear}
-        className="rounded-sm text-muted-foreground hover:text-foreground"
-      >
-        <XIcon aria-hidden className="size-3" />
-      </button>
+        className="rounded-sm text-muted-foreground"
+      />
     </span>
   );
   return (

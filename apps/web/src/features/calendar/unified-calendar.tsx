@@ -9,8 +9,6 @@ import {
 } from "@cubby/schemas/calendar";
 import type { EntityRef } from "@cubby/schemas/entity";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useQuery } from "@tanstack/react-query";
 import { addDays } from "date-fns";
@@ -49,6 +47,7 @@ import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { useLocalStorage } from "~/ui/hooks/use-local-storage";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
+import { PrevNextButtons } from "~/ui/navigation/prev-next-buttons";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { createPopoverHandle, PopoverTrigger } from "~/ui/primitives/popover";
@@ -572,33 +571,23 @@ export function UnifiedCalendar({
     <EntityDisplayImagesProvider refs={imageRefs} seeded={seededImages}>
       <Stack gap="sm">
         <Row align="center" wrap gap="xs">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-xs"
-            aria-label={`Previous ${period}`}
-            onClick={() => shiftAnchor(-1)}
+          <PrevNextButtons
+            previous={{
+              label: `Previous ${period}`,
+              onClick: () => shiftAnchor(-1),
+            }}
+            next={{ label: `Next ${period}`, onClick: () => shiftAnchor(1) }}
           >
-            <CaretLeftIcon />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            className="text-xs"
-            onClick={() => onDateChange(undefined)}
-          >
-            Today
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-xs"
-            aria-label={`Next ${period}`}
-            onClick={() => shiftAnchor(1)}
-          >
-            <CaretRightIcon />
-          </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              className="text-xs"
+              onClick={() => onDateChange(undefined)}
+            >
+              Today
+            </Button>
+          </PrevNextButtons>
           <h2 className="font-heading text-sm font-semibold">{periodTitle}</h2>
           <Row align="center" gap="xs" className="ml-auto">
             <PeriodActions render={periodActions} range={activePeriod} />

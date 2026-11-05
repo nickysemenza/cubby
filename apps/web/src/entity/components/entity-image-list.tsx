@@ -1,12 +1,12 @@
 import type { ImageOut } from "@cubby/schemas/image";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { type FC, useState } from "react";
 
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row } from "~/ui/layout";
-import { Button, buttonVariants } from "~/ui/primitives/button";
+import { TileOverlay } from "~/ui/media/tile-overlay";
+import { buttonVariants } from "~/ui/primitives/button";
 
 import { PhotoGrid } from "../entity-media/photo-grid";
 import { PhotoViewer } from "../entity-media/photo-viewer";
@@ -47,20 +47,16 @@ const EntityImageList: FC<EntityImageListProps> = ({
             renderOverlay={
               onRemove
                 ? (image) => (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label={`Remove ${image.filename}`}
-                      title={`Remove ${image.filename}`}
-                      className="absolute top-1 right-1 z-20 size-6 bg-[var(--background)] text-muted-foreground hover:text-destructive"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onRemove(image.id);
+                    <TileOverlay
+                      remove={{
+                        "aria-label": `Remove ${image.filename}`,
+                        title: `Remove ${image.filename}`,
+                        onClick: (event) => {
+                          event.stopPropagation();
+                          onRemove(image.id);
+                        },
                       }}
-                    >
-                      <XIcon className="size-3.5" />
-                    </Button>
+                    />
                   )
                 : undefined
             }

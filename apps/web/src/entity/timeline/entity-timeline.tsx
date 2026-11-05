@@ -12,8 +12,6 @@ import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
 import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
 import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
-import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
-import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -41,6 +39,7 @@ import { DatePickerInput } from "~/ui/dates/date-picker-input";
 import { DateRangeShortcuts } from "~/ui/dates/date-range-shortcuts";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Panel, Row, Stack } from "~/ui/layout";
+import { PrevNextButtons } from "~/ui/navigation/prev-next-buttons";
 import { Button } from "~/ui/primitives/button";
 import {
   Tooltip,
@@ -731,24 +730,18 @@ function TimelinePager({
       <span className="mr-2">
         Page {meta.pageIndex + 1} of {pageCount} ({meta.totalCount} records)
       </span>
-      <Button
-        variant="outline"
-        size="icon"
-        onClick={() => onPageChange(meta.pageIndex - 1)}
-        disabled={meta.pageIndex === 0}
-      >
-        <span className="sr-only">Go to previous page</span>
-        <CaretLeftIcon />
-      </Button>
-      <Button
-        variant="outline"
-        size="icon"
-        onClick={() => onPageChange(meta.pageIndex + 1)}
-        disabled={meta.pageIndex + 1 >= pageCount}
-      >
-        <span className="sr-only">Go to next page</span>
-        <CaretRightIcon />
-      </Button>
+      <PrevNextButtons
+        previous={{
+          label: "Go to previous page",
+          onClick: () => onPageChange(meta.pageIndex - 1),
+          disabled: meta.pageIndex === 0,
+        }}
+        next={{
+          label: "Go to next page",
+          onClick: () => onPageChange(meta.pageIndex + 1),
+          disabled: meta.pageIndex + 1 >= pageCount,
+        }}
+      />
     </Row>
   );
 }

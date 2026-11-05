@@ -1,9 +1,9 @@
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { cn } from "cn";
 import type * as React from "react";
 import { type Control, type FieldValues, useFieldArray } from "react-hook-form";
 
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
@@ -137,16 +137,13 @@ export const ArrayFieldManager = <
         >
           {renderField(field, index)}
           {showRemoveButton && (
-            <Button
+            <RemoveButton
               type="button"
-              variant="ghost"
               size="icon-sm"
               className="mb-1"
               aria-label={`${removeButtonLabel ?? `Remove ${title.slice(0, -1).toLowerCase()}`} ${index + 1}`}
               onClick={() => handleRemove(index)}
-            >
-              <XIcon className="size-3.5" />
-            </Button>
+            />
           )}
         </div>
       ))}

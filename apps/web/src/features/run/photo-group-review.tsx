@@ -31,7 +31,6 @@ import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
-import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { MinusCircleIcon } from "@phosphor-icons/react/dist/csr/MinusCircle";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
@@ -96,6 +95,7 @@ import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Image } from "~/ui/media/image";
+import { MoreMenuTrigger } from "~/ui/navigation/more-menu-trigger";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import {
@@ -510,18 +510,11 @@ function ImageMenu({
   };
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
+      <MoreMenuTrigger
         disabled={disabled}
-        render={
-          <Button
-            variant="secondary"
-            size="icon-xs"
-            aria-label={`Photo ${imageId} actions`}
-          />
-        }
-      >
-        <DotsThreeIcon />
-      </DropdownMenuTrigger>
+        size="icon-xs"
+        aria-label={`Photo ${imageId} actions`}
+      />
       <DropdownMenuContent align="end" className="w-56">
         {groupKey ? (
           <>

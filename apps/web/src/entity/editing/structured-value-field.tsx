@@ -5,7 +5,6 @@ import type {
   StructuredValueSchema,
 } from "@cubby/schemas/structured-value-schema";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { createContext, useContext, useId, type ReactNode } from "react";
 import {
   Controller,
@@ -29,6 +28,7 @@ import {
   PlainDateField,
   UnifiedTextField,
 } from "~/ui/forms/form-utils";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
@@ -700,16 +700,13 @@ function MapEditor({
                 required
               />
             </div>
-            <Button
+            <RemoveButton
               type="button"
-              variant="ghost"
               size="icon-sm"
               className="mb-1"
               aria-label={`Remove ${key.label}`}
               onClick={() => withoutEntry(key.value)}
-            >
-              <XIcon className="size-3.5" />
-            </Button>
+            />
           </div>
         ))}
       {absent.length > 0 ? (

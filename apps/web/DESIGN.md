@@ -176,6 +176,10 @@ the DayPicker calendar), `tree`, `forms`, `feedback`, `overlays`, `layout`,
 `navigation` and `data-table`. `ui/hooks` holds only generic hooks. Hooks that read
 entity data live under `entity/`; the household-date and auth hooks live in `lib/`.
 
+Use `RemoveButton`, `MoreMenuTrigger`, `PrevNextButtons`, `TileOverlay`,
+`InlineEditActions`, and `KeyHint` for shared controls and legends.
+`SubtaskProgress` owns task checklist badges.
+
 Different jobs justify different public components, not duplicate engines or
 styling. Share lower-level behavior and tokens where the contracts agree:
 

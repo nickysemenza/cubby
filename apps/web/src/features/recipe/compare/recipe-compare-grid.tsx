@@ -7,7 +7,6 @@ import type {
 import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
 import { EqualsIcon } from "@phosphor-icons/react/dist/csr/Equals";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useMemo, useState } from "react";
 
@@ -34,10 +33,10 @@ import type { RecipeCosting } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { Panel } from "~/ui/layout";
 import { stickyRowHeaderCard } from "~/ui/matrix/matrix-chrome";
 import { Image } from "~/ui/media/image";
-import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 
 import { compactRound } from "../recipe-scaling-pct";
@@ -367,17 +366,14 @@ export const RecipeCompareGrid: React.FC<{
                         <ChefHatIcon className="size-4" />
                       </div>
                     )}
-                    <Button
+                    <RemoveButton
                       type="button"
                       onClick={() => onRemove(c.recipe.id)}
                       aria-label={`Remove ${c.recipe.name} from comparison`}
-                      variant="ghost"
                       size="icon"
-                      className="absolute top-1 right-1 size-11 bg-background/70 text-muted-foreground hover:text-destructive sm:size-8"
+                      className="absolute top-1 right-1 size-11 bg-background/70 text-muted-foreground sm:size-8"
                       title="Remove from comparison"
-                    >
-                      <XIcon className="size-3.5" />
-                    </Button>
+                    />
                   </div>
                   <Link
                     to="/recipes/$shortcode"

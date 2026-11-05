@@ -1,7 +1,5 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import type { EntityGraphNode } from "@cubby/schemas/entity-graph";
-import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
-import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
 import { cn } from "cn";
@@ -28,6 +26,7 @@ import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Panel } from "~/ui/layout/panel";
+import { PrevNextButtons } from "~/ui/navigation/prev-next-buttons";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import {
@@ -267,30 +266,24 @@ export function GraphExplorer({
   return (
     <Stack gap="md" className={cn("min-w-0", frame.outer)}>
       <Row gap="sm" wrap>
-        <Button
-          variant="outline"
-          size="icon"
-          aria-label="Previous record"
-          disabled={model.history.cursor === 0}
-          onClick={() => {
-            model.back(-1);
-            setReveal((old) => old + 1);
+        <PrevNextButtons
+          previous={{
+            label: "Previous record",
+            disabled: model.history.cursor === 0,
+            onClick: () => {
+              model.back(-1);
+              setReveal((old) => old + 1);
+            },
           }}
-        >
-          <ArrowLeftIcon />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          aria-label="Next record"
-          disabled={model.history.cursor >= model.history.trail.length - 1}
-          onClick={() => {
-            model.back(1);
-            setReveal((old) => old + 1);
+          next={{
+            label: "Next record",
+            disabled: model.history.cursor >= model.history.trail.length - 1,
+            onClick: () => {
+              model.back(1);
+              setReveal((old) => old + 1);
+            },
           }}
-        >
-          <ArrowRightIcon />
-        </Button>
+        />
         <Input
           aria-label="Find explored records"
           placeholder="Find in this map…"

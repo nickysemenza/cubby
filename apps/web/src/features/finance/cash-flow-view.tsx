@@ -7,7 +7,6 @@ import {
   cashFlowScenarioSchema,
 } from "@cubby/schemas/cash-flow";
 import { ChartBarIcon } from "@phosphor-icons/react/dist/csr/ChartBar";
-import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useId, useState } from "react";
@@ -27,6 +26,7 @@ import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { IndexedSections } from "~/ui/data-table/indexed-sections";
 import { StaticTable } from "~/ui/data-table/static-table";
+import { RemoveButton } from "~/ui/forms/remove-button";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -162,16 +162,13 @@ function ScenarioEditor({
               header: <span className="sr-only">Remove</span>,
               headClassName: "w-8",
               cell: (scenario, index) => (
-                <Button
-                  variant="ghost"
+                <RemoveButton
                   size="icon-xs"
                   aria-label={`Remove ${scenario.label}`}
                   onClick={() =>
                     onChange(scenarios.filter((_row0, at) => at !== index))
                   }
-                >
-                  <XIcon />
-                </Button>
+                />
               ),
             },
           ]}
