@@ -610,9 +610,7 @@ describe("record suggestions", () => {
     expect(suggestFields).not.toHaveBeenCalled();
   });
 
-  // Regression: a fresh page-mount runKey in the query key re-asked every row
-  // on each remount, defeating the stable cache profile.
-  it("reuses the answer when the list remounts with a new runKey", async () => {
+  it("reuses the answer when the list remounts", async () => {
     const asked = vi.fn();
     const operations: EntitySuggestionsOperations = {
       suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
@@ -644,7 +642,6 @@ describe("record suggestions", () => {
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
     expect(asked).toHaveBeenCalledTimes(1);
-    expect(asked.mock.calls[0]?.[0]).toHaveProperty("runKey");
     // Saved record questions must reach canonical automation for every entity.
     expect(asked.mock.calls[0]?.[0]).toMatchObject({
       entityId: id,

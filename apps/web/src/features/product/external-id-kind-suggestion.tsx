@@ -3,7 +3,6 @@ import { useWatch } from "react-hook-form";
 
 import { basisValueOf } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionHint } from "~/entity/suggestions/field-suggestion-hint";
-import { useFieldSuggestionContext } from "~/entity/suggestions/field-suggestion-provider";
 import { useRowEnumSuggestion } from "~/entity/suggestions/use-row-enum-suggestion";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 
@@ -53,18 +52,12 @@ export function ExternalIdKindSuggestion<TFieldValues extends FieldValues>({
   const enabled =
     source != null && (identifier?.length ?? 0) >= MIN_IDENTIFIER_LENGTH;
 
-  // Reuses the mounted `FieldSuggestionProvider`'s page-mount run when this
-  // row lives inside one (the product editor); absent one, the server files
-  // the call under the actor's run for the hour.
-  const runKey = useFieldSuggestionContext()?.runKey;
-
   const basis = {
     source: source ?? "",
     identifier: identifier ?? "",
     url,
     productName: basisValueOf(productName),
     brandName: basisValueOf(brandName),
-    runKey,
   };
 
   const { suggestion, isPending, applied, apply } = useRowEnumSuggestion({

@@ -80,10 +80,6 @@ export interface FieldSuggestionContextValue {
   clearAutoFilled: (field: string) => void;
   /** Whether `field` currently holds this provider's own untouched write. */
   isAutoFilled: (field: string) => boolean;
-  /** This mount's `ai_suggest` grouping id — a row-level suggestion mounted
-   * inside this form (e.g. `ExternalIdKindSuggestion`) reuses it instead of
-   * filing its call under the actor's hourly run. */
-  readonly runKey: string;
   reviewDraft: (field: string, proposal: FieldSuggestion) => Promise<void>;
   acknowledgeSaved: (recordId: string) => Promise<void>;
   readonly applyFinanceCategory: ReturnType<
@@ -267,9 +263,6 @@ export function FieldSuggestionProvider({
   );
   if (receiptHandler) receiptHandler.current = acknowledgeSaved;
   const [batchFailure, setBatchFailure] = useState<unknown>(null);
-  // One id per page mount, grouping every suggestFields call this provider
-  // makes into one `ai_suggest` run.
-  const [runKey] = useState(() => crypto.randomUUID());
   const persistedEntityId =
     mode === "edit" ? financeSuggestionEntityId(entity, record) : undefined;
   const financeApply = useFinanceCategoryApply(operations);
@@ -495,7 +488,6 @@ export function FieldSuggestionProvider({
             entity,
             targets: suggestedTargets,
             basis: debouncedBasis,
-            runKey,
           }
         : null,
     [
@@ -504,7 +496,6 @@ export function FieldSuggestionProvider({
       sufficient,
       basisSettled,
       debouncedBasis,
-      runKey,
       persistedEntityId,
     ],
   );
@@ -517,7 +508,6 @@ export function FieldSuggestionProvider({
             entity,
             targets: alternativeTargets,
             basis: debouncedBasis,
-            runKey,
           }
         : null,
     [
@@ -526,7 +516,6 @@ export function FieldSuggestionProvider({
       sufficient,
       basisSettled,
       debouncedBasis,
-      runKey,
       persistedEntityId,
     ],
   );
@@ -634,7 +623,6 @@ export function FieldSuggestionProvider({
       markAutoFilled,
       clearAutoFilled,
       isAutoFilled,
-      runKey,
       reviewDraft,
       acknowledgeSaved,
       applyFinanceCategory: async (suggestion) => {
@@ -675,7 +663,6 @@ export function FieldSuggestionProvider({
       markAutoFilled,
       clearAutoFilled,
       isAutoFilled,
-      runKey,
       reviewDraft,
       acknowledgeSaved,
       applyFinanceCategory,

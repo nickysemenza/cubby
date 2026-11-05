@@ -258,11 +258,18 @@ const runPurposeSelection = z
   .passthrough();
 
 export const runScaffold = listScaffold("run", runTable, {
-  // These Runs still own required AI references and automatic budget attribution.
-  // An explicit purpose filter keeps their history directly accessible.
+  // Automatic work nobody opens: old grouping Runs always, routine passes once they ended,
+  // and mail discovery once it completed, since its failures need a member. An explicit
+  // purpose filter keeps their history directly accessible.
   population: (filters) =>
     runPurposeSelection.parse(filters).purpose === undefined
-      ? notInArray(runTable.purpose, ["ai_suggest", "background"])
+      ? sql`${notInArray(runTable.purpose, ["ai_suggest", "background"])} AND (
+          ${notInArray(runTable.purpose, ["ai_refresh", "connection_discovery", "derived_refresh"])}
+          OR ${inArray(runTable.status, ["running", "paused", "paused_auth"])}
+        ) AND (
+          ${runTable.purpose} <> ${"mail_discovery"}
+          OR ${runTable.status} <> ${"completed"}
+        )`
       : sql`true`,
   derived: {
     stalled: listReadValue(() => runStalledSql()),

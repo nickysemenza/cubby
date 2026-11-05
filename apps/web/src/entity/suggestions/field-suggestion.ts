@@ -187,9 +187,6 @@ export interface FieldSuggestionSource {
   /** Bare manifest field keys of `entity` being requested this call. */
   readonly targets: readonly string[];
   readonly basis: Record<string, string | null>;
-  /** One id per page mount, grouping every call this page makes into one
-   * `ai_suggest` run. Omit to share the actor's run for the hour. */
-  readonly runKey?: string;
   /** A reopened settled question's saved-input revision; see
    * `fieldSuggestionsInput.inputRevision`. */
   readonly inputRevision?: string;
@@ -272,7 +269,6 @@ export function useEntitySuggestionsQuery({
     entity: effective.entity,
     targets: [...effective.targets],
     basis: effective.basis,
-    runKey: effective.runKey,
   });
   const query = useQuery({
     ...opts,

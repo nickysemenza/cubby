@@ -229,7 +229,6 @@ function mergeSuggestionRow(
 const RecordSuggestionsContext = createContext<{
   entity: StandardEntity;
   publishedOnly: boolean;
-  runKey: string;
   rows: ReadonlyMap<string, SuggestionRow>;
   save: (
     id: string,
@@ -591,7 +590,6 @@ function suggestionRequestsForRecord(
   entity: StandardEntity,
   record: SuggestionRecord,
   plans: ReturnType<typeof suggestionTargetPlans>,
-  runKey: string,
 ) {
   const resolutions = recordFieldResolutions(record);
   return plans.flatMap(({ target, ownTargets, basisTargets, field }) => {
@@ -649,7 +647,6 @@ function suggestionRequestsForRecord(
           basisMode: empty ? ("suggested" as const) : ("provided" as const),
           targets: [target.key],
           basis,
-          runKey,
         },
       },
     ];
@@ -817,7 +814,6 @@ function requestsForRecords(
   entity: StandardEntity,
   records: readonly unknown[],
   targets: SuggestTargets,
-  runKey: string,
   evaluationEnabled: boolean,
 ) {
   if (!evaluationEnabled || targets.targets.length === 0) return [];
@@ -826,13 +822,7 @@ function requestsForRecords(
     const parsed = recordSchema.safeParse(raw);
     if (!parsed.success || parseShortcode(parsed.data.id)?.type !== entity)
       return [];
-    return suggestionRequestsForRecord(
-      queryClient,
-      entity,
-      parsed.data,
-      plans,
-      runKey,
-    );
+    return suggestionRequestsForRecord(queryClient, entity, parsed.data, plans);
   });
 }
 
@@ -1375,9 +1365,6 @@ function BoundRecordSuggestions({
   const update = useEntityCommands(entity, { mutationPort });
   const [correctionRecord, setCorrectionRecord] =
     useState<SuggestionRecord | null>(null);
-  // One id per page mount, groups every suggestFields call this provider
-  // makes into one `ai_suggest` run instead of a run per row/field.
-  const [runKey] = useState(() => crypto.randomUUID());
   // Suggestions only ever resolve in the browser. Deriving a request basis and
   // a query observer per row during SSR cost list pages hundreds of ms of
   // Worker CPU for nothing; skipping it until hydration keeps the server render
@@ -1515,7 +1502,6 @@ function BoundRecordSuggestions({
     entity,
     records,
     targets,
-    runKey,
     !publishedOnly,
   );
   const recordReady = (id: string) =>
@@ -1643,7 +1629,6 @@ function BoundRecordSuggestions({
   const context = {
     entity,
     publishedOnly,
-    runKey,
     rows,
     stored,
     accepted,

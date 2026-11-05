@@ -140,7 +140,6 @@ export const aiContract = defineContract(
       input: fieldSuggestionsInput,
       output: fieldSuggestionsOut,
       cache: { profile: "stable" },
-      queryKeyOmit: ["runKey"],
     }),
     suggestFieldsBatch: query({
       readPolicy: "strong",
@@ -154,7 +153,6 @@ export const aiContract = defineContract(
       input: fieldSuggestionsInput,
       output: fieldSuggestionsReviewOut,
       cache: { profile: "stable" },
-      queryKeyOmit: ["runKey"],
     }),
     settledSuggestionQuestions: query({
       note: "List pages skip re-asking declined suggestion questions",
@@ -236,7 +234,6 @@ export const aiContract = defineContract(
       input: externalIdKindSuggestionInput,
       output: suggestExternalIdKindOut,
       cache: { profile: "stable" },
-      queryKeyOmit: ["runKey"],
     }),
     usageFilterOptions: query({
       exposure: "capability",
