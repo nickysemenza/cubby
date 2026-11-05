@@ -75,30 +75,11 @@ const routedEntities = (entities: readonly CompiledEntity[]) =>
     } => entity.route !== null && entity.descriptor.browserRoutes !== false,
   );
 
-/** The route modules `render/browser-routes.ts` emits. */
-export const generatedBrowserRouteFiles = (
-  entities: readonly CompiledEntity[],
-): readonly string[] =>
-  routedEntities(entities).flatMap((entity) => {
-    const { basePath, detailParam } = browserRoutes(entity);
-    return [
-      ...(entity.route.list === null
-        ? []
-        : [`${routeDirectory}/${basePath}.index.tsx`]),
-      ...(entity.route.detail === null
-        ? []
-        : [`${routeDirectory}/${basePath}.$${detailParam}.tsx`]),
-      ...(entity.route.create === "dialog"
-        ? [`${routeDirectory}/${basePath}.new.tsx`]
-        : []),
-    ];
-  });
-
 /**
  * The route modules a declaration promises but leaves hand-written: a `null`
  * list or detail, and the `/new` page behind `create: "page"`.
  */
-export const handWrittenBrowserRouteFiles = (
+const handWrittenBrowserRouteFiles = (
   entities: readonly CompiledEntity[],
 ): readonly string[] =>
   routedEntities(entities).flatMap((entity) => {
@@ -118,8 +99,7 @@ export const handWrittenBrowserRouteFiles = (
 
 export const missingBrowserRouteFiles = (
   entities: readonly CompiledEntity[],
-  exists: (path: string) => boolean = existsSync,
 ): readonly string[] =>
   handWrittenBrowserRouteFiles(entities).filter(
-    (relativePath) => !exists(resolve(ROOT, relativePath)),
+    (relativePath) => !existsSync(resolve(ROOT, relativePath)),
   );

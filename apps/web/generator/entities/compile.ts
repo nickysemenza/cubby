@@ -123,7 +123,7 @@ const inferredFieldLabel = (key: string, isReference: boolean): string => {
 };
 
 /** Preserve the explicitly named declaration exceptions for the catalog. */
-export function collectEntityOverrides(
+function collectEntityOverrides(
   raw: DeclarationObject,
 ): CompiledEntity["overrides"] {
   const overrides: { path: string; value: string }[] = [];
@@ -3266,7 +3266,7 @@ const validateImageVisualEvidence = (
  * independent of which entities are compiled — exported so a fixture catalog can exercise the
  * duplicate case directly, without needing a full entity declaration.
  */
-export const validatePhotoCategoryLabels = (
+const validatePhotoCategoryLabels = (
   categories: Readonly<Record<string, { classifierLabels: readonly string[] }>>,
 ): void => {
   const owner = new Map<string, string>();
