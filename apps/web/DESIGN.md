@@ -598,7 +598,8 @@ their age distribution as an execution-event rate.
 The Assessment producer and its internal-source observations are a separate
 publication cutover; the additive DTO alone does not enable them.
 
-Progress uses `ui/shadcn/progress.tsx`, following ReUI's Base UI pattern with
+Progress uses the shadcn `ui/shadcn/progress.tsx` copy, extended with Cubby's
+normalization and paused and indeterminate states, with
 `ProgressLabel`, `ProgressValue`, and a 6px token-colored track. Labels and
 values stack on phone widths so long Job kinds retain their own line. Run detail and
 Run Work cells show the current phase's known processed/total counts;
