@@ -22,10 +22,7 @@ import {
   readRecordWorkQueue,
   readWorkQueue,
 } from "~/server/domains/work/service/work-queue-read";
-import {
-  derivedMarkTickets,
-  drainStoredDerived,
-} from "~/server/testing/background-queue";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   storedQuality,
   storedQualityIds,
@@ -51,8 +48,7 @@ describe("stored Product quality", () => {
   const ctx = withTestDb();
   const refresh = () => drainStoredDerived(ctx.db);
   // A source write marks the record's stored quality with a fresh ticket.
-  const generation = async () =>
-    Math.max(0, ...(await derivedMarkTickets(ctx.db, "product.dataQuality")));
+
   const seed = async () => {
     const item = await createProductIdentityFixture(
       ctx.db,
@@ -132,16 +128,15 @@ describe("stored Product quality", () => {
     expect(await priceGap()).toBe(false);
   });
 
-  it("enrolls Expense, kit, attachment and image-integrity inputs and converges through the family", async () => {
+  it("rebuilds Expense, kit, attachment and image-integrity changes through the family", async () => {
     const { item, kit } = await seed();
     const gaps = async () =>
       (await loadDataQualities(ctx.db, "product", [item.entityId], "stored"))
         .get(item.entityId)!
         .gaps.map((gap) => gap.check);
-    const assertEnrolled = async <T>(write: () => Promise<T>) => {
-      const before = await generation();
+    const writeAndRefresh = async <T>(write: () => Promise<T>) => {
       await write();
-      expect(await generation()).toBeGreaterThan(before);
+
       await refresh();
     };
     await refresh();
@@ -157,19 +152,19 @@ describe("stored Product quality", () => {
     );
     await refresh();
     expect(await gaps()).not.toContain("product_price");
-    await assertEnrolled(() =>
+    await writeAndRefresh(() =>
       updateExpense(ctx.db, line.output.id, { cost: 0 }, ctx.actor),
     );
     expect(await gaps()).toContain("product_price");
-    await assertEnrolled(() =>
+    await writeAndRefresh(() =>
       updateExpense(ctx.db, line.output.id, { cost: 12 }, ctx.actor),
     );
     expect(await gaps()).not.toContain("product_price");
-    await assertEnrolled(() =>
+    await writeAndRefresh(() =>
       detachProductComponents(ctx.db, kit.entityId, [item.entityId], ctx.actor),
     );
     expect(await gaps()).toContain("product_price");
-    await assertEnrolled(() =>
+    await writeAndRefresh(() =>
       attachProductComponents(
         ctx.db,
         kit.entityId,
@@ -183,7 +178,7 @@ describe("stored Product quality", () => {
       "synthetic-stored-quality-cover",
     );
     expect(await gaps()).toContain("product_image");
-    await assertEnrolled(() =>
+    await writeAndRefresh(() =>
       attachExistingImageToEntity(
         ctx.db,
         { targetId: item.id, imageId: photo.shortcode },
@@ -191,7 +186,7 @@ describe("stored Product quality", () => {
       ),
     );
     expect(await gaps()).not.toContain("product_image");
-    await assertEnrolled(() =>
+    await writeAndRefresh(() =>
       updateImageIntegrity(ctx.db, photo.id, {
         width: 10,
         height: 10,

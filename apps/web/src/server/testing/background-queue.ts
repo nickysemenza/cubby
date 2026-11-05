@@ -6,14 +6,12 @@ import {
 } from "@cubby/schemas/queue-messages";
 import { releaseId, usdaReleaseObjectName } from "@cubby/usda/release";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { sql } from "drizzle-orm";
 
 import { setCfEnv } from "~/server/cf-env";
 import { getUsdaReleaseEnv } from "~/server/cf-env";
 import { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
-import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
 import { productFoodCompute } from "~/server/domains/product/repo/read-facts";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
@@ -31,10 +29,6 @@ import {
 } from "~/server/generic/derived/service/rebuild";
 import { claimJob, releaseJobClaim } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import {
-  workItemsFor,
-  workTicketsWhere,
-} from "~/server/generic/jobs/repo/work-items";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
@@ -190,26 +184,6 @@ export async function drainDerivedPage(
   }
   if (pending) throw new Error("The selected derived preparation did not run");
 }
-
-/**
- * Pending derived marks for `target` (and one record), for invalidation
- * assertions. Without `ref`, fanout marks (`<target>@<input>`) count too.
- */
-export const derivedMarkTickets = (
-  db: Database,
-  target: string,
-  ref?: string,
-): Promise<number[]> =>
-  ref
-    ? workItemsFor(db, target, [ref]).then((items) =>
-        items.map((item) => item.ticket),
-      )
-    : workTicketsWhere(
-        db,
-        DERIVED_DRAIN_JOB_KEY,
-        (column) =>
-          sql`(${column} = ${target} OR ${column} LIKE ${`${target}@%`})`,
-      );
 
 /** Settle derived marks with an optional recipe costing seam (a USDA fixture). */
 export async function drainRecipeRefreshJobs(

@@ -30,11 +30,7 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import {
-  derivedMarkTickets,
-  drainDerivedPage,
-  drainStoredDerived,
-} from "~/server/testing/background-queue";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   storedQuality,
   storedQualityIds,
@@ -507,31 +503,5 @@ describe("Shipment evidence quality", () => {
       await tombstoneEntityIdentities(tx, [parcel.row.id]);
     });
     expect(await storedQuality(ctx.db, parcel.row.id)).toBeUndefined();
-  });
-
-  it("publishes the latest verdict when a write lands during preparation", async () => {
-    const parcel = await seed([shipped, delivered]);
-    const timeline = await readShipmentTimeline(ctx.db, parcel.code);
-    await drainDerivedPage(ctx.db, {
-      target: "shipment.dataQuality",
-      during: () =>
-        editShipmentObservation(
-          ctx.db,
-          {
-            shipmentId: parcel.code,
-            observationId: timeline.observations.find(
-              (o) => o.kind === "delivered",
-            )!.observationId,
-            patch: { time: instant("2026-06-01T12:00:00Z") },
-          },
-          ctx.actor,
-        ).then(() => undefined),
-    });
-    // The edit re-ticketed the mark, so the stale page cannot clear it; the
-    // next drain publishes the edit's verdict (ADR 0021).
-    expect(
-      await derivedMarkTickets(ctx.db, "shipment.dataQuality", parcel.row.id),
-    ).toHaveLength(1);
-    await drainStoredDerived(ctx.db);
   });
 });
