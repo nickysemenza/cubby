@@ -1120,7 +1120,7 @@ describe("shared spending booking", () => {
         plan,
         ctx.actor,
       ).then(
-        (result) => (result.replayed ? "replayed" : "created"),
+        (result) => (result?.replayed ? "replayed" : "created"),
         (error: unknown) =>
           error instanceof Error ? error.message : String(error),
       );
