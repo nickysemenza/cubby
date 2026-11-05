@@ -12,8 +12,8 @@ import { putPresignedObject } from "~/lib/presigned-upload";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { FileDropField } from "~/ui/file-upload/file-drop-field";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Label } from "~/ui/primitives/label";
+import { Button } from "~/ui/shadcn/button";
+import { Label } from "~/ui/shadcn/label";
 
 import type { PendingImage } from "./pending-image-upload";
 

@@ -17,7 +17,7 @@ import {
 } from "~/features/schedule/schedule-grid";
 import type { calendar } from "~/integrations/tanstack-query/generated/domains/calendar.gen";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 type CalendarScheduleOut = Awaited<ReturnType<typeof calendar.schedule.call>>;
 

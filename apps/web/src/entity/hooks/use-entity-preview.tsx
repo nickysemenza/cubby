@@ -24,8 +24,8 @@ import {
   prefetchEntityPreview,
 } from "~/entity/entity-query";
 import { readRecordField } from "~/entity/entity-references";
-import { Button } from "~/ui/primitives/button";
-import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
+import { Button } from "~/ui/shadcn/button";
+import { Sheet, SheetContent, SheetTitle } from "~/ui/shadcn/sheet";
 
 import { EntityWorkbenchInspector } from "../entity-detail/entity-workbench-inspector";
 

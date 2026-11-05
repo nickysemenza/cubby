@@ -20,7 +20,7 @@ import {
   useSectionCount,
   useSectionEmpty,
 } from "~/ui/data-table/detail-section-state";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { JobDiagnostics } from "../job/job-diagnostics";
 import { DecisionLedger } from "./decision-ledger";

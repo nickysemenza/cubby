@@ -17,8 +17,8 @@ import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Spinner } from "~/ui/primitives/spinner";
+import { Button } from "~/ui/shadcn/button";
+import { Spinner } from "~/ui/shadcn/spinner";
 
 import { AUDIT_COLUMNS, AuditRecordRow, auditFacts } from "./audit-log-entry";
 import { foldAuditEntries } from "./audit-log-fold";

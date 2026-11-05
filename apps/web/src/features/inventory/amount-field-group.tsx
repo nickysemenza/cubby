@@ -1,11 +1,10 @@
+import { cn } from "cn";
 import type { ReactNode } from "react";
 import type {
   FieldPathByValue,
   FieldValues,
   UseFormReturn,
 } from "react-hook-form";
-
-import { cn } from "~/lib/utils";
 
 import {
   NullableNumericField,

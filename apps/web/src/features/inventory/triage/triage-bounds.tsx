@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import { Picker } from "~/entity/picker/picker";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
-import { Input } from "~/ui/primitives/input";
+import { Input } from "~/ui/shadcn/input";
 
 const CategorySearch = referenceEntitySearch("productCategory");
 

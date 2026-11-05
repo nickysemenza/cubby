@@ -18,7 +18,7 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Stack, Row } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { ScopedListPager } from "./scoped-list-pager";
 import { RecordLink } from "./suggestion-values";

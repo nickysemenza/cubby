@@ -6,7 +6,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { compileEntityListInput } from "~/entity/entity-list";
 import { useServerTree } from "~/entity/hooks/use-server-tree";
 import { useEntityMetadata } from "~/entity/metadata";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 
 // One cached hierarchy read shared by every pill on the page.
 const spendingCategoryTreeInput = (queryClient: QueryClient) =>

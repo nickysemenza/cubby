@@ -3,8 +3,8 @@ import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 
 import { formatSmallCurrency, formatCompactCount } from "~/lib/number-format";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
+import { Button } from "~/ui/shadcn/button";
+import { Description } from "~/ui/text/description";
 
 import { formatMinuteRange } from "./import-helpers";
 import type { BookEstimate } from "./types";

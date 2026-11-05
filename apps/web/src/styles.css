@@ -32,11 +32,10 @@
   --text-3xs: 0.5rem; /* 8px */
   --text-3xs--line-height: 0.75rem;
 
-  /* Pill labels and control labels have fixed sizes in every density. */
-  --text-11: 0.6875rem; /* 11px */
-  --text-11--line-height: 0.875rem;
-  --text-control: 0.75rem; /* 12px */
-  --text-control--line-height: 1.625;
+  /* Control labels keep a fixed size in every density. `md` is a t-shirt name
+     so stock tailwind-merge (`cn`) classifies it as a font size. */
+  --text-md: 0.75rem; /* 12px */
+  --text-md--line-height: 1.625;
 
   /* Mirrored from @cubby/design-tokens so motion tokens exist as utilities. */
   --ease-cozy: var(--brand-ease-cozy);
@@ -717,7 +716,7 @@
     --table-section-surface: var(--muted);
     --nav-row-height: 22px;
     --pill-height: 18px;
-    --pill-font-size: var(--text-11);
+    --pill-font-size: 0.6875rem; /* 11px */
     --record-pill-height: 18px;
     --record-pill-mark: 14px;
     --fact-row-height: 1.375rem;

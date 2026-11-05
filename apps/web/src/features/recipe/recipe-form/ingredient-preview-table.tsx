@@ -4,6 +4,7 @@ import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { cn } from "cn";
 import { uniq } from "es-toolkit";
 import { useMemo, useState } from "react";
 
@@ -14,19 +15,14 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
-import { cn } from "~/lib/utils";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { NoneValue } from "~/ui/primitives/none-value";
-import { Spinner } from "~/ui/primitives/spinner";
-import { StaticTable } from "~/ui/primitives/static-table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/ui/primitives/tooltip";
+import { Button } from "~/ui/shadcn/button";
+import { Spinner } from "~/ui/shadcn/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import { Description } from "~/ui/text/description";
 import { formatAmounts } from "~/ui/text/format-amount";
+import { NoneValue } from "~/ui/text/none-value";
 
 import { DecompositionView } from "../decomposition-view";
 import {

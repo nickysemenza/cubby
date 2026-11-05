@@ -1,5 +1,6 @@
+import { cn } from "cn";
+
 import { INGREDIENT_PART_COLOR } from "~/lib/ingredient-part-colors";
-import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
 /**

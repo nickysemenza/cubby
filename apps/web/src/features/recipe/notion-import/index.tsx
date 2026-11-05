@@ -17,16 +17,16 @@ import { recipeStreams } from "~/integrations/tanstack-query/generated/domains/r
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { BulkProgressBar } from "~/ui/feedback/bulk-progress-bar";
 import { Panel } from "~/ui/layout/panel";
 import { Row } from "~/ui/layout/row";
 import { Stack } from "~/ui/layout/stack";
 import { Toolbar } from "~/ui/layout/toolbar";
-import { BulkProgressBar } from "~/ui/primitives/bulk-progress-bar";
-import { Button } from "~/ui/primitives/button";
-import { Checkbox } from "~/ui/primitives/checkbox";
-import { Description } from "~/ui/primitives/description";
-import { Input } from "~/ui/primitives/input";
-import { Spinner } from "~/ui/primitives/spinner";
+import { Button } from "~/ui/shadcn/button";
+import { Checkbox } from "~/ui/shadcn/checkbox";
+import { Input } from "~/ui/shadcn/input";
+import { Spinner } from "~/ui/shadcn/spinner";
+import { Description } from "~/ui/text/description";
 
 import type { ImportResult } from "../cookbook-import/types";
 import { RecipeImportCard } from "../recipe-import-card";

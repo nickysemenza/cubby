@@ -2,6 +2,7 @@ import type { CalendarItem } from "@cubby/schemas/calendar";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { capitalize } from "@cubby/shared";
+import { cn } from "cn";
 
 import { EntityCover } from "~/entity/components/entity-cover";
 import { EntityIdentityMark } from "~/entity/components/entity-identity-mark";
@@ -9,11 +10,10 @@ import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-imag
 import { InheritedMarker } from "~/entity/fields/field-resolution";
 import { formatCurrency } from "~/lib/number-format";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
-import { cn } from "~/lib/utils";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
-import { Badge } from "~/ui/primitives/badge";
+import { Badge } from "~/ui/shadcn/badge";
 
 import { calendarItemPresentation } from "./calendar-kind-registry";
 import { itemSpanLabel } from "./calendar-span";

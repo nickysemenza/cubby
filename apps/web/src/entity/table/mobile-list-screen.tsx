@@ -1,13 +1,13 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { RowData } from "@tanstack/react-table";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 
-import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { MobileCardSkeletonList } from "~/ui/feedback/mobile-card-skeleton";
+import { PullToRefresh } from "~/ui/feedback/pull-to-refresh";
 import { QueryRefreshStatus } from "~/ui/feedback/query-refresh-status";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { PullToRefresh } from "~/ui/primitives/pull-to-refresh";
 
 import type { FilterSheetSwitch } from "../../ui/data-table/filter-bar";
 import type {

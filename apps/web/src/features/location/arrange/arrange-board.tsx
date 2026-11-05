@@ -2,9 +2,8 @@ import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { LocationTreeNode } from "@cubby/schemas/location";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
+import { cn } from "cn";
 import { useEffect, useMemo, useRef } from "react";
-
-import { cn } from "~/lib/utils";
 
 import { ArrangeColumn } from "./arrange-column";
 import { findNode, pathToNode } from "./arrange-tree-utils";

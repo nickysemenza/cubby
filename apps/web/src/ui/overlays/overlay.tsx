@@ -1,4 +1,5 @@
 import { getErrorMessage } from "@cubby/shared";
+import { cn } from "cn";
 import {
   useEffect,
   useRef,
@@ -7,17 +8,16 @@ import {
   type ReactNode,
 } from "react";
 
-import { cn } from "~/lib/utils";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
-} from "~/ui/primitives/dialog";
-import { SheetContent } from "~/ui/primitives/sheet";
-import { Spinner } from "~/ui/primitives/spinner";
+} from "~/ui/shadcn/dialog";
+import { SheetContent } from "~/ui/shadcn/sheet";
+import { Spinner } from "~/ui/shadcn/spinner";
 
 type OverlayAction = {
   label: string;

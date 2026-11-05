@@ -3,6 +3,7 @@ import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwis
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -12,7 +13,6 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import RTable from "~/entity/table/table";
 import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
-import { cn } from "~/lib/utils";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -22,14 +22,10 @@ import { useLocalTable } from "~/ui/data-table/use-local-table";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { StatusText } from "~/ui/primitives/status-text";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/ui/primitives/tooltip";
+import { Button } from "~/ui/shadcn/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import { Description } from "~/ui/text/description";
+import { StatusText } from "~/ui/text/status-text";
 
 import { equivalenceWorkbenchSearch } from "./equivalence-workbench-link";
 

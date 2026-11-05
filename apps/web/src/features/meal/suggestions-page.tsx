@@ -7,10 +7,10 @@ import { recipeAvailability } from "~/integrations/tanstack-query/generated/doma
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Grid, Panel, Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { StatusText } from "~/ui/primitives/status-text";
+import { Badge } from "~/ui/shadcn/badge";
+import { Button } from "~/ui/shadcn/button";
+import { Description } from "~/ui/text/description";
+import { StatusText } from "~/ui/text/status-text";
 
 import { AddToMeal } from "./add-to-meal";
 import {

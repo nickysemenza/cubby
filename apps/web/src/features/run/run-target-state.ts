@@ -1,6 +1,6 @@
 import type { RunTargetState } from "@cubby/schemas/purchase-import";
 
-import type { BadgeVariant } from "~/ui/primitives/badge";
+import type { BadgeVariant } from "~/ui/shadcn/badge";
 
 export const RUN_TARGET_STATE_LABEL = {
   pending: "Pending",

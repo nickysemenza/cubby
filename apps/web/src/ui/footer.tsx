@@ -1,7 +1,7 @@
 import { GraphIcon } from "@phosphor-icons/react/dist/csr/Graph";
 
 import type { BuildMetadata } from "~/lib/build-metadata";
-import { formatBuildDate } from "~/lib/utils";
+import { formatBuildDate } from "~/lib/date-format";
 import { Row } from "~/ui/layout";
 
 export function AppFooter({ metadata }: { metadata: BuildMetadata }) {

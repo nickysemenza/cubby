@@ -9,9 +9,9 @@ import { formatCount } from "~/lib/number-format";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { wasm } from "~/lib/wasm";
 import { Row, Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
-import { Input } from "~/ui/primitives/input";
-import { Label } from "~/ui/primitives/label";
+import { Input } from "~/ui/shadcn/input";
+import { Label } from "~/ui/shadcn/label";
+import { Description } from "~/ui/text/description";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 
 export type FoodAmountSourceKind =

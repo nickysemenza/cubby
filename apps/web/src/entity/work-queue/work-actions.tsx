@@ -16,8 +16,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/ui/primitives/alert-dialog";
-import { Button } from "~/ui/primitives/button";
+} from "~/ui/shadcn/alert-dialog";
+import { Button } from "~/ui/shadcn/button";
 
 import type { WorkActionProps, WorkActionTarget } from "./work-action-props";
 

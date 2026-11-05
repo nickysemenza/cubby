@@ -14,8 +14,8 @@ import { z } from "zod";
 import { Picker } from "~/entity/picker/picker";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
-import { Button } from "~/ui/primitives/button";
-import { Input } from "~/ui/primitives/input";
+import { Button } from "~/ui/shadcn/button";
+import { Input } from "~/ui/shadcn/input";
 
 type LedgerAttributionRow = ReturnType<typeof ledgerAttributions.parse>[number];
 

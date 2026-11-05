@@ -11,8 +11,8 @@ import { MarkdownText } from "~/entity/prose/markdown";
 import { dataQuality } from "~/integrations/tanstack-query/generated/domains/dataQuality.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { Button } from "~/ui/primitives/button";
-import { Input } from "~/ui/primitives/input";
+import { Button } from "~/ui/shadcn/button";
+import { Input } from "~/ui/shadcn/input";
 
 type ExplainedCheck = NonNullable<
   FieldExplanationOutput["qualityBreakdown"]

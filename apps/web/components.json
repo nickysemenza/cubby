@@ -16,7 +16,7 @@
   "aliases": {
     "components": "~/ui",
     "utils": "~/lib/utils",
-    "ui": "~/ui/primitives",
+    "ui": "~/ui/shadcn",
     "lib": "~/lib",
     "hooks": "~/ui/hooks"
   },

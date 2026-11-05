@@ -1,4 +1,5 @@
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { cn } from "cn";
 import {
   useMemo,
   useRef,
@@ -7,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 
-import { cn } from "~/lib/utils";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 
 export interface OutlineNode<T> {

@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import {
   createContext,
   type ReactNode,
@@ -7,8 +8,6 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-
-import { cn } from "~/lib/utils";
 
 import { useCellActive, useCoarsePointer, useRowActive } from "./row-activity";
 import { railCovers } from "./use-cell-spill";

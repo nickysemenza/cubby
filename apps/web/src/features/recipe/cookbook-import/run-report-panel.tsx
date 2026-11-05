@@ -14,11 +14,11 @@ import {
   RecordList,
   RecordRow,
 } from "~/ui/common/record-list";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { StaticTable } from "~/ui/primitives/static-table";
+import { Button } from "~/ui/shadcn/button";
+import { Description } from "~/ui/text/description";
 
 import {
   type ChunkRow,

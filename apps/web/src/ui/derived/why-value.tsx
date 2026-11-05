@@ -43,16 +43,16 @@ import {
   DisclosureRoot,
   DisclosureTrigger,
 } from "~/ui/layout/disclosure";
-import { Badge } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { Badge } from "~/ui/shadcn/badge";
+import { Button } from "~/ui/shadcn/button";
 import {
   Popover,
   PopoverContent,
   PopoverTitle,
   PopoverTrigger,
-} from "~/ui/primitives/popover";
+} from "~/ui/shadcn/popover";
 import JsonRenderer from "~/ui/text/json-renderer";
+import { NoneValue } from "~/ui/text/none-value";
 
 import { DecisionChain, DerivedFreshness } from "./decision-chain";
 import { DecisionLevels } from "./decision-levels";

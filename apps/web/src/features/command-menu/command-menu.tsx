@@ -29,7 +29,7 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useDebug } from "~/ui/hooks/use-debug";
 import { useLocalStorage } from "~/ui/hooks/use-local-storage";
 import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
+import { Badge } from "~/ui/shadcn/badge";
 import {
   CommandDialog,
   CommandGroup,
@@ -37,8 +37,8 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-} from "~/ui/primitives/command";
-import { Spinner } from "~/ui/primitives/spinner";
+} from "~/ui/shadcn/command";
+import { Spinner } from "~/ui/shadcn/spinner";
 
 import { completeNavLeaves } from "../../entity/navigation/nav-items";
 import type { NavItem } from "../../entity/navigation/nav-items";

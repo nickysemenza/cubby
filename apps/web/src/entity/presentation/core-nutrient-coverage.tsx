@@ -1,5 +1,6 @@
+import { cn } from "cn";
+
 import { CORE_NUTRIENTS } from "~/lib/usda-food-stats";
-import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 
 /**

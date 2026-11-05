@@ -37,8 +37,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/ui/primitives/alert-dialog";
-import { Button } from "~/ui/primitives/button";
+} from "~/ui/shadcn/alert-dialog";
+import { Button } from "~/ui/shadcn/button";
 
 import { parseRichTextSafe } from "../richtext";
 import {

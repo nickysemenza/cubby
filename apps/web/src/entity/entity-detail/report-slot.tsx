@@ -11,6 +11,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { cn } from "cn";
 import { type ReactNode, useEffect } from "react";
 
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
@@ -20,27 +21,22 @@ import { entityReport } from "~/integrations/tanstack-query/generated/domains/en
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
 import { formatCurrency } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { KeyNumbers } from "~/ui/common/key-numbers";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
-import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Row, Stack } from "~/ui/layout";
-import { buttonVariants } from "~/ui/primitives/button";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { EnumPill } from "~/ui/primitives/enum-pill";
-import { Eyebrow } from "~/ui/primitives/eyebrow";
-import {
-  Progress,
-  ProgressLabel,
-  ProgressValue,
-} from "~/ui/primitives/progress";
-import { Skeleton } from "~/ui/primitives/skeleton";
 import {
   StaticTable,
   type StaticTableColumn,
-} from "~/ui/primitives/static-table";
+} from "~/ui/data-table/static-table";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Row, Stack } from "~/ui/layout";
+import { buttonVariants } from "~/ui/shadcn/button";
+import { Button } from "~/ui/shadcn/button";
+import { Progress, ProgressLabel, ProgressValue } from "~/ui/shadcn/progress";
+import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Description } from "~/ui/text/description";
+import { EnumPill } from "~/ui/text/enum-pill";
+import { Eyebrow } from "~/ui/text/eyebrow";
 
 import { DetailAction, reportDetailActionsFor } from "./detail-action-bar";
 import { RecordsBlockView, RecordsDetailActions } from "./records-block";

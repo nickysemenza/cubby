@@ -32,12 +32,12 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
-import { Badge } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { Skeleton } from "~/ui/primitives/skeleton";
-import { Textarea } from "~/ui/primitives/textarea";
+import { Alert, AlertDescription, AlertTitle } from "~/ui/shadcn/alert";
+import { Badge } from "~/ui/shadcn/badge";
+import { Button } from "~/ui/shadcn/button";
+import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Textarea } from "~/ui/shadcn/textarea";
+import { Description } from "~/ui/text/description";
 
 import { CopyJsonButton } from "./copy-debug-button";
 import { RecipeFlowMap, RecipeFlowTable } from "./recipe-flow-renderers";

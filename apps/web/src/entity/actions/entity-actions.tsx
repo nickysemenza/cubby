@@ -14,19 +14,19 @@ import {
 import { featureRegistry } from "~/entity/feature-registry";
 import { useEntityMetadata } from "~/entity/metadata";
 import { copyIdentifiers, copyShortcodes } from "~/lib/clipboard";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
+} from "~/ui/shadcn/dropdown-menu";
 import {
   Popover,
   PopoverContent,
   PopoverTitle,
   PopoverTrigger,
-} from "~/ui/primitives/popover";
+} from "~/ui/shadcn/popover";
 
 import type {
   BulkAction,

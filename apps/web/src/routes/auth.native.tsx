@@ -13,7 +13,7 @@ import {
 } from "~/lib/native-auth";
 import { pageTitle } from "~/lib/page-title";
 import { Panel } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 export const Route = createFileRoute("/auth/native")({
   validateSearch: nativeAuthSearch,

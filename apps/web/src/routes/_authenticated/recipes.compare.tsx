@@ -28,7 +28,7 @@ import { computeRecipeCosting } from "~/lib/recipe-costing";
 import { urlStringParam } from "~/lib/search-params";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
-import { buttonVariants } from "~/ui/primitives/button";
+import { buttonVariants } from "~/ui/shadcn/button";
 
 const searchParamsSchema = z.object({
   ids: urlStringParam,

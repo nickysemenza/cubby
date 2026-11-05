@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { useId, useState } from "react";
 
 import {
@@ -8,14 +9,9 @@ import {
 } from "~/lib/date-format";
 import { dateSpanParts, stackedDateSpan, yearMark } from "~/lib/date-span";
 import { householdLocalDate } from "~/lib/household-date";
-import { cn } from "~/lib/utils";
 import { StackedValue, useDenseCell } from "~/ui/common/stacked-value";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/ui/primitives/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
 
 type DateDisplayProps = {
   className?: string;

@@ -103,10 +103,10 @@ import { CellMagnitudeBar } from "~/ui/data-table/visuals/cell-visual";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { WhyValueContents } from "~/ui/derived/why-value";
 import { ExternalLinkText } from "~/ui/external-link";
-import { Button } from "~/ui/primitives/button";
-import { Checkbox } from "~/ui/primitives/checkbox";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { Button } from "~/ui/shadcn/button";
+import { Checkbox } from "~/ui/shadcn/checkbox";
 import { tryFormatAmount } from "~/ui/text/format-amount";
+import { NoneValue } from "~/ui/text/none-value";
 
 import { columnHeaderFor } from "../column-header";
 import { recordFieldClearing } from "../editing/field-clearing";

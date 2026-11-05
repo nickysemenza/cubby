@@ -17,10 +17,10 @@ import { useId, useMemo, useState } from "react";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { wasm } from "~/lib/wasm";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Input } from "~/ui/primitives/input";
-import { Label } from "~/ui/primitives/label";
-import { Spinner } from "~/ui/primitives/spinner";
+import { Button } from "~/ui/shadcn/button";
+import { Input } from "~/ui/shadcn/input";
+import { Label } from "~/ui/shadcn/label";
+import { Spinner } from "~/ui/shadcn/spinner";
 
 import { useUpdateMutation } from "../../entity/hooks/use-update-mutation";
 import { NutrientsSummary } from "../../entity/presentation/nutrients-summary";

@@ -12,7 +12,7 @@ import type { WorkActionProps } from "~/entity/work-queue/work-actions";
 import { ProblemItemsAction } from "~/features/work-queue/problem-items-action";
 import { formatCurrency } from "~/lib/number-format";
 import { Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { withoutSourceAlias, withoutSourceRef } from "./duplicate-claims";
 

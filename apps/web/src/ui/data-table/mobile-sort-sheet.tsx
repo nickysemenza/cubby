@@ -2,10 +2,10 @@ import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
 import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import type { RowData } from "@tanstack/react-table";
+import { cn } from "cn";
 
-import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
-import { Eyebrow } from "~/ui/primitives/eyebrow";
+import { Eyebrow } from "~/ui/text/eyebrow";
 
 import type {
   CubbyColumn as Column,

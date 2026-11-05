@@ -20,12 +20,12 @@ import { imageUpload } from "~/integrations/tanstack-query/generated/domains/ima
 import { maintenance } from "~/integrations/tanstack-query/generated/domains/maintenance.gen";
 import { problems } from "~/integrations/tanstack-query/generated/domains/problems.gen";
 import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { Eyebrow } from "~/ui/primitives/eyebrow";
-import { StaticTable } from "~/ui/primitives/static-table";
+import { Button } from "~/ui/shadcn/button";
+import { Description } from "~/ui/text/description";
+import { Eyebrow } from "~/ui/text/eyebrow";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 
 import { BackfillButton } from "./backfill-button";

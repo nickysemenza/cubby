@@ -75,9 +75,9 @@ import {
 } from "~/ui/forms/form-utils";
 import { Section } from "~/ui/layout";
 import { Row } from "~/ui/layout";
-import { Checkbox } from "~/ui/primitives/checkbox";
-import { Input } from "~/ui/primitives/input";
-import { Textarea } from "~/ui/primitives/textarea";
+import { Checkbox } from "~/ui/shadcn/checkbox";
+import { Input } from "~/ui/shadcn/input";
+import { Textarea } from "~/ui/shadcn/textarea";
 
 import {
   entityFieldPresentation,

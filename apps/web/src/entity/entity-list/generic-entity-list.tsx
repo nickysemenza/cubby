@@ -70,7 +70,7 @@ import {
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { EntityShelf } from "./entity-shelf";
 import {

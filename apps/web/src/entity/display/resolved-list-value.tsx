@@ -1,8 +1,8 @@
 import type { ResolvedListItem } from "@cubby/schemas/field-resolution";
+import { cn } from "cn";
 import { Fragment, type ReactNode } from "react";
 
 import { InheritedMarker } from "~/entity/fields/field-resolution";
-import { cn } from "~/lib/utils";
 
 /** Shared rendering for a resolved set, retaining each record and inherited marker. */
 export function ResolvedListValue({

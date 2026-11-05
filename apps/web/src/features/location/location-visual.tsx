@@ -3,13 +3,13 @@ import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
 import type { LocationTreeNode } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { locationChildGroupLabel } from "~/lib/location-child-label";
-import { cn } from "~/lib/utils";
-import { Badge } from "~/ui/primitives/badge";
-import { Image } from "~/ui/primitives/image";
+import { Image } from "~/ui/common/image";
+import { Badge } from "~/ui/shadcn/badge";
 
 import { LocationIcon } from "../../entity/presentation/location-icons";
 import { resolveLocationVisual } from "../../entity/presentation/location-visual-resolver";

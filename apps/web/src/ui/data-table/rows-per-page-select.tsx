@@ -1,6 +1,6 @@
 import type { RowData } from "@tanstack/react-table";
+import { cn } from "cn";
 
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 
 import type { CubbyTable as Table } from "./table-features";

@@ -11,7 +11,7 @@ import { ProductRelatednessActions } from "~/entity/relatedness/relatedness-rail
 import { purchaseLabel } from "~/lib/purchase-label";
 import { RecordDot, RecordList, RecordRow } from "~/ui/common/record-list";
 import { Stack } from "~/ui/layout";
-import { StatusText } from "~/ui/primitives/status-text";
+import { StatusText } from "~/ui/text/status-text";
 
 function JourneyStep({
   label,

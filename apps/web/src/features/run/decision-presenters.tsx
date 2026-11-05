@@ -9,6 +9,7 @@ import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
 import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { XCircleIcon } from "@phosphor-icons/react/dist/csr/XCircle";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -16,11 +17,10 @@ import type { RunDecision } from "~/contracts/run-detail.contract";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Panel } from "~/ui/layout/panel";
 import { SidePanelSection } from "~/ui/overlays/side-panel";
-import { StaticTable } from "~/ui/primitives/static-table";
 
 import type { StatusTone } from "../job/job-status";
 import { DECISION_STATUS_LABEL, humanizeKey } from "./run-view-model";

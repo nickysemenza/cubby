@@ -6,7 +6,7 @@ import { preloadCommandMenu } from "~/features/command-menu/command-menu-loader"
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useNavAuthed } from "~/ui/hooks/use-nav-authed";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { MainNavEnhancements } from "../../entity/navigation/main-nav-enhancements";
 

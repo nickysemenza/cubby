@@ -1,6 +1,6 @@
 import type { RowData, RowSelectionState } from "@tanstack/react-table";
 
-import { Checkbox } from "~/ui/primitives/checkbox";
+import { Checkbox } from "~/ui/shadcn/checkbox";
 
 import type { CubbyCellContext, CubbyColumnDef } from "./table-features";
 

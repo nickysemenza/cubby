@@ -1,9 +1,9 @@
+import { cn } from "cn";
 import { useMemo, useState } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import { RecipePartHeading } from "./recipe-part-heading";
 import { formatRichText, parseRichTextSafe } from "./richtext";

@@ -1,8 +1,7 @@
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
+import { cn } from "cn";
 import type { ReactNode } from "react";
-
-import { cn } from "~/lib/utils";
 
 /** `muted` and `warning` carry meaning; they are not decoration choices. */
 type PanelTone = "default" | "muted" | "warning";

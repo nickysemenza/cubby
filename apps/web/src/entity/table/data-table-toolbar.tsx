@@ -9,16 +9,16 @@ import { SortAscendingIcon } from "@phosphor-icons/react/dist/csr/SortAscending"
 import { SortDescendingIcon } from "@phosphor-icons/react/dist/csr/SortDescending";
 import { useQueryClient } from "@tanstack/react-query";
 import type { RowData } from "@tanstack/react-table";
+import { cn } from "cn";
 import { type ReactNode, useContext } from "react";
 import { createPortal } from "react-dom";
 
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { defaultSortFor } from "~/entity/sortable-fields";
-import { cn } from "~/lib/utils";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Toolbar } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,7 +30,7 @@ import {
   DropdownMenuSubmenuContent,
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
+} from "~/ui/shadcn/dropdown-menu";
 
 import { isTableLayoutCustomized } from "../../ui/data-table/column-layout";
 import { DataTableViewOptions } from "../../ui/data-table/data-table-view-options";

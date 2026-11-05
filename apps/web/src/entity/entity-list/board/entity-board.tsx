@@ -12,6 +12,7 @@ import {
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { cn } from "cn";
 import { useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -37,7 +38,6 @@ import {
 } from "~/entity/model/list-contracts";
 import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { useTableState } from "~/entity/table/use-table-state";
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import { DenseCellContext } from "~/ui/common/stacked-value";
 import { FilterBar } from "~/ui/data-table/filter-bar";
@@ -52,7 +52,7 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { ListLoadingSkeleton } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Panel } from "~/ui/layout/panel";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,7 +61,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
+} from "~/ui/shadcn/dropdown-menu";
 
 import { listGroupBy } from "../list-grouping";
 import type { ListSlotProps } from "../list-slot-types";

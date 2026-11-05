@@ -10,7 +10,7 @@ import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import { formatCurrency } from "~/lib/number-format";
 import type { CubbyRow } from "~/ui/data-table/table-features";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,8 +21,8 @@ import {
   DropdownMenuSubmenuContent,
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
-import { Textarea } from "~/ui/primitives/textarea";
+} from "~/ui/shadcn/dropdown-menu";
+import { Textarea } from "~/ui/shadcn/textarea";
 
 import {
   acceptItem,

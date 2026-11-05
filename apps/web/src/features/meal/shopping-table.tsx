@@ -1,20 +1,20 @@
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { useMemo, useState } from "react";
 
 import { entityDetailLink } from "~/entity/entities";
 import RTable from "~/entity/table/table";
 import { formatCalendarDay } from "~/lib/date-format";
-import { cn } from "~/lib/utils";
+import { StaticTable } from "~/ui/data-table/static-table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useLocalTable } from "~/ui/data-table/use-local-table";
-import { Checkbox } from "~/ui/primitives/checkbox";
-import { StaticTable } from "~/ui/primitives/static-table";
+import { Checkbox } from "~/ui/shadcn/checkbox";
 
 import {
   formatAmount,

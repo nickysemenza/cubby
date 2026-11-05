@@ -5,7 +5,7 @@ import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type React from "react";
 import { useCallback, useState } from "react";
 
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import {
   useCellEditState,

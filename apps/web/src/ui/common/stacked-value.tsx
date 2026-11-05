@@ -1,7 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { cn } from "cn";
 import { createContext, useContext, type ReactNode } from "react";
-
-import { cn } from "~/lib/utils";
 
 /**
  * Set inside a desktop table cell, where values take their dense form: dates

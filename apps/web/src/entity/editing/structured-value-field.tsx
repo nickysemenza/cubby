@@ -30,8 +30,8 @@ import {
   UnifiedTextField,
 } from "~/ui/forms/form-utils";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Checkbox } from "~/ui/primitives/checkbox";
+import { Button } from "~/ui/shadcn/button";
+import { Checkbox } from "~/ui/shadcn/checkbox";
 
 import {
   collectionEditSchema,

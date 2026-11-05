@@ -22,10 +22,10 @@ import {
 } from "~/features/schedule/schedule-grid";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Section, Stack, Toolbar } from "~/ui/layout";
-import { StaticTable } from "~/ui/primitives/static-table";
 
 import {
   cropName,

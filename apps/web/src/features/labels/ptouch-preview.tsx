@@ -1,7 +1,7 @@
 import { getShortcodeUrl } from "@cubby/shared";
 
-import { Description } from "~/ui/primitives/description";
-import { StaticTable } from "~/ui/primitives/static-table";
+import { StaticTable } from "~/ui/data-table/static-table";
+import { Description } from "~/ui/text/description";
 
 import type { LabelItem } from "./sheet-layouts";
 

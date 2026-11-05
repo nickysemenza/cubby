@@ -8,6 +8,7 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGl
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { cn } from "cn";
 import { uniq } from "es-toolkit";
 import {
   useCallback,
@@ -24,22 +25,21 @@ import {
   SearchShortcode,
 } from "~/entity/presentation/search-facts";
 import { search } from "~/integrations/tanstack-query/generated/domains/search.gen";
-import { cn } from "~/lib/utils";
 import { MobileCard } from "~/ui/data-table/mobile-card";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { MobileCardSkeletonList } from "~/ui/feedback/mobile-card-skeleton";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
+import { Badge } from "~/ui/shadcn/badge";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
-import { Input } from "~/ui/primitives/input";
-import { Skeleton } from "~/ui/primitives/skeleton";
+} from "~/ui/shadcn/dropdown-menu";
+import { Input } from "~/ui/shadcn/input";
+import { Skeleton } from "~/ui/shadcn/skeleton";
 
 import {
   type EntityPreviewRowData,

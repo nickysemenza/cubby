@@ -17,7 +17,7 @@ import { SunHorizonIcon } from "@phosphor-icons/react/dist/csr/SunHorizon";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { format } from "date-fns";
 
-import { type BadgeVariant } from "~/ui/primitives/badge";
+import { type BadgeVariant } from "~/ui/shadcn/badge";
 
 /**
  * Presentation for the two meal classification enums.

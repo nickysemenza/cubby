@@ -1,10 +1,10 @@
 import { recordEmojiInput } from "@cubby/schemas/emoji";
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { entityRoster } from "@cubby/schemas/entity-roster";
+import { cn } from "cn";
 
 import { EntityIcon } from "~/entity/entities";
 import { readPathValue } from "~/entity/read-path";
-import { cn } from "~/lib/utils";
 
 /** All record marks share a fixed footprint and a declaration-owned type fallback. */
 export function RecordEmoji({

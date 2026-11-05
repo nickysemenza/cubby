@@ -35,7 +35,7 @@ import type {
   EventCalendarDragState,
   EventCalendarSegment,
 } from "./event-calendar-types";
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
 
 const LANE_HEIGHT = "1.75rem";
 

@@ -44,10 +44,10 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { Input } from "~/ui/primitives/input";
+import { Alert, AlertDescription, AlertTitle } from "~/ui/shadcn/alert";
+import { Button } from "~/ui/shadcn/button";
+import { Input } from "~/ui/shadcn/input";
+import { Description } from "~/ui/text/description";
 
 // A null quantity is "not entered yet": an already-counted Product starts
 // blank so units can never be added without typing a number.

@@ -1,20 +1,20 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { imageChainExplanation } from "@cubby/schemas/field-explanation";
 import { useQuery } from "@tanstack/react-query";
+import { cn } from "cn";
 import { useState, type ReactNode } from "react";
 import type { z } from "zod";
 
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
-import { cn } from "~/lib/utils";
+import { Image } from "~/ui/common/image";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Button } from "~/ui/primitives/button";
-import { Image } from "~/ui/primitives/image";
+import { Button } from "~/ui/shadcn/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
   PopoverTitle,
-} from "~/ui/primitives/popover";
+} from "~/ui/shadcn/popover";
 
 import { SourceStack } from "./source-stack";
 import { ExplanationEntityLink } from "./why-value";

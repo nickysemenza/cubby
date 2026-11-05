@@ -14,9 +14,9 @@ import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { Panel } from "~/ui/layout/panel";
-import { Button } from "~/ui/primitives/button";
-import { Input } from "~/ui/primitives/input";
-import { Textarea } from "~/ui/primitives/textarea";
+import { Button } from "~/ui/shadcn/button";
+import { Input } from "~/ui/shadcn/input";
+import { Textarea } from "~/ui/shadcn/textarea";
 
 const ENTITY_OPTIONS: readonly PickerOption[] =
   fieldSuggestionsInput.shape.entity.options.map((option) => ({

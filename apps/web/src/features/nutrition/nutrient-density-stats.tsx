@@ -7,7 +7,7 @@ import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { usdaNutrientBasis } from "~/lib/unit-mapping-utils";
 import { Row } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import {
   entityDisplayImageKey,

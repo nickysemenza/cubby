@@ -42,7 +42,7 @@ import {
   deferredFilterOptionSource,
   deferredRosterControls,
 } from "~/ui/hooks/filter-option-types";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 
 import { kindAgreement } from "./statement-kind-votes";
 import { SuggestionActionsCell, ExpandCell } from "./suggestion-actions";

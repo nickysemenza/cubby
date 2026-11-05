@@ -17,7 +17,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { CategoryLabel } from "~/entity/presentation/category-label";
 import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
+import { Badge } from "~/ui/shadcn/badge";
 
 import type { EntityDetailFieldRenderers } from "./index";
 

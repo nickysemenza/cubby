@@ -4,7 +4,7 @@ import { type ReactNode, useRef } from "react";
 
 import { formatCount } from "~/lib/number-format";
 import { CurrencyValue } from "~/ui/common/currency-value";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +13,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
+} from "~/ui/shadcn/dropdown-menu";
 
 import { tableMoneyTotals } from "../../ui/data-table/bulk/table-money";
 import { columnLabel } from "../../ui/data-table/data-table-view-options";

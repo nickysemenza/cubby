@@ -9,8 +9,8 @@ import { UsdaFoodSearchField } from "~/entity/picker/with-usda-food-search";
 import { RecipeUsagesTable } from "~/features/recipe/recipe-usages-table";
 import { ingredient } from "~/integrations/tanstack-query/generated/domains/ingredient.gen";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
+import { Button } from "~/ui/shadcn/button";
+import { Description } from "~/ui/text/description";
 
 import { EnrichmentEditor } from "./enrichment-editor";
 import type { EquivalenceDraft } from "./equivalence-workbench-link";

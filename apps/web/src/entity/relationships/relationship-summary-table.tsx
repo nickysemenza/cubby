@@ -22,8 +22,8 @@ import { relatedData } from "~/integrations/tanstack-query/generated/domains/rel
 import { formatCurrency } from "~/lib/number-format";
 import { ROW_DENSITY } from "~/ui/data-table/density";
 import { Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
-import { Input } from "~/ui/primitives/input";
+import { Input } from "~/ui/shadcn/input";
+import { Description } from "~/ui/text/description";
 
 import { useTableColumnLayout } from "../../ui/data-table/column-layout";
 import {

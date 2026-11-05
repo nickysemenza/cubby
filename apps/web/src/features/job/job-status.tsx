@@ -2,7 +2,7 @@ import type { JobState } from "@cubby/schemas/job";
 import { HourglassIcon } from "@phosphor-icons/react/dist/csr/Hourglass";
 
 import type { StepWait } from "~/features/run/run-view-model";
-import { EnumPill } from "~/ui/primitives/enum-pill";
+import { EnumPill } from "~/ui/text/enum-pill";
 
 const TONE = {
   info: "var(--info)",

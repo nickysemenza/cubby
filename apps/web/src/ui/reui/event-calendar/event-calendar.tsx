@@ -45,7 +45,7 @@ import type {
 import { EventCalendarDndProvider } from "./event-calendar-dnd";
 import { EventCalendarMonthView } from "./event-calendar-month-view";
 import { EventCalendarWeekView } from "./event-calendar-week-view";
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
 
 interface EventCalendarActivationConfig {
   moveDistancePx: number;

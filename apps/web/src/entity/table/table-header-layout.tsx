@@ -24,12 +24,12 @@ import { SortDescendingIcon } from "@phosphor-icons/react/dist/csr/SortDescendin
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { Header, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
+import { cn } from "cn";
 import { type ReactNode, useRef } from "react";
 
 import { EntityIcon } from "~/entity/entities";
 import { FieldProvenance } from "~/entity/fields/field-provenance";
-import { cn } from "~/lib/utils";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,8 +38,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
-import { TableHead, TableRow } from "~/ui/primitives/table";
+} from "~/ui/shadcn/dropdown-menu";
+import { TableHead, TableRow } from "~/ui/shadcn/table";
 
 import {
   columnWidthValue,

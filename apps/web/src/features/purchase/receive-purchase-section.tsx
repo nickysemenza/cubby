@@ -8,8 +8,8 @@ import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { entityListFor } from "~/entity/entity-list";
 import { ReceiveExpenseDialog } from "~/features/expense/receive-expense-dialog";
 import { Row, Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
-import { StatusText } from "~/ui/primitives/status-text";
+import { Description } from "~/ui/text/description";
+import { StatusText } from "~/ui/text/status-text";
 
 const PAGE_SIZE = 100;
 

@@ -22,7 +22,7 @@ import { OperationError } from "~/lib/operation-error";
 import { ErrorDetails } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 type ErrorCategory =
   | "auth"

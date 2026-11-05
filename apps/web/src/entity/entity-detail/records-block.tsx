@@ -3,13 +3,13 @@ import { type ReactNode, Suspense, useState } from "react";
 
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { DateDisplay } from "~/ui/common/date-display";
+import { Image } from "~/ui/common/image";
 import { RecordDetail } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { Eyebrow } from "~/ui/primitives/eyebrow";
-import { Image } from "~/ui/primitives/image";
-import { Skeleton } from "~/ui/primitives/skeleton";
+import { Button } from "~/ui/shadcn/button";
+import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Description } from "~/ui/text/description";
+import { Eyebrow } from "~/ui/text/eyebrow";
 
 import {
   DetailAction,

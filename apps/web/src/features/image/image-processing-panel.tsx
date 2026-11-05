@@ -26,13 +26,13 @@ import { image as imageOperations } from "~/integrations/tanstack-query/generate
 import { imageProcessing } from "~/integrations/tanstack-query/generated/domains/imageProcessing.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatInstant } from "~/lib/date-format";
+import { Image } from "~/ui/common/image";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button, buttonVariants } from "~/ui/primitives/button";
-import { Image } from "~/ui/primitives/image";
-import { Textarea } from "~/ui/primitives/textarea";
+import { Button, buttonVariants } from "~/ui/shadcn/button";
+import { Textarea } from "~/ui/shadcn/textarea";
 
 import { workStateLabel } from "./image-processing-state";
 

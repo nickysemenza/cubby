@@ -12,11 +12,11 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { Image } from "~/ui/common/image";
 import { Row } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
-import { Eyebrow } from "~/ui/primitives/eyebrow";
-import { Image } from "~/ui/primitives/image";
-import { Spinner } from "~/ui/primitives/spinner";
+import { Spinner } from "~/ui/shadcn/spinner";
+import { Description } from "~/ui/text/description";
+import { Eyebrow } from "~/ui/text/eyebrow";
 
 import {
   entityDisplayImageKey,

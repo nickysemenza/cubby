@@ -41,7 +41,7 @@ import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
 import { useDetailTitle } from "~/ui/hooks/use-document-title";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { recipeExportSearchSchema } from "./-recipe-export-search";
 

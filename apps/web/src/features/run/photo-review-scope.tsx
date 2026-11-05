@@ -2,8 +2,8 @@ import type { PhotoGroupProposal } from "@cubby/schemas/photo-import-run";
 import { useMemo, useState } from "react";
 
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Input } from "~/ui/primitives/input";
+import { Button } from "~/ui/shadcn/button";
+import { Input } from "~/ui/shadcn/input";
 
 const EMPTY: readonly PhotoGroupProposal[] = [];
 type ReviewScope = {

@@ -1,4 +1,5 @@
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { cn } from "cn";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -11,15 +12,14 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { cn } from "~/lib/utils";
 import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
 import {
   DisclosureBody,
   DisclosureRoot,
   DisclosureTrigger,
 } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/primitives/button";
-import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
+import { Button } from "~/ui/shadcn/button";
+import { Sheet, SheetContent, SheetTitle } from "~/ui/shadcn/sheet";
 
 /**
  * The docked panel's width, as one CSS custom property on the document root.

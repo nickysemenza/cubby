@@ -10,8 +10,8 @@ import { EntityIcon } from "~/entity/entities";
 import { LocationIcon } from "~/entity/presentation/location-icons";
 import { TreeOutline, type OutlineNode } from "~/ui/common/tree-outline";
 import { FieldRecordValue } from "~/ui/derived/record-value";
-import { NoneValue } from "~/ui/primitives/none-value";
 import { tryFormatAmount } from "~/ui/text/format-amount";
+import { NoneValue } from "~/ui/text/none-value";
 
 import { LocationVisual } from "./location-visual";
 

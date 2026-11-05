@@ -161,9 +161,14 @@
     "**/dist/**",
     "**/.wrangler/**",
     "**/.cloudflare/**",
-    "apps/apple/{App,CubbyKit,Generated,docs,e2e}/**",
-    "apps/web/src/ui/primitives/context-menu.tsx"
+    "apps/apple/{App,CubbyKit,Generated,docs,e2e}/**"
   ],
+  // Registry copies stay whole so `shadcn add --overwrite` diffs cleanly;
+  // their unused parts are expected.
+  "ignoreIssues": {
+    "apps/web/src/ui/shadcn/**": ["exports", "types"],
+    "apps/web/src/ui/reui/**": ["exports", "types"]
+  },
   "ignoreDependencies": ["zod"],
   "ignoreBinaries": ["wasm-pack", "vitest"],
   "ignoreWorkspaces": ["packages/wasm"],

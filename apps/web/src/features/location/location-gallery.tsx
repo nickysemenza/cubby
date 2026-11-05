@@ -17,13 +17,13 @@ import {
 import { useLocationTree } from "~/entity/hooks/use-location-tree";
 import { LocationBreadcrumb } from "~/entity/presentation/location-breadcrumb";
 import { formatCurrency } from "~/lib/number-format";
+import { ImageWithPreview } from "~/ui/common/image-with-preview";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
-import { Button } from "~/ui/primitives/button";
-import { ImageWithPreview } from "~/ui/primitives/image-with-preview";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { Button } from "~/ui/shadcn/button";
 import { tryFormatAmount } from "~/ui/text/format-amount";
+import { NoneValue } from "~/ui/text/none-value";
 import {
   Visualization,
   visualizationState,

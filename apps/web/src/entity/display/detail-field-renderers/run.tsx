@@ -1,6 +1,6 @@
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { RunSentryAction } from "~/entity/entity-detail/report-slot";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 
 import type { EntityDetailFieldRenderers } from "./index";
 

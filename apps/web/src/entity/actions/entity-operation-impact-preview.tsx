@@ -1,10 +1,10 @@
 import type { EntityConnectionGroup } from "@cubby/schemas/entity-connections";
 import type { OperationEffect } from "@cubby/schemas/entity-integrity";
 import { useQuery } from "@tanstack/react-query";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
-import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 

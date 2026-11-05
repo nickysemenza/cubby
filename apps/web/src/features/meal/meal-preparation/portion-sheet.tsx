@@ -17,10 +17,10 @@ import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Panel } from "~/ui/layout/panel";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { Input } from "~/ui/primitives/input";
-import { Label } from "~/ui/primitives/label";
+import { Button } from "~/ui/shadcn/button";
+import { Input } from "~/ui/shadcn/input";
+import { Label } from "~/ui/shadcn/label";
+import { Description } from "~/ui/text/description";
 
 import { FoodAmountEditor, formatFoodAmount } from "../food-amount-editor";
 import { MealNutritionEstimates } from "../meal-nutrition";

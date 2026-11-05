@@ -3,7 +3,7 @@ import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
 import { useState } from "react";
 
 import { copyTextWithToast } from "~/lib/clipboard";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 /**
  * Shared shell for the "copy as debug" buttons that drop facts into a Claude

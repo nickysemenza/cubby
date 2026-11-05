@@ -9,7 +9,7 @@ import type { EditableEntity, EntityEditResult } from "~/entity/editing/types";
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { DropdownMenuSeparator } from "~/ui/primitives/dropdown-menu";
+import { DropdownMenuSeparator } from "~/ui/shadcn/dropdown-menu";
 
 import { VerbMenuItem, verbBulkAction } from "../actions/action-verb-ui";
 import { DeleteEntityDialog } from "../actions/delete-entity-action";

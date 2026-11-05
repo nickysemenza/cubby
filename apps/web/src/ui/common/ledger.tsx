@@ -1,6 +1,5 @@
+import { cn } from "cn";
 import { createContext, type HTMLAttributes, useContext } from "react";
-
-import { cn } from "~/lib/utils";
 
 import "./ledger.css";
 

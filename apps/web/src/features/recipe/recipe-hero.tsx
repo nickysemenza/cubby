@@ -13,8 +13,8 @@ import { sumBy } from "es-toolkit";
 import { EntityFilterLink } from "~/entity/components/entity-ref-link";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
+import { Image } from "~/ui/common/image";
 import { Panel, Row } from "~/ui/layout";
-import { Image } from "~/ui/primitives/image";
 
 import { RecipeSourceLink } from "../../entity/presentation/recipe-source";
 import { recipeTimeEntries } from "../../entity/presentation/recipe-utils";

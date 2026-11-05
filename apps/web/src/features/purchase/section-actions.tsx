@@ -2,7 +2,7 @@ import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { useState } from "react";
 
 import type { SectionActionComponent } from "~/entity/entity-detail/section-actions";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { LinkProductsDialog } from "./link-products-dialog";

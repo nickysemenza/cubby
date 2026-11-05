@@ -1,7 +1,7 @@
 import { wasmFormat } from "~/lib/wasm";
 
 // Pure number formatters, kept free of UI dependencies so chart theme modules
-// can import them. `lib/utils` re-exports everything here.
+// can import them.
 
 // `Intl.NumberFormat` is expensive to construct — one shared instance per
 // distinct option set (record counts, usage tallies, token counts, currency,

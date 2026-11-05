@@ -13,7 +13,7 @@ import type { z } from "zod";
 
 import { CategoryLabelById } from "~/entity/presentation/category-label";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import { CellFrame } from "../../ui/data-table/cell-frame";
 import { formatProbability, stringLabelOf } from "./field-suggestion";

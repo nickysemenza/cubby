@@ -1,0 +1,119 @@
+
+import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
+import { createContext, useContext, useMemo, useState } from "react";
+
+import { cn } from "cn";
+import { popoverElevationClassName } from "~/ui/overlays/popover-elevation";
+
+type TooltipLazyContextValue = {
+  lazy: boolean;
+  enabled: boolean;
+};
+
+const TooltipLazyContext = createContext<TooltipLazyContextValue | null>(null);
+
+function TooltipProvider({
+  delay = 0,
+  ...props
+}: TooltipPrimitive.Provider.Props) {
+  return (
+    <TooltipPrimitive.Provider
+      data-slot="tooltip-provider"
+      delay={delay}
+      {...props}
+    />
+  );
+}
+
+type TooltipProps = TooltipPrimitive.Root.Props & {
+  lazy?: boolean;
+};
+
+function Tooltip({ lazy = true, onOpenChange, ...props }: TooltipProps) {
+  const [enabled, setEnabled] = useState(!lazy);
+  const contextValue = useMemo(
+    () => ({ lazy, enabled }),
+    [lazy, enabled],
+  );
+
+  const handleOpenChange: TooltipPrimitive.Root.Props["onOpenChange"] = (
+    open,
+    eventDetails,
+  ) => {
+    if (lazy && open && !enabled) {
+      setEnabled(true);
+    }
+    onOpenChange?.(open, eventDetails);
+  };
+
+  return (
+    <TooltipProvider>
+      <TooltipLazyContext.Provider value={contextValue}>
+        <TooltipPrimitive.Root
+          data-slot="tooltip"
+          onOpenChange={handleOpenChange}
+          {...props}
+        />
+      </TooltipLazyContext.Provider>
+    </TooltipProvider>
+  );
+}
+
+function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {
+  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
+}
+
+function TooltipContent({
+  className,
+  positionerClassName,
+  side = "top",
+  sideOffset = 4,
+  align = "center",
+  alignOffset = 0,
+  children,
+  ...props
+}: TooltipPrimitive.Popup.Props &
+  Pick<
+    TooltipPrimitive.Positioner.Props,
+    "align" | "alignOffset" | "side" | "sideOffset"
+  > & {
+    /**
+     * Classes for the *positioner*, which is where the stacking context lives
+     * (`isolate z-50`). A tooltip opened from inside another portalled popup
+     * needs this to clear it — the combobox popup sits at `z-[200]`, so a
+     * z-index passed via `className` (the popup element) can't win.
+     */
+    positionerClassName?: string;
+  }) {
+  const lazyContext = useContext(TooltipLazyContext);
+  if (lazyContext?.lazy && !lazyContext.enabled) {
+    return null;
+  }
+
+  return (
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Positioner
+        align={align}
+        alignOffset={alignOffset}
+        side={side}
+        sideOffset={sideOffset}
+        className={cn("isolate z-50", positionerClassName)}
+      >
+        <TooltipPrimitive.Popup
+          data-slot="tooltip-content"
+          className={cn(
+            popoverElevationClassName,
+            "origin-(--transform-origin) duration-(--brand-motion-fast) ease-cozy data-closed:duration-(--brand-motion-exit) data-instant:animate-none data-open:animate-in data-open:fade-in-0 data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-closed:animate-out data-closed:fade-out-0 data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1 bg-foreground text-background z-50 w-fit max-w-xs origin-(--transform-origin) rounded-md px-2.5 py-1.5 text-xs **:data-[slot=kbd]:rounded-sm",
+            className,
+          )}
+          {...props}
+        >
+          {children}
+          <TooltipPrimitive.Arrow className="bg-foreground fill-foreground z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-sm data-[side=bottom]:top-1 data-[side=left]:top-1/2! data-[side=left]:-right-1 data-[side=left]:-translate-y-1/2 data-[side=right]:top-1/2! data-[side=right]:-left-1 data-[side=right]:-translate-y-1/2 data-[side=top]:-bottom-2.5" />
+        </TooltipPrimitive.Popup>
+      </TooltipPrimitive.Positioner>
+    </TooltipPrimitive.Portal>
+  );
+}
+
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };

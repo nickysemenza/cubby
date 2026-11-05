@@ -50,11 +50,6 @@ import { useLocalStorage } from "~/ui/hooks/use-local-storage";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { createPopoverHandle, PopoverTrigger } from "~/ui/primitives/popover";
-import { Spinner } from "~/ui/primitives/spinner";
-import { Switch } from "~/ui/primitives/switch";
 import {
   type EventCalendarRenderEventProps,
   type EventCalendarRenderEventRoot,
@@ -66,6 +61,11 @@ import type {
   CalendarEvent,
   EventCalendarProposedUpdate,
 } from "~/ui/reui/event-calendar/event-calendar-types";
+import { Button } from "~/ui/shadcn/button";
+import { createPopoverHandle, PopoverTrigger } from "~/ui/shadcn/popover";
+import { Spinner } from "~/ui/shadcn/spinner";
+import { Switch } from "~/ui/shadcn/switch";
+import { Description } from "~/ui/text/description";
 
 import { CalendarAgenda } from "./calendar-agenda";
 import type { CalendarCreateDialog as CalendarCreateDialogComponent } from "./calendar-create-dialog";

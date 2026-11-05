@@ -13,7 +13,7 @@ import { UnitCoveragePanel } from "~/features/units/unit-coverage-panel";
 import { labelNutrientsPer100 } from "~/lib/label-nutrition";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import { LabelNutritionReview } from "./label-nutrition-review";
 

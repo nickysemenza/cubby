@@ -7,6 +7,7 @@ import { ListDashesIcon } from "@phosphor-icons/react/dist/csr/ListDashes";
 import type { CellSelectionState, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import type { VirtualItem } from "@tanstack/react-virtual";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -19,23 +20,22 @@ import {
   RecordSuggestionBoundary,
 } from "~/entity/suggestions/record-suggestions";
 import type { QueryTiming } from "~/lib/query-timing";
-import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
+import {
+  StaticTable,
+  type StaticTableColumn,
+} from "~/ui/data-table/static-table";
 import { ValueChangeScope } from "~/ui/derived/value-change";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QueryRefreshStatus } from "~/ui/feedback/query-refresh-status";
 import { Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-} from "~/ui/primitives/dropdown-menu";
-import { Skeleton } from "~/ui/primitives/skeleton";
-import {
-  StaticTable,
-  type StaticTableColumn,
-} from "~/ui/primitives/static-table";
+} from "~/ui/shadcn/dropdown-menu";
+import { Skeleton } from "~/ui/shadcn/skeleton";
 import {
   Table,
   TableBody,
@@ -43,7 +43,7 @@ import {
   TableFooter,
   TableHeader,
   TableRow,
-} from "~/ui/primitives/table";
+} from "~/ui/shadcn/table";
 
 import type { BulkActionPreview } from "../../ui/data-table/bulk-actions.types";
 import { tableMoneyTotals } from "../../ui/data-table/bulk/table-money";

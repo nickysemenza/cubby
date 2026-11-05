@@ -4,9 +4,9 @@ import type { IngredientEnrichmentRead } from "~/contracts/ingredient.contract";
 import { AiProvenance } from "~/entity/suggestions/ai-proposal-card";
 import { AiProposalList } from "~/entity/suggestions/ai-proposal-list";
 import { Row, Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
-import { Input } from "~/ui/primitives/input";
-import { Progress } from "~/ui/primitives/progress";
+import { Input } from "~/ui/shadcn/input";
+import { Progress } from "~/ui/shadcn/progress";
+import { Description } from "~/ui/text/description";
 
 import { UnitInput } from "./workbench-editor-core";
 import type { Suggestion } from "./workbench-row";

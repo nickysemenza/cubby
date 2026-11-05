@@ -1,12 +1,12 @@
 import type { ExpenseMonthlyAggregate } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { useId, useMemo } from "react";
 
 import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCount, formatCurrency } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";

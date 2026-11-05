@@ -1,17 +1,13 @@
 import type { SearchDestination } from "@cubby/schemas/search";
 import { useQueryClient } from "@tanstack/react-query";
+import { cn } from "cn";
 import { Suspense } from "react";
 
 import { entitySearchFacts } from "~/entity/display/entity-display";
 import { entities } from "~/entity/entities";
 import { useEntityMetadata } from "~/entity/metadata";
-import { cn } from "~/lib/utils";
 import { DenseCellContext } from "~/ui/common/stacked-value";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/ui/primitives/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
 
 const denseSearchCell = { linksTo: null };
 

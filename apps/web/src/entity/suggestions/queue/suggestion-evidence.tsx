@@ -46,9 +46,9 @@ import { Facts, FactsDensityProvider } from "~/ui/common/facts";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Section } from "~/ui/layout/section";
-import { Button } from "~/ui/primitives/button";
-import { Checkbox } from "~/ui/primitives/checkbox";
-import { Input } from "~/ui/primitives/input";
+import { Button } from "~/ui/shadcn/button";
+import { Checkbox } from "~/ui/shadcn/checkbox";
+import { Input } from "~/ui/shadcn/input";
 
 import {
   CounterpartyLine,

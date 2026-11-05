@@ -14,14 +14,14 @@ import { ContributionGapsTable } from "~/features/finance/household-contribution
 import { householdContribution } from "~/integrations/tanstack-query/generated/domains/householdContribution.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { KeyNumbers } from "~/ui/common/key-numbers";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
-import { Badge } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
-import { Skeleton } from "~/ui/primitives/skeleton";
-import { StaticTable } from "~/ui/primitives/static-table";
+import { Alert, AlertDescription, AlertTitle } from "~/ui/shadcn/alert";
+import { Badge } from "~/ui/shadcn/badge";
+import { Button } from "~/ui/shadcn/button";
+import { Skeleton } from "~/ui/shadcn/skeleton";
 
 function CheckMark({ ok }: { ok: boolean }) {
   return ok ? (

@@ -8,7 +8,7 @@ import {
   conversionCoverage,
 } from "~/lib/conversion-coverage";
 import { Row, Stack } from "~/ui/layout";
-import { StatusText } from "~/ui/primitives/status-text";
+import { StatusText } from "~/ui/text/status-text";
 
 import { CoverageChips, MacroChips } from "./coverage-chips";
 import { KindIcon } from "./kind-icon";

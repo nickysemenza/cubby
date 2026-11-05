@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { formatTimestamp } from "~/lib/date-format";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { StatusText } from "~/ui/primitives/status-text";
+import { Button } from "~/ui/shadcn/button";
+import { StatusText } from "~/ui/text/status-text";
 
 export function PurchaseImportAgentConnection({
   feedback,

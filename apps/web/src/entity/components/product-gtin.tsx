@@ -1,4 +1,5 @@
-import { cn } from "~/lib/utils";
+import { cn } from "cn";
+
 import { wasm } from "~/lib/wasm";
 import { MiddleTruncate } from "~/ui/common/middle-truncate";
 import { useDenseCell } from "~/ui/common/stacked-value";

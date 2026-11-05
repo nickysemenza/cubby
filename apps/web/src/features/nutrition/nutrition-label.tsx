@@ -8,9 +8,9 @@ import {
   type NutrientKey,
   TIER1_NUTRIENTS,
 } from "@cubby/usda";
+import { cn } from "cn";
 
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
-import { cn } from "~/lib/utils";
 
 /**
  * FDA label order for the macro block — Total Fat (Saturated Fat), Cholesterol,

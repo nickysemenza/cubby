@@ -16,16 +16,16 @@ import { useCallback, useId, useMemo, useRef } from "react";
 import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
 import { flattenRecipes } from "~/lib/cookbook-graph";
 import { cookbookRecipeSignature } from "~/lib/recipe-signature";
+import { Image } from "~/ui/common/image";
+import { BulkProgressBar } from "~/ui/feedback/bulk-progress-bar";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Panel } from "~/ui/layout/panel";
 import { Row } from "~/ui/layout/row";
 import { Stack } from "~/ui/layout/stack";
-import { BulkProgressBar } from "~/ui/primitives/bulk-progress-bar";
-import { Button } from "~/ui/primitives/button";
-import { Checkbox } from "~/ui/primitives/checkbox";
-import { Description } from "~/ui/primitives/description";
-import { Image } from "~/ui/primitives/image";
-import { Input } from "~/ui/primitives/input";
+import { Button } from "~/ui/shadcn/button";
+import { Checkbox } from "~/ui/shadcn/checkbox";
+import { Input } from "~/ui/shadcn/input";
+import { Description } from "~/ui/text/description";
 
 import type { SubRecipeLink } from "../parsed-ingredient-table";
 import {

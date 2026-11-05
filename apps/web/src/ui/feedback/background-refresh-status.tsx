@@ -1,7 +1,7 @@
 import { useIsFetching } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useState } from "react";
 
-import { Spinner } from "~/ui/primitives/spinner";
+import { Spinner } from "~/ui/shadcn/spinner";
 
 /** Hide fast refreshes and reset the delay after every idle interval. */
 function useDelayedRefresh(active: boolean) {

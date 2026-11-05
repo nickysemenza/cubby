@@ -17,7 +17,7 @@ import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 const CONVERT_TO_TRANSFER_OPTION: PickerOption = {
   value: "convert_to_transfer",

@@ -4,15 +4,15 @@ import {
   type Confidence,
 } from "@cubby/schemas/ai";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { cn } from "cn";
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
 
 import { badgeToneTextClass, statusTone } from "~/lib/status-tone";
-import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { Kbd } from "~/ui/primitives/kbd";
+import { Button } from "~/ui/shadcn/button";
+import { Kbd } from "~/ui/shadcn/kbd";
+import { Description } from "~/ui/text/description";
 
 /** Confidence → text color, from the shared status tone so every AI-suggestion
  * surface agrees. */

@@ -1,8 +1,9 @@
+import { cn } from "cn";
+
 import {
   INGREDIENT_PART_COLOR,
   type IngredientPart,
 } from "~/lib/ingredient-part-colors";
-import { cn } from "~/lib/utils";
 
 import { InlineTextDiff } from "../../ui/text/inline-text-diff";
 

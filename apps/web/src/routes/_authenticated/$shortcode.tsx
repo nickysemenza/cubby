@@ -28,7 +28,7 @@ import { Page } from "~/entity/page/page";
 import { shortcodeHead } from "~/lib/page-title";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 export const Route = createFileRoute("/_authenticated/$shortcode")({
   loader: ({ params }) => {

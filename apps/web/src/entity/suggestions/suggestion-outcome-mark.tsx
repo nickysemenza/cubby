@@ -8,17 +8,13 @@ import {
 import { getErrorMessage } from "@cubby/shared";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { cn } from "cn";
 import { ClassicV2 } from "loading-dev";
 import type { KeyboardEvent, ReactNode, SyntheticEvent } from "react";
 
-import { cn } from "~/lib/utils";
 import { Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/ui/primitives/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
+import { Description } from "~/ui/text/description";
 
 import { formatProbability } from "./field-suggestion";
 import {

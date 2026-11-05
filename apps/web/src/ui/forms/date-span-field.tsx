@@ -8,7 +8,7 @@ import {
 import { z } from "zod";
 
 import { DateSpanInput } from "~/ui/date-span-input";
-import { FieldError } from "~/ui/primitives/field";
+import { FieldError } from "~/ui/shadcn/field";
 
 import { FormFieldGroup } from "./form-field-group";
 

@@ -7,7 +7,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Stack } from "~/ui/layout";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 import { TruncatedList } from "~/ui/truncated-list";
 
 import type { InlineRefLinkProps } from "./inline";

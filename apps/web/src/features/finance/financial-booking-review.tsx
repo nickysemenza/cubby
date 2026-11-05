@@ -27,7 +27,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 const CREDIT_PURPOSE_OPTIONS: readonly PickerOption[] = [
   { value: "vendor", label: "Vendor refund or proceeds" },

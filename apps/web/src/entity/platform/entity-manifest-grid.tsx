@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { allEntities } from "@cubby/schemas/entity-roster";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { cn } from "cn";
 import { type ReactNode, useMemo } from "react";
 
 import { EntityIcon } from "~/entity/entities";
@@ -8,7 +9,7 @@ import type { EntityInspectorHealth } from "~/entity/entity-inspector-health";
 import RTable from "~/entity/table/table";
 import { entityInspectorHealth } from "~/integrations/tanstack-query/generated/domains/entityInspectorHealth.gen";
 import { authClient } from "~/lib/auth-client";
-import { cn } from "~/lib/utils";
+import { StaticTable } from "~/ui/data-table/static-table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -17,8 +18,7 @@ import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useLocalTable } from "~/ui/data-table/use-local-table";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { domainWayfinding } from "~/ui/navigation/domain-wayfinding";
-import { Badge } from "~/ui/primitives/badge";
-import { StaticTable } from "~/ui/primitives/static-table";
+import { Badge } from "~/ui/shadcn/badge";
 import {
   Table,
   TableBody,
@@ -26,8 +26,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "~/ui/primitives/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
+} from "~/ui/shadcn/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/shadcn/tabs";
 
 import { EntityOverrideTable } from "./entity-override-table";
 import { EntityReferenceGraph } from "./entity-reference-graph";

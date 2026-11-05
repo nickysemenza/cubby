@@ -31,10 +31,10 @@ import type { FinancialTransactionFormValues } from "~/features/finance/financia
 import { formatDateSpan } from "~/lib/date-span";
 import { Row, Stack } from "~/ui/layout";
 import type { Overlay } from "~/ui/overlays/overlay";
-import { Checkbox } from "~/ui/primitives/checkbox";
-import { Description } from "~/ui/primitives/description";
-import { Input } from "~/ui/primitives/input";
-import { Label } from "~/ui/primitives/label";
+import { Checkbox } from "~/ui/shadcn/checkbox";
+import { Input } from "~/ui/shadcn/input";
+import { Label } from "~/ui/shadcn/label";
+import { Description } from "~/ui/text/description";
 
 import {
   EntityIntentFields,

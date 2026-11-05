@@ -7,6 +7,7 @@ import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
+import { cn } from "cn";
 import { Fragment, useState } from "react";
 
 import type { ListSearch } from "~/entity/entity-list/list-slot-types";
@@ -18,10 +19,9 @@ import {
 } from "~/entity/model/view-manifest";
 import { useViewCounts } from "~/entity/table/list-query-context";
 import { formatCount } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { useSlidingIndicator } from "~/ui/hooks/use-sliding-indicator";
 import { Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,7 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
+} from "~/ui/shadcn/dropdown-menu";
 
 import { applyColumnLayout } from "../../ui/data-table/column-layout";
 import type { CubbyTable as Table } from "../../ui/data-table/table-features";

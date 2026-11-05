@@ -16,7 +16,7 @@ import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 /** Both actions create a Product: USDA links belong to Products, not ingredients. */
 export function UsdaFoodActions({

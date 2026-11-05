@@ -2,16 +2,16 @@ import type { AiUsageSummaryRow } from "@cubby/schemas/ai";
 import { AI_USAGE_TRANSPORT_LABELS as transportLabels } from "@cubby/schemas/telemetry";
 import { recordKeys } from "@cubby/shared";
 import { ChartBarIcon } from "@phosphor-icons/react/dist/csr/ChartBar";
+import { cn } from "cn";
 import { useMemo } from "react";
 
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
-import { cn } from "~/lib/utils";
 import { ChartTooltip } from "~/ui/charts/chart-tooltip";
 import { ResponsiveBar } from "~/ui/charts/nivo-responsive";
 import { formatAiCost } from "~/ui/common/ai-cost";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import { Visualization } from "~/ui/visualizations/visualization";
 
 export const usageChartDimensions = {

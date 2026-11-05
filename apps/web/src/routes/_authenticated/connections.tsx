@@ -14,7 +14,7 @@ import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
 import { GraphExplorer } from "~/entity/relationships/graph-explorer";
 import { pageTitle } from "~/lib/page-title";
 import { Stack, Row } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 // A partial or stale link still offers a starting-record picker.
 const searchSchema = z.object({

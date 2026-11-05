@@ -10,15 +10,11 @@ import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { Input } from "~/ui/primitives/input";
-import { Label } from "~/ui/primitives/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/ui/primitives/popover";
+import { Button } from "~/ui/shadcn/button";
+import { Input } from "~/ui/shadcn/input";
+import { Label } from "~/ui/shadcn/label";
+import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
+import { Description } from "~/ui/text/description";
 
 import { getIngredientName } from "../../entity/presentation/recipe-utils";
 import { resolveScaleFactor, type ScaleAnchor } from "./recipe-scaling";

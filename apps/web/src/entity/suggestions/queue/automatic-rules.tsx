@@ -19,9 +19,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/ui/primitives/alert-dialog";
-import { Badge } from "~/ui/primitives/badge";
-import { Switch } from "~/ui/primitives/switch";
+} from "~/ui/shadcn/alert-dialog";
+import { Badge } from "~/ui/shadcn/badge";
+import { Switch } from "~/ui/shadcn/switch";
 
 const RULE_NAME = {
   "field.addition": "Field assignment",

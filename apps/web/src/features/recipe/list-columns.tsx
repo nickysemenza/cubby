@@ -28,7 +28,7 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useTagOptions } from "~/ui/hooks/use-entity-options";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 import { TruncatedList } from "~/ui/truncated-list";
 
 import { defineListOverride } from "../../entity/list-columns/types";

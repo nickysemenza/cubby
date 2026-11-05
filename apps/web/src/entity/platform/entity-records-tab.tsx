@@ -48,7 +48,7 @@ import {
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useFilterBarDraft } from "~/ui/data-table/use-filter-bar-draft";
 import { Stack } from "~/ui/layout";
-import { EnumPill } from "~/ui/primitives/enum-pill";
+import { EnumPill } from "~/ui/text/enum-pill";
 
 const EMPTY_ROWS: EntityRecord[] = [];
 const helper = createCubbyColumnHelper<EntityRecord>();

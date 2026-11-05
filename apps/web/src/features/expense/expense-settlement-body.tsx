@@ -2,7 +2,7 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import { ExpensePurchaseSection } from "./expense-purchase-section";
 

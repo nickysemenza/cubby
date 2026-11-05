@@ -4,6 +4,7 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import { Link, useLocation, useRouter } from "@tanstack/react-router";
+import { cn } from "cn";
 import {
   type ReactNode,
   Suspense,
@@ -19,7 +20,6 @@ import { preloadCommandMenu } from "~/features/command-menu/command-menu-loader"
 import { MainNav } from "~/features/shell/main-nav";
 import { useDatabaseChanges } from "~/integrations/tanstack-query/use-database-changes";
 import type { UnparsedError } from "~/lib/error-utils";
-import { cn } from "~/lib/utils";
 import {
   BackgroundRefreshStatus,
   ShellStatusSlot,
@@ -30,7 +30,7 @@ import {
   useAppViewportBounds,
   useVirtualKeyboard,
 } from "~/ui/hooks/use-virtual-keyboard";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import {
   AuthenticatedShellAccount,

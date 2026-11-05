@@ -3,15 +3,15 @@ import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
 
-import { Button, buttonVariants } from "~/ui/primitives/button";
+import { Image } from "~/ui/common/image";
+import { Button, buttonVariants } from "~/ui/shadcn/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "~/ui/primitives/dialog";
-import { Image } from "~/ui/primitives/image";
+} from "~/ui/shadcn/dialog";
 
 import type { PhotoGridImage } from "./photo-grid";
 

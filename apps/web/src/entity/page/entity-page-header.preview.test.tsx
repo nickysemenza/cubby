@@ -5,8 +5,8 @@ import { page } from "vitest/browser";
 
 import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { Button } from "~/ui/primitives/button";
-import { Input } from "~/ui/primitives/input";
+import { Button } from "~/ui/shadcn/button";
+import { Input } from "~/ui/shadcn/input";
 
 import { DetailPageHeader, ListPageHeader } from "./entity-page-header";
 

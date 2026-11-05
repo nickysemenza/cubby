@@ -3,10 +3,10 @@ import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { MinusIcon } from "@phosphor-icons/react/dist/csr/Minus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { cn } from "cn";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { useEntityMetadata } from "~/entity/metadata";
-import { cn } from "~/lib/utils";
 
 import { RecordLink } from "./suggestion-values";
 

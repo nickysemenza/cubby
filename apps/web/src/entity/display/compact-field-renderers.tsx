@@ -11,7 +11,7 @@ import {
   CategoryLabel,
   CategoryLabelById,
 } from "~/entity/presentation/category-label";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 
 import { EntityQualityFact } from "./data-quality-value";
 

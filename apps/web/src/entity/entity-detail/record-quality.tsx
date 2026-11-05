@@ -16,19 +16,19 @@ import { MinusCircleIcon } from "@phosphor-icons/react/dist/csr/MinusCircle";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { createContext, useContext, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
-import { cn } from "~/lib/utils";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { WhyValue } from "~/ui/derived/why-value";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { useNeedsYouTarget } from "./needs-you";
 

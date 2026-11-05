@@ -27,9 +27,9 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Checkbox } from "~/ui/primitives/checkbox";
-import { DropdownMenuItem } from "~/ui/primitives/dropdown-menu";
-import { Input } from "~/ui/primitives/input";
+import { Checkbox } from "~/ui/shadcn/checkbox";
+import { DropdownMenuItem } from "~/ui/shadcn/dropdown-menu";
+import { Input } from "~/ui/shadcn/input";
 
 type Family = SweepStartInput["families"][number]["family"];
 type SweepFieldTarget = z.infer<typeof sweepFieldTargets>[number];

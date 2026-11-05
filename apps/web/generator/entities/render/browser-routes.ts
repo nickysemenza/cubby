@@ -65,7 +65,7 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
       ? [importLine(entity.route.listReadProjection)]
       : []),
     ...(entity.route.create === "page"
-      ? ['import { Button } from "~/ui/primitives/button";']
+      ? ['import { Button } from "~/ui/shadcn/button";']
       : []),
     ...(entity.route.create === "dialog"
       ? ['import { captureRequest } from "~/entity/editing/editor-requests";']

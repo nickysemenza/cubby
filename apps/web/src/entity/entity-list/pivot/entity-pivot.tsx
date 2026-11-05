@@ -2,11 +2,11 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
+import { cn } from "cn";
 import { type KeyboardEvent, useMemo, useState } from "react";
 
 import type { GroupSummaryModel } from "~/entity/entity-list/group-drill-down";
 import { formatCount, formatPercent } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
 import type { CrossTabColumn } from "~/ui/matrix/group-columns";

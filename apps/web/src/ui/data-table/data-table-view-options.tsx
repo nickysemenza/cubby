@@ -5,14 +5,14 @@ import { useState } from "react";
 
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
+} from "~/ui/shadcn/dropdown-menu";
 
 import { isTableLayoutCustomized } from "./column-layout";
 import type {

@@ -8,8 +8,8 @@ import { dashboard } from "~/integrations/tanstack-query/generated/domains/dashb
 import { authClient } from "~/lib/auth-client";
 import { formatCompactCount } from "~/lib/number-format";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Eyebrow } from "~/ui/primitives/eyebrow";
-import { Skeleton } from "~/ui/primitives/skeleton";
+import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Eyebrow } from "~/ui/text/eyebrow";
 
 const getCountLabel = (
   pluralLabel: string,

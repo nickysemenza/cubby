@@ -19,7 +19,7 @@ import { useEntityMetadata } from "~/entity/metadata";
 import { Page } from "~/entity/page/page";
 import { DisplayMenu } from "~/entity/table/display-menu";
 import type { PageLayout } from "~/ui/layout/page-wrapper";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 /**
  * The list page bodies every entity list route shares, as factories.

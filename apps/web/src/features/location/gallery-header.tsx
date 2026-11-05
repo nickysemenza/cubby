@@ -4,8 +4,8 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGl
 import { Picker } from "~/entity/picker/picker";
 import { locationTypeOptionsWithTheme } from "~/entity/presentation/location-icons";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Input } from "~/ui/primitives/input";
+import { Button } from "~/ui/shadcn/button";
+import { Input } from "~/ui/shadcn/input";
 
 export type EmptyFilter = "all" | "withItems" | "empty";
 

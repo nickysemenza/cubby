@@ -15,11 +15,11 @@ import { QueuePassPosition } from "~/features/work-queue/queue-pass-progress";
 import { inventory } from "~/integrations/tanstack-query/generated/domains/inventory.gen";
 import { location } from "~/integrations/tanstack-query/generated/domains/location.gen";
 import { formatCurrency } from "~/lib/number-format";
+import { Image } from "~/ui/common/image";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
-import { Image } from "~/ui/primitives/image";
+import { Button } from "~/ui/shadcn/button";
+import { Description } from "~/ui/text/description";
 
 import type { TriageProduct } from "./triage-types";
 

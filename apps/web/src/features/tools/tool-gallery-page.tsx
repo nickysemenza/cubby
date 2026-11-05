@@ -12,6 +12,7 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGl
 import { SquaresFourIcon } from "@phosphor-icons/react/dist/csr/SquaresFour";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
+import { cn } from "cn";
 import {
   type RefObject,
   useCallback,
@@ -35,21 +36,20 @@ import {
 } from "~/entity/table/shelf";
 import { project } from "~/integrations/tanstack-query/generated/domains/project.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { Image } from "~/ui/common/image";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Badge } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
-import { Image } from "~/ui/primitives/image";
-import { Input } from "~/ui/primitives/input";
-import { NoneValue } from "~/ui/primitives/none-value";
-import { Skeleton } from "~/ui/primitives/skeleton";
-import { Spinner } from "~/ui/primitives/spinner";
+import { Badge } from "~/ui/shadcn/badge";
+import { Button } from "~/ui/shadcn/button";
+import { Input } from "~/ui/shadcn/input";
+import { Skeleton } from "~/ui/shadcn/skeleton";
+import { Spinner } from "~/ui/shadcn/spinner";
 import { tryFormatAmount } from "~/ui/text/format-amount";
+import { NoneValue } from "~/ui/text/none-value";
 
 const PAGE_SIZE = 60;
 const DIRECT_GROUP_JUMP_LIMIT = 10;

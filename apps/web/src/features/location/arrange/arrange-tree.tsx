@@ -5,11 +5,11 @@ import {
 import type { LocationTreeNode } from "@cubby/schemas/location";
 import { ArrowBendDownRightIcon } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { cn } from "cn";
 import { useRef } from "react";
 
-import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
+import { Description } from "~/ui/text/description";
 
 import { ArrangeItemChip } from "./arrange-item-chip";
 import { ArrangeLocationRow } from "./arrange-location-row";

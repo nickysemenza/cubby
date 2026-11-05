@@ -8,15 +8,15 @@ import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useDebouncedValue } from "@tanstack/react-pacer";
+import { cn } from "cn";
 import * as React from "react";
 
-import { cn } from "~/lib/utils";
 import { useHydrationGate } from "~/ui/hooks/use-hydrated";
-import { EnumPill } from "~/ui/primitives/enum-pill";
-import { Kbd } from "~/ui/primitives/kbd";
-import { popoverElevationClassName } from "~/ui/primitives/popover-elevation";
-import { Spinner } from "~/ui/primitives/spinner";
-import { ToggleGroup, ToggleGroupItem } from "~/ui/primitives/toggle-group";
+import { popoverElevationClassName } from "~/ui/overlays/popover-elevation";
+import { Kbd } from "~/ui/shadcn/kbd";
+import { Spinner } from "~/ui/shadcn/spinner";
+import { ToggleGroup, ToggleGroupItem } from "~/ui/shadcn/toggle-group";
+import { EnumPill } from "~/ui/text/enum-pill";
 
 import type { ComboboxItem, PickerChip, PickerTone } from "./combobox-types";
 import { type PickerOption, pickerOptionItem } from "./picker-option";
@@ -363,7 +363,7 @@ const fieldFrameClass = (compact: boolean | undefined) =>
     "focus-within:border-ring focus-within:ring-[2px] focus-within:ring-ring/30",
     "has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 data-[hydrating]:has-[:disabled]:opacity-100",
     compact
-      ? "min-h-(--input-height) text-control max-sm:min-h-11 max-sm:text-base"
+      ? "min-h-(--input-height) text-md max-sm:min-h-11 max-sm:text-base"
       : "min-h-(--input-height) text-sm max-sm:min-h-11 max-sm:text-base",
   );
 

@@ -10,6 +10,7 @@ import { useState, type ReactNode } from "react";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { aiFunding } from "~/integrations/tanstack-query/generated/domains/aiFunding.gen";
 import { formatCurrency } from "~/lib/number-format";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import {
@@ -21,11 +22,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/ui/primitives/alert-dialog";
-import { Button } from "~/ui/primitives/button";
-import { Input } from "~/ui/primitives/input";
-import { StaticTable } from "~/ui/primitives/static-table";
-import { StatusText } from "~/ui/primitives/status-text";
+} from "~/ui/shadcn/alert-dialog";
+import { Button } from "~/ui/shadcn/button";
+import { Input } from "~/ui/shadcn/input";
+import { StatusText } from "~/ui/text/status-text";
 
 const usd = (value: number) => formatCurrency(value);
 const clock = (iso: string) =>

@@ -1,14 +1,14 @@
 import { AuthView } from "@daveyplate/better-auth-ui";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
+import { cn } from "cn";
 import { z } from "zod";
 
 import { AuthEntryFrame } from "~/features/auth/auth-entry-frame";
 import { AuthUIProvider } from "~/features/auth/auth-ui-provider";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
-import { cn } from "~/lib/utils";
-import { Alert } from "~/ui/primitives/alert";
-import { buttonVariants } from "~/ui/primitives/button";
+import { Alert } from "~/ui/shadcn/alert";
+import { buttonVariants } from "~/ui/shadcn/button";
 
 // Deliberately NOT loose. The OAuth server appends a signed authorize query
 // here (`sig` + repeated `ba_param` names, whose signature covers the exact

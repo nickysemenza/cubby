@@ -15,11 +15,11 @@ import { IngredientUsagePanel } from "~/features/ingredient/ingredient-usage-pan
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { recipeStreams } from "~/integrations/tanstack-query/generated/domains/recipeStreams.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { BulkProgressBar } from "~/ui/feedback/bulk-progress-bar";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { BulkProgressBar } from "~/ui/primitives/bulk-progress-bar";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
+import { Button } from "~/ui/shadcn/button";
+import { Description } from "~/ui/text/description";
 
 /**
  * A book stored in the retired extraction format. Nothing reads it any

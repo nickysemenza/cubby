@@ -1,6 +1,5 @@
+import { cn } from "cn";
 import type { ReactNode } from "react";
-
-import { cn } from "~/lib/utils";
 
 /** One ordered evidence chain for reference values and read-only image strips. */
 export function SourceStack({

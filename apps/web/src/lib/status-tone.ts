@@ -8,7 +8,7 @@ import type {
 import type { TaskStatus } from "@cubby/schemas/task-fields";
 import type { McpToolUsageStatus } from "@cubby/schemas/telemetry";
 
-import type { BadgeVariant } from "~/ui/primitives/badge";
+import type { BadgeVariant } from "~/ui/shadcn/badge";
 
 type TransactionImportStatus =
   FinancialTransactionImportPreviewOut["rows"][number]["status"];

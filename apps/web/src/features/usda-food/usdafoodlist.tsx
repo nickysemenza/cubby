@@ -32,8 +32,8 @@ import {
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
 import { Row, Stack } from "~/ui/layout";
-import { Description } from "~/ui/primitives/description";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { Description } from "~/ui/text/description";
+import { NoneValue } from "~/ui/text/none-value";
 
 import { CoreNutrientCoverage } from "../../entity/presentation/core-nutrient-coverage";
 import { createEntityInlineLinkColumn } from "../../entity/table/column-helpers";

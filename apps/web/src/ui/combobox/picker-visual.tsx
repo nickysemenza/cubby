@@ -1,5 +1,6 @@
-import { cn } from "~/lib/utils";
-import { Image } from "~/ui/primitives/image";
+import { cn } from "cn";
+
+import { Image } from "~/ui/common/image";
 
 import type { ComboboxItem } from "./combobox-types";
 

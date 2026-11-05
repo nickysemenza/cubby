@@ -24,8 +24,8 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { KeyNumbers } from "~/ui/common/key-numbers";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Grid, Panel, Row, Stack } from "~/ui/layout";
-import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
-import { Eyebrow } from "~/ui/primitives/eyebrow";
+import { Badge, type BadgeVariant } from "~/ui/shadcn/badge";
+import { Eyebrow } from "~/ui/text/eyebrow";
 
 import {
   type EntityGraphLens,

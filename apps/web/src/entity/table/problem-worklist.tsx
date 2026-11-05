@@ -7,7 +7,7 @@ import {
   type ProblemContinuation,
   useProblemContinuation,
 } from "~/entity/problems/problem-continuation";
-import { Badge } from "~/ui/primitives/badge";
+import { Badge } from "~/ui/shadcn/badge";
 
 const filterValueSchema = z.union([z.string(), z.array(z.string())]);
 

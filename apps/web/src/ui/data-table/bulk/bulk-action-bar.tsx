@@ -4,14 +4,14 @@ import type { RowData } from "@tanstack/react-table";
 
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { Row as LayoutRow } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
-import { Spinner } from "~/ui/primitives/spinner";
+} from "~/ui/shadcn/dropdown-menu";
+import { Spinner } from "~/ui/shadcn/spinner";
 
 import {
   type BulkAction,

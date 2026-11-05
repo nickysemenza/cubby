@@ -1,4 +1,5 @@
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
+import { cn } from "cn";
 import {
   createContext,
   type CSSProperties,
@@ -6,13 +7,8 @@ import {
   useContext,
 } from "react";
 
-import { cn } from "~/lib/utils";
-import { Button } from "~/ui/primitives/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/ui/primitives/popover";
+import { Button } from "~/ui/shadcn/button";
+import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
 
 import { Ledger, LedgerCell, LedgerRow } from "./ledger";
 import type { RecordTone } from "./record-list";

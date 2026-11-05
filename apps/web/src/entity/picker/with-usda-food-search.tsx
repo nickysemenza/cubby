@@ -16,8 +16,8 @@ import { parseUsdaFoodRef } from "~/ui/combobox/parse-usda-food-ref";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { Row } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
+import { Button } from "~/ui/shadcn/button";
+import { Description } from "~/ui/text/description";
 
 import type { ComboboxItem } from "../../ui/combobox/combobox-types";
 import { Picker } from "../../ui/combobox/picker";

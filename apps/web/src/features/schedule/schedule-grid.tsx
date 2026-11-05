@@ -1,5 +1,6 @@
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { cn } from "cn";
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -12,7 +13,6 @@ import {
 
 import { formatInstant } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
-import { cn } from "~/lib/utils";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 
 /* oxlint-disable jsx-a11y/prefer-tag-over-role -- Pinned labels and independently scrolling dates require flex layout; native table layout cannot preserve those regions. */

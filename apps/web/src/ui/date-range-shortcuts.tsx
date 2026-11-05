@@ -1,13 +1,13 @@
 import { historicalDateRangePresets } from "@cubby/schemas/date-range";
 
 import { resolveDateRange } from "~/lib/date-range-presets";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
+} from "~/ui/shadcn/dropdown-menu";
 
 /** Viewing windows use historical shortcuts; stored deadline dates keep their own semantics. */
 export function DateRangeShortcuts({

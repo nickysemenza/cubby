@@ -5,7 +5,7 @@ import type {
 } from "@cubby/schemas/entity-graph";
 
 import { entityLabel } from "~/entity/entities";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { graphRefKey } from "./entity-graph-state";
 import { GraphRecordFacts, GraphRecordLink } from "./graph-record-content";

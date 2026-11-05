@@ -1519,7 +1519,7 @@ export async function suggestProjectTools(
       coverImageUrl: coverImageUrls.get(row.productId) ?? null,
       lane: "purchased_here" as const,
       matchedTrade: null,
-      // Not `formatCurrency`: that helper lives in `~/lib/utils`, a
+      // Not `formatCurrency`: that helper lives in `~/lib/number-format`, a
       // client-side module with no existing server import (grep confirms
       // zero) — see the same note in repo/project/attention.ts.
       reasons: [`Bought here · $${Math.round(row.projectPurchaseCost)}`],

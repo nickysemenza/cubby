@@ -34,8 +34,8 @@ import {
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/primitives/button";
-import { Input } from "~/ui/primitives/input";
+import { Button } from "~/ui/shadcn/button";
+import { Input } from "~/ui/shadcn/input";
 
 import { FoodAmountEditor } from "./food-amount-editor";
 

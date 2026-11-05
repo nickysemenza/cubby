@@ -7,7 +7,7 @@ import { useCallback, useMemo } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { vendor } from "~/integrations/tanstack-query/generated/domains/vendor.gen";
-import { DropdownMenuItem } from "~/ui/primitives/dropdown-menu";
+import { DropdownMenuItem } from "~/ui/shadcn/dropdown-menu";
 
 import { VerbMenuItem } from "./action-verb-ui";
 import { defineEntityAction } from "./entity-action-definition";

@@ -15,7 +15,7 @@ import {
 import { readRecordField } from "~/entity/entity-references";
 import type { DetailEntity } from "~/entity/model/detail-contracts";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Spinner } from "~/ui/primitives/spinner";
+import { Spinner } from "~/ui/shadcn/spinner";
 
 import { InlineRefLink } from "./inline";
 import { ChipRefLink } from "./leaf";

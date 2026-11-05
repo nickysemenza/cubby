@@ -6,7 +6,7 @@ import {
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
 import { Stack } from "~/ui/layout";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 
 const roleLabel = {
   attachment: "Attachment",

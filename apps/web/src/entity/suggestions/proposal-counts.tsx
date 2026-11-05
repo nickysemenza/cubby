@@ -20,12 +20,8 @@ import { z } from "zod";
 import { RecordProposals } from "~/entity/suggestions/queue/record-proposals";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Button } from "~/ui/primitives/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/ui/primitives/popover";
+import { Button } from "~/ui/shadcn/button";
+import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
 
 const identity = z.object({ id: z.string() });
 const ActiveRecordsContext = createContext<((id: string) => () => void) | null>(

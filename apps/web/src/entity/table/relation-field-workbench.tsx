@@ -11,7 +11,7 @@ import {
 } from "~/entity/fields/field-provenance";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { TableCellWorkbench } from "../../ui/data-table/table-cell-workbench";
 

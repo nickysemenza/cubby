@@ -4,6 +4,7 @@ import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { cva } from "class-variance-authority";
+import { cn } from "cn";
 import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
@@ -25,20 +26,15 @@ import {
   type HoverPreviewEntity,
 } from "~/entity/preview/preview-entities";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
-import { cn } from "~/lib/utils";
 import { useIdentityCell } from "~/ui/common/stacked-value";
 import { ExternalLinkIcon } from "~/ui/external-link";
 import {
   PreviewCard,
   PreviewCardContent,
   PreviewCardTrigger,
-} from "~/ui/primitives/preview-card";
-import { Spinner } from "~/ui/primitives/spinner";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/ui/primitives/tooltip";
+} from "~/ui/shadcn/preview-card";
+import { Spinner } from "~/ui/shadcn/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
 
 const EntityPreviewContent = browserOnlyLazy<
   ComponentProps<typeof EntityPreviewContentComponent>

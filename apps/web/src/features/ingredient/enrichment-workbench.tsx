@@ -7,6 +7,7 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -38,7 +39,6 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { ingredient } from "~/integrations/tanstack-query/generated/domains/ingredient.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
@@ -50,9 +50,9 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
-import { Progress } from "~/ui/primitives/progress";
+import { Badge } from "~/ui/shadcn/badge";
+import { Button } from "~/ui/shadcn/button";
+import { Progress } from "~/ui/shadcn/progress";
 
 import {
   type EquivalenceDraft,

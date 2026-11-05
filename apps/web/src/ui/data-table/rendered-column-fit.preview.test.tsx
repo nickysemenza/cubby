@@ -6,7 +6,7 @@ import { page } from "vitest/browser";
 
 import { householdDaysFromNow } from "~/lib/household-date";
 import { ChipCluster } from "~/ui/common/chip-cluster";
-import { Badge } from "~/ui/primitives/badge";
+import { Badge } from "~/ui/shadcn/badge";
 import {
   Table,
   TableBody,
@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
   TableFooter,
-} from "~/ui/primitives/table";
+} from "~/ui/shadcn/table";
 
 import { createPlainDateColumn } from "../../entity/table/column-helpers";
 import { HeaderLabel } from "../../entity/table/table-header-layout";

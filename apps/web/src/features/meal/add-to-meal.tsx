@@ -37,9 +37,9 @@ import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { DatePickerInput } from "~/ui/date-picker-input";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/primitives/button";
-import { Checkbox } from "~/ui/primitives/checkbox";
-import { Label } from "~/ui/primitives/label";
+import { Button } from "~/ui/shadcn/button";
+import { Checkbox } from "~/ui/shadcn/checkbox";
+import { Label } from "~/ui/shadcn/label";
 
 import { mealListLabel } from "./meal-format";
 import { useInvalidateMeals } from "./use-meal-mutations";

@@ -10,7 +10,7 @@ import { useEntityMetadata } from "~/entity/metadata";
 import { runHref } from "~/entity/routing/purchase-import-links";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { Row } from "~/ui/layout";
-import { EnumPill } from "~/ui/primitives/enum-pill";
+import { EnumPill } from "~/ui/text/enum-pill";
 
 import { runHasAgent, useAgentReviewSync } from "./agent-observation";
 

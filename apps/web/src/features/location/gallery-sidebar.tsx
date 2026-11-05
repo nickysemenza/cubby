@@ -1,9 +1,9 @@
 import type { LocationTreeNode } from "@cubby/schemas/location";
 import { SidebarIcon } from "@phosphor-icons/react/dist/csr/Sidebar";
+import { cn } from "cn";
 import { useEffect, useRef } from "react";
 
-import { cn } from "~/lib/utils";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { LocationOutline } from "./location-outline";
 

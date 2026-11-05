@@ -17,9 +17,9 @@ import { QueuePassPosition } from "~/features/work-queue/queue-pass-progress";
 import { usdaFood } from "~/integrations/tanstack-query/generated/domains/usdaFood.gen";
 import type { EnrichmentProposal } from "~/server/ai/enrichment/proposals";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import { Kbd, KbdGroup } from "~/ui/primitives/kbd";
-import { Spinner } from "~/ui/primitives/spinner";
+import { Button } from "~/ui/shadcn/button";
+import { Kbd, KbdGroup } from "~/ui/shadcn/kbd";
+import { Spinner } from "~/ui/shadcn/spinner";
 
 import {
   EnrichmentEditor,

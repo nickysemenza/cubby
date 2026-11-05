@@ -12,9 +12,9 @@ import {
   conversionCoverage,
 } from "~/lib/conversion-coverage";
 import { wasm } from "~/lib/wasm";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row } from "~/ui/layout";
-import { StaticTable } from "~/ui/primitives/static-table";
 
 import { KindIcon } from "./kind-icon";
 

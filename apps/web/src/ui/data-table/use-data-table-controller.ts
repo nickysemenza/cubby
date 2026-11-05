@@ -1,8 +1,8 @@
 import { useElementScrollRestoration } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
+import { cn } from "cn";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { cn } from "~/lib/utils";
 import { useDebug } from "~/ui/hooks/use-debug";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useIsMobile } from "~/ui/hooks/use-mobile";

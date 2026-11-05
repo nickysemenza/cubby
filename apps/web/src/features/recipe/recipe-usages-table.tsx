@@ -10,13 +10,9 @@ import {
   type ParseDrift,
 } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
-import { Button } from "~/ui/primitives/button";
-import { StaticTable } from "~/ui/primitives/static-table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/ui/primitives/tooltip";
+import { StaticTable } from "~/ui/data-table/static-table";
+import { Button } from "~/ui/shadcn/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
 
 import {
   entityDisplayImageKey,

@@ -2,10 +2,9 @@ import type { RecipeSource } from "@cubby/schemas/recipe-shared";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import type { MouseEvent } from "react";
 import { match, P } from "ts-pattern";
-
-import { cn } from "~/lib/utils";
 
 // One place owns how a recipe's source is presented — the book/website/notion
 // dispatch, the URL-host parsing, and the icon+link scaffold — so the recipe

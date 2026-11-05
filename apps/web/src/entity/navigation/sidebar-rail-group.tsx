@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 
-import { cn } from "~/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,12 +8,8 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/ui/primitives/tooltip";
+} from "~/ui/shadcn/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
 
 import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
 import { WorkNavDot } from "../../ui/navigation/work-nav-status";

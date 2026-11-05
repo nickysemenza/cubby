@@ -1,9 +1,9 @@
 import type { RowData } from "@tanstack/react-table";
 import type { ComponentProps, ReactElement } from "react";
 
-import { Button } from "~/ui/primitives/button";
-import { DropdownMenuItem } from "~/ui/primitives/dropdown-menu";
-import { Spinner } from "~/ui/primitives/spinner";
+import { Button } from "~/ui/shadcn/button";
+import { DropdownMenuItem } from "~/ui/shadcn/dropdown-menu";
+import { Spinner } from "~/ui/shadcn/spinner";
 
 import type { BulkAction } from "../../ui/data-table/bulk-actions.types";
 import { type ActionVerbId, verbDef } from "./action-verbs";

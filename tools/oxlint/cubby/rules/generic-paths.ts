@@ -70,10 +70,12 @@ export const noRawConsoleRule = defineRule({
 export const noAdHocNumberFormatRule = defineRule({
   meta: {
     type: "suggestion",
-    docs: { description: "Format and round numbers through lib/utils." },
+    docs: {
+      description: "Format and round numbers through lib/number-format.",
+    },
     messages: {
-      intl: `Use the lib/utils formatters (formatCurrency, formatCount, formatPercent, compact variants) instead of new Intl.NumberFormat. ${CATALOG}`,
-      toFixed: `Use roundTo / the lib/utils formatters instead of toFixed. ${CATALOG}`,
+      intl: `Use the lib/number-format formatters (formatCurrency, formatCount, formatPercent, compact variants) instead of new Intl.NumberFormat. ${CATALOG}`,
+      toFixed: `Use roundTo / the lib/number-format formatters instead of toFixed. ${CATALOG}`,
     },
   },
   createOnce(context) {
@@ -230,7 +232,7 @@ const VALUE_CONTROL_PARTS = new Set([
   "ToggleGroup",
 ]);
 const VALUE_CONTROL_MODULES =
-  /^@base-ui\/react\/(combobox|select|autocomplete|toggle-group)$|^~\/ui\/primitives\/toggle-group$/u;
+  /^@base-ui\/react\/(combobox|select|autocomplete|toggle-group)$|^~\/ui\/shadcn\/toggle-group$/u;
 
 /** A value control built outside `Picker`: Base UI's combobox, select,
  * autocomplete, or toggle group, or the toggle-group primitive. */

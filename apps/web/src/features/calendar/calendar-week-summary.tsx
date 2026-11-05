@@ -1,4 +1,5 @@
 import type { CalendarDaySummary } from "@cubby/schemas/calendar";
+import { cn } from "cn";
 import { format } from "date-fns";
 import type { ReactNode } from "react";
 
@@ -6,7 +7,6 @@ import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { aggregateTotals } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
-import { cn } from "~/lib/utils";
 
 import { householdCalendarDate } from "./calendar-period";
 

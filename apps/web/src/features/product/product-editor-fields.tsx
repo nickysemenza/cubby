@@ -34,6 +34,7 @@ import { IdentifyProductButton } from "~/features/product/identify-product-with-
 import { UnitMappingPairField } from "~/features/units/unit-mapping-pair-field";
 import { upc as upcLookup } from "~/integrations/tanstack-query/generated/domains/upc.gen";
 import { barcodeForLookup } from "~/lib/barcode";
+import { Image } from "~/ui/common/image";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ArrayFieldManager } from "~/ui/forms/array-field-manager";
 import { ChipsInput } from "~/ui/forms/chips-input";
@@ -41,12 +42,11 @@ import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { NullableNumericField, UnifiedTextField } from "~/ui/forms/form-utils";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/primitives/button";
-import { Checkbox } from "~/ui/primitives/checkbox";
-import { Description } from "~/ui/primitives/description";
-import { FieldError } from "~/ui/primitives/field";
-import { Image } from "~/ui/primitives/image";
-import { Spinner } from "~/ui/primitives/spinner";
+import { Button } from "~/ui/shadcn/button";
+import { Checkbox } from "~/ui/shadcn/checkbox";
+import { FieldError } from "~/ui/shadcn/field";
+import { Spinner } from "~/ui/shadcn/spinner";
+import { Description } from "~/ui/text/description";
 
 import type {
   EntityEditorMediaInput,

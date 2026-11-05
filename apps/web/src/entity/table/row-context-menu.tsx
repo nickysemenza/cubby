@@ -1,10 +1,7 @@
 import type { RowData } from "@tanstack/react-table";
 import { type MouseEvent, useMemo, useState } from "react";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-} from "~/ui/primitives/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent } from "~/ui/shadcn/dropdown-menu";
 
 import { useCoarsePointer } from "../../ui/data-table/row-activity";
 import type {

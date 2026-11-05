@@ -32,7 +32,7 @@ import { z } from "zod";
 
 import { assessment } from "~/integrations/tanstack-query/generated/domains/assessment.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import {
   basisValueOf,

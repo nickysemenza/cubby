@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
+import { cn } from "cn";
 import {
   createContext,
   type ReactNode,
@@ -17,7 +18,6 @@ import {
   type DetailWayfinding,
   ListPageHeader,
 } from "~/entity/page/entity-page-header";
-import { cn } from "~/lib/utils";
 import { ListLoadingSkeleton } from "~/ui/feedback/loading-skeletons";
 import { type PageLayout, PageWrapper } from "~/ui/layout/page-wrapper";
 

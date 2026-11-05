@@ -16,9 +16,9 @@ import { describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
 import { ImageThumbnail } from "~/entity/table/image-thumbnail";
-import { Button } from "~/ui/primitives/button";
-import { NoneValue } from "~/ui/primitives/none-value";
-import { Table, TableBody, TableCell, TableRow } from "~/ui/primitives/table";
+import { Button } from "~/ui/shadcn/button";
+import { Table, TableBody, TableCell, TableRow } from "~/ui/shadcn/table";
+import { NoneValue } from "~/ui/text/none-value";
 
 import { CellEditTrigger } from "./cell-edit-trigger";
 import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "./cell-frame";

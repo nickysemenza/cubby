@@ -1,5 +1,6 @@
+import { cn } from "cn";
+
 import { AuthenticatedShellControls } from "~/entity/navigation/authenticated-shell-controls";
-import { cn } from "~/lib/utils";
 
 import { NavDropdown } from "./nav-dropdown";
 import { navGroups, topNavItems } from "./nav-items";

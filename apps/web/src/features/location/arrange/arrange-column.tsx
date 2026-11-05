@@ -6,9 +6,9 @@ import type {
 } from "@cubby/schemas/location";
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
 import { QuestionIcon } from "@phosphor-icons/react/dist/csr/Question";
+import { cn } from "cn";
 
 import { LocationIcon } from "~/entity/presentation/location-icons";
-import { cn } from "~/lib/utils";
 
 import { ArrangeItemChip } from "./arrange-item-chip";
 import { ArrangeLocationCard } from "./arrange-location-card";

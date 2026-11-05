@@ -12,7 +12,7 @@ import { RecordMark } from "~/entity/components/record-mark";
 import { entities, entityDetailParams } from "~/entity/entities";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { getStatusChartColor } from "~/lib/status-colors";
-import { NoneValue } from "~/ui/primitives/none-value";
+import { NoneValue } from "~/ui/text/none-value";
 import { Visualization } from "~/ui/visualizations/visualization";
 
 import { TASK_STATUS_LABELS } from "../shared";

@@ -42,7 +42,7 @@ White surface, #FAFAFA sidebar, #F5F5F5 hover and inset, secondary ink and #E5E5
 
 ## Typography
 
-Inter (self-hosted `@fontsource-variable/inter`) for identity, body, labels, controls, and tables; Geist Mono (`@fontsource-variable/geist-mono`) for shortcodes, money, counts and other tabular figures in tables, timelines and facts. On a desktop fine pointer body text is 12px (`text-sm`), section titles 13px semibold (`text-base`), page and record titles 16px semibold (`text-xl`), captions 11px (`text-xs`), pills and column headers 11px (`text-11`); control labels are 12px everywhere (`text-control`). The base scale for phones, coarse pointers and hosted workspaces is 13px body, 15px section titles, 20px page titles and 12px captions. Hierarchy comes from size and weight, with sentence-case labels (`text-xs text-muted-foreground font-medium`). `cubby/no-uppercase-utility` enforces sentence case; `cubby/no-arbitrary-font-size` requires the type scale (`text-3xs` 8px, `text-2xs` 10px, `text-11`, `text-xs`, `text-control`, `text-sm`, `text-base`, then `text-lg` and `text-xl`). Key-number strips use the page-title size in semibold Inter with tabular figures.
+Inter (self-hosted `@fontsource-variable/inter`) for identity, body, labels, controls, and tables; Geist Mono (`@fontsource-variable/geist-mono`) for shortcodes, money, counts and other tabular figures in tables, timelines and facts. On a desktop fine pointer body text is 12px (`text-sm`), section titles 13px semibold (`text-base`), page and record titles 16px semibold (`text-xl`), captions 11px (`text-xs`), pills and column headers 11px (`--pill-font-size`); control labels are 12px everywhere (`text-md`). The base scale for phones, coarse pointers and hosted workspaces is 13px body, 15px section titles, 20px page titles and 12px captions. Hierarchy comes from size and weight, with sentence-case labels (`text-xs text-muted-foreground font-medium`). `cubby/no-uppercase-utility` enforces sentence case; `cubby/no-arbitrary-font-size` requires the type scale (`text-3xs` 8px, `text-2xs` 10px, `text-xs`, `text-md`, `text-sm`, `text-base`, then `text-lg` and `text-xl`). Key-number strips use the page-title size in semibold Inter with tabular figures.
 
 ## Layout
 
@@ -150,7 +150,7 @@ validation and date behavior; native dropdowns and hand-built imitations do not
 establish whether an existing Cubby workflow improves.
 
 `components.json` configures the shadcn Base UI/Mira family; local primitives
-are maintained in `src/ui/primitives`. Base UI owns accessible interaction,
+are maintained in `src/ui/shadcn`. Base UI owns accessible interaction,
 while Cubby owns their styling and composition. The remaining copied ReUI
 surface is the event calendar; its exact source and license live in
 [`src/ui/reui/SOURCE.md`](src/ui/reui/SOURCE.md). Filters and file upload are
@@ -591,7 +591,7 @@ their age distribution as an execution-event rate.
 The Assessment producer and its internal-source observations are a separate
 publication cutover; the additive DTO alone does not enable them.
 
-Progress uses `ui/primitives/progress.tsx`, following ReUI's Base UI pattern with
+Progress uses `ui/shadcn/progress.tsx`, following ReUI's Base UI pattern with
 `ProgressLabel`, `ProgressValue`, and a 6px token-colored track. Labels and
 values stack on phone widths so long Job kinds retain their own line. Run detail and
 Run Work cells show the current phase's known processed/total counts;

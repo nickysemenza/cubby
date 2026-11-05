@@ -6,6 +6,7 @@ import {
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -19,7 +20,6 @@ import {
 import { useEntityMetadata } from "~/entity/metadata";
 import { getEntityNavGroup } from "~/entity/navigation/nav-items";
 import { formatCount } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
 import { DateDisplay } from "~/ui/common/date-display";
 import { ImageChainPopover } from "~/ui/derived/image-chain";
@@ -29,7 +29,7 @@ import {
   domainWayfinding,
   type WayfindingDomain,
 } from "~/ui/navigation/domain-wayfinding";
-import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
+import { Badge, type BadgeVariant } from "~/ui/shadcn/badge";
 
 /** Authored action hierarchy for a record header. */
 export interface DetailHeroActions {

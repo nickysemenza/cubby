@@ -24,7 +24,7 @@ import type { EntityEditIntent } from "~/entity/editing/intent-types";
 import type { EditableEntity, EntityEditRecord } from "~/entity/editing/types";
 import { entities } from "~/entity/entities";
 import { statusTone } from "~/lib/status-tone";
-import type { BadgeVariant } from "~/ui/primitives/badge";
+import type { BadgeVariant } from "~/ui/shadcn/badge";
 
 import { TASK_STATUS_LABELS } from "../../entity/presentation/task-options";
 import {

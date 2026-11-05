@@ -15,12 +15,12 @@ import { useEntityMetadata } from "~/entity/metadata";
 import { renderOptionCell } from "~/entity/table/column-helpers";
 import { task } from "~/integrations/tanstack-query/generated/domains/task.gen";
 import { DateDisplay } from "~/ui/common/date-display";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Badge } from "~/ui/primitives/badge";
-import { StaticTable } from "~/ui/primitives/static-table";
+import { Badge } from "~/ui/shadcn/badge";
 
 type ActionableTasksOut = Awaited<ReturnType<typeof task.listActionable.call>>;
 type ActionableTaskOut = ActionableTasksOut["next"][number];

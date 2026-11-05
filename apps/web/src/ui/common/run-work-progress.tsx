@@ -5,11 +5,7 @@ import {
 
 import { formatCount } from "~/lib/number-format";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
-import {
-  Progress,
-  ProgressLabel,
-  ProgressValue,
-} from "~/ui/primitives/progress";
+import { Progress, ProgressLabel, ProgressValue } from "~/ui/shadcn/progress";
 
 import { useDenseCell } from "./stacked-value";
 

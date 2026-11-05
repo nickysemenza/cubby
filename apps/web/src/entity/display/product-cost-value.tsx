@@ -4,12 +4,8 @@ import { fieldMissingLabel } from "@cubby/schemas/field-envelope-presentation";
 import { countLabel } from "@cubby/shared/pluralize";
 
 import { formatCurrency } from "~/lib/number-format";
-import { NoneValue } from "~/ui/primitives/none-value";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/ui/primitives/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
+import { NoneValue } from "~/ui/text/none-value";
 
 /** Cost renders only its canonical snapshot; its shared explanation owns source details. */
 export function ProductCostValue({

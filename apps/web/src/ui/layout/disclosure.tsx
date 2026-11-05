@@ -1,8 +1,7 @@
 import { Collapsible } from "@base-ui/react/collapsible";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { cn } from "cn";
 import type { ReactNode } from "react";
-
-import { cn } from "~/lib/utils";
 
 /**
  * Open state for a disclosure. Children mount only while open; `keepMounted`

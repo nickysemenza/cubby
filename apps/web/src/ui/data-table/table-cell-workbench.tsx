@@ -4,14 +4,14 @@ import { useState } from "react";
 
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   Popover,
   PopoverContent,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
-} from "~/ui/primitives/popover";
+} from "~/ui/shadcn/popover";
 
 import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "./cell-frame";
 

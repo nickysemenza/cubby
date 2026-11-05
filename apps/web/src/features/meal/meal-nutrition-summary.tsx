@@ -24,8 +24,8 @@ import {
 } from "~/lib/nutrition-format";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/primitives/button";
-import { Description } from "~/ui/primitives/description";
+import { Button } from "~/ui/shadcn/button";
+import { Description } from "~/ui/text/description";
 
 import { AddFoodDialog } from "./add-food-dialog";
 import { FoodAmountReadout } from "./food-amount-editor";

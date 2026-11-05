@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 
 import { getAppErrorDetails } from "~/lib/error-utils";
-import { cn } from "~/lib/utils";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { ErrorDetails } from "./error-details";
 

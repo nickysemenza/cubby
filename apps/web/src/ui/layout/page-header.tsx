@@ -1,6 +1,5 @@
+import { cn } from "cn";
 import { Fragment, type ReactNode } from "react";
-
-import { cn } from "~/lib/utils";
 
 type PageHeaderProps = {
   title: ReactNode;

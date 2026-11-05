@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 
 import type { WorkActionProps } from "~/entity/work-queue/work-actions";
 import { ProblemItemsAction } from "~/features/work-queue/problem-items-action";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { UnitCoverageInlineFix } from "./unit-coverage-fix";
 

@@ -2,7 +2,7 @@ import { countLabel } from "@cubby/shared/pluralize";
 
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 export function OrphanedClientMaintenance({
   count,

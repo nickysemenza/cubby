@@ -8,8 +8,8 @@ import type { EntityEditDialog as EntityEditDialogComponent } from "~/entity/edi
 import type { EntityEditDialogRequest } from "~/entity/editing/entity-edit-dialog";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/primitives/button";
-import { Spinner } from "~/ui/primitives/spinner";
+import { Button } from "~/ui/shadcn/button";
+import { Spinner } from "~/ui/shadcn/spinner";
 
 const EntityEditDialog = browserOnlyLazy<
   ComponentProps<typeof EntityEditDialogComponent>

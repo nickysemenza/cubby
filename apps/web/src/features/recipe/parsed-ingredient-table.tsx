@@ -1,15 +1,15 @@
 import type { WAmount } from "@cubby/recipebridge";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
+import { cn } from "cn";
 import { useMemo } from "react";
 import type { ReadonlyDeep } from "type-fest";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { cn } from "~/lib/utils";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { Row } from "~/ui/layout";
-import { badgeVariants } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
-import { StaticTable } from "~/ui/primitives/static-table";
+import { badgeVariants } from "~/ui/shadcn/badge";
+import { Button } from "~/ui/shadcn/button";
 
 import {
   entityDisplayImageKey,

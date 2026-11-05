@@ -25,7 +25,7 @@ import {
 } from "~/ui/data-table/indexed-sections";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Stack } from "~/ui/layout";
-import { Skeleton } from "~/ui/primitives/skeleton";
+import { Skeleton } from "~/ui/shadcn/skeleton";
 import {
   Visualization,
   visualizationState,

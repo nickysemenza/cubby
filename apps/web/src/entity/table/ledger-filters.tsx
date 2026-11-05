@@ -13,7 +13,7 @@ import {
   useViewCounts,
   withFacets,
 } from "~/entity/table/list-query-context";
-import { Popover, PopoverContent } from "~/ui/primitives/popover";
+import { Popover, PopoverContent } from "~/ui/shadcn/popover";
 
 import {
   FilterBar,

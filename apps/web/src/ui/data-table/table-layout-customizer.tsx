@@ -15,15 +15,15 @@ import { PushPinSlashIcon } from "@phosphor-icons/react/dist/csr/PushPinSlash";
 import { SidebarIcon } from "@phosphor-icons/react/dist/csr/Sidebar";
 import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import type { RowData } from "@tanstack/react-table";
+import { cn } from "cn";
 
-import { cn } from "~/lib/utils";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
+} from "~/ui/shadcn/dropdown-menu";
 
 import {
   applyColumnLayout,

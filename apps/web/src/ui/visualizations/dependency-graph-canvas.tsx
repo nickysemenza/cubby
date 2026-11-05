@@ -6,7 +6,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Panel } from "~/ui/layout/panel";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import { appendGraphImages, type GraphImage } from "./dependency-graph-images";
 import { bindGraphInteractions } from "./dependency-graph-interactions";

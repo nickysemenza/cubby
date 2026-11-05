@@ -12,16 +12,16 @@ import {
 import { mergeConfigFor } from "~/entity/entities";
 import type { MergeDisplayRow, MergeableConfig } from "~/entity/types";
 import { product } from "~/integrations/tanstack-query/generated/domains/product.gen";
+import { StaticTable } from "~/ui/data-table/static-table";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { Panel } from "~/ui/layout/panel";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Alert } from "~/ui/primitives/alert";
-import { Badge } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
-import { Checkbox } from "~/ui/primitives/checkbox";
-import { Description } from "~/ui/primitives/description";
-import { StaticTable } from "~/ui/primitives/static-table";
+import { Alert } from "~/ui/shadcn/alert";
+import { Badge } from "~/ui/shadcn/badge";
+import { Button } from "~/ui/shadcn/button";
+import { Checkbox } from "~/ui/shadcn/checkbox";
+import { Description } from "~/ui/text/description";
 
 /** Display text comes from `mergeable.rowLabel`/`rowStat`, not a hardcoded
  * `name` field — a row shape like `PurchaseOut` (no `name`) works here too. */

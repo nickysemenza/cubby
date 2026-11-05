@@ -8,15 +8,15 @@ import type {
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
 import { useQueryClient } from "@tanstack/react-query";
+import { cn } from "cn";
 import { type ReactNode, useCallback, useState } from "react";
 
 import { enumFieldLabel } from "~/entity/display/enum-field-display";
 import { entities } from "~/entity/entities";
 import { useEntityMetadata } from "~/entity/metadata";
-import { cn } from "~/lib/utils";
 import { FieldRecordValue } from "~/ui/derived/record-value";
-import { NoneValue } from "~/ui/primitives/none-value";
 import { tryFormatAmount } from "~/ui/text/format-amount";
+import { NoneValue } from "~/ui/text/none-value";
 
 import {
   getSearchMatchText,

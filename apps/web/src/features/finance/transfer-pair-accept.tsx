@@ -13,7 +13,7 @@ import { formatCurrency } from "~/lib/number-format";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 type Candidate =
   FinancialTransferPairSuggestionsOut["suggestions"][number]["candidates"][number];

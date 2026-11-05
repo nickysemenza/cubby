@@ -10,7 +10,7 @@ import {
 } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 import type { DependencyGraphCanvas as DependencyGraphCanvasComponent } from "./dependency-graph-canvas";
 import {

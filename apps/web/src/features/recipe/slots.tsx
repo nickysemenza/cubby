@@ -13,7 +13,7 @@ import RecipeDetail, {
 import { RecipeFlowAction } from "~/features/recipe/recipe-flow-view";
 import type { RecipeFlowLayoutMode } from "~/features/recipe/recipe-flow-view";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 /**
  * The cooking workflow: view switcher, scaling, nutrition basis, costing

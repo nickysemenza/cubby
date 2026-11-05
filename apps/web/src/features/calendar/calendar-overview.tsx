@@ -3,26 +3,26 @@ import {
   type CalendarDaySummary,
   type CalendarItem,
 } from "@cubby/schemas/calendar";
+import { cn } from "cn";
 import { addDays, differenceInCalendarDays, format } from "date-fns";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { HOUSEHOLD_TIMEZONE } from "~/lib/household-date";
 import { formatPlainDate } from "~/lib/plain-date";
-import { cn } from "~/lib/utils";
-import { Button } from "~/ui/primitives/button";
+import {
+  buildEventIndex,
+  packWeekRowLanes,
+} from "~/ui/reui/event-calendar/event-calendar-lib";
+import type { CalendarEvent } from "~/ui/reui/event-calendar/event-calendar-types";
+import { Button } from "~/ui/shadcn/button";
 import {
   Popover,
   PopoverContent,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
-} from "~/ui/primitives/popover";
-import {
-  buildEventIndex,
-  packWeekRowLanes,
-} from "~/ui/reui/event-calendar/event-calendar-lib";
-import type { CalendarEvent } from "~/ui/reui/event-calendar/event-calendar-types";
+} from "~/ui/shadcn/popover";
 
 import { CalendarItemPresentation } from "./calendar-item-row";
 import { calendarOverviewLayout } from "./calendar-overview-layout";

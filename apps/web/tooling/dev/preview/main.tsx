@@ -25,8 +25,8 @@ import {
 import { installFeatures } from "~/features/registry";
 import { Picker } from "~/ui/combobox/picker";
 import { ErrorDetailsDialogHost } from "~/ui/feedback/error-details-dialog";
-import { Label } from "~/ui/primitives/label";
-import { Toaster } from "~/ui/primitives/sonner";
+import { Label } from "~/ui/shadcn/label";
+import { Toaster } from "~/ui/shadcn/sonner";
 
 import {
   PREVIEW_ENTITIES,

@@ -5,6 +5,7 @@ import type {
   ReportTime,
 } from "@cubby/schemas/entity-report";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { cn } from "cn";
 import { type ReactNode, Suspense, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -13,8 +14,8 @@ import { entities } from "~/entity/entities";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { formatCalendarDay } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
-import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
+import { Image } from "~/ui/common/image";
 import {
   RecordDetail,
   RecordDot,
@@ -23,9 +24,8 @@ import {
   RecordRow,
 } from "~/ui/common/record-list";
 import { CloudflareIcon } from "~/ui/icons/cloudflare";
-import { Badge } from "~/ui/primitives/badge";
-import { Button, buttonVariants } from "~/ui/primitives/button";
-import { Image } from "~/ui/primitives/image";
+import { Badge } from "~/ui/shadcn/badge";
+import { Button, buttonVariants } from "~/ui/shadcn/button";
 
 import { collectionActionFor } from "./collection-actions";
 import { DetailAction } from "./detail-action-bar";

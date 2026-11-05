@@ -29,7 +29,7 @@ import { QuerySection } from "~/ui/feedback/query-section";
 import { VisibleContent } from "~/ui/hooks/visible-content";
 import { Section } from "~/ui/layout";
 import { PageHeader } from "~/ui/layout/page-header";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 
 const HomeInsights = lazy(async () => {
   const module = await import("~/features/home/home-insights");

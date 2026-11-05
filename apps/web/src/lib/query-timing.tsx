@@ -1,7 +1,6 @@
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
+import { cn } from "cn";
 import type { FC } from "react";
-
-import { cn } from "~/lib/utils";
 
 export interface QueryTiming {
   durationMs: number | null;

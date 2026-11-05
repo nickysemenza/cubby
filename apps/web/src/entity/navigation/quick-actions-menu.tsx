@@ -1,10 +1,10 @@
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { Link } from "@tanstack/react-router";
+import { cn } from "cn";
 
 import { EntityIcon, entities } from "~/entity/entities";
-import { cn } from "~/lib/utils";
 import { domainForEntity } from "~/ui/navigation/domain-wayfinding";
-import { Button } from "~/ui/primitives/button";
+import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,12 +12,8 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from "~/ui/primitives/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/ui/primitives/tooltip";
+} from "~/ui/shadcn/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/ui/shadcn/tooltip";
 
 import { actionsForSurface } from "../actions/action-items";
 import { navGroups } from "./nav-items";

@@ -5,9 +5,9 @@ import {
   type NutrientsPer100,
   TIER1_NUTRIENTS,
 } from "@cubby/usda";
+import { cn } from "cn";
 
 import { trimAmount } from "~/lib/nutrition-format";
-import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 
 // Short table headers — the one per-surface override of the long displayName.

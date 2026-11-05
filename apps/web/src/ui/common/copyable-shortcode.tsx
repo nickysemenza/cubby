@@ -1,9 +1,9 @@
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
+import { cn } from "cn";
 import { useState } from "react";
 
 import { copyShortcodes } from "~/lib/clipboard";
-import { cn } from "~/lib/utils";
 
 /**
  * A shortcode, click-to-copy.
