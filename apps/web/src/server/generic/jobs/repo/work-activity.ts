@@ -1,3 +1,4 @@
+import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import {
@@ -142,6 +143,46 @@ async function readEmbeddingStreams(
   ];
 }
 
+/** AI evaluations, held on their own rows: one stream per feature. */
+async function readAiEvaluationStreams(
+  db: Database,
+  now: Date,
+): Promise<StreamRow[]> {
+  const at = sql`${now.toISOString()}::timestamp`;
+  const since = (minutes: number) =>
+    sql`${at} - ${minutes} * interval '1 minute'`;
+  const owed = sql`e."runAt" IS NOT NULL`;
+  const held = sql`e."leaseUntil" > ${at}`;
+  const later = sql`${owed} AND NOT coalesce(${held}, false) AND e."runAt" > ${at}`;
+  const claimable = sql`${owed} AND NOT coalesce(${held}, false) AND e."runAt" <= ${at}`;
+  const { rows } = await getDb(db).execute<StreamRow>(sql`
+    SELECT 'ai.evaluation:' || e.feature AS kind,
+      count(*) FILTER (WHERE ${held})::int AS "running",
+      count(*) FILTER (WHERE ${claimable})::int AS "due",
+      count(*) FILTER (WHERE ${later} AND e.attempts > 0)::int AS "backingOff",
+      count(*) FILTER (WHERE ${later} AND e.attempts = 0)::int AS "scheduled",
+      0 AS "paused",
+      count(*) FILTER (WHERE e.state = ${aiEvaluationState.enum.completed} AND e."updatedAt" > ${since(RECENT_MINUTES.pace)})::int AS "completedPace",
+      count(*) FILTER (WHERE e.state = ${aiEvaluationState.enum.completed} AND e."updatedAt" > ${since(RECENT_MINUTES.completed)})::int AS "completed",
+      count(*) FILTER (WHERE e.state = ${aiEvaluationState.enum.failed} AND e."updatedAt" > ${since(RECENT_MINUTES.failed)})::int AS "failed",
+      max(e."updatedAt") FILTER (WHERE e.state = ${aiEvaluationState.enum.completed}) AS "lastCompletedAt",
+      min(e."runAt") FILTER (WHERE ${claimable}) AS "oldestDueAt",
+      ARRAY(
+        SELECT r.shortcode FROM "AiEvaluation" stream
+        JOIN "Run" r ON r.id = stream."runId"
+        WHERE stream.feature = e.feature AND stream."runAt" IS NOT NULL AND ${notDeleted("r")}
+          AND r.status IN (${sql.join(
+            ACTIVE_RUN_STATUSES.map((status) => sql`${status}`),
+            sql`, `,
+          )})
+        GROUP BY r.id ORDER BY r."createdAt" DESC, r.id LIMIT ${STREAM_RUNS}
+      ) AS "runs"
+    FROM "AiEvaluation" e
+    WHERE ${owed} OR e."updatedAt" > ${since(RECENT_MINUTES.failed)}
+    GROUP BY e.feature`);
+  return rows;
+}
+
 /**
  * Live and recent work per Job kind and domain-owned stream: what runs now, what
  * waits and why, and how fast recent work finished. Internal maintenance kinds are
@@ -209,6 +250,7 @@ export async function readWorkActivity(
       ...rows.rows,
       ...(await readImageStreams(db, now)),
       ...(await readEmbeddingStreams(db, now)),
+      ...(await readAiEvaluationStreams(db, now)),
     ]
       .sort((left, right) => left.kind.localeCompare(right.kind))
       .map((row) => ({

@@ -376,3 +376,94 @@ it("carries an owed embedding from its WorkItem onto its SearchDocument", async 
     ).rejects.toThrow("Job_kind_retired_check");
   });
 });
+
+it("moves owed AI evaluations onto their rows and keeps paid results and parked work", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle(client);
+    await migrateDatabase(db, { through: "0077_embedding_work_on_owner_rows" });
+    const id = (n: number) =>
+      `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+    await client.query(`INSERT INTO "user" (id, name, email)
+      VALUES ('synthetic-user', 'Synthetic', 'synthetic@example.test')`);
+    await identity(client, "run", id(1), "RUN-SYNTH1");
+    await client.query(
+      `INSERT INTO "Run" (id, shortcode, purpose, trigger, "actorUserId", "actorName", "actorEmail")
+       VALUES ($1, 'RUN-SYNTH1', 'maintenance', 'manual', 'synthetic-user', 'Synthetic', 'synthetic@example.test')`,
+      [id(1)],
+    );
+    const evaluation = (n: number, state: string, result: unknown = null) =>
+      client.query(
+        `INSERT INTO "AiEvaluation" (id, "runId", "workKey", feature, target, provenance, snapshot, state, result)
+         VALUES ($1::uuid, $2, $3, 'synthetic-feature',
+           jsonb_build_object('entity', 'product', 'recordId', $1::text), '{}', '{}', $4, $5::jsonb)`,
+        [id(n), id(1), `synthetic-work-${n}`, state, JSON.stringify(result)],
+      );
+    await evaluation(2, "queued");
+    await evaluation(3, "result_ready", { paid: "Synthetic answer" });
+    await evaluation(4, "queued");
+    await evaluation(5, "completed", { paid: "Synthetic answer" });
+    const item = (n: number, attempts: number, priority: number) =>
+      client.query(
+        `INSERT INTO "WorkItem" (drain, target, ref, attempts, priority, "readyAt", "lastError", "waitCause", "waitStartedAt")
+         VALUES ('ai-evaluation:synthetic-feature', 'ai.evaluation', $1, $2, $3, '2026-03-01T00:00:00Z', 'Synthetic retry', 'search_coverage', now())`,
+        [id(n), attempts, priority],
+      );
+    await item(2, 2, 0);
+    await item(3, 1, 1);
+    await item(5, 0, 1);
+    await identity(client, "job", id(6), "JOB-SYNTH1");
+    await client.query(
+      `INSERT INTO "Job" (id, shortcode, key, kind, state, input)
+       VALUES ($1, 'JOB-SYNTH1', 'ai-evaluation:synthetic-feature', 'ai.evaluation', 'running', '{}')`,
+      [id(6)],
+    );
+    const paid = async () =>
+      (
+        await client.query(
+          `SELECT id, state, result, snapshot, provenance FROM "AiEvaluation" ORDER BY id`,
+        )
+      ).rows;
+    const before = await paid();
+
+    await migrateDatabase(db, {
+      through: "0078_ai_evaluations_own_their_work",
+    });
+
+    expect(await paid()).toEqual(before);
+    const rows = (
+      await client.query(
+        `SELECT to_char("runAt", 'YYYY-MM-DD') AS "runAt", priority, attempts, "waitCause", error FROM "AiEvaluation" ORDER BY id`,
+      )
+    ).rows;
+    const owed = {
+      runAt: "2026-03-01",
+      waitCause: "search_coverage",
+      error: "Synthetic retry",
+    };
+    expect(rows[0]).toEqual({ ...owed, priority: 0, attempts: 2 });
+    expect(rows[1]).toEqual({ ...owed, priority: 1, attempts: 1 });
+    // The running predecessor may be paying right now, and deleting its Job cannot stop
+    // that call, so its rows stay reserved past the longest a consumer can run.
+    expect(
+      (
+        await client.query(
+          `SELECT "leaseToken" IS NOT NULL AS reserved, "leaseUntil" > now() + interval '15 minutes' AS outlasts
+           FROM "AiEvaluation" WHERE "runAt" IS NOT NULL`,
+        )
+      ).rows,
+    ).toEqual([
+      { reserved: true, outlasts: true },
+      { reserved: true, outlasts: true },
+    ]);
+    // Parked stays parked, and a settled evaluation owes nothing.
+    expect(rows[2]).toMatchObject({ runAt: null, attempts: 0 });
+    expect(rows[3]).toMatchObject({ runAt: null, attempts: 0 });
+    expect(
+      (
+        await client.query(
+          `SELECT count(*)::int AS left FROM "WorkItem" WHERE target = 'ai.evaluation'`,
+        )
+      ).rows,
+    ).toEqual([{ left: 0 }]);
+  });
+});

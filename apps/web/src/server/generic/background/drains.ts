@@ -3,11 +3,8 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
-import type {
-  DrainClaim,
-  DrainHandler,
-  DrainStore,
-} from "~/server/generic/jobs/service/drain";
+import type { DrainClaim, DrainStore } from "~/server/generic/jobs/drain-store";
+import type { DrainHandler } from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
 
 const log = createLogger("drains");

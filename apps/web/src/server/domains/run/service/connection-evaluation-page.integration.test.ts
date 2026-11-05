@@ -1,5 +1,4 @@
 import type { EntityRef } from "@cubby/schemas/entity";
-import { describeJobWaitingOn } from "@cubby/schemas/job";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, inArray } from "drizzle-orm";
@@ -8,12 +7,10 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import {
-  aiEvaluationDrain,
-  markAiEvaluationWork,
-} from "~/server/ai/evaluation/repo/ai-evaluation-work";
+import { markAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import {
   aiEvaluationItem,
+  updateAiEvaluationWork,
   drainAiEvaluations,
 } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import * as productIdentity from "~/server/ai/product-identity";
@@ -38,13 +35,6 @@ import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
-import {
-  readWorkItems,
-  updateJobs,
-  updateWorkItems,
-} from "~/server/generic/jobs/jobs.fixtures";
-import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
-import { jobFactsOf } from "~/server/generic/jobs/repo/job-queue";
 import { markWork } from "~/server/generic/jobs/repo/work-items";
 import { readRunEvaluationsByCode } from "~/server/generic/run-detail/repo/run-evaluations";
 import {
@@ -494,7 +484,7 @@ describe("connection evaluation pages", () => {
       sourceKey: "synthetic-final-event",
     });
     const ids = await schedule([message.message]);
-    await updateWorkItems(ctx.db, { refs: ids }, { attempts: 2 });
+    await updateAiEvaluationWork(ctx.db, ids, { attempts: 2 });
     const publish = connectionRepo.publishPreparedEntityConnections;
     vi.spyOn(
       connectionRepo,
@@ -684,12 +674,10 @@ describe("connection evaluation pages", () => {
     const waitingId = evaluationFor(source.entityId);
     const siblingId = evaluationFor(sibling.message.id);
     const productRef = { entityKind: "product" as const, entityId: source.id };
-    await updateWorkItems(
-      ctx.db,
-      { refs: [waitingId] },
-      { attempts: 1, lastError: "Synthetic earlier failure" },
-    );
-    const owed = await aiEvaluationItem(ctx.db, waitingId);
+    await updateAiEvaluationWork(ctx.db, [waitingId], {
+      attempts: 1,
+      error: "Synthetic earlier failure",
+    });
     await markWork(ctx.db, DERIVED_DRAIN, [
       {
         target: "expense.searchDocument",
@@ -704,69 +692,21 @@ describe("connection evaluation pages", () => {
     expect(await states([waitingId])).toEqual(["queued"]);
     const waiting = await aiEvaluationItem(ctx.db, waitingId);
     expect(waiting).toMatchObject({
-      ticket: owed?.ticket,
-      reason: owed?.reason,
       attempts: 1,
       lastError: "Synthetic earlier failure",
       waitCause: "search_coverage",
     });
-    const { baseMs, maxMs } = jobKindPolicy("ai.evaluation").backoff;
-    if (!waiting?.waitStartedAt) throw new Error("Synthetic wait missing");
-    expect(waiting.readyAt.getTime() - waiting.waitStartedAt.getTime()).toBe(
-      baseMs,
-    );
     expect(requests).toEqual([]);
     expect(await readEntityConnections(ctx.db, productRef)).toEqual([]);
 
-    // The explicit wait outranks retained history, and its Job explains it.
-    const drain = aiEvaluationDrain("entity-connections").key;
-    expect(await readWorkItems(ctx.db, { drain })).toEqual([
-      expect.objectContaining({ waitCause: expect.any(String) }),
-    ]);
-    const [sleeping] = await updateJobs(
-      ctx.db,
-      { key: drain },
-      { availableAt: waiting.readyAt },
-    );
-    if (!sleeping) throw new Error("Synthetic drain missing");
-    const [facts] = await jobFactsOf(ctx.db, [sleeping]);
-    expect(facts?.waitingOn).toMatchObject({
-      reason: "backing_off",
-      cause: "search_coverage",
-    });
-    expect(describeJobWaitingOn(facts?.waitingOn ?? null)).toMatch(
-      /^Waiting for search indexing; next attempt in /,
-    );
-
-    // A long wait keeps its start and its bound, without spending an attempt.
-    const longAgo = new Date(Date.now() - 24 * 60 * 60_000);
-    await updateWorkItems(
-      ctx.db,
-      { refs: [waitingId] },
-      { waitStartedAt: longAgo },
-    );
-    expect(await runPage([waitingId])).toBe("succeeded");
-    const bounded = await aiEvaluationItem(ctx.db, waitingId);
-    expect(bounded).toMatchObject({ attempts: 1, waitStartedAt: longAgo });
-    expect(
-      Math.abs(
-        (bounded?.readyAt.getTime() ?? 0) -
-          longAgo.getTime() -
-          24 * 60 * 60_000 -
-          maxMs,
-      ),
-    ).toBeLessThan(60_000);
-
-    // A fresh mark clears the wait with a new ticket and attempt budget.
+    // A fresh mark clears the wait with a new attempt budget.
     await markAiEvaluationWork(ctx.db, [waitingId]);
     const remarked = await aiEvaluationItem(ctx.db, waitingId);
     expect(remarked).toMatchObject({
       attempts: 0,
       lastError: null,
       waitCause: null,
-      waitStartedAt: null,
     });
-    expect(remarked?.ticket).not.toBe(owed?.ticket);
 
     await drainDerivedRefreshFrontier(ctx.db);
     expect(await runPage([waitingId])).toBe("succeeded");

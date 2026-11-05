@@ -1141,7 +1141,7 @@ describe("stored Product identity pairs", () => {
     expect(changed.workKey).not.toBe(first.workKey);
     expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(1);
     expect(await aiEvaluationItem(ctx.db, first.id)).toMatchObject({
-      drain: `ai-evaluation:${first.feature}`,
+      feature: first.feature,
     });
     // An in-flight attempt is fenced by its item ticket, so reverting the
     // input updates the queued row in place.

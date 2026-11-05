@@ -12,8 +12,7 @@ import {
   PENDING_AI_STATES,
 } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import {
-  AI_EVALUATION_TARGET,
-  aiEvaluationDrain,
+  aiEvaluationPageKey,
   aiEvaluationAttemptToken,
   aiEvaluationAttemptLive,
 } from "~/server/ai/evaluation/repo/ai-evaluation-work";
@@ -29,10 +28,7 @@ import { uuidArrayParam } from "~/server/db/helpers/query";
 import { repositoryBeforeCommit } from "~/server/db/repository-access.boundary";
 import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
-import {
-  postponeWorkRefs,
-  type WorkItem,
-} from "~/server/generic/jobs/repo/work-items";
+import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 import type { DrainContext } from "~/server/generic/jobs/service/drain";
 
 import type {
@@ -54,13 +50,6 @@ export class AiEvaluationUnauthorizedError extends Error {
   }
 }
 
-/** Hold not-yet-claimed items until `until`; an attempt already holding one keeps it. */
-export const postponeAiEvaluationWork = (
-  db: Database,
-  ids: readonly string[],
-  until: Date,
-) => postponeWorkRefs(db, AI_EVALUATION_TARGET, ids, until);
-
 export async function readAiEvaluations(db: Database, ids: readonly string[]) {
   if (!ids.length) return [];
   return getDb(db)
@@ -74,7 +63,7 @@ export type ClaimedAiEvaluation = typeof aiEvaluation.$inferSelect & {
   attempts: number;
 };
 
-/** Bind one drain item to its live owner; the drain's lease fences every later write. */
+/** Bind one item to its live owner; its lease fences every later write. */
 export async function claimAiEvaluation(
   context: Pick<DrainContext, "claim" | "fenced">,
   item: WorkItem,
@@ -86,8 +75,8 @@ export async function claimAiEvaluation(
       .from(aiEvaluation)
       .where(eq(aiEvaluation.id, item.ref));
     if (!existing || !PENDING_AI_STATES.includes(existing.state)) return null;
-    if (context.claim.key !== aiEvaluationDrain(existing.feature).key)
-      throw new Error("AI evaluation item belongs to another drain");
+    if (context.claim.key !== aiEvaluationPageKey(existing.feature))
+      throw new Error("AI evaluation item belongs to another feature's page");
     if (
       existing.executionKind === "ai_refresh" &&
       !(await readAiRefreshActivation(tx))?.enabled
@@ -117,7 +106,7 @@ export async function claimAiEvaluation(
     return row
       ? {
           ...row,
-          attemptToken: aiEvaluationAttemptToken(context.claim, item),
+          attemptToken: aiEvaluationAttemptToken(context.claim),
           attempts: item.attempts,
         }
       : null;

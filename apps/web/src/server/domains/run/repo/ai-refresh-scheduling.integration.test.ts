@@ -13,11 +13,13 @@ import {
   enqueueAiEvaluation,
   evaluationSlotKey,
 } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import {
+  aiEvaluationItem,
+  owedAiEvaluations,
+} from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { aiEvaluation, product, run } from "~/server/db/schema";
-import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
-import { workItemsFor } from "~/server/generic/jobs/repo/work-items";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
@@ -31,10 +33,10 @@ import { ensureRun, systemActor } from "./ensure-run";
 // Real transactions expose races between shared Jobs and their requesters.
 describe("AI refresh scheduling admission", () => {
   const ctx = withTestDb();
-  const evaluationItems = async () =>
-    (await readWorkItems(ctx.db, { target: "ai.evaluation" })).length;
+  const evaluationItems = () => owedAiEvaluations(ctx.db);
+  /** The mark a re-mark would replace: its due time. */
   const aiEvaluationTicket = async (id: string) =>
-    (await workItemsFor(ctx.db, "ai.evaluation", [id]))[0]?.ticket;
+    (await aiEvaluationItem(ctx.db, id))?.readyAt?.getTime();
   const target = (recordId = crypto.randomUUID()) => ({
     target: aiEvaluationTarget.parse({
       kind: "email",

@@ -941,6 +941,16 @@ export const runChildren = [
       { key: "result", kind: "jsonb" },
       { key: "receipt", kind: "jsonb" },
       { key: "error", kind: "text" },
+      // Set while the drain owes this evaluation; null once settled or parked.
+      { key: "runAt", kind: "timestamp" },
+      { key: "priority", kind: "integer", notNull: true, default: 1 },
+      { key: "attempts", kind: "integer", notNull: true, default: 0 },
+      // The page holding it; also the attempt token its writes check.
+      { key: "leaseToken", kind: "uuid" },
+      { key: "leaseUntil", kind: "timestamp" },
+      /** New input arrived under this lease: its page still holds it but can write nothing. */
+      { key: "leaseStale", kind: "boolean", notNull: true, default: false },
+      { key: "waitCause", kind: "text" },
       {
         key: "createdAt",
         kind: "timestamp",
@@ -984,6 +994,12 @@ export const runChildren = [
         name: "AiEvaluation_admission_idx",
         on: ["executionKind", "state"],
       },
+      {
+        name: "AiEvaluation_owed_idx",
+        on: ["feature", "priority", "runAt"],
+        where: "{runAt} IS NOT NULL",
+      },
+      { name: "AiEvaluation_updatedAt_idx", on: ["updatedAt"] },
       {
         name: "AiEvaluation_run_state_idx",
         on: ["runId", "state"],

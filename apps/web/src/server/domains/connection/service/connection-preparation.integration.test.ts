@@ -180,7 +180,6 @@ describe("connection preparation and publication authority", () => {
       .from(aiEvaluation)
       .where(eq(aiEvaluation.runId, runId));
     if (!evaluation) throw new Error("Synthetic incomplete target missing");
-    const owed = await aiEvaluationItem(ctx.db, evaluation.id);
     const stateOfEvaluation = async () =>
       (
         await getDb(ctx.db)
@@ -198,7 +197,6 @@ describe("connection preparation and publication authority", () => {
     expect((await stateOfEvaluation())?.state).toBe("queued");
     const waiting = await aiEvaluationItem(ctx.db, evaluation.id);
     expect(waiting).toMatchObject({
-      ticket: owed?.ticket,
       attempts: 0,
       lastError: null,
       waitCause: "search_coverage",
@@ -232,11 +230,9 @@ describe("connection preparation and publication authority", () => {
     );
     expect((await stateOfEvaluation())?.state).toBe("queued");
     expect(await aiEvaluationItem(ctx.db, evaluation.id)).toMatchObject({
-      ticket: owed?.ticket,
       attempts: 1,
       lastError: expect.stringContaining("exceeded its fixed candidate budget"),
       waitCause: null,
-      waitStartedAt: null,
     });
     expect(await readEntityConnections(ctx.db, source)).toEqual([]);
     await drainAiEvaluations(
@@ -298,7 +294,6 @@ describe("connection preparation and publication authority", () => {
             eq(assessmentState.field, "subjectProductId"),
           ),
         );
-    const owedTicket = (await aiEvaluationItem(ctx.db, unavailableId))?.ticket;
     const read = selectedRead.readSelectedEntityRecords;
     vi.spyOn(selectedRead, "readSelectedEntityRecords").mockImplementation(
       async (input) => {
@@ -336,7 +331,6 @@ describe("connection preparation and publication authority", () => {
     expect((await settled(unavailableId))?.state).toBe("queued");
     expect(await aiEvaluationItem(ctx.db, unavailableId)).toMatchObject({
       attempts: 1,
-      ticket: owedTicket,
       lastError: expect.stringContaining(
         "Suggestion target field result is unavailable",
       ),

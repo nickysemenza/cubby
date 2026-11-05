@@ -249,8 +249,6 @@ export type JobKindPolicy = {
    */
   readonly maxAttempts: number | null;
   readonly backoff: JobBackoff;
-  /** Live leases of this kind across every drain; Run-owned work is exempt. */
-  readonly maxInFlight?: number;
 };
 
 const MAINTENANCE_BACKOFF = { baseMs: 60_000, maxMs: 15 * 60_000 };
@@ -268,9 +266,6 @@ const MAINTENANCE: JobKindPolicy = {
   maxAttempts: null,
   backoff: MAINTENANCE_BACKOFF,
 };
-/** A drain Job owns no work of its own; its items retry on their own rows. */
-const DRAIN: JobKindPolicy = { ...MAINTENANCE, internal: false };
-
 /**
  * The one registry of per-kind execution policy. A kind absent here runs on
  * the server drain and fails after three consecutive failures.
@@ -351,25 +346,6 @@ export const JOB_KIND_POLICY = {
     dependencies: "Derived declarations and current record state.",
     cost: "No blanket AI charge; individual downstream computations own cost.",
     exclusions: "Does not introduce a second derived-value policy.",
-  },
-  // One drain per feature; two pages at once leave the other lanes free.
-  "ai.evaluation": {
-    stuck: { consequence: "Suggestions won't update until this works." },
-    activityLabel: "AI evaluations",
-    label: "AI evaluation",
-    purpose: "Executes admitted AI evaluations.",
-    trigger: "Evaluation admission by a Run or record workflow.",
-    targets: "Eligible evaluation rows selected by the drain.",
-    effects:
-      "Records model output, charged usage and eligible published results.",
-    dependencies:
-      "Current evidence, configured model, provider capacity and funding.",
-    cost: "Paid AI work; funding and provider waits remain visible.",
-    exclusions:
-      "Obsolete evidence and ineligible evaluations follow existing evaluation policy.",
-    ...DRAIN,
-    lane: "frontier_ai",
-    maxInFlight: 2,
   },
   "purchase.dispatch": {
     stuck: { consequence: "New purchases won't import until this works." },

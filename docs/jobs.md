@@ -43,10 +43,9 @@ over many records is a **drain Job** over **work items** in the generic
 `WorkItem` table (`generic/jobs/repo/work-items.ts`): one Job per kind and
 feature, and one item per `(target, ref)` it still owes. Drains:
 
-| Drain Job key             | Kind            | Item `target`   | Item `ref`      |
-| ------------------------- | --------------- | --------------- | --------------- |
-| `derived:drain`           | `derived.drain` | derived family  | source row      |
-| `ai-evaluation:<feature>` | `ai.evaluation` | `ai.evaluation` | AiEvaluation id |
+| Drain Job key   | Kind            | Item `target`  | Item `ref` |
+| --------------- | --------------- | -------------- | ---------- |
+| `derived:drain` | `derived.drain` | derived family | source row |
 
 An item holds scheduling and refresh metadata: `drain` (its owning Job key), a fresh
 `ticket` per mark, `priority` (0 for member and Run demand, 1 for automatic
@@ -130,19 +129,17 @@ discovery, statement paging and image processing.
 ## Kinds and lanes
 
 `apps/web/src/server/generic/jobs/kind-policy.ts` is the one registry of
-per-kind policy: lane, internal flag, whether the server drain claims it,
-`maxAttempts` (null never exhausts), failure backoff and an optional
-`maxInFlight`. A kind absent there is a server kind with three attempts and
+per-kind policy: lane, internal flag, `maxAttempts` (null never exhausts) and
+failure backoff. A kind absent there is a server kind with three attempts and
 1 s doubling to 60 s backoff. Each lane names the executor that runs it:
 
-| Lane          | Kinds               | Executor                         |
-| ------------- | ------------------- | -------------------------------- |
-| `frontier_ai` | `ai.evaluation`     | the server drain, paid providers |
-| `external`    | `purchase.dispatch` | a coordinator outside the drain  |
-| `server`      | every other kind    | the server drain                 |
+| Lane       | Kinds               | Executor                        |
+| ---------- | ------------------- | ------------------------------- |
+| `external` | `purchase.dispatch` | a coordinator outside the drain |
+| `server`   | every other kind    | the server drain                |
 
-`drained: false` parks a kind: the drain never claims it, so device work does
-not churn through server claims. Enqueueing device work rings connected
+Device image work is parked on its own row and never reaches the drain.
+Enqueueing it rings connected
 companions after commit, and a companion connecting to the doorbell is rung at
 once; there is no polling interval. Work that comes due later (a failure
 backoff, a deferral, a lapsed lease, a delayed release) rings through a
@@ -244,13 +241,6 @@ Timed Jobs and woken Jobs scan separately, so terminal history is never
 searched to find a wake. The latest claim per kind comes from the
 `(kind, lastClaimedAt)` index, including completed Jobs so that finishing a
 pass never erases its service history.
-
-`maxInFlight` caps one kind's live leases across every drain (AI evaluation:
-two). A cap limits that kind; it reserves no capacity for other kinds, and a
-capped page still occupies its drain's lane and queue delivery while it runs.
-Claim-time admission takes a nonblocking transaction advisory lock per kind and
-counts `running` Jobs whose lease has not expired; an expired lease frees
-capacity and stays reclaimable. Run-owned work bypasses the cap.
 
 Member-first ordering inside a drain is item priority: root transactions in
 Job execution mark derived inputs at priority 1, member transactions at 0, and
@@ -698,12 +688,17 @@ funding caps.
 (live Run checks, pausing, funding resumption, the workflow fence around one
 evaluation) comes in through the `AiEvaluationExecution` port that
 `domains/run/service/ai-evaluation-execution.ts` provides; the drain itself
-knows no Run tables. Each feature has one drain Job, `ai-evaluation:<feature>`, over items keyed by
-evaluation id (priority 0 when the owner or an uncancelled requester is a
-running, member-visible Run nobody scheduled; otherwise 1). An attempt is the
-drain lease plus the item's ticket (`aiEvaluationAttemptToken`): a lost lease,
-changed input or new demand makes an in-flight attempt obsolete without any
-per-evaluation Job. Prepare rechecks live Run authority, activation, pending or
+knows no Run tables. Nothing queues an evaluation: `AiEvaluation.runAt` is set while
+the drain owes it (`priority` 0 when the owner or an uncancelled requester is a
+running, member-visible Run nobody scheduled; otherwise 1) and null once it settled
+or parked. Each round pages up to two features, most urgent first. A page claims
+rows under one `leaseToken`, a 16-minute lease nothing renews because no consumer
+outlives 15 minutes. The token is the attempt (`aiEvaluationAttemptToken`), and a
+mark never takes a held lease, because that page may be paying the provider: no
+sibling claims the row until the page releases it or the lease lapses. New demand
+for the same input leaves the attempt to settle it. Changed input sets `leaseStale`,
+which makes the attempt obsolete and fails its writes, and the next page evaluates
+the new input once the row is released. Prepare rechecks live Run authority, activation, pending or
 `result_ready` state and generation; queued obsolete generations retire in sets
 before inference, and a stopped requester parks its item. A paid answer is
 written as `result_ready` through `ctx.fenced` before publication, so a later
@@ -715,15 +710,14 @@ Gateway admission throw `JobDeferredError`, which stops the page without
 spending attempts; [pending semantic coverage](#semantic-coverage-waits) postpones
 only its item; anything else is the item's failure, and its third
 consecutive failure settles the evaluation `failed` with the raw error and
-settles its requesters. A Run cancel withdraws its requests and drops the items
-of evaluations no other requester still wants. `maxInFlight: 2` caps this kind's
-leases without reserving capacity for other kinds
-([Selection and admission](#selection-and-admission)).
+settles its requesters. A Run cancel withdraws its requests and stops owing
+evaluations no other requester still wants. Paid concurrency is bounded by the
+one queue consumer and the two feature lanes.
 
 A governed target field whose current result is unavailable is that target's
 failure (`JobTargetError`), not an empty value or obsolete evidence. At
 publication its chunk rolls back and splits, so siblings commit without new
-inference; the target retains its ticket and spends item attempts as above.
+inference; the target stays owed and spends item attempts as above.
 
 Each page observes up to 8 items; the rest stay owed and the drain rejoins fair
 selection after the page's checkpoint. Product identity and connection features
@@ -857,17 +851,14 @@ publish. When every incomplete search is `pending`, the item keeps its ticket,
 priority, attempts, `reason` and `lastError` and stores the `search_coverage` wait.
 Healthy siblings on the page continue, and an empty page keeps the item's deadline.
 
-Nothing wakes the item when upstream settles, except a new mark for the evaluation,
-which clears the wait with its fresh ticket and attempt budget. The retry cadence
-uses the kind's ordinary backoff bounds: each delay is the wait's age so far, clamped
-to `baseMs` and `maxMs` (1, 1, 2, 4, 8 and then 15 minutes for `ai.evaluation`).
-Pending has no attempt ceiling: the evaluation stays queued and the item stays owed
-for as long as upstream owes the work, reported as waiting with its next attempt.
-Run detail counts it under Waiting; the drain Job names the cause and deadline. Each
+Nothing wakes the evaluation when upstream settles, except a new mark, which clears
+the wait with a fresh attempt budget. It retries once a minute. Pending has no attempt
+ceiling: the evaluation stays queued and owed for as long as upstream owes the work.
+Run detail counts it under Waiting. Each
 retry repeats page preparation, rechecking source and requester authority before any
 paid stage, and may embed its queries again. A paused or cancelled requester
 therefore settles at the next retry or through Run control, not at wait publication,
-which writes only the item. A `budget_exceeded` gap or a provider failure spends
+which writes only the evaluation's work columns. A `budget_exceeded` gap or a provider failure spends
 attempts, clears any wait, and settles `failed` as above.
 
 The `evaluation page` log describes one attempt before the drain maps it, with

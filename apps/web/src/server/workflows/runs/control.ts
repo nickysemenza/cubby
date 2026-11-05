@@ -8,7 +8,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import {
-  AI_EVALUATION_TARGET,
+  dropAiEvaluationWork,
   markAiEvaluationWork,
 } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type { Database } from "~/server/db";
@@ -19,7 +19,6 @@ import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { createAppError } from "~/server/errors/app-error";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { cancelRunJobs, pauseJob } from "~/server/generic/jobs/repo/operator";
-import { dropWork, workItemsFor } from "~/server/generic/jobs/repo/work-items";
 
 import type { ExecutedRunPurpose } from "./contract";
 import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
@@ -226,18 +225,11 @@ export async function cancelRunAiWork(
     }
     // Only work nobody else still wants was cancelled; another requester's
     // pending evaluation keeps its item.
-    const withdrawn = await workItemsFor(
+    await dropAiEvaluationWork(
       tx,
-      AI_EVALUATION_TARGET,
-      sql`SELECT e.id FROM "AiEvaluation" e
-       WHERE e.state = ${aiEvaluationState.enum.cancelled}
-         AND (e."runId" = ${runId}::uuid
-           OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId" = e.id AND r."runId" = ${runId}::uuid))`,
-    );
-    await dropWork(
-      tx,
-      AI_EVALUATION_TARGET,
-      withdrawn.map((item) => item.ref),
+      sql`"AiEvaluation".state = ${aiEvaluationState.enum.cancelled}
+        AND ("AiEvaluation"."runId" = ${runId}::uuid
+          OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId" = "AiEvaluation".id AND r."runId" = ${runId}::uuid))`,
     );
     return sharedDemand;
   });

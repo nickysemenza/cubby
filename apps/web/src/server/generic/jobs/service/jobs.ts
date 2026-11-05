@@ -9,7 +9,6 @@ import {
 } from "~/server/generic/jobs/context";
 import { JobSupersededError } from "~/server/generic/jobs/errors";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
-import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import { JOB_DRAIN, JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
 import {
   assertJobClaim,
@@ -239,8 +238,8 @@ async function executeClaim(
 
 /**
  * Free lanes reselect fair work without waiting for a slow sibling. Selected
- * Jobs stay reserved locally until their page finishes; leases and kind
- * admission protect claims across independent drains.
+ * Jobs stay reserved locally until their page finishes; leases protect claims
+ * across independent drains.
  */
 export async function drainDueJobs(
   db: Database,
@@ -255,9 +254,8 @@ export async function drainDueJobs(
   let settled = 0;
   let progressed = 0;
   const reserved = new Set<string>();
-  // Kind caps can outlast this invocation. A row lock may clear while a
-  // sibling publishes, so reconsider uncapped refusals after real progress.
-  const cappedSkips = new Set<string>();
+  // A row lock may clear while a sibling publishes, so reconsider refusals
+  // after real progress.
   const busy = new Set<string>();
   const selected: Awaited<ReturnType<typeof dueJobs>> = [];
   let selecting: Promise<boolean> | undefined;
@@ -272,7 +270,7 @@ export async function drainDueJobs(
     );
     if (remaining <= 0) return false;
     const candidates = await dueJobs(db, remaining, {
-      excludeIds: [...reserved, ...cappedSkips, ...busy],
+      excludeIds: [...reserved, ...busy],
     });
     for (const candidate of candidates) {
       reserved.add(candidate.id);
@@ -305,17 +303,11 @@ export async function drainDueJobs(
         const outcome = await advanceJob(db, candidate.id, handlers);
         outcomes.push(outcome);
         if (outcome === "skipped") {
-          if (
-            jobKindPolicy(candidate.kind).maxInFlight !== undefined &&
-            progressBefore === progressed
-          )
-            cappedSkips.add(candidate.id);
           // A sibling may have progressed while this refusal was in flight.
-          else if (progressBefore === progressed) busy.add(candidate.id);
+          if (progressBefore === progressed) busy.add(candidate.id);
         } else {
           progressed++;
           busy.clear();
-          cappedSkips.clear();
         }
       } finally {
         reserved.delete(candidate.id);
@@ -336,9 +328,7 @@ export async function drainDueJobs(
   await (
     await import("~/server/generic/jobs/scheduler/client")
   ).reconcileJobSchedule("drain.finished");
-  if (
-    (await dueJobs(db, 1, { excludeIds: [...cappedSkips, ...busy] })).length
-  ) {
+  if ((await dueJobs(db, 1, { excludeIds: [...busy] })).length) {
     await (
       await import("~/server/workflows/background-tasks/publish")
     ).wakeJobs({ source: "job.drain-budget" });
