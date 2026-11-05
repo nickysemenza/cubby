@@ -106,6 +106,11 @@ export const workItem = pgTable(
       "WorkItem_no_retired_automatic_fields",
       sql`split_part(${t.target}, '@', 1) NOT LIKE '%.automaticFields'`,
     ),
+    // These families moved to their owners' rows: a late write must fail, not strand.
+    check(
+      "WorkItem_retired_target_check",
+      sql`${t.target} NOT IN ('embedding.refresh', 'embedding.cleanup')`,
+    ),
     primaryKey({ columns: [t.target, t.ref] }),
     index("WorkItem_ready_idx").on(t.drain, t.priority, t.readyAt),
     index("WorkItem_target_prefix_idx").on(sql`${t.target} COLLATE "C"`),

@@ -43,12 +43,10 @@ over many records is a **drain Job** over **work items** in the generic
 `WorkItem` table (`generic/jobs/repo/work-items.ts`): one Job per kind and
 feature, and one item per `(target, ref)` it still owes. Drains:
 
-| Drain Job key             | Kind                | Item `target`       | Item `ref`         |
-| ------------------------- | ------------------- | ------------------- | ------------------ |
-| `derived:drain`           | `derived.drain`     | derived family      | source row         |
-| `ai-evaluation:<feature>` | `ai.evaluation`     | `ai.evaluation`     | AiEvaluation id    |
-| `embedding:refresh`       | `embedding.refresh` | `embedding.refresh` | source entity id   |
-| `embedding:cleanup`       | `embedding.cleanup` | `embedding.cleanup` | EntityEmbedding id |
+| Drain Job key             | Kind            | Item `target`   | Item `ref`      |
+| ------------------------- | --------------- | --------------- | --------------- |
+| `derived:drain`           | `derived.drain` | derived family  | source row      |
+| `ai-evaluation:<feature>` | `ai.evaluation` | `ai.evaluation` | AiEvaluation id |
 
 An item holds scheduling and refresh metadata: `drain` (its owning Job key), a fresh
 `ticket` per mark, `priority` (0 for member and Run demand, 1 for automatic
@@ -258,13 +256,11 @@ Member-first ordering inside a drain is item priority: root transactions in
 Job execution mark derived inputs at priority 1, member transactions at 0, and
 savepoints inherit the outer transaction's priority.
 
-The drain runs up to `JOB_DRAIN.concurrency` Jobs at once. The queue consumer's
-`maxConcurrency` (`packages/shared/src/background-queue-consumer.json`) is a
-ceiling, not the number of active consumers:
-[Cloudflare scales consumers only after a whole batch finishes](https://developers.cloudflare.com/queues/configuration/consumer-concurrency/),
-so one long active batch can hold accepted wakes undelivered. Smaller pages
-reduce that exposure, but one provider wave can still run for minutes; no wake
-has a hard delivery time.
+The drain runs up to `JOB_DRAIN.concurrency` Jobs at once. The queue consumer runs
+one batch at a time (`maxConcurrency: 1` in
+`packages/shared/src/background-queue-consumer.json`), so one long active batch
+holds accepted wakes undelivered. Smaller pages reduce that exposure, but one
+provider wave can still run for minutes; no wake has a hard delivery time.
 
 Free lanes refill while siblings run. A refused claim of an uncapped
 kind stays excluded until another page makes progress, then rejoins fair
@@ -648,16 +644,23 @@ Explicit member retries retain their `retryEvaluationId` receipt.
 
 ### Embedding execution
 
-Embeddings run on two drains. `embedding:refresh` items are keyed by source
-entity id; prepare reads the source's kind from its `Entity` identity, builds
-current search text and hashes it, so a re-mark during a page simply takes a
-new ticket. `embedding:cleanup` items are keyed by `EntityEmbedding` id, which
-is also the physical Vectorize vector id: a Job id is never a vector id.
-Search publication, search-index repair and derived compute mark sources with
-`markWork`. Explicit search repair completes when its search marks settle;
-unrelated derived items retain their own retry deadlines on the shared drain.
-Cleanup marks every retired, failed or deleted artifact whose
-vector has no delete receipt.
+Embeddings run on two registered drains with no Job or `WorkItem` row
+(`generic/background/drains.ts`). A `SearchDocument` owes a fresh embedding when
+`embeddingDueAt` is set; a failure backs off on the document, and Vectorize
+visibility polling reschedules it without spending an attempt. An `EntityEmbedding`
+that is retired or failed with no `deletionId` owes a vector deletion, so nothing
+marks it; a failed deletion waits on `deletionRetryAt`. The cleanup is safe to repeat
+because only the receipt settles it.
+
+A refresh keeps source dirtiness and execution apart. `embeddingGeneration` is the
+intent, and a mark advances it at any time. `embeddingLeaseToken` and
+`embeddingLeaseUntil` name the page allowed to pay the provider, and a mark never
+touches them, so the hourly cron or a page across a deploy skips a held document even
+after a re-mark. The lease outlasts the 15 minutes a consumer can run, so a crashed
+page's documents come free on their own. Settling needs both the lease and the claimed
+generation. After the provider has been paid, an upload needs the lease and either that
+generation or text that still hashes the same, and its receipt then needs only the
+lease: the next page adopts the receipt. Changed text uploads nothing.
 
 An artifact moves `prepared` → `submitting` → `submitted` → `selected` →
 `retired` (or `failed`). Each step that precedes a provider or Vectorize call

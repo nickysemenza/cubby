@@ -1,6 +1,14 @@
 import { createLogger } from "@cubby/worker-tracing";
+import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
+import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
+import type {
+  DrainClaim,
+  DrainHandler,
+  DrainStore,
+} from "~/server/generic/jobs/service/drain";
+import type { JobContext } from "~/server/generic/jobs/types";
 
 const log = createLogger("drains");
 
@@ -61,4 +69,54 @@ export async function runDrains(
   });
   if (failures.length === 1) throw failures[0];
   if (failures.length) throw new AggregateError(failures, "Drains failed");
+}
+
+const settledCounts = z
+  .object({
+    published: z.number().catch(0),
+    failed: z.number().catch(0),
+    covered: z.number().catch(0),
+  })
+  .catch({ published: 0, failed: 0, covered: 0 });
+
+/**
+ * One page of a `defineDrain` whose items are its domain's own rows, with no Job
+ * claim: the store's `claim` must be exclusive, because a sibling invocation can run
+ * beside this one, and its `lock` fences each item. Only a page that settled something
+ * asks for another, so held rows cannot spin.
+ */
+export function storeDrain(input: {
+  name: string;
+  /** `release` ends this page's claim on rows it did not settle. */
+  store: DrainStore & { release?(db: Database): Promise<void> };
+  handler: DrainHandler;
+}): BackgroundDrain {
+  const claim: DrainClaim = {
+    key: input.name,
+    generation: 1,
+    leaseToken: crypto.randomUUID(),
+  };
+  return {
+    name: input.name,
+    async page(db) {
+      const context: JobContext = {
+        signal: new AbortController().signal,
+        fenced: (work) => repositoryTransactionDatabase(db, work),
+        fence: async () => {},
+        check: async () => {},
+      };
+      const { page, publish } = await input.handler
+        .prepare(db, claim, context)
+        .finally(() => input.store.release?.(db));
+      if (publish) await repositoryTransactionDatabase(db, publish);
+      return {
+        more:
+          Object.values(settledCounts.parse(page.result)).reduce(
+            (sum, count) => sum + count,
+            0,
+          ) > 0,
+        nextAt: page.availableAt ?? (await input.store.nextReadyAt(db)),
+      };
+    },
+  };
 }

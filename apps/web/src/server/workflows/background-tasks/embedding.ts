@@ -2,10 +2,7 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
 
 import type { Database } from "~/server/db";
-import {
-  EMBEDDING_REFRESH_DRAIN,
-  EMBEDDING_REFRESH_TARGET,
-} from "~/server/generic/embedding/repo/embedding-drain";
+import { markEmbeddingRefresh } from "~/server/generic/embedding/repo/embedding-work";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
   embedTexts,
@@ -15,7 +12,6 @@ import {
   productionVectorStore,
   type VectorStorePort,
 } from "~/server/generic/embedding/service/semantic/vector-store";
-import { markWork } from "~/server/generic/jobs/repo/work-items";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
 
 export interface EmbeddingRefreshPort {
@@ -32,7 +28,7 @@ export const productionEmbeddingRefreshPort: EmbeddingRefreshPort = {
   vectorStore: productionVectorStore,
 };
 
-/** Admit one refresh item per source identity; the drain reads current text and configuration. */
+/** Owe one refresh per source identity; the drain reads current text and configuration. */
 export async function enqueueEmbeddingRefs(
   db: Database,
   prepared: Awaited<ReturnType<typeof prepareSearchDocuments>>,
@@ -40,12 +36,8 @@ export async function enqueueEmbeddingRefs(
   const refs = new Map<string, SearchableEntityRef>();
   for (const { source } of prepared.entries)
     refs.set(entityRefKey(source.entityKind, source.entityId), source);
-  await markWork(
+  await markEmbeddingRefresh(
     db,
-    EMBEDDING_REFRESH_DRAIN,
-    [...refs.values()].map((ref) => ({
-      target: EMBEDDING_REFRESH_TARGET,
-      ref: ref.entityId,
-    })),
+    [...refs.values()].map((ref) => ref.entityId),
   );
 }

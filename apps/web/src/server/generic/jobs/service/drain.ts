@@ -12,6 +12,7 @@ import type { Database } from "~/server/db";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
+import type { JobBackoff } from "~/server/generic/jobs/kind-policy";
 import type { JobClaim } from "~/server/generic/jobs/repo/queue";
 import {
   claimWork,
@@ -21,11 +22,16 @@ import {
 } from "~/server/generic/jobs/repo/work-claims";
 import { lockWork, type WorkItem } from "~/server/generic/jobs/repo/work-items";
 
-import type { JobContext, JobHandler } from "../types";
+import type { JobContext, PreparedJobPage } from "../types";
 
 /** What a drain adapter may know of its claim: identity for attempt tokens, never the lease itself. */
 export type DrainContext = JobContext & {
-  claim: Pick<JobClaim, "key" | "generation" | "leaseToken">;
+  claim: DrainClaim;
+};
+
+/** The identity a page reads: a drain Job's claim, or a domain row drain's page. */
+export type DrainClaim = Pick<JobClaim, "key" | "generation" | "leaseToken"> & {
+  kind?: string;
 };
 
 /** Pause, defer and lease loss stop the page; an adapter must rethrow them rather than settle an item. */
@@ -48,7 +54,45 @@ type DrainPublication = {
   covered?: readonly WorkItem[];
 };
 
+/**
+ * Where a drain's owed items live. `WorkItem` by default; a domain whose own rows
+ * are the debt supplies its own (`generic/background/drains.ts`). `lock` returns
+ * the same item objects it was given, narrowed to those still current.
+ */
+export type DrainStore = {
+  claim(
+    db: Database,
+    limit: number,
+    eligible?: (target: SQL) => SQL,
+  ): Promise<WorkItem[]>;
+  lock(
+    tx: Database,
+    items: readonly WorkItem[],
+    options?: { drain?: string },
+  ): Promise<WorkItem[]>;
+  clear(tx: Database, items: readonly WorkItem[]): Promise<void>;
+  defer(
+    tx: Database,
+    items: readonly WorkItem[],
+    error: string,
+    backoff: JobBackoff,
+  ): Promise<void>;
+  nextReadyAt(db: Database): Promise<Date | null>;
+};
+
+const workItemStore = (drain: string): DrainStore => ({
+  claim: (db, limit, eligible) => claimWork(db, drain, limit, eligible),
+  lock: (tx, items, options) => lockWork(tx, items, options),
+  clear: (tx, items) => clearWork(tx, items),
+  defer: (tx, items, error, backoff) => deferWork(tx, items, error, backoff),
+  nextReadyAt: (db) => nextWorkReadyAt(db, drain),
+});
+
 export type DrainSpec<P> = {
+  /** Owed items in a domain's own rows; omitted, they are `WorkItem`s of the claim's key. */
+  store?: DrainStore;
+  /** Failure backoff when the claim's kind declares none. */
+  backoff?: JobBackoff;
   /** Items claimed per page. */
   limit: number;
   /** Admission against the current work frontier, before limiting the page. */
@@ -133,16 +177,27 @@ const chunked = <P>(
   return chunks;
 };
 
-export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
+/** A drain's page: a `JobHandler` for a drain Job, or run directly by a row drain. */
+export type DrainHandler = {
+  prepare(
+    db: Database,
+    claim: DrainClaim,
+    context: JobContext,
+  ): Promise<PreparedJobPage>;
+};
+
+export function defineDrain<P>(spec: DrainSpec<P>): DrainHandler {
   return {
     async prepare(db, claim, context) {
-      const { backoff } = jobKindPolicy(claim.kind);
+      const backoff =
+        spec.backoff ?? jobKindPolicy(claim.kind ?? claim.key).backoff;
+      const store = spec.store ?? workItemStore(claim.key);
       const observed = await withJobPhase("drain.claim", () =>
-        claimWork(db, claim.key, spec.limit, spec.eligible),
+        store.claim(db, spec.limit, spec.eligible),
       );
       const items = spec.admit?.(observed) ?? observed;
       if (!items.length) {
-        const next = await nextWorkReadyAt(db, claim.key);
+        const next = await store.nextReadyAt(db);
         return {
           page: next ? { done: false, availableAt: next } : { done: true },
           ...(spec.idle ? { publish: (tx) => spec.idle!(tx) } : {}),
@@ -163,7 +218,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
         let settled = 0;
         for (const [item, error] of entries) {
           const narrowed = (await spec.lock?.(tx, [item], prepared)) ?? [item];
-          const held = await lockWork(tx, narrowed);
+          const held = await store.lock(tx, narrowed);
           if (!held.length) continue;
           settled++;
           if (
@@ -172,8 +227,8 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
             item.attempts + 1 >= spec.maxAttempts
           ) {
             await spec.exhaust(tx, held, message(error));
-            await clearWork(tx, held);
-          } else await deferWork(tx, held, message(error), backoff);
+            await store.clear(tx, held);
+          } else await store.defer(tx, held, message(error), backoff);
         }
         return settled;
       };
@@ -195,7 +250,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
               async (tx) => {
                 const narrowed =
                   (await spec.lock?.(tx, chunk, prepared)) ?? chunk;
-                const held = await lockWork(tx, narrowed);
+                const held = await store.lock(tx, narrowed);
                 if (!held.length) return { published: 0, covered: 0 };
                 const publication = await spec.publish(tx, held, prepared);
                 const retained = new Set(
@@ -209,14 +264,14 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
                 );
                 // Coverage cannot consume retained work or claims belonging to
                 // a later chunk. Producers may have re-marked any extra item.
-                const covered = await lockWork(
+                const covered = await store.lock(
                   tx,
                   (publication?.covered ?? []).filter(
                     ({ target, ref }) => !claimedRefs.has(`${target}\0${ref}`),
                   ),
                   { drain: claim.key },
                 );
-                await clearWork(tx, [...completed, ...covered]);
+                await store.clear(tx, [...completed, ...covered]);
                 return { published: completed.length, covered: covered.length };
               },
               { isolationLevel: spec.isolationLevel },

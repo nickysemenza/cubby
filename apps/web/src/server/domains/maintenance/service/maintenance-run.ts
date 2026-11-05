@@ -101,58 +101,35 @@ function onceStep(
 const SEARCH_CLEANUP_PAGE = 200;
 const searchCleanupCursor = z
   .object({
-    phase: z.enum(["documents", "vectors"]),
     entityKind: searchableEntitySchema.optional(),
     entityId: z.uuid().optional(),
-    after: z.string().optional(),
   })
   .nullable();
 
-/** Retire orphaned search documents, then queue retired embedding vectors for deletion. */
+/** Retire orphaned search documents; the cleanup drain then deletes their vectors. */
 function searchArtifactCleanupStep(): StepDriver {
   return {
     page: async ({ db, step }) => {
-      const cursor = searchCleanupCursor.parse(step.cursor ?? null) ?? {
-        phase: "documents" as const,
-      };
-      if (cursor.phase === "documents") {
-        const [
-          { getSearchDocumentOrphanPage },
-          { retireStillOrphanedSearchArtifacts },
-        ] = await Promise.all([
-          import("~/server/generic/search/repo/search-document"),
-          import("~/server/generic/embedding/repo/entity-embedding-cleanup"),
-        ]);
-        const page = await getSearchDocumentOrphanPage(db, {
-          cursor:
-            cursor.entityKind && cursor.entityId
-              ? { entityKind: cursor.entityKind, entityId: cursor.entityId }
-              : undefined,
-          pageSize: SEARCH_CLEANUP_PAGE,
-        });
-        const retired = await retireStillOrphanedSearchArtifacts(db, page.refs);
-        return {
-          kind: "progress",
-          delta: { done: retired },
-          cursor: page.nextCursor
-            ? { phase: "documents", ...page.nextCursor }
-            : { phase: "vectors" },
-          done: false,
-        };
-      }
-      const { queueEmbeddingCleanupPage } =
-        await import("~/server/generic/embedding/repo/embedding-cleanup");
-      const page = await queueEmbeddingCleanupPage(
-        db,
-        cursor.after,
-        SEARCH_CLEANUP_PAGE,
-      );
+      const cursor = searchCleanupCursor.parse(step.cursor ?? null) ?? {};
+      const [
+        { getSearchDocumentOrphanPage },
+        { retireStillOrphanedSearchArtifacts },
+      ] = await Promise.all([
+        import("~/server/generic/search/repo/search-document"),
+        import("~/server/generic/embedding/repo/entity-embedding-cleanup"),
+      ]);
+      const page = await getSearchDocumentOrphanPage(db, {
+        cursor:
+          cursor.entityKind && cursor.entityId
+            ? { entityKind: cursor.entityKind, entityId: cursor.entityId }
+            : undefined,
+        pageSize: SEARCH_CLEANUP_PAGE,
+      });
+      const retired = await retireStillOrphanedSearchArtifacts(db, page.refs);
       return {
         kind: "progress",
-        delta: { done: page.queued },
-        ...(page.nextCursor
-          ? { cursor: { phase: "vectors", after: page.nextCursor } }
-          : {}),
+        delta: { done: retired },
+        ...(page.nextCursor ? { cursor: page.nextCursor } : {}),
         done: !page.nextCursor,
       };
     },

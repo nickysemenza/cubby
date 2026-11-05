@@ -806,8 +806,8 @@ participation and advertised image capabilities both gate execution. Image
 work is never abandoned; its lanes, leases, renewal, release and retry policy
 are owned by [Durable Jobs](jobs.md#image-processing).
 
-Cloud and native image execution share one Job lease and generation fence.
-Processing attempts preserve executor attribution and output receipts. The
+Cloud and native image execution share the lease on their `ImageProcessingJob`
+row. Processing attempts preserve executor attribution and output receipts. The
 background consumer's concurrency and each drain's page concurrency are in
 `packages/shared/src/background-queue-consumer.json` and `JOB_DRAIN`;
 provider admission separately bounds paid model starts. These limits do not

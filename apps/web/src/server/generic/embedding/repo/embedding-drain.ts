@@ -15,29 +15,17 @@ import { repositoryQueries as getDb } from "~/server/db/repository-access.bounda
 import { entityEmbedding } from "~/server/db/retained-tables";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import {
-  EMBEDDING_CLEANUP_DRAIN,
-  EMBEDDING_CLEANUP_TARGET,
-} from "~/server/generic/embedding/repo/embedding-cleanup";
+  markEmbeddingRefresh,
+  type EmbeddingRefreshStore,
+} from "~/server/generic/embedding/repo/embedding-work";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
-import {
-  dropWork,
-  lockWork,
-  markWork,
-  type WorkItem,
-} from "~/server/generic/jobs/repo/work-items";
+import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
 import {
   SHORTCODE_TABLE,
   orderedEntityLockKinds,
 } from "~/server/generic/shortcode/repo/shortcode-tables";
-
-/** One refresh drain Job; items are keyed by source entity id. */
-export const EMBEDDING_REFRESH_DRAIN = {
-  key: "embedding:refresh",
-  kind: "embedding.refresh",
-} as const;
-export const EMBEDDING_REFRESH_TARGET = "embedding.refresh";
 
 type Artifact = {
   id: string;
@@ -283,10 +271,11 @@ export async function prepareEmbeddingDrainPage(
 
 export async function stageEmbeddingDrainArtifacts(
   tx: Database,
+  store: EmbeddingRefreshStore,
   items: readonly WorkItem[],
   page: EmbeddingDrainPage,
 ) {
-  const held = await lockWork(tx, items);
+  const held = await store.lock(tx, items);
   const currentRefs = new Set(held.map((item) => item.ref));
   const stale = page.stalePending.filter((artifact) =>
     currentRefs.has(artifact.entityId),
@@ -305,14 +294,6 @@ export async function stageEmbeddingDrainArtifacts(
           isNull(entityEmbedding.deletedAt),
         ),
       );
-    await markWork(
-      tx,
-      EMBEDDING_CLEANUP_DRAIN,
-      stale.map((artifact) => ({
-        target: EMBEDDING_CLEANUP_TARGET,
-        ref: artifact.id,
-      })),
-    );
   }
   const create = page.uploads.filter(
     (entry) => !entry.artifactId && currentRefs.has(entry.item.ref),
@@ -349,31 +330,86 @@ export async function stageEmbeddingDrainArtifacts(
   }
 }
 
-export async function markEmbeddingArtifactsSubmitting(
+/** Which entries' sources still hash to the text that was embedded. */
+async function entriesWithCurrentText(
   tx: Database,
   entries: readonly EmbeddingDrainEntry[],
 ) {
-  const held = await lockWork(
+  if (!entries.length) return [];
+  const docs = await prepareSearchDocuments(
     tx,
-    entries.map((entry) => entry.item),
+    entries.map((entry) => entry.ref!),
   );
-  const ids = entries
-    .filter((entry) => held.includes(entry.item))
-    .map((entry) => entry.artifactId!);
-  if (ids.length)
+  const bodies = new Map(
+    docs.entries.map(({ source, body }) => [
+      entityRefKey(source.entityKind, source.entityId),
+      body,
+    ]),
+  );
+  const current: EmbeddingDrainEntry[] = [];
+  for (const entry of entries) {
+    const { entityKind, entityId } = entry.ref!;
+    const body = bodies.get(entityRefKey(entityKind, entityId));
+    if (
+      body !== undefined &&
+      (await embeddingTextHash({
+        entityKind,
+        ...entry.config,
+        text: normalizeSearchText(body),
+      })) === entry.hash
+    )
+      current.push(entry);
+  }
+  return current;
+}
+
+/**
+ * Runs after the provider has been paid, so it needs the lease and either the claimed
+ * generation or text that still hashes the same. A same-text re-mark keeps the vector,
+ * and the next page adopts its receipt. Changed text uploads nothing.
+ */
+export async function markEmbeddingArtifactsSubmitting(
+  tx: Database,
+  store: EmbeddingRefreshStore,
+  entries: readonly EmbeddingDrainEntry[],
+) {
+  const held = new Set(
+    await store.holding(
+      tx,
+      entries.map((entry) => entry.item),
+    ),
+  );
+  const unmarked = new Set(await store.lock(tx, [...held]));
+  const adoptable = await entriesWithCurrentText(
+    tx,
+    entries.filter(
+      (entry) => held.has(entry.item) && !unmarked.has(entry.item),
+    ),
+  );
+  const uploadable = [
+    ...entries.filter((entry) => unmarked.has(entry.item)),
+    ...adoptable,
+  ];
+  if (uploadable.length)
     await getDb(tx)
       .update(entityEmbedding)
       .set({ artifactState: "submitting" })
-      .where(inArray(entityEmbedding.id, ids));
-  return held;
+      .where(
+        inArray(
+          entityEmbedding.id,
+          uploadable.map((entry) => entry.artifactId!),
+        ),
+      );
+  return uploadable.map((entry) => entry.item);
 }
 
 export async function recordEmbeddingUploadReceipts(
   tx: Database,
+  store: EmbeddingRefreshStore,
   receipts: readonly EmbeddingUploadReceipt[],
 ) {
   const held = new Set(
-    await lockWork(
+    await store.holding(
       tx,
       receipts.map(({ entry }) => entry.item),
     ),
@@ -397,28 +433,18 @@ export async function recordEmbeddingUploadReceipts(
     entry.status = "poll";
     entry.pollUntil = new Date(Date.now() + 5_000);
   }
-  if (superseded.length) {
-    for (const { entry, submissionId, vectorHash } of superseded)
-      await getDb(tx)
-        .update(entityEmbedding)
-        .set({
-          artifactState: "failed",
-          artifactHash: entry.hash,
-          vectorHash,
-          submissionId,
-          observedAt: receivedAt,
-          deletedAt: receivedAt,
-        })
-        .where(eq(entityEmbedding.id, entry.artifactId!));
-    await markWork(
-      tx,
-      EMBEDDING_CLEANUP_DRAIN,
-      superseded.map(({ entry }) => ({
-        target: EMBEDDING_CLEANUP_TARGET,
-        ref: entry.artifactId!,
-      })),
-    );
-  }
+  for (const { entry, submissionId, vectorHash } of superseded)
+    await getDb(tx)
+      .update(entityEmbedding)
+      .set({
+        artifactState: "failed",
+        artifactHash: entry.hash,
+        vectorHash,
+        submissionId,
+        observedAt: receivedAt,
+        deletedAt: receivedAt,
+      })
+      .where(eq(entityEmbedding.id, entry.artifactId!));
 }
 
 async function lockPublicationSources(
@@ -465,7 +491,7 @@ async function lockPublicationSources(
   return new Set(live.rows.map(({ id, kind }) => entityRefKey(kind, id)));
 }
 
-/** Source writers lock identities before marking their WorkItems. */
+/** Source writers lock identities before marking their documents. */
 export async function lockEmbeddingDrainSources(
   tx: Database,
   items: readonly WorkItem[],
@@ -482,6 +508,7 @@ export async function lockEmbeddingDrainSources(
 
 export async function publishEmbeddingDrainSelections(
   tx: Database,
+  store: EmbeddingRefreshStore,
   items: readonly WorkItem[],
   page: EmbeddingDrainPage,
 ) {
@@ -514,7 +541,7 @@ export async function publishEmbeddingDrainSelections(
     const ref = entry.ref!;
     const key = entityRefKey(ref.entityKind, ref.entityId);
     if (!live.has(key) || missing.has(key)) {
-      await dropWork(tx, EMBEDDING_REFRESH_TARGET, [entry.item.ref]);
+      await store.clear(tx, [entry.item]);
       continue;
     }
     const body = bodies.get(key);
@@ -527,9 +554,7 @@ export async function publishEmbeddingDrainSelections(
             text: normalizeSearchText(body),
           });
     if (currentHash !== entry.hash) {
-      await markWork(tx, EMBEDDING_REFRESH_DRAIN, [
-        { target: EMBEDDING_REFRESH_TARGET, ref: entry.item.ref },
-      ]);
+      await markEmbeddingRefresh(tx, [entry.item.ref]);
       continue;
     }
     selected.push(entry);

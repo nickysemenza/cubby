@@ -25,8 +25,8 @@ import {
   derivedDrainHandler,
   derivedReconcileHandler,
 } from "~/server/generic/derived/service/drain-job";
-import { embeddingCleanupHandler } from "~/server/generic/embedding/service/embedding-cleanup";
-import { embeddingRefreshHandler } from "~/server/generic/embedding/service/embedding-refresh";
+import { embeddingCleanupDrain } from "~/server/generic/embedding/service/embedding-cleanup";
+import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
 import { JOB_DRAIN } from "~/server/generic/jobs/limits";
 import {
   defineJobHandler,
@@ -81,8 +81,6 @@ export const productionJobHandlers: JobHandlers = {
   "derived.drain": derivedDrainHandler(derivedComputes),
   "derived.reconcile": derivedReconcileHandler,
   "discovery.connections": connectionDiscoveryJobHandler,
-  "embedding.refresh": embeddingRefreshHandler(),
-  "embedding.cleanup": embeddingCleanupHandler(),
   "run.execute": runJobHandler,
   "ai.evaluation": aiEvaluationJobHandler(runAiEvaluationExecution()),
   "ai-refresh.activate": aiRefreshActivationHandler,
@@ -133,7 +131,13 @@ export const productionJobHandlers: JobHandlers = {
 } satisfies Record<keyof typeof JOB_KIND_POLICY, JobHandler>;
 
 /** Work owned by its domain's rows: no Job row, one registration here. */
-const productionDrains: readonly BackgroundDrain[] = [cloudImageDrain];
+// Built per round, not at import: these read production ports that sit in an import
+// cycle with this module, and evaluating them here fails the consumer's module load.
+const productionDrains = (): readonly BackgroundDrain[] => [
+  cloudImageDrain,
+  embeddingRefreshDrain(),
+  embeddingCleanupDrain(),
+];
 
 export async function drainProductionJobs(
   db: Database,
@@ -141,7 +145,7 @@ export async function drainProductionJobs(
 ) {
   const [jobs, drains] = await Promise.allSettled([
     drainDueJobs(db, productionJobHandlers, limit),
-    runDrains(db, productionDrains),
+    runDrains(db, productionDrains()),
   ]);
   if (jobs.status === "rejected") throw jobs.reason;
   if (drains.status === "rejected") throw drains.reason;

@@ -1,62 +1,9 @@
 import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
-import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { notDeleted } from "~/server/db/helpers/predicates";
-import {
-  repositoryQueries as getDb,
-  repositoryTransactionDatabase,
-} from "~/server/db/repository-access.boundary";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { entityEmbedding } from "~/server/db/retained-tables";
-import { markWork, workPending } from "~/server/generic/jobs/repo/work-items";
-
-export const EMBEDDING_CLEANUP_DRAIN = {
-  key: "embedding:cleanup",
-  kind: "embedding.cleanup",
-} as const;
-export const EMBEDDING_CLEANUP_TARGET = "embedding.cleanup";
-
-/** Mark retired physical vectors for the cleanup drain, leaving retry timing on each item. */
-async function prepareEmbeddingCleanupPage(
-  db: Database,
-  after?: string,
-  limit = 25,
-) {
-  const rows = await getDb(db).execute<{ id: string }>(sql`
-    SELECT e.id FROM "EntityEmbedding" e
-    WHERE (e."deletedAt" IS NOT NULL OR e."artifactState" IN (
-        ${embeddingArtifactState.enum.retired},
-        ${embeddingArtifactState.enum.failed}
-      ))
-      AND e."deletionId" IS NULL
-      AND e."artifactState" <> ${embeddingArtifactState.enum.selected}
-      AND NOT (e."artifactState" = ${embeddingArtifactState.enum.selected} AND ${notDeleted("e")})
-      AND ${after ? sql`e.id > ${after}::uuid` : sql`true`}
-      AND NOT ${workPending(EMBEDDING_CLEANUP_TARGET, sql`e.id`)}
-    ORDER BY e.id LIMIT ${limit}`);
-  const ids = rows.rows.map(({ id }) => id);
-  return {
-    nextCursor: rows.rows.length === limit ? rows.rows.at(-1)?.id : undefined,
-    pending: ids.length,
-    publish: (tx: Database) =>
-      markWork(
-        tx,
-        EMBEDDING_CLEANUP_DRAIN,
-        ids.map((id) => ({ target: EMBEDDING_CLEANUP_TARGET, ref: id })),
-      ),
-  };
-}
-
-/** Queue one bounded page of artifacts that have no outstanding deletion receipt. */
-export async function queueEmbeddingCleanupPage(
-  db: Database,
-  after?: string,
-  limit = 25,
-) {
-  const prepared = await prepareEmbeddingCleanupPage(db, after, limit);
-  await repositoryTransactionDatabase(db, prepared.publish);
-  return { queued: prepared.pending, nextCursor: prepared.nextCursor };
-}
 
 export async function assertEmbeddingArtifactCanBeDeleted(
   db: Database,

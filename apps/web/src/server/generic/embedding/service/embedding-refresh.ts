@@ -1,4 +1,8 @@
 import type { Database } from "~/server/db/database";
+import {
+  storeDrain,
+  type BackgroundDrain,
+} from "~/server/generic/background/drains";
 import { vectorPayloadHash } from "~/server/generic/embedding/repo/embedding-artifact";
 import {
   lockEmbeddingDrainSources,
@@ -10,17 +14,16 @@ import {
   type EmbeddingDrainPage,
   type EmbeddingUploadReceipt,
 } from "~/server/generic/embedding/repo/embedding-drain";
-import { EMBEDDING_REFRESH_TARGET } from "~/server/generic/embedding/repo/embedding-drain";
+import {
+  embeddingRefreshStore,
+  postponeEmbeddingRefresh,
+  type EmbeddingRefreshStore,
+} from "~/server/generic/embedding/repo/embedding-work";
 import {
   JobRetryableError,
   JobSupersededError,
 } from "~/server/generic/jobs/errors";
-import {
-  dropWork,
-  lockWork,
-  postponeWork,
-  type WorkItem,
-} from "~/server/generic/jobs/repo/work-items";
+import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 import { defineDrain } from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
 import {
@@ -34,6 +37,7 @@ const REQUEST_BYTES_LIMIT = 300_000;
 const INPUT_BYTES_LIMIT = 8_192;
 const VISIBILITY_POLL_MS = 5_000;
 const VISIBILITY_DEADLINE_MS = 2 * 60_000;
+const EMBEDDING_BACKOFF = { baseMs: 60_000, maxMs: 15 * 60_000 };
 
 type RefreshPage = EmbeddingDrainPage;
 
@@ -75,17 +79,18 @@ function uploadChunks<T extends { text: string }>(items: readonly T[]) {
 
 async function prepareRefreshPage(
   port: EmbeddingRefreshPort,
+  store: EmbeddingRefreshStore,
   db: Database,
   items: readonly WorkItem[],
   context: JobContext,
 ) {
-  if (!port.configured())
-    throw new Error("Embedding provider or Vectorize binding is unavailable");
   const config = port.config();
   const page = await prepareEmbeddingDrainPage(db, items, config);
   const toCreate = page.uploads.some((entry) => !entry.artifactId);
   if (toCreate || page.stalePending.length)
-    await context.fenced((tx) => stageEmbeddingDrainArtifacts(tx, items, page));
+    await context.fenced((tx) =>
+      stageEmbeddingDrainArtifacts(tx, store, items, page),
+    );
 
   const failures = new Map<WorkItem, unknown>();
   const submitted = page.submitted.filter(
@@ -139,7 +144,7 @@ async function prepareRefreshPage(
   )) {
     const current = new Set(
       await context.fenced((tx) =>
-        lockWork(
+        store.lock(
           tx,
           chunk.map((entry) => entry.item),
         ),
@@ -168,7 +173,7 @@ async function prepareRefreshPage(
       checkSignal(context.signal);
       const uploadable = new Set(
         await context.fenced((tx) =>
-          markEmbeddingArtifactsSubmitting(tx, active),
+          markEmbeddingArtifactsSubmitting(tx, store, active),
         ),
       );
       for (const entry of active)
@@ -201,7 +206,7 @@ async function prepareRefreshPage(
       }
       if (receiptEntries.length)
         await context.fenced((tx) =>
-          recordEmbeddingUploadReceipts(tx, receiptEntries),
+          recordEmbeddingUploadReceipts(tx, store, receiptEntries),
         );
     } catch (error) {
       for (const entry of active) failures.set(entry.item, error);
@@ -210,35 +215,44 @@ async function prepareRefreshPage(
   return { prepared: page, failed: failures };
 }
 
-export function embeddingRefreshHandler(
+/** Embeds each document marked as owing a vector, and selects it once Vectorize shows it. */
+export function embeddingRefreshDrain(
   port: EmbeddingRefreshPort = productionEmbeddingRefreshPort,
-) {
-  return defineDrain<RefreshPage>({
-    limit: PAGE_LIMIT,
-    prepare: (db, items, context) =>
-      prepareRefreshPage(port, db, items, context),
-    lock: async (tx, items, prepared) => {
-      await lockEmbeddingDrainSources(tx, items, prepared);
+): BackgroundDrain {
+  return {
+    name: "embedding.refresh",
+    async page(db, round) {
+      if (!port.configured()) return { more: false, nextAt: null };
+      const store = embeddingRefreshStore(crypto.randomUUID());
+      return storeDrain({
+        name: "embedding.refresh",
+        store,
+        handler: defineDrain<RefreshPage>({
+          store,
+          backoff: EMBEDDING_BACKOFF,
+          limit: PAGE_LIMIT,
+          prepare: (pageDb, items, context) =>
+            prepareRefreshPage(port, store, pageDb, items, context),
+          lock: async (tx, items, prepared) => {
+            await lockEmbeddingDrainSources(tx, items, prepared);
+          },
+          publish: async (tx, items, prepared) => {
+            const postponed = items.filter(
+              (item) => prepared.byItem.get(item)?.status === "poll",
+            );
+            for (const item of postponed)
+              await postponeEmbeddingRefresh(
+                tx,
+                store,
+                [item],
+                prepared.byItem.get(item)!.pollUntil ??
+                  new Date(Date.now() + VISIBILITY_POLL_MS),
+              );
+            await publishEmbeddingDrainSelections(tx, store, items, prepared);
+            return { retain: postponed };
+          },
+        }),
+      }).page(db, round);
     },
-    publish: async (tx, items, prepared) => {
-      const postponed = items.filter(
-        (item) => prepared.byItem.get(item)?.status === "poll",
-      );
-      for (const item of postponed) {
-        const entry = prepared.byItem.get(item)!;
-        await postponeWork(
-          tx,
-          [item],
-          entry.pollUntil ?? new Date(Date.now() + VISIBILITY_POLL_MS),
-        );
-      }
-      for (const item of items) {
-        const entry = prepared.byItem.get(item);
-        if (entry?.status === "missing")
-          await dropWork(tx, EMBEDDING_REFRESH_TARGET, [item.ref]);
-      }
-      await publishEmbeddingDrainSelections(tx, items, prepared);
-      return { retain: postponed };
-    },
-  });
+  };
 }

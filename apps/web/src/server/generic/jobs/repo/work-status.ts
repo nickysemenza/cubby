@@ -441,6 +441,70 @@ async function readImageWork(
   return facts;
 }
 
+/** Embeddings owed on search documents, and when one last finished indexing. */
+async function readEmbeddingWork(
+  db: Database,
+  now: Date,
+): Promise<StatusFacts> {
+  const at = stamp(now);
+  const { rows } = await getDb(db).execute<{
+    dueSince: string | null;
+    lastIndexedAt: string | null;
+    failedAt: string | null;
+    failedError: string | null;
+    failedAttempts: number | null;
+  }>(sql`
+    WITH failing AS (
+      SELECT "updatedAt", "embeddingError", "embeddingAttempts" FROM "SearchDocument"
+      WHERE "embeddingDueAt" IS NOT NULL AND "embeddingAttempts" >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
+      ORDER BY "embeddingDueAt" LIMIT 1
+    )
+    SELECT
+      (SELECT min("embeddingDueAt") FROM "SearchDocument"
+        WHERE "embeddingDueAt" <= ${at} AND coalesce("embeddingLeaseUntil" <= ${at}, true)) AS "dueSince",
+      (SELECT max("indexedAt") FROM "EntityEmbedding") AS "lastIndexedAt",
+      (SELECT "updatedAt" FROM failing) AS "failedAt",
+      (SELECT "embeddingError" FROM failing) AS "failedError",
+      (SELECT "embeddingAttempts" FROM failing) AS "failedAttempts"`);
+  const row = rows[0];
+  const dueSince = utc(row?.dueSince ?? null);
+  const lastFinishedAt = utc(row?.lastIndexedAt ?? null);
+  const facts: StatusFacts = { stuck: [], behind: false, lastFinishedAt };
+  const action: WorkStuckItem["action"] = { type: "none" };
+  if (dueSince && dueSince <= minutesAgo(now, STUCK_WINDOW_MINUTES)) {
+    if (
+      !lastFinishedAt ||
+      lastFinishedAt <= minutesAgo(now, STUCK_WINDOW_MINUTES)
+    )
+      facts.stuck.push({
+        ...stoppedItem(
+          "embedding.refresh",
+          lastFinishedAt ?? dueSince,
+          now,
+          row?.failedError ?? null,
+        ),
+        title: "Search embeddings stopped",
+        action,
+      });
+    else facts.behind = true;
+  } else if (dueSince && dueSince <= minutesAgo(now, BEHIND_MINUTES))
+    facts.behind = true;
+  const failedAt = utc(row?.failedAt ?? null);
+  if (failedAt)
+    facts.stuck.push({
+      ...failingItem(
+        "embedding.refresh",
+        failedAt,
+        row?.failedAttempts ?? 1,
+        row?.failedError ?? null,
+        false,
+      ),
+      title: "Search embeddings keep failing",
+      action,
+    });
+  return facts;
+}
+
 /**
  * Runs a member started or reviews that stopped. Stalled Runs are listed one by
  * one. Failures collapse to each purpose's latest and clear when a later Run of
@@ -555,28 +619,33 @@ async function readStoppedRuns(db: Database, now: Date) {
 
 export async function readBackgroundWorkStatus(db: Database, now = new Date()) {
   const drains = await readDrains(db, now);
-  const [kinds, images, runs] = await Promise.all([
+  const [kinds, images, embeddings, runs] = await Promise.all([
     readJobKinds(db, now, drains.kinds),
     readImageWork(db, now),
+    readEmbeddingWork(db, now),
     readStoppedRuns(db, now),
   ]);
   // A kind that stopped says so once, whichever row noticed first.
   const seen = new Set<string>();
-  const stuck = [...drains.stuck, ...kinds.stuck, ...images.stuck].filter(
-    (item) => {
-      const kind = item.key.replace(/:failing$/, "");
-      if (seen.has(kind)) return false;
-      seen.add(kind);
-      return true;
-    },
-  );
+  const stuck = [
+    ...drains.stuck,
+    ...kinds.stuck,
+    ...images.stuck,
+    ...embeddings.stuck,
+  ].filter((item) => {
+    const kind = item.key.replace(/:failing$/, "");
+    if (seen.has(kind)) return false;
+    seen.add(kind);
+    return true;
+  });
   return {
     stuck: [...stuck, ...runs],
-    behind: drains.behind || kinds.behind || images.behind,
+    behind: drains.behind || kinds.behind || images.behind || embeddings.behind,
     lastFinishedAt: latest(
       drains.lastFinishedAt,
       kinds.lastFinishedAt,
       images.lastFinishedAt,
+      embeddings.lastFinishedAt,
     ),
     deviceDueSince: images.deviceDueSince,
   };

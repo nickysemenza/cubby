@@ -142,12 +142,12 @@ export async function publishBackgroundTasks(
       const task = backgroundTaskSchema.parse(input);
       if (task.kind === "entity-embedding.refresh") {
         const { enqueueEmbeddingRefs } = await import("./embedding");
-        const { prepareSearchDocuments } =
+        const { prepareSearchDocuments, publishPreparedSearchDocuments } =
           await import("~/server/generic/search/repo/search-document");
-        await enqueueEmbeddingRefs(
-          tx,
-          await prepareSearchDocuments(tx, [task]),
-        );
+        const prepared = await prepareSearchDocuments(tx, [task]);
+        // The document owes the embedding, so it exists before the mark.
+        await publishPreparedSearchDocuments(tx, prepared);
+        await enqueueEmbeddingRefs(tx, prepared);
         continue;
       }
       await enqueueJob(tx, {
