@@ -8,6 +8,7 @@ import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
  * public tools (ADR 0010).
  */
 import {
+  type LedgerPartyId,
   emailId,
   userId,
   parseEntityId,
@@ -32,8 +33,10 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
   asc,
+  desc,
   eq,
   inArray,
+  isNotNull,
   isNull,
   ne,
   notInArray,
@@ -549,6 +552,48 @@ export async function startMailImport(
 }
 
 /** Revisit retained related Emails that predate automatic import admission. */
+/** How long automatic admission waits after a Run fails on its own. */
+const SELF_FAILURE_BACKOFF_MS = 60 * 60 * 1000;
+
+/**
+ * Automatic admission waits while a Run waits for AI funding, or after the
+ * latest settled Run failed on its own. A failed Run releases its Emails, so
+ * admitting again at once would spin: 540 fifty-Email Runs failed in two hours
+ * this way when no funding could answer.
+ */
+async function mailImportHeldBack(db: Database, ledgerPartyId: LedgerPartyId) {
+  const party = parseEntityId("ledgerParty", ledgerPartyId);
+  const ownMailImports = and(
+    eq(run.ledgerPartyId, party),
+    eq(run.purpose, "mail_import"),
+    notDeleted(run),
+  );
+  const [paused] = await getDb(db)
+    .select({ id: run.id })
+    .from(run)
+    .where(
+      and(
+        ownMailImports,
+        eq(run.status, runStatus.enum.paused_auth),
+        eq(run.failureCode, "execution_limit"),
+      ),
+    )
+    .limit(1);
+  if (paused) return true;
+  const [latest] = await getDb(db)
+    .select({ failureCode: run.failureCode, endedAt: run.endedAt })
+    .from(run)
+    .where(and(ownMailImports, isNotNull(run.endedAt)))
+    .orderBy(desc(run.endedAt))
+    .limit(1);
+  return (
+    (latest?.failureCode === "agent_failed" ||
+      latest?.failureCode === runStatus.enum.dispatch_failed) &&
+    latest.endedAt !== null &&
+    Date.now() - latest.endedAt.getTime() < SELF_FAILURE_BACKOFF_MS
+  );
+}
+
 export async function importPendingEmails(db: Database) {
   const { listMemberMailboxes } =
     await import("~/server/domains/purchase-import/repo/gmail/targets");
@@ -574,6 +619,7 @@ export async function importPendingEmails(db: Database) {
     const actorId = target.userId;
     if (!actorId) continue;
     if (!(await mailImportEnabled(db, target.mailboxId))) continue;
+    if (await mailImportHeldBack(db, target.ledgerPartyId)) continue;
     const pending = await getDb(db)
       .select({ id: orderMail.id })
       .from(emailTable)

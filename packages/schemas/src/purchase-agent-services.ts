@@ -46,6 +46,8 @@ export const reconcileSettledRunInput = purchaseAgentOperationRef
     failure: markRunFailedInput
       .pick({ failureCode: true, detail: true })
       .optional(),
+    /** That submission's own last turn found no paid funding: wait instead of failing. */
+    fundingUnavailable: z.boolean().optional(),
   });
 
 /** One model turn's token and cost accounting, recorded once per `eventId`. */

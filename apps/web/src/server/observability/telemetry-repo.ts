@@ -140,6 +140,8 @@ export async function persistTelemetryMessages(
             occurredAt: new Date(event.occurredAt),
             userId: userId.parse(event.userId),
             clientId: event.clientId,
+            action: event.action ?? null,
+            errorKind: event.errorKind ?? null,
             // A Run deleted before ingest leaves the call unattributed rather
             // than failing the batch on its foreign key.
             runId:

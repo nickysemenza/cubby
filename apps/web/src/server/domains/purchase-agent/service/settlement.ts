@@ -43,6 +43,8 @@ export type SubmissionLedger = {
   receivedEventIds(): string[];
   /** A host generation allowance stopped research; unfinished work needs review. */
   reviewDetail?(): string | undefined;
+  /** This submission's own last model turn found no paid funding. */
+  fundingUnavailable?(operationId: string): boolean;
 };
 
 /**
@@ -92,11 +94,17 @@ export async function reportSettlement(
       receivedEventIds: deps.submissions.receivedEventIds(),
     };
     if (reviewDetail) input.detail = reviewDetail;
-    else if (outcome.kind === "fail")
+    else if (outcome.kind === "fail") {
       input.failure = {
         failureCode: outcome.failureCode,
         detail: outcome.detail,
       };
+      if (
+        outcome.failureCode === "agent_failed" &&
+        deps.submissions.fundingUnavailable?.(operationId)
+      )
+        input.fundingUnavailable = true;
+    }
     const reconciled = await deps.services.reconcileSettledRun(input);
     if (reconciled.reconciled && (reviewDetail || outcome.kind === "fail"))
       await deps.services.updateAgentProgress({

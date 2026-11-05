@@ -1086,7 +1086,7 @@ describe("mail research admission", () => {
       const emails = await getDb(ctx.db).select().from(emailTable);
       expect(emails.find((row) => row.orderMailId === mail.id)).toMatchObject({
         runId: successorId,
-        status: "researching",
+        status: "blocked",
       });
       expect(
         emails.find((row) => row.orderMailId === untouched.id),
@@ -1183,9 +1183,10 @@ describe("mail research admission", () => {
       runId: againId,
       failureCode: "agent_failed",
     });
+    // It stays with the Run, and no longer claims research nothing is doing.
     expect(await emailState(mail.id)).toEqual({
       runId: againId,
-      status: "researching",
+      status: "blocked",
     });
   });
 
@@ -1236,6 +1237,45 @@ describe("mail research admission", () => {
       status: "pending",
     });
     expect(await emailState(blocked.id)).toEqual({ runId, status: "blocked" });
+  });
+
+  it("holds automatic admission after a Run fails on its own, until the backoff passes", async () => {
+    const { party, mail } = await source();
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: "synthetic-mailbox",
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    const [first] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id],
+    });
+    if (!first) throw new Error("Synthetic Run missing");
+    const failedId = parseEntityId("run", first.runId);
+    await markRunFailed(ctx.db, {
+      runId: failedId,
+      failureCode: "agent_failed",
+    });
+    const owner = async () =>
+      (
+        await getDb(ctx.db)
+          .select({ runId: emailTable.runId })
+          .from(emailTable)
+          .where(eq(emailTable.orderMailId, mail.id))
+      )[0]?.runId;
+    await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: true });
+    await importPendingEmails(ctx.db);
+    expect(await owner()).toBeNull();
+
+    await getDb(ctx.db)
+      .update(run)
+      .set({ endedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })
+      .where(eq(run.id, failedId));
+    await importPendingEmails(ctx.db);
+    expect(await owner()).not.toBeNull();
   });
 
   it("readmits a released Email under a new Run when its failed Run admitted only it", async () => {

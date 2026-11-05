@@ -69,6 +69,12 @@ const callResult = z.object({
 });
 
 /** A Cubby MCP call result as the agent's tool output. */
+/**
+ * The MCP client gives up at 60s by default while the server keeps working, so a
+ * long mail search reads as a failure and its Email can end unresolved.
+ */
+const TOOL_CALL_TIMEOUT_MS = 180_000;
+
 export function cubbyToolResult(raw: unknown): ToolExecutionResult {
   const parsed = callResult.parse(raw);
   const content: NonNullable<ToolExecutionResult["output"]> = [];
@@ -147,7 +153,7 @@ export function cubbyMcpExtension(
                   generationFor?.(api, context),
                 ),
               },
-              { signal: context.abortSignal },
+              { signal: context.abortSignal, timeout: TOOL_CALL_TIMEOUT_MS },
             ),
           ),
       }),

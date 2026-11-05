@@ -89,6 +89,12 @@ describe("inference funding", () => {
     },
   );
 
+  it("advances past the plan's bare rate limit", () => {
+    const body = JSON.stringify({ detail: "Rate limit exceeded" });
+    expect(isInferenceFundingRefusal(429, body, "subscription")).toBe(true);
+    expect(isInferenceFundingRefusal(429, body, "openai_credit")).toBe(false);
+  });
+
   it.each(["credit_balance_exhausted", "insufficient_quota"])(
     "recognizes OpenAI credit exhaustion %s without treating rate limits as exhausted credit",
     (code) => {

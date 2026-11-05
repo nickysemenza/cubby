@@ -731,6 +731,87 @@ describe("purchase import run admission", () => {
     });
   });
 
+  describe("a settled submission with no paid funding", () => {
+    const stored = async (id: string) =>
+      (
+        await getDb(ctx.db)
+          .select({
+            status: runTable.status,
+            failureCode: runTable.failureCode,
+          })
+          .from(runTable)
+          .where(eq(runTable.id, runEntityId.parse(id)))
+      )[0];
+    const settle = (
+      run: { id: string; dispatchEventId: string | null },
+      fundingUnavailable?: boolean,
+    ) =>
+      reconcileSettledRun(ctx.db, {
+        runId: runEntityId.parse(run.id),
+        operationId: "submission-settled:1",
+        generation: run.dispatchEventId!,
+        sequence: 1,
+        receivedEventIds: new Set([run.dispatchEventId!]),
+        failure: { failureCode: "agent_failed" },
+        fundingUnavailable,
+      });
+    const resumes = async () => {
+      const { job } = await import("~/server/db/schema");
+      return getDb(ctx.db)
+        .select({ key: job.key })
+        .from(job)
+        .where(eq(job.kind, "run.funding-resume"));
+    };
+
+    it("pauses when that submission's own turn found none", async () => {
+      const run = await startAgentRun(await createMember());
+      await settle(run, true);
+      expect(await stored(run.id)).toEqual({
+        status: "paused_auth",
+        failureCode: "execution_limit",
+      });
+      expect(await resumes()).toHaveLength(1);
+    });
+
+    it("fails when only an earlier attempt's usage said so", async () => {
+      const run = await startAgentRun(await createMember());
+      const { aiUsage } = await import("~/server/db/schema");
+      await getDb(ctx.db)
+        .insert(aiUsage)
+        .values({
+          runId: runEntityId.parse(run.id),
+          feature: "mail-import",
+          provider: "synthetic",
+          model: "synthetic-model",
+          operation: "import",
+          durationMs: 1,
+          status: "failed",
+          failure: "Provider 'openai' has no BYOK credential named 'default'.",
+        });
+      await settle(run);
+      expect(await stored(run.id)).toMatchObject({
+        status: "failed",
+        failureCode: "agent_failed",
+      });
+    });
+
+    it("cannot pause a newer generation from a stale report", async () => {
+      const run = await startAgentRun(await createMember());
+      const { pauseForFunding } =
+        await import("~/server/domains/run/repo/execution-context");
+      const { AiBudgetExhaustedError, readAiBudget } =
+        await import("~/server/ai/budget");
+      await pauseForFunding(
+        ctx.db,
+        runEntityId.parse(run.id),
+        new AiBudgetExhaustedError(await readAiBudget(ctx.db)),
+        crypto.randomUUID(),
+      );
+      expect(await stored(run.id)).toMatchObject({ status: "running" });
+      expect(await resumes()).toEqual([]);
+    });
+  });
+
   it("keeps a Run's findings readable beyond the global Problems sample", async () => {
     const party = await createMember();
     const earlier = await startAgentRun(party);
