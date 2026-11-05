@@ -636,8 +636,10 @@ It creates no new member task for missing source proof. Original evidence and
 existing actionable member review remain retained. `matchState: held` blocks automatic actions for unresolved identity, historical ownership, or a retained accepted reservation whose transaction was deleted. Summary splits heldHistorical from heldNeverMatched; a hold without a historical link may still be unbooked spending. `historicalTransactionIds` lists those retained links explicitly; it never supplies accepted ownership. Existing SourceRecord updates accept `identityResolution` only as an explicit reviewed judgment, with expectedDisposition, the observation fingerprint, expected owner version, accepted owner, complete live historical transaction set, resolved account, explicit open/ignored judgment and note. Choose distinct, accept_existing, or assign. The transaction is audited, preserves ignore decisions and original aliases, and does not alter money. Exact replay never supplies that decision. Prior member suppressions
 remain negative fences through retained alias provenance; they never prove identity.
 
-Read projections expand retained historical alias edges once per query, then join
-those sets to observations and occurrences. They preserve the point acceptance
+Read projections materialize retained historical closure before applying root
+predicates. List filters use the generic whole-list value set; state sorts use
+uncorrelated membership sets. Page bindings load states and historical links in
+one batch rather than a scalar subquery per observation. They preserve the point acceptance
 check's live-binding/transaction rules and retained alias provenance. Historical
 links remain presentation and negative ownership fences, never accepted ownership.
 

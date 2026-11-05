@@ -50,7 +50,7 @@ export const sourceOccurrencesWithUnresolvedHistory = sql`(
     AND NOT COALESCE(owner."identityProof"->'resolvedHistoricalTransactionIds' ? evidence."historicalTransactionId"::text,false)
 )`;
 
-/** The original alias/sibling/occurrence closure, shared by every observation in a read. */
+/** Materialize the original closure before root filters can make it a per-row expansion. */
 export const sourceObservationHistoricalLinks = sql`(
   WITH evidence_history AS MATERIALIZED (${directHistoricalEvidence}),
   key_history AS MATERIALIZED (
@@ -64,7 +64,7 @@ export const sourceObservationHistoricalLinks = sql`(
     JOIN evidence_history evidence ON evidence."occurrenceId"=sibling."occurrenceId"
     WHERE sibling."observationId" IS NOT NULL AND sibling."occurrenceId" IS NOT NULL
   ),
-  history AS (
+  history AS MATERIALIZED (
     SELECT observed."observationId", history."historicalTransactionId", history.code
     FROM "FinancialEvidenceAlias" observed JOIN key_history history ON history.source=observed.source AND history.value=observed.value
     WHERE observed."observationId" IS NOT NULL

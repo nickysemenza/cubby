@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/source-occurrence-fields";
 import {
   recordSourceTransactionRecordsInput,
+  sourceTransactionRecordMatchState,
   type TransactionImportInput,
   type SourceTransactionRecordInput,
 } from "@cubby/schemas/source-transaction-record";
@@ -28,7 +29,10 @@ import {
   auditLog,
   financialEvidenceAlias,
 } from "~/server/db/schema";
-import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
+import {
+  sourceObservations,
+  sourceObservationField,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { createMcpServer } from "~/server/mcp/server";
 import {
@@ -339,7 +343,9 @@ describe("statement row ledger", () => {
           SELECT history.code FROM (${sourceHistoricalTransactionRows(sql`r.id`, sql`ARRAY[r."occurrenceId"]::uuid[]`)}) history ORDER BY history.code
         ) OR projection."reviewState" IS DISTINCT FROM CASE
           WHEN o."reviewState"=${sourceOccurrenceReviewState.enum.ready} AND ${sourceOccurrenceHasUnresolvedHistory(sql`o.id`, sql`o."acceptedTransactionId"`)}
-          THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE o."reviewState" END`);
+          THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE o."reviewState" END
+          OR projection."matchState" IS DISTINCT FROM ${sourceObservationField("matchState", "r")}
+          OR projection."reviewState" IS DISTINCT FROM ${sourceObservationField("reviewState", "r")}`);
       expect(rows).toEqual([{ differences: 0 }]);
     };
     const [historicalBinding] = await getDb(ctx.db)
@@ -910,6 +916,24 @@ describe("statement row ledger", () => {
       ]),
     });
     expect(projection.data[0]).not.toHaveProperty("providerData");
+    // Saved views, facets and import reports must agree with the visible state.
+    for (const state of sourceTransactionRecordMatchState.options) {
+      const filtered = await sourceTransactionRecordScaffold.read(ctx.db, {
+        filters: { matchState: [state] },
+        sorts: [{ orderBy: "matchState", direction: "asc" }],
+        pagination: { pageIndex: 0, pageSize: 10 },
+      });
+      expect(filtered.count).toBe(state === "unmatched" ? 2 : 0);
+      expect(filtered.data.every((item) => item.matchState === state)).toBe(
+        true,
+      );
+      expect(
+        filtered.data.every((item) =>
+          Array.isArray(item.historicalTransactionIds),
+        ),
+      ).toBe(true);
+    }
+
     expect(
       (
         await findSourceTransactionRecordDrift(ctx.db, {

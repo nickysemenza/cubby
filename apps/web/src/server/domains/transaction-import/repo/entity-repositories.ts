@@ -18,6 +18,7 @@ import { sourceTransactionRecordSearch } from "~/server/domains/transaction-impo
 import {
   sourceObservations,
   sourceObservationField,
+  sourceObservationColumns,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   merchantVendorInferences,
@@ -44,7 +45,6 @@ type ReaderDb = Database | DrizzleTransaction;
 type SourceRow = typeof sourceTransactionRecord.$inferSelect;
 
 const initialFingerprint = sql`(SELECT i.fingerprint FROM "TransactionImport" i WHERE i.id = "SourceTransactionRecord"."batchId")`;
-const transactionCode = sourceObservationField("transactionShortcode");
 
 const sourceRead = {
   media: true,
@@ -69,18 +69,24 @@ const sourceRead = {
       if (!rows.length)
         return new Map<
           string,
-          { matchState: unknown; transactionId: unknown }
+          {
+            matchState: unknown;
+            transactionId: unknown;
+            historicalTransactionIds: unknown;
+          }
         >();
       const result = await unwrapDb(db)
         .select({
-          id: sourceTransactionRecord.id,
-          matchState: sourceObservationField("matchState"),
-          transactionId: transactionCode,
+          id: sourceObservationColumns.id,
+          matchState: sourceObservationColumns.matchState,
+          transactionId: sourceObservationColumns.transactionShortcode,
+          historicalTransactionIds:
+            sourceObservationColumns.historicalTransactionIds,
         })
-        .from(sourceTransactionRecord)
+        .from(sql`${sourceObservations} "SourceTransactionRecord"`)
         .where(
           inArray(
-            sourceTransactionRecord.id,
+            sourceObservationColumns.id,
             rows.map((row) => row.id),
           ),
         );
@@ -137,8 +143,13 @@ const sourceRead = {
         rawSourceTransactionRecordOut.pick({
           matchState: true,
           transactionId: true,
+          historicalTransactionIds: true,
         }),
         (row, loaded) => ({
+          historicalTransactionIds:
+            rawSourceTransactionRecordOut.shape.historicalTransactionIds.parse(
+              loaded.get(row.id)?.historicalTransactionIds ?? [],
+            ),
           matchState: rawSourceTransactionRecordOut.shape.matchState.parse(
             loaded.get(row.id)?.matchState,
           ),
@@ -187,7 +198,14 @@ export const sourceTransactionRecordScaffold = listScaffold(
       acceptedTransactions: sql`SELECT "record" AS "owner", "transaction" FROM (${sourceTransactionSettlements}) accepted`,
     },
     derived: {
-      matchState: sourceObservationField("matchState"),
+      matchState: {
+        value: sourceObservationField("matchState"),
+        // Fence the complete state set before filters or import membership
+        // can turn its history join into a parameterized nested loop.
+        set: sql`WITH match_states AS MATERIALIZED (
+          SELECT observed.id, observed."matchState" AS value FROM ${sourceObservations} observed
+        ) SELECT id, value FROM match_states`,
+      },
       externalId: sourceObservationField("externalId"),
       legacyExternalId: sourceObservationField("legacyExternalId"),
       chargeKey: sourceObservationField("chargeKey"),
@@ -203,9 +221,6 @@ export const sourceTransactionRecordScaffold = listScaffold(
     read: {
       ...sourceRead,
       columns: {
-        historicalTransactionIds: sourceObservationField(
-          "historicalTransactionIds",
-        ),
         accountName: sql`(SELECT account.name FROM "FinancialAccount" account WHERE account.id=${sourceObservationField("accountId")})`,
         ...Object.fromEntries(
           (

@@ -21,6 +21,7 @@ import {
 } from "drizzle-orm";
 
 import {
+  sourceOccurrenceHasUnresolvedHistory,
   sourceOccurrencesWithUnresolvedHistory,
   sourceObservationHistoricalLinks,
 } from "~/server/db/computed/source-occurrence-history-sql";
@@ -153,14 +154,29 @@ export const sourceObservationColumns = {
 
 export const sourceObservationFrom = sql`${sourceObservations} "SourceTransactionRecord"`;
 
-/** Ordinary facts do not evaluate the historical closure needed only for state/history reads. */
+/** Whole-list membership stays uncorrelated, including when used as a sort key. */
 export const sourceObservationField = (
   key: keyof typeof sourceObservationColumns,
   root = "SourceTransactionRecord",
-) => sql`(
-  SELECT observed.${sql.identifier(key)} FROM ${key === "matchState" || key === "reviewState" || key === "historicalTransactionIds" ? sourceObservations : sourceObservationFacts} observed
-  WHERE observed.id = ${sql.identifier(root)}.id
-)`;
+): SQL => {
+  const id = sql`${sql.identifier(root)}.id`;
+  if (key === "matchState") {
+    return sql`CASE ${sql.join(
+      sourceTransactionRecordMatchState.options.map(
+        (state) =>
+          sql`WHEN ${id} IN (SELECT observed.id FROM ${sourceObservations} observed WHERE observed."matchState"=${state}) THEN ${state}`,
+      ),
+      sql` `,
+    )} END`;
+  }
+  if (key === "reviewState") {
+    return sql`(SELECT CASE WHEN owner."reviewState"=${sourceOccurrenceReviewState.enum.ready}
+      AND ${sourceOccurrenceHasUnresolvedHistory(sql`owner.id`, sql`owner."acceptedTransactionId"`)}
+      THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE owner."reviewState" END
+      FROM "SourceOccurrence" owner JOIN "SourceTransactionRecord" record ON record."occurrenceId"=owner.id WHERE record.id=${id})`;
+  }
+  return sql`(SELECT observed.${sql.identifier(key)} FROM ${key === "historicalTransactionIds" ? sourceObservations : sourceObservationFacts} observed WHERE observed.id=${id})`;
+};
 
 /** Prior member suppression is a negative fence, never proof of source or accepted identity. */
 export const sourceOccurrenceSuppressed = (id: SQL) => sql`${id} IN (
