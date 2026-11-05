@@ -18,9 +18,9 @@ import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
-// Short: a full backlog drains within about a minute, and a longer wait idles
-// the pass rather than the queue.
-const DISCOVERY_BACKPRESSURE_MS = 30_000;
+// Evaluation settlements release backpressure through the existing Job wake.
+// One-hour retry is only the backstop for a missed release, not an idle poll.
+const DISCOVERY_BACKPRESSURE_MS = 60 * 60_000;
 
 /**
  * A member's cancel of the pass's Run stops the pass until the next day's

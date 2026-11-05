@@ -1,5 +1,5 @@
 import { jobState } from "@cubby/schemas/job";
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
@@ -7,7 +7,7 @@ import { getDb, withTransaction } from "~/server/db/helpers";
 import { job, jobInvalidationCapture } from "~/server/db/retained-tables";
 import { drainPending } from "~/server/generic/jobs/repo/work-items";
 
-/** Completed and cancelled Jobs older than this are pruned; failed ones stay. */
+/** Completed and cancelled execution retention; failed executions retain 30 days. */
 export const JOB_RETENTION_MS = 14 * 24 * 60 * 60_000;
 
 /**
@@ -19,17 +19,26 @@ export async function pruneFinishedJobs(
   { limit, now = new Date() }: { limit: number; now?: Date },
 ): Promise<number> {
   const before = new Date(now.getTime() - JOB_RETENTION_MS);
+  const failedBefore = new Date(now.getTime() - 30 * 24 * 60 * 60_000);
   return withTransaction(db, async (tx) => {
     const doomed = tx
       .select({ id: job.id })
       .from(job)
       .where(
         and(
-          inArray(job.state, [
-            jobState.enum.completed,
-            jobState.enum.cancelled,
-          ]),
-          lt(job.updatedAt, before),
+          or(
+            and(
+              inArray(job.state, [
+                jobState.enum.completed,
+                jobState.enum.cancelled,
+              ]),
+              lt(job.updatedAt, before),
+            ),
+            and(
+              eq(job.state, jobState.enum.failed),
+              lt(job.updatedAt, failedBefore),
+            ),
+          ),
           // Producers hold a key-share lock through their wake transaction;
           // a committed wake or pending item keeps its execution identity.
           sql`NOT EXISTS (SELECT 1 FROM "JobInvalidationCapture" c WHERE c.key = ${job.key} AND NOT c.observed)`,

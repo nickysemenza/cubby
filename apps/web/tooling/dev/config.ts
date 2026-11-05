@@ -54,7 +54,7 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
         maxBatchSize: 1,
         maxBatchTimeout: 0,
         maxConcurrency: 1,
-        maxRetries: 0,
+        maxRetries: 3,
       }),
       triggers.queue({
         name: queues.telemetry,

@@ -24,5 +24,18 @@ export async function wakeAiEvaluationRequesters(
         sql`, `,
       )}) AND r."cancelledAt" IS NULL`,
   );
-  await runAfterCommit(db, () => wakeJobs({ source: "run-receipt" }));
+  // Discovery admission locks its Job before evaluation rows. Release capacity
+  // after commit so settlement never takes those locks in the reverse order.
+  await runAfterCommit(db, async (committed) => {
+    await makeJobsDueNow(
+      committed,
+      sql`SELECT DISTINCT 'discovery:connections'
+      FROM "AiEvaluation" settled WHERE settled.feature = 'entity-connections'
+      AND settled.id IN (${sql.join(
+        ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})`,
+    );
+    await wakeJobs({ source: "run-receipt" });
+  });
 }

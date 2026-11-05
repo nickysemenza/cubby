@@ -7,7 +7,8 @@ import {
   runWorkSamples,
   readRunWorkPhase,
 } from "@cubby/schemas/run-work-progress";
-import { and, desc, inArray, sql } from "drizzle-orm";
+import { and, desc, inArray, notInArray, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import { formatDuration } from "~/lib/format-duration";
 import { aiCostSummarySql } from "~/server/ai/repo/ai-usage";
@@ -253,7 +254,17 @@ function runDisplayStatusOf(
     return "retried" as const;
   return status;
 }
+const runPurposeSelection = z
+  .object({ purpose: z.unknown().optional() })
+  .passthrough();
+
 export const runScaffold = listScaffold("run", runTable, {
+  // These Runs still own required AI references and automatic budget attribution.
+  // An explicit purpose filter keeps their history directly accessible.
+  population: (filters) =>
+    runPurposeSelection.parse(filters).purpose === undefined
+      ? notInArray(runTable.purpose, ["ai_suggest", "background"])
+      : sql`true`,
   derived: {
     stalled: listReadValue(() => runStalledSql()),
     needsAttention: listReadValue(() => runNeedsAttentionSql()),

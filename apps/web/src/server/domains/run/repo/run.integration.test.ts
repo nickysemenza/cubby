@@ -105,9 +105,8 @@ describe("ensureRun shortcode collisions", () => {
 describe("listRuns", () => {
   const ctx = withTestDb();
 
-  // Regression: the list once hid ephemeral runs unless a special flag was
-  // set, so every decision pass and AI action was missing from `/runs`.
-  it("lists ephemeral AI runs unfiltered and by trigger", async () => {
+  // Automatic usage groups stay stored but do not crowd member session lists.
+  it("hides automatic AI Runs until their purpose is explicitly selected", async () => {
     await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const page = { pageIndex: 0, pageSize: 50 };
 
@@ -117,7 +116,7 @@ describe("listRuns", () => {
       pagination: page,
     });
     const ephemeral = await runScaffold.read(ctx.db, {
-      filters: { trigger: ["ephemeral"] },
+      filters: { purpose: ["ai_suggest"], trigger: ["ephemeral"] },
       sorts: [],
       pagination: page,
     });
@@ -127,9 +126,8 @@ describe("listRuns", () => {
       pagination: page,
     });
 
-    expect(all.data).toEqual([
-      expect.objectContaining({ purpose: "ai_suggest", trigger: "ephemeral" }),
-    ]);
+    expect(all.data).toEqual([]);
+    expect(all.count).toBe(0);
     expect(ephemeral.data).toHaveLength(1);
     expect(manual.data).toHaveLength(0);
   });
