@@ -7,7 +7,6 @@ import {
 } from "@cubby/schemas/source-transaction-record";
 import { testUserId } from "@cubby/schemas/testing";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -19,6 +18,11 @@ import { getDb } from "~/server/db/helpers";
 import { sourceTransactionRecord } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { recipeLineCoverage } from "~/server/domains/recipe/operations/recipe.server";
+import {
+  sourceObservationColumns,
+  sourceObservationFrom,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
+import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
   entityKernelContextSchema,
@@ -113,6 +117,10 @@ describe("MCP entity kernel boundary", () => {
     ) => ({
       providerTransactionId,
       providerAccountId,
+      providerData: {
+        id: providerTransactionId,
+        account_id: providerAccountId,
+      },
       providerAmount,
       accountDescriptor: `Synthetic card ${providerAccountId}`,
       statementDate: "2026-05-04",
@@ -162,19 +170,31 @@ describe("MCP entity kernel boundary", () => {
       rows: [observation()],
     });
     const before = await getDb(ctx.db).select().from(sourceTransactionRecord);
-    const scoped = before.filter(
+    const scoped = (
+      await getDb(ctx.db)
+        .select(sourceObservationColumns)
+        .from(sourceObservationFrom)
+    ).filter(
       (row) =>
         row.source === "monarch" &&
         row.providerTransactionId === "synthetic-provider-1" &&
         row.providerAccountId === "synthetic-account-1",
     );
     expect(scoped).toHaveLength(2);
-    const head = scoped.find((row) => row.current);
-    const previous = scoped.find((row) => !row.current);
+    const head = scoped.find((row) => row.amount === 12);
+    const previous = scoped.find((row) => row.amount === 10);
     if (!head || !previous)
       throw new Error("Synthetic revision history missing");
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: { source: head.source, externalIds: [previous.externalId] },
+        data: { supersededByExternalId: head.externalId },
+      },
+      ctx.actor,
+    );
     const response = z.object({
-      items: z.array(z.object({ id: z.string(), current: z.boolean() })),
+      items: z.array(z.object({ id: z.string() })),
       meta: z.object({ totalCount: z.number() }),
     });
     const list = async (
@@ -185,7 +205,7 @@ describe("MCP entity kernel boundary", () => {
           action: "list",
           entity: "sourceTransactionRecord",
           filters,
-          fields: ["id", "current"],
+          fields: ["id"],
         },
         context,
       );
@@ -203,11 +223,11 @@ describe("MCP entity kernel boundary", () => {
       [head.shortcode, previous.shortcode].sort(),
     );
     expect(await list({ ...identity, current: true })).toMatchObject({
-      items: [{ id: head.shortcode, current: true }],
+      items: [{ id: head.shortcode }],
       meta: { totalCount: 1 },
     });
     expect(await list({ ...identity, current: false })).toMatchObject({
-      items: [{ id: previous.shortcode, current: false }],
+      items: [{ id: previous.shortcode }],
       meta: { totalCount: 1 },
     });
     const otherAccount = before.find(
@@ -235,27 +255,20 @@ describe("MCP entity kernel boundary", () => {
       before,
     );
 
-    await executeEntity(context, {
-      action: "delete",
-      entity: "sourceTransactionRecord",
-      ids: [head.shortcode],
-    });
-    expect(await list(identity)).toMatchObject({
-      items: [{ id: previous.shortcode, current: false }],
+    await expect(
+      executeEntity(context, {
+        action: "delete",
+        entity: "sourceTransactionRecord",
+        ids: [head.shortcode],
+      }),
+    ).rejects.toThrow("Retained replacement or accepted financial evidence");
+    expect(await list({ ...identity, current: true })).toMatchObject({
+      items: [{ id: head.shortcode }],
       meta: { totalCount: 1 },
     });
-    expect(await list({ ...identity, current: true })).toMatchObject({
-      items: [],
-      meta: { totalCount: 0 },
-    });
-    expect(
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(sourceTransactionRecord)
-          .where(eq(sourceTransactionRecord.id, head.id))
-      )[0],
-    ).toMatchObject({ deletedAt: expect.any(Date), current: true });
+    expect(await getDb(ctx.db).select().from(sourceTransactionRecord)).toEqual(
+      before,
+    );
   });
 
   it("annotates read-only tools from the registry", async () => {

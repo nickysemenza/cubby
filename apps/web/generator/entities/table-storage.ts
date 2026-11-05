@@ -71,6 +71,8 @@ export const compileEntityTable = (
     columns: [],
     indexes: [],
     checks: [],
+    foreignKeys: [],
+    uniqueKeys: [],
     unindexedReferences: {},
     relations: {},
   };
@@ -272,6 +274,22 @@ export const compileEntityTable = (
     columns,
     indexes,
     checks,
+    uniqueKeys: declared.uniqueKeys.map((key, i) => ({
+      ...key,
+      columns: key.columns.map((column) =>
+        columnName(column, `${tableContext}.uniqueKeys[${i}]`),
+      ),
+    })),
+    foreignKeys: declared.foreignKeys.map((key, i) => {
+      if (key.columns.length !== key.references.length)
+        throw new EntityDeclarationError(
+          `${tableContext}.foreignKeys[${i}] must have matching column counts.`,
+        );
+      key.columns.forEach((column) =>
+        columnName(column, `${tableContext}.foreignKeys[${i}]`),
+      );
+      return key;
+    }),
     relations,
   };
 };
@@ -302,6 +320,7 @@ export const validateEntityTables = (
       ...entity.table.columns.flatMap(({ reference }) =>
         reference === null || reference === "user" ? [] : [reference],
       ),
+      ...entity.table.foreignKeys.map((key) => key.table),
     ];
     for (const reference of references)
       if (!tables.has(reference))

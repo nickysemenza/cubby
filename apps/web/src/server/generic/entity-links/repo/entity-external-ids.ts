@@ -3,7 +3,7 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
  * The one seam for `EntityExternalId` and its `ExternalSource` registry.
  *
  * Every identifier an outside system gives an entity is a row here: product
- * identifiers, settlement references, Notion pages, Drive folders. A row
+ * identifiers, Notion pages, Drive folders. A row
  * names at most one live entity per `(source, kind, externalId)`; rows
  * soft-delete with their entity (the entity's delete policy disposes the
  * `EntityExternalId.entityId` edge), so an identifier can be re-recorded after
@@ -14,17 +14,7 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
  */
 import type { EntityExternalIdKind } from "@cubby/schemas/external-id";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import {
-  and,
-  asc,
-  eq,
-  inArray,
-  isNull,
-  ne,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import { entityIdentity } from "~/server/db/entity-identity-schema";
@@ -113,167 +103,6 @@ export async function ensureExternalSources(
 /** Live identifiers of one kind. */
 export const liveExternalIds = (kind: EntityExternalIdKind): SQL =>
   sql`(${eq(entityExternalId.kind, kind)} AND ${isNull(entityExternalId.deletedAt)})`;
-
-export type SettlementRef = { source: string; externalId: string };
-
-/**
- * Each transaction's live settlement references. Ordered by source then
- * externalId: the rows carry no array position, so the order is canonical
- * rather than as-entered.
- */
-export async function settlementRefsFor(
-  db: Db,
-  transactionIds: readonly string[],
-): Promise<Map<string, SettlementRef[]>> {
-  const out = new Map<string, SettlementRef[]>();
-  if (transactionIds.length === 0) return out;
-  const rows = await repositoryQueries(db)
-    .select({
-      entityId: entityExternalId.entityId,
-      source: entityExternalId.source,
-      externalId: entityExternalId.externalId,
-    })
-    .from(entityExternalId)
-    .where(
-      and(
-        liveExternalIds("settlement_ref"),
-        inArray(entityExternalId.entityId, [...transactionIds]),
-      ),
-    )
-    .orderBy(asc(entityExternalId.source), asc(entityExternalId.externalId));
-  for (const row of rows) {
-    out.set(row.entityId, [
-      ...(out.get(row.entityId) ?? []),
-      { source: row.source, externalId: row.externalId },
-    ]);
-  }
-  return out;
-}
-
-/** Preview and attachment share the same idempotent reference merge. */
-export async function settlementRefsIncluding(
-  db: Db,
-  transactionId: string,
-  ref: SettlementRef,
-): Promise<SettlementRef[]> {
-  const existing =
-    (await settlementRefsFor(db, [transactionId])).get(transactionId) ?? [];
-  const refs = existing.some(
-    (saved) =>
-      saved.source === ref.source && saved.externalId === ref.externalId,
-  )
-    ? existing
-    : [...existing, ref];
-  return refs.sort(
-    (a, b) =>
-      a.source.localeCompare(b.source) ||
-      a.externalId.localeCompare(b.externalId),
-  );
-}
-
-/**
- * Refuse settlement references another live transaction already holds. The
- * live unique is the backstop (`db-errors.ts` maps its violation to the same
- * reason); this names the holder first.
- */
-export async function assertSettlementRefsAvailable(
-  db: Db,
-  refs: readonly SettlementRef[],
-  exceptTransactionId?: string,
-): Promise<void> {
-  if (refs.length === 0) return;
-  const [held] = await repositoryQueries(db)
-    .select({
-      source: entityExternalId.source,
-      externalId: entityExternalId.externalId,
-    })
-    .from(entityExternalId)
-    .where(
-      and(
-        liveExternalIds("settlement_ref"),
-        or(
-          ...refs.map((ref) =>
-            and(
-              eq(entityExternalId.source, ref.source),
-              eq(entityExternalId.externalId, ref.externalId),
-            ),
-          ),
-        ),
-        exceptTransactionId
-          ? ne(entityExternalId.entityId, exceptTransactionId)
-          : undefined,
-      ),
-    )
-    .limit(1);
-  if (held)
-    throw createAppError(
-      "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT",
-      `Source transaction ${held.source}/${held.externalId} is already recorded.`,
-    );
-}
-
-/**
- * Make `refs` the transaction's full live settlement-reference set: refs no
- * longer named are soft-deleted, new ones inserted, kept ones untouched. The
- * caller holds the evidence locks and has checked availability.
- */
-export async function replaceSettlementRefs(
-  tx: RepositoryQueryTransaction,
-  transactionId: string,
-  refs: readonly SettlementRef[],
-): Promise<void> {
-  const key = (ref: SettlementRef) => `${ref.source}\0${ref.externalId}`;
-  const current =
-    (await settlementRefsFor(tx, [transactionId])).get(transactionId) ?? [];
-  const wanted = new Set(refs.map(key));
-  const have = new Set(current.map(key));
-  const removed = current.filter((ref) => !wanted.has(key(ref)));
-  const added = refs.filter((ref) => !have.has(key(ref)));
-  if (removed.length > 0)
-    await tx
-      .update(entityExternalId)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          liveExternalIds("settlement_ref"),
-          eq(entityExternalId.entityId, transactionId),
-          or(
-            ...removed.map((ref) =>
-              and(
-                eq(entityExternalId.source, ref.source),
-                eq(entityExternalId.externalId, ref.externalId),
-              ),
-            ),
-          ),
-        ),
-      );
-  if (added.length === 0) {
-    if (removed.length)
-      await recordChange(tx, {
-        kind: "source",
-        categories: ["financialTransaction"],
-      });
-    return;
-  }
-  await ensureExternalSources(
-    tx,
-    added.map((ref) => ref.source),
-  );
-  await tx.insert(entityExternalId).values(
-    added.map((ref) => ({
-      entityId: transactionId,
-      entityKind: "financialTransaction" as const,
-      source: ref.source,
-      kind: "settlement_ref" as const,
-      externalId: ref.externalId,
-      isPrimary: null,
-    })),
-  );
-  await recordChange(tx, {
-    kind: "source",
-    categories: ["financialTransaction"],
-  });
-}
 
 /**
  * The one live identifier of a single-slot kind (a Notion page, a Drive

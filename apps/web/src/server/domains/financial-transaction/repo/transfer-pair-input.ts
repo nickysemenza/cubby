@@ -5,6 +5,7 @@ import {
 import { sql, type SQL } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 
 /** Kinds that retrieve transfer evidence, without proving a transfer. */
@@ -49,7 +50,7 @@ const seedQueries = (input: SeedBoundary) => ({
   `,
   statements: sql`
       SELECT 'stmt:' || r.source || ':' || ${chargeKeyOf("r")} AS key
-      FROM "SourceTransactionRecord" r
+      FROM ${sourceObservations} r
       WHERE ${notDeleted("r")} AND r."sourceCategory" IS NOT NULL
         ${input.since ? sql`AND r."statementDate" >= ${input.since}::date` : sql``}
         ${input.createdBefore ? sql`AND r."createdAt" <= ${input.createdBefore}::timestamptz` : sql``}`,

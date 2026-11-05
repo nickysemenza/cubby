@@ -4,7 +4,7 @@ import {
   shortcodeEntities,
   entityManifest,
 } from "@cubby/schemas/entity-manifest";
-import { sql, type SQL } from "drizzle-orm";
+import { getTableColumns, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -60,6 +60,10 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
     if (!table)
       throw new Error(`Shortcode entity ${kind} has no payload table`);
     const payload = sql.identifier(table);
+    // An immutable payload has no update clock; its creation is its latest fact change.
+    const columns = getTableColumns(SHORTCODE_TABLE[kind]);
+    const updatedAt =
+      "updatedAt" in columns ? columns.updatedAt : columns.createdAt;
     const id = sql`${payload}."id"`;
     const fields = {
       name: sql`${labelSql(kind, `"${table}"`)} AS name`,
@@ -86,7 +90,7 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
       `);
     return sql`
       SELECT identity.id::text AS "dbId", identity.shortcode AS id,
-        identity.kind, identity."createdAt", ${payload}."updatedAt"
+        identity.kind, identity."createdAt", ${updatedAt} AS "updatedAt"
         ${sql.join(early, sql``)}
       FROM "Entity" identity JOIN ${payload} ON ${id} = identity.id
       WHERE identity.kind = ${kind} AND ${notDeleted("identity")}

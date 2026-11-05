@@ -13,6 +13,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { run, runStep } from "~/server/db/schema";
 import { transferPairSeedKeys } from "~/server/domains/financial-transaction/repo/transfer-pair-input";
+import { sourceObservationField } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   statementHoldAccounts,
   statementInputCharges,
@@ -67,7 +68,7 @@ async function runStepInputWhere(
     });
     return entity === "financialTransaction"
       ? sql`('ftx:' || "FinancialTransaction".shortcode) IN (SELECT key FROM (${seeds}) inputs)`
-      : sql`('stmt:' || "SourceTransactionRecord".source || ':' || "SourceTransactionRecord"."chargeKey") IN (SELECT key FROM (${seeds}) inputs)`;
+      : sql`('stmt:' || "SourceTransactionRecord".source || ':' || ${sourceObservationField("chargeKey")}) IN (SELECT key FROM (${seeds}) inputs)`;
   }
   const family = sweep.families.find(
     (candidate) => candidate.family === "statement_transaction",
@@ -82,7 +83,7 @@ async function runStepInputWhere(
   if (address.stepKey === "statement_generate") {
     const charges = statementInputCharges(family.scope);
     // Include every live observation of each eligible charge, including older revisions.
-    return sql`("SourceTransactionRecord".source, "SourceTransactionRecord"."chargeKey") IN (SELECT source, "chargeKey" FROM (${charges}) inputs)`;
+    return sql`("SourceTransactionRecord".source, ${sourceObservationField("chargeKey")}) IN (SELECT source, "chargeKey" FROM (${charges}) inputs)`;
   }
   const accounts = await statementHoldAccounts(db, family.scope);
   if (!accounts.length) return sql`false`;

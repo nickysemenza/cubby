@@ -87,6 +87,8 @@ export interface ConvergenceNames {
     | "sourceCategory"
     | "providerStatus"
     | "providerTransactionId"
+    | "providerAccountId"
+    | "providerData"
     | "rowPosition"
   > & { source: TransactionImportInput["source"] };
 }
@@ -149,6 +151,11 @@ export function convergenceNames(token: string): ConvergenceNames {
       sourceCategory: "Clothing",
       providerStatus: "posted",
       providerTransactionId: `${token}-posted`,
+      providerAccountId: `${token}-card`,
+      providerData: {
+        transaction: { id: `${token}-posted`, account_id: `${token}-card` },
+        account: { id: `${token}-card` },
+      },
       rowPosition: 1,
     },
   };
@@ -524,7 +531,7 @@ export async function convergenceProjection(
       (SELECT count(*)::int FROM "InventoryEntry" i JOIN "Product" p ON p.id = i."productId" WHERE p.name = ${productName} AND i."deletedAt" IS NULL AND p."deletedAt" IS NULL) AS inventory,
       (SELECT sum(i."amountValue")::int FROM "InventoryEntry" i JOIN "Product" p ON p.id = i."productId" WHERE p.name = ${productName} AND i."deletedAt" IS NULL AND p."deletedAt" IS NULL AND i."ownershipMode" = 'explicit' AND i."ownerLedgerPartyId" = ${memberId}) AS "ownedQuantity",
       (SELECT count(*)::int FROM "SourceTransactionRecord" WHERE "accountDescriptor" = ${statementAccount} AND "deletedAt" IS NULL) AS observations,
-      (SELECT count(*)::int FROM "SourceTransactionRecord" s JOIN "EntityExternalId" x ON x.source = s.source AND x."externalId" = s."externalId" AND x.kind = 'settlement_ref' AND x."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t.id = x."entityId" AND t."deletedAt" IS NULL WHERE s."accountDescriptor" = ${statementAccount} AND s."deletedAt" IS NULL) AS "matchedObservations",
+      (SELECT count(*)::int FROM "SourceTransactionRecord" s JOIN "SourceOccurrence" owner ON owner.id = s."occurrenceId" AND owner."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t.id = owner."acceptedTransactionId" AND t."deletedAt" IS NULL WHERE s."accountDescriptor" = ${statementAccount} AND s."deletedAt" IS NULL) AS "matchedObservations",
       (SELECT count(*)::int FROM "OrderMail" m JOIN "Email" email ON email."orderMailId" = m.id AND email."ledgerPartyId" = m."ledgerPartyId" WHERE email."messageId" = ${messageId} AND email."ledgerPartyId" = ${memberId} AND email.provider = 'gmail' AND email."deletedAt" IS NULL) AS mail,
       (SELECT count(*)::int FROM "EmailPurchaseDecision" d JOIN "OrderMailEvent" e ON e.id = d."eventId" JOIN "OrderMail" m ON m.id = e."orderMailId" JOIN "Email" email ON email."orderMailId" = m.id AND email."ledgerPartyId" = m."ledgerPartyId" WHERE email."messageId" = ${messageId} AND email."ledgerPartyId" = ${memberId} AND email.provider = 'gmail' AND email."deletedAt" IS NULL AND e."supersededAt" IS NULL AND d.decision = 'linked') AS "linkedMail"
   `);

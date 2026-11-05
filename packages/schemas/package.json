@@ -225,6 +225,8 @@
     "./financial-transaction-fields": "./src/financial-transaction-fields.ts",
     "./filter-options": "./src/filter-options.ts",
     "./filter-sentinel-fields": "./src/filter-sentinel-fields.ts",
+    "./source-transaction-record-fields": "./src/source-transaction-record-fields.ts",
+    "./source-occurrence-fields": "./src/source-occurrence-fields.ts",
     "./source-transaction-record": "./src/source-transaction-record.ts",
     "./statement-suggestion": "./src/statement-suggestion.ts",
     "./transfer-pair-suggestion": "./src/transfer-pair-suggestion.ts",

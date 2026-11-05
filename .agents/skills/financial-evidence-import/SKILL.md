@@ -14,8 +14,7 @@ does not write back to Monarch. Pi integration is deferred.
 Cubby owns durable scheduling, matching, suggestions, booking and guarded
 corrections. Record evidence and inspect its receipts; do not chain transaction
 creation, reference attachment, Expense booking or account merges after intake.
-Report unresolved account/identity/correction decisions through existing review
-surfaces. Order and receipt work uses [purchase-import](../purchase-import/SKILL.md).
+Keep existing actionable account/identity/correction review visible. Missing source proof blocks automatic actions, creates no new member task, and never permits guessing a judgment. Order and receipt work uses [purchase-import](../purchase-import/SKILL.md).
 
 ## Monarch MCP collection
 
@@ -85,7 +84,7 @@ surfaces. Order and receipt work uses [purchase-import](../purchase-import/SKILL
 - Give each immutable collection a stable fingerprint of its exact retained
   source bytes, observation time and explicit account/date/visibility scope
   where proven. Keep new observations of changed provider facts; replay the
-  same bytes with the same fingerprint/positions. Separate ID-less occurrences
+  same bytes with their original fingerprint and attested original positions. A legacy collection with unpositioned retained rows must refuse a parser-supplied position rather than mint another event; preserve its rows and explicit ignores. Never backfill positions from a new parse or renumbering. Separate ID-less occurrences
   remain independent until explicit reconciliation establishes identity. Provider revisions are
   evidence, not permission to overwrite accepted money by arrival order.
   The server derives observation and charge identities. Do not compute
@@ -165,11 +164,11 @@ Read a selected `STR-` or `TIM-` through `entity_read.get`. Consult the live
 schema for filters, related records and projection fields; the import fingerprint
 alone proves neither retained membership nor complete coverage.
 
-Use `finance_read.summary` to size reconciliation by match state and
+Use `finance_read.summary` to distinguish matched, held and unmatched evidence; heldHistorical and heldWithoutHistoricalLinks separate retained matching history from evidence without a historical link. Neither authorizes booking while held; a never-matched hold may still represent unbooked spending after explicit reviewed identity resolution. SourceRecord historicalTransactionIds are labelled historical evidence and never imply accepted ownership. Use
 `finance_read.drift` to investigate possible descriptor revisions. These are
 workflow computations, not roster APIs. Judgment corrections use the declared
 `entity.update` fields on `sourceTransactionRecord`; obtain record IDs from
-retained reads before setting a reviewed successor. Transaction imports remain
+retained reads before setting a reviewed successor. Exact replay preserves a selected head and withdrawal. Stronger holds survive revisions. For an actual explicit identity judgment, the same entity.update accepts identityResolution (distinct, accept_existing or assign) with expectedDisposition, the observation fingerprint, owner version, accepted owner, complete live historical transaction set, account and decision note from the reviewed read. Never invent that judgment merely to clear a hold; preserve the existing evidence-backed review. Re-read affected evidence before each write. Transaction imports remain
 read-only outside intake. Provider facts and memberships change only through
 recording source evidence. The [evidence lifecycle](../../../docs/import-evidence-convergence.md#financial-evidence-entities)
 owns create/merge restrictions and deletion guards.
@@ -193,3 +192,5 @@ Expenses. Report pending/unknown status, revisions, withdrawals, correction
 reviews and failed durable work without claiming source capabilities from
 synthetic tests. Routine success needs no per-row approval; unresolved decisions
 remain in Suggestions and execution failures in existing Job/Run diagnostics.
+
+Reviewed bulk identity resolution uses the existing `entity.commands` action (up to50 independent update commands). Each command is `action: update`, `entity: sourceTransactionRecord`, the reviewed STR shortcode and `data.identityResolution` with its own expectedDisposition, fact fingerprint, occurrence version, accepted owner and complete live historical set. The batch preserves per-row refusal; one stale review never supplies a judgment for another row. Re-read affected records immediately before each bounded batch and retain each result. Do not use one shared bulkUpdate judgment for unrelated evidence. Only explicitly authorized, evidence-backed decisions may be submitted; unresolved items remain held, visible, and money-unchanged. No web action or automatic identity guessing is required.

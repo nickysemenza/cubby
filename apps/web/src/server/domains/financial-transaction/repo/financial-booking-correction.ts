@@ -23,7 +23,7 @@ import {
   deleteExpenses,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
-import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   readLedgerTransfer,
   updateLedgerTransfer,
@@ -214,9 +214,6 @@ export async function commitFinancialBookingCorrection(
   return withSnapshotWrite(
     db,
     async (tx) => {
-      await lockFinancialEvidenceKeys(tx, "reviewed-booking", [
-        review.transactionId,
-      ]);
       const txDb = databaseForTransaction(tx);
       const decisionDigest = await digestValue(
         financialBookingCorrectionPreview.parse(review),
@@ -244,6 +241,7 @@ export async function commitFinancialBookingCorrection(
           "This booking already has a different reviewed correction. Refresh its financial record.",
         );
       }
+      await lockFinancialTransactionSources(tx, [review.transactionId]);
       const fresh = await previewFinancialBookingCorrection(txDb, review);
       if (
         JSON.stringify(fresh) !==

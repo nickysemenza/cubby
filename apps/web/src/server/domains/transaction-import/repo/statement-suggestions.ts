@@ -17,10 +17,13 @@ import {
   financialTransactionKind,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
+import { financialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
 import { financialTransactionProviderStatus } from "@cubby/schemas/financial-transaction-fields";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
+import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
+import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record-fields";
 import {
   type StatementCounterparty,
   type StatementKindVotes,
@@ -36,7 +39,7 @@ import { cents } from "@cubby/shared";
 import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
@@ -50,12 +53,9 @@ import {
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import {
-  suggestionTable,
-  financialTransaction,
-  financialAccount,
-  sourceTransactionRecord,
-} from "~/server/db/schema";
+import { suggestionTable, financialTransaction } from "~/server/db/schema";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
+import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   previewFinancialTransactionImport,
   prepareFinancialStatementPreview,
@@ -64,16 +64,16 @@ import {
   findTransferPairsForCharges,
   transferPairSourceCharges,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
-import {
-  providerScopeRelation,
-  PROVIDER_IDENTITY_REVIEW,
-} from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
+import { sourceOccurrenceSuppressed } from "~/server/domains/transaction-import/repo/source-observation-state";
+import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
+import { PROVIDER_IDENTITY_REVIEW } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
   chargeKeyOf,
   chargeStateOf,
   hasStatementOccurrence,
   OCCURRENCE_IDENTITY_REVIEW,
   pendingSuggestion,
+  sourceSuggestionAutomaticEligible,
   suggestionField,
   suggestionRefKey,
 } from "~/server/domains/transaction-import/repo/statement-charge";
@@ -176,6 +176,9 @@ export function statementChargeFromWorkRef(ref: string): ChargeRef | null {
 }
 
 type Observation = {
+  occurrenceId: string | null;
+  occurrenceVersion: number | null;
+  reviewState: string | null;
   id: string;
   source: string;
   externalId: string;
@@ -278,18 +281,22 @@ async function loadObservations(
   const { rows } = await unwrapDb(db).execute<
     Record<string, string | number | Date | null>
   >(sql`
-    SELECT r.id, r.source, r."externalId", ${chargeKeyOf("r")} AS "chargeKey",
+    SELECT r.id, r."occurrenceId", r."occurrenceVersion", r."reviewState", r.source, r."externalId", ${chargeKeyOf("r")} AS "chargeKey",
       r."rowPosition", r."providerTransactionId", r."providerAccountId", r."accountDescriptor",
       r."statementDate", r."providerAmount", r.amount, r.merchant,
       r."rawDescription", r."sourceCategory", r."providerStatus",
       r."providerNotes", r."withdrawnAt", r."accountId", r."createdAt", si.fingerprint AS "importFingerprint"
-    FROM "SourceTransactionRecord" r
+    FROM ${sourceObservations} r
     JOIN "TransactionImport" si ON si.id = r."batchId"
     WHERE ${notDeleted("r")}
       AND (r.source, ${chargeKeyOf("r")}) IN (${tuples(charges)})
     ORDER BY r.current DESC, r."lastObservedAt" DESC, r."createdAt" DESC, r.id
   `);
   return rows.map((row) => ({
+    occurrenceId: row.occurrenceId === null ? null : String(row.occurrenceId),
+    occurrenceVersion:
+      row.occurrenceVersion === null ? null : Number(row.occurrenceVersion),
+    reviewState: row.reviewState === null ? null : String(row.reviewState),
     id: String(row.id),
     source: String(row.source),
     externalId: String(row.externalId),
@@ -433,7 +440,7 @@ async function siblingsFor(
     ),
     o AS MATERIALIZED (
       SELECT p.key, p."rowIds", o.id, o.source, o."batchId", o."rowPosition", o."providerTransactionId", ${chargeKeyOf("o")} AS "chargeKey"
-      FROM p JOIN "SourceTransactionRecord" o ON o.source = p.source
+      FROM p JOIN ${sourceObservations} o ON o.source = p.source
         AND normalize(o."accountDescriptor", NFKC) = normalize(p.descriptor, NFKC)
         AND o."providerAmount" = p.amount
         AND o."statementDate" BETWEEN p.day - ${SIBLING_WINDOW_DAYS}::int AND p.day + ${SIBLING_WINDOW_DAYS}::int
@@ -457,7 +464,7 @@ async function siblingsFor(
     WHERE NOT EXISTS (
       SELECT 1 FROM members mo
       JOIN members mp ON mp."importId" = mo."importId"
-      JOIN "SourceTransactionRecord" own ON own.id = mp."statementRowId"
+      JOIN ${sourceObservations} own ON own.id = mp."statementRowId"
       WHERE mo."statementRowId" = o.id AND mp."statementRowId" = ANY(o."rowIds")
         AND ${notDeleted("own")}
         AND ((o."providerTransactionId" IS NOT NULL AND own."providerTransactionId" IS NOT NULL)
@@ -497,34 +504,18 @@ async function claimedCandidates(
     WITH p AS MATERIALIZED (
       SELECT * FROM (VALUES ${values}) AS v(key, source, "chargeKey", "transactionId")
     ),
-    refs AS MATERIALIZED (
-      SELECT p.key, p.source, p."chargeKey", p."transactionId", fx."externalId"
-      FROM p JOIN "EntityExternalId" fx ON fx."entityId" = p."transactionId"
-        AND fx.kind = 'settlement_ref' AND ${notDeleted("fx")}
-        AND fx.source = p.source
-    ),
-    -- Two indexed probes rather than one OR join: a ref is either an
-    -- occurrence id or a charge key (a v1 hash stored as legacyExternalId).
-    hits AS MATERIALIZED (
-      SELECT refs.key, refs."transactionId", refs."chargeKey" AS own,
-        r.source, ${chargeKeyOf("r")} AS "claimKey"
-      FROM refs JOIN "SourceTransactionRecord" r ON r.source = refs.source
-        AND r."externalId" = refs."externalId" AND ${notDeleted("r")}
+    owners AS MATERIALIZED (
+      SELECT p.key, p."transactionId" FROM p
+      JOIN "SourceOccurrence" owner ON owner."acceptedTransactionId" = p."transactionId"
+        AND owner.source = p.source AND owner.shortcode <> p."chargeKey"
+        AND owner.disposition <> ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} AND owner."supersededByOccurrenceId" IS NULL
       UNION
-      SELECT refs.key, refs."transactionId", refs."chargeKey",
-        r.source, ${chargeKeyOf("r")}
-      FROM refs JOIN "SourceTransactionRecord" r ON r.source = refs.source
-        AND r."legacyReference" = refs."externalId" AND ${notDeleted("r")}
-    ),
-    -- An ignored or superseded charge was set aside by the member, so it no
-    -- longer claims the transaction holding its ref.
-    cs AS MATERIALIZED ${chargeStateOf(
-      sql`(r.source, ${chargeKeyOf("r")}) IN (SELECT source, "claimKey" FROM hits)`,
-    )}
-    SELECT DISTINCT hits.key, hits."transactionId"
-    FROM hits JOIN cs ON cs.source = hits.source AND cs."chargeKey" = hits."claimKey"
-      AND NOT cs.ignored AND NOT cs.superseded
-    WHERE hits."claimKey" <> hits.own
+      SELECT p.key, p."transactionId" FROM p
+      JOIN "FinancialEvidenceAlias" unresolved ON unresolved."historicalTransactionId" = p."transactionId"
+        AND unresolved.source = p.source
+      LEFT JOIN "SourceOccurrence" retained ON retained.id=unresolved."occurrenceId"
+      WHERE retained.id IS NULL OR retained."acceptedTransactionId" IS DISTINCT FROM unresolved."historicalTransactionId"
+    ) SELECT DISTINCT key, "transactionId" FROM owners
   `);
   for (const row of rows) {
     const set = result.get(row.key) ?? new Set<string>();
@@ -581,16 +572,14 @@ async function merchantHistory(
       FROM (VALUES ${values}) AS v(key, account, merchant, day, direction)
     ),
     -- Transactions clean creates on these accounts made when accepted as is,
-    -- derived once from the accept Feedback and probed through the
-    -- settlement-ref unique index. Ref keys split at the first ':', the
+    -- derived once from retained accept decisions and their historical evidence. Ref keys split at the first ':', the
     -- separator suggestionRefKey writes after the source.
     ruled AS MATERIALIZED (
-      SELECT DISTINCT fx."entityId" AS id
+      SELECT DISTINCT fx.owner AS id
       FROM "Suggestion" s
       CROSS JOIN LATERAL jsonb_array_elements(s.decisions) f(event)
       CROSS JOIN LATERAL jsonb_array_elements_text(s.data->'refs') ref(key)
-      JOIN "EntityExternalId" fx ON fx.kind = 'settlement_ref' AND ${notDeleted("fx")}
-        AND fx.source = split_part(ref.key, ':', 1)
+      JOIN ${financialSourceReferenceRows} fx ON fx.source = split_part(ref.key, ':', 1)
         AND fx."externalId" = substr(ref.key, length(split_part(ref.key, ':', 1)) + 2)
       WHERE s.family = ${assessmentFamily.enum.statement_transaction}
         AND (s.judgment->>'clean')::boolean
@@ -792,7 +781,7 @@ async function prepareChargePreviews(
       retainedRefs: new Map(
         grouped.map(({ charge, canonical }) => [
           chargeId(charge),
-          canonical.externalId,
+          canonical.chargeKey,
         ]),
       ),
       settlementAccountHints: new Map(
@@ -831,154 +820,43 @@ async function prepareChargePreviews(
 async function providerIdentityFacts(
   db: Database,
   inputs: readonly { charge: ChargeRef; canonical: Observation }[],
-  accounts?: readonly {
+  _accounts?: readonly {
     id: string;
     sourceAliases: ReturnType<typeof financialAccountSourceAliases.parse>;
   }[],
 ) {
-  const asked = inputs.flatMap(({ charge, canonical }) =>
-    canonical.providerTransactionId
-      ? [
-          {
-            charge,
-            canonical,
-            providerTransactionId: canonical.providerTransactionId,
-          },
-        ]
-      : [],
-  );
   const result = new Map<
     string,
     { fingerprint: string; unresolved: boolean }
   >();
-  if (!asked.length) return result;
-  const client = unwrapDb(db);
-  // includes-deleted: narrow identities first, then load complete charge history
-  // so retired known account IDs still prevent null-scope ABA.
-  const keys = client
-    .selectDistinct({
-      source: sourceTransactionRecord.source,
-      chargeKey: sourceTransactionRecord.chargeKey,
-    })
-    .from(sourceTransactionRecord)
-    .where(
-      or(
-        ...asked.map(({ charge, providerTransactionId }) =>
-          and(
-            eq(sourceTransactionRecord.source, charge.source),
-            eq(
-              sourceTransactionRecord.providerTransactionId,
-              providerTransactionId,
-            ),
-          ),
-        ),
-      ),
-    )
-    .as("provider_keys");
-  const rows = await client
-    .select({
-      id: sourceTransactionRecord.id,
-      source: sourceTransactionRecord.source,
-      chargeKey: sourceTransactionRecord.chargeKey,
-      providerTransactionId: sourceTransactionRecord.providerTransactionId,
-      providerAccountId: sourceTransactionRecord.providerAccountId,
-      accountDescriptor: sourceTransactionRecord.accountDescriptor,
-      accountId: sourceTransactionRecord.accountId,
-      deletedAt: sourceTransactionRecord.deletedAt,
-      supersededByRowId: sourceTransactionRecord.supersededByRowId,
-      withdrawnAt: sourceTransactionRecord.withdrawnAt,
-    })
-    .from(sourceTransactionRecord)
-    .innerJoin(
-      keys,
-      and(
-        eq(keys.source, sourceTransactionRecord.source),
-        eq(keys.chargeKey, sourceTransactionRecord.chargeKey),
-      ),
-    )
-    .orderBy(
-      sourceTransactionRecord.source,
-      sourceTransactionRecord.chargeKey,
-      sourceTransactionRecord.id,
-    );
-  const scopedAccounts =
-    accounts ??
-    (
-      await unwrapDb(db)
-        .select({
-          id: financialAccount.id,
-          sourceAliases: financialAccount.sourceAliases,
-        })
-        .from(financialAccount)
-        .where(isNull(financialAccount.deletedAt))
-    ).map((account) => ({
-      ...account,
-      sourceAliases: financialAccountSourceAliases.parse(account.sourceAliases),
-    }));
-  const known = new Map<string, Set<string>>();
-  for (const row of rows) {
-    const key = chargeId(row);
-    const ids = known.get(key) ?? new Set<string>();
-    if (row.providerAccountId) ids.add(row.providerAccountId);
-    known.set(key, ids);
-  }
-  const scopeAccounts = scopedAccounts.map((account) => ({
-    id: account.id,
-    aliases: account.sourceAliases,
-  }));
-  for (const { charge, canonical } of asked) {
-    const history = rows.filter(
-      (row) =>
-        row.source === charge.source &&
-        row.providerTransactionId === canonical.providerTransactionId,
-    );
-    const ownIds = known.get(chargeId(charge)) ?? new Set<string>();
-    const unresolved =
-      ownIds.size > 1 ||
-      history.some(
-        (row) =>
-          row.chargeKey !== charge.chargeKey &&
-          providerScopeRelation({
-            source: charge.source,
-            left: canonical,
-            right: row,
-            leftKnownIds: ownIds,
-            rightKnownIds: known.get(chargeId(row)) ?? new Set<string>(),
-            accounts: scopeAccounts,
-          }) !== "distinct",
-      );
-    // Scope aliases are mutable authority. Retain only accounts relevant to this
-    // identity so unrelated account maintenance cannot stale every proposal.
-    const normalize = (value: string) =>
-      value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
-    const chargeHistory = rows.filter((row) =>
-      history.some(
-        (member) =>
-          member.source === row.source && member.chargeKey === row.chargeKey,
-      ),
-    );
-    const relevantAccounts = scopeAccounts.filter((account) =>
-      chargeHistory.some(
-        (row) =>
-          row.accountId === account.id ||
-          account.aliases.some(
-            (alias) =>
-              alias.source === row.source &&
-              ((row.providerAccountId !== null &&
-                alias.externalAccountId === row.providerAccountId) ||
-                normalize(alias.alias) === normalize(row.accountDescriptor)),
-          ),
-      ),
-    );
+  const ids = inputs.flatMap(({ canonical }) =>
+    canonical.occurrenceId ? [canonical.occurrenceId] : [],
+  );
+  const owners = ids.length
+    ? (
+        await unwrapDb(db).execute<{
+          id: string;
+          version: number;
+          reviewState: string;
+          currentObservationId: string | null;
+          acceptedTransactionId: string | null;
+          suppressed: boolean;
+        }>(sql`
+    -- includes-deleted: reserved identities and retained member suppression remain negative fences.
+    SELECT owner.id,owner.version,owner."reviewState",owner."currentObservationId",owner."acceptedTransactionId",
+      ${sourceOccurrenceSuppressed(sql`owner.id`)} AS suppressed FROM "SourceOccurrence" owner
+    WHERE owner.id IN (${sql.join(
+      ids.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})`)
+      ).rows
+    : [];
+  for (const { charge, canonical } of inputs) {
+    const owner = owners.find((owner) => owner.id === canonical.occurrenceId);
     result.set(chargeId(charge), {
-      unresolved,
+      unresolved: !owner || owner.reviewState !== "ready" || owner.suppressed,
       fingerprint: await sha256Hex(
-        canonicalJson(
-          jsonSnapshot.parse({
-            history: chargeHistory,
-            accounts: relevantAccounts.sort((a, b) => a.id.localeCompare(b.id)),
-          }),
-        ),
+        canonicalJson(jsonSnapshot.parse(owner ?? null)),
       ),
     });
   }
@@ -1611,7 +1489,7 @@ async function buildHoldVoidProposalsForHolds(
 async function loadObservationsById(db: Database, rowIds: readonly string[]) {
   if (!rowIds.length) return [];
   const { rows } = await unwrapDb(db).execute<ChargeRef>(sql`
-    SELECT DISTINCT r.source, ${chargeKeyOf("r")} AS "chargeKey" FROM "SourceTransactionRecord" r
+    SELECT DISTINCT r.source, ${chargeKeyOf("r")} AS "chargeKey" FROM ${sourceObservations} r
     WHERE r.id IN (${sql.join(
       rowIds.map((id) => sql`${id}::uuid`),
       sql`, `,
@@ -1634,8 +1512,8 @@ async function laterCoveringImport(
 ): Promise<string | null> {
   const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
     SELECT DISTINCT si.id FROM "TransactionImport" si
-    JOIN "SourceTransactionRecord" head ON head."withdrawalImportId" = si.id
-    JOIN "SourceTransactionRecord" held ON held.source=head.source AND held."chargeKey"=head."chargeKey"
+    JOIN ${sourceObservations} head ON head."withdrawalImportId" = si.id
+    JOIN ${sourceObservations} held ON held.source=head.source AND held."chargeKey"=head."chargeKey"
     WHERE ${notDeleted("si")} AND si.source=${input.source} AND si."completedAt" IS NOT NULL
       AND si.coverage->>${"visibility"}=${"all"} AND head.current AND head."withdrawnAt" IS NOT NULL
       AND ${notDeleted("head")} AND ${notDeleted("held")}
@@ -1657,14 +1535,14 @@ async function postedTwinExists(
     amount: string;
     statementDate: unknown;
   }>(sql`
-    SELECT r.amount, r."statementDate" FROM "SourceTransactionRecord" r
+    SELECT r.amount, r."statementDate" FROM ${sourceObservations} r
     WHERE ${notDeleted("r")}
       AND r."providerStatus" IS DISTINCT FROM ${sourceTransactionRecordProviderStatus.enum.pending}
       AND r."statementDate" BETWEEN ${date}::date - ${PENDING_POST_WINDOW_DAYS}::int
         AND ${date}::date + ${PENDING_POST_WINDOW_DAYS}::int
       AND sign(r.amount) = sign(${hold.amount}::numeric)
       AND r."accountDescriptor" IN (
-        SELECT held."accountDescriptor" FROM "SourceTransactionRecord" held
+        SELECT held."accountDescriptor" FROM ${sourceObservations} held
         WHERE held.id IN (${sql.join(
           hold.pendingRowIds.map((id) => sql`${id}::uuid`),
           sql`, `,
@@ -1815,6 +1693,67 @@ type ChargePublicationHistory = SuggestionRow & {
   applicationOrder: unknown;
 };
 
+/** Retained paid publications follow observations and their aliases across slot changes. */
+async function priorStatementPublications(
+  db: Database,
+  proposals: readonly ChargeProposal[],
+) {
+  const roots = proposals.flatMap((proposal) =>
+    proposal.observations.map(
+      (row) => sql`(${chargeId(proposal.charge)}, ${row.id}::uuid)`,
+    ),
+  );
+  const result = new Map<string, ChargePublicationHistory[]>();
+  if (!roots.length) return result;
+  const { rows } = await getDb(db).execute<
+    SuggestionRow & { owner: string }
+  >(sql`
+    WITH roots(owner, observation) AS (VALUES ${sql.join(roots, sql`, `)})
+    SELECT DISTINCT roots.owner, s.id::text AS id, s.status, s.active, s.fingerprint, s.suppression, s.data,
+      s.data->>'evidenceFingerprint' AS "evidenceFingerprint", to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt", s.producer, s.judgment
+    FROM roots JOIN "Suggestion" s ON s.family=${assessmentFamily.enum.statement_transaction}
+      AND (s."recordId"=roots.observation OR EXISTS (
+        SELECT 1 FROM "FinancialEvidenceAlias" evidence
+        WHERE evidence."observationId"=roots.observation AND ${notDeleted("evidence")} AND evidence.source=s.data->>${financialTransactionSourceRef.keyof().enum.source} AND evidence.value=s.data->>'chargeKey'))
+    ORDER BY "createdAt" DESC, id DESC`);
+  for (const row of rows) {
+    const data = z.record(z.string(), z.json()).parse(row.data);
+    const value: ChargePublicationHistory = {
+      ...row,
+      data,
+      producer: assessmentProducer.nullable().parse(row.producer),
+      needsLabel: jsonText(data.needsLabel),
+      checkpoint: data.labelCheckpoint ?? null,
+      applicationPending: jsonText(data.applicationPending),
+      applicationOrder: data.applicationOrder ?? null,
+    };
+    const history = result.get(row.owner) ?? [];
+    history.push(value);
+    result.set(row.owner, history);
+  }
+  return result;
+}
+
+/** Keep the immutable old publication and labels, replacing only its active queue slot. */
+async function retireRetainedStatementAdvice(
+  db: Database,
+  proposal: ChargeProposal,
+) {
+  if (!proposal.observations.length) return;
+  await transitionAssessmentStates(
+    db,
+    sql`${suggestionTable.family}=${assessmentFamily.enum.statement_transaction}
+    AND ${suggestionTable.active} AND ${suggestionTable.status}=${suggestionStatus.enum.pending}
+    AND ${inArray(
+      suggestionTable.recordId,
+      proposal.observations.map((row) => row.id),
+    )}
+    AND ${suggestionTable.data}->>${financialTransactionSourceRef.keyof().enum.source}=${proposal.charge.source}
+    AND ${suggestionTable.data}->>'chargeKey' IS DISTINCT FROM ${proposal.charge.chargeKey}`,
+    { active: false, status: "superseded" },
+  );
+}
+
 /** The text `->>` reads from a JSON scalar. */
 const jsonText = (value: unknown) =>
   value === undefined || value === null
@@ -1887,7 +1826,10 @@ const statementSuggestions: SuggestionFamily<
   StatementCandidate,
   ChargePublicationHistory,
   "settled",
-  Map<string, ChargeState> | null
+  {
+    states: Map<string, ChargeState> | null;
+    history: Map<string, ChargePublicationHistory[]>;
+  }
 > = {
   family: assessmentFamily.enum.statement_transaction,
   slot: ({ proposal: { charge } }) => ({
@@ -1909,20 +1851,31 @@ const statementSuggestions: SuggestionFamily<
       tx,
       candidates.map(({ proposal }) => proposal),
     ),
-  load: async (tx, candidates, batch) =>
-    batch
-      ? currentChargeStates(
+  load: async (tx, candidates, batch) => ({
+    states: batch
+      ? await currentChargeStates(
           tx,
           candidates.map(({ proposal }) => proposal.charge),
         )
       : null,
+    history: await priorStatementPublications(
+      tx,
+      candidates.map(({ proposal }) => proposal),
+    ),
+  }),
   batchable: ({ proposal }) =>
     proposal.judgment.recommended !== "void" &&
     !isSettledBooking(proposal.judgment),
   async precheck(tx, { proposal, labelPublication }, rows, _producer, context) {
     const { charge, judgment } = proposal;
+    if (
+      rows.some(
+        (row) => row.active && row.status === suggestionStatus.enum.pending,
+      )
+    )
+      await retireRetainedStatementAdvice(tx, proposal);
     if (context.batch) {
-      const state = context.loaded?.get(chargeId(charge));
+      const state = context.loaded.states?.get(chargeId(charge));
       return !state || chargeSettled(state, judgment)
         ? { kind: "defer" }
         : undefined;
@@ -1977,15 +1930,19 @@ const statementSuggestions: SuggestionFamily<
   onUnchanged: "none",
   async prepare(tx, candidate, rows, producer, context) {
     const { proposal } = candidate;
+    const history = [
+      ...rows,
+      ...(context.loaded.history.get(chargeId(proposal.charge)) ?? []),
+    ];
     if (context.batch)
-      return reusableRuleLabels(rows, proposal)
+      return reusableRuleLabels(history, proposal)
         ? "defer"
         : { candidate, producer };
     if (producer.kind !== "rule" || !proposal.judgment.create)
       return { candidate, producer };
     // Retain the paid votes, not their old rule/history conclusions. Evidence
     // still gets a fresh fingerprint and current apply-time validation.
-    const reusable = reusableRuleLabels(rows, proposal);
+    const reusable = reusableRuleLabels(history, proposal);
     if (!reusable) return { candidate, producer };
     const previous = assessmentJudgments.statement_transaction.parse(
       reusable.judgment,
@@ -2086,6 +2043,8 @@ const statementSuggestions: SuggestionFamily<
     );
   },
   async afterPublish(tx, published, context) {
+    for (const { candidate } of published)
+      await retireRetainedStatementAdvice(tx, candidate.proposal);
     if (context.batch) {
       // Reference writers use evidence-key locks. Their transaction may commit
       // after our admission read but before these new states become visible.
@@ -2122,7 +2081,7 @@ const statementSuggestions: SuggestionFamily<
         );
     }
   },
-  labelBacklog: sql`${pendingSuggestion()} AND ((s.data->>'needsLabel')::boolean
+  labelBacklog: sql`${pendingSuggestion()} AND ${sourceSuggestionAutomaticEligible("s", true)} AND ((s.data->>'needsLabel')::boolean
     OR coalesce((s.data->>'applicationPending')::boolean, false))`,
 };
 
@@ -2651,7 +2610,7 @@ async function admitRetriedCharge(
     throw new Error("Retained charge identity was not found");
   if (scope.importId || scope.since) {
     const { rows } = await getDb(db).execute(sql`
-      SELECT 1 FROM "SourceTransactionRecord" r WHERE ${notDeleted("r")}
+      SELECT 1 FROM ${sourceObservations} r WHERE ${notDeleted("r")}
         AND r.source = ${charge.source} AND r."chargeKey" = ${charge.chargeKey}
         ${scope.since ? sql`AND r."statementDate" >= ${scope.since}::date` : sql``}
         ${scope.importId ? sql`AND (r.id IN (SELECT m."statementRowId" FROM ${transactionImportMembers} m WHERE m."importId" = ${scope.importId}::uuid) OR r."withdrawalImportId" = ${scope.importId}::uuid)` : sql``}
@@ -2697,32 +2656,43 @@ export async function retryStatementGenerationRefs(
   let published = 0;
   let labelsReused = 0;
   let unchanged = 0;
-  const batchSize = input.scope?.importId
-    ? JOB_PAGE_LIMITS.statementApplicationsPerPage
-    : JOB_PAGE_LIMITS.statementGenerationPerPage;
-  // Keep the same bounded page size even for a large historical failure set.
-  for (let offset = 0; offset < input.refs.length; offset += batchSize) {
-    const refs = input.refs.slice(offset, offset + batchSize);
-    const charges = refs.flatMap((ref) => {
-      const charge = statementChargeFromWorkRef(ref);
-      if (charge) return [charge];
+  for (const ref of input.refs) {
+    const original = statementChargeFromWorkRef(ref);
+    if (!original) {
       failed.push(
         statementGenerationFailure(
           ref,
-          new Error("Unsupported statement charge failure reference"),
+          new Error("Unsupported retained statement work reference"),
         ),
       );
-      return [];
-    });
-    if (!charges.length) continue;
-    const admitted: ChargeRef[] = [];
-    for (const charge of charges) {
-      const ref = `charge:${chargeId(charge)}`;
-      try {
+      continue;
+    }
+    try {
+      const { rows: mapped } = await getDb(db).execute<{
+        source: string;
+        chargeKey: string;
+        held: boolean;
+      }>(sql`
+        SELECT DISTINCT observation.source,observation."chargeKey",
+          (observation."occurrenceId" IS NULL OR observation."reviewState"<>${sourceOccurrenceReviewState.enum.ready}) AS held
+        FROM ${sourceObservations} observation
+        WHERE observation.source=${original.source} AND ${notDeleted("observation")}
+          AND (observation."chargeKey"=${original.chargeKey} OR
+            -- includes-deleted: retained aliases rebind original work references without accepting ownership.
+            EXISTS(SELECT 1 FROM "FinancialEvidenceAlias" retained WHERE retained."observationId"=observation.id
+              AND retained.source=${original.source} AND retained.value=${original.chargeKey}))
+        ORDER BY observation.source,observation."chargeKey"`);
+      if (!mapped.length || mapped.some((charge) => charge.held))
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Retained statement work requires source identity or ownership review. Its original failure reference and paid advice remain retained; resolve the source evidence and retry this same work.",
+        );
+      const admitted: ChargeRef[] = [];
+      for (const charge of mapped) {
         const inScope = await withTransactionDatabase(db, async (tx) => {
           await assertWorkflowEffect(tx);
           await getDb(tx).execute(
-            sql`SELECT pg_advisory_xact_lock(hashtextextended(${`statement-suggestion:${chargeId(charge)}`}, 0))`,
+            sql`SELECT pg_advisory_xact_lock(hashtextextended(${`statement-suggestion:${chargeId(charge)}`},0))`,
           );
           if (!(await admitRetriedCharge(tx, charge, input.scope ?? {})))
             return false;
@@ -2730,26 +2700,35 @@ export async function retryStatementGenerationRefs(
           return true;
         });
         if (inScope) admitted.push(charge);
-        else skipped++;
-      } catch (error) {
-        if (isWorkflowInterrupted(error)) throw error;
-        failed.push(statementGenerationFailure(ref, error));
       }
+      if (!admitted.length) {
+        skipped++;
+        continue;
+      }
+      // A retained work reference remains one progress unit even when its old hint
+      // resolves to several independent proven source occurrences.
+      const page = await generateStatementSuggestionPage(db, {
+        runId: input.runId,
+        scope: input.scope,
+        after: null,
+        retryCharges: admitted,
+        work: input.work,
+      });
+      published += page.published;
+      labelsReused += page.labelsReused;
+      unchanged += page.unchanged;
+      if (page.failed.length)
+        failed.push(
+          statementGenerationFailure(
+            ref,
+            new Error(JSON.stringify(page.failed)),
+          ),
+        );
+      else done++;
+    } catch (error) {
+      if (isWorkflowInterrupted(error)) throw error;
+      failed.push(statementGenerationFailure(ref, error));
     }
-    if (!admitted.length) continue;
-    const page = await generateStatementSuggestionPage(db, {
-      runId: input.runId,
-      scope: input.scope,
-      after: null,
-      retryCharges: admitted,
-      work: input.work,
-    });
-    published += page.published;
-    labelsReused += page.labelsReused;
-    unchanged += page.unchanged;
-    failed.push(...page.failed);
-    skipped += page.outOfScope;
-    done += page.processed - page.failed.length - page.outOfScope;
   }
   return { done, skipped, failed, published, labelsReused, unchanged };
 }
@@ -3327,12 +3306,21 @@ async function statementLabelCandidates(
     retryCharges === undefined
       ? sql`true`
       : retryCharges.length
-        ? sql`(${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (${sql.join(
-            retryCharges.map(
-              (charge) => sql`(${charge.source}, ${charge.chargeKey})`,
-            ),
-            sql`, `,
-          )})`
+        ? sql`-- includes-deleted: retained aliases map prior work without establishing current financial ownership.
+    EXISTS (
+    SELECT 1 FROM ${sourceObservations} observation
+    WHERE observation.source=${suggestionField("source")} AND observation."chargeKey"=${suggestionField("chargeKey")}
+      AND (${sql.join(
+        retryCharges.map(
+          (
+            charge,
+          ) => sql`(observation.source=${charge.source} AND (observation."chargeKey"=${charge.chargeKey} OR
+        -- includes-deleted: retained aliases rebind original work references without accepting ownership.
+        EXISTS(SELECT 1 FROM "FinancialEvidenceAlias" retained WHERE retained."observationId"=observation.id AND retained.source=${charge.source} AND retained.value=${charge.chargeKey})))`,
+        ),
+        sql` OR `,
+      )})
+  )`
         : sql`false`;
   const positionAt = sql`coalesce((s.data->'applicationOrder'->>'createdAt')::timestamp, s."createdAt")`;
   const positionId = sql`coalesce((s.data->'applicationOrder'->>'id')::uuid, s.id)`;

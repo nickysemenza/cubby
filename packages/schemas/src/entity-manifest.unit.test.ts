@@ -120,7 +120,12 @@ describe("entity manifest", () => {
       (entity) => !entitySummary[entity].nativeBrowse,
     );
     expect(sorted(webOnly)).toEqual(
-      sorted(["imageJob", "sourceTransactionRecord", "transactionImport"]),
+      sorted([
+        "imageJob",
+        "sourceOccurrence",
+        "sourceTransactionRecord",
+        "transactionImport",
+      ]),
     );
   });
 

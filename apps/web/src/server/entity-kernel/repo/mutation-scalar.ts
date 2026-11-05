@@ -7,12 +7,28 @@ import { alias } from "drizzle-orm/pg-core";
 import { amountJsonSql } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { inventoryEntry } from "~/server/db/schema";
+import { sourceObservationField } from "~/server/domains/transaction-import/repo/source-observation-state";
 
 /** Scalar adapters read only the saved row, a to-one link, or a two-row cardinality probe. */
 export function nonColumnMutationScalar(
   entity: ShortcodeEntity,
   key: string,
 ): SQL | undefined {
+  if (entity === "sourceTransactionRecord") {
+    if (key === "accountId")
+      return sql`(-- includes-deleted: explicit source decisions retain their referenced account.
+        SELECT account.shortcode FROM "FinancialAccount" account WHERE account.id = ${sourceObservationField("accountId", "saved")})`;
+    if (key === "supersededByRowId")
+      return sql`(-- includes-deleted: retained replacement proof remains explainable.
+        SELECT observation.shortcode FROM "SourceTransactionRecord" observation WHERE observation.id = ${sourceObservationField("supersededByRowId", "saved")})`;
+    if (
+      key === "notes" ||
+      key === "disposition" ||
+      key === "dispositionReason" ||
+      key === "dispositionNote"
+    )
+      return sourceObservationField(key, "saved");
+  }
   if (entity === "inventory" && key === "amount") {
     const saved = alias(inventoryEntry, "saved");
     return amountJsonSql(saved.amountValue, saved.amountUnit);

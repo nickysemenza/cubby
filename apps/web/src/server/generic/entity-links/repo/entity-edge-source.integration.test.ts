@@ -12,6 +12,7 @@ import {
 } from "~/server/db/schema";
 import { createOrReuseAttachedImage } from "~/server/domains/image/repo/image";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
+import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
@@ -123,7 +124,7 @@ describe("entity edge source", () => {
     expect(stock?.disposition).toMatchObject({ effect: expect.any(String) });
   });
 
-  it("connects retained source versions through accepted aliases with exact counts and bounded samples", async () => {
+  it("connects retained source versions through their explicit accepted occurrence with exact counts and bounded samples", async () => {
     const observe = (
       fingerprint: string,
       providerId: string,
@@ -133,7 +134,7 @@ describe("entity edge source", () => {
         ctx.db,
         recordSourceTransactionRecordsInput.parse({
           import: {
-            source: "synthetic-edge-source",
+            source: "monarch",
             label: "Synthetic connection evidence",
             fingerprint,
             dateKind: "transaction",
@@ -142,13 +143,18 @@ describe("entity edge source", () => {
           rows: [
             {
               providerTransactionId: providerId,
+              providerAccountId: "synthetic-edge-account",
               accountDescriptor: "Synthetic card",
               statementDate: "2026-06-01",
               providerAmount: -12.5,
               rawDescription: "Synthetic connection charge",
               // A revision changes a fact; providerData alone is an annotation.
               providerNotes: version === 1 ? null : `Synthetic v${version}`,
-              providerData: { version },
+              providerData: {
+                id: providerId,
+                account_id: "synthetic-edge-account",
+                version,
+              },
             },
           ],
         }),
@@ -157,10 +163,6 @@ describe("entity edge source", () => {
     await observe("synthetic-edge-v1", "synthetic-charge", 1);
     const original = (await listSourceTransactionRecords(ctx.db, {})).data[0];
     if (!original) throw new Error("Synthetic source record was not recorded");
-    await getDb(ctx.db)
-      .update(sourceTransactionRecord)
-      .set({ legacyReference: "synthetic-legacy-settlement" })
-      .where(eq(sourceTransactionRecord.shortcode, original.id));
     const account = (
       await createRepoEntity(ctx, "financialAccount", {
         name: "Synthetic connection account",
@@ -180,24 +182,43 @@ describe("entity edge source", () => {
           })),
         })
       ).output;
-    const first = await transaction([
-      original.externalId,
-      "synthetic-legacy-settlement",
-    ]);
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: {
+          source: original.source,
+          externalIds: [original.externalId],
+        },
+        data: { accountId: account.id },
+      },
+      ctx.actor,
+    );
+    const first = await transaction([original.chargeKey]);
     await observe("synthetic-edge-v2", "synthetic-charge", 2);
     const revised = (await listSourceTransactionRecords(ctx.db, {})).data.find(
       (row) => row.id !== original.id,
     );
     if (!revised)
       throw new Error("Synthetic revised source record was not recorded");
-    const second = await transaction([revised.externalId]);
+    const second = first;
     await observe("synthetic-edge-other", "synthetic-other-charge", 1);
     const unrelated = (
       await listSourceTransactionRecords(ctx.db, {})
     ).data.find((row) => row.chargeKey !== original.chargeKey);
     if (!unrelated)
       throw new Error("Synthetic unrelated source record was not recorded");
-    await transaction([unrelated.externalId]);
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: {
+          source: unrelated.source,
+          externalIds: [unrelated.externalId],
+        },
+        data: { accountId: account.id },
+      },
+      ctx.actor,
+    );
+    await transaction([unrelated.chargeKey]);
 
     const edgeKey =
       "rows:sourceTransactionRecord.acceptedTransactions.transaction";
@@ -218,10 +239,8 @@ describe("entity edge source", () => {
       otherKind: "financialTransaction",
       role: "reference",
       disposition: null,
-      count: 2,
-      items: [
-        { id: [first.id, second.id].sort()[0], kind: "financialTransaction" },
-      ],
+      count: 1,
+      items: [{ id: first.id, kind: "financialTransaction" }],
     });
     const fullOutgoing = await getEntityConnections(
       ctx.db,
@@ -235,7 +254,7 @@ describe("entity edge source", () => {
         .find((group) => group.edgeKey === edgeKey)
         ?.items.map((item) => item.id)
         .sort(),
-    ).toEqual([first.id, second.id].sort());
+    ).toEqual([first.id]);
     const incoming = await getEntityConnections(
       ctx.db,
       {

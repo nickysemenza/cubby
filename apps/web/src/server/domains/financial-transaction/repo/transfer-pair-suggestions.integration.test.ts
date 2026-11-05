@@ -31,7 +31,9 @@ import {
   ledgerParty,
   ledgerTransfer,
   sourceTransactionRecord,
+  sourceOccurrence,
 } from "~/server/db/schema";
+import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   transferPairSeedKeys,
   transferPairSeedPage,
@@ -40,13 +42,17 @@ import { labelTransferPairSuggestions } from "~/server/domains/financial-transac
 import { readLedgerTransfer } from "~/server/domains/ledger-transfer/repo";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import {
+  sourceObservationColumns,
+  sourceObservationFrom,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
+import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { previewStatementSuggestion } from "~/server/domains/transaction-import/repo/statement-suggestion-preview";
 import { readStatementSuggestions } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
-import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import {
@@ -210,7 +216,15 @@ describe("transfer-pair suggestions", () => {
           providerStatus: row.status === undefined ? "posted" : row.status,
           providerNotes: null,
           providerTransactionId: row.providerTransactionId ?? null,
-          providerAccountId: row.providerAccountId ?? null,
+          providerAccountId: row.providerTransactionId
+            ? (row.providerAccountId ?? row.account)
+            : (row.providerAccountId ?? null),
+          providerData: row.providerTransactionId
+            ? {
+                id: row.providerTransactionId,
+                account_id: row.providerAccountId ?? row.account,
+              }
+            : null,
           rowPosition: ++position,
         })),
       }),
@@ -222,8 +236,29 @@ describe("transfer-pair suggestions", () => {
     amount: number,
     date: string,
     extra: Parameters<typeof createRepoEntity<"financialTransaction">>[2] = {},
-  ) =>
-    (
+  ) => {
+    for (const source of new Set(
+      (extra.sourceRefs ?? [])
+        .filter((ref) => ref.externalId.startsWith("SOC-"))
+        .map((ref) => ref.source),
+    ))
+      await updateSourceTransactionRecords(
+        ctx.db,
+        {
+          selector: {
+            source,
+            externalIds: (extra.sourceRefs ?? [])
+              .filter(
+                (ref) =>
+                  ref.source === source && ref.externalId.startsWith("SOC-"),
+              )
+              .map((ref) => ref.externalId),
+          },
+          data: { accountId },
+        },
+        ctx.actor,
+      );
+    return (
       await createRepoEntity(ctx, "financialTransaction", {
         accountId,
         amount,
@@ -241,6 +276,7 @@ describe("transfer-pair suggestions", () => {
         ...extra,
       })
     ).output!;
+  };
 
   const refresh = async (
     answer: (descriptor: string) => Choice = byDescriptor,
@@ -386,17 +422,6 @@ describe("transfer-pair suggestions", () => {
       ],
       { source: "copilot" },
     );
-    // Opaque synthetic identities exercise the byte cursor independently of locale sorting.
-    for (const key of ["A", "a", "á"])
-      await unwrapDb(ctx.db)
-        .update(sourceTransactionRecord)
-        .set({ chargeKey: key })
-        .where(
-          eq(
-            sourceTransactionRecord.rawDescription,
-            `SYNTHETIC SEED KEY ${key}`,
-          ),
-        );
     await unwrapDb(ctx.db)
       .update(sourceTransactionRecord)
       .set({ createdAt: new Date("2100-01-01T00:00:00Z") })
@@ -404,7 +429,7 @@ describe("transfer-pair suggestions", () => {
     const { rows: repeated } = await unwrapDb(ctx.db).execute<{
       count: number;
     }>(sql`
-      SELECT count(*)::int AS count FROM "SourceTransactionRecord"
+      SELECT count(*)::int AS count FROM ${sourceObservationFrom}
       WHERE "rawDescription"='SYNTHETIC SEED REVISION' AND "sourceCategory" IS NOT NULL
       GROUP BY source,"chargeKey" HAVING count(*) > 1
     `);
@@ -1073,14 +1098,10 @@ describe("transfer-pair suggestions", () => {
     // A supported leg must never admit its unproven opposite leg, even when
     // the pair was published clean before that evidence changed.
     const oppositeCharge = published!.judgment.inflow.charge!;
-    const [opposite] = await unwrapDb(ctx.db)
-      .select()
-      .from(sourceTransactionRecord)
-      .where(eq(sourceTransactionRecord.chargeKey, oppositeCharge.chargeKey));
     await unwrapDb(ctx.db)
-      .update(sourceTransactionRecord)
-      .set({ rowPosition: null, providerTransactionId: null })
-      .where(eq(sourceTransactionRecord.id, opposite!.id));
+      .update(sourceOccurrence)
+      .set({ reviewState: "identity_conflict" })
+      .where(eq(sourceOccurrence.shortcode, oppositeCharge.chargeKey));
     expect(await discoverTransferPairs(ctx.db)).toEqual([]);
     await expect(apply(published!)).rejects.toThrow(
       /candidate|occurrence|changed/i,
@@ -1088,12 +1109,9 @@ describe("transfer-pair suggestions", () => {
     expect(await liveTransactions()).toEqual([]);
     expect(await transfers()).toEqual([]);
     await unwrapDb(ctx.db)
-      .update(sourceTransactionRecord)
-      .set({
-        rowPosition: opposite!.rowPosition,
-        providerTransactionId: opposite!.providerTransactionId,
-      })
-      .where(eq(sourceTransactionRecord.id, opposite!.id));
+      .update(sourceOccurrence)
+      .set({ reviewState: "ready" })
+      .where(eq(sourceOccurrence.shortcode, oppositeCharge.chargeKey));
 
     const result = await apply(published!);
     const legs = await liveTransactions();
@@ -1521,10 +1539,10 @@ describe("transfer-pair suggestions", () => {
     // Statement review converged both observations on one transaction.
     const observed = await unwrapDb(ctx.db)
       .select({
-        source: sourceTransactionRecord.source,
-        externalId: sourceTransactionRecord.externalId,
+        source: sourceObservationColumns.source,
+        externalId: sourceObservationColumns.chargeKey,
       })
-      .from(sourceTransactionRecord)
+      .from(sourceObservationFrom)
       .where(
         eq(sourceTransactionRecord.accountDescriptor, "Synthetic checking"),
       );
@@ -1560,10 +1578,10 @@ describe("transfer-pair suggestions", () => {
     ]);
     const [observed] = await unwrapDb(ctx.db)
       .select({
-        source: sourceTransactionRecord.source,
-        externalId: sourceTransactionRecord.externalId,
+        source: sourceObservationColumns.source,
+        externalId: sourceObservationColumns.chargeKey,
       })
-      .from(sourceTransactionRecord);
+      .from(sourceObservationFrom);
     const recorded = await transaction(bank, 175, "2026-08-03", {
       sourceRefs: [observed!],
       rawDescription: "ONLINE TRANSFER TO SAVINGS",
@@ -1584,9 +1602,11 @@ describe("transfer-pair suggestions", () => {
       },
     ]);
     expect(await discoverTransferPairs(ctx.db)).toEqual([]);
-    expect(revision.correctionReviews).toMatchObject([
-      { transactionId: recorded.id, reason: expect.any(String) },
-    ]);
+    expect(revision.correctionReviews).toEqual([]);
+    expect(
+      (await liveTransactions()).find((row) => row.shortcode === recorded.id)
+        ?.amount,
+    ).toBe(175);
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
     await drainStoredDerived(ctx.db);
     const review = await listSuggestionPage(ctx.db, {
@@ -1599,151 +1619,151 @@ describe("transfer-pair suggestions", () => {
           ? [item.evidence.reviewReason]
           : [],
       ),
-    ).toEqual([expect.stringContaining("amount changed")]);
+    ).toEqual([]);
     expect(await liveTransactions()).toMatchObject([
       { amount: 175, status: "posted" },
     ]);
     expect(await transfers()).toEqual([]);
   });
 
-  it.each([false, true])(
-    "refuses statement A when only transfer leg B has a deleted provider collision, afterPreview=%s",
-    async (afterPreview) => {
-      const member = await owner("Synthetic guarded transfer member");
-      await account(
-        "Synthetic guard checking",
-        member,
-        checking,
-        "synthetic-checking-id",
+  it("refuses a cached statement pair when its opposite source occurrence becomes held", async () => {
+    const member = await owner("Synthetic guarded transfer member");
+    await account(
+      "Synthetic guard checking",
+      member,
+      checking,
+      "synthetic-checking-id",
+    );
+    await account(
+      "Synthetic guard savings",
+      member,
+      savings,
+      "synthetic-savings-id",
+    );
+    await statement([
+      {
+        account: "Synthetic guard checking",
+        date: "2026-05-04",
+        amount: 70,
+        description: "ONLINE TRANSFER TO SAVINGS",
+        providerTransactionId: "synthetic-transfer-a",
+        providerAccountId: "synthetic-checking-id",
+      },
+      {
+        account: "Synthetic guard savings",
+        date: "2026-05-04",
+        amount: -70,
+        description: "ONLINE TRANSFER FROM CHECKING",
+        providerTransactionId: "synthetic-transfer-b",
+        providerAccountId: "synthetic-savings-id",
+      },
+      {
+        account: "Synthetic guard savings",
+        date: "2026-05-01",
+        amount: -777,
+        description: "SYNTHETIC RETIRED PROVIDER OBSERVATION",
+        providerTransactionId: "synthetic-transfer-c",
+        providerAccountId: "synthetic-savings-id",
+      },
+    ]);
+    const [retired] = await unwrapDb(ctx.db)
+      .select(sourceObservationColumns)
+      .from(sourceObservationFrom)
+      .where(
+        eq(
+          sourceTransactionRecord.providerTransactionId,
+          "synthetic-transfer-c",
+        ),
       );
-      await account(
-        "Synthetic guard savings",
-        member,
-        savings,
-        "synthetic-savings-id",
-      );
-      await statement([
-        {
-          account: "Synthetic guard checking",
-          date: "2026-05-04",
-          amount: 70,
-          description: "ONLINE TRANSFER TO SAVINGS",
-          providerTransactionId: "synthetic-transfer-a",
-          providerAccountId: "synthetic-checking-id",
-        },
-        {
-          account: "Synthetic guard savings",
-          date: "2026-05-04",
-          amount: -70,
-          description: "ONLINE TRANSFER FROM CHECKING",
-          providerTransactionId: "synthetic-transfer-b",
-          providerAccountId: "synthetic-savings-id",
-        },
-        {
-          account: "Synthetic guard savings",
-          date: "2026-05-01",
-          amount: -777,
-          description: "SYNTHETIC RETIRED PROVIDER OBSERVATION",
-          providerTransactionId: "synthetic-transfer-c",
-          providerAccountId: "synthetic-savings-id",
-        },
-      ]);
-      const [retired] = await unwrapDb(ctx.db)
-        .select()
-        .from(sourceTransactionRecord)
-        .where(
-          eq(
-            sourceTransactionRecord.providerTransactionId,
-            "synthetic-transfer-c",
-          ),
-        );
-      // Retained tombstones are absent from pair discovery but still constrain
-      // provider identity. Today's intake cannot construct the historical collision.
+    // Retained tombstones are absent from pair discovery but still constrain
+    // provider identity. Today's intake cannot construct the historical collision.
+    await unwrapDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ deletedAt: new Date() })
+      .where(eq(sourceTransactionRecord.id, retired!.id));
+    const collide = () =>
+      unwrapDb(ctx.db)
+        .update(sourceOccurrence)
+        .set({ reviewState: "identity_conflict" })
+        .where(eq(sourceOccurrence.providerIdentity, "synthetic-transfer-b"));
+    await refresh();
+    await generateStatementSuggestionPage(ctx.db, {
+      after: null,
+      runId: null,
+    });
+    const stateIds = (
       await unwrapDb(ctx.db)
-        .update(sourceTransactionRecord)
-        .set({ deletedAt: new Date() })
-        .where(eq(sourceTransactionRecord.id, retired!.id));
-      const collide = () =>
-        unwrapDb(ctx.db)
-          .update(sourceTransactionRecord)
-          .set({ providerTransactionId: "synthetic-transfer-b" })
-          .where(eq(sourceTransactionRecord.id, retired!.id));
-      if (!afterPreview) await collide();
-      await refresh();
-      await generateStatementSuggestionPage(ctx.db, {
-        after: null,
-        runId: null,
-      });
-      const stateIds = (
-        await unwrapDb(ctx.db)
-          .select({ id: suggestionTable.id })
-          .from(suggestionTable)
-      ).map((state) => state.id);
-      const suggestion = (
-        await readStatementSuggestions(ctx.db, stateIds)
-      ).find((item) => item.amount === 70)!;
-      expect(suggestion).toBeDefined();
-      const application = statementTransactionApplication.parse({
-        kind: "statement_transaction",
-        action: "create",
-      });
-      const command = {
+        .select({ id: suggestionTable.id })
+        .from(suggestionTable)
+    ).map((state) => state.id);
+    const suggestion = (await readStatementSuggestions(ctx.db, stateIds)).find(
+      (item) => item.amount === 70,
+    )!;
+    expect(suggestion).toBeDefined();
+    const application = statementTransactionApplication.parse({
+      kind: "statement_transaction",
+      action: "create",
+    });
+    const command = {
+      assessmentId: suggestion.assessmentId,
+      expectedFingerprint: suggestion.fingerprint,
+      operationId: "synthetic-guarded-transfer-a",
+      verdict: "correct" as const,
+      intent: "apply" as const,
+      application,
+    };
+    {
+      await previewStatementSuggestion(ctx.db, {
         assessmentId: suggestion.assessmentId,
         expectedFingerprint: suggestion.fingerprint,
-        operationId: "synthetic-guarded-transfer-a",
-        verdict: "correct" as const,
-        intent: "apply" as const,
         application,
-      };
-      if (afterPreview) {
-        await previewStatementSuggestion(ctx.db, {
-          assessmentId: suggestion.assessmentId,
-          expectedFingerprint: suggestion.fingerprint,
-          application,
-        });
-        await collide();
-      }
-      // includes-deleted: refusal must preserve B's retained collision evidence.
-      const before = await unwrapDb(ctx.db)
-        .select()
-        .from(sourceTransactionRecord)
-        .orderBy(sourceTransactionRecord.id);
-      await expect(
-        reviewAssessment(ctx.db, kernelCtx(ctx), command),
-      ).rejects.toThrow(/provider identity|evidence changed/i);
-      expect(suggestion.clean).toBe(afterPreview);
-      await expect(
-        previewStatementSuggestion(ctx.db, {
-          assessmentId: suggestion.assessmentId,
-          expectedFingerprint: suggestion.fingerprint,
-          application,
-        }),
-      ).rejects.toThrow(/provider identity|evidence changed/i);
-      const [pair] = await pending();
-      await expect(
-        applyTransferPair(ctx.db, kernelCtx(ctx), {
-          key: pair!.judgment.key,
-          expectedFingerprint: pair!.fingerprint,
-        }),
-      ).rejects.toThrow(/provider identity/i);
-      expect(await liveTransactions()).toEqual([]);
-      expect(await transfers()).toEqual([]);
-      // includes-deleted: compare the complete retained source graph.
-      expect(
-        await unwrapDb(ctx.db)
-          .select()
-          .from(sourceTransactionRecord)
-          .orderBy(sourceTransactionRecord.id),
-      ).toEqual(before);
-      const events = (await readSuggestionDecisions(ctx.db)).map(
-        (event) => event.operationId,
-      );
-      expect(events).toContain("synthetic-guarded-transfer-a");
-      expect(events).not.toContain(
-        "command-application:synthetic-guarded-transfer-a",
-      );
-    },
-  );
+      });
+      await collide();
+    }
+    // includes-deleted: refusal must preserve B's retained collision evidence.
+    const before = await unwrapDb(ctx.db)
+      .select(sourceObservationColumns)
+      .from(sourceObservationFrom)
+      .orderBy(sourceTransactionRecord.id);
+    await expect(
+      reviewAssessment(ctx.db, kernelCtx(ctx), command),
+    ).rejects.toThrow(
+      /provider identity|evidence changed|candidate|occurrence/i,
+    );
+    expect(suggestion.clean).toBe(true);
+    await expect(
+      previewStatementSuggestion(ctx.db, {
+        assessmentId: suggestion.assessmentId,
+        expectedFingerprint: suggestion.fingerprint,
+        application,
+      }),
+    ).rejects.toThrow(
+      /provider identity|evidence changed|candidate|occurrence/i,
+    );
+    const [pair] = await pending();
+    await expect(
+      applyTransferPair(ctx.db, kernelCtx(ctx), {
+        key: pair!.judgment.key,
+        expectedFingerprint: pair!.fingerprint,
+      }),
+    ).rejects.toThrow(/provider identity|candidate|occurrence/i);
+    expect(await liveTransactions()).toEqual([]);
+    expect(await transfers()).toEqual([]);
+    // includes-deleted: compare the complete retained source graph.
+    expect(
+      await unwrapDb(ctx.db)
+        .select(sourceObservationColumns)
+        .from(sourceObservationFrom)
+        .orderBy(sourceTransactionRecord.id),
+    ).toEqual(before);
+    const events = (await readSuggestionDecisions(ctx.db)).map(
+      (event) => event.operationId,
+    );
+    expect(events).toContain("synthetic-guarded-transfer-a");
+    expect(events).not.toContain(
+      "command-application:synthetic-guarded-transfer-a",
+    );
+  });
 
   it("refuses a stale accept and leaves no created leg behind", async () => {
     const member = await owner("Synthetic member");
@@ -1910,7 +1930,7 @@ describe("transfer-pair suggestions", () => {
     expect(await discoverTransferPairs(ctx.db)).toEqual([]);
   });
 
-  it("creates a statement leg with every observation's settlement ref", async () => {
+  it("creates a statement leg with one accepted occurrence for every retained revision", async () => {
     const member = await owner("Synthetic member");
     const checking = await account("Synthetic checking", member);
     await account("Synthetic savings", member, savings);
@@ -1932,6 +1952,29 @@ describe("transfer-pair suggestions", () => {
       })),
       { fingerprint: "synthetic-second-export" },
     );
+    const retained = (
+      await unwrapDb(ctx.db)
+        .select(sourceObservationColumns)
+        .from(sourceObservationFrom)
+    ).filter(
+      (row) => row.providerTransactionId === "synthetic-reexport-transfer",
+    );
+    const earlier = retained.find(
+      (row) => row.rawDescription === "ONLINE TRANSFER TO SAVINGS",
+    );
+    const later = retained.find((row) =>
+      row.rawDescription.endsWith("UPDATED"),
+    );
+    if (!earlier || !later)
+      throw new Error("Synthetic source revisions missing");
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: { source: earlier.source, externalIds: [earlier.externalId] },
+        data: { supersededByExternalId: later.externalId },
+      },
+      ctx.actor,
+    );
     await statement([
       {
         account: "Synthetic savings",
@@ -1943,22 +1986,17 @@ describe("transfer-pair suggestions", () => {
     const [pair] = await discoverTransferPairs(ctx.db);
     const observed = await unwrapDb(ctx.db)
       .select({
-        externalId: sourceTransactionRecord.externalId,
-        legacy: sourceTransactionRecord.legacyReference,
+        externalId: sourceObservationColumns.chargeKey,
+        legacy: sourceObservationColumns.legacyReference,
       })
-      .from(sourceTransactionRecord)
+      .from(sourceObservationFrom)
       .where(
         eq(sourceTransactionRecord.accountDescriptor, "Synthetic checking"),
       );
     expect(observed).toHaveLength(2);
-    expect(pair!.outflow.refs.map((ref) => ref.externalId).sort()).toEqual(
-      [
-        ...new Set([
-          ...observed.map((row) => row.externalId),
-          ...observed.flatMap((row) => (row.legacy ? [row.legacy] : [])),
-        ]),
-      ].sort(),
-    );
+    expect(pair!.outflow.refs).toEqual([
+      { source: later.source, externalId: later.chargeKey },
+    ]);
     const result = await applyTransferPair(ctx.db, kernelCtx(ctx), {
       key: pair!.key,
       expectedFingerprint: await fingerprintTransferPair(pair!),
@@ -1971,17 +2009,17 @@ describe("transfer-pair suggestions", () => {
         .where(eq(financialTransaction.shortcode, result.outflowTransactionId))
     )[0]!.id;
     const refs =
-      (await settlementRefsFor(ctx.db, [outflowId])).get(outflowId) ?? [];
+      (await financialSourceRefsFor(ctx.db, [outflowId])).get(outflowId) ?? [];
     expect(refs.map((ref) => ref.externalId).sort()).toEqual(
       pair!.outflow.refs.map((ref) => ref.externalId).sort(),
     );
     // Settlement must also claim every observation's account, as a statement create does.
     const claimed = await unwrapDb(ctx.db)
       .select({ account: financialAccount.shortcode })
-      .from(sourceTransactionRecord)
+      .from(sourceObservationFrom)
       .leftJoin(
         financialAccount,
-        eq(financialAccount.id, sourceTransactionRecord.accountId),
+        eq(financialAccount.id, sourceObservationColumns.accountId),
       )
       .where(
         eq(sourceTransactionRecord.accountDescriptor, "Synthetic checking"),

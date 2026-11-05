@@ -12,8 +12,10 @@ import {
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { sourceOccurrenceIdentityKind } from "@cubby/schemas/source-occurrence-fields";
+import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { cents } from "@cubby/shared";
-import { and, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { chunk, uniq, uniqBy } from "es-toolkit";
 
 import { shiftPlainDate } from "~/lib/household-date";
@@ -25,8 +27,15 @@ import {
   financialTransaction,
   sourceTransactionRecord,
   transactionImport,
+  transactionImportRecord,
   vendor,
 } from "~/server/db/retained-tables";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
+import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import {
+  sourceObservationColumns,
+  sourceObservationFrom,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   sourceTransactionRecordExternalId,
   sourceTransactionRecordOccurrenceId,
@@ -35,7 +44,6 @@ import {
   merchantVendorInferences,
   normalizeMerchant,
 } from "~/server/domains/vendor/repo/merchant-vendor-inference";
-import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 
 /**
  * Deliberately *not* the identity module's canonicalizer, despite being the
@@ -183,19 +191,23 @@ async function sameFilePositions(
     )}) AS requested(fingerprint, source, "externalId")`;
     const loaded = unwrapDb(db)
       .select({
-        source: sourceTransactionRecord.source,
-        externalId: sourceTransactionRecord.externalId,
+        source: sourceObservationColumns.source,
+        externalId: sourceObservationColumns.chargeKey,
         fingerprint: transactionImport.fingerprint,
-        rowPosition: sourceTransactionRecord.rowPosition,
+        rowPosition: transactionImportRecord.rowPosition,
       })
-      .from(sourceTransactionRecord)
+      .from(sourceObservationFrom)
       .innerJoin(
         requested,
-        sql`requested.source = ${sourceTransactionRecord.source} AND requested."externalId" = ${sourceTransactionRecord.externalId}`,
+        sql`requested.source = ${sourceObservationColumns.source} AND requested."externalId" = ${sourceObservationColumns.chargeKey}`,
+      )
+      .innerJoin(
+        transactionImportRecord,
+        eq(transactionImportRecord.statementRowId, sourceTransactionRecord.id),
       )
       .innerJoin(
         transactionImport,
-        sql`${sourceTransactionRecord.batchId} = ${transactionImport.id} AND requested.fingerprint = ${transactionImport.fingerprint}`,
+        sql`${transactionImportRecord.importId} = ${transactionImport.id} AND requested.fingerprint = ${transactionImport.fingerprint}`,
       )
       .where(
         and(notDeleted(sourceTransactionRecord), notDeleted(transactionImport)),
@@ -259,10 +271,42 @@ export async function previewFinancialTransactionImport(
   const legacyIds = await Promise.all(
     input.rows.map((row) => sourceTransactionRecordExternalId(row)),
   );
+  const retainedOccurrences = input.rows.length
+    ? await unwrapDb(db).execute<{ key: string; shortcode: string }>(sql`
+    WITH requested AS (SELECT * FROM (VALUES ${sql.join(
+      input.rows.map(
+        (row) => sql`(
+      ${row.key}::text, ${row.source}::text, ${row.importFingerprint ?? null}::text,
+      ${row.rowPosition ?? null}::integer, ${row.providerTransactionId ?? null}::text, ${row.providerAccountId ?? null}::text
+    )`,
+      ),
+      sql`, `,
+    )}) value(key, source, fingerprint, position, provider, account))
+    SELECT requested.key, owner.shortcode FROM requested
+    JOIN "TransactionImport" collection ON collection.source = requested.source AND collection.fingerprint = requested.fingerprint
+    JOIN "TransactionImportRecord" membership ON membership."importId"=collection.id AND membership."rowPosition"=requested.position
+    JOIN "SourceTransactionRecord" observation ON observation.id=membership."statementRowId"
+    JOIN "SourceOccurrence" owner ON owner.id = observation."occurrenceId"
+    WHERE ${notDeleted("owner")} AND ${notDeleted("observation")} AND owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
+    UNION
+    SELECT requested.key, owner.shortcode FROM requested
+    JOIN "SourceOccurrence" owner ON owner.source = requested.source AND owner."identityKind" = ${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
+      AND owner."identityScope" = 'provider-account:' || requested.account AND owner."providerIdentity" = requested.provider
+    WHERE ${notDeleted("owner")} AND owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}`)
+    : null;
+  const occurrenceCandidates = new Map<string, Set<string>>();
+  for (const candidate of retainedOccurrences?.rows ?? []) {
+    const codes = occurrenceCandidates.get(candidate.key) ?? new Set<string>();
+    codes.add(candidate.shortcode);
+    occurrenceCandidates.set(candidate.key, codes);
+  }
   const sourceRefIds = await Promise.all(
     input.rows.map(
       (row, index) =>
         options.retainedRefs?.get(row.key) ??
+        (occurrenceCandidates.get(row.key)?.size === 1
+          ? [...occurrenceCandidates.get(row.key)!][0]
+          : undefined) ??
         (row.importFingerprint && row.rowPosition !== undefined
           ? sourceTransactionRecordOccurrenceId(
               row.source,
@@ -283,20 +327,23 @@ export async function previewFinancialTransactionImport(
   const observations = providerPairs.length
     ? await unwrapDb(db)
         .select({
-          source: sourceTransactionRecord.source,
-          providerTransactionId: sourceTransactionRecord.providerTransactionId,
-          providerAccountId: sourceTransactionRecord.providerAccountId,
-          externalId: sourceTransactionRecord.externalId,
+          source: sourceObservationColumns.source,
+          providerTransactionId: sourceObservationColumns.providerTransactionId,
+          providerAccountId: sourceObservationColumns.providerAccountId,
+          externalId: sourceObservationColumns.chargeKey,
         })
-        .from(sourceTransactionRecord)
+        .from(sourceObservationFrom)
         .where(
           and(
             notDeleted(sourceTransactionRecord),
+            sql`EXISTS (SELECT 1 FROM "SourceOccurrence" owner
+              WHERE owner.id = ${sourceObservationColumns.occurrenceId} AND owner."identityKind" = ${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
+                AND owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND ${notDeleted("owner")})`,
             or(
               ...providerPairs.map((row) =>
                 and(
-                  sql`${sourceTransactionRecord.source} = ${row.source}`,
-                  sql`${sourceTransactionRecord.providerTransactionId} = ${row.providerTransactionId}`,
+                  sql`${sourceObservationColumns.source} = ${row.source}`,
+                  sql`${sourceObservationColumns.providerTransactionId} = ${row.providerTransactionId}`,
                 ),
               ),
             ),
@@ -304,14 +351,13 @@ export async function previewFinancialTransactionImport(
         )
     : [];
 
-  // Global settlement references survive date corrections. A relation of exact
-  // source/ref pairs avoids quadratic planning of a large correlated OR tree.
+  // Explicit occurrence ownership supplies exact matches; historical aliases only widen candidates.
   const pairs = uniqBy(
     [
-      ...input.rows.flatMap((row, index) => [
-        { source: row.source, externalId: sourceRefIds[index]! },
-        { source: row.source, externalId: legacyIds[index]! },
-      ]),
+      ...input.rows.map((row, index) => ({
+        source: row.source,
+        externalId: sourceRefIds[index]!,
+      })),
       ...observations,
     ],
     (pair) => `${pair.source}\0${pair.externalId}`,
@@ -320,17 +366,28 @@ export async function previewFinancialTransactionImport(
     pairs.length === 0
       ? undefined
       : sql`${financialTransaction.id} IN (
-          SELECT px."entityId"
-          FROM (VALUES ${sql.join(
-            pairs.map(
-              (pair) => sql`(${pair.source}::text, ${pair.externalId}::text)`,
-            ),
-            sql`, `,
-          )}) AS requested(source, "externalId")
-          JOIN "EntityExternalId" px ON px.source = requested.source
-            AND px."externalId" = requested."externalId"
-          WHERE px.kind = 'settlement_ref' AND ${notDeleted("px")}
-        )`;
+    SELECT owner."acceptedTransactionId" FROM "SourceOccurrence" owner
+    JOIN (VALUES ${sql.join(
+      pairs.map(
+        (pair) => sql`(${pair.source}::text, ${pair.externalId}::text)`,
+      ),
+      sql`, `,
+    )}) requested(source, code)
+      ON owner.source = requested.source AND owner.shortcode = requested.code
+    WHERE owner."acceptedTransactionId" IS NOT NULL
+    UNION
+    SELECT alias."historicalTransactionId" FROM "FinancialEvidenceAlias" alias
+    JOIN (VALUES ${sql.join(
+      input.rows.flatMap((row, index) =>
+        [sourceRefIds[index]!, legacyIds[index]!].map(
+          (value) => sql`(${row.source}::text, ${value}::text)`,
+        ),
+      ),
+      sql`, `,
+    )}) requested(source, value)
+      ON alias.source = requested.source AND alias.value = requested.value
+    WHERE alias."historicalTransactionId" IS NOT NULL
+  )`;
   const [preparation, transactions] = await Promise.all([
     options.preparation ?? prepareFinancialStatementPreview(db),
     unwrapDb(db)
@@ -367,7 +424,7 @@ export async function previewFinancialTransactionImport(
   const parsedAccounts = preparation.accounts;
   for (const transaction of transactions)
     preparation.ids.set(transaction.shortcode, transaction.id);
-  const refsByTransaction = await settlementRefsFor(
+  const refsByTransaction = await financialSourceRefsFor(
     db,
     transactions.map((transaction) => transaction.id),
   );
@@ -379,18 +436,29 @@ export async function previewFinancialTransactionImport(
   // scan for each input row. Reference identity stays source-scoped.
   const transactionsByAccount = new Map<string, typeof parsedTransactions>();
   const transactionsByRef = new Map<string, typeof parsedTransactions>();
+  const transactionsByAlias = new Map<string, typeof parsedTransactions>();
   for (const transaction of parsedTransactions) {
     const accountRows = transactionsByAccount.get(transaction.accountId) ?? [];
     accountRows.push(transaction);
     transactionsByAccount.set(transaction.accountId, accountRows);
     for (const key of new Set(
-      transaction.sourceRefs.map((ref) => pairKey(ref.source, ref.externalId)),
+      transaction.sourceRefs
+        .filter((ref) => ref.externalId.startsWith("SOC-"))
+        .map((ref) => pairKey(ref.source, ref.externalId)),
     )) {
       const refRows = transactionsByRef.get(key) ?? [];
       refRows.push(transaction);
       transactionsByRef.set(key, refRows);
     }
   }
+  for (const transaction of parsedTransactions)
+    for (const ref of transaction.sourceRefs) {
+      const key = pairKey(ref.source, ref.externalId);
+      transactionsByAlias.set(key, [
+        ...(transactionsByAlias.get(key) ?? []),
+        transaction,
+      ]);
+    }
   const observationsByProvider = new Map<string, typeof observations>();
   for (const observation of observations) {
     if (!observation.providerTransactionId) continue;
@@ -521,8 +589,8 @@ export async function previewFinancialTransactionImport(
       providerObservations(row)
         .filter(
           (observation) =>
-            row.providerAccountId === undefined ||
-            row.providerAccountId === null ||
+            row.providerAccountId !== undefined &&
+            row.providerAccountId !== null &&
             observation.providerAccountId === row.providerAccountId,
         )
         .flatMap(
@@ -540,7 +608,7 @@ export async function previewFinancialTransactionImport(
           )
         : [];
     const legacyMatches = (
-      transactionsByRef.get(pairKey(row.source, legacyIds[index]!)) ?? []
+      transactionsByAlias.get(pairKey(row.source, legacyIds[index]!)) ?? []
     ).filter((transaction) => account && transaction.accountId === account.id);
     const nearbyMatches = account
       ? (transactionsByAccount.get(account.id) ?? []).filter((transaction) => {

@@ -17,11 +17,11 @@ import {
   purchase as purchaseTable,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
 import { prepareSourceOrderReconciliation } from "~/server/domains/purchase-import/repo/reconciliation";
 import { prepareMailFinancialEvent } from "~/server/domains/purchase-import/service/mail-financial-event";
-import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -427,7 +427,7 @@ describe("server verified financial convergence", () => {
         decidedByUserId: ctx.actor.userId,
       });
     expect(
-      (await settlementRefsFor(ctx.db, [transaction.entityId])).get(
+      (await financialSourceRefsFor(ctx.db, [transaction.entityId])).get(
         transaction.entityId,
       ),
     ).toEqual([{ source: "synthetic-bank", externalId: "synthetic-charge-1" }]);
@@ -444,7 +444,7 @@ describe("server verified financial convergence", () => {
       purchaseId: purchase.output.id,
     });
     expect(
-      (await settlementRefsFor(ctx.db, [transaction.entityId])).get(
+      (await financialSourceRefsFor(ctx.db, [transaction.entityId])).get(
         transaction.entityId,
       ),
     ).toContainEqual({

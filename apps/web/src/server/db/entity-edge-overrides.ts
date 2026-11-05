@@ -92,6 +92,9 @@ import {
   plant,
   planting,
   sourceTransactionRecord,
+  sourceObservationAnnotation,
+  sourceOccurrence,
+  financialEvidenceAlias,
   transactionImportRecord,
   suggestionTable,
   task,
@@ -293,14 +296,66 @@ export const ENTITY_EDGE_OVERRIDES = {
     },
   }),
   sourceTransactionRecord: edges({
-    "SourceTransactionRecord.supersededByRowId": {
-      column: sourceTransactionRecord.supersededByRowId,
-      role: "reference",
-      label: "superseded records",
+    "SourceObservationAnnotation.supersededByObservationId": {
+      column: sourceObservationAnnotation.supersededByObservationId,
+      role: "history",
+      label: "original replacements",
       description:
-        "The explicit reviewed successor of an earlier source record.",
-      liveness: { kind: "must-target-live" },
+        "Each original observation preserves its reviewed successor.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "The live replacement guard owns deletion eligibility; retained decisions remain historical evidence.",
+      },
     },
+    "SourceOccurrence.currentObservationId": {
+      column: sourceOccurrence.currentObservationId,
+      role: "history",
+      label: "occurrence frontier",
+      description:
+        "Retain the selected frontier after observation deletion; never promote an older version.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "A tombstoned frontier reserves source identity without authorizing automatic money.",
+      },
+    },
+    "SourceOccurrence.replacementObservationId": {
+      column: sourceOccurrence.replacementObservationId,
+      role: "history",
+      label: "replacement proof",
+      description:
+        "The exact reviewed replacement observation remains explainable.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "The deletion hook protects live replacement decisions while history remains retained.",
+      },
+    },
+    "SourceObservationAnnotation.observationId": {
+      column: sourceObservationAnnotation.observationId,
+      role: "history",
+      label: "observation annotations",
+      description:
+        "Original notes and unresolved judgments survive observation retirement.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason: "Annotations preserve source history through its tombstone.",
+      },
+    },
+    "FinancialEvidenceAlias.observationId": {
+      column: financialEvidenceAlias.observationId,
+      role: "history",
+      label: "retained evidence aliases",
+      description:
+        "Original aliases remain explainable through observation tombstones.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Alias evidence is retained, never a live accepted-owner lookup.",
+      },
+    },
+
     "TransactionImportRecord.statementRowId": {
       column: transactionImportRecord.statementRowId,
       role: "history",
@@ -314,7 +369,79 @@ export const ENTITY_EDGE_OVERRIDES = {
       },
     },
   }),
+  sourceOccurrence: edges({
+    "SourceTransactionRecord.occurrenceId": {
+      column: sourceTransactionRecord.occurrenceId,
+      role: "history",
+      label: "source observations",
+      description:
+        "Immutable observations keep their proven occurrence identity.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Retiring an identity never rewrites the observations that reserved it.",
+      },
+    },
+    "FinancialEvidenceAlias.occurrenceId": {
+      column: financialEvidenceAlias.occurrenceId,
+      role: "history",
+      label: "source aliases",
+      description:
+        "Alias provenance keeps its original proven source occurrence.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason: "Evidence is retained through occurrence retirement.",
+      },
+    },
+    "SourceOccurrence.supersededByOccurrenceId": {
+      column: sourceOccurrence.supersededByOccurrenceId,
+      role: "history",
+      label: "reviewed replacements",
+      description:
+        "An explicit replacement keeps naming its reserved target identity.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Source lifecycle history never releases or silently reassigns replacement identity.",
+      },
+    },
+  }),
   transactionImport: edges({
+    "SourceOccurrence.physicalImportId": {
+      column: sourceOccurrence.physicalImportId,
+      role: "history",
+      label: "physical source identities",
+      description:
+        "The original physical collection reserves each positioned occurrence.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Collection retirement never releases its original position identities.",
+      },
+    },
+    "SourceOccurrence.withdrawalImportId": {
+      column: sourceOccurrence.withdrawalImportId,
+      role: "history",
+      label: "withdrawal proofs",
+      description:
+        "The completed provider collection that confirmed source withdrawal.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "A retained withdrawal remains evidence after collection retirement.",
+      },
+    },
+    "SourceObservationAnnotation.withdrawalImportId": {
+      column: sourceObservationAnnotation.withdrawalImportId,
+      role: "history",
+      label: "original withdrawal proofs",
+      description:
+        "Original observation withdrawal history preserves its collection identity.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason: "Historical provenance survives collection retirement.",
+      },
+    },
     "SourceTransactionRecord.batchId": {
       column: sourceTransactionRecord.batchId,
       role: "history",
@@ -322,13 +449,7 @@ export const ENTITY_EDGE_OVERRIDES = {
       description: "The import that first retained a source observation.",
       liveness: { kind: "must-target-live" },
     },
-    "SourceTransactionRecord.withdrawalImportId": {
-      column: sourceTransactionRecord.withdrawalImportId,
-      role: "history",
-      label: "withdrawal proof",
-      description: "The completed import that confirmed a source withdrawal.",
-      liveness: { kind: "must-target-live" },
-    },
+
     "TransactionImportRecord.importId": {
       column: transactionImportRecord.importId,
       role: "history",
@@ -1336,19 +1457,45 @@ export const ENTITY_EDGE_OVERRIDES = {
             "A reviewed Email-to-transaction association is append-only history that keeps its original UUIDs through every tombstone.",
         },
       },
-      "SourceTransactionRecord.accountId": {
-        column: sourceTransactionRecord.accountId,
-        role: "reference",
-        label: "statement rows",
+      "SourceObservationAnnotation.accountId": {
+        column: sourceObservationAnnotation.accountId,
+        role: "history",
+        label: "original source account judgments",
         description:
-          "A provider statement line an agent judged to belong to this account. Evidence Cubby is reconciled against, not a settlement event: the row is what the export said, and assigning it an account is a human judgment rather than something the import derived.",
-        liveness: { kind: "must-target-live" },
+          "Each retained observation keeps its original account judgment; unresolved active assignments are guarded by account deletion.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Promoted observations retain their original account history after current occurrence judgments change.",
+        },
       },
     }),
     ...linkEdgesFor("financialAccount"),
   },
   financialTransaction: {
     ...edges({
+      "SourceOccurrence.acceptedTransactionId": {
+        column: sourceOccurrence.acceptedTransactionId,
+        role: "history",
+        label: "accepted source reservation",
+        description: "Acceptance remains reserved after transaction deletion.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "A deleted accepted transaction never releases identity for automatic money recreation.",
+        },
+      },
+      "FinancialEvidenceAlias.historicalTransactionId": {
+        column: financialEvidenceAlias.historicalTransactionId,
+        role: "history",
+        label: "retained source bindings",
+        description: "Former source bindings remain original evidence.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Retained provenance names transaction tombstones without establishing current ownership.",
+        },
+      },
       "EmailFinancialAssociation.transactionId": {
         column: emailFinancialAssociation.transactionId,
         role: "history",

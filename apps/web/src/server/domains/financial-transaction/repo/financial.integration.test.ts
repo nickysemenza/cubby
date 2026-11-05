@@ -23,6 +23,7 @@ import {
   mergePurchases,
   purchaseScaffold,
 } from "~/server/domains/purchase/repo/purchase";
+import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   recordSourceTransactionRecords,
   updateSourceTransactionRecords,
@@ -176,20 +177,48 @@ describe("financial repositories — critical invariants", () => {
         ctx.actor,
       )
     ).output;
+    await recordSourceTransactionRecords(
+      ctx.db,
+      recordSourceTransactionRecordsInput.parse({
+        import: {
+          source: "concurrency-test",
+          label: "Synthetic source",
+          fingerprint: "synthetic-race",
+        },
+        rows: [
+          {
+            rowPosition: 1,
+            accountDescriptor: "Synthetic account",
+            statementDate: "2026-01-01",
+            providerAmount: -10,
+            rawDescription: "Synthetic occurrence",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!source) throw new Error("Synthetic source missing");
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: { source: source.source, externalIds: [source.externalId] },
+        data: { accountId: createdAccount.id },
+      },
+      ctx.actor,
+    );
     const input = (amount: number) =>
       buildEntity("financialTransaction", {
         accountId: createdAccount.id,
         kind: "purchase",
         status: "pending",
         amount,
-        sourceRefs: [
-          { source: "concurrency-test", externalId: "shared-transaction" },
-        ],
+        sourceRefs: [{ source: source.source, externalId: source.chargeKey }],
       });
 
     const results = await Promise.allSettled([
       createFinancialTransaction(ctx.db, input(10), ctx.actor),
-      createFinancialTransaction(ctx.db, input(20), ctx.actor),
+      createFinancialTransaction(ctx.db, input(10), ctx.actor),
     ]);
 
     expect(
@@ -343,6 +372,8 @@ describe("financial repositories — critical invariants", () => {
     const row = {
       key: "row-1",
       source: "monarch",
+      providerTransactionId: "synthetic-preview-event",
+      providerAccountId: "synthetic-provider-account-a",
       account: "Citi Double Cash (...1702)",
       date: "2026-07-31",
       amount: -54.29,
@@ -391,9 +422,51 @@ describe("financial repositories — critical invariants", () => {
     });
     expect(first.rows[0]?.existingTransactionIds).toEqual([]);
 
+    await recordSourceTransactionRecords(
+      ctx.db,
+      recordSourceTransactionRecordsInput.parse({
+        import: {
+          source: "monarch",
+          label: "Synthetic preview source",
+          fingerprint: "synthetic-preview-source",
+        },
+        rows: [
+          {
+            rowPosition: 1,
+            providerTransactionId: row.providerTransactionId,
+            providerAccountId: row.providerAccountId,
+            providerData: {
+              id: row.providerTransactionId,
+              account_id: row.providerAccountId,
+            },
+            accountDescriptor: row.account,
+            statementDate: row.date,
+            providerAmount: row.amount,
+            merchant: row.merchant,
+            rawDescription: row.originalStatement,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const [retainedSource] = (await listSourceTransactionRecords(ctx.db, {}))
+      .data;
+    if (!retainedSource) throw new Error("Synthetic retained source missing");
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: {
+          source: row.source,
+          externalIds: [retainedSource.externalId],
+        },
+        data: { accountId: createdAccount.id },
+      },
+      ctx.actor,
+    );
     const proposed = requireTestValue(
-      first.rows[0],
-      "Expected the first Monarch preview row.",
+      (await previewFinancialTransactionImport(ctx.db, { rows: [row] }))
+        .rows[0],
+      "Expected retained preview.",
     ).proposed;
     const createdEvidence = await createRepoEntity(
       ctx,
@@ -487,6 +560,7 @@ describe("financial repositories — critical invariants", () => {
         {
           ...row,
           key: "corrected-statement",
+          providerTransactionId: null,
           originalStatement: "AMZN MKTP CORRECTED",
         },
       ],
@@ -524,6 +598,7 @@ describe("financial repositories — critical invariants", () => {
         {
           ...row,
           key: "possible-existing",
+          providerTransactionId: null,
           date: "2026-07-30",
           amount: -12.34,
           originalStatement: "MANUAL STATEMENT LINE",
@@ -571,6 +646,8 @@ describe("financial repositories — critical invariants", () => {
             ...row,
             key: `identity-only-account-${digits}`,
             account: `Unmapped Visa (...${digits})`,
+            providerTransactionId: null,
+            providerAccountId: null,
             originalStatement: "IDENTITY-ONLY LINE",
           },
         ],
@@ -601,6 +678,8 @@ describe("financial repositories — critical invariants", () => {
         {
           ...row,
           key: "ambiguous-digits",
+          providerTransactionId: null,
+          providerAccountId: null,
           account: "Unmapped Visa (...9997)",
           originalStatement: "AMBIGUOUS LINE",
         },
@@ -627,6 +706,8 @@ describe("financial repositories — critical invariants", () => {
       amount: -12.34,
       originalStatement: "FINGERPRINTED LINE",
       importFingerprint: "fp-1",
+      providerTransactionId: null,
+      providerAccountId: null,
     };
     const fingerprintedDuplicates = await previewFinancialTransactionImport(
       ctx.db,
@@ -685,6 +766,8 @@ describe("financial repositories — critical invariants", () => {
           ...row,
           key: "unknown-account",
           account: "Unmapped Visa (...9998)",
+          providerTransactionId: null,
+          providerAccountId: null,
           originalStatement: "OTHER MERCHANT",
         },
       ],
@@ -704,7 +787,15 @@ describe("financial repositories — critical invariants", () => {
     // charge already exists within the date window, so attaching that evidence
     // requires review rather than creating another charge.
     const otherProvider = await previewFinancialTransactionImport(ctx.db, {
-      rows: [{ ...row, key: "copilot-view", source: "copilot" }],
+      rows: [
+        {
+          ...row,
+          key: "copilot-view",
+          source: "copilot",
+          importFingerprint: "synthetic-copilot-retained",
+          rowPosition: 1,
+        },
+      ],
     });
     expect(otherProvider.rows[0]?.status).toBe("possible_existing");
     expect(otherProvider.rows[0]?.existingTransactionIds).toEqual([
@@ -717,8 +808,54 @@ describe("financial repositories — critical invariants", () => {
       proposed.sourceRef.externalId,
     );
 
-    // Both providers' refs can live on one transaction: uniqueness is per
-    // (source, externalId) pair, not per externalId.
+    await recordSourceTransactionRecords(
+      ctx.db,
+      recordSourceTransactionRecordsInput.parse({
+        import: {
+          source: "copilot",
+          label: "Synthetic second provider",
+          fingerprint: "synthetic-copilot-retained",
+        },
+        rows: [
+          {
+            rowPosition: 1,
+            accountDescriptor: row.account,
+            statementDate: row.date,
+            providerAmount: row.amount,
+            merchant: row.merchant,
+            rawDescription: row.originalStatement,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const [copilotSource] = (
+      await listSourceTransactionRecords(ctx.db, { source: "copilot" })
+    ).data;
+    if (!copilotSource) throw new Error("Synthetic Copilot occurrence missing");
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: {
+          source: "copilot",
+          externalIds: [copilotSource.externalId],
+        },
+        data: { accountId: createdAccount.id },
+      },
+      ctx.actor,
+    );
+    const retainedCopilot = await previewFinancialTransactionImport(ctx.db, {
+      rows: [
+        {
+          ...row,
+          key: "copilot-retained",
+          source: "copilot",
+          importFingerprint: "synthetic-copilot-retained",
+          rowPosition: 1,
+        },
+      ],
+    });
+    // Explicit review may accept two independently proven source occurrences on one transaction.
     const merged = await updateFinancialTransaction(
       ctx.db,
       createdEvidence.output.id,
@@ -726,8 +863,8 @@ describe("financial repositories — critical invariants", () => {
         sourceRefs: [
           proposed.sourceRef,
           requireTestValue(
-            otherProvider.rows[0],
-            "Expected the Copilot preview row.",
+            retainedCopilot.rows[0],
+            "Expected the retained Copilot preview row.",
           ).proposed.sourceRef,
         ],
       },
@@ -738,7 +875,13 @@ describe("financial repositories — critical invariants", () => {
     const bothRecorded = await previewFinancialTransactionImport(ctx.db, {
       rows: [
         { ...row, key: "monarch-again" },
-        { ...row, key: "copilot-again", source: "copilot" },
+        {
+          ...row,
+          key: "copilot-again",
+          source: "copilot",
+          importFingerprint: "synthetic-copilot-retained",
+          rowPosition: 1,
+        },
       ],
     });
     expect(bothRecorded.rows.map((item) => item.status)).toEqual([
@@ -818,11 +961,28 @@ describe("financial repositories — critical invariants", () => {
     const { rows: retained } = await getDb(ctx.db).execute<{
       externalId: string;
     }>(sql`
-      SELECT r."externalId" FROM "SourceTransactionRecord" r
+      SELECT r."chargeKey" AS "externalId" FROM ${sourceObservations} r
       JOIN "TransactionImport" i ON i.id = r."batchId"
       WHERE i.fingerprint = ${fingerprints[0]} AND r."deletedAt" IS NULL
     `);
 
+    const [sourceRow] = (
+      await listSourceTransactionRecords(ctx.db, {
+        importFingerprint: fingerprints[0],
+      })
+    ).data;
+    if (!sourceRow) throw new Error("Synthetic cached source missing");
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: {
+          source: sourceRow.source,
+          externalIds: [sourceRow.externalId],
+        },
+        data: { accountId: createdAccount.id },
+      },
+      ctx.actor,
+    );
     await createRepoEntity(ctx, "financialTransaction", {
       accountId: createdAccount.id,
       kind: proposed.kind,
@@ -1076,7 +1236,7 @@ describe("financial repositories — critical invariants", () => {
     ).resolves.toBeDefined();
   });
 
-  it("blocks account deletion, rejects cross-row source collisions, and preserves purchase-only updates", async () => {
+  it("blocks account deletion, retains ambiguous aliases, and preserves purchase-only updates", async () => {
     const a = (
       await createFinancialAccount(
         ctx.db,

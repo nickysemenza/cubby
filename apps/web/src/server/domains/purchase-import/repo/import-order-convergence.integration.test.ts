@@ -41,6 +41,11 @@ import {
   proposePhotoGroups,
 } from "~/server/domains/photo-import/repo/run/proposals";
 import { stagePhotoImport } from "~/server/domains/photo-import/service/photo-import-stage.service";
+import {
+  sourceObservationColumns,
+  sourceObservationFrom,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
+import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { executeEntity } from "~/server/entity-kernel";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -373,12 +378,25 @@ async function createConvergenceHarness(ctx: TestDbContext) {
       where: eq(schema.financialAccount.id, cardId),
     });
     const evidence = recorded.batchId
-      ? await database.query.sourceTransactionRecord.findFirst({
-          where: eq(schema.sourceTransactionRecord.batchId, recorded.batchId),
-        })
+      ? (
+          await database
+            .select(sourceObservationColumns)
+            .from(sourceObservationFrom)
+            .where(eq(schema.sourceTransactionRecord.batchId, recorded.batchId))
+        )[0]
       : undefined;
     if (!account || !evidence)
       throw new Error("Convergence card or evidence missing");
+    await updateSourceTransactionRecords(
+      db,
+      {
+        selector: { source, externalIds: [evidence.externalId] },
+        data: {
+          accountId: parseShortcodeFor("financialAccount", account.shortcode),
+        },
+      },
+      actor,
+    );
     await executeEntity(kernel, {
       action: "create",
       entity: "financialTransaction",
@@ -390,7 +408,7 @@ async function createConvergenceHarness(ctx: TestDbContext) {
         postedDate: "2026-09-12",
         merchant: names.name,
         rawDescription: names.sourceTransactionRecord.rawDescription,
-        sourceRefs: [{ source, externalId: evidence.externalId }],
+        sourceRefs: [{ source, externalId: evidence.chargeKey }],
       }),
     });
     const transaction = await database.query.financialTransaction.findFirst({

@@ -325,6 +325,8 @@ export type CompiledEntityTable = Readonly<{
   columns: readonly EntityTableColumn[];
   indexes: readonly EntityTableIndex[];
   checks: readonly EntityTableCheck[];
+  foreignKeys: ChildTableMetadata["foreignKeys"];
+  uniqueKeys: readonly { name: string; columns: readonly string[] }[];
   relations: readonly EntityTableRelation[];
 }>;
 export type CompiledPresentation = CompiledEntityPresentation;

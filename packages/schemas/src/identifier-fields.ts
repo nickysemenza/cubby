@@ -84,6 +84,7 @@ export const expenseId = ENTITY_ID_SCHEMA.expense;
 export const sourceTransactionRecordId =
   ENTITY_ID_SCHEMA.sourceTransactionRecord;
 export const transactionImportId = ENTITY_ID_SCHEMA.transactionImport;
+export const sourceOccurrenceId = ENTITY_ID_SCHEMA.sourceOccurrence;
 export const financialAccountId = ENTITY_ID_SCHEMA.financialAccount;
 export const financialTransactionId = ENTITY_ID_SCHEMA.financialTransaction;
 export const vendorId = ENTITY_ID_SCHEMA.vendor;
@@ -114,6 +115,7 @@ export type ProjectId = EntityId<"project">;
 export type TaskId = EntityId<"task">;
 export type ExpenseId = EntityId<"expense">;
 export type SourceTransactionRecordId = EntityId<"sourceTransactionRecord">;
+export type SourceOccurrenceId = EntityId<"sourceOccurrence">;
 export type TransactionImportId = EntityId<"transactionImport">;
 export type FinancialAccountId = EntityId<"financialAccount">;
 export type FinancialTransactionId = EntityId<"financialTransaction">;

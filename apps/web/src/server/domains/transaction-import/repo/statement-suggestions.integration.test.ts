@@ -36,12 +36,11 @@ import * as databaseHelpers from "~/server/db/helpers";
 import {
   suggestionTable,
   runStep,
-  transactionImportRecord,
   expense,
   financialTransaction,
   financialTransactionAllocation,
   spendingCategory,
-  sourceTransactionRecord,
+  sourceOccurrence,
 } from "~/server/db/schema";
 import * as statementPreview from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -84,6 +83,7 @@ import {
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
+import { sourceObservationFrom } from "./source-observation-state";
 import {
   getSourceTransactionRecordSummary,
   recordSourceTransactionRecords,
@@ -125,6 +125,16 @@ const rowInput = (
   providerStatus: "posted" as const,
   providerNotes: null,
   rowPosition: ++position,
+  ...(overrides.providerTransactionId
+    ? {
+        providerAccountId:
+          overrides.accountDescriptor ?? "Synthetic Card (...4242)",
+        providerData: {
+          id: overrides.providerTransactionId,
+          account_id: overrides.accountDescriptor ?? "Synthetic Card (...4242)",
+        },
+      }
+    : {}),
   ...overrides,
 });
 
@@ -162,19 +172,59 @@ async function statementSpendingAdvice(
   return advice;
 }
 
-const record = (
+const observedCollections = new WeakMap<object, Map<string, string>>();
+let collectionOrder = 0;
+const record = async (
   ctx: Ctx,
   rows: SourceTransactionRecordInput[],
   importOverrides: Partial<TransactionImportInput> = {},
-) =>
-  recordSourceTransactionRecords(
+) => {
+  const collections =
+    observedCollections.get(ctx.db) ?? new Map<string, string>();
+  const collection = importInput(importOverrides);
+  const observedAt =
+    collection.observedAt ??
+    collections.get(collection.fingerprint) ??
+    new Date(Date.UTC(2026, 5, 1) + ++collectionOrder * 1000).toISOString();
+  collections.set(collection.fingerprint, observedAt);
+  observedCollections.set(ctx.db, collections);
+  const receipt = await recordSourceTransactionRecords(
     ctx.db,
     recordSourceTransactionRecordsInput.parse({
-      import: importInput(importOverrides),
+      import: { ...collection, observedAt },
       rows,
     }),
     ctx.actor,
   );
+  // These label fixtures explicitly review changed provider frontiers. Production intake keeps unordered revisions held.
+  for (const row of rows.filter((row) => row.providerTransactionId)) {
+    const observations = (
+      await listSourceTransactionRecords(ctx.db, { source: collection.source })
+    ).data.filter(
+      (observation) =>
+        observation.providerTransactionId === row.providerTransactionId,
+    );
+    const head = observations.find(
+      (observation) => observation.importFingerprint === collection.fingerprint,
+    );
+    const previous = observations.find(
+      (observation) => observation.id !== head?.id,
+    );
+    if (head && previous && !head.current)
+      await updateSourceTransactionRecords(
+        ctx.db,
+        {
+          selector: {
+            source: collection.source,
+            externalIds: [previous.externalId],
+          },
+          data: { supersededByExternalId: head.externalId },
+        },
+        ctx.actor,
+      );
+  }
+  return receipt;
+};
 
 const card = async (ctx: Ctx) => {
   const owner = await createRepoIdentity(ctx, "ledgerParty", {
@@ -197,7 +247,7 @@ const card = async (ctx: Ctx) => {
       {
         source: "monarch",
         alias: "Synthetic Card (...4242)",
-        externalAccountId: null,
+        externalAccountId: "Synthetic Card (...4242)",
       },
     ],
   });
@@ -1378,7 +1428,7 @@ describe("statement Transaction suggestions", () => {
       source: string;
       chargeKey: string;
     }>(
-      sql`SELECT source, "chargeKey" FROM "SourceTransactionRecord" WHERE "deletedAt" IS NULL`,
+      sql`SELECT source, "chargeKey" FROM ${sourceObservationFrom} WHERE "deletedAt" IS NULL`,
     );
     const charges = rows.map(({ source, chargeKey }) => ({
       source,
@@ -1469,7 +1519,7 @@ describe("statement Transaction suggestions", () => {
       await getSourceTransactionRecordSummary(ctx.db, {
         matchState: "unmatched",
       }),
-    ).toMatchObject({ unmatched: 4, unmatchedCharges: 2 });
+    ).toMatchObject({ unmatched: 2, unmatchedCharges: 2 });
 
     expect(await generate(ctx)).toBe(2);
     expect(await generate(ctx)).toBe(0);
@@ -1576,7 +1626,7 @@ describe("statement Transaction suggestions", () => {
       externalId: string;
       chargeKey: string;
     }>(sql`
-      SELECT source,"externalId","chargeKey" FROM "SourceTransactionRecord"
+      SELECT source,"externalId","chargeKey" FROM ${sourceObservationFrom}
       WHERE "deletedAt" IS NULL ORDER BY source,"chargeKey"`);
     await updateSourceTransactionRecords(
       ctx.db,
@@ -1628,64 +1678,23 @@ describe("statement Transaction suggestions", () => {
     ).toEqual([rows[2]!.chargeKey, rows[4]!.chargeKey].sort());
   });
 
-  // Equal content in independent delta collections cannot inherit another
-  // occurrence's settlement or ignore decision without an upstream identity.
-  it.each(["settled", "ignored"] as const)(
-    "keeps an identical ID-less delta observation actionable after the other is %s",
-    async (decision) => {
-      await card(ctx);
-      const observed = rowInput({ rowPosition: 1 });
-      await record(ctx, [observed], { fingerprint: "synthetic-idless-first" });
-      const [first] = (await listSourceTransactionRecords(ctx.db, {})).data;
-      await record(ctx, [observed], { fingerprint: "synthetic-idless-second" });
-      const [second] = (
-        await listSourceTransactionRecords(ctx.db, {
-          importFingerprint: "synthetic-idless-second",
-        })
-      ).data;
-      expect(second!.legacyExternalId).toBe(first!.legacyExternalId);
-      expect(second!.chargeKey).not.toBe(first!.chargeKey);
-      expect(second!.externalId).not.toBe(first!.externalId);
-      await generate(ctx);
-      const pending = await readPendingStatements(ctx);
-      expect(pending).toHaveLength(2);
-      const reviewed = pending.find(
-        (row) => row.chargeKey === first!.chargeKey,
-      )!;
-      if (decision === "settled") {
-        await accept(ctx, reviewed);
-      } else {
-        await updateSourceTransactionRecords(
-          ctx.db,
-          {
-            selector: {
-              source: first!.source,
-              externalIds: [first!.externalId],
-            },
-            data: {
-              disposition: "ignored",
-              dispositionReason: "not_modeled",
-              dispositionNote: "Synthetic observation reviewed independently.",
-            },
-          },
-          ctx.actor,
-        );
-      }
-      await generate(ctx);
-      const after = (await listSourceTransactionRecords(ctx.db, {})).data;
-      expect(after.find((row) => row.id === first!.id)).toMatchObject({
-        matchState: decision === "settled" ? "matched" : "ignored",
-      });
-      expect(after.find((row) => row.id === second!.id)).toMatchObject({
-        matchState: "unmatched",
-        transactionId: null,
-        disposition: "open",
-      });
-      expect(await readPendingStatements(ctx)).toMatchObject([
-        { chargeKey: second!.chargeKey },
-      ]);
-    },
-  );
+  it("holds overlapping unattested collections without creating member work or changing money", async () => {
+    await card(ctx);
+    const observed = rowInput({ rowPosition: 1 });
+    await record(ctx, [observed], { fingerprint: "synthetic-idless-first" });
+    await record(ctx, [observed], { fingerprint: "synthetic-idless-second" });
+    const retained = (await listSourceTransactionRecords(ctx.db, {})).data;
+    expect(retained).toHaveLength(2);
+    expect(new Set(retained.map((row) => row.chargeKey)).size).toBe(2);
+    await generate(ctx);
+    expect(await readPendingStatements(ctx)).toHaveLength(1);
+    expect(retained.every((row) => row.transactionId === null)).toBe(true);
+    expect(retained.map((row) => row.matchState).sort()).toEqual([
+      "held",
+      "unmatched",
+    ]);
+    expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
+  });
 
   // Failure modes: the settlement-ref trigger supersedes the suggestion being
   // applied; a second accept creates a twin; the row stays unmatched.
@@ -1854,7 +1863,7 @@ describe("statement Transaction suggestions", () => {
       chargeKey: string;
     }>(sql`
       SELECT source, "chargeKey"
-      FROM "SourceTransactionRecord" WHERE "deletedAt" IS NULL ORDER BY source, "chargeKey"
+      FROM ${sourceObservationFrom} WHERE "deletedAt" IS NULL ORDER BY source, "chargeKey"
     `);
     const removeFailure = await rejectStatementPublication(
       ctx,
@@ -1936,7 +1945,7 @@ describe("statement Transaction suggestions", () => {
         failed: [
           {
             ref: "charge:synthetic:missing",
-            message: expect.stringContaining("not found"),
+            message: expect.stringContaining("requires source identity"),
           },
         ],
       });
@@ -1954,6 +1963,17 @@ describe("statement Transaction suggestions", () => {
     const [observation] = (await listSourceTransactionRecords(ctx.db, {})).data;
     if (!pending || !observation)
       throw new Error("Missing synthetic recovery evidence");
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: {
+          source: observation.source,
+          externalIds: [observation.externalId],
+        },
+        data: { accountId: account.id },
+      },
+      ctx.actor,
+    );
     await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "account_transfer",
@@ -1962,7 +1982,7 @@ describe("statement Transaction suggestions", () => {
       transactionDate: "2026-05-04",
       postedDate: "2026-05-04",
       sourceRefs: [
-        { source: observation.source, externalId: observation.externalId },
+        { source: observation.source, externalId: observation.chargeKey },
       ],
     });
     // Recreate only the stale projection a missed after-commit retirement left.
@@ -2030,6 +2050,17 @@ describe("statement Transaction suggestions", () => {
     ]);
     const [observation] = (await listSourceTransactionRecords(ctx.db, {})).data;
     if (!observation) throw new Error("Missing synthetic source observation");
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: {
+          source: observation.source,
+          externalIds: [observation.externalId],
+        },
+        data: { accountId: account.id },
+      },
+      ctx.actor,
+    );
     await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "purchase",
@@ -2037,7 +2068,7 @@ describe("statement Transaction suggestions", () => {
       amount: 42.5,
       transactionDate: "2026-05-04",
       sourceRefs: [
-        { source: observation.source, externalId: observation.externalId },
+        { source: observation.source, externalId: observation.chargeKey },
       ],
     });
     await generate(ctx);
@@ -2185,89 +2216,6 @@ describe("statement Transaction suggestions", () => {
 
   // Physical positions prove genuine purchases; historical membership and
   // Unicode descriptor differences must not hide an unresolved extra occurrence.
-  it("requires occurrence proof before clearing same-amount sibling review", async () => {
-    await card(ctx);
-    await record(ctx, [
-      rowInput({ rawDescription: "EXAMPLE MKTPLACE PMTS" }),
-      rowInput({ rawDescription: "EXAMPLE MKTPL*AB12CD34" }),
-    ]);
-    await generate(ctx);
-    expect(
-      (await readPendingStatements(ctx)).map((row) => row.siblings),
-    ).toEqual([0, 0]);
-    await record(
-      ctx,
-      [
-        rowInput({
-          accountDescriptor: "Ｓynthetic Card (...4242)",
-          rawDescription: "EXAMPLE MKTPL*EF56GH78",
-        }),
-      ],
-      { fingerprint: "fp-firmed" },
-    );
-    await generate(ctx);
-    const rows = await readPendingStatements(ctx);
-    expect(rows).toHaveLength(3);
-    expect(rows.every((row) => !row.clean && row.siblings > 0)).toBe(true);
-
-    const retained = await getDb(ctx.db).select().from(sourceTransactionRecord);
-    const positioned = retained.find(
-      (row) => row.rawDescription === "EXAMPLE MKTPLACE PMTS",
-    )!;
-    const historical = retained.find(
-      (row) => row.rawDescription === "EXAMPLE MKTPL*EF56GH78",
-    )!;
-    const previous = rows.find(
-      (row) => row.chargeKey === historical.chargeKey,
-    )!;
-    // Intake refuses new unpositioned rows; emulate retained historical surplus.
-    await getDb(ctx.db)
-      .update(sourceTransactionRecord)
-      .set({ rowPosition: null })
-      .where(eq(sourceTransactionRecord.id, historical.id));
-    await getDb(ctx.db).insert(transactionImportRecord).values({
-      importId: positioned.batchId,
-      statementRowId: historical.id,
-    });
-    await expect(
-      previewStatementSuggestion(ctx.db, {
-        assessmentId: previous.assessmentId,
-        expectedFingerprint: previous.fingerprint,
-        application: { kind: "statement_transaction", action: "create" },
-      }),
-    ).rejects.toThrow(/source occurrence|evidence changed/i);
-    await generate(ctx);
-    const after = await readPendingStatements(ctx);
-    expect(after).toHaveLength(3);
-    expect(after.every((row) => !row.clean && row.siblings > 0)).toBe(true);
-
-    // Removing live peers cannot turn an unproven historical occurrence into money.
-    await getDb(ctx.db)
-      .update(sourceTransactionRecord)
-      .set({ deletedAt: new Date() })
-      .where(
-        inArray(
-          sourceTransactionRecord.id,
-          retained
-            .filter((row) => row.id !== historical.id)
-            .map((row) => row.id),
-        ),
-      );
-    await generate(ctx);
-    const held = (await readPendingStatements(ctx)).find(
-      (row) => row.chargeKey === historical.chargeKey,
-    );
-    expect(held).toMatchObject({
-      clean: false,
-      siblings: 0,
-      reviewReason: expect.stringMatching(/source occurrence/),
-    });
-    if (!held) throw new Error("Missing occurrence review hold");
-    await expect(accept(ctx, held)).rejects.toThrow(/source occurrence/);
-    expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
-  });
-
   // Matching statement labels must not replace the attach target's actual kind.
   it("keeps an attach to a non-spending transaction out of clean booking despite matching statement labels", async () => {
     const account = (await card(ctx)).output;
@@ -2794,6 +2742,14 @@ describe("statement Transaction suggestions", () => {
         counterparty: { label: "business" },
       },
     });
+    const [original] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!original?.legacyExternalId)
+      throw new Error("Synthetic retained alias missing");
+    const legacyKey = original.legacyExternalId;
+    await getDb(ctx.db).execute(
+      sql`UPDATE "Suggestion" SET data=jsonb_set(data,'{chargeKey}',to_jsonb(${legacyKey}::text)), subject=jsonb_set(subject,'{chargeKey}',to_jsonb(${legacyKey}::text)) WHERE id=${before!.assessmentId}::uuid`,
+    );
+    await expect(accept(ctx, before!)).rejects.toThrow(/explicit review/);
     await record(
       ctx,
       [{ ...observed, rowPosition: 10, providerNotes: "Synthetic memo" }],
@@ -2823,11 +2779,33 @@ describe("statement Transaction suggestions", () => {
       },
       model: before!.model,
     });
+    expect(await stateOf(ctx, before!.assessmentId)).toMatchObject({
+      active: false,
+      status: "superseded",
+    });
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      operationId: "synthetic-obsolete-dismissal",
+      assessmentId: before!.assessmentId,
+      verdict: "dismissed",
+      intent: "history",
+      suppression: {
+        scope: "statement_transaction",
+        candidateKey: `${original.source}:${legacyKey}`,
+        fingerprint: null,
+      },
+      evidence: { note: "Dismiss obsolete held advice only" },
+    });
+    const [obsolete] = await getDb(ctx.db)
+      .select({ suppression: suggestionTable.suppression })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, before!.assessmentId));
+    expect(obsolete?.suppression).toBeNull();
+    expect(await readPendingStatements(ctx)).toHaveLength(1);
     await accept(ctx, after!);
     expect(
-      (await listSourceTransactionRecords(ctx.db, {})).data.every(
-        (row) => row.matchState === "matched",
-      ),
+      (await listSourceTransactionRecords(ctx.db, {})).data
+        .filter((row) => row.current)
+        .every((row) => row.matchState === "matched"),
     ).toBe(true);
   });
 
@@ -4753,10 +4731,10 @@ describe("statement Transaction suggestions", () => {
     // A withdrawn head is absent unless its retained correction review allows it.
     for (const index of [6, 7])
       await getDb(ctx.db)
-        .update(sourceTransactionRecord)
+        .update(sourceOccurrence)
         .set({ withdrawnAt: new Date() })
         .where(
-          sql`${sourceTransactionRecord.source}='monarch' AND ${sourceTransactionRecord.externalId}=(SELECT data->>'headRef' FROM "Suggestion" WHERE id=${target(index).id}::uuid)`,
+          sql`${sourceOccurrence.shortcode}=(SELECT data->>'chargeKey' FROM "Suggestion" WHERE id=${target(index).id}::uuid)`,
         );
     const durableRun = await ensureRun(ctx.db, ctx.actor, {
       purpose: "sweep",
@@ -4841,74 +4819,6 @@ describe("statement Transaction suggestions", () => {
     ).toEqual([target(1).id, target(3).id]);
   });
 
-  it.each(["unresolved", "conflicting"])(
-    "discovers matched booking with %s source account evidence",
-    async (sourceResolution) => {
-      const account = (await card(ctx)).output;
-      const conflictingAccount =
-        sourceResolution === "conflicting"
-          ? (
-              await createRepoIdentity(ctx, "financialAccount", {
-                name: "Synthetic competing source account",
-                identity: {
-                  kind: "credit_card",
-
-                  network: "visa",
-                },
-                sourceAliases: [
-                  {
-                    source: "monarch",
-                    alias: "Synthetic historical account label",
-                    externalAccountId: null,
-                  },
-                ],
-              })
-            ).output
-          : null;
-      await record(ctx, [
-        rowInput({ accountDescriptor: "Synthetic historical account label" }),
-      ]);
-      const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
-      if (!source) throw new Error("Synthetic retained source missing");
-      const transaction = await createRepoIdentity(
-        ctx,
-        "financialTransaction",
-        {
-          accountId: account.id,
-          kind: "purchase",
-          status: "posted",
-          amount: 42.5,
-          postedDate: "2026-05-04",
-          merchant: "Example Grocer",
-          sourceRefs: [{ source: "monarch", externalId: source.externalId }],
-        },
-      );
-      const before = await getDb(ctx.db).select().from(sourceTransactionRecord);
-      await generate(ctx);
-      expect(await readPendingStatements(ctx)).toMatchObject([
-        {
-          recommended: "book",
-          accountId: conflictingAccount?.id ?? account.id,
-          matchedTransactionId: transaction.output.id,
-          ...(conflictingAccount
-            ? {
-                clean: false,
-                reviewReason:
-                  "The source account conflicts with the accepted transaction account; review the account evidence.",
-              }
-            : {}),
-        },
-      ]);
-      expect(
-        await getDb(ctx.db).select().from(sourceTransactionRecord),
-      ).toEqual(before);
-      expect(
-        await getDb(ctx.db).select().from(financialTransaction),
-      ).toHaveLength(1);
-      expect(await getDb(ctx.db).select().from(expense)).toHaveLength(0);
-    },
-  );
-
   // Failure modes: a ref attached on another path (the import page, an
   // agent's entity.update) leaves the suggestion live, and accepting it
   // records the charge twice.
@@ -4918,6 +4828,15 @@ describe("statement Transaction suggestions", () => {
     await generate(ctx);
     const [suggestion] = await readPendingStatements(ctx);
     const [row] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!row) throw new Error("Synthetic source missing");
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: { source: row.source, externalIds: [row.externalId] },
+        data: { accountId: account.id },
+      },
+      ctx.actor,
+    );
     await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "purchase",
@@ -4926,7 +4845,7 @@ describe("statement Transaction suggestions", () => {
       postedDate: "2026-05-04",
       merchant: "Example Grocer",
       rawDescription: "EXAMPLE GROCER 0001",
-      sourceRefs: [{ source: "monarch", externalId: row!.externalId }],
+      sourceRefs: [{ source: "monarch", externalId: row!.chargeKey }],
     });
     expect(await stateOf(ctx, suggestion!.assessmentId)).toMatchObject({
       status: "pending",

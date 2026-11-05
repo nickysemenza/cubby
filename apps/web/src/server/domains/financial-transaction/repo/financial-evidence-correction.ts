@@ -6,7 +6,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -27,11 +27,18 @@ import {
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import {
+  lockFinancialSourceOccurrences,
+  financialSourceRefsFor,
+} from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import {
+  sourceObservationColumns,
+  sourceObservationFrom,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
 import { isBlockedRefusal } from "~/server/errors/app-error";
 import { assertAutomaticRuleOn } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { ruleBase } from "~/server/generic/assessment/repo/automatic-rules";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 
 import {
   bookingGraph,
@@ -44,7 +51,9 @@ import {
 } from "./financial-convergence";
 import { updateFinancialTransaction } from "./financial-transaction";
 
-type Observation = typeof sourceTransactionRecord.$inferSelect;
+const correctionObservations = (db: Database) =>
+  getDb(db).select(sourceObservationColumns).from(sourceObservationFrom);
+type Observation = Awaited<ReturnType<typeof correctionObservations>>[number];
 type EvidenceVerification =
   | { status: "verified" }
   | { status: "review"; reason: string };
@@ -87,13 +96,20 @@ async function loadCorrectionObservation(
   db: Database,
   input: FinancialEvidenceCorrectionInput,
 ): Promise<{ status: "verified"; observation: Observation } | Review> {
-  const observation = await getDb(db).query.sourceTransactionRecord.findFirst({
-    where: and(
-      eq(sourceTransactionRecord.source, input.source),
-      eq(sourceTransactionRecord.externalId, input.externalId),
-      notDeleted(sourceTransactionRecord),
-    ),
-  });
+  const [observation] = await correctionObservations(db)
+    .where(
+      and(
+        eq(sourceTransactionRecord.source, input.source),
+        eq(sourceObservationColumns.chargeKey, input.externalId),
+        eq(sourceObservationColumns.current, true),
+        notDeleted(sourceTransactionRecord),
+      ),
+    )
+    .limit(1);
+  if (observation?.reviewState !== "ready" || observation.occurrenceId === null)
+    return review(
+      "The source occurrence has unresolved identity, revision order or ownership.",
+    );
   if (!observation)
     return review("The retained source observation is missing.");
   if (input.amount === null) {
@@ -180,7 +196,7 @@ const hasSourceUpdates = (
 ) => previousRefs !== currentRefs || Object.keys(lifecycle).length > 0;
 
 function sourceLifecycle(
-  observation: typeof sourceTransactionRecord.$inferSelect,
+  observation: Observation,
   row: typeof financialTransaction.$inferSelect,
 ) {
   if (
@@ -224,7 +240,7 @@ function settledBeforeBookingGuards(
     ReturnType<FinancialEvidenceCorrectionInput["verifyCurrentEvidence"]>
   >,
   amount: number | null,
-  observation: typeof sourceTransactionRecord.$inferSelect,
+  observation: Observation,
   row: typeof financialTransaction.$inferSelect,
   addsReference: boolean,
 ): FinancialEvidenceCorrectionResult | null {
@@ -256,13 +272,7 @@ export async function reconcileFinancialEvidenceCorrection(
   return withSnapshotWrite(
     db,
     async (tx): Promise<FinancialEvidenceCorrectionResult> => {
-      await lockFinancialEvidenceKeys(tx, "reviewed-booking", [
-        input.transactionId,
-      ]);
       const txDb = databaseForTransaction(tx);
-      const source = await loadCorrectionObservation(txDb, input);
-      if (source.status === "review") return source;
-      const { observation } = source;
       const row = await tx.query.financialTransaction.findFirst({
         where: and(
           eq(financialTransaction.shortcode, input.transactionId),
@@ -270,41 +280,28 @@ export async function reconcileFinancialEvidenceCorrection(
         ),
       });
       if (!row) return review("The financial transaction is no longer live.");
+      await lockFinancialEvidenceKeys(tx, "reviewed-booking", [
+        `transaction:${row.id}`,
+      ]);
+      await lockFinancialSourceOccurrences(
+        tx,
+        [{ source: input.source, externalId: input.externalId }],
+        row.id,
+      );
+      const source = await loadCorrectionObservation(txDb, input);
+      if (source.status === "review") return source;
+      const { observation } = source;
+      if (observation.acceptedTransactionId !== row.id)
+        return review(
+          "The source occurrence is not accepted evidence for this transaction.",
+        );
       if (observation.accountId !== row.accountId)
         return review(
-          "The source observation does not identify the transaction's account.",
+          "The source occurrence does not identify the transaction's account.",
         );
-      const refs = (await settlementRefsFor(txDb, [row.id])).get(row.id) ?? [];
-      const sourceRefs = refs.filter((ref) => ref.source === input.source);
-      const acceptedObservation = sourceRefs.length
-        ? await tx.query.sourceTransactionRecord.findFirst({
-            where: and(
-              eq(sourceTransactionRecord.source, input.source),
-              eq(sourceTransactionRecord.chargeKey, observation.chargeKey),
-              or(
-                inArray(
-                  sourceTransactionRecord.externalId,
-                  sourceRefs.map((ref) => ref.externalId),
-                ),
-                inArray(
-                  sourceTransactionRecord.legacyReference,
-                  sourceRefs.map((ref) => ref.externalId),
-                ),
-              ),
-              notDeleted(sourceTransactionRecord),
-            ),
-          })
-        : undefined;
-      if (!acceptedObservation)
-        return review(
-          "The source charge is not accepted evidence for this transaction.",
-        );
-      const nextRefs = refs.some(
-        (ref) =>
-          ref.source === input.source && ref.externalId === input.externalId,
-      )
-        ? refs
-        : [...refs, { source: input.source, externalId: input.externalId }];
+      const refs =
+        (await financialSourceRefsFor(txDb, [row.id])).get(row.id) ?? [];
+      const nextRefs = refs;
       const settled = settledBeforeBookingGuards(
         await input.verifyCurrentEvidence(txDb, observation),
         input.amount,

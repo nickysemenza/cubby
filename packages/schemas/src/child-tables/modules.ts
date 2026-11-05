@@ -5,8 +5,10 @@ import { emailFinancialAssociationChildren } from "./email-financial-association
 import { importObservationChildren } from "./import-observations.js";
 import { imageProcessingChildren } from "./image-processing.js";
 import { defineChildTable } from "../entity-definitions/child-definition.js";
+import { financialEvidenceChildren } from "./financial-evidence";
 
 export const modulesChildren = [
+  ...financialEvidenceChildren,
   ...assessmentChildren,
   ...importObservationChildren,
   ...emailObservationChildren,
@@ -254,6 +256,8 @@ export const modulesChildren = [
         notNull: true,
         reference: { table: "sourceTransactionRecord", column: "id" },
       },
+      { key: "rowPosition", kind: "integer" },
+      { key: "requestFingerprint", kind: "text" },
       {
         key: "createdAt",
         kind: "timestamp",
@@ -268,18 +272,18 @@ export const modulesChildren = [
         on: ["importId", "statementRowId"],
       },
       { name: "TransactionImportRecord_row_idx", on: ["statementRowId"] },
+      {
+        name: "TransactionImportRecord_position_key",
+        unique: true,
+        on: ["importId", "rowPosition"],
+        where: "{rowPosition} IS NOT NULL",
+      },
+    ],
+    checks: [
+      {
+        name: "TransactionImportRecord_position_check",
+        sql: "{rowPosition} IS NULL OR {rowPosition} > 0",
+      },
     ],
   }),
-  /**
-   * One verbatim row from a provider export.
-   *
-   * Match state is **derived**, not stored: a row is matched when a live
-   * `settlement_ref` `EntityExternalId` names its `(source, externalId)` pair.
-   * That join needs no DISTINCT because the live `(source, kind, externalId)`
-   * unique allows one owner per pair.
-   *
-   * The provider columns are immutable after ingest; the only mutable fields are
-   * the judgments an agent explicitly writes (`accountId`, `disposition*`,
-   * `supersededByRowId`, `notes`).
-   */
 ];

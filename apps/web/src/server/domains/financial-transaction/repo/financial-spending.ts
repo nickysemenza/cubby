@@ -11,6 +11,7 @@ import {
   type FinancialSpendingPlan,
 } from "@cubby/schemas/financial-booking";
 import { financialTransactionSettlementViolation } from "@cubby/schemas/financial-transaction";
+import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
 import { parseShortcodeFor, parseEntityId } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -42,7 +43,11 @@ import {
   financialAccountPurchaser,
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
-import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import {
+  financialSourceRefsFor,
+  financialSourceRefsIncluding,
+} from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   planPurchaseRetainedSettlement,
   prepareRetainedSettlementDiscovery,
@@ -51,11 +56,6 @@ import {
 } from "~/server/domains/purchase-import/repo/retained-settlement";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { AppError, createAppError } from "~/server/errors/app-error";
-import {
-  settlementRefsFor,
-  settlementRefsIncluding,
-  type SettlementRef,
-} from "~/server/generic/entity-links/repo/entity-external-ids";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   canonicalJson,
@@ -196,7 +196,7 @@ export async function prepareFinancialSpendingPage(
   for (const transaction of transactions)
     transactionsById.set(transaction.shortcode, transaction);
   const transactionIds = transactions.map((row) => row.id);
-  const references = await settlementRefsFor(db, transactionIds);
+  const references = await financialSourceRefsFor(db, transactionIds);
   const allocations = transactionIds.length
     ? await getDb(db).query.financialTransactionAllocation.findMany({
         where: and(
@@ -408,7 +408,7 @@ async function spendingFacts(
         accountId: account.shortcode,
         sourceRefs: page
           ? [...(page.references.get(row.id) ?? [])]
-          : ((await settlementRefsFor(db, [row.id])).get(row.id) ?? []),
+          : ((await financialSourceRefsFor(db, [row.id])).get(row.id) ?? []),
       })
     : financialSpendingSource.parse(request.source);
   source.sourceRefs.sort(
@@ -1357,7 +1357,7 @@ export async function previewFinancialSpending(
   db: Database,
   raw: z.input<typeof financialSpendingRequest>,
   attachment?: {
-    settlementRef: SettlementRef;
+    settlementRef: FinancialTransactionSourceRef;
     fields?: Partial<
       Pick<
         z.infer<typeof financialSpendingSource>,
@@ -1372,7 +1372,7 @@ export async function previewFinancialSpending(
   // Preview an impending reference attachment without duplicating its charge.
   // Commit still requires that reference to exist in retained evidence.
   if (attachment && facts.row) {
-    facts.source.sourceRefs = await settlementRefsIncluding(
+    facts.source.sourceRefs = await financialSourceRefsIncluding(
       db,
       facts.row.id,
       attachment.settlementRef,
@@ -1652,7 +1652,7 @@ export async function commitFinancialSpending(
     db,
     async (tx) => {
       const txDb = databaseForTransaction(tx);
-      await lockFinancialEvidenceKeys(tx, "reviewed-booking", [transactionId]);
+      await lockFinancialTransactionSources(tx, [transactionId]);
       const fresh = await previewFinancialSpending(txDb, {
         ...plan.request,
         source: undefined,

@@ -38,6 +38,7 @@ import {
   productCategoryId,
   startSuggestionSweep,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { sourceObservationFrom } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
@@ -319,7 +320,7 @@ describe("clean import booking controls", () => {
       });
       const withdrawals = () =>
         getDb(ctx.db).execute(sql`
-        SELECT id, "withdrawnAt", "withdrawalImportId" FROM "SourceTransactionRecord" ORDER BY id
+        SELECT id, "withdrawnAt", "withdrawalImportId" FROM ${sourceObservationFrom} ORDER BY id
       `);
       const beforeWithdrawals = await withdrawals();
       const result = await labelStatementSuggestions(ctx.db, {

@@ -20,11 +20,17 @@ import {
   financialTransactionAllocation,
   product as productTable,
   sourceTransactionRecord,
+  sourceOccurrence,
   transactionImport,
 } from "~/server/db/schema";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import {
+  sourceObservationColumns,
+  sourceObservationFrom,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
+import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
@@ -101,7 +107,18 @@ const record = (
     ctx.db,
     recordSourceTransactionRecordsInput.parse({
       import: importInput(overrides),
-      rows,
+      rows: rows.map((row) =>
+        row.providerTransactionId
+          ? {
+              ...row,
+              providerAccountId: "synthetic-list-account",
+              providerData: {
+                id: row.providerTransactionId,
+                account_id: "synthetic-list-account",
+              },
+            }
+          : row,
+      ),
     }),
     ctx.actor,
   );
@@ -201,7 +218,7 @@ describe("cross-family Suggestion list", () => {
         })
       ).items,
     ).toHaveLength(1);
-    await getDb(ctx.db).update(sourceTransactionRecord).set({
+    await getDb(ctx.db).update(sourceOccurrence).set({
       disposition: "ignored",
       dispositionReason: "not_modeled",
       dispositionNote: "Synthetic unmodeled charge",
@@ -326,8 +343,8 @@ describe("cross-family Suggestion list", () => {
     ]);
     await generate(ctx);
     const [source] = await getDb(ctx.db)
-      .select()
-      .from(sourceTransactionRecord)
+      .select(sourceObservationColumns)
+      .from(sourceObservationFrom)
       .where(
         eq(
           sourceTransactionRecord.providerTransactionId,
@@ -365,13 +382,21 @@ describe("cross-family Suggestion list", () => {
       costType: "materials",
       trade: "building",
     });
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: { source: source.source, externalIds: [source.externalId] },
+        data: { accountId: account.id },
+      },
+      ctx.actor,
+    );
     await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "purchase",
       status: "posted",
       amount: 42.5,
       postedDate: "2026-05-04",
-      sourceRefs: [{ source: "monarch", externalId: source.externalId }],
+      sourceRefs: [{ source: "monarch", externalId: source.chargeKey }],
       allocations: [{ purchaseId: purchase.output.id, amount: 42.5 }],
     });
     const expenseId = await resolveOrThrow(
@@ -1092,6 +1117,33 @@ describe("cross-family Suggestion list", () => {
     await record(ctx, [rowInput({ providerAmount: -73 })], {
       fingerprint: "fp-list-unrelated",
     });
+    const history = await getDb(ctx.db)
+      .select(sourceObservationColumns)
+      .from(sourceObservationFrom);
+    const previous = history.find(
+      (row) =>
+        row.providerTransactionId &&
+        row.rawDescription === "EXAMPLE GROCER 0001",
+    );
+    const selectedRevision = history.find(
+      (row) =>
+        row.providerTransactionId &&
+        row.rawDescription === "EXAMPLE GROCER REVISED",
+    );
+    if (!previous || !selectedRevision)
+      throw new Error("Synthetic collection revision missing");
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: {
+          source: previous.source,
+          externalIds: [previous.externalId],
+        },
+        data: { supersededByExternalId: selectedRevision.externalId },
+      },
+      ctx.actor,
+    );
+
     await generate(ctx);
     const observations = await getDb(ctx.db)
       .select({

@@ -2812,6 +2812,16 @@ const buildMetadataSchemas = () => {
     columns: z.array(entityTableColumnMetadataSchema).optional().default([]),
     indexes: z.array(entityTableIndexMetadataSchema).optional().default([]),
     checks: z.array(entityTableCheckMetadataSchema).optional().default([]),
+    foreignKeys: childTableMetadataSchema.shape.foreignKeys,
+    uniqueKeys: z
+      .array(
+        z.strictObject({
+          name: z.string().min(1),
+          columns: z.array(z.string().min(1)).min(1),
+        }),
+      )
+      .optional()
+      .default([]),
     /** Reference column key → why it has no index of its own. */
     unindexedReferences: z
       .record(nonEmptyString(), nonEmptyString())

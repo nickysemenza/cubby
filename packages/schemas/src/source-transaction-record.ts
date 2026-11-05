@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { dateTime } from "./codec";
 import { externalIdSource } from "./external-id";
-import { money } from "./money";
+import { money, settledMoney } from "./money";
 import { createSortPaginationFields } from "./pagination";
 import {
   financialAccountShortcode,
@@ -134,7 +134,7 @@ export const sourceTransactionRecordInput = z.strictObject({
    * does not merely flip a sign, it mints a SECOND identity for a charge
    * already recorded and the row can never match.
    */
-  providerAmount: z.number().finite(),
+  providerAmount: settledMoney,
   merchant: z.string().nullable().default(null),
   rawDescription: z.string(),
   sourceCategory: z.string().nullable().default(null),
@@ -274,18 +274,9 @@ export type UpdateSourceTransactionRecordsInput = z.infer<
 >;
 
 /**
- * Two live rows that are the same charge under two identities.
- *
- * The hash covers `rawDescription`, so a charge re-exported after its
- * descriptor firms up (`AMAZON MKTPLACE PMTS` → `AMAZON MKTPL*XD8AR9RG3`)
- * mints a SECOND identity for money already recorded. The hash cannot be
- * fixed — it is stored externally as a `settlement_ref` `EntityExternalId` on the
- * transaction (its `sourceRefs`) with no back-reference — so drift is detected rather than prevented.
- *
- * Reported, never acted on: the remedy links one row to the other with
- * `supersededByExternalId`, and which row superseded which is a judgment.
- * Same-amount-same-day coincidences are real (two $4.50 coffees), so a
- * candidate is a question, not a finding.
+ * Possible duplicate source evidence. Similar amount/date/description is a review
+ * hint only; accepted ownership is the occurrence FK. A member may explicitly
+ * retain a replacement edge, without declaring the two identities equivalent.
  */
 export const sourceTransactionRecordDriftCandidate = z.object({
   source: z.string(),
@@ -378,12 +369,16 @@ export const sourceTransactionRecordListOut = z.object({
 export const sourceTransactionRecordSummaryOut = z.object({
   total: z.number().int(),
   matched: z.number().int(),
+  held: z.number().int(),
+  heldHistorical: z.number().int(),
+  heldWithoutHistoricalLinks: z.number().int(),
   unmatched: z.number().int(),
   ignored: z.number().int(),
   superseded: z.number().int(),
   amountTotal: money,
-  /** `amountTotal` split by match state; the four sum to it. */
+  /** `amountTotal` split by match state; every state contributes to the total. */
   matchedAmount: money,
+  heldAmount: money,
   unmatchedAmount: money,
   ignoredAmount: money,
   supersededAmount: money,

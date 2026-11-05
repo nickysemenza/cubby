@@ -33,3 +33,5 @@ rewriting its decision.
 | [0023](0023-lists-are-declared-over-a-relation.md)            | Lists are declared over a relation                                     |
 | [0024](0024-repository-read-declaration.md)                   | Every entity reads through one declared scaffold port                  |
 | [0025](0025-radical-simplification-of-background-work.md)     | Shrink Cubby's machinery in place on Workers and Neon                  |
+
+| [0026](0026-source-occurrence-and-accepted-evidence.md) | Source occurrence owns accepted bank evidence |

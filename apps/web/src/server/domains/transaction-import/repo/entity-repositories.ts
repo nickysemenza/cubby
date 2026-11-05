@@ -2,17 +2,23 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { sourceTransactionRecordUpdateData } from "@cubby/schemas/entities/sourceTransactionRecord";
 import { sourceTransactionRecordRawOut as rawSourceTransactionRecordOut } from "@cubby/schemas/entity-contracts/sourceTransactionRecord";
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
-import { sourceTransactionRecordMatchState } from "@cubby/schemas/source-transaction-record";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
-import { notDeleted, unwrapDb, withTransactionOn } from "~/server/db/helpers";
+import {
+  unwrapDb,
+  withTransactionOn,
+  runAfterCommit,
+} from "~/server/db/helpers";
 import { sourceTransactionRecord } from "~/server/db/schema";
 import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import { sourceTransactionRecordSearch } from "~/server/domains/transaction-import/repo/search-read-source-transaction-record";
-import { CHARGE_STATE } from "~/server/domains/transaction-import/repo/statement-charge";
+import {
+  sourceObservations,
+  sourceObservationField,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   merchantVendorInferences,
   normalizeMerchant,
@@ -24,33 +30,28 @@ import {
   type MutationReceipt,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
-import { createAppError } from "~/server/errors/app-error";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { auditEvidenceRows } from "./intake-audit";
+import { updateSourceObservationJudgments } from "./source-occurrence";
 import {
+  lockSourceObservationRemoval,
   assertSourceTransactionRecordDeletionAllowed,
-  assertSourceTransactionRecordSupersessionAllowed,
 } from "./source-transaction-record-lifecycle";
 
 type ReaderDb = Database | DrizzleTransaction;
 type SourceRow = typeof sourceTransactionRecord.$inferSelect;
 
-// Charge state is authoritative over every live observation, independent of the page.
-const chargeState = sql`(SELECT CASE WHEN cs.ignored THEN ${sourceTransactionRecordMatchState.enum.ignored} WHEN cs.superseded THEN ${sourceTransactionRecordMatchState.enum.superseded}
-  WHEN cs.shortcode IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.matched} ELSE ${sourceTransactionRecordMatchState.enum.unmatched} END FROM ${CHARGE_STATE} cs
-  WHERE cs.source = "SourceTransactionRecord".source AND cs."chargeKey" = "SourceTransactionRecord"."chargeKey")`;
-const initialFingerprint = sql`(SELECT i.fingerprint FROM "TransactionImport" i
-  WHERE i.id = "SourceTransactionRecord"."batchId")`;
-const transactionCode = sql`(SELECT cs.shortcode FROM ${CHARGE_STATE} cs
-  WHERE cs.source = "SourceTransactionRecord".source AND cs."chargeKey" = "SourceTransactionRecord"."chargeKey")`;
+const initialFingerprint = sql`(SELECT i.fingerprint FROM "TransactionImport" i WHERE i.id = "SourceTransactionRecord"."batchId")`;
+const transactionCode = sourceObservationField("transactionShortcode");
 
 const sourceRead = {
   media: true,
   references: {
     source: { kind: "public" },
+    occurrenceId: { kind: "lookup", missing: "null", includeDeleted: true },
+    accountId: { kind: "lookup", missing: "null", includeDeleted: true },
     batchId: { kind: "lookup", missing: "error", includeDeleted: true },
     withdrawalImportId: {
       kind: "lookup",
@@ -73,7 +74,7 @@ const sourceRead = {
       const result = await unwrapDb(db)
         .select({
           id: sourceTransactionRecord.id,
-          matchState: chargeState,
+          matchState: sourceObservationField("matchState"),
           transactionId: transactionCode,
         })
         .from(sourceTransactionRecord)
@@ -97,7 +98,7 @@ const sourceRead = {
           importFingerprint: sql<string>`${initialFingerprint}`,
           supersededBy: sql<
             string | null
-          >`(SELECT r."externalId" FROM "SourceTransactionRecord" r WHERE r.id = "SourceTransactionRecord"."supersededByRowId")`,
+          >`(SELECT successor."externalId" FROM ${sourceObservations} successor WHERE successor.id = ${sourceObservationField("supersededByRowId")})`,
         })
         .from(sourceTransactionRecord)
         .where(
@@ -182,13 +183,51 @@ export const sourceTransactionRecordScaffold = listScaffold(
   {
     rows: {
       runStepInputs: runStepInputListRows("sourceTransactionRecord"),
+      reconciliation: sql`SELECT r.id AS owner, r."accountId" AS account, r."withdrawalImportId" AS withdrawal, r."supersededByRowId" AS successor FROM ${sourceObservations} r`,
       acceptedTransactions: sql`SELECT "record" AS "owner", "transaction" FROM (${sourceTransactionSettlements}) accepted`,
     },
     derived: {
-      matchState: chargeState,
+      matchState: sourceObservationField("matchState"),
+      externalId: sourceObservationField("externalId"),
+      legacyExternalId: sourceObservationField("legacyExternalId"),
+      chargeKey: sourceObservationField("chargeKey"),
+      current: sourceObservationField("current"),
+      withdrawnAt: sourceObservationField("withdrawnAt"),
+      lastObservedAt: sourceObservationField("lastObservedAt"),
+      updatedAt: sourceObservationField("updatedAt"),
+      notes: sourceObservationField("notes"),
+      dispositionNote: sourceObservationField("dispositionNote"),
+      disposition: sourceObservationField("disposition"),
+      dispositionReason: sourceObservationField("dispositionReason"),
     },
     read: {
       ...sourceRead,
+      columns: {
+        historicalTransactionIds: sourceObservationField(
+          "historicalTransactionIds",
+        ),
+        accountName: sql`(SELECT account.name FROM "FinancialAccount" account WHERE account.id=${sourceObservationField("accountId")})`,
+        ...Object.fromEntries(
+          (
+            [
+              "externalId",
+              "legacyExternalId",
+              "chargeKey",
+              "current",
+              "withdrawnAt",
+              "lastObservedAt",
+              "updatedAt",
+              "notes",
+              "dispositionNote",
+              "disposition",
+              "dispositionReason",
+              "accountId",
+              "withdrawalImportId",
+              "supersededByRowId",
+            ] as const
+          ).map((key) => [key, sourceObservationField(key)]),
+        ),
+      },
       title: sql`${sourceTransactionRecord.rawDescription}`,
       search: sourceTransactionRecordSearch,
     },
@@ -228,91 +267,98 @@ const updateSource = defineMutationWriter({
     const data = sourceTransactionRecordUpdateData.strict().parse(input);
     const id = await resolveOrThrow(db, "sourceTransactionRecord", code);
     return withTransactionOn(db, async (tx) => {
-      const [before] = await tx
-        .select()
-        .from(sourceTransactionRecord)
-        .where(
-          and(
-            eq(sourceTransactionRecord.id, id),
-            notDeleted(sourceTransactionRecord),
-          ),
-        )
-        .limit(1);
-      if (!before)
-        throw createAppError(
-          "REFERENCED_RECORD_MISSING",
-          `Source record ${code} was not found`,
-        );
-      const values = {
-        disposition: data.disposition,
-        dispositionReason: data.dispositionReason,
-        dispositionNote: data.dispositionNote,
-        notes: data.notes,
-        accountId:
-          data.accountId === undefined
-            ? undefined
-            : data.accountId === null
-              ? null
-              : await resolveOrThrow(tx, "financialAccount", data.accountId),
-        supersededByRowId:
-          data.supersededByRowId === undefined
-            ? undefined
-            : data.supersededByRowId === null
-              ? null
-              : await resolveOrThrow(
-                  tx,
-                  "sourceTransactionRecord",
-                  data.supersededByRowId,
-                ),
-      };
-      if (values.supersededByRowId)
-        await assertSourceTransactionRecordSupersessionAllowed(
+      if (data.identityResolution) {
+        const { resolveSourceIdentity } =
+          await import("~/server/domains/transaction-import/repo/source-identity-resolution");
+        const charge = await resolveSourceIdentity(
           tx,
-          before,
-          values.supersededByRowId,
-        );
-      const changed = Object.entries(values).some(
-        ([key, value]) =>
-          value !== undefined &&
-          new Map(Object.entries(before)).get(key) !== value,
-      );
-      if (changed) {
-        const updated = await tx
-          .update(sourceTransactionRecord)
-          .set(values)
-          .where(eq(sourceTransactionRecord.id, id))
-          .returning();
-        await auditEvidenceRows(
-          tx,
+          id,
+          data.identityResolution,
           actor,
-          "sourceTransactionRecord",
-          [before],
-          updated,
         );
+        await runAfterCommit(tx, async (committed) => {
+          const { regenerateCharges } =
+            await import("~/server/domains/transaction-import/repo/statement-suggestions");
+          await regenerateCharges(committed, [charge]);
+        });
       }
+      await updateSourceObservationJudgments(
+        tx,
+        [id],
+        {
+          disposition: data.disposition,
+          dispositionReason: data.dispositionReason,
+          dispositionNote: data.dispositionNote,
+          notes: data.notes,
+          accountId:
+            data.accountId === undefined
+              ? undefined
+              : data.accountId === null
+                ? null
+                : await resolveOrThrow(tx, "financialAccount", data.accountId),
+          supersededByRowId:
+            data.supersededByRowId === undefined
+              ? undefined
+              : data.supersededByRowId === null
+                ? null
+                : await resolveOrThrow(
+                    tx,
+                    "sourceTransactionRecord",
+                    data.supersededByRowId,
+                  ),
+        },
+        actor,
+      );
       return readOutput({ entityId: id, shortcode: code });
     });
   },
 });
 
 const SOURCE_TRANSACTION_RECORD_DELETE_POLICY = {
-  "SourceTransactionRecord.supersededByRowId": {
-    code: "block-live-predecessors",
+  "SourceOccurrence.currentObservationId": {
+    code: "retain-occurrence-head",
+    effect: "preserve",
+    description:
+      "Occurrence head evidence remains reserved through an observation tombstone.",
+  },
+  "SourceOccurrence.replacementObservationId": {
+    code: "retain-replacement-proof",
     effect: "block",
-    description: "Live superseding predecessors retain the source record.",
+    description:
+      "A live explicit replacement decision requires its exact observation evidence.",
+  },
+  "SourceObservationAnnotation.observationId": {
+    code: "retain-observation-judgments",
+    effect: "preserve",
+    description:
+      "Observation annotations and unresolved decisions remain retained.",
+  },
+  "SourceObservationAnnotation.supersededByObservationId": {
+    code: "retain-replacement-history",
+    effect: "block",
+    description:
+      "A live predecessor retains its exact reviewed replacement observation.",
+  },
+  "FinancialEvidenceAlias.observationId": {
+    code: "retain-source-aliases",
+    effect: "preserve",
+    description:
+      "Original aliases remain explainable through observation tombstones.",
   },
   "TransactionImportRecord.statementRowId": {
     code: "retain-import-membership",
     effect: "preserve",
-    description:
-      "Imports retain membership history when a source record is deleted.",
+    description: "Imports retain original and subsequent memberships.",
   },
 } as const;
 export const sourceTransactionRecordRepository = defineRepository(
   "sourceTransactionRecord",
   {
     lifecycle: { delete: SOURCE_TRANSACTION_RECORD_DELETE_POLICY },
-    deleteHooks: { beforeDelete: assertSourceTransactionRecordDeletionAllowed },
+    deleteHooks: {
+      beforeLock: lockSourceObservationRemoval,
+      beforeDelete: assertSourceTransactionRecordDeletionAllowed,
+    },
     scaffold: sourceTransactionRecordScaffold,
     update: asActor(updateSource),
   },

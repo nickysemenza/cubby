@@ -1,93 +1,62 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
-  parseEntityId,
   parseShortcodeFor,
   type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
+import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { transactionImportInput } from "@cubby/schemas/source-transaction-record";
-import { cents } from "@cubby/shared";
+import { moneyToMinor } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import {
-  getDb,
-  notDeleted,
-  unwrapDb,
-  withTransaction,
-} from "~/server/db/helpers";
+import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
 import { transactionImport, sourceTransactionRecord } from "~/server/db/schema";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { reconcileFinancialEvidenceCorrection } from "~/server/domains/financial-transaction/repo/financial-evidence-correction";
+import {
+  sourceObservationColumns,
+  sourceObservationFrom,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
 
-import { auditEvidenceRows } from "./intake-audit";
-
-/** Revisions can change generated money only while every retained source agrees. */
+/** A ready occurrence supplies current facts; all accepted occurrences corroborate independently. */
 export async function reconcileRecordedFinancialEvidence(
   db: Database,
   source: string,
-  chargeKeys: readonly string[],
+  occurrenceCodes: readonly string[],
   actor: ActorContext,
 ) {
   const reviews: {
     transactionId: FinancialTransactionShortcode;
     reason: string;
   }[] = [];
-  if (!chargeKeys.length) return reviews;
+  if (!occurrenceCodes.length) return reviews;
   const heads = await getDb(db)
-    .select()
-    .from(sourceTransactionRecord)
+    .select(sourceObservationColumns)
+    .from(sourceObservationFrom)
     .where(
       and(
         eq(sourceTransactionRecord.source, source),
-        inArray(sourceTransactionRecord.chargeKey, [...chargeKeys]),
-        eq(sourceTransactionRecord.current, true),
+        inArray(sourceObservationColumns.chargeKey, [...occurrenceCodes]),
+        eq(sourceObservationColumns.current, true),
+        eq(sourceObservationColumns.reviewState, "ready"),
         notDeleted(sourceTransactionRecord),
       ),
     );
   for (const head of heads) {
-    const { rows: linked } = await unwrapDb(db).execute<{
-      shortcode: string;
-      accountId: string;
-    }>(sql`
-      SELECT DISTINCT ft.shortcode, ft."accountId" FROM "FinancialTransaction" ft
-      JOIN "EntityExternalId" ref ON ref."entityId" = ft.id AND ref.kind = 'settlement_ref' AND ${notDeleted("ref")}
-      JOIN "SourceTransactionRecord" observed ON observed.source = ref.source AND ${notDeleted("observed")}
-        AND (observed."externalId" = ref."externalId" OR
-          observed."legacyReference" = ref."externalId")
-      WHERE observed.source = ${source} AND observed."chargeKey" = ${head.chargeKey} AND ${notDeleted("ft")}
-    `);
-    if (linked.length !== 1) continue;
-    const target = linked[0]!;
+    if (
+      head.acceptedTransactionId === null ||
+      head.transactionShortcode === null
+    )
+      continue;
     const transactionId = parseShortcodeFor(
       "financialTransaction",
-      target.shortcode,
+      head.transactionShortcode,
     );
-    if (head.accountId === null)
-      await withTransaction(db, async (tx) => {
-        const updated = await tx
-          .update(sourceTransactionRecord)
-          .set({
-            accountId: parseEntityId("financialAccount", target.accountId),
-          })
-          .where(
-            and(
-              eq(sourceTransactionRecord.id, head.id),
-              sql`${sourceTransactionRecord.accountId} IS NULL`,
-            ),
-          )
-          .returning();
-        await auditEvidenceRows(
-          tx,
-          actor,
-          "sourceTransactionRecord",
-          [head],
-          updated,
-        );
-      });
     const result = await reconcileFinancialEvidenceCorrection(
       db,
       {
         source,
-        externalId: head.externalId,
+        externalId: head.chargeKey,
         transactionId,
         amount: head.withdrawnAt === null ? head.amount : null,
         verifyCurrentEvidence: async (tx, observation) => {
@@ -107,10 +76,7 @@ export async function reconcileRecordedFinancialEvidence(
             const { rows: counts } = await unwrapDb(tx).execute<{
               count: number;
             }>(sql`
-            SELECT count(*)::int AS count FROM "TransactionImportRecord" m
-            JOIN "SourceTransactionRecord" r ON r.id=m."statementRowId" AND ${notDeleted("r")}
-            WHERE m."importId"=${observation.withdrawalImportId}::uuid
-          `);
+            SELECT count(*)::int AS count FROM "TransactionImportRecord" member WHERE member."importId"=${observation.withdrawalImportId}::uuid`);
             const parsed = transactionImportInput.shape.coverage.safeParse(
               proof?.coverage,
             );
@@ -120,9 +86,7 @@ export async function reconcileRecordedFinancialEvidence(
               counts[0]?.count !== proof.rowCountDeclared ||
               !coverage ||
               coverage.visibility !== "all" ||
-              coverage.account !==
-                (observation.providerAccountId ??
-                  observation.accountDescriptor) ||
+              coverage.account !== observation.providerAccountId ||
               coverage.from > observation.statementDate ||
               coverage.to < observation.statementDate
             )
@@ -132,51 +96,32 @@ export async function reconcileRecordedFinancialEvidence(
                   "Withdrawal requires persisted complete account/window evidence.",
               };
           }
-          const { rows: evidence } = await unwrapDb(tx).execute<{
-            amount: number | null;
-            withdrawn: boolean | null;
-            own: boolean | null;
-          }>(sql`
-          SELECT DISTINCT latest.amount, latest."withdrawnAt" IS NOT NULL AS withdrawn,
-            latest.source = ${source} AND latest."chargeKey" = ${head.chargeKey} AS own
-          FROM "FinancialTransaction" ft
-          JOIN "EntityExternalId" ref ON ref."entityId" = ft.id AND ref.kind='settlement_ref' AND ${notDeleted("ref")}
-          LEFT JOIN "SourceTransactionRecord" observed ON observed.source=ref.source AND ${notDeleted("observed")}
-            AND (observed."externalId"=ref."externalId" OR observed."legacyReference"=ref."externalId")
-          LEFT JOIN "SourceTransactionRecord" latest ON latest.source=observed.source AND latest."chargeKey"=observed."chargeKey"
-            AND latest.current AND ${notDeleted("latest")}
-          WHERE ft.shortcode=${transactionId}
-            -- A set-aside charge is not independent corroboration. Keep unresolved
-            -- references in the result so they still require review.
-            AND NOT EXISTS (
-              SELECT 1 FROM "SourceTransactionRecord" predecessor
-              WHERE predecessor.source=observed.source
-                AND predecessor."chargeKey"=observed."chargeKey"
-                AND ${notDeleted("predecessor")}
-                AND predecessor."supersededByRowId" IS NOT NULL
-            )
-        `);
-          if (evidence.some((row) => row.amount === null))
-            return {
-              status: "review",
-              reason:
-                "Independent settlement evidence needs review before this booking changes.",
-            };
-          if (
-            evidence.some(
-              (row) =>
-                !row.own &&
-                !row.withdrawn &&
-                (observation.withdrawnAt !== null ||
-                  cents(Number(row.amount)) !== cents(observation.amount)),
-            )
-          )
-            return {
-              status: "review",
-              reason:
-                "Other current source evidence still supports this booking or disagrees with the new amount.",
-            };
-          return { status: "verified" };
+          const { rows } = await unwrapDb(tx).execute<{ blocked: boolean }>(sql`
+          -- includes-deleted: retired observations and bindings remain safety blockers.
+          SELECT EXISTS (
+            SELECT 1 FROM "SourceOccurrence" other
+            LEFT JOIN "SourceTransactionRecord" evidence ON evidence.id = other."currentObservationId"
+            WHERE other."acceptedTransactionId" = ${observation.acceptedTransactionId}::uuid
+              AND other.id <> ${observation.occurrenceId}::uuid
+              AND (other."deletedAt" IS NOT NULL OR other."reviewState" <> ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
+                OR other."supersededByOccurrenceId" IS NOT NULL OR other."replacementObservationId" IS NOT NULL
+                OR evidence.id IS NULL OR evidence."deletedAt" IS NOT NULL
+                OR (other."withdrawnAt" IS NULL AND (${observation.withdrawnAt !== null}
+                  OR evidence."amountMinor" <> ${moneyToMinor(observation.amount)}::bigint
+                  OR other."accountId" IS DISTINCT FROM ${observation.accountId}::uuid)))
+            UNION ALL
+            SELECT 1 FROM "FinancialEvidenceAlias" alias
+            LEFT JOIN "SourceOccurrence" owner ON owner.id = alias."occurrenceId"
+            WHERE alias."historicalTransactionId" = ${observation.acceptedTransactionId}::uuid
+              AND (owner.id IS NULL OR owner."acceptedTransactionId" IS DISTINCT FROM alias."historicalTransactionId")
+          ) AS blocked`);
+          return rows[0]?.blocked
+            ? {
+                status: "review",
+                reason:
+                  "Independent or unresolved historical source evidence blocks automatic booking correction.",
+              }
+            : { status: "verified" };
         },
       },
       actor,

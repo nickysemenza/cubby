@@ -96,11 +96,17 @@ test("source evidence uses generic records while provider facts remain immutable
     where: eq(schema.sourceTransactionRecord.id, evidence.id),
   });
   expect(retained).toMatchObject({
-    notes: "Synthetic judgment reviewed against source",
     rawDescription: description,
-    providerAmount: -12.34,
+    providerAmount: -1234n,
     batchId: collection.id,
   });
+
+  const annotation = await getDb(
+    db,
+  ).query.sourceObservationAnnotation.findFirst({
+    where: eq(schema.sourceObservationAnnotation.observationId, evidence.id),
+  });
+  expect(annotation?.notes).toBe("Synthetic judgment reviewed against source");
 
   await gotoAuthenticatedPage(
     page,

@@ -15,6 +15,7 @@ import {
   financialTransactionAllocation,
   purchase,
 } from "~/server/db/schema";
+import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { transactionSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import { createAppError } from "~/server/errors/app-error";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
@@ -86,6 +87,7 @@ export async function applyFinancialSettlementAllocation(
         "financialTransaction",
         input.transactionId,
       );
+      await lockFinancialTransactionSources(tx, [input.transactionId]);
       await lockUpdatePurchases(tx, id, { allocations: input.allocations });
       await tx
         .select({ id: financialTransaction.id })

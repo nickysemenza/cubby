@@ -46,6 +46,8 @@ import {
   locationSearch,
 } from "~/server/domains/location/repo/crud";
 import { buildLocationTree } from "~/server/domains/location/repo/tree";
+import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { createVendor } from "~/server/domains/vendor/repo/vendor";
 import {
@@ -124,13 +126,28 @@ describe("entity display image resolver", () => {
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic linked account",
     });
+    const evidence = (await listSourceTransactionRecords(ctx.db, {})).data.find(
+      (row) => row.id === record.shortcode,
+    );
+    if (!evidence) throw new Error("Synthetic source projection missing");
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: {
+          source: evidence.source,
+          externalIds: [evidence.externalId],
+        },
+        data: { accountId: account.output.id },
+      },
+      ctx.actor,
+    );
     const transaction = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
       status: "posted",
       amount: 1,
       postedDate: "2026-01-01",
-      sourceRefs: [{ source: record.source, externalId: record.externalId }],
+      sourceRefs: [{ source: record.source, externalId: evidence.chargeKey }],
       allocations: [{ purchaseId: purchase.output.id, amount: 1 }],
     });
     expect(
@@ -208,13 +225,28 @@ describe("entity display image resolver", () => {
       vendorId: otherSeller.output.id,
       date: "2026-01-01",
     });
+    const evidence = (await listSourceTransactionRecords(ctx.db, {})).data.find(
+      (row) => row.id === record.shortcode,
+    );
+    if (!evidence) throw new Error("Synthetic source projection missing");
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: {
+          source: evidence.source,
+          externalIds: [evidence.externalId],
+        },
+        data: { accountId: account.output.id },
+      },
+      ctx.actor,
+    );
     const confirmed = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
       status: "posted",
       amount: 1,
       postedDate: "2026-01-01",
-      sourceRefs: [{ source: record.source, externalId: record.externalId }],
+      sourceRefs: [{ source: record.source, externalId: evidence.chargeKey }],
       allocations: [{ purchaseId: otherPurchase.output.id, amount: 1 }],
     });
     expect(

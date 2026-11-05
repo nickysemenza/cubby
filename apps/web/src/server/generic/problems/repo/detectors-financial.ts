@@ -59,21 +59,23 @@ export async function findInvalidFinancialJson(
 export async function findDuplicateFinancialTransactionSourceRefs(
   db: Database,
 ): Promise<ProblemItem<"duplicateFinancialTransactionSourceRefs">[]> {
-  const result = await getDb(db).execute<{
+  const { rows } = await getDb(db).execute<{
     source: string;
-    externalId: string;
-    transactionIds: string[];
+    value: string;
+    transactions: string[];
   }>(sql`
-    SELECT fx."source" AS source, fx."externalId" AS "externalId", array_agg(ft.shortcode) AS "transactionIds"
-    FROM "EntityExternalId" fx
-    JOIN "FinancialTransaction" ft ON ft."id" = fx."entityId" AND ${notDeleted("ft")}
-    WHERE fx."kind" = 'settlement_ref' AND ${notDeleted("fx")}
-    GROUP BY fx."source", fx."externalId"
-    HAVING count(*) > 1
-  `);
-  return result.rows.map((row) => ({
-    ...row,
-    transactionIds: row.transactionIds.map((id) =>
+    SELECT alias.source,alias.value,array_agg(DISTINCT target.shortcode ORDER BY target.shortcode) AS transactions
+    FROM "FinancialEvidenceAlias" alias
+    JOIN "FinancialTransaction" target ON target.id=alias."historicalTransactionId" AND ${notDeleted("target")}
+    WHERE alias.kind='transaction_ref' AND ${notDeleted("alias")}
+      -- includes-deleted: retained source aliases remain evidence rather than non-occurrence ownership.
+      AND NOT EXISTS(SELECT 1 FROM "FinancialEvidenceAlias" observation WHERE observation.source=alias.source AND observation.value=alias.value AND observation."observationId" IS NOT NULL)
+    GROUP BY alias.source,alias.value HAVING count(DISTINCT target.id)>1
+    ORDER BY alias.source,alias.value`);
+  return rows.map((row) => ({
+    source: row.source,
+    externalId: row.value,
+    transactionIds: row.transactions.map((id) =>
       parseShortcodeFor("financialTransaction", id),
     ),
   }));

@@ -39,7 +39,8 @@ import {
   paymentDateWindowSql,
   paymentFundingPartySql,
 } from "~/server/domains/financial-account/repo/funding-sql";
-import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { findSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import {
   assertMailFinancialEvidenceCurrent,
@@ -47,7 +48,6 @@ import {
 } from "~/server/domains/purchase-import/repo/mail-financial-event";
 import { normalizeMerchant } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { AppError } from "~/server/errors/app-error";
-import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   nameMatchesAnySql,
@@ -131,7 +131,7 @@ export async function acceptedAutomaticFacts(
         }
       : null,
     allocations,
-    sourceRefs: (await settlementRefsFor(db, [row.id])).get(row.id) ?? [],
+    sourceRefs: (await financialSourceRefsFor(db, [row.id])).get(row.id) ?? [],
     expenses: graph.lines,
     attributions: graph.attributions,
     purchase: target
@@ -249,11 +249,8 @@ async function verifyMailPayment(
       JSON.stringify([row.accountId, vendorId.id, mailEvent.providerEventId]),
     ),
   };
-  await lockFinancialEvidenceKeys(tx, "transaction-ref", [
-    `${eventRef.source}\u0000${eventRef.externalId}`,
-  ]);
   const previousIdentity = await tx.execute<{ id: string }>(
-    sql`SELECT x."entityId" AS id FROM "EntityExternalId" x WHERE x.source = ${eventRef.source} AND x.kind = 'settlement_ref' AND x."externalId" = ${eventRef.externalId} AND ${notDeleted("x")}`,
+    sql`SELECT x."historicalTransactionId" AS id FROM "FinancialEvidenceAlias" x WHERE x.source = ${eventRef.source} AND x.value = ${eventRef.externalId} AND ${notDeleted("x")}`,
   );
   if (previousIdentity.rows.some((previous) => previous.id !== row.id))
     return review(
@@ -358,15 +355,13 @@ async function runFinancialConvergence(
   return (dryRun ? withTransaction : withSnapshotWrite)(
     db,
     async (tx) => {
-      await lockFinancialEvidenceKeys(tx, "reviewed-booking", [
-        input.transactionId,
-      ]);
       const txDb = databaseForTransaction(tx);
       const id = await resolveOrThrow(
         txDb,
         "financialTransaction",
         input.transactionId,
       );
+      await lockFinancialTransactionSources(tx, [input.transactionId]);
       // Match the settlement writer's global lock order: accepted Purchases
       // precede the transaction, including a target proved by the current Email.
       await tx.execute(sql`
@@ -429,7 +424,8 @@ async function runFinancialConvergence(
         return review(
           "The payment needs a dated funding account available to this member: the household or the member funds it on the charge date, and the member owns the account, is its primary cardholder, or is an authorized user then.",
         );
-      const refs = (await settlementRefsFor(tx, [row.id])).get(row.id) ?? [];
+      const refs =
+        (await financialSourceRefsFor(tx, [row.id])).get(row.id) ?? [];
       if (!refs.length)
         return review("The payment has no stable source identity.");
       const allocations = await tx

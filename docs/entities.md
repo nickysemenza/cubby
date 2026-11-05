@@ -3966,6 +3966,12 @@ Do not create another entity-specific category column or allocation renderer.
 
 ## Relations, deletion, and merge
 
+Domain command/identity reservations that must precede generic deletion's root
+row locks belong in the repository's `deleteHooks.beforeLock`. `beforeDelete`
+runs after those root locks and owns guards/effects before edge dispositions.
+Financial deletion uses the former for command keys and sorted occurrence locks;
+acquiring them in `beforeDelete` would invert the financial writer lock order.
+
 Relationship authorship uses `entity-definitions/relationships.ts`. A stored
 singular identifier reference uses `r.field(key)`; its field owns the target used by storage,
 validation and the graph. Ordinary storage entries inherit that target; explicit

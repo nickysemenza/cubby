@@ -38,7 +38,7 @@ import {
   financialAccountPurchaser,
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
-import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { createPurchase } from "~/server/domains/purchase/repo/purchase";
 import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { resolveNames } from "~/server/entity-kernel/resolve";
@@ -520,12 +520,10 @@ export async function commitFinancialBooking(
   return withSnapshotWrite(
     db,
     async (tx) => {
-      await lockFinancialEvidenceKeys(tx, "reviewed-booking", [
-        review.transactionId,
-      ]);
       const txDb = databaseForTransaction(tx);
       const replayed = await replayBooking(txDb, review);
       if (replayed) return replayed;
+      await lockFinancialTransactionSources(tx, [review.transactionId]);
       const fresh = await previewFinancialBooking(txDb, {
         ...review,
         spendingCategoryId: review.categoryOverride,
