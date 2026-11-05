@@ -23,7 +23,6 @@ import {
   readEvaluationTally,
   readFirstEvaluationErrors,
   type EvaluationScope,
-  type EvaluationTally,
 } from "~/server/ai/evaluation/repo/evaluation-tally";
 import type { Database } from "~/server/db";
 import {
@@ -166,33 +165,35 @@ async function readAiWork(db: Database, owner: RunRow, attempt: number) {
         null,
     };
   }
-  const scope: EvaluationScope = ownsAiWork(owner)
-    ? { runId: owner.id, source: "owned" }
-    : { runId: owner.id, source: "requested" };
-  const tally = await readEvaluationTally(db, scope);
+  if (ownsAiWork(owner)) {
+    const scope: EvaluationScope = { runId: owner.id, source: "owned" };
+    const tally = await readEvaluationTally(db, scope);
+    return {
+      total: tally.total,
+      pending: tally.pending,
+      failed: tally.failed > 0,
+      progress: aiRefreshProgress.parse({
+        attempt,
+        selected: tally.total,
+        queued: tally.queued,
+        resultReady: tally.resultReady,
+        completed: tally.completed,
+        blocked: tally.blocked,
+        failed: tally.failed,
+        obsolete: tally.obsolete,
+        cancelled: tally.cancelled,
+        errors: await readFirstEvaluationErrors(db, scope, 10),
+      }),
+      errorText: () => readEvaluationErrorText(db, scope),
+    };
+  }
+  const scope: EvaluationScope = { runId: owner.id, source: "requested" };
+  const outcomes = await readEvaluationOutcomes(db, scope);
   return {
-    total: tally.total,
-    pending: tally.pending,
-    failed: tally.failed > 0,
-    progress: ownsAiWork(owner)
-      ? aiRefreshProgress.parse({
-          attempt,
-          selected: tally.total,
-          queued: tally.queued,
-          resultReady: tally.resultReady,
-          completed: tally.completed,
-          blocked: tally.blocked,
-          failed: tally.failed,
-          obsolete: tally.obsolete,
-          cancelled: tally.cancelled,
-          errors: await readFirstEvaluationErrors(db, scope, 10),
-        })
-      : suggestionSweepProgress(
-          owner,
-          tally,
-          await readEvaluationOutcomes(db, scope),
-          attempt,
-        ),
+    total: outcomes.tally.total,
+    pending: outcomes.tally.pending,
+    failed: outcomes.tally.failed > 0,
+    progress: suggestionSweepProgress(owner, outcomes, attempt),
     errorText: () => readEvaluationErrorText(db, scope),
   };
 }
@@ -285,8 +286,7 @@ function reclassificationProgress(
 
 function suggestionSweepProgress(
   owner: RunRow,
-  tally: EvaluationTally,
-  outcomes: Awaited<ReturnType<typeof readEvaluationOutcomes>>,
+  { tally, ...outcomes }: Awaited<ReturnType<typeof readEvaluationOutcomes>>,
   attempt: number,
 ) {
   const legacy = suggestionSweepRunProgress.safeParse(owner.progress).data

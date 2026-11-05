@@ -216,6 +216,7 @@ describe("evaluation tally", () => {
     const tally = await readEvaluationTally(ctx.db, scope);
     expect(tally).toEqual(want.tally);
     const outcomes = await readEvaluationOutcomes(ctx.db, scope);
+    expect(outcomes.tally).toEqual(want.tally);
     expect({
       applied: outcomes.applied,
       queued: outcomes.queued,

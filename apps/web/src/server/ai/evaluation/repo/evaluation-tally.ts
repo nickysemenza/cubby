@@ -14,7 +14,7 @@ import {
 import type { RunId } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
 import { RUN_STEP_ERROR_SAMPLE } from "@cubby/schemas/run-step";
-import { and, eq, sql, type SQLWrapper } from "drizzle-orm";
+import { and, eq, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { SelectedFields } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -97,15 +97,11 @@ function reads(scope: EvaluationScope) {
   };
 }
 
-export async function readEvaluationTally(
-  db: Database,
-  scope: EvaluationScope,
-) {
-  const { state, where, query } = reads(scope);
+function tallyColumns(state: SQL) {
   const count = (value: string) =>
     sql<number>`(count(*) FILTER (WHERE ${state} = ${value}))::int`;
   const { enum: states } = aiEvaluationState;
-  const [row] = await query(db, {
+  return {
     total: sql<number>`count(*)::int`,
     queued: count(states.queued),
     resultReady: count(states.result_ready),
@@ -114,7 +110,15 @@ export async function readEvaluationTally(
     failed: count(states.failed),
     obsolete: count(states.obsolete),
     cancelled: count(states.cancelled),
-  }).where(where);
+  };
+}
+
+export async function readEvaluationTally(
+  db: Database,
+  scope: EvaluationScope,
+) {
+  const { state, where, query } = reads(scope);
+  const [row] = await query(db, tallyColumns(state)).where(where);
   if (!row) throw new Error("Evaluation tally returned no row");
   return { ...row, pending: row.queued + row.resultReady };
 }
@@ -126,34 +130,42 @@ const outcomeReceipt = z.object({
 });
 
 /**
- * Outcome counts and every diagnostic. Only receipts with diagnostics leave the database,
- * in roster order, and the receipt schema still decides whether one counts.
+ * State counts, outcome counts and every diagnostic. A settling step takes its final tallies
+ * from this, so it is one statement: a concurrent settlement is seen in full or not at all, and
+ * no outcome can be missed by a read that also finds nothing pending. Only receipts with
+ * diagnostics leave the database, in roster order, and the receipt schema decides if one counts.
  */
 export async function readEvaluationOutcomes(
   db: Database,
   scope: EvaluationScope,
 ) {
-  const { receipt, where, order, query } = reads(scope);
-  const hasDiagnostics = sql`(${receipt} ? 'diagnostics' AND ${receipt} -> 'diagnostics' <> '[]'::jsonb)`;
+  const { state, receipt, where, order, query } = reads(scope);
+  const hasDiagnostics = sql`(jsonb_typeof(${receipt}) = 'object'
+    AND ${receipt} ? 'diagnostics' AND ${receipt} -> 'diagnostics' <> '[]'::jsonb)`;
   const plainOutcome = (value: string) => sql<number>`(count(*) FILTER (WHERE
     jsonb_typeof(${receipt}) = 'object' AND ${receipt} -> 'outcome' = to_jsonb(${value}::text)
     AND NOT coalesce(${hasDiagnostics}, false)))::int`;
-  const [plain] = await query(db, {
-    applied: plainOutcome("applied"),
-    queued: plainOutcome("queued"),
+  const [row] = await query(db, {
+    ...tallyColumns(state),
+    plainApplied: plainOutcome("applied"),
+    plainQueued: plainOutcome("queued"),
+    detailed: sql<
+      unknown[] | null
+    >`jsonb_agg(${receipt} ORDER BY ${sql.join(order, sql`, `)})
+      FILTER (WHERE ${hasDiagnostics})`,
   }).where(where);
-  const detailed = await query(db, { receipt: sql<unknown>`${receipt}` })
-    .where(and(where, sql`jsonb_typeof(${receipt}) = 'object'`, hasDiagnostics))
-    .orderBy(...order);
-  const parsed = detailed.flatMap((row) => {
-    const result = outcomeReceipt.safeParse(row.receipt);
+  if (!row) throw new Error("Evaluation outcomes returned no row");
+  const { plainApplied, plainQueued, detailed, ...tally } = row;
+  const parsed = (detailed ?? []).flatMap((receipt) => {
+    const result = outcomeReceipt.safeParse(receipt);
     return result.success ? [result.data] : [];
   });
   const outcome = (value: string) =>
     parsed.filter((entry) => entry.outcome === value).length;
   return {
-    applied: (plain?.applied ?? 0) + outcome("applied"),
-    queued: (plain?.queued ?? 0) + outcome("queued"),
+    tally: { ...tally, pending: tally.queued + tally.resultReady },
+    applied: plainApplied + outcome("applied"),
+    queued: plainQueued + outcome("queued"),
     diagnostics: parsed.flatMap((entry) => entry.diagnostics ?? []),
   };
 }

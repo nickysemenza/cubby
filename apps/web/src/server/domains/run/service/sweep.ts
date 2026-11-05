@@ -805,14 +805,11 @@ const fieldEvaluate: StepDriversFor<"sweep">["field_evaluate"] = {
   page: async (context) => {
     await readmitFailures(context, false);
     const scope = fieldEvaluations(context.run);
-    const [tally, outcomes] = await Promise.all([
-      readEvaluationTally(context.db, scope),
-      readEvaluationOutcomes(context.db, scope),
-    ]);
+    const outcomes = await readEvaluationOutcomes(context.db, scope);
     const reasons: Record<string, number> = {};
     for (const diagnostic of outcomes.diagnostics)
       reasons[diagnostic.reason] = (reasons[diagnostic.reason] ?? 0) + 1;
-    return evaluationPage(context, scope, tally, {
+    return evaluationPage(context, scope, outcomes.tally, {
       tallies: { applied: outcomes.applied, queued: outcomes.queued },
       reasons,
     });
