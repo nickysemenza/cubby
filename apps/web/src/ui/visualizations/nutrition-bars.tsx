@@ -8,7 +8,7 @@ import { useMemo } from "react";
 import { aggregateEstimates, scaleNutrition } from "~/lib/nutrition-estimates";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import type { IngredientDataItem } from "~/lib/recipe-costing";
-import { KeyNumbers } from "~/ui/common/key-numbers";
+import { KeyNumbers } from "~/ui/records/key-numbers";
 import { Visualization } from "~/ui/visualizations/visualization";
 
 const SEGMENT_COLORS = [

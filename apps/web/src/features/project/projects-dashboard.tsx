@@ -34,18 +34,18 @@ import { entityReport } from "~/integrations/tanstack-query/generated/domains/en
 import { image } from "~/integrations/tanstack-query/generated/domains/image.gen";
 import { project } from "~/integrations/tanstack-query/generated/domains/project.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { DateDisplay } from "~/ui/common/date-display";
-import { Image } from "~/ui/common/image";
-import { type KeyNumber, KeyNumbers } from "~/ui/common/key-numbers";
 import type { CubbyRow } from "~/ui/data-table/table-features";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { DashboardSectionLoading } from "~/ui/feedback/loading-skeletons";
 import { Grid, Panel, Row, Section, Stack } from "~/ui/layout";
+import { Image } from "~/ui/media/image";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { type KeyNumber, KeyNumbers } from "~/ui/records/key-numbers";
 import { Badge } from "~/ui/reui/badge";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import {
   defaultFilters,

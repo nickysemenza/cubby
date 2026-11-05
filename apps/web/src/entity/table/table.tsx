@@ -20,7 +20,6 @@ import {
   RecordSuggestionBoundary,
 } from "~/entity/suggestions/record-suggestions";
 import type { QueryTiming } from "~/lib/query-timing";
-import { CurrencyValue } from "~/ui/common/currency-value";
 import {
   StaticTable,
   type StaticTableColumn,
@@ -44,6 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/ui/primitives/table";
+import { CurrencyValue } from "~/ui/values/currency-value";
 
 import type { BulkActionPreview } from "../../ui/data-table/bulk-actions.types";
 import { tableMoneyTotals } from "../../ui/data-table/bulk/table-money";
@@ -67,17 +67,16 @@ import type {
   CubbyRow as Row,
 } from "../../ui/data-table/table-features";
 import { isUnpaged } from "../../ui/data-table/table-features";
-import { TreeStatusRow } from "../../ui/data-table/tree-status-row";
 import { useDataTableController } from "../../ui/data-table/use-data-table-controller";
 import type {
   GroupColumnTotal,
   GroupConfig,
 } from "../../ui/data-table/use-grouped-list";
-import { serverTreeStatusOf } from "../../ui/hooks/use-server-tree-children";
 import {
   SidePanelLayout,
   TableRowStepContext,
 } from "../../ui/overlays/side-panel";
+import { TreeStatusRow } from "../../ui/tree/tree-status-row";
 import {
   type EntityActionsEntry,
   EntityActionsProvider,
@@ -85,6 +84,7 @@ import {
 } from "../actions/entity-actions";
 import { EntityDisplayImagesProvider } from "../entity-media/entity-display-images";
 import type { InfiniteScrollControls } from "../hooks/use-infinite-table-list";
+import { serverTreeStatusOf } from "../hooks/use-server-tree-children";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { DesktopDataRow as DataRow } from "./desktop-data-row";
 import { TableEmptyState } from "./entity-empty-states";

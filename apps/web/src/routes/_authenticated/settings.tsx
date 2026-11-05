@@ -37,7 +37,6 @@ import {
   type TimingResponse,
 } from "~/lib/perf/timing.contract";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { DateDisplay } from "~/ui/common/date-display";
 import { IndexedSections } from "~/ui/data-table/indexed-sections";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Section, Stack } from "~/ui/layout";
@@ -45,6 +44,7 @@ import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
+import { DateDisplay } from "~/ui/values/date-display";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   validateSearch: z.object({

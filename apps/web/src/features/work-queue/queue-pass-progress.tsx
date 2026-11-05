@@ -2,11 +2,11 @@ import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowC
 import { cn } from "cn";
 import type { ReactNode } from "react";
 
-import { DateDisplay } from "~/ui/common/date-display";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Progress } from "~/ui/primitives/progress";
 import { Description } from "~/ui/text/description";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import type { PassCounts } from "./queue-pass";
 import type { QueuePassResumeCandidate } from "./use-queue-pass";

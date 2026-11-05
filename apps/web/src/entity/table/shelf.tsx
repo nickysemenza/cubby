@@ -5,9 +5,9 @@ import { cn } from "cn";
 import type { ReactNode } from "react";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
-import { Image } from "~/ui/common/image";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Panel } from "~/ui/layout/panel";
+import { Image } from "~/ui/media/image";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -16,8 +16,8 @@ import {
   type GroupConfig,
   groupSections,
 } from "../../ui/data-table/use-grouped-list";
-import { useInfiniteScrollSentinel } from "../../ui/hooks/use-infinite-scroll-sentinel";
 import type { InfiniteScrollControls } from "../hooks/use-infinite-table-list";
+import { useInfiniteScrollSentinel } from "./use-infinite-scroll-sentinel";
 
 export interface GroupedFlowGroup<T> {
   id: string;

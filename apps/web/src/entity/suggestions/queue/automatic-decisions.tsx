@@ -11,14 +11,14 @@ import { assessment } from "~/integrations/tanstack-query/generated/domains/asse
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { Picker } from "~/ui/combobox/picker";
-import { DateDisplay } from "~/ui/common/date-display";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Stack, Row } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
+import { RecordList, RecordRow } from "~/ui/records/record-list";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import { ScopedListPager } from "./scoped-list-pager";
 import { RecordLink } from "./suggestion-values";

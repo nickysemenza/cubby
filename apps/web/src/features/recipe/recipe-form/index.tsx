@@ -17,6 +17,7 @@ import { z } from "zod";
 
 import { EntityPrimitiveFields } from "~/entity/editing/entity-primitive-fields";
 import { PendingImageUpload } from "~/entity/entity-media/pending-image-upload";
+import { useImageState } from "~/entity/entity-media/use-image-state";
 import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
 import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";
@@ -26,7 +27,6 @@ import {
   getSubmitButtonText,
   UnifiedTextField,
 } from "~/ui/forms/form-utils";
-import { useImageState } from "~/ui/hooks/use-image-state";
 import { Row, Section, Stack } from "~/ui/layout";
 import {
   AlertDialog,

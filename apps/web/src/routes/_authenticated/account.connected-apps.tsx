@@ -9,7 +9,6 @@ import RTable from "~/entity/table/table";
 import { OrphanedClientMaintenance } from "~/features/account/orphaned-client-maintenance";
 import { oauth } from "~/integrations/tanstack-query/generated/domains/oauth.gen";
 import { pageTitle } from "~/lib/page-title";
-import { DateDisplay } from "~/ui/common/date-display";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -30,6 +29,7 @@ import {
 } from "~/ui/primitives/alert-dialog";
 import { Button } from "~/ui/primitives/button";
 import { Badge } from "~/ui/reui/badge";
+import { DateDisplay } from "~/ui/values/date-display";
 
 // A static sibling of /account/$accountView: TanStack ranks literal segments
 // above dynamic ones, so this wins over the better-auth-ui catch-all rather

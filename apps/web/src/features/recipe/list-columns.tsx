@@ -8,6 +8,7 @@ import { useMemo } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
+import { useTagOptions } from "~/entity/hooks/use-entity-options";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import type { EntityListParamsByEntity } from "~/entity/model/list-contracts";
@@ -27,9 +28,8 @@ import {
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
-import { useTagOptions } from "~/ui/hooks/use-entity-options";
 import { NoneValue } from "~/ui/text/none-value";
-import { TruncatedList } from "~/ui/truncated-list";
+import { TruncatedList } from "~/ui/text/truncated-list";
 
 import { defineListOverride } from "../../entity/list-columns/types";
 

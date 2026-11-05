@@ -36,7 +36,7 @@ const productListItem = getEntityListItemSchema("product");
 import type {
   ListQueryOptionsFn,
   ListQueryResponse,
-} from "~/ui/hooks/use-paginated-table-core";
+} from "~/entity/table/use-paginated-table-core";
 
 installFeatures();
 const queryClient = createEditorTestQueryClient();

@@ -34,7 +34,7 @@ import { meal } from "~/integrations/tanstack-query/generated/domains/meal.gen";
 import { formatDateSpan } from "~/lib/date-span";
 import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
-import { DatePickerInput } from "~/ui/date-picker-input";
+import { DatePickerInput } from "~/ui/dates/date-picker-input";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";

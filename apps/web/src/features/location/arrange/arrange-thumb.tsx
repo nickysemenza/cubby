@@ -4,8 +4,8 @@ import { cn } from "cn";
 import type React from "react";
 import type { ReactNode } from "react";
 
-import { Image } from "~/ui/common/image";
-import { ImagePreviewPopup } from "~/ui/common/image-with-preview";
+import { Image } from "~/ui/media/image";
+import { ImagePreviewPopup } from "~/ui/media/image-with-preview";
 import { Tooltip, TooltipTrigger } from "~/ui/primitives/tooltip";
 
 interface ArrangeThumbProps {

@@ -1,12 +1,12 @@
 import type { OnChangeFn, RowSelectionState } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 
-import type { EntityActionsEntry } from "../../entity/actions/entity-actions";
 import type {
   CubbyColumnDef as ColumnDef,
   CubbyRow as Row,
   CubbyTable as Table,
-} from "../data-table/table-features";
+} from "../../ui/data-table/table-features";
+import type { EntityActionsEntry } from "../actions/entity-actions";
 
 export interface UseEntitySelectionReturn<TData extends { id: string }> {
   /**

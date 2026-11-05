@@ -16,12 +16,12 @@ import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { photoImport } from "~/integrations/tanstack-query/generated/domains/photoImport.gen";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
-import { AiCost } from "~/ui/common/ai-cost";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Progress } from "~/ui/primitives/progress";
 import { StatusText } from "~/ui/text/status-text";
+import { AiCost } from "~/ui/values/ai-cost";
 
 import { runHasAgent } from "./agent-observation";
 import { PhotoGroupReview, usePhotoRunReview } from "./photo-group-review";

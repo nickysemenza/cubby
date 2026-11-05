@@ -2,7 +2,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { OPTION_GLYPH_NAMES } from "~/ui/common/option-glyph";
+import { OPTION_GLYPH_NAMES } from "~/ui/media/option-glyph";
 
 import {
   SIDE_PANEL_WIDTH_KEY,

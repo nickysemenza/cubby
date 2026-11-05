@@ -38,7 +38,6 @@ import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { AmountFieldGroup } from "~/features/inventory/amount-field-group";
 import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/domains/inventory.gen";
-import { DecisionSteps } from "~/ui/common/decision-steps";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -46,6 +45,7 @@ import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import { DecisionSteps } from "~/ui/records/decision-steps";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/reui/alert";
 import { Description } from "~/ui/text/description";
 

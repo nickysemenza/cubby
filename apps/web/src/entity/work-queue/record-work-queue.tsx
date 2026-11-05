@@ -6,10 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
-import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
+import { Ledger, LedgerCell, LedgerRow } from "~/ui/records/ledger";
 
 import { WorkActions } from "./work-actions";
 import { GapChip, OwnerPill } from "./work-queue-display";

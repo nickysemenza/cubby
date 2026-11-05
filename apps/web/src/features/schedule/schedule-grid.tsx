@@ -13,7 +13,7 @@ import {
 
 import { formatInstant } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { RecordList, RecordRow } from "~/ui/records/record-list";
 
 /* oxlint-disable jsx-a11y/prefer-tag-over-role -- Pinned labels and independently scrolling dates require flex layout; native table layout cannot preserve those regions. */
 

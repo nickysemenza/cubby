@@ -14,13 +14,13 @@ import { runDetail } from "~/integrations/tanstack-query/generated/domains/runDe
 import { formatCount } from "~/lib/number-format";
 import { runPlanBlocks } from "~/lib/run-plan";
 import { Picker } from "~/ui/combobox/picker";
-import type { KeyNumber } from "~/ui/common/key-numbers";
-import { RecordList } from "~/ui/common/record-list";
 import {
   useSectionCount,
   useSectionEmpty,
 } from "~/ui/data-table/detail-section-state";
 import { Button } from "~/ui/primitives/button";
+import type { KeyNumber } from "~/ui/records/key-numbers";
+import { RecordList } from "~/ui/records/record-list";
 
 import { JobDiagnostics } from "../job/job-diagnostics";
 import { DecisionLedger } from "./decision-ledger";

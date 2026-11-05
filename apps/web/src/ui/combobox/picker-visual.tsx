@@ -1,6 +1,6 @@
 import { cn } from "cn";
 
-import { Image } from "~/ui/common/image";
+import { Image } from "~/ui/media/image";
 
 import type { ComboboxItem } from "./combobox-types";
 

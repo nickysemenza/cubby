@@ -1,8 +1,8 @@
 import { cn } from "cn";
 
 import { wasm } from "~/lib/wasm";
-import { MiddleTruncate } from "~/ui/common/middle-truncate";
-import { useDenseCell } from "~/ui/common/stacked-value";
+import { MiddleTruncate } from "~/ui/values/middle-truncate";
+import { useDenseCell } from "~/ui/values/stacked-value";
 
 /** Canonical storage establishes ISBN identity, but not an observed UPC/EAN encoding. */
 export function productGtinLabel(gtin: string | null): "ISBN-13" | "GTIN" {

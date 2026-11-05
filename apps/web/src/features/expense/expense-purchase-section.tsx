@@ -12,13 +12,13 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { DateDisplay } from "~/ui/common/date-display";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 import { NoneValue } from "~/ui/text/none-value";
+import { DateDisplay } from "~/ui/values/date-display";
 
 // Module-level so the fallback keeps a stable reference across renders.
 const NO_OTHER_EXPENSES: ExpenseOut[] = [];

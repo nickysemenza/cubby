@@ -34,9 +34,9 @@ import type { RecipeCosting } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { Image } from "~/ui/common/image";
 import { Panel } from "~/ui/layout";
 import { stickyRowHeaderCard } from "~/ui/matrix/matrix-chrome";
+import { Image } from "~/ui/media/image";
 import { Button } from "~/ui/primitives/button";
 
 import { compactRound } from "../recipe-scaling-pct";

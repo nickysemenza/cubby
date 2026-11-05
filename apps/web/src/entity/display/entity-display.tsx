@@ -60,21 +60,6 @@ import {
 import { EditableEntityCell } from "~/entity/table/editable-entity-cell";
 import { formatCurrency } from "~/lib/number-format";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
-import { CurrencyValue } from "~/ui/common/currency-value";
-import { DateDisplay } from "~/ui/common/date-display";
-import {
-  AddFactValue,
-  type Fact,
-  Facts,
-  NotRecordedValue,
-  useFactsAdd,
-} from "~/ui/common/facts";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
-import {
-  NumberValue,
-  renderScalarValue,
-  type ScalarDisplayValue,
-} from "~/ui/common/scalar-value";
 import type { CellClipboardSpec } from "~/ui/data-table/cell-clipboard";
 import { dateRangeCellData } from "~/ui/data-table/cell-data";
 import {
@@ -102,11 +87,26 @@ import {
 import { CellMagnitudeBar } from "~/ui/data-table/visuals/cell-visual";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { WhyValueContents } from "~/ui/derived/why-value";
-import { ExternalLinkText } from "~/ui/external-link";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
+import {
+  AddFactValue,
+  type Fact,
+  Facts,
+  NotRecordedValue,
+  useFactsAdd,
+} from "~/ui/records/facts";
+import { RecordList, RecordRow } from "~/ui/records/record-list";
+import { ExternalLinkText } from "~/ui/text/external-link";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 import { NoneValue } from "~/ui/text/none-value";
+import { CurrencyValue } from "~/ui/values/currency-value";
+import { DateDisplay } from "~/ui/values/date-display";
+import {
+  NumberValue,
+  renderScalarValue,
+  type ScalarDisplayValue,
+} from "~/ui/values/scalar-value";
 
 import { columnHeaderFor } from "../column-header";
 import { recordFieldClearing } from "../editing/field-clearing";

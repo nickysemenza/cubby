@@ -24,6 +24,7 @@ import {
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
 import type { FilterPatch } from "~/entity/filters";
+import { flattenUniquePageItems } from "~/entity/hooks/infinite-page-utils";
 import { useLoadAllPages } from "~/entity/hooks/use-all-entity-records";
 import { useEntityMetadata } from "~/entity/metadata";
 import {
@@ -32,7 +33,6 @@ import {
 } from "~/features/schedule/schedule-grid";
 import { entityReport } from "~/integrations/tanstack-query/generated/domains/entityReport.gen";
 import { project } from "~/integrations/tanstack-query/generated/domains/project.gen";
-import { flattenUniquePageItems } from "~/ui/hooks/infinite-page-utils";
 import { Panel } from "~/ui/layout/panel";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 import {

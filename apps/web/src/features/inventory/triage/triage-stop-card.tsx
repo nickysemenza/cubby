@@ -15,9 +15,9 @@ import { QueuePassPosition } from "~/features/work-queue/queue-pass-progress";
 import { inventory } from "~/integrations/tanstack-query/generated/domains/inventory.gen";
 import { location } from "~/integrations/tanstack-query/generated/domains/location.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { Image } from "~/ui/common/image";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Stack } from "~/ui/layout";
+import { Image } from "~/ui/media/image";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 

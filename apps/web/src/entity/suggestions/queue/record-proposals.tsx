@@ -5,12 +5,12 @@ import { useState } from "react";
 
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { RecordList, RecordRow } from "~/ui/records/record-list";
 
 import { useAcceptClean } from "./accept-clean";
 import { ScopedListPager } from "./scoped-list-pager";

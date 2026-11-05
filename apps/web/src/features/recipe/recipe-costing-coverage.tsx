@@ -9,7 +9,6 @@ import {
   TOTALS_MISSING_MEASURES as MISSING_CHIPS,
   type RecipeTotalsGap,
 } from "~/lib/recipe-totals-gaps";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Row } from "~/ui/layout";
 import { buttonVariants } from "~/ui/primitives/button";
 import {
@@ -19,6 +18,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import { RecordList, RecordRow } from "~/ui/records/record-list";
 import { Badge } from "~/ui/reui/badge";
 
 /**

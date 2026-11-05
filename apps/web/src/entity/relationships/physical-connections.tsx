@@ -10,9 +10,9 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
-import { RecordGroup, RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
+import { RecordGroup, RecordList, RecordRow } from "~/ui/records/record-list";
 
 /**
  * One-hop physical connections (the runtime edge source, ADR 0006)

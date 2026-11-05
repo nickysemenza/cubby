@@ -465,7 +465,7 @@ export const noHandRolledRecordListRule = defineRule({
       description: "Render read-only record lists through RecordList.",
     },
     messages: {
-      recordList: `Use RecordList (ui/common/record-list.tsx) instead of a divide-y list; prose lists such as recipe ingredients may baseline. ${CATALOG}`,
+      recordList: `Use RecordList (ui/records/record-list.tsx) instead of a divide-y list; prose lists such as recipe ingredients may baseline. ${CATALOG}`,
     },
   },
   createOnce(context) {

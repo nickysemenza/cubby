@@ -26,8 +26,6 @@ import {
   type HoverPreviewEntity,
 } from "~/entity/preview/preview-entities";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
-import { useIdentityCell } from "~/ui/common/stacked-value";
-import { ExternalLinkIcon } from "~/ui/external-link";
 import {
   HoverCard,
   HoverCardContent,
@@ -39,6 +37,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { ExternalLinkIcon } from "~/ui/text/external-link";
+import { useIdentityCell } from "~/ui/values/stacked-value";
 
 const EntityPreviewContent = browserOnlyLazy<
   ComponentProps<typeof EntityPreviewContentComponent>

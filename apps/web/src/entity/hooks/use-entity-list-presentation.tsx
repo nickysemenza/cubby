@@ -16,6 +16,7 @@ import {
   type TableStateReturn,
   useTableState,
 } from "~/entity/table/use-table-state";
+import type { RuntimeFilterOptions } from "~/ui/combobox/filter-option-types";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
 import { useRevealTableColumnsOnce } from "~/ui/data-table/column-layout";
 import {
@@ -23,7 +24,6 @@ import {
   type CubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
-import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 
 import type { EntityActionSubject } from "../actions/entity-actions";
 import type { DeletableConfig } from "./use-deletable-config";

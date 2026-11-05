@@ -14,9 +14,9 @@ import { z } from "zod";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { recommendations } from "~/integrations/tanstack-query/generated/domains/recommendations.gen";
 import { search } from "~/integrations/tanstack-query/generated/domains/search.gen";
-import { RecordList } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { Button, buttonVariants } from "~/ui/primitives/button";
+import { RecordList } from "~/ui/records/record-list";
 
 import {
   type EntityDisplayImageMap,

@@ -2,15 +2,15 @@ import { humanize } from "@cubby/shared";
 import { type ComponentProps, useMemo } from "react";
 
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
-import type { Fact } from "~/ui/common/facts";
+import { Row, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
+import { Button } from "~/ui/primitives/button";
+import type { Fact } from "~/ui/records/facts";
 import {
   RecordList,
   RecordRow,
   recordColumnsOf,
-} from "~/ui/common/record-list";
-import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
-import { Button } from "~/ui/primitives/button";
+} from "~/ui/records/record-list";
 
 import type { DependencyGraphCanvas as DependencyGraphCanvasComponent } from "./dependency-graph-canvas";
 import {

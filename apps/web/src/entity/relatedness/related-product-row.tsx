@@ -2,7 +2,7 @@ import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { ReactNode } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { RecordRow, RecordScore } from "~/ui/common/record-list";
+import { RecordRow, RecordScore } from "~/ui/records/record-list";
 
 /**
  * One compact product identity row for derived relationship surfaces. The

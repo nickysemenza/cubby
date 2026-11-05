@@ -10,10 +10,10 @@ import {
   useCubbyTable,
 } from "../../ui/data-table/table-features";
 import type { GroupConfig } from "../../ui/data-table/use-grouped-list";
-import type { UseEntitySelectionReturn } from "../../ui/hooks/use-entity-selection";
 import type { EntityActionsEntry } from "../actions/entity-actions";
 import type { InfiniteScrollControls } from "../hooks/use-infinite-table-list";
 import RTable, { type NestToggle, type RTableProps } from "./table";
+import type { UseEntitySelectionReturn } from "./use-entity-selection";
 
 /**
  * The complete rendering contract produced by the list hooks.

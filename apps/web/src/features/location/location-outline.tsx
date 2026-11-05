@@ -8,10 +8,10 @@ import { useMemo, type ReactNode } from "react";
 
 import { EntityIcon } from "~/entity/entities";
 import { LocationIcon } from "~/entity/presentation/location-icons";
-import { TreeOutline, type OutlineNode } from "~/ui/common/tree-outline";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 import { NoneValue } from "~/ui/text/none-value";
+import { TreeOutline, type OutlineNode } from "~/ui/tree/tree-outline";
 
 import { LocationVisual } from "./location-visual";
 

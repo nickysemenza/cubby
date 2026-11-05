@@ -13,8 +13,6 @@ import { entityDetailLink } from "~/entity/entities";
 import { PickerField } from "~/entity/forms/picker-field";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { formatCurrency } from "~/lib/number-format";
-import { Facts, FactsDensityProvider } from "~/ui/common/facts";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { WhyValue } from "~/ui/derived/why-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { DateRangeField } from "~/ui/forms/date-span-field";
@@ -35,6 +33,8 @@ import {
   PopoverHeader,
   PopoverTitle,
 } from "~/ui/primitives/popover";
+import { Facts, FactsDensityProvider } from "~/ui/records/facts";
+import { RecordList, RecordRow } from "~/ui/records/record-list";
 
 import { DuplicateMealButton } from "../meal/copy-meals";
 import { CalendarItemPresentation, itemMetadata } from "./calendar-item-row";

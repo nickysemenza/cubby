@@ -28,7 +28,6 @@ import {
 import { ImageThumbnail } from "~/entity/table/image-thumbnail";
 import RTable from "~/entity/table/table";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
-import { renderScalarValue } from "~/ui/common/scalar-value";
 import {
   numberCellData,
   textCellData,
@@ -49,6 +48,7 @@ import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useFilterBarDraft } from "~/ui/data-table/use-filter-bar-draft";
 import { Stack } from "~/ui/layout";
 import { EnumPill } from "~/ui/text/enum-pill";
+import { renderScalarValue } from "~/ui/values/scalar-value";
 
 const EMPTY_ROWS: EntityRecord[] = [];
 const helper = createCubbyColumnHelper<EntityRecord>();

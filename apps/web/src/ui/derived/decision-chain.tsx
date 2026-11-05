@@ -15,10 +15,10 @@ import {
 } from "~/entity/fields/field-resolution";
 import { compactFieldText } from "~/entity/fields/field-text";
 import { useEntityMetadata } from "~/entity/metadata";
-import { DateDisplay } from "~/ui/common/date-display";
-import { Facts } from "~/ui/common/facts";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Button } from "~/ui/primitives/button";
+import { Facts } from "~/ui/records/facts";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import {
   pendingWorkLabel,

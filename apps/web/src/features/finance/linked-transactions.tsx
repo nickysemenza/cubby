@@ -12,13 +12,13 @@ import { useEntityList } from "~/entity/hooks/use-entity-list";
 import { useEntityFieldSave } from "~/entity/hooks/use-update-mutation";
 import { useEntityMetadata } from "~/entity/metadata";
 import { ListWorkbench } from "~/entity/table/list-workbench";
+import type { ListQueryOptionsFn } from "~/entity/table/use-paginated-table-core";
 import { formatCurrency } from "~/lib/number-format";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
 import { EmptyState } from "~/ui/feedback/empty-state";
-import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 

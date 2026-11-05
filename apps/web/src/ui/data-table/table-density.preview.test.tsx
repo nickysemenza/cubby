@@ -3,8 +3,6 @@ import { type ReactNode, useRef } from "react";
 import { describe, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
-import { ChipCluster } from "~/ui/common/chip-cluster";
-import { MiddleTruncate } from "~/ui/common/middle-truncate";
 import {
   Table,
   TableBody,
@@ -13,6 +11,8 @@ import {
   TableHeader,
   TableRow,
 } from "~/ui/primitives/table";
+import { ChipCluster } from "~/ui/records/chip-cluster";
+import { MiddleTruncate } from "~/ui/values/middle-truncate";
 
 import { HeaderLabel } from "../../entity/table/table-header-layout";
 import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "./cell-frame";

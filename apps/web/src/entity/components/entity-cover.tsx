@@ -8,8 +8,8 @@ import { cn } from "cn";
 import type { ReactNode } from "react";
 
 import { EntityIcon } from "~/entity/entities";
-import { Image } from "~/ui/common/image";
-import { ImageWithPreview } from "~/ui/common/image-with-preview";
+import { Image } from "~/ui/media/image";
+import { ImageWithPreview } from "~/ui/media/image-with-preview";
 
 interface EntityCoverProps {
   images: readonly ImageUrlSummary[];

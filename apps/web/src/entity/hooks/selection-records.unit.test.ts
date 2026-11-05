@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
+import type { ListQueryOptionsFn } from "~/entity/table/use-paginated-table-core";
 
 import { loadSelectionRecords } from "./selection-records";
 

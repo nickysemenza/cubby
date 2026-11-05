@@ -26,9 +26,9 @@ import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { PreviewQuery } from "~/entity/preview/preview-query";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
-import { FactsAddProvider, FactsDensityProvider } from "~/ui/common/facts";
 import { Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { FactsAddProvider, FactsDensityProvider } from "~/ui/records/facts";
 
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";

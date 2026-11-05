@@ -26,7 +26,6 @@ import {
   RecordRowSuggestions,
   RecordSuggestionBoundary,
 } from "~/entity/suggestions/record-suggestions";
-import { DenseCellContext } from "~/ui/common/stacked-value";
 import { useDebug } from "~/ui/hooks/use-debug";
 import {
   type LongPressHandlers,
@@ -35,6 +34,7 @@ import {
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Spinner } from "~/ui/primitives/spinner";
+import { DenseCellContext } from "~/ui/values/stacked-value";
 
 import { DebugDialog } from "../../ui/data-table/debug-dialog";
 import { groupRecordIdentity } from "../../ui/data-table/group-record-identity";
@@ -44,13 +44,13 @@ import type {
   CubbyRow as Row,
   CubbyTable as ITable,
 } from "../../ui/data-table/table-features";
-import { TreeStatusRow } from "../../ui/data-table/tree-status-row";
 import type { GroupConfig } from "../../ui/data-table/use-grouped-list";
 import { useGroupedList } from "../../ui/data-table/use-grouped-list";
-import { useInfiniteScrollSentinel } from "../../ui/hooks/use-infinite-scroll-sentinel";
-import { serverTreeStatusOf } from "../../ui/hooks/use-server-tree-children";
+import { TreeStatusRow } from "../../ui/tree/tree-status-row";
 import type { InfiniteScrollControls } from "../hooks/use-infinite-table-list";
+import { serverTreeStatusOf } from "../hooks/use-server-tree-children";
 import { TableEmptyState } from "./entity-empty-states";
+import { useInfiniteScrollSentinel } from "./use-infinite-scroll-sentinel";
 import {
   estimateMobileRowHeight,
   type MobileListRowModel,

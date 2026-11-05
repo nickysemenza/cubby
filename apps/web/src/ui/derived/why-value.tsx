@@ -30,11 +30,7 @@ import { fieldExplanation } from "~/integrations/tanstack-query/generated/domain
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { formatCurrency } from "~/lib/number-format";
-import { DateDisplay } from "~/ui/common/date-display";
-import { Facts } from "~/ui/common/facts";
-import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
 import { CELL_RAIL_BUTTON_CLASS } from "~/ui/data-table/cell-frame";
-import { ExternalLinkText } from "~/ui/external-link";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 import {
@@ -50,9 +46,13 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import { Facts } from "~/ui/records/facts";
+import { Ledger, LedgerCell, LedgerRow } from "~/ui/records/ledger";
 import { Badge } from "~/ui/reui/badge";
+import { ExternalLinkText } from "~/ui/text/external-link";
 import JsonRenderer from "~/ui/text/json-renderer";
 import { NoneValue } from "~/ui/text/none-value";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import { DecisionChain, DerivedFreshness } from "./decision-chain";
 import { DecisionLevels } from "./decision-levels";

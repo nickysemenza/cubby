@@ -1,6 +1,6 @@
 import type { EntitySummary } from "@cubby/schemas/entity-summary";
 
-import { KeyNumbers } from "~/ui/common/key-numbers";
+import { KeyNumbers } from "~/ui/records/key-numbers";
 
 type ListTotalDescriptor = Pick<
   EntitySummary["list"]["totals"][number],

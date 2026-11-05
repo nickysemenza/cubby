@@ -36,17 +36,9 @@ import { formatCount, formatCurrency } from "~/lib/number-format";
 import { parsePlainDate } from "~/lib/plain-date";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { DateDisplay } from "~/ui/common/date-display";
-import { KeyNumbers } from "~/ui/common/key-numbers";
-import {
-  RecordDot,
-  RecordHeading,
-  RecordList,
-  RecordRow,
-} from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
-import { DatePickerInput } from "~/ui/date-picker-input";
-import { DateRangeShortcuts } from "~/ui/date-range-shortcuts";
+import { DatePickerInput } from "~/ui/dates/date-picker-input";
+import { DateRangeShortcuts } from "~/ui/dates/date-range-shortcuts";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -55,8 +47,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { KeyNumbers } from "~/ui/records/key-numbers";
+import {
+  RecordDot,
+  RecordHeading,
+  RecordList,
+  RecordRow,
+} from "~/ui/records/record-list";
 import { Description } from "~/ui/text/description";
 import { EnumPill } from "~/ui/text/enum-pill";
+import { DateDisplay } from "~/ui/values/date-display";
 import {
   Visualization,
   visualizationState,

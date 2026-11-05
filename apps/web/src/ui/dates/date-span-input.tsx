@@ -5,9 +5,9 @@ import type { DateRange } from "react-day-picker";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
-import type { Calendar as CalendarComponent } from "~/ui/calendar";
 import { Picker } from "~/ui/combobox/picker";
-import { DatePickerInput } from "~/ui/date-picker-input";
+import type { Calendar as CalendarComponent } from "~/ui/dates/calendar";
+import { DatePickerInput } from "~/ui/dates/date-picker-input";
 import { Button } from "~/ui/primitives/button";
 import {
   Popover,
@@ -19,7 +19,7 @@ const Calendar = browserOnlyLazy<ComponentProps<typeof CalendarComponent>>(
   import.meta.env.SSR
     ? null
     : () =>
-        import("~/ui/calendar").then((module) => ({
+        import("~/ui/dates/calendar").then((module) => ({
           default: module.Calendar,
         })),
 );

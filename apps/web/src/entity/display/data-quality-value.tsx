@@ -9,9 +9,9 @@ import { cn } from "cn";
 import { z } from "zod";
 
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
-import { useDenseCell } from "~/ui/common/stacked-value";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { WhyValue } from "~/ui/derived/why-value";
+import { useDenseCell } from "~/ui/values/stacked-value";
 
 /**
  * Quality reads as what is missing, in its condition tone: warning for missing

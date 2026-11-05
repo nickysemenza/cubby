@@ -1,4 +1,4 @@
-import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
+import type { ListQueryOptionsFn } from "~/entity/table/use-paginated-table-core";
 
 /** Resolve action data only on demand, after lightweight identity selection. */
 export async function loadSelectionRecords<

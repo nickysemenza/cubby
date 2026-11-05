@@ -4,8 +4,8 @@ import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { useState } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-import { Image } from "~/ui/common/image";
 import { Panel } from "~/ui/layout/panel";
+import { Image } from "~/ui/media/image";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 

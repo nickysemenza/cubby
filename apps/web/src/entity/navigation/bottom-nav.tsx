@@ -5,8 +5,8 @@ import { Link, useLocation } from "@tanstack/react-router";
 import { cn } from "cn";
 import * as React from "react";
 
+import { useNavAuthed } from "~/lib/use-nav-authed";
 import { BackgroundRefreshStatus } from "~/ui/feedback/background-refresh-status";
-import { useNavAuthed } from "~/ui/hooks/use-nav-authed";
 import { useVirtualKeyboard } from "~/ui/hooks/use-virtual-keyboard";
 import { Row } from "~/ui/layout";
 

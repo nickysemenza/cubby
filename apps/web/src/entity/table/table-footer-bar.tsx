@@ -3,7 +3,6 @@ import type { RowData } from "@tanstack/react-table";
 import { type ReactNode, useRef } from "react";
 
 import { formatCount } from "~/lib/number-format";
-import { CurrencyValue } from "~/ui/common/currency-value";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -14,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
+import { CurrencyValue } from "~/ui/values/currency-value";
 
 import { tableMoneyTotals } from "../../ui/data-table/bulk/table-money";
 import { columnLabel } from "../../ui/data-table/data-table-view-options";

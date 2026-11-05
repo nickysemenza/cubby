@@ -24,9 +24,12 @@ import {
 } from "~/entity/table/column-helpers";
 import type { TableStateReturn } from "~/entity/table/use-table-state";
 import { formatCurrency } from "~/lib/number-format";
+import type { RuntimeFilterOptions } from "~/ui/combobox/filter-option-types";
+import {
+  deferredFilterOptionSource,
+  deferredRosterControls,
+} from "~/ui/combobox/filter-option-types";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { DateDisplay } from "~/ui/common/date-display";
-import { StackedValue } from "~/ui/common/stacked-value";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
   createCubbyColumnCollection,
@@ -37,12 +40,9 @@ import {
   attachCubbyColumnMeta,
   type FilterConfig,
 } from "~/ui/data-table/table-meta";
-import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
-import {
-  deferredFilterOptionSource,
-  deferredRosterControls,
-} from "~/ui/hooks/filter-option-types";
 import { NoneValue } from "~/ui/text/none-value";
+import { DateDisplay } from "~/ui/values/date-display";
+import { StackedValue } from "~/ui/values/stacked-value";
 
 import { kindAgreement } from "./statement-kind-votes";
 import { SuggestionActionsCell, ExpandCell } from "./suggestion-actions";

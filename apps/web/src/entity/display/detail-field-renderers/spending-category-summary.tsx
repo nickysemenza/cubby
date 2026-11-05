@@ -5,8 +5,8 @@ import {
 
 import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
 import { formatCurrency } from "~/lib/number-format";
-import { ChipCluster } from "~/ui/common/chip-cluster";
 import { Row, Stack } from "~/ui/layout";
+import { ChipCluster } from "~/ui/records/chip-cluster";
 
 const compactSummaryLabels = {
   ...spendingCategorySummaryLabels,

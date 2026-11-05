@@ -17,8 +17,6 @@ import { job } from "~/integrations/tanstack-query/generated/domains/job.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
-import { type Fact, Facts } from "~/ui/common/facts";
-import { RecordList, type RecordListState } from "~/ui/common/record-list";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { CloudflareIcon } from "~/ui/icons/cloudflare";
@@ -27,6 +25,8 @@ import { Panel } from "~/ui/layout/panel";
 import { Section } from "~/ui/layout/section";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import { type Fact, Facts } from "~/ui/records/facts";
+import { RecordList, type RecordListState } from "~/ui/records/record-list";
 
 import { jobWait } from "../run/run-view-model";
 import { JobDefinition } from "../run/work-definition";

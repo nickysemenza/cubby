@@ -7,20 +7,20 @@ import { match } from "ts-pattern";
 import { EntityIcon } from "~/entity/entities";
 import { isPickerEntity, recordSource } from "~/entity/picker/picker";
 import { resolveDateRange } from "~/lib/date-range-presets";
+import {
+  deferredFilterOptionSource,
+  deferredRosterControls,
+  filterOptionItems,
+  type RuntimeFilterOptions,
+} from "~/ui/combobox/filter-option-types";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { OptionGlyph } from "~/ui/common/option-glyph";
 import {
   barFieldFromConfig,
   type FilterBarField,
   type FilterValueType,
 } from "~/ui/data-table/filter-bar-core";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
-import {
-  deferredFilterOptionSource,
-  deferredRosterControls,
-  filterOptionItems,
-  type RuntimeFilterOptions,
-} from "~/ui/hooks/filter-option-types";
+import { OptionGlyph } from "~/ui/media/option-glyph";
 
 import * as behavior from "./filter-behavior";
 import {

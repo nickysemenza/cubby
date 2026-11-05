@@ -9,12 +9,12 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { mealListLabel } from "~/features/meal/meal-format";
 import { meal } from "~/integrations/tanstack-query/generated/domains/meal.gen";
-import { DenseCellContext } from "~/ui/common/stacked-value";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { Section } from "~/ui/layout";
+import { DenseCellContext } from "~/ui/values/stacked-value";
 
 import type { HomeAsOfWindow } from "./home-as-of-window";
 import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";

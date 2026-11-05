@@ -2,7 +2,7 @@ import type { EnumIcon, EnumRole } from "@cubby/shared/enum-palette";
 import { createElement, type ReactNode } from "react";
 
 import { expenseLineAutoOption } from "~/lib/select-options";
-import { OptionGlyph } from "~/ui/common/option-glyph";
+import { OptionGlyph } from "~/ui/media/option-glyph";
 
 /** One picker option: a value/label pair plus an optional leading icon or swatch color. */
 export type EntitySelectOption = Readonly<{

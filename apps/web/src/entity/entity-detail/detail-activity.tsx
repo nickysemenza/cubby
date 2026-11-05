@@ -11,17 +11,17 @@ import { formatCalendarDay, formatInstant } from "~/lib/date-format";
 import { dateSpanParts } from "~/lib/date-span";
 import { householdLocalDate } from "~/lib/household-date";
 import { formatCurrency } from "~/lib/number-format";
+import { useHouseholdToday } from "~/lib/use-household-today";
+import { QuerySection } from "~/ui/feedback/query-section";
+import { useHydrated } from "~/ui/hooks/use-hydrated";
+import { VisibleContent } from "~/ui/hooks/visible-content";
+import { Section } from "~/ui/layout";
 import {
   RecordDot,
   RecordList,
   RecordMore,
   RecordRow,
-} from "~/ui/common/record-list";
-import { QuerySection } from "~/ui/feedback/query-section";
-import { useHouseholdToday } from "~/ui/hooks/use-household-today";
-import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { VisibleContent } from "~/ui/hooks/visible-content";
-import { Section } from "~/ui/layout";
+} from "~/ui/records/record-list";
 
 import { AuditLogList } from "../audit-log/audit-log-list";
 import { useDetailActivity } from "./use-detail-data";

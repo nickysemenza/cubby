@@ -9,11 +9,11 @@ import {
   EntityRefList,
 } from "~/entity/components/entity-ref-link";
 import { useEntityMetadata } from "~/entity/metadata";
-import { useDenseCell } from "~/ui/common/stacked-value";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { NoneValue } from "~/ui/text/none-value";
+import { useDenseCell } from "~/ui/values/stacked-value";
 
 import {
   CELL_EDIT_GROUP_CLASS,
@@ -25,7 +25,7 @@ import {
   type InventoryRelatedEntity,
 } from "../../ui/data-table/inventory-column-helpers";
 import { tryFormatAmount } from "../../ui/text/format-amount";
-import { TruncatedList } from "../../ui/truncated-list";
+import { TruncatedList } from "../../ui/text/truncated-list";
 import {
   entityDisplayImageKey,
   useEntityDisplayImageMap,

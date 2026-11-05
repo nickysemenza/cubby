@@ -12,6 +12,7 @@ import {
   ambiguousConnectionLabels,
 } from "~/entity/relationships/connection-paths";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
+import { Button } from "~/ui/primitives/button";
 import {
   RecordFold,
   RecordGroup,
@@ -19,8 +20,7 @@ import {
   type RecordListState,
   RecordMore,
   RecordRow,
-} from "~/ui/common/record-list";
-import { Button } from "~/ui/primitives/button";
+} from "~/ui/records/record-list";
 
 import {
   useSectionCount,

@@ -18,15 +18,15 @@ import {
 import type { QueryTiming } from "~/lib/query-timing";
 
 import {
-  flattenUniquePageItems,
-  type IdentifiedListRow,
-} from "../../ui/hooks/infinite-page-utils";
-import {
   type ListQueryOptionsFn,
   type ListQueryResponse,
   usePaginatedTableCore,
-} from "../../ui/hooks/use-paginated-table-core";
+} from "../table/use-paginated-table-core";
 import type { TableStateReturn } from "../table/use-table-state";
+import {
+  flattenUniquePageItems,
+  type IdentifiedListRow,
+} from "./infinite-page-utils";
 interface UseInfiniteTableListOptions<
   TFilters,
   TData extends IdentifiedListRow,

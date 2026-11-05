@@ -13,6 +13,7 @@ import { manifestFilterConfig } from "~/entity/filter-manifest";
 import { entityMetadata } from "~/entity/metadata";
 import { RelatedPreviewCell } from "~/entity/table/related-preview-cell";
 import { relatedData } from "~/integrations/tanstack-query/generated/domains/relatedData.gen";
+import type { RuntimeFilterOptions } from "~/ui/combobox/filter-option-types";
 import type {
   CubbyColumnDef as ColumnDef,
   CubbyColumnHelper as ColumnHelper,
@@ -21,7 +22,6 @@ import type {
   FilterConfig,
   MobileColumnMeta,
 } from "~/ui/data-table/table-meta";
-import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
 
 export interface RelatedPreviewState {
   byCell: Map<string, RelatedPreviewGroup>;

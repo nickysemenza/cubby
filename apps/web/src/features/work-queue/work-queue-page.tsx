@@ -44,6 +44,10 @@ import { GroupMenu } from "~/entity/table/data-table-toolbar";
 import { ViewTabs } from "~/entity/table/data-table-views";
 import RTable from "~/entity/table/table";
 import {
+  type ListQueryOptionsFn,
+  type ListQueryResponse,
+} from "~/entity/table/use-paginated-table-core";
+import {
   useTableState,
   type TableStateReturn,
 } from "~/entity/table/use-table-state";
@@ -57,6 +61,11 @@ import {
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { copyShortcodes } from "~/lib/clipboard";
 import { formatCount } from "~/lib/number-format";
+import {
+  deferredFilterOptionSource,
+  deferredRosterControls,
+  type RuntimeFilterOptionSource,
+} from "~/ui/combobox/filter-option-types";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
 import { BulkActionBar } from "~/ui/data-table/bulk/bulk-action-bar";
 import { tableMoneyTotals } from "~/ui/data-table/bulk/table-money";
@@ -77,16 +86,7 @@ import { useBulkActions } from "~/ui/data-table/use-bulk-actions";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { useTableConfig } from "~/ui/data-table/use-table-config";
 import { EmptyState } from "~/ui/feedback/empty-state";
-import {
-  deferredFilterOptionSource,
-  deferredRosterControls,
-  type RuntimeFilterOptionSource,
-} from "~/ui/hooks/filter-option-types";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
-import {
-  type ListQueryOptionsFn,
-  type ListQueryResponse,
-} from "~/ui/hooks/use-paginated-table-core";
 import { Button } from "~/ui/primitives/button";
 
 import {

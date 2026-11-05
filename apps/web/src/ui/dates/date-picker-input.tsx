@@ -18,7 +18,7 @@ import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { parsePlainDateInput } from "~/lib/plain-date-input";
-import type { Calendar as CalendarComponent } from "~/ui/calendar";
+import type { Calendar as CalendarComponent } from "~/ui/dates/calendar";
 import {
   Popover,
   PopoverContent,
@@ -31,7 +31,7 @@ const Calendar = browserOnlyLazy<ComponentProps<typeof CalendarComponent>>(
   import.meta.env.SSR
     ? null
     : () =>
-        import("~/ui/calendar").then((mod) => ({
+        import("~/ui/dates/calendar").then((mod) => ({
           default: mod.Calendar,
         })),
 );

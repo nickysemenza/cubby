@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { page } from "vitest/browser";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { DateDisplay } from "~/ui/common/date-display";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import { EditableDateRangeCell } from "./editable-cell";
 

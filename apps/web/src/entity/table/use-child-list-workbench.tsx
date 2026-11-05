@@ -1,6 +1,10 @@
 import type { RowData } from "@tanstack/react-table";
 import { useCallback, useRef, useState } from "react";
 
+import type {
+  ListQueryOptionsFn,
+  ListQueryResponse,
+} from "~/entity/table/use-paginated-table-core";
 import {
   bulkActionPreview,
   type BulkActionsConfig,
@@ -9,10 +13,6 @@ import { BulkActionBar } from "~/ui/data-table/bulk/bulk-action-bar";
 import { useBulkActions } from "~/ui/data-table/use-bulk-actions";
 import { useTableConfig } from "~/ui/data-table/use-table-config";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
-import type {
-  ListQueryOptionsFn,
-  ListQueryResponse,
-} from "~/ui/hooks/use-paginated-table-core";
 
 import { useInfiniteTableList } from "../hooks/use-infinite-table-list";
 import type { ListWorkbenchModel } from "./list-workbench";

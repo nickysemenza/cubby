@@ -3,11 +3,11 @@ import { Link } from "@tanstack/react-router";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { location } from "~/integrations/tanstack-query/generated/domains/location.gen";
-import { CurrencyValue } from "~/ui/common/currency-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
+import { CurrencyValue } from "~/ui/values/currency-value";
 
 import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";
 

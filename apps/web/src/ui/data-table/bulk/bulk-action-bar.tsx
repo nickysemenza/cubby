@@ -2,7 +2,6 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { RowData } from "@tanstack/react-table";
 
-import { CurrencyValue } from "~/ui/common/currency-value";
 import { Row as LayoutRow } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -12,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 import { Spinner } from "~/ui/primitives/spinner";
+import { CurrencyValue } from "~/ui/values/currency-value";
 
 import {
   type BulkAction,

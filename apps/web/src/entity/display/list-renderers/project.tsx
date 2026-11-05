@@ -1,12 +1,12 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { fieldEmptyLabel } from "@cubby/schemas/field-envelope-presentation";
 
-import { useDenseCell } from "~/ui/common/stacked-value";
 import { textCellData } from "~/ui/data-table/cell-data";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { CellBar } from "~/ui/data-table/visuals/cell-visual";
 import { FieldValueMark } from "~/ui/derived/value-mark";
+import { useDenseCell } from "~/ui/values/stacked-value";
 
 import type { ListRenderer, ListRowOf } from "../list-renderer-types";
 

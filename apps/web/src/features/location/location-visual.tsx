@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { locationChildGroupLabel } from "~/lib/location-child-label";
-import { Image } from "~/ui/common/image";
+import { Image } from "~/ui/media/image";
 import { Badge } from "~/ui/reui/badge";
 
 import { LocationIcon } from "../../entity/presentation/location-icons";

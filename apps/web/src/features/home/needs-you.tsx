@@ -13,13 +13,13 @@ import {
 } from "~/features/work-queue/work-row-link";
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { formatCount } from "~/lib/number-format";
-import { CurrencyValue } from "~/ui/common/currency-value";
-import { DenseCellContext } from "~/ui/common/stacked-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { CurrencyValue } from "~/ui/values/currency-value";
+import { DenseCellContext } from "~/ui/values/stacked-value";
 
 import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";
 

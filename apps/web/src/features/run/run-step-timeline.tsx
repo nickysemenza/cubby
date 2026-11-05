@@ -6,16 +6,16 @@ import { type ReactNode, useState } from "react";
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
-import { InspectableValue } from "~/ui/common/inspectable-value";
-import { type KeyNumber, KeyNumbers } from "~/ui/common/key-numbers";
+import { Disclosure } from "~/ui/layout/disclosure";
+import { Progress } from "~/ui/primitives/progress";
+import { type KeyNumber, KeyNumbers } from "~/ui/records/key-numbers";
 import {
   RecordDot,
   type RecordDotState,
   RecordList,
   RecordRow,
-} from "~/ui/common/record-list";
-import { Disclosure } from "~/ui/layout/disclosure";
-import { Progress } from "~/ui/primitives/progress";
+} from "~/ui/records/record-list";
+import { InspectableValue } from "~/ui/values/inspectable-value";
 
 import { WaitNotice } from "../job/job-status";
 import {

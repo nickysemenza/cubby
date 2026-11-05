@@ -11,7 +11,7 @@ import {
   ProgressValue,
 } from "~/ui/primitives/progress";
 
-import { useDenseCell } from "./stacked-value";
+import { useDenseCell } from "../values/stacked-value";
 
 /**
  * Rates and ETA come from the recorded interval history, never browser

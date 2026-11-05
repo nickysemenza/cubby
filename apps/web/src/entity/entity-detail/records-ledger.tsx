@@ -14,18 +14,18 @@ import { entities } from "~/entity/entities";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { formatCalendarDay } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
-import { DateDisplay } from "~/ui/common/date-display";
-import { Image } from "~/ui/common/image";
+import { CloudflareIcon } from "~/ui/icons/cloudflare";
+import { Image } from "~/ui/media/image";
+import { Button, buttonVariants } from "~/ui/primitives/button";
 import {
   RecordDetail,
   RecordDot,
   RecordHeading,
   RecordList,
   RecordRow,
-} from "~/ui/common/record-list";
-import { CloudflareIcon } from "~/ui/icons/cloudflare";
-import { Button, buttonVariants } from "~/ui/primitives/button";
+} from "~/ui/records/record-list";
 import { Badge } from "~/ui/reui/badge";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import { collectionActionFor } from "./collection-actions";
 import { DetailAction } from "./detail-action-bar";

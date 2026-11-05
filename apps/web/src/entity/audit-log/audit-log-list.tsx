@@ -11,14 +11,14 @@ import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-o
 import { auditLog } from "~/integrations/tanstack-query/generated/domains/auditLog.gen";
 import { authClient } from "~/lib/auth-client";
 import { householdLocalDate } from "~/lib/household-date";
-import { DateDisplay } from "~/ui/common/date-display";
-import { RecordHeading, RecordList } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Spinner } from "~/ui/primitives/spinner";
+import { RecordHeading, RecordList } from "~/ui/records/record-list";
+import { DateDisplay } from "~/ui/values/date-display";
 
 import { AUDIT_COLUMNS, AuditRecordRow, auditFacts } from "./audit-log-entry";
 import { foldAuditEntries } from "./audit-log-fold";

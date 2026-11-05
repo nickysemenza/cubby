@@ -6,8 +6,8 @@ import { useState, type ReactNode } from "react";
 import type { z } from "zod";
 
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
-import { Image } from "~/ui/common/image";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Image } from "~/ui/media/image";
 import { Button } from "~/ui/primitives/button";
 import {
   Popover,

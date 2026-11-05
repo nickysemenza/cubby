@@ -1,8 +1,8 @@
 import { cn } from "cn";
 import { type ReactNode } from "react";
 
-import { Image } from "~/ui/common/image";
 import { Panel } from "~/ui/layout/panel";
+import { Image } from "~/ui/media/image";
 
 export type PhotoGridImage = {
   id: string;

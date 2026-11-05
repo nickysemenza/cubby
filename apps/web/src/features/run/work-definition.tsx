@@ -7,10 +7,10 @@ import {
 } from "@cubby/schemas/run-fields";
 import { Link } from "@tanstack/react-router";
 
-import { Facts } from "~/ui/common/facts";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
+import { Facts } from "~/ui/records/facts";
+import { RecordList, RecordRow } from "~/ui/records/record-list";
 
 /** The same effects contract is read before launch and alongside actual outcomes. */
 export function WorkEffects({

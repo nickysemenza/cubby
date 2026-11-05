@@ -7,11 +7,11 @@ import { useId, useMemo } from "react";
 import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCount, formatCurrency } from "~/lib/number-format";
-import { CurrencyValue } from "~/ui/common/currency-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
+import { CurrencyValue } from "~/ui/values/currency-value";
 
 import { getHomeAsOfWindow, type HomeAsOfWindow } from "./home-as-of-window";
 import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";

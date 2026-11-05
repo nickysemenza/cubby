@@ -31,13 +31,13 @@ import { entityGraph } from "~/integrations/tanstack-query/generated/domains/ent
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import { RecordList, RecordRow } from "~/ui/records/record-list";
 
 import {
   GRAPH_BRANCH_PAGE_SIZE,

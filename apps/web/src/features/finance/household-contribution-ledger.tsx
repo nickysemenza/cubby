@@ -13,13 +13,13 @@ import { renderOptionCell } from "~/entity/table/column-helpers";
 import { ContributionGapsTable } from "~/features/finance/household-contribution-format";
 import { householdContribution } from "~/integrations/tanstack-query/generated/domains/householdContribution.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { KeyNumbers } from "~/ui/common/key-numbers";
 import { StaticTable } from "~/ui/data-table/static-table";
-import { DatePickerInput } from "~/ui/date-picker-input";
+import { DatePickerInput } from "~/ui/dates/date-picker-input";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { KeyNumbers } from "~/ui/records/key-numbers";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/reui/alert";
 import { Badge } from "~/ui/reui/badge";
 

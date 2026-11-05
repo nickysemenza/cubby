@@ -52,7 +52,6 @@ import { formatCount } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { pickerOptionItem } from "~/ui/combobox/picker-option";
 import { PickerVisual } from "~/ui/combobox/picker-visual";
-import { RecordPill } from "~/ui/common/record-pill";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
@@ -63,6 +62,7 @@ import {
   PopoverTrigger,
 } from "~/ui/primitives/popover";
 import { Switch } from "~/ui/primitives/switch";
+import { RecordPill } from "~/ui/records/record-pill";
 import { EnumPill } from "~/ui/text/enum-pill";
 import { Pill } from "~/ui/text/pill";
 

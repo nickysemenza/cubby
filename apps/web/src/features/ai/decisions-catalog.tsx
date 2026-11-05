@@ -17,7 +17,6 @@ import RTable from "~/entity/table/table";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { formatCount } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
-import { Facts } from "~/ui/common/facts";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import {
   createCubbyColumnCollection,
@@ -30,6 +29,7 @@ import { Panel, Row, Stack } from "~/ui/layout";
 import { SidePanel, SidePanelLayout } from "~/ui/overlays/side-panel";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import { Facts } from "~/ui/records/facts";
 import { Badge } from "~/ui/reui/badge";
 import { Description } from "~/ui/text/description";
 import { NoneValue } from "~/ui/text/none-value";
