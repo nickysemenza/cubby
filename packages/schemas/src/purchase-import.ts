@@ -359,6 +359,15 @@ export function normalizeImportExtractionModelOutput(
   return { status: "unreadable", detail };
 }
 
+export const runFindingEntity = z.enum([
+  "shipment",
+  "ledgerParty",
+  "purchase",
+  "expense",
+  "product",
+  "run",
+  "email",
+]);
 export const runFindingKind = z.enum([
   "wrong_product",
   "duplicate_product",

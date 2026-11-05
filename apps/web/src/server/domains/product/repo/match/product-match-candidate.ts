@@ -383,12 +383,6 @@ export async function publishProductPairPublications(
           {
             id: row.id,
             patch,
-            cause: {
-              kind:
-                row.id === current.prediction.id
-                  ? "product_pair_republished"
-                  : "superseded_by_publication",
-            },
           },
         ];
       });
@@ -656,7 +650,6 @@ export async function repointProductMatchCandidatesTx(
             fingerprint: null,
           }
         : { active: false, status: "superseded", suppression: null },
-      { kind: "target_merged" },
     );
   }
 }

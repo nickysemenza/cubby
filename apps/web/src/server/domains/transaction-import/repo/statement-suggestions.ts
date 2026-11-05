@@ -1700,7 +1700,6 @@ async function retireSettledChargeAdvice(db: Database, charge: ChargeRef) {
                 (cs.shortcode IS NOT NULL AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.book})
             )`,
     { active: false, status: "superseded" },
-    { kind: "statement_settled_elsewhere" },
   );
 }
 
@@ -1951,7 +1950,6 @@ const statementSuggestions: SuggestionFamily<
       if (fresh?.status === "already_booked")
         return {
           kind: "retire",
-          cause: "statement_already_booked",
           reason: "settled",
         };
     }
@@ -2119,7 +2117,6 @@ const statementSuggestions: SuggestionFamily<
                   WHERE cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${judgment.recommended !== "book"})
                 )`,
               { active: false, status: "superseded" },
-              { kind: "statement_settled_elsewhere" },
             );
           }),
         );
@@ -2216,7 +2213,6 @@ async function retireStatementPublications(
               AND (cs.ignored OR cs.superseded OR
                 (cs.shortcode IS NOT NULL AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.book})))`,
       { active: false, status: "superseded" },
-      { kind: "statement_settled_elsewhere" },
     );
   });
 }
@@ -2377,7 +2373,6 @@ async function publishCompleteLabelBatch(
             tx,
             sql`${pendingStatementState} AND ${suggestionField("source", STATE)}=${proposal.charge.source} AND ${suggestionField("chargeKey", STATE)}=${proposal.charge.chargeKey}`,
             { active: false, status: "superseded" },
-            { kind: "statement_already_booked" },
           );
           outcomes.set(id, { kind: "resolved", reason: "settled" });
           continue;
@@ -3147,7 +3142,6 @@ export async function recordStatementLabelCheckpoint(
           },
         };
       },
-      { kind: "statement_label_checkpoint" },
     );
     if (matched) {
       return "saved";
@@ -3198,7 +3192,6 @@ export async function completeStatementApplications(
         } = stateData.parse(row.data ?? {});
         return { data };
       },
-      { kind: "statement_application_completed" },
     );
     return admitted;
   };

@@ -747,12 +747,9 @@ describe("durable image representations", () => {
       producer: null,
       evidence: null,
     });
-    await transitionAssessmentState(
-      ctx.db,
-      unrelated.id,
-      { status: "resolved" },
-      { kind: "synthetic-unrelated" },
-    );
+    await transitionAssessmentState(ctx.db, unrelated.id, {
+      status: "resolved",
+    });
     await recordFeedback(ctx.db, {
       assessmentId: unrelated.id,
       operationId: crypto.randomUUID(),

@@ -1,9 +1,9 @@
 # Entity connections
 
 Connection discovery is an explicit mutation, usable by background work and
-on-demand refresh. Reading connections reads stored Assessments only and never
-calls a model. Recommendations use the existing Assessment/Feedback history;
-there is no separate review ledger. A new connection always requires review.
+on-demand refresh. Reading connections reads stored Suggestions only and never
+calls a model. A member's decision stays on its Suggestion; there is no separate
+review ledger. A new connection always requires review.
 Existing automatic domain behavior is unchanged.
 
 ## Failure modes
@@ -11,8 +11,8 @@ Existing automatic domain behavior is unchanged.
 - A retrieved candidate keeps its pre-inference evidence through publication; a later assignment cannot be adopted as a new basis. Confirmation must still refuse an assigned or acquisition-ineligible Expense and an already acquired Product/Purchase pair, even when a supplied Assessment fingerprint matches the current rows.
 
 - A read must not infer, publish, or spend model budget.
-- Repeated discovery must reuse an identical immutable Assessment; changed
-  evidence must publish a different event, preserving previous Feedback.
+- Repeated discovery must reuse an identical Suggestion; changed evidence must
+  publish a different one, preserving any decision on the previous one.
 - Wrong grades only that event and evidence. Persistent suppression is a
   separate explicit choice keyed by relation and endpoints.
 - Confirmation must refuse deleted endpoints, changed evidence, mismatched
@@ -120,8 +120,8 @@ Workbench match card shows the same "Not actionable" line as Suggestions for a
 pair without exact-identifier admission, and keeps merge available.
 
 `applyEntityConnection` is the recommendation handler called by
-`reviewAssessment`. Payload rows are acquired before projection locks, evidence
-is read again, and the active/pending projection is checked before the domain
+`reviewAssessment`. Payload rows are acquired before the Suggestion lock, evidence
+is read again, and the active/pending status is checked before the domain
 write. The generic review handler owns the immutable application receipt and
 retry. New field discovery uses the real declared inference and shared
 Suggestion publisher, always pending; `assertConnectionFieldFresh` guards those

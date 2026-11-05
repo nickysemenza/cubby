@@ -59,8 +59,8 @@ type Publication = Parameters<typeof publishAssessments>[1][number];
 type SuggestionPrecheck<Reason extends string> =
   /** Terminal; the family already made any writes it needs. */
   | { kind: "resolved"; reason: Reason }
-  /** Terminal; active pending slot rows retire under `cause`. */
-  | { kind: "retire"; cause: string; reason: Reason }
+  /** Terminal; active pending slot rows retire. */
+  | { kind: "retire"; reason: Reason }
   /** Batch admission only: publish this candidate one at a time instead. */
   | { kind: "defer" };
 
@@ -253,7 +253,6 @@ export async function retireSupersededSuggestions(
       active: false,
       ...(row.status === "pending" && { status: "superseded" }),
     }),
-    { kind: "superseded_by_publication" },
   );
 }
 
@@ -312,7 +311,6 @@ async function publishLocked<
           tx,
           inArray(suggestionTable.id, pending),
           { active: false, status: "superseded" },
-          { kind: check.cause },
         );
     }
     if (check) {
@@ -336,7 +334,6 @@ async function publishLocked<
             unchanged.map((row) => row.id),
           ),
           { runId: producer.runId },
-          { kind: family.onUnchanged.reconfirm },
         );
       outcomes[index] = { outcome: "unchanged", rows: unchanged };
       continue;

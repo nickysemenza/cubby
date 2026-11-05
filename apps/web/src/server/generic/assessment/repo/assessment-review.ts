@@ -691,7 +691,6 @@ async function settleReview(
                 eq(suggestionTable.active, true),
               ),
               { status: "applied" },
-              { kind: "assessment_applied", feedbackId: event.id },
             );
         }
         let fieldApplicationReceipt: z.infer<
@@ -767,12 +766,10 @@ async function settleReview(
         throw new Error(
           "Only history Dismissal or Wrong Feedback accepts suppression scope",
         );
-      await transitionAssessmentState(
-        transactionDb,
-        state.id,
-        { suppression: input.suppression, status: "resolved" },
-        { kind: "member_review", feedbackId: event.id },
-      );
+      await transitionAssessmentState(transactionDb, state.id, {
+        suppression: input.suppression,
+        status: "resolved",
+      });
       return "resolved";
     } else if (
       state &&
@@ -810,7 +807,6 @@ async function settleReview(
             correctValue: input.correction.value,
           }),
         }),
-        { kind: "member_review", feedbackId: event.id },
       );
       return nextStatus;
     }

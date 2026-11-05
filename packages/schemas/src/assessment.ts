@@ -15,7 +15,6 @@ import {
   nonEmptyTuple,
 } from "./identifiers";
 import { shortcodeEntities } from "./generated/entity-roster.gen";
-import { emailAccuracyRoster } from "./email-accuracy";
 import {
   statementTransactionApplication,
   statementTransactionJudgment,
@@ -39,23 +38,14 @@ export const assessmentFamily = z.enum([
   "recommendation",
   "statement_transaction",
   "transfer_pair",
-  "run_finding",
-  "evaluation_sample",
 ]);
-/**
- * Families whose decisions live with their domain owners: Assessment, State and
- * Feedback keep only their retained history and refuse new rows.
- */
+/** Families whose decisions live with their domain owners, never on a Suggestion. */
 export const mailDecisionFamily = z.enum([
   "email_relevance",
   "email_link",
   "mail_import_outcome",
 ]);
 export type MailDecisionFamily = z.infer<typeof mailDecisionFamily>;
-export const retiredAssessmentFamilies = [
-  ...mailDecisionFamily.options,
-  "run_finding",
-] as const;
 export const feedbackVerdict = z.enum([
   "correct",
   "wrong",
@@ -64,15 +54,6 @@ export const feedbackVerdict = z.enum([
   "ungraded",
 ]);
 const record = { entity: z.string().min(1), recordId: z.uuid() };
-export const runFindingEntity = z.enum([
-  "shipment",
-  "ledgerParty",
-  "purchase",
-  "expense",
-  "product",
-  "run",
-  "email",
-]);
 export const assessmentSubjects = {
   field: z.object({
     kind: z.literal("field"),
@@ -141,19 +122,6 @@ export const assessmentSubjects = {
     recordId: z.uuid(),
     pairKey: z.string().min(1),
   }),
-  /** One import finding about a record, scoped to the member's ledger. */
-  run_finding: z.object({
-    kind: z.literal("run_finding"),
-    entity: runFindingEntity,
-    recordId: z.uuid(),
-    ledgerPartyId: entityIdSchema("ledgerParty"),
-  }),
-  /** A frozen evaluation roster; it has no current target or review state. */
-  evaluation_sample: z.object({
-    kind: z.literal("evaluation_sample"),
-    evaluation: z.literal("email_accuracy"),
-    ownerUserId: z.string().min(1),
-  }),
 };
 export const assessmentSubject = z.discriminatedUnion("kind", [
   assessmentSubjects.field,
@@ -165,8 +133,6 @@ export const assessmentSubject = z.discriminatedUnion("kind", [
   assessmentSubjects.recommendation,
   assessmentSubjects.statement_transaction,
   assessmentSubjects.transfer_pair,
-  assessmentSubjects.run_finding,
-  assessmentSubjects.evaluation_sample,
 ]);
 
 /**
@@ -235,8 +201,6 @@ export const assessmentProjectionTargets = {
     entity: z.literal("financialAccount"),
     recordId: z.uuid(),
   }),
-  run_finding: z.object({ entity: runFindingEntity, recordId: z.uuid() }),
-  evaluation_sample: z.never(),
 };
 
 /** Frozen result of the real writer; totals remain SUM(Expense.cost). */
@@ -283,13 +247,6 @@ export const assessmentJudgments = {
   recommendation: z.object({ candidateKey: z.string() }),
   statement_transaction: statementTransactionJudgment,
   transfer_pair: transferPairJudgment,
-  run_finding: z.object({
-    kind: z.string().min(1),
-    summary: z.string(),
-    proposedFix: z.json().nullable(),
-    probability: z.number().nullable(),
-  }),
-  evaluation_sample: emailAccuracyRoster,
 };
 
 export const assessmentProducer = z.object({
@@ -308,17 +265,13 @@ export const assessmentPublication = z
     fingerprint: z.string().nullable(),
     producer: assessmentProducer.nullable(),
     evidence: z.json().nullable(),
-    origin: z
-      .object({ table: z.string(), id: z.string(), metadata: z.json() })
-      .nullable()
-      .default(null),
     served: z.boolean().default(true),
   })
   .refine(
     ({ family, subject }) => family === subject.kind,
     "Assessment family must match subject",
   );
-/** `system` maintains the current projection only; it never grades or suppresses. */
+/** `system` records capture receipts only; it never grades or suppresses. */
 export const feedbackAuthority = z.enum([
   "member",
   "evaluation",
@@ -327,8 +280,6 @@ export const feedbackAuthority = z.enum([
   "system",
 ]);
 const reviewIntent = z.enum(["history", "draft", "apply"]);
-/** Column patch an event applied to AssessmentState; a present key is set. */
-export const assessmentProjectionPatch = z.record(z.string(), z.json());
 export const feedbackEvent = z.object({
   assessmentId: assessmentChildHandle,
   operationId: z.string().min(1),
@@ -336,13 +287,12 @@ export const feedbackEvent = z.object({
   correction: assessmentCorrection.default({ present: false }),
   reason: z.string().nullable().default(null),
   evidence: z.json().nullable().default(null),
-  intent: z.enum([...reviewIntent.options, "projection"]).default("history"),
+  intent: reviewIntent.default("history"),
   authority: feedbackAuthority,
   actorUserId: z.string().nullable(),
   suppression: assessmentSuppression.nullable().default(null),
   receipt: z.json().nullable().default(null),
   metadata: z.json().nullable().default(null),
-  projection: assessmentProjectionPatch.nullable().default(null),
 });
 /**
  * One retained decision on a Suggestion: a member's verdict, an evaluation grade
@@ -350,7 +300,7 @@ export const feedbackEvent = z.object({
  * correction, and an event is identified by its operation within its Suggestion.
  */
 export const suggestionDecision = feedbackEvent
-  .omit({ assessmentId: true, projection: true })
+  .omit({ assessmentId: true })
   .extend({ id: z.guid(), createdAt: z.iso.datetime() });
 export type SuggestionDecision = z.infer<typeof suggestionDecision>;
 
@@ -361,10 +311,8 @@ export const assessmentReviewInput = feedbackEvent
     actorUserId: true,
     receipt: true,
     metadata: true,
-    projection: true,
   })
   .extend({
-    intent: reviewIntent.default("history"),
     operationId: z
       .string()
       .min(1)

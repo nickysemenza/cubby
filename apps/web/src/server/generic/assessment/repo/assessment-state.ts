@@ -1,7 +1,3 @@
-import {
-  assessmentProjectionPatch,
-  retiredAssessmentFamilies,
-} from "@cubby/schemas/assessment";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
@@ -11,7 +7,6 @@ import {
   inArray,
   isNull,
   ne,
-  notInArray,
   or,
   is,
   sql,
@@ -92,8 +87,6 @@ type StateColumn = Exclude<
 export type AssessmentStatePatch = Partial<
   Pick<typeof suggestionTable.$inferInsert, StateColumn>
 >;
-/** Why the projection moved: a system maintenance kind or the Feedback that caused it. */
-export type ProjectionCause = { kind: string; feedbackId?: string };
 
 const projectedColumns = new Set<string>(
   Object.keys(getTableColumns(suggestionTable)).filter(
@@ -101,13 +94,14 @@ const projectedColumns = new Set<string>(
   ),
 );
 
-type ProjectionPatch = z.infer<typeof assessmentProjectionPatch>;
+const projectionPatch = z.record(z.string(), z.json());
+type ProjectionPatch = z.infer<typeof projectionPatch>;
 
 /** Only current columns, as JSON; a transition takes values, not computed SQL. */
 function projectionColumns(values: AssessmentStatePatch): ProjectionPatch {
   if (Object.values(values).some((value) => is(value, SQL)))
     throw new Error("Suggestion transitions take values, not SQL");
-  const json = assessmentProjectionPatch.parse(jsonSnapshot.parse(values));
+  const json = projectionPatch.parse(jsonSnapshot.parse(values));
   return Object.fromEntries(
     Object.entries(json).filter(([key]) => projectedColumns.has(key)),
   );
@@ -126,8 +120,7 @@ const columnWrites = (patch: ProjectionPatch): AssessmentStatePatch =>
 
 /**
  * The only writer of a Suggestion's status after publication. Unchanged columns
- * are not written. `cause` names why a transition happened for the caller's
- * reader; it is not stored, since transitions keep no event history.
+ * are not written.
  */
 export async function transitionAssessmentStates(
   db: RepositoryQueryInput,
@@ -135,12 +128,11 @@ export async function transitionAssessmentStates(
   patch:
     | AssessmentStatePatch
     | ((row: StateRow) => AssessmentStatePatch | null | undefined),
-  cause: ProjectionCause,
 ): Promise<TransitionResult[]> {
   return transitionAssessmentStateBatch(db, where, (rows) =>
     rows.flatMap((row) => {
       const next = typeof patch === "function" ? patch(row) : patch;
-      return next ? [{ id: row.id, patch: next, cause }] : [];
+      return next ? [{ id: row.id, patch: next }] : [];
     }),
   );
 }
@@ -154,7 +146,6 @@ export async function transitionAssessmentStateBatch(
   prepare: (rows: readonly StateRow[]) => readonly {
     id: string;
     patch: AssessmentStatePatch;
-    cause: ProjectionCause;
   }[],
 ): Promise<TransitionResult[]> {
   const rows = await getDb(db)
@@ -167,10 +158,9 @@ export async function transitionAssessmentStateBatch(
   const changes: {
     row: StateRow;
     patch: ProjectionPatch;
-    cause: ProjectionCause;
   }[] = [];
   const seen = new Set<string>();
-  for (const { id, patch, cause } of prepare(rows)) {
+  for (const { id, patch } of prepare(rows)) {
     if (seen.has(id)) throw new Error("Duplicate AssessmentState transition");
     seen.add(id);
     const row = rowsById.get(id);
@@ -186,8 +176,7 @@ export async function transitionAssessmentStateBatch(
           ),
       ),
     );
-    if (Object.keys(changed).length)
-      changes.push({ row, patch: changed, cause });
+    if (Object.keys(changed).length) changes.push({ row, patch: changed });
   }
   if (!changes.length) return [];
   const updated = await updateManyAndReturn(db, suggestionTable, {
@@ -223,13 +212,11 @@ export async function transitionAssessmentState(
   db: RepositoryQueryInput,
   id: string,
   patch: AssessmentStatePatch,
-  cause: ProjectionCause,
 ) {
   const [row] = await transitionAssessmentStates(
     db,
     eq(suggestionTable.id, id),
     patch,
-    cause,
   );
   return row ?? null;
 }
@@ -277,7 +264,6 @@ export async function retireAssessmentTargetsTx(
   await transitionAssessmentStates(
     tx,
     and(
-      notInArray(suggestionTable.family, [...retiredAssessmentFamilies]),
       eq(suggestionTable.entity, entityKind),
       or(
         inArray(suggestionTable.recordId, ids),
@@ -285,7 +271,6 @@ export async function retireAssessmentTargetsTx(
       ),
     ),
     retired,
-    { kind: "target_removed" },
   );
 }
 
@@ -305,6 +290,5 @@ export async function repointAssessmentTargetsTx(
       eq(suggestionTable.family, "field"),
     ),
     { recordId: keepId, status: "superseded", confirmedValue: null },
-    { kind: "target_merged" },
   );
 }

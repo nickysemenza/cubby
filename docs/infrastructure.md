@@ -736,8 +736,8 @@ evidence once; image provenance freezes its roster and rejects failed decisions
 before publication. USDA and ingredient-merge batches retain per-ingredient
 errors; UPC offer judgments share one request context inside each lookup, while
 the outer UPC loop retains quota and rate-limit stopping behavior.
-Paired field audits record `AssessmentState.data.served` explicitly. List
-filters and the immutable Assessment publication trigger use that flag;
+Paired field audits record `Suggestion.data.served` explicitly. List filters use
+that flag;
 ordinary field answers are served by default. Paired publications without a
 boolean flag fail. The cutover migration materializes existing serving and
 checkpoint metadata before deleting retired automatic routing pins from Run

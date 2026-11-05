@@ -1,5 +1,4 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { retiredAssessmentFamilies } from "@cubby/schemas/assessment";
 /**
  * The one list module every repository composes: the declared stored-filter
  * predicates (`declaredFilterPredicates`) and the per-entity list scaffold
@@ -984,10 +983,6 @@ const suggestionPredicate = (
     WHERE s."entity" = ${entity}
       AND s."recordId" = ${sql.identifier(getTableName(table))}."id"
       AND s."status" = ${suggestionStatus.enum.pending}
-      AND s."family" NOT IN (${sql.join(
-        retiredAssessmentFamilies.map((family) => sql`${family}`),
-        sql`, `,
-      )})
       AND ${notDeleted("r")}
       AND COALESCE((s.data->>'served')::boolean, true)
       ${kind}

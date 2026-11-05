@@ -1424,7 +1424,6 @@ export async function refreshTransferPairStatements(
           statementRefreshPending: false,
         },
       }),
-      { kind: "transfer_pair_statement_refreshed" },
     );
     return true;
   });
@@ -1701,7 +1700,6 @@ export async function generateTransferPairSuggestionsPage(
                   eq(suggestionTable.status, "pending"),
                 ),
                 { active: false, status: "superseded" },
-                { kind: "transfer_pair_out_of_scope" },
               );
               return retiredRows.length;
             });
@@ -2229,7 +2227,6 @@ export async function applyTransferPair(
         )}]::text[]
         ${input.stateId ? sql`AND ${suggestionTable.id} <> ${input.stateId}::uuid` : sql``}`,
       { active: false, status: "superseded" },
-      { kind: "transfer_pair_leg_taken" },
     );
     return {
       transferId: accepted.transferId,
@@ -2261,12 +2258,7 @@ export async function applyTransferPairSuggestion(
     const published = transferPairJudgment.parse(prediction?.judgment);
     if (state.status !== "pending" || !state.fingerprint)
       throw refused("This transfer pair suggestion is no longer pending.");
-    await transitionAssessmentState(
-      tx,
-      state.id,
-      { status: "applied" },
-      { kind: "transfer_pair_applied" },
-    );
+    await transitionAssessmentState(tx, state.id, { status: "applied" });
     await applyTransferPair(tx, context, {
       key: subject.pairKey,
       expectedFingerprint: input.expectedFingerprint ?? state.fingerprint,

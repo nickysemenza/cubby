@@ -1,7 +1,7 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { runFindingEntity } from "@cubby/schemas/assessment";
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import type { RunId } from "@cubby/schemas/identifiers";
+import { runFindingEntity } from "@cubby/schemas/purchase-import";
 import { storedImportFix } from "@cubby/schemas/purchase-import";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";

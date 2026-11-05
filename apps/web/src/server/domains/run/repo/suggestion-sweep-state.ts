@@ -300,7 +300,6 @@ export async function saveSweepSuggestions(
               at: new Date().toISOString(),
             },
           },
-          { kind: "field_refresh_superseded" },
         );
       }
       const created: string[] = [];

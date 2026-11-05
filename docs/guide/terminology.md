@@ -738,8 +738,8 @@ _Avoid_: for anything new; say Suggestion
 
 **Connection candidate**:
 A proposed, specifically named relationship between existing records, with
-evidence and an explicit effect of acceptance. It is a Suggestion backed by an
-Assessment, not a generic similarity link. [Connection discovery](entity-connections.md) owns
+evidence and an explicit effect of acceptance. It is a Suggestion, not a generic
+similarity link. [Connection discovery](entity-connections.md) owns
 discovery and review behavior.
 
 **Acquisition candidate**:
@@ -786,7 +786,7 @@ A Suggestion, computed from one statement charge, to create a
 Financial Transaction, attach the charge to an existing one, supersede a
 recorded hold with its posted row, or void a hold a later export no longer
 contains, or book spending on an already matched transaction. It uses the
-`statement_transaction` Assessment family and the shared review path. Posted
+`statement_transaction` Suggestion family and the shared review path. Posted
 spending also books or links Expenses; a transaction alone adds no spend.
 Import-clean booking and uncertainty follow
 [evidence convergence](../import-evidence-convergence.md). A clean one is
@@ -796,7 +796,7 @@ disagrees, and the counterparty is not a person.
 _Avoid_: statement proposal, auto-match
 
 **Transfer pair suggestion**:
-A Suggestion, with the `transfer_pair` Assessment family, that two opposite
+A Suggestion, in the `transfer_pair` family, that two opposite
 money movements on different accounts are one Ledger Transfer or Internal move.
 Accepting it creates any missing leg and pairs both; dismissing it suppresses
 that pair. Clean, cash-leg and overlap policy lives in
@@ -830,7 +830,7 @@ A Suggestion whose value differs from the record's current value.
 A Suggestion for a field that is currently blank.
 
 **Miss**:
-An Assessment the household reports as wrong. A corrected value or verdict and
+A Suggestion the household reports as wrong. A corrected value or verdict and
 its evidence distinguish a confirmed Miss from uncertainty or a preference to
 hide a candidate. A Miss is evidence for improving rules, prompts or
 classification choices, not a standing instruction to hide the result.

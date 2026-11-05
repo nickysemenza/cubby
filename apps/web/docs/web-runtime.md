@@ -619,11 +619,9 @@ keyed by `WorkSourceActionId`. Pending
 statement-reference invalidation uses one hashable source-reference set rather
 than a source-record lookup per reference per pending suggestion.
 Statement counts decode one compact page-independent eligibility projection.
-Connection publication retains its small target reference in the existing
-`AssessmentState.data` projection; the migration fills current pending rows
-from immutable evidence without changing decisions. Queue counts still check
-live endpoints, feedback and suppression. A missing projection falls back to
-immutable evidence, including writes completed by the predecessor during deployment.
+Connection publication retains its small target reference in `Suggestion.data`.
+Queue counts still check live endpoints, decisions and suppression. A missing
+reference falls back to the row's evidence.
 
 Infinite tables use the shared pagination default unless a measured caller
 constraint requires an override. A smaller batch can repeat full population

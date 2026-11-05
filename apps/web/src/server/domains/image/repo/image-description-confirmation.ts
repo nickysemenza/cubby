@@ -36,13 +36,6 @@ export async function writeImageDescriptionConfirmation(
     .limit(1);
   if (!source || state.fingerprint !== source.hash)
     throw new Error("Image evidence changed before confirmation");
-  const cause = {
-    kind: "image_description_confirmed",
-    feedbackId:
-      owner.kind === "member"
-        ? owner.commandFeedbackId
-        : owner.sourceFeedbackId,
-  };
   await transitionAssessmentStates(
     db,
     and(
@@ -51,20 +44,14 @@ export async function writeImageDescriptionConfirmation(
       sql`${suggestionTable.id} <> ${state.id}`,
     ),
     { confirmedValue: null },
-    cause,
   );
-  await transitionAssessmentState(
-    db,
-    state.id,
-    {
-      confirmedValue: { present: true, value: description },
-      status: "applied",
-      data: {
-        ...z.record(z.string(), z.json()).parse(state.data ?? {}),
-        confirmationOwner: imageDescriptionConfirmationOwner.parse(owner),
-      },
+  await transitionAssessmentState(db, state.id, {
+    confirmedValue: { present: true, value: description },
+    status: "applied",
+    data: {
+      ...z.record(z.string(), z.json()).parse(state.data ?? {}),
+      confirmationOwner: imageDescriptionConfirmationOwner.parse(owner),
     },
-    cause,
-  );
+  });
   await recordChange(db, { kind: "source", categories: ["image"] });
 }

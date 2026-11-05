@@ -121,7 +121,7 @@ export async function acknowledgeSavedField(
       confidence: null,
       threshold: null,
     });
-    const accepted = await recordFeedback(transactionDb, {
+    await recordFeedback(transactionDb, {
       assessmentId: prediction.id,
       operationId: `receipt:${input.operationId}`,
       verdict: input.correction.present ? "wrong" : "correct",
@@ -138,12 +138,10 @@ export async function acknowledgeSavedField(
         field: subject.field,
       },
     });
-    await transitionAssessmentState(
-      transactionDb,
-      prediction.id,
-      { status: "applied", acceptanceReceipt: receipt },
-      { kind: "member_review", feedbackId: accepted.id },
-    );
+    await transitionAssessmentState(transactionDb, prediction.id, {
+      status: "applied",
+      acceptanceReceipt: receipt,
+    });
     return receipt;
   });
 }

@@ -193,7 +193,6 @@ export async function saveConnectionFieldGuard(
             sql`${suggestionTable.data}->>'reviewKey'=${reviewKey}`,
           ),
           { data: { reviewKey, connectionEvidence: evidence } },
-          { kind: "connection_evidence_attached" },
         );
       });
     },

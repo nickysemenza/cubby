@@ -50,8 +50,8 @@ Selected changes to an existing Product publish inactive shared field Assessment
 they retain evidence and review identity without entering automatic application.
 Approval writes the selected fields and records the generic `saved_field`
 acceptance receipt in the same transaction. Rejecting a linked Brand proposal
-records shared Assessment Feedback as well as the photo evidence rejection.
-Unchanged candidate values retain their original Assessment and input fingerprint
+records a decision on the Suggestion as well as the photo evidence rejection.
+Unchanged candidate values retain their original Suggestion and input fingerprint
 through sibling draft edits. Approval locks and checks the retained Product inputs
 before any write; changed selected photo evidence or a later member correction
 requires clearing and reselecting the proposed field after review rather than an
