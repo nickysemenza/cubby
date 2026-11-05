@@ -82,7 +82,8 @@ export function RecordPill({
           <span
             className={cn(
               "font-medium",
-              dense && "max-w-[75%] shrink-0 truncate",
+              // The leaf gives way only once the parent has none left.
+              dense && "min-w-0 truncate",
             )}
           >
             {name}
@@ -90,7 +91,7 @@ export function RecordPill({
           <span
             className={cn(
               "text-xs text-muted-foreground",
-              dense && "min-w-0 truncate",
+              dense && "min-w-0 shrink-[1000] truncate",
             )}
           >
             {parent}
