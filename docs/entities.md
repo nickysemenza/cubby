@@ -1808,7 +1808,7 @@ null values alone do not establish that a contract is unnecessary.
   an empty queue alone does not establish that its workflow is unnecessary.
 - **Always-null columns.** `Plant.daysFrom*` and `Plant.breeding`,
   `Planting.outcome`, `Vendor.returnWindowDays`,
-  `Run.historyCursorUrl`, `Task.sortOrder`,
+  `Task.sortOrder`,
   `Meal.sortOrder`, `Wish.acquiredAt`, `Device.productId`, `Cookbook.report`.
   Image `captureDeviceLabel`, `capturePlaceName`, and
   `capturedAtOffsetMinutes` fill once the library path sends them (Images &

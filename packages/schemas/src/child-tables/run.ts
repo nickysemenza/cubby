@@ -75,7 +75,6 @@ export const runChildren = [
         kind: "jsonb",
         type: "PhotoRunImageCommitReceipt",
       },
-      { key: "preparedAt", kind: "timestamp" },
       { key: "completedAt", kind: "timestamp" },
       {
         key: "deviceWorkState",
@@ -84,12 +83,6 @@ export const runChildren = [
       },
       { key: "deviceWorkAttempts", kind: "integer", notNull: true, default: 0 },
       { key: "deviceWorkError", kind: "text" },
-      {
-        key: "deviceWorkDeviceId",
-        kind: "uuid",
-        type: "DeviceId",
-        reference: { table: "device", column: "id", onDelete: "set null" },
-      },
       { key: "deviceWorkUpdatedAt", kind: "timestamp" },
       {
         key: "createdAt",
@@ -127,11 +120,6 @@ export const runChildren = [
         on: ["runId", "imageId", "workKey"],
       },
       { name: "PhotoRunImage_image_idx", on: ["imageId"] },
-      {
-        name: "PhotoRunImage_device_idx",
-        on: ["deviceWorkDeviceId"],
-        where: "{deviceWorkDeviceId} IS NOT NULL",
-      },
     ],
     checks: [
       {

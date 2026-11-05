@@ -533,6 +533,13 @@
       "when": 1793864260923,
       "tag": "0075_drop_redundant_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1793864481385,
+      "tag": "0076_drop_dead_columns",
+      "breakpoints": true
     }
   ]
 }

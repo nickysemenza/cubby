@@ -1071,7 +1071,6 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
     await insertAndReturn(db, photoRunImage, {
       runId: photoRun.id,
       imageId,
-      deviceWorkDeviceId: deviceId,
       targetFingerprint: "delete-policy-photo-image",
     });
   }
