@@ -20,6 +20,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
+import { lockFinancialTransactionSources } from "./financial-source-evidence";
 import {
   lockUpdatePurchases,
   updateFinancialTransaction,

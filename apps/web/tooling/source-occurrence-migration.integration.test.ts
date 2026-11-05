@@ -9,7 +9,7 @@ import { withMigrationDatabase } from "./test-database-lease";
 it("promotes only proven occurrence identity and retains unresolved history without money effects", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
-    await migrateDatabase(db, { through: "0088_ledger_transfer_minor_units" });
+    await migrateDatabase(db, { through: "0094_ledger_transfer_minor_units" });
     await client.query(
       `INSERT INTO "ExternalSource" (slug,label) VALUES ('monarch','Synthetic bank')`,
     );
@@ -188,7 +188,7 @@ it("promotes only proven occurrence identity and retains unresolved history with
       `UPDATE "SourceTransactionRecord" SET amount=10.010000000000002,"providerAmount"=-10.010000000000002 WHERE "rowPosition"=1`,
     );
     await expect(
-      migrateDatabase(db, { through: "0089_source_occurrence_ownership" }),
+      migrateDatabase(db, { through: "0095_source_occurrence_ownership" }),
     ).rejects.toThrow("independent IEEE");
     expect(
       (
@@ -205,7 +205,7 @@ it("promotes only proven occurrence identity and retains unresolved history with
         `SELECT jsonb_agg(to_jsonb(r) ORDER BY id) AS rows FROM "SourceTransactionRecord" r`,
       )
     ).rows[0].rows;
-    await migrateDatabase(db, { through: "0089_source_occurrence_ownership" });
+    await migrateDatabase(db, { through: "0095_source_occurrence_ownership" });
     expect(
       (
         await client.query(

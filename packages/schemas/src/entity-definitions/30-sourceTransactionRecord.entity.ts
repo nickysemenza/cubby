@@ -688,7 +688,7 @@ export const { definition, readSchemas } = defineEntityModel({
             },
           ],
         },
-        display: { list: false },
+        display: { list: false, detailLabelPath: "historicalTransactionIds[]" },
         validation: readOnly(z.array(shortcodeSchema("financialTransaction"))),
       },
       {

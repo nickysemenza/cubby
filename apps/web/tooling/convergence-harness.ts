@@ -87,6 +87,8 @@ export interface ConvergenceNames {
     | "sourceCategory"
     | "providerStatus"
     | "providerTransactionId"
+    | "providerAccountId"
+    | "providerData"
     | "rowPosition"
   > & { source: TransactionImportInput["source"] };
 }
@@ -149,6 +151,11 @@ export function convergenceNames(token: string): ConvergenceNames {
       sourceCategory: "Clothing",
       providerStatus: "posted",
       providerTransactionId: `${token}-posted`,
+      providerAccountId: `${token}-card`,
+      providerData: {
+        transaction: { id: `${token}-posted`, account_id: `${token}-card` },
+        account: { id: `${token}-card` },
+      },
       rowPosition: 1,
     },
   };

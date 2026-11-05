@@ -524,9 +524,9 @@ transfer edits preserve omitted evidence; fresh or changed evidence must reject
 noisy amounts through the financial constraint boundary. Migration completion is not
 historical financial acceptance. No transfer is reclassified as Expense spend.
 
-## Source occurrence ownership (provisional 0089)
+## Source occurrence ownership (provisional 0095)
 
-`0089_source_occurrence_ownership` follows both minor-unit money migrations.
+`0095_source_occurrence_ownership` follows both minor-unit money migrations.
 The parent assigns its release number. It is a direct cutover, with the same
 RunStep gate: all retained financial refresh steps must be terminal.
 

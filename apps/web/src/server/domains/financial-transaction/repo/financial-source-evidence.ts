@@ -240,10 +240,11 @@ export async function assertFinancialSourceRefsAvailable(
         owner.replacementObservationId !== null ||
         (owner.acceptedTransactionId !== null &&
           owner.acceptedTransactionId !== exceptTransactionId)
-      )
-        refuse(
+      ) {
+        return refuse(
           "The proven occurrence is unavailable or has a different accepted owner. Refresh its source review.",
         );
+      }
       const history = await query.execute<{ held: boolean }>(
         sql`SELECT ${sourceOccurrenceHasUnresolvedHistory(sql`${owner.id}::uuid`, sql`${owner.acceptedTransactionId}::uuid`)} AS held`,
       );
