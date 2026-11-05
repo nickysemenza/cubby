@@ -589,6 +589,13 @@
       "when": 1793878655979,
       "tag": "0083_ai_usage_without_a_run",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1793878655980,
+      "tag": "0084_hourly_derived_rebuild",
+      "breakpoints": true
     }
   ]
 }

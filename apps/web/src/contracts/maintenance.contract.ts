@@ -1,5 +1,6 @@
 import {
   maintenanceRunOutSchema,
+  derivedRebuildStatusSchema,
   maintenanceStatusSchema,
   repairImageDimensionsInputSchema,
   repairImageDimensionsOutSchema,
@@ -33,6 +34,19 @@ export const maintenanceContract = defineContract(
       input: z.undefined(),
       output: maintenanceRunOutSchema,
       invalidates: ["maintenance", "runOnly"],
+    }),
+    rebuildDerived: mutation({
+      description:
+        "Start or resume the deterministic household rebuild on Workers. An active pass keeps its committed cursor. This regenerates no AI responses or embeddings.",
+      input: z.undefined(),
+      output: z.object({ existing: z.boolean() }),
+    }),
+    derivedRebuildStatus: query({
+      description:
+        "Read aggregate deterministic rebuild progress, failures and the last three wall-clock timings.",
+      input: z.undefined(),
+      output: derivedRebuildStatusSchema,
+      readPolicy: "strong",
     }),
     // Live operational state.
     status: query({

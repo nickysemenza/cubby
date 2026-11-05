@@ -9,9 +9,8 @@ import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, isTransaction, notDeleted } from "~/server/db/helpers";
 import { householdDaySql } from "~/server/db/helpers/query";
-import { cookbook, product, project } from "~/server/db/schema";
+import { project } from "~/server/db/schema";
 import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
-import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import {
   owedWorkItem,
   workPendingWhere,
@@ -62,7 +61,7 @@ export const loadWorkDiagnosticFacts = async (db: Database) => {
   };
 };
 
-/** Canonical detectors may consume stored quality/rollups only when every input is available. */
+/** Diagnostics accept mixed-age inputs; records created mid-pass converge on the next pass. */
 export const loadWorkDiagnosticComputeTargets = async (
   db: Database | DrizzleTransaction,
   ids: readonly string[],
@@ -83,34 +82,5 @@ export const loadWorkDiagnosticComputeTargets = async (
         ),
       ),
     );
-  if (anchors.length > 0) {
-    const sources = [
-      { entity: "product", table: product, key: "dataQuality" },
-      { entity: "cookbook", table: cookbook, key: "dataQuality" },
-      { entity: "project", table: project, key: "rollups" },
-    ] as const;
-    for (const source of sources) {
-      const rows = await getDb(db)
-        .select({ id: source.table.id })
-        .from(source.table)
-        .where(notDeleted(source.table));
-      // Preparation may inspect the population; display never takes this path.
-      for (let offset = 0; offset < rows.length; offset += 500) {
-        const ids = rows.slice(offset, offset + 500).map((row) => row.id);
-        const reads = await loadStoredDerived(db, source.entity, ids, [
-          source.key,
-        ]);
-        if (
-          ids.some((id) => {
-            const read = reads.get(id)?.get(source.key);
-            return !read?.resultExists || read.stale || read.error;
-          })
-        )
-          throw new Error(
-            `Work diagnostic inputs are unavailable or stale: ${source.entity}.${source.key}.`,
-          );
-      }
-    }
-  }
   return { db, ids: anchors.map((anchor) => anchor.id) };
 };

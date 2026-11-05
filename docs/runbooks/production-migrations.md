@@ -219,6 +219,21 @@ deployment. Everything committed so far must stay compatible with the running Wo
 because the next Deploy resumes from there. One statement can hold several commands
 in one transaction, so a cutover's copy and retirement stay atomic.
 
+## Hourly deterministic pass
+
+The Worker cutover adds one DerivedRebuild cursor row and switches execution off
+per-value tickets. Retained tickets stay in place. Before retiring a target's
+tickets, verify replacement output coverage. Retirement always filters
+`drain = 'derived:drain'`; paid and member-directed work belongs to its owner.
+
+Use maintenance.rebuildDerived to start or resume a Worker pass and
+maintenance.derivedRebuildStatus for aggregate progress and the last three
+wall-clock timings. Record three full corpus timings against 15 minutes;
+separately require completion under 45 minutes and inspect Worker logs for CPU
+or memory-limit terminations. A target miss is reported, never hidden by clearing
+retained work. Trigger retirement, catalog checks and DerivedValue drop remain
+separate deployed-reader-first steps under ADR 0025.
+
 ## Quality snapshot cutover
 
 The quality cutover adds `QualitySnapshot` and copies every `dataQuality` row's

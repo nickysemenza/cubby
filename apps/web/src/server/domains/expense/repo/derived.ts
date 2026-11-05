@@ -44,5 +44,7 @@ const expenseBeneficiariesCompute: DerivedCompute = async (db, ids) => {
 };
 
 export const expenseDerivedComputes = {
-  "expense.beneficiaries": expenseBeneficiariesCompute,
+  "expense.beneficiaries": Object.assign(expenseBeneficiariesCompute, {
+    preparationBatchSize: 200,
+  }),
 };

@@ -16,13 +16,12 @@ import { workWaitCause } from "@cubby/schemas/job";
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { householdLocalDate } from "~/lib/household-date";
 import {
   entityStoredDerivedDeclarations,
   type EntityStoredDerivedDeclaration,
   storedDerived,
 } from "~/server/db/derived-declarations";
-import { householdDaySql, uuidArrayParam } from "~/server/db/helpers/query";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import type {
@@ -30,9 +29,7 @@ import type {
   StoredDerivedRead,
   CurrentReadFacts,
 } from "~/server/generic/derived/repo/read-context";
-import { observedWorkItem } from "~/server/generic/jobs/repo/work-items";
 
-import { fanoutTargetMatches } from "./fanout";
 export type {
   PageStoredMeta,
   StoredDerivedRead,
@@ -284,33 +281,17 @@ export async function loadStoredDerived(
   const declarations = keys.map((key) => requireStored(entity, key));
   const out = new Map<string, Map<string, StoredDerivedRead>>();
   if (ids.length === 0 || declarations.length === 0) return out;
-  // A target-wide fanout flag does not establish which record it affects.
-  // Only a direct ticket can attribute a recorded source cause to this record.
-  // VALUES exposes the key count; jsonb_to_recordset estimates 100 and can
-  // make a small read hash whole publication and work tables.
+  // Snapshot freshness belongs to the coarse hourly pass, never retained tickets.
   const result = await unwrapDb(db).execute(sql`
-    WITH keys AS MATERIALIZED (
-      SELECT declared.*, EXISTS (SELECT 1 FROM "WorkItem" w
-        WHERE ${fanoutTargetMatches(sql`w.target`, sql`declared.target`)}) AS "fanoutPending"
-      FROM (VALUES ${sql.join(
-        declarations.map(
-          ({ key, target, clock }) =>
-            sql`(${key}::text, ${target}::text, ${clock}::text)`,
-        ),
-        sql`, `,
-      )}) AS declared(key, target, clock)
-    )
+    WITH keys AS (SELECT * FROM (VALUES ${sql.join(
+      declarations.map(({ key }) => sql`(${key}::text)`),
+      sql`, `,
+    )}) AS declared(key))
     SELECT i.id AS "entityId", k.key, v.value,
            ${options.includeEvidence ? sql`v."decidedBy"` : sql`v."decidedBy" - ${storedFieldDecision.keyof().enum.evidence}`} AS "decidedBy", v."computedAt",
-           (d.ref IS NOT NULL OR k."fanoutPending") AS pending,
-           (d.ref IS NOT NULL OR k."fanoutPending" OR (k.clock = 'householdDay' AND
-             ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date)) IS TRUE AS stale,
-           CASE WHEN d.ref IS NOT NULL THEN d.reason WHEN k."fanoutPending" THEN 'Related refresh pending'
-             WHEN k.clock = 'householdDay' AND ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date THEN 'Daily refresh due' END AS "refreshReason",
-           CASE WHEN d.ref IS NULL AND k."fanoutPending" THEN ${fieldWorkAttribution.value} END AS attribution,
-           d."lastError" AS error, d."readyAt" AS "retryAt",
-           coalesce(d.waiting, false) AS waiting, d."waitCause",
-           d."runningSince", d."leaseExpiresAt"
+           false AS pending, false AS stale, NULL::text AS "refreshReason", NULL::text AS attribution,
+           NULL::text AS error, NULL::timestamp AS "retryAt", false AS waiting, NULL::text AS "waitCause",
+           NULL::timestamp AS "runningSince", NULL::timestamp AS "leaseExpiresAt"
       FROM unnest(${uuidArrayParam(ids)}) AS i(id)
      CROSS JOIN keys k
       LEFT JOIN LATERAL (
@@ -322,8 +303,7 @@ export async function loadStoredDerived(
           ),
           sql` UNION ALL `,
         )}
-      ) v ON true
-      LEFT JOIN LATERAL ${observedWorkItem(sql`k.target`, sql`i.id`)} d ON true`);
+      ) v ON true`);
   for (const row of z.array(valueRow).parse(result.rows)) {
     const byKey = out.get(row.entityId) ?? new Map();
     const metadata = storedFieldDecision.safeParse(row.decidedBy);

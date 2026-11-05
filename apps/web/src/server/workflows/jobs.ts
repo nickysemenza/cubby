@@ -7,11 +7,13 @@ import {
 } from "@cubby/schemas/background-tasks";
 import { jobWaitReason, type JOB_KIND_POLICY } from "@cubby/schemas/job";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { captureException } from "@sentry/tanstackstart-react";
 import { z } from "zod";
 
 import { aiEvaluationDrain } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import { getPurchaseDispatchHostEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
+import { DERIVED_REBUILD_LEASE_SECONDS } from "~/server/db/derived-rebuild-schema";
 import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
@@ -20,10 +22,12 @@ import {
   runDrains,
   type BackgroundDrain,
 } from "~/server/generic/background/drains";
+import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
+import { derivedReconcileHandler } from "~/server/generic/derived/service/drain-job";
 import {
-  derivedDrainHandler,
-  derivedReconcileHandler,
-} from "~/server/generic/derived/service/drain-job";
+  rebuildDerived,
+  DerivedRebuildBusyError,
+} from "~/server/generic/derived/service/rebuild";
 import { embeddingCleanupDrain } from "~/server/generic/embedding/service/embedding-cleanup";
 import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
 import { JOB_DRAIN } from "~/server/generic/jobs/limits";
@@ -76,7 +80,7 @@ const backgroundHandlers = {
 
 export const productionJobHandlers: JobHandlers = {
   ...backgroundHandlers,
-  "derived.drain": derivedDrainHandler(derivedComputes),
+  "derived.drain": derivedReconcileHandler,
   "derived.reconcile": derivedReconcileHandler,
   "discovery.connections": connectionDiscoveryJobHandler,
   "run.execute": runJobHandler,
@@ -132,13 +136,34 @@ export const productionJobHandlers: JobHandlers = {
 >;
 
 /** Work owned by its domain's rows: no Job row, one registration here. */
-// Built per round, not at import: these read production ports that sit in an import
-// cycle with this module, and evaluating them here fails the consumer's module load.
+const derivedRebuildDrain: BackgroundDrain = {
+  name: "derived-rebuild",
+  page: async (db, { deadline }) => {
+    try {
+      const more = await rebuildDerived(db, derivedComputes, { deadline });
+      const status = more ? null : await readDerivedRebuildStatus(db);
+      return {
+        more,
+        nextAt: status?.failures ? new Date(Date.now() + 5 * 60_000) : null,
+      };
+    } catch (error) {
+      if (error instanceof DerivedRebuildBusyError)
+        return {
+          more: false,
+          nextAt: new Date(Date.now() + DERIVED_REBUILD_LEASE_SECONDS * 1000),
+        };
+      captureException(error);
+      return { more: false, nextAt: new Date(Date.now() + 5 * 60_000) };
+    }
+  },
+};
+// Built per round: production ports participate in this module's import cycle.
 const productionDrains = (): readonly BackgroundDrain[] => [
   cloudImageDrain,
   embeddingRefreshDrain(),
   embeddingCleanupDrain(),
   aiEvaluationDrain(runAiEvaluationExecution()),
+  derivedRebuildDrain,
 ];
 
 export async function drainProductionJobs(

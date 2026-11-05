@@ -6,6 +6,7 @@ import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import {
   type SearchableEntity,
   searchableEntities,
+  isEmbeddableEntity,
 } from "@cubby/schemas/search";
 
 import { USDAClient } from "~/server/clients/usda";
@@ -46,6 +47,7 @@ import {
  */
 const searchSink = (entity: SearchableEntity) =>
   derivedSink({
+    preparationBatchSize: 200,
     prepare: (db, ids) =>
       prepareSearchDocuments(
         db,
@@ -59,9 +61,23 @@ const searchSink = (entity: SearchableEntity) =>
         ),
         missing: prepared.missing.filter((ref) => keep.has(ref.entityId)),
       };
-      await publishPreparedSearchDocuments(tx, current);
-      if (productionEmbeddingRefreshPort.configured())
-        await enqueueEmbeddingRefs(tx, current);
+      const published = await publishPreparedSearchDocuments(tx, current);
+      if (
+        isEmbeddableEntity(entity) &&
+        productionEmbeddingRefreshPort.configured()
+      ) {
+        const changed = new Set(
+          published
+            .filter((result) => result.status === "upserted")
+            .map((result) => result.entityId),
+        );
+        await enqueueEmbeddingRefs(tx, {
+          entries: current.entries.filter((entry) =>
+            changed.has(entry.source.entityId),
+          ),
+          missing: [],
+        });
+      }
       return ids;
     },
   });

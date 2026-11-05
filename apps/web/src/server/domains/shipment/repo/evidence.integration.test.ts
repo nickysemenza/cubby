@@ -921,7 +921,7 @@ describe("Shipment retained evidence", () => {
           eventCount: {
             result: {
               kind: "cached",
-              freshness: "stale",
+              freshness: "fresh",
               decision: { outcome: { value: 1 } },
             },
           },

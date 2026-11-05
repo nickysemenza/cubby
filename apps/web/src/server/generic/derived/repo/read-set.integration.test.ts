@@ -6,12 +6,11 @@ import {
 import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project-fields";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
-import { PgDialect } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { seedPerformanceCorpus } from "tooling/scenarios/performance";
 import { seedEntity, withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { USDAClient } from "~/server/clients/usda";
@@ -39,55 +38,17 @@ import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessm
 import {
   type DerivedAdapter,
   derivedSink,
-  isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
-import { markAllStoredDerived } from "~/server/generic/derived/repo/drain";
-import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
+import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
+import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductFixture,
   makeProductInput,
   makeCookbookExtraction,
 } from "~/server/testing/repo.fixtures";
 import { derivedComputes } from "~/server/workflows/derived-computes";
-
-/**
- * Infrastructure every compute may read without declaring it: identity and
- * the derived cache itself (a `dependsOn` value is read from `DerivedValue`).
- */
-const UNDECLARED_READS = new Set(["Entity", "DerivedValue", "QualitySnapshot"]);
-
-/** Full read models also load presentation fields these sinks never publish. */
-const INCIDENTAL_READS = {
-  // Input availability reads queue status and envelope execution observations.
-  // The calculation discards execution metadata; Job lifecycle is not an input.
-  "project.workDiagnosticFacts": new Set(["WorkItem", "Job"]),
-  "recipe.totals": new Set([
-    // getRecipesByIDs loads cookbook metadata; recipeWasmInput uses only yield and rows.
-    "Cookbook",
-    // getRecipesByIDs resolves display images; neither costing nor its fingerprint uses media.
-    "EntityAttachment",
-    // The same display-image projection loads image integrity and representations only.
-    "Image",
-    // Transparent representations are discarded before recipeWasmInput.
-    "ImageDerivative",
-    // Meals supply borrowed recipe images, never costing inputs.
-    "Meal",
-    // Meal membership is traversed only for those borrowed images.
-    "MealRecipe",
-  ]),
-  "product.conversionCoverage": new Set([
-    // loadProductsForCoverage loads brandName/brandCode for problem captions;
-    // the published coverage projection uses neither.
-    "Vendor",
-  ]),
-  "project.completionYear": new Set([
-    // loadProjectTree loads assignee labels; the date-window fold uses no assignee fields.
-    "LedgerParty",
-  ]),
-};
 
 /** USDA is a Worker binding; the tracer needs only the database reads. */
 const offlineUsda = new USDAClient(
@@ -109,14 +70,8 @@ const computes = new Map<string, DerivedAdapter>([
   ],
 ]);
 
-/**
- * The read-set tracer (ADR 0021): every table a compute adapter reads must be
- * a declared input, or a change to it would leave the stored value silently
- * stale. Each declaration's compute runs (sinks: `prepare` only) over sample
- * rows of a synthetic household (the performance corpus plus one of each kind
- * it lacks) and its traced reads are compared to its inputs.
- */
-describe("stored derived read sets", () => {
+/** Rebuild every deterministic cache from retained synthetic household inputs. */
+describe("deterministic cache rebuild", () => {
   const ctx = withTestDb();
 
   const firstCode = async (table: string) => {
@@ -256,120 +211,15 @@ describe("stored derived read sets", () => {
     });
   }
 
-  it("reads only declared inputs", async () => {
-    await seedCorpus();
-    const tableNames = new Set(
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`,
-        )
-      ).rows.map((row) => String((row as { tablename: string }).tablename)),
-    );
-    const undeclared: string[] = [];
-    const unsampled: string[] = [];
-    const failed: string[] = [];
-    for (const declaration of storedDerivedDeclarations()) {
-      const adapter = computes.get(declaration.compute);
-      if (!adapter) {
-        failed.push(`${declaration.target}: no compute adapter`);
-        continue;
-      }
-      if (declaration.target === "project.workDiagnosticFacts")
-        await drainStoredDerived(ctx.db, 100, Object.fromEntries(computes));
-      const ids = (
-        await getDb(ctx.db).execute(
-          sql`SELECT id::text AS id FROM ${sql.identifier(declaration.table)}
-          ${declaration.target === "project.workDiagnosticFacts" ? sql`WHERE shortcode=${HOUSEHOLD_PROJECT_SHORTCODE}` : sql``}
-          ORDER BY id LIMIT 25`,
-        )
-      ).rows.map((row) => String((row as { id: string }).id));
-      if (ids.length === 0) {
-        unsampled.push(declaration.target);
-        continue;
-      }
-      // Compiled SQL names every table the adapter reads.
-      const compiled = vi.spyOn(PgDialect.prototype, "sqlToQuery");
-      let error: string | null = null;
-      try {
-        await (isDerivedSink(adapter)
-          ? adapter.prepare(ctx.db, ids)
-          : adapter(ctx.db, ids));
-        // A selection's refs are an opaque one-column SQL relation. Inspect
-        // each pure selector once; capture tables/paths are already declared,
-        // and the drain/rebuild journey below exercises real source refs.
-        const selectionKeys = new Set(
-          declaration.inputs.flatMap((input) =>
-            input.selection ? [input.selection.key] : [],
-          ),
-        );
-        for (const key of selectionKeys) {
-          const select = adapter.fanoutSelections?.[key];
-          if (!select) throw new Error(`Unregistered fanout selection ${key}`);
-          new PgDialect().sqlToQuery(
-            select(sql`SELECT NULL::uuid AS id WHERE false`),
-          );
-        }
-      } catch (caught) {
-        error = String(caught);
-      }
-      const tables = new Set(
-        compiled.mock.results.flatMap((result) =>
-          result.type === "return"
-            ? [
-                ...result.value.sql.matchAll(
-                  /\b(?:FROM|JOIN|UPDATE|INTO)\s+"([A-Za-z][A-Za-z0-9_]*)"/giu,
-                ),
-              ].flatMap((match) => (match[1] ? [match[1]] : []))
-            : [],
-        ),
-      );
-      compiled.mockRestore();
-      if (error) {
-        failed.push(`${declaration.target}: ${error}`);
-        continue;
-      }
-      if (tables.size === 0) {
-        failed.push(`${declaration.target}: no compiled SQL observed`);
-        continue;
-      }
-      const declared = new Set([
-        declaration.table,
-        ...declaration.inputs.flatMap((input) => [
-          input.table,
-          ...(input.path ?? []).map((step) => step.table),
-          ...(input.paths ?? []).flatMap((path) =>
-            path.map((step) => step.table),
-          ),
-          ...(input.selection?.path ?? []).map((step) => step.table),
-        ]),
-        ...declaration.dependsOn.flatMap((dependency) =>
-          "through" in dependency ? [dependency.through.table] : [],
-        ),
-      ]);
-      const incidental = Object.entries(INCIDENTAL_READS).find(
-        ([target]) => target === declaration.target,
-      )?.[1];
-      for (const table of tables)
-        if (
-          tableNames.has(table) &&
-          !declared.has(table) &&
-          !UNDECLARED_READS.has(table) &&
-          !incidental?.has(table)
-        )
-          undeclared.push(`${declaration.target} reads ${table}`);
-    }
-    expect(failed.join("\n")).toBe("");
-    expect(unsampled.join("\n")).toBe("");
-    expect(undeclared.join("\n")).toBe("");
-  });
-
-  it("reconciles and rebuilds every declared cache family from retained inputs", async () => {
+  it("rebuilds every declared cache family idempotently from retained inputs", async () => {
     await seedCorpus();
     const adapters = Object.fromEntries(computes);
     const drain = async () => {
-      await drainStoredDerived(ctx.db, 100, adapters);
-      // Ready-only draining must not hide deferred computations from this proof.
-      expect(await readWorkItems(ctx.db)).toEqual([]);
+      for (let page = 0; page < 1_000; page++) {
+        if (!(await rebuildDerived(ctx.db, adapters, { force: page === 0 })))
+          return;
+      }
+      throw new Error("Synthetic deterministic pass exceeded its page bound");
     };
     const snapshot = async () => ({
       values: (
@@ -447,7 +297,6 @@ describe("stored derived read sets", () => {
     expect(incremental.coverage.length).toBeGreaterThan(0);
     expect(incremental.recipes.some((row) => row.totals !== null)).toBe(true);
 
-    await markAllStoredDerived(ctx.db);
     await drain();
     expect(await snapshot()).toEqual(incremental);
 
@@ -459,8 +308,16 @@ describe("stored derived read sets", () => {
     await getDb(ctx.db).execute(
       sql`UPDATE "Recipe" SET totals = NULL, "totalsComputedAt" = NULL`,
     );
-    await markAllStoredDerived(ctx.db);
     await drain();
     expect(await snapshot()).toEqual(incremental);
+    const status = await readDerivedRebuildStatus(ctx.db);
+    expect(status.durationsMs).toHaveLength(3);
+    process.stdout.write(
+      JSON.stringify({
+        measurement: "synthetic deterministic full rebuild",
+        durationsMs: status.durationsMs,
+        targetMs: 900_000,
+      }) + "\n",
+    );
   }, 30_000);
 });

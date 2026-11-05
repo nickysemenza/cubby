@@ -409,8 +409,7 @@
                   "kind": "missing"
                 },
                 "work": {
-                  "kind": "pending",
-                  "refreshReason": "Refresh requested"
+                  "kind": "idle"
                 }
               }
             }

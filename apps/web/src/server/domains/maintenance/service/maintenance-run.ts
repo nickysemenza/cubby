@@ -364,7 +364,7 @@ export function maintenanceStepDrivers(
         ),
       };
     }),
-    // Derived values reconcile through their own hourly buckets (ADR 0021);
+    // Derived values rebuild through their own hourly pass (ADR 0025);
     // this step owns the search artifacts no mark reaches: documents of
     // records removed before their triggers existed, and retired vectors.
     "derived-refresh": searchArtifactCleanupStep(),

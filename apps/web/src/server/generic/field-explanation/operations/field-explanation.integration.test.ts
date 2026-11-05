@@ -158,7 +158,7 @@ describe("derived field explanations against canonical records", () => {
     ]);
     expect(explanation.envelope.result).toMatchObject({
       kind: "cached",
-      freshness: "stale",
+      freshness: "fresh",
     });
     expect(JSON.stringify(explanation.sources)).toContain(first.output.id);
     expect(JSON.stringify(explanation.sources)).not.toContain(second.output.id);

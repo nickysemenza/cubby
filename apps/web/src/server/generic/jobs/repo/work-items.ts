@@ -5,7 +5,7 @@
  * producer and adapter interface; claiming and settlement belong to
  * `defineDrain` (`work-claims.ts`).
  */
-import { jobState, type WorkWaitCause } from "@cubby/schemas/job";
+import type { WorkWaitCause } from "@cubby/schemas/job";
 import { and, asc, eq, inArray, lte, sql, type SQL } from "drizzle-orm";
 
 import { uuidArrayParam } from "~/server/db/helpers/query";
@@ -13,7 +13,7 @@ import {
   repositoryQueries,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
-import { job, workItem } from "~/server/db/retained-tables";
+import { workItem } from "~/server/db/retained-tables";
 
 import { wakeJob } from "./producer";
 
@@ -97,20 +97,6 @@ export async function observePendingWork(
       ),
     )
     .orderBy(workItem.target, workItem.ref);
-}
-
-/** Pending items include future retries; callers may narrow to their owned targets. */
-export async function hasPendingWork(
-  db: RepositoryQueryInput,
-  drain: string,
-  eligible: (target: SQL) => SQL,
-): Promise<boolean> {
-  const [row] = await repositoryQueries(db)
-    .select({ target: workItem.target })
-    .from(workItem)
-    .where(and(eq(workItem.drain, drain), eligible(sql`${workItem.target}`)))
-    .limit(1);
-  return !!row;
 }
 
 /** Exactly these tickets: a re-marked item no longer matches. */
@@ -345,18 +331,6 @@ export async function postponeWorkRefs(
   return [...new Set(rows.map((row) => row.drain))].sort();
 }
 
-/** Withdraw items regardless of ticket (cancellation, deletion of the source). */
-export async function dropWork(
-  tx: RepositoryQueryInput,
-  target: string,
-  refs: readonly string[],
-) {
-  if (!refs.length) return;
-  await repositoryQueries(tx)
-    .delete(workItem)
-    .where(and(eq(workItem.target, target), inArray(workItem.ref, [...refs])));
-}
-
 /** A target's items whose ref is in `refs` (a subquery or array), as composable rows. */
 export async function workItemsFor(
   db: RepositoryQueryInput,
@@ -425,12 +399,6 @@ export async function drainReady(db: RepositoryQueryInput, drain: string) {
 export const workPendingWhere = (target: (column: SQL) => SQL) =>
   sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${target(sql`${workItem.target}`)})`;
 
-/** Shared by point reads and the drain aggregate; aliases name the indexed item and its Job. */
-const currentWorkExecution = sql`j.state = ${jobState.enum.running}
-  AND j."leaseToken" = w."executionLeaseToken" AND j."leaseExpiresAt" > now()
-  AND w."executionTicket" = w.ticket
-  AND w."executionStartedAt" >= w."readyAt" AND w."readyAt" <= now()`;
-
 /**
  * Owed work is an input to derived computations; Job execution is not. An
  * explicit wait outranks a retained `lastError`, which is history, not its state.
@@ -438,17 +406,6 @@ const currentWorkExecution = sql`j.state = ${jobState.enum.running}
 export const owedWorkItem = (target: SQL, ref: SQL) =>
   sql`(SELECT ${workItem.ref} AS ref, CASE WHEN ${workItem.waitCause} IS NULL THEN ${workItem.lastError} END AS "lastError", ${workItem.readyAt} AS "readyAt"
     FROM ${workItem} WHERE ${workItem.target} = ${target} AND ${workItem.ref} = ${ref})`;
-
-/** Public refresh metadata additionally observes the exact executing Job lease. */
-export const observedWorkItem = (target: SQL, ref: SQL) =>
-  sql`(SELECT w.ref, w.reason, CASE WHEN w."waitCause" IS NULL THEN w."lastError" END AS "lastError", w."readyAt", w."waitCause",
-      (w."readyAt" > now()) IS TRUE AS waiting,
-      CASE WHEN ${currentWorkExecution}
-        THEN w."executionStartedAt" ELSE NULL END AS "runningSince",
-      j."leaseExpiresAt" AS "leaseExpiresAt"
-    FROM ${workItem} w
-    LEFT JOIN ${job} j ON j.key = w.drain
-    WHERE w.target = ${target} AND w.ref = ${ref})`;
 
 /** Fenced caller only. An observation grants no authority over a work ticket. */
 export async function observeWorkExecution(
@@ -470,10 +427,6 @@ export async function observeWorkExecution(
     })
     .where(workTickets(held));
 }
-
-/** Whether any item of `targets` is still owed. */
-export const workPendingIn = (targets: readonly string[]) =>
-  sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${inArray(workItem.target, [...targets])})`;
 
 /** Whether a drain (a key or a correlated key column) still owes any item. */
 export const drainPending = (drain: string | SQL) =>

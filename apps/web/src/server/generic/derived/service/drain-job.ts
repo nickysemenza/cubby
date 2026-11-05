@@ -8,11 +8,9 @@ import {
   householdLocalDate,
   shiftPlainDate,
 } from "~/lib/household-date";
-import type { Database } from "~/server/db";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import type { DerivedComputes } from "~/server/generic/derived/repo/compute";
 import {
-  DERIVED_DRAIN_JOB_KEY,
   DERIVED_COMPUTE_BATCH,
   admitDerivedPage,
   derivedChunk,
@@ -26,7 +24,6 @@ import {
   prepareDerivedPage,
   publishDerivedChunk,
 } from "~/server/generic/derived/repo/drain";
-import { repeatJob } from "~/server/generic/jobs/repo/producer";
 import { observeWorkExecution } from "~/server/generic/jobs/repo/work-items";
 import {
   defineDrain,
@@ -235,12 +232,3 @@ export const derivedReconcileHandler: JobHandler = defineJobHandler(
   z.object({}).passthrough(),
   async () => ({ page: { done: true, result: { outcome: "retired" } } }),
 );
-
-/** Existing dirty tickets and clock deadlines retain their ordinary drain. */
-export async function scheduleDerivedJobs(db: Database): Promise<void> {
-  await repeatJob(db, {
-    key: DERIVED_DRAIN_JOB_KEY,
-    kind: "derived.drain",
-    input: {},
-  });
-}

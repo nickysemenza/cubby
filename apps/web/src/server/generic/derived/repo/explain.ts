@@ -4,7 +4,7 @@ import { fieldDecision } from "@cubby/schemas/field-envelope";
 import { fieldLiveComparison } from "@cubby/schemas/field-explanation";
 import { z } from "zod";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db/database";
 import { storedDerived } from "~/server/db/derived-declarations";
 import {
   type DerivedComputes,
@@ -14,7 +14,7 @@ import {
 import { projectStoredResult } from "~/server/generic/derived/repo/read";
 /** The caller owns the read snapshot; comparisons never publish or replace its result. */
 export async function explainLiveDerived(
-  db: Database | DrizzleTransaction,
+  db: Database,
   computes: DerivedComputes,
   entity: Entity,
   key: string,

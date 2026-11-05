@@ -694,6 +694,7 @@ export const renderEntityMetadataArtifacts = (
                     publishes: "ownTable",
                     stored: {
                       compute: `search.${entity.key}`,
+                      rebuildPhase: "search",
                       inputs: [
                         {
                           table: entity.descriptor.dbTable,
@@ -748,6 +749,7 @@ export const renderEntityMetadataArtifacts = (
                     publishes: "ownTable",
                     stored: {
                       compute: `quality.${entity.key}`,
+                      rebuildPhase: "quality",
                       snapshotSource: {
                         table: "QualitySnapshot",
                         value: {

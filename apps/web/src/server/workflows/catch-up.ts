@@ -48,11 +48,6 @@ export async function recoverMissedWork(
 ) {
   const obligations = await Promise.allSettled([
     (async () => {
-      const { scheduleDerivedJobs } =
-        await import("~/server/generic/derived/service/drain-job");
-      await scheduleDerivedJobs(db);
-    })(),
-    (async () => {
       const { scheduleDerivedDiscovery } =
         await import("~/server/domains/run/service/derived-discovery");
       await scheduleDerivedDiscovery(db);
