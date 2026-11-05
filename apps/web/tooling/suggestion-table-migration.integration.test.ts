@@ -24,7 +24,15 @@ async function publish(
     evidence?: unknown;
     served?: boolean;
     createdAt?: string;
-    state?: Record<string, unknown>;
+    state?: {
+      entity?: string;
+      recordId?: string;
+      status?: string;
+      active?: boolean;
+      data?: object;
+      suppression?: object | null;
+      acceptanceReceipt?: object;
+    };
   },
 ) {
   const createdAt = input.createdAt ?? "2026-01-01T00:00:00Z";
@@ -62,7 +70,9 @@ async function publish(
       state.status,
       state.active,
       JSON.stringify(state.data),
-      state.suppression === undefined ? null : JSON.stringify(state.suppression),
+      state.suppression === undefined
+        ? null
+        : JSON.stringify(state.suppression),
       input.fingerprint ?? null,
       createdAt,
       state.acceptanceReceipt === undefined
@@ -126,8 +136,17 @@ async function seedPredecessor(client: Db) {
     id: id(1),
     family: "field",
     served: false,
-    subject: { kind: "field", entity: "product", recordId: id(900), field: "brandId" },
-    state: { status: "applied", active: false, acceptanceReceipt: { auditIds: [] } },
+    subject: {
+      kind: "field",
+      entity: "product",
+      recordId: id(900),
+      field: "brandId",
+    },
+    state: {
+      status: "applied",
+      active: false,
+      acceptanceReceipt: { auditIds: [] },
+    },
     fingerprint: "field-1",
   });
   await feedback(client, {
@@ -163,7 +182,12 @@ async function seedPredecessor(client: Db) {
     id: id(2),
     family: "field",
     served: false,
-    subject: { kind: "field", entity: "product", recordId: id(900), field: "model" },
+    subject: {
+      kind: "field",
+      entity: "product",
+      recordId: id(900),
+      field: "model",
+    },
     state: { status: "superseded", active: false },
   });
   const statement = (source: string, chargeKey: string) => ({
@@ -245,7 +269,11 @@ async function seedPredecessor(client: Db) {
     state: {
       entity: "expense",
       status: "resolved",
-      suppression: { scope: "connection.transaction-refund", candidateKey: "k", fingerprint: null },
+      suppression: {
+        scope: "connection.transaction-refund",
+        candidateKey: "k",
+        fingerprint: null,
+      },
     },
   });
   await feedback(client, {
@@ -272,7 +300,9 @@ describe("Suggestion table migration", () => {
           await client.query(`SELECT * FROM ${schema}"Assessment" ORDER BY id`)
         ).rows,
         states: (
-          await client.query(`SELECT * FROM ${schema}"AssessmentState" ORDER BY id`)
+          await client.query(
+            `SELECT * FROM ${schema}"AssessmentState" ORDER BY id`,
+          )
         ).rows,
         events: (
           await client.query(`SELECT * FROM ${schema}"Feedback" ORDER BY id`)

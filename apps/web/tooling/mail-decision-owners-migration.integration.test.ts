@@ -722,7 +722,7 @@ describe("mail decision owners migration", () => {
             .n,
         );
       const queued = await tickets();
-      await migrateDatabase(db);
+      await migrateDatabase(db, { through: "0074_mail_decision_owners" });
 
       expect(await snapshot(client)).toEqual(before);
       const labelled = id(160);
