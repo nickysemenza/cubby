@@ -1111,9 +1111,9 @@ describe("shared spending booking", () => {
         },
         ctx.actor,
       );
-      expect(claimed.output.sourceClaims).toMatchObject([
-        { targetAmountAtClaim: 42.5 },
-      ]);
+      expect(claimed.output).toMatchObject({
+        sourceClaims: [{ targetAmountAtClaim: 42.5 }],
+      });
       const lineage = await loadFinancialBookingLineage(
         ctx.db,
         transaction.output.id,
