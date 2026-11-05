@@ -17,11 +17,6 @@ import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { normalizeSearchTextSql } from "~/server/db/computed/search-normalization";
 import {
-  fanoutTarget,
-  isFanoutInput,
-  storedDerived,
-} from "~/server/db/derived-declarations";
-import {
   unwrapDb,
   isTransaction,
   uuidArrayParam,
@@ -35,7 +30,6 @@ import {
   type SearchableEntityText,
 } from "~/server/generic/embedding/repo/entity-embedding";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
-import { workPendingIn } from "~/server/generic/jobs/repo/work-items";
 
 interface SearchDocumentSource {
   entityKind: SearchableEntity;
@@ -805,35 +799,22 @@ const unembeddedDocumentsSql = (
     ${updatedBefore ? sql`AND sd."updatedAt" <= ${updatedBefore}::timestamp` : sql``}
 `;
 
-/** Eligibility witness only: ANN recall is not an exhaustive similarity proof. */
-/**
- * Semantic coverage is incomplete for these kinds while one of their search
- * documents awaits recompute (direct or fanout marks, ADR 0021) or lacks a
- * current embedding. One statement; the marks probe uses exact targets so it
- * stays a primary-key lookup.
- */
+/** Completeness follows published search documents and their embeddings. Retained
+ * predecessor tickets do not block hourly snapshots; source edits converge on the next pass. */
 export async function searchCoverageIncomplete(
   db: Database | DrizzleTransaction,
   config: SemanticEmbeddingConfig,
   kinds: readonly SearchableEntity[],
 ): Promise<boolean> {
   if (!kinds.length) return false;
-  const targets = kinds.flatMap((kind) => {
-    const declaration = storedDerived(kind, "searchDocument");
-    return declaration
-      ? [
-          declaration.target,
-          ...declaration.inputs.flatMap((input, index) =>
-            isFanoutInput(input)
-              ? [fanoutTarget(declaration.target, index)]
-              : [],
-          ),
-        ]
-      : [];
-  });
-  const result = await unwrapDb(db).execute(sql`SELECT ${
-    targets.length ? sql`${workPendingIn(targets)} OR ` : sql``
-  }EXISTS (
+  const sources = await searchDocumentSourceSql([...kinds]);
+  const missingSources = sources
+    ? sql`EXISTS (SELECT 1 FROM (${sources.union}) source
+    WHERE NOT EXISTS (SELECT 1 FROM "SearchDocument" document
+      WHERE document."entityKind" = source."entityKind" AND document."entityId" = source."entityId"::uuid AND ${notDeleted("document")}) LIMIT 1)`
+    : sql`false`;
+  const result = await unwrapDb(db)
+    .execute(sql`${sources?.sourcePrefix ?? sql``} SELECT ${missingSources} OR EXISTS (
     SELECT 1 ${unembeddedDocumentsSql(config)}
       AND sd."entityKind" IN (${sql.join(
         kinds.map((kind) => sql`${kind}`),

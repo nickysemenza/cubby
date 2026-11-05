@@ -108,7 +108,7 @@ describe("validated semantic candidates", () => {
     expect(
       degraded.candidates.map((candidate) => candidate.entityId),
     ).toContain(first.subject.entityId);
-    expect(degraded.complete).toBe(false);
+    expect(degraded.complete).toBe(true);
     const ref = {
       entityKind: "product",
       entityId: first.subject.entityId,
@@ -125,7 +125,7 @@ describe("validated semantic candidates", () => {
     expect(similar.candidates.map((candidate) => candidate.entityId)).toContain(
       second.subject.entityId,
     );
-    expect(similar.complete).toBe(false);
+    expect(similar.complete).toBe(true);
   });
 
   it("validates the seed and excludes it before trimming ranked neighbors", async () => {
