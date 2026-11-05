@@ -1,37 +1,33 @@
-import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
+import { Switch as SwitchPrimitive } from "@base-ui/react/switch"
+import { cn } from "cn"
+import { useHydrationGate } from "~/ui/hooks/use-hydrated"
 
-import { useHydrationGate } from "~/ui/hooks/use-hydrated";
-import { cn } from "cn";
-
-interface SwitchProps extends SwitchPrimitive.Root.Props {
-  className?: string;
-}
-
-function Switch({ className, ...props }: SwitchProps) {
-  const gate = useHydrationGate(props.disabled);
+function Switch({
+  className,
+  size = "default",
+  ...props
+}: SwitchPrimitive.Root.Props & {
+  size?: "sm" | "default"
+}) {
+  const gate = useHydrationGate(props.disabled)
   return (
     <SwitchPrimitive.Root
       data-slot="switch"
+      data-size={size}
       className={cn(
-        "peer inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-none border-2 border-transparent transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-        "bg-input data-checked:bg-primary",
+        "peer group/switch relative inline-flex shrink-0 cursor-pointer items-center rounded-none border-2 border-transparent transition-colors outline-none after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[size=default]:h-5 data-[size=default]:w-9 data-[size=sm]:h-4 data-[size=sm]:w-7 data-checked:bg-primary data-unchecked:bg-input data-disabled:cursor-not-allowed data-disabled:opacity-50",
         gate["data-hydrating"] !== undefined && "disabled:opacity-100",
-        className,
+        className
       )}
       {...props}
       {...gate}
     >
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
-        className={cn(
-          "pointer-events-none block size-4 rounded-none bg-background ring-0 transition-transform",
-          "translate-x-0 data-checked:translate-x-4",
-        )}
+        className="pointer-events-none block rounded-none bg-card ring-0 transition-transform group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 group-data-[size=default]/switch:data-checked:translate-x-4 group-data-[size=sm]/switch:data-checked:translate-x-3 data-unchecked:translate-x-0"
       />
     </SwitchPrimitive.Root>
-  );
+  )
 }
 
-export { Switch };
+export { Switch }
