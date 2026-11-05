@@ -1,6 +1,9 @@
 import { borrowedImagesField } from "./image-fields";
-import { idField, timestampField } from "./field-policy";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import { idField, readOnly, timestampField } from "./field-policy";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import { cookbookReadSchemas } from "../cookbook-fields";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { cookbookProductSummary } from "@cubby/schemas/cookbook-fields";
@@ -184,11 +187,7 @@ export const { definition, readSchemas } = defineEntityModel(
               "Recipe count is the number of live recipes imported from this cookbook.",
             readPath: "recipeCount",
           },
-          validation: {
-            read: z.number().int().min(0),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.number().int().min(0)),
         },
         {
           key: "coverUrl",
@@ -210,11 +209,7 @@ export const { definition, readSchemas } = defineEntityModel(
               { path: "displayImages", label: "Selected cookbook cover" },
             ],
           },
-          validation: {
-            read: z.string().nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.string().nullable()),
         },
         borrowedImagesField([{ entity: "image", relation: "cover" }]),
         {
@@ -231,11 +226,7 @@ export const { definition, readSchemas } = defineEntityModel(
               "Source recipes counts recipe entries present in the cookbook's imported source data.",
             readPath: "sourceRecipeCount",
           },
-          validation: {
-            read: z.number().int().min(0),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.number().int().min(0)),
         },
         {
           key: "needsReextract",
@@ -254,11 +245,7 @@ export const { definition, readSchemas } = defineEntityModel(
               { path: "sourceRecipeCount", label: "Source recipe count" },
             ],
           },
-          validation: {
-            read: z.boolean(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.boolean()),
         },
         {
           key: "product",
@@ -266,11 +253,7 @@ export const { definition, readSchemas } = defineEntityModel(
           nullable: true,
           reference: { entity: "product" },
           display: { columnGroup: "Publication" },
-          validation: {
-            read: cookbookProductSummary.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(cookbookProductSummary.nullable()),
         },
       ],
       storage: [
@@ -411,30 +394,10 @@ export const { definition, readSchemas } = defineEntityModel(
             columns: ["deletedAt", "id"],
             path: [{ table: "Cookbook", from: "productId", to: "id" }],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Product", from: "id", to: "id" },
-              { table: "Cookbook", from: "productId", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Product", from: "id", to: "id" },
-              { table: "Cookbook", from: "productId", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Product", from: "id", to: "id" },
+            { table: "Cookbook", from: "productId", to: "id" },
+          ]),
           {
             table: "Product",
             match: { id: "id" },
@@ -450,32 +413,11 @@ export const { definition, readSchemas } = defineEntityModel(
               { table: "Cookbook", from: "productId", to: "id" },
             ],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Vendor", from: "id", to: "id" },
-              { table: "Product", from: "brandId", to: "id" },
-              { table: "Cookbook", from: "productId", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Vendor", from: "id", to: "id" },
-              { table: "Product", from: "brandId", to: "id" },
-              { table: "Cookbook", from: "productId", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Cookbook", from: "productId", to: "id" },
+          ]),
           {
             table: "Recipe",
             match: { cookbookId: "id" },

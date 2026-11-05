@@ -1,6 +1,9 @@
 import { galleryImagesField, galleryWriteFields } from "./image-fields";
-import { idField, timestampField } from "./field-policy";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import { idField, readOnly, timestampField } from "./field-policy";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import { mealReadSchemas } from "../meal-fields";
 import { mealChildren } from "../child-tables/meal.js";
 import { defineEntity, defineEntityModel } from "./definition.js";
@@ -343,7 +346,7 @@ Rules:
           key: "displayName",
           kind: "text",
           display: { detail: false, list: false, width: "lg" },
-          validation: { read: z.string(), create: null, update: null },
+          validation: readOnly(z.string()),
         },
         idField(mealShortcode),
         {
@@ -358,11 +361,7 @@ Rules:
             readPath: "totals",
             sourceDependencies: [{ path: "recipes", label: "Recipe servings" }],
           },
-          validation: {
-            read: mealTotals,
-            create: null,
-            update: null,
-          },
+          validation: readOnly(mealTotals),
         },
         // Flat preview projections of `totals` (`totalsPreview`): a partial
         // estimate shows what is known, anything else reads as absent.
@@ -376,30 +375,26 @@ Rules:
             preview: true,
             format: "currency",
           },
-          validation: {
-            read: z
+          validation: readOnly(
+            z
               .number()
               .nullable()
               .default(null)
               .describe("Known cost of the totals, in dollars"),
-            create: null,
-            update: null,
-          },
+          ),
         },
         {
           key: "calories",
           kind: "number",
           nullable: true,
           display: { detail: false, list: false, preview: true },
-          validation: {
-            read: z
+          validation: readOnly(
+            z
               .number()
               .nullable()
               .default(null)
               .describe("Known kilocalories of the totals"),
-            create: null,
-            update: null,
-          },
+          ),
         },
         {
           output: false,
@@ -456,7 +451,7 @@ Rules:
               { path: "recipes", label: "Recipe composition" },
             ],
           },
-          validation: { read: z.array(z.string()), create: null, update: null },
+          validation: readOnly(z.array(z.string())),
         },
         timestampField("createdAt"),
         timestampField("updatedAt"),
@@ -762,32 +757,11 @@ Rules:
               { table: "Meal", from: "id", to: "id" },
             ],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Recipe", from: "id", to: "id" },
-              { table: "MealRecipe", from: "recipeId", to: "mealId" },
-              { table: "Meal", from: "id", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Recipe", from: "id", to: "id" },
-              { table: "MealRecipe", from: "recipeId", to: "mealId" },
-              { table: "Meal", from: "id", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Recipe", from: "id", to: "id" },
+            { table: "MealRecipe", from: "recipeId", to: "mealId" },
+            { table: "Meal", from: "id", to: "id" },
+          ]),
           { table: "MealRecipe", match: { mealId: "id" } },
           {
             table: "Recipe",

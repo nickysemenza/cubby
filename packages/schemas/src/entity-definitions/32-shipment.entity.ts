@@ -1,4 +1,4 @@
-import { timestampField } from "./field-policy";
+import { readOnly, timestampField } from "./field-policy";
 import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
@@ -145,18 +145,14 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "id",
         kind: "identifier",
         display: { list: false },
-        validation: {
-          read: shortcodeSchema("shipment"),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(shortcodeSchema("shipment")),
       },
       {
         audit: true,
         key: "name",
         kind: "text",
         display: {},
-        validation: { read: z.string().min(1), create: null, update: null },
+        validation: readOnly(z.string().min(1)),
       },
       {
         audit: true,
@@ -165,11 +161,7 @@ export const { definition, readSchemas } = defineEntityModel({
         nullable: true,
         reference: { entity: "purchase" },
         display: { columnGroup: "Purchase", labelPath: "purchaseName" },
-        validation: {
-          read: shortcodeSchema("purchase").nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(shortcodeSchema("purchase").nullable()),
       },
       {
         key: "vendorId",
@@ -177,21 +169,13 @@ export const { definition, readSchemas } = defineEntityModel({
         nullable: true,
         reference: { entity: "vendor" },
         display: { labelPath: "vendorName" },
-        validation: {
-          read: shortcodeSchema("vendor").nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(shortcodeSchema("vendor").nullable()),
       },
       {
         key: "vendorName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         audit: true,
@@ -211,7 +195,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "purchaseAssociationReviewed",
         kind: "boolean",
         display: {},
-        validation: { read: z.boolean(), create: null, update: null },
+        validation: readOnly(z.boolean()),
       },
       {
         audit: true,
@@ -219,11 +203,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         nullable: true,
         display: { columnGroup: "Tracking" },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         audit: true,
@@ -270,22 +250,14 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "purchaseName",
         kind: "text",
         nullable: true,
         provenance: { kind: "derived", sources: [{ label: "Purchase" }] },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "carrierName",
@@ -295,11 +267,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "derived",
           sources: [{ label: "Carrier Vendor" }],
         },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "firstEventDate",
@@ -311,11 +279,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "derived",
           sources: [{ label: "Tracking events" }],
         },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "lastEventDate",
@@ -327,11 +291,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "derived",
           sources: [{ label: "Tracking events" }],
         },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "eventSpanHours",
@@ -347,11 +307,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "derived",
           sources: [{ label: "Tracking events" }],
         },
-        validation: {
-          read: z.number().nonnegative().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().nonnegative().nullable()),
       },
       {
         key: "eventSpanLabel",
@@ -361,11 +317,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "derived",
           sources: [{ label: "Tracking events" }],
         },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "eventCount",
@@ -377,11 +329,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "derived",
           sources: [{ label: "Tracking events" }],
         },
-        validation: {
-          read: z.number().int().nonnegative().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().nonnegative().nullable()),
       },
       timestampField("createdAt", { list: false, format: "timestamp" }),
       timestampField("updatedAt", { list: false, format: "timestamp" }),

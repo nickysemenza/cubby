@@ -1,5 +1,8 @@
-import { idField, timestampField } from "./field-policy";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import { idField, readOnly, timestampField } from "./field-policy";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -376,44 +379,28 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "plantName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         display: { detail: false, list: false },
         key: "sourceProductName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         display: { detail: false, list: false },
         key: "locationName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         display: { detail: false, list: false },
         key: "taskName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         // Derived on read from the plant's crop guide, for the household's
@@ -433,11 +420,7 @@ export const { definition, readSchemas } = defineEntityModel({
           readPath: "guideSowWindow",
           sourceDependencies: [{ path: "plantId", label: "Plant" }],
         },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "guideTransplantWindow",
@@ -455,11 +438,7 @@ export const { definition, readSchemas } = defineEntityModel({
           readPath: "guideTransplantWindow",
           sourceDependencies: [{ path: "plantId", label: "Plant" }],
         },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         // Expected first-harvest range: the later of sowedOn + the sow range and
@@ -489,22 +468,14 @@ export const { definition, readSchemas } = defineEntityModel({
             { path: "plantId", label: "Plant" },
           ],
         },
-        validation: {
-          read: plainDate.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(plainDate.nullable()),
       },
       {
         display: { detail: false, list: false },
         key: "expectedHarvestEnd",
         kind: "date",
         nullable: true,
-        validation: {
-          read: plainDate.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(plainDate.nullable()),
       },
       {
         // e.g. "Jul 14–24 (crop estimate)"; the basis says whether the days
@@ -524,18 +495,14 @@ export const { definition, readSchemas } = defineEntityModel({
           readPath: "expectedHarvest",
           sourceDependencies: [{ path: "plantId", label: "Plant" }],
         },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         display: { detail: false, list: false },
         // `"<plant display name>"`, else "Unknown plant" — the non-null title.
         key: "displayName",
         kind: "text",
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       idField(plantingShortcode),
       timestampField("createdAt", { detail: false, list: false }),
@@ -790,72 +757,26 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Planting", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "GardenEntry", from: "id", to: "id" },
-            {
-              table: "EntityLink",
-              from: "fromEntityId",
-              to: "toEntityId",
-              where: { kind: "gardenEntryPlanting" },
-            },
-            { table: "Planting", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "GardenEntry", from: "id", to: "id" },
-            {
-              table: "EntityLink",
-              from: "fromEntityId",
-              to: "toEntityId",
-              where: { kind: "gardenEntryPlanting" },
-            },
-            { table: "Planting", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "GardenEntry", from: "id", to: "id" },
+          {
+            table: "EntityLink",
+            from: "fromEntityId",
+            to: "toEntityId",
+            where: { kind: "gardenEntryPlanting" },
+          },
+          { table: "Planting", from: "id", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
           columns: ["deletedAt", "id"],
           path: [{ table: "Planting", from: "sourceProductId", to: "id" }],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            { table: "Planting", from: "sourceProductId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            { table: "Planting", from: "sourceProductId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          { table: "Planting", from: "sourceProductId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -871,32 +792,11 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Planting", from: "sourceProductId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Planting", from: "sourceProductId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Planting", from: "sourceProductId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          { table: "Planting", from: "sourceProductId", to: "id" },
+        ]),
       ],
 
       checks: [

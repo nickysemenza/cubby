@@ -1,5 +1,8 @@
-import { idField, timestampField } from "./field-policy";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import { idField, readOnly, timestampField } from "./field-policy";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import {
   financialAccountAuthorizedUsers,
   financialAccountFundingPeriods,
@@ -461,22 +464,14 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "ledgerPartyName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         display: { detail: false, list: false },
         key: "providerVendorName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "transactionCount",
@@ -494,11 +489,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "Transaction count is the number of live financial transactions linked to this account.",
           readPath: "transactionCount",
         },
-        validation: {
-          read: z.number().int().nonnegative(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().nonnegative()),
       },
       timestampField("createdAt"),
       timestampField("updatedAt"),
@@ -837,30 +828,10 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "FinancialAccount", from: "providerVendorId", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "FinancialAccount", from: "providerVendorId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "FinancialAccount", from: "providerVendorId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "FinancialAccount", from: "providerVendorId", to: "id" },
+        ]),
         {
           table: "Vendor",
           match: { id: "providerVendorId" },

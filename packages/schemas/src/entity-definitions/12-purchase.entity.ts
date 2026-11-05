@@ -1,7 +1,10 @@
 import { galleryWriteFields } from "./image-fields";
 import { historicalDateRangePresets } from "../date-range";
-import { idField, timestampField } from "./field-policy";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import { idField, readOnly, timestampField } from "./field-policy";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import { labelField } from "./label-field.js";
 import { purchaseChildren } from "../child-tables/purchase.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
@@ -329,11 +332,7 @@ export const { definition, readSchemas } = defineEntityModel({
         nullable: true,
         reference: { entity: "ledgerParty" },
         display: { list: false },
-        validation: {
-          read: ledgerPartyShortcode.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(ledgerPartyShortcode.nullable()),
       },
       {
         key: "bookingCoverage",
@@ -368,11 +367,7 @@ export const { definition, readSchemas } = defineEntityModel({
           optionRole: "status",
           optionColor: "neutral-status",
         },
-        validation: {
-          read: purchaseEvidenceCoverage.shape.booking,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(purchaseEvidenceCoverage.shape.booking),
       },
       {
         key: "documentCoverage",
@@ -416,11 +411,7 @@ export const { definition, readSchemas } = defineEntityModel({
           optionRole: "status",
           optionColor: "neutral-status",
         },
-        validation: {
-          read: purchaseEvidenceCoverage.shape.document,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(purchaseEvidenceCoverage.shape.document),
       },
       {
         key: "itemizationCoverage",
@@ -464,11 +455,7 @@ export const { definition, readSchemas } = defineEntityModel({
           optionRole: "status",
           optionColor: "neutral-status",
         },
-        validation: {
-          read: purchaseEvidenceCoverage.shape.itemization,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(purchaseEvidenceCoverage.shape.itemization),
       },
       {
         key: "productsCoverage",
@@ -517,11 +504,7 @@ export const { definition, readSchemas } = defineEntityModel({
           optionRole: "status",
           optionColor: "neutral-status",
         },
-        validation: {
-          read: purchaseEvidenceCoverage.shape.products,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(purchaseEvidenceCoverage.shape.products),
       },
       {
         display: { detail: false, list: false },
@@ -536,11 +519,7 @@ export const { definition, readSchemas } = defineEntityModel({
           description:
             "Booking, itemization, and Product coverage are evaluated independently against household expectations; documents are optional.",
         },
-        validation: {
-          read: purchaseEvidenceCoverage,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(purchaseEvidenceCoverage),
       },
       {
         key: "spendingCategorySummary",
@@ -563,11 +542,7 @@ export const { definition, readSchemas } = defineEntityModel({
           description:
             "Category amounts come from the live Expense ledger and its canonical adjustment allocations. The Purchase fallback is not its category summary.",
         },
-        validation: {
-          read: spendingCategorySummarySchema,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(spendingCategorySummarySchema),
       },
       {
         audit: true,
@@ -585,11 +560,9 @@ export const { definition, readSchemas } = defineEntityModel({
             { value: "source", label: "Source" },
           ],
         },
-        validation: {
-          read: z.enum(["legacy", "manual", "source"]).default("legacy"),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(
+          z.enum(["legacy", "manual", "source"]).default("legacy"),
+        ),
       },
       {
         key: "spendingCategoryId",
@@ -621,11 +594,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "spendingCategoryName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "itemizationExpectation",
@@ -909,22 +878,14 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "vendorName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         display: { detail: false, list: false },
         key: "vendorLogo",
         kind: "json",
         nullable: true,
-        validation: {
-          read: imageUrlSummary.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(imageUrlSummary.nullable()),
       },
       {
         display: { detail: false, list: false },
@@ -935,11 +896,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "orderUrl",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.url().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.url().nullable()),
       },
       {
         key: "expenseCount",
@@ -964,22 +921,14 @@ export const { definition, readSchemas } = defineEntityModel({
             "Expense count is the number of live expense lines linked to this purchase.",
           readPath: "expenseCount",
         },
-        validation: {
-          read: z.number().int(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int()),
       },
       {
         display: { detail: false, list: false },
         // Live Expenses whose cost has not been recorded yet.
         key: "unpricedExpenseCount",
         kind: "number",
-        validation: {
-          read: z.number().int(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int()),
       },
       {
         // `SUM(cost)` over this purchase's live expenses. THIS is the purchase's
@@ -1012,11 +961,7 @@ export const { definition, readSchemas } = defineEntityModel({
             { path: "unpricedExpenseCount", label: "Unpriced expense count" },
           ],
         },
-        validation: {
-          read: money,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(money),
       },
       {
         key: "reconciliation",
@@ -1070,11 +1015,7 @@ export const { definition, readSchemas } = defineEntityModel({
             { path: "unpricedExpenseCount", label: "Unpriced expense count" },
           ],
         },
-        validation: {
-          read: purchaseReconciliation,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(purchaseReconciliation),
       },
       labelField("expenseCountLabel", "Live expense lines"),
       labelField("reconciliationLabel", "Stated and expense totals"),
@@ -1140,11 +1081,7 @@ export const { definition, readSchemas } = defineEntityModel({
             },
           ],
         },
-        validation: {
-          read: financialReconciliationSummary,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(financialReconciliationSummary),
       },
       {
         key: "documentCount",
@@ -1168,11 +1105,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "Document count is the number of live images attached to this purchase.",
           readPath: "documentCount",
         },
-        validation: {
-          read: z.number().int(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int()),
       },
       {
         display: { detail: false, list: false },
@@ -1195,11 +1128,7 @@ export const { definition, readSchemas } = defineEntityModel({
             { path: "displayImages", label: "Selected purchase images" },
           ],
         },
-        validation: {
-          read: purchaseImages,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(purchaseImages),
       },
       {
         output: false,
@@ -1246,7 +1175,7 @@ export const { definition, readSchemas } = defineEntityModel({
         // nullable and user-editable, so it cannot serve as the title field.
         key: "displayName",
         kind: "text",
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       timestampField("createdAt", { detail: false, list: false }),
       timestampField("updatedAt", { detail: false, list: false }),
@@ -1802,62 +1731,21 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Purchase", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "id" },
-            { table: "Expense", from: "productId", to: "purchaseId" },
-            { table: "Purchase", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "id" },
-            { table: "Expense", from: "productId", to: "purchaseId" },
-            { table: "Purchase", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "id" },
+          { table: "Expense", from: "productId", to: "purchaseId" },
+          { table: "Purchase", from: "id", to: "id" },
+        ]),
         {
           table: "Vendor",
           match: { id: "id" },
           columns: ["deletedAt", "id"],
           path: [{ table: "Purchase", from: "vendorId", to: "id" }],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Purchase", from: "vendorId", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Purchase", from: "vendorId", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Purchase", from: "vendorId", to: "id" },
+        ]),
         {
           table: "Product",
           match: { id: "id" },
@@ -1877,34 +1765,12 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Purchase", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Expense", from: "productId", to: "purchaseId" },
-            { table: "Purchase", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "id" },
-            { table: "Expense", from: "productId", to: "purchaseId" },
-            { table: "Purchase", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "id" },
+          { table: "Expense", from: "productId", to: "purchaseId" },
+          { table: "Purchase", from: "id", to: "id" },
+        ]),
         {
           table: "FinancialTransactionAllocation",
           match: { purchaseId: "id" },

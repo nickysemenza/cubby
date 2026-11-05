@@ -1,4 +1,4 @@
-import { idField, timestampField } from "./field-policy";
+import { idField, readOnly, timestampField } from "./field-policy";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
@@ -145,21 +145,13 @@ export const { definition, readSchemas } = defineEntityModel({
         display: { detail: false, list: false },
         key: "fromPartyName",
         kind: "text",
-        validation: {
-          read: z.string(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string()),
       },
       {
         display: { detail: false, list: false },
         key: "toPartyName",
         kind: "text",
-        validation: {
-          read: z.string(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string()),
       },
       {
         key: "amount",
@@ -291,11 +283,7 @@ export const { definition, readSchemas } = defineEntityModel({
             },
           ],
         },
-        validation: {
-          read: ledgerTransferClassification,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(ledgerTransferClassification),
       },
       timestampField("createdAt"),
       timestampField("updatedAt"),

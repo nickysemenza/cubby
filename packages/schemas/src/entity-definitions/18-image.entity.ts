@@ -1,5 +1,5 @@
 import { historicalDateRangePresets } from "../date-range";
-import { idField, timestampField } from "./field-policy";
+import { idField, readOnly, timestampField } from "./field-policy";
 import { imageReadSchemas } from "../image-processing";
 import { imageChildren } from "../child-tables/image.js";
 import {
@@ -201,11 +201,7 @@ export const { definition, readSchemas } = defineEntityModel(
               { path: "useOriginal", label: "Use original preference" },
             ],
           },
-          validation: {
-            read: optionalImageRepresentations,
-            create: null,
-            update: null,
-          },
+          validation: readOnly(optionalImageRepresentations),
         },
         {
           key: "url",
@@ -222,21 +218,13 @@ export const { definition, readSchemas } = defineEntityModel(
             readPath: "url",
             sourceDependencies: [{ path: "key", label: "Image storage key" }],
           },
-          validation: {
-            read: z.url(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.url()),
         },
         {
           key: "key",
           kind: "text",
           display: { columnGroup: "File", listHidden: true },
-          validation: {
-            read: z.string(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.string()),
         },
         {
           key: "size",
@@ -248,11 +236,7 @@ export const { definition, readSchemas } = defineEntityModel(
             format: "bytes",
             mobile: { slot: "trailing", priority: 5 },
           },
-          validation: {
-            read: z.number().int().positive(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.number().int().positive()),
         },
         {
           key: "contentType",
@@ -262,11 +246,7 @@ export const { definition, readSchemas } = defineEntityModel(
             width: "sm",
             mobile: { slot: "subtitle", priority: 10 },
           },
-          validation: {
-            read: z.string(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.string()),
         },
         {
           key: "status",
@@ -294,33 +274,21 @@ export const { definition, readSchemas } = defineEntityModel(
             optionRole: "status",
             optionColor: "neutral-status",
           },
-          validation: {
-            read: z.enum(generatedImageStatusValues),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.enum(generatedImageStatusValues)),
         },
         {
           key: "width",
           kind: "number",
           nullable: true,
           display: { columnGroup: "File", listHidden: true },
-          validation: {
-            read: z.number().int().positive().nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.number().int().positive().nullable()),
         },
         {
           key: "height",
           kind: "number",
           nullable: true,
           display: { columnGroup: "File", listHidden: true },
-          validation: {
-            read: z.number().int().positive().nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.number().int().positive().nullable()),
         },
         { output: false, key: "perceptualHash", kind: "text", nullable: true },
         {
@@ -336,22 +304,14 @@ export const { definition, readSchemas } = defineEntityModel(
           // Hidden by default: it repeats Type except when sniffing disagrees
           // with the stored content type, which the detail page shows.
           display: { columnGroup: "File", listHidden: true },
-          validation: {
-            read: z.string().nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.string().nullable()),
         },
         {
           key: "sha256",
           kind: "text",
           nullable: true,
           display: { columnGroup: "File", listHidden: true },
-          validation: {
-            read: z.string().nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.string().nullable()),
         },
         {
           key: "renderStatus",
@@ -372,11 +332,9 @@ export const { definition, readSchemas } = defineEntityModel(
               { value: "failed", label: "Failed", color: "destructive" },
             ],
           },
-          validation: {
-            read: z.enum(generatedImageRenderStatusValues).nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(
+            z.enum(generatedImageRenderStatusValues).nullable(),
+          ),
         },
         {
           key: "storageStatus",
@@ -402,11 +360,9 @@ export const { definition, readSchemas } = defineEntityModel(
               },
             ],
           },
-          validation: {
-            read: z.enum(generatedImageStorageStatusValues).nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(
+            z.enum(generatedImageStorageStatusValues).nullable(),
+          ),
         },
         {
           audit: false,
@@ -506,11 +462,7 @@ export const { definition, readSchemas } = defineEntityModel(
           kind: "timestamp",
           nullable: true,
           display: { columnGroup: "Processing" },
-          validation: {
-            read: dateTime.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(dateTime.nullable()),
         },
         {
           audit: false,
@@ -530,11 +482,7 @@ export const { definition, readSchemas } = defineEntityModel(
           kind: "number",
           nullable: true,
           display: { list: false },
-          validation: {
-            read: z.number().int().nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.number().int().nullable()),
         },
         {
           key: "captureLocation",
@@ -546,33 +494,21 @@ export const { definition, readSchemas } = defineEntityModel(
             list: false,
             renderer: { detail: "image-capture-location" },
           },
-          validation: {
-            read: imageCaptureLocation.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(imageCaptureLocation.nullable()),
         },
         {
           key: "capturePlaceName",
           kind: "text",
           nullable: true,
           display: { list: false },
-          validation: {
-            read: z.string().nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.string().nullable()),
         },
         {
           key: "captureDeviceLabel",
           kind: "text",
           nullable: true,
           display: { list: false },
-          validation: {
-            read: z.string().nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.string().nullable()),
         },
         {
           audit: false,
@@ -613,11 +549,7 @@ export const { definition, readSchemas } = defineEntityModel(
             description:
               "The current name of the derived capturing member, if set.",
           },
-          validation: {
-            read: z.string().nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.string().nullable()),
         },
         {
           key: "captureAttribution",
@@ -634,33 +566,21 @@ export const { definition, readSchemas } = defineEntityModel(
               { value: "confirmed", label: "Confirmed", color: "positive" },
             ],
           },
-          validation: {
-            read: imageCaptureAttribution,
-            create: null,
-            update: null,
-          },
+          validation: readOnly(imageCaptureAttribution),
         },
         {
           key: "provenanceEvidence",
           kind: "json",
           nullable: true,
           display: { list: false, detailLabelPath: "provenanceEvidenceLabel" },
-          validation: {
-            read: imageProvenanceEvidence.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(imageProvenanceEvidence.nullable()),
         },
         {
           key: "sourceEvidence",
           kind: "json",
           nullable: true,
           display: { list: false, detailLabelPath: "sourceEvidence.model" },
-          validation: {
-            read: imageSourceEvidence.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(imageSourceEvidence.nullable()),
         },
         {
           // Detail-only: the live rows of the `ImageSighting` child table
@@ -672,11 +592,7 @@ export const { definition, readSchemas } = defineEntityModel(
             sources: [{ label: "Photo library sightings" }],
           },
           display: { list: false, renderer: { detail: "image-sightings" } },
-          validation: {
-            read: z.array(imageSightingOut).optional(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.array(imageSightingOut).optional()),
         },
         {
           output: false,
@@ -717,11 +633,7 @@ export const { definition, readSchemas } = defineEntityModel(
             kind: "derived",
             sources: [{ label: "Image storage" }],
           },
-          validation: {
-            read: z.array(z.unknown()),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.array(z.unknown())),
         },
         { output: false, key: "shortcode", kind: "text" },
         { output: false, key: "deletedAt", kind: "timestamp", nullable: true },

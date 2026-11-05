@@ -1,5 +1,8 @@
-import { idField, timestampField } from "./field-policy";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import { idField, readOnly, timestampField } from "./field-policy";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { ingredientShortcode, plantShortcode } from "../identifier-fields.js";
 import { plantBreeding, plantVerdict } from "@cubby/schemas/garden-fields";
@@ -48,7 +51,7 @@ const derivedText = <const K extends string>(
     readPath: key,
     sourceDependencies: [{ path: "gardenGuideKey" as const, label: "Crop" }],
   },
-  validation: { read: z.string().nullable(), create: null, update: null },
+  validation: readOnly(z.string().nullable()),
 });
 
 export const { definition, readSchemas } = defineEntityModel({
@@ -312,11 +315,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "ingredientName",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       derivedText(
         "guideSowWindow",
@@ -339,7 +338,7 @@ export const { definition, readSchemas } = defineEntityModel({
         // name already is the crop label.
         key: "displayName",
         kind: "text",
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       idField(plantShortcode),
       timestampField("createdAt", { detail: false, list: false }),
@@ -479,30 +478,10 @@ export const { definition, readSchemas } = defineEntityModel({
           columns: ["deletedAt", "id"],
           path: [{ table: "Plant", from: "id", to: "id" }],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Product", from: "id", to: "growsPlantId" },
-            { table: "Plant", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Product", from: "id", to: "growsPlantId" },
-            { table: "Plant", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Product", from: "id", to: "growsPlantId" },
+          { table: "Plant", from: "id", to: "id" },
+        ]),
         {
           table: "Planting",
           match: { plantId: "id" },
@@ -534,44 +513,17 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Plant", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "GardenEntry", from: "id", to: "id" },
-            {
-              table: "EntityLink",
-              from: "fromEntityId",
-              to: "toEntityId",
-              where: { kind: "gardenEntryPlanting" },
-            },
-            { table: "Planting", from: "id", to: "plantId" },
-            { table: "Plant", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "GardenEntry", from: "id", to: "id" },
-            {
-              table: "EntityLink",
-              from: "fromEntityId",
-              to: "toEntityId",
-              where: { kind: "gardenEntryPlanting" },
-            },
-            { table: "Planting", from: "id", to: "plantId" },
-            { table: "Plant", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "GardenEntry", from: "id", to: "id" },
+          {
+            table: "EntityLink",
+            from: "fromEntityId",
+            to: "toEntityId",
+            where: { kind: "gardenEntryPlanting" },
+          },
+          { table: "Planting", from: "id", to: "plantId" },
+          { table: "Plant", from: "id", to: "id" },
+        ]),
         {
           table: "Product",
           match: { growsPlantId: "id" },
@@ -587,32 +539,11 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Plant", from: "id", to: "id" },
           ],
         },
-        {
-          table: "EntityAttachment",
-          match: { entityId: "id" },
-          columns: ["deletedAt", "imageId", "purpose", "role"],
-          path: [
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "growsPlantId" },
-            { table: "Plant", from: "id", to: "id" },
-          ],
-        },
-        {
-          table: "Image",
-          match: { id: "id" },
-          columns: [
-            "deletedAt",
-            "renderStatus",
-            "storageStatus",
-            "detectedContentType",
-          ],
-          path: [
-            { table: "EntityAttachment", from: "imageId", to: "entityId" },
-            { table: "Vendor", from: "id", to: "id" },
-            { table: "Product", from: "brandId", to: "growsPlantId" },
-            { table: "Plant", from: "id", to: "id" },
-          ],
-        },
+        ...attachedImageInputs([
+          { table: "Vendor", from: "id", to: "id" },
+          { table: "Product", from: "brandId", to: "growsPlantId" },
+          { table: "Plant", from: "id", to: "id" },
+        ]),
       ],
 
       // An off-guide crop records why it has no guide key.

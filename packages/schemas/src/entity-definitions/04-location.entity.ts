@@ -1,6 +1,9 @@
 import { galleryImagesField, galleryWriteFields } from "./image-fields";
-import { timestampField, aliasList } from "./field-policy";
-import { imageDescriptionInputs } from "./image-description-inputs";
+import { aliasList, readOnly, timestampField } from "./field-policy";
+import {
+  attachedImageInputs,
+  imageDescriptionInputs,
+} from "./image-description-inputs";
 import {
   locationReadSchemas,
   MAX_LOCATION_TREE_DEPTH,
@@ -417,11 +420,7 @@ Rules:
           key: "id",
           kind: "identifier",
           display: { list: false },
-          validation: {
-            read: locationShortcode,
-            create: null,
-            update: null,
-          },
+          validation: readOnly(locationShortcode),
         },
         {
           key: "product",
@@ -449,11 +448,7 @@ Rules:
               { path: "product", label: "Installed product" },
             ],
           },
-          validation: {
-            read: locationIdentityProductOut.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(locationIdentityProductOut.nullable()),
         },
         {
           key: "lastBulkInventory",
@@ -465,11 +460,7 @@ Rules:
             format: "timestamp",
             mobile: { slot: "meta", priority: 90 },
           },
-          validation: {
-            read: dateTime.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(dateTime.nullable()),
         },
         {
           key: "aiDescription",
@@ -489,11 +480,7 @@ Rules:
             width: "xl",
             mobile: { slot: "meta", priority: 70 },
           },
-          validation: {
-            read: z.string().nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(z.string().nullable()),
         },
         galleryImagesField("location", "Location", z.array(imageOut)),
         {
@@ -549,11 +536,7 @@ Rules:
               },
             ],
           },
-          validation: {
-            read: locationValuation.nullable(),
-            create: null,
-            update: null,
-          },
+          validation: readOnly(locationValuation.nullable()),
         },
         timestampField("createdAt"),
         timestampField("updatedAt"),
@@ -1092,30 +1075,10 @@ Rules:
             columns: ["deletedAt", "id"],
             path: [{ table: "Location", from: "productId", to: "id" }],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Product", from: "id", to: "id" },
-              { table: "Location", from: "productId", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Product", from: "id", to: "id" },
-              { table: "Location", from: "productId", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Product", from: "id", to: "id" },
+            { table: "Location", from: "productId", to: "id" },
+          ]),
           {
             table: "Product",
             match: { id: "id" },
@@ -1131,32 +1094,11 @@ Rules:
               { table: "Location", from: "productId", to: "id" },
             ],
           },
-          {
-            table: "EntityAttachment",
-            match: { entityId: "id" },
-            columns: ["deletedAt", "imageId", "purpose", "role"],
-            path: [
-              { table: "Vendor", from: "id", to: "id" },
-              { table: "Product", from: "brandId", to: "id" },
-              { table: "Location", from: "productId", to: "id" },
-            ],
-          },
-          {
-            table: "Image",
-            match: { id: "id" },
-            columns: [
-              "deletedAt",
-              "renderStatus",
-              "storageStatus",
-              "detectedContentType",
-            ],
-            path: [
-              { table: "EntityAttachment", from: "imageId", to: "entityId" },
-              { table: "Vendor", from: "id", to: "id" },
-              { table: "Product", from: "brandId", to: "id" },
-              { table: "Location", from: "productId", to: "id" },
-            ],
-          },
+          ...attachedImageInputs([
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Location", from: "productId", to: "id" },
+          ]),
           {
             table: "AiAnalysis",
             match: { entityId: "id" },

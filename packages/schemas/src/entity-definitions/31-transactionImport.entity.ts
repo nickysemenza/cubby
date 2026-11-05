@@ -1,4 +1,4 @@
-import { timestampField } from "./field-policy";
+import { readOnly, timestampField } from "./field-policy";
 import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
 import { dateTime } from "../codec";
@@ -101,32 +101,28 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "id",
         kind: "identifier",
         display: { list: false },
-        validation: {
-          read: shortcodeSchema("transactionImport"),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(shortcodeSchema("transactionImport")),
       },
       {
         audit: true,
         key: "source",
         kind: "text",
         display: { columnGroup: "Source" },
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         audit: true,
         key: "label",
         kind: "text",
         display: {},
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         audit: true,
         key: "fingerprint",
         kind: "text",
         display: { list: false },
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         audit: true,
@@ -147,7 +143,7 @@ export const { definition, readSchemas } = defineEntityModel({
             glyph: { phosphor: "Info", sfSymbol: "info.circle" },
           })),
         },
-        validation: { read: statementDateKind, create: null, update: null },
+        validation: readOnly(statementDateKind),
       },
       {
         audit: true,
@@ -155,18 +151,14 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "number",
         nullable: true,
         display: { columnGroup: "Rows", columnBar: true },
-        validation: {
-          read: z.number().int().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().nullable()),
       },
       {
         audit: true,
         key: "observedAt",
         kind: "timestamp",
         display: { columnGroup: "Source", format: "timestamp" },
-        validation: { read: dateTime, create: null, update: null },
+        validation: readOnly(dateTime),
       },
       {
         audit: true,
@@ -174,7 +166,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "json",
         nullable: true,
         display: {},
-        validation: { read: z.json().nullable(), create: null, update: null },
+        validation: readOnly(z.json().nullable()),
       },
       {
         audit: true,
@@ -182,7 +174,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "timestamp",
         nullable: true,
         display: { columnGroup: "Execution", format: "timestamp" },
-        validation: { read: dateTime.nullable(), create: null, update: null },
+        validation: readOnly(dateTime.nullable()),
       },
       {
         audit: true,
@@ -190,11 +182,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       timestampField("createdAt", { format: "timestamp" }),
       timestampField("updatedAt", { list: false, format: "timestamp" }),
@@ -203,13 +191,13 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        validation: { read: dateTime.nullable(), create: null, update: null },
+        validation: readOnly(dateTime.nullable()),
       },
       {
         output: false,
         key: "shortcode",
         kind: "text",
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         key: "rowCountStored",
@@ -219,11 +207,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         kind: "number",
         display: { columnGroup: "Rows", columnBar: true },
-        validation: {
-          read: z.number().int().nonnegative(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().nonnegative()),
       },
     ],
     storage: [

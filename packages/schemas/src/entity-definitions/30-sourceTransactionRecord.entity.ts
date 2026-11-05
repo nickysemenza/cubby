@@ -1,4 +1,4 @@
-import { timestampField } from "./field-policy";
+import { readOnly, timestampField } from "./field-policy";
 import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
 import { dateTime } from "../codec";
@@ -165,11 +165,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "id",
         kind: "identifier",
         display: { list: false },
-        validation: {
-          read: shortcodeSchema("sourceTransactionRecord"),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(shortcodeSchema("sourceTransactionRecord")),
       },
       {
         key: "displayName",
@@ -179,7 +175,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         kind: "text",
         display: { list: false },
-        validation: { read: z.string().min(1), create: null, update: null },
+        validation: readOnly(z.string().min(1)),
       },
       {
         audit: true,
@@ -188,18 +184,14 @@ export const { definition, readSchemas } = defineEntityModel({
         labelOverride: "First import",
         reference: { entity: "transactionImport" },
         display: { columnGroup: "Source" },
-        validation: {
-          read: shortcodeSchema("transactionImport"),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(shortcodeSchema("transactionImport")),
       },
       {
         audit: true,
         key: "source",
         kind: "text",
         display: { columnGroup: "Source" },
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         audit: true,
@@ -207,7 +199,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         labelOverride: "Source reference",
         display: { columnGroup: "Source" },
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         audit: true,
@@ -215,11 +207,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "number",
         nullable: true,
         display: { list: false },
-        validation: {
-          read: z.number().int().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.number().int().nullable()),
       },
       {
         audit: true,
@@ -227,11 +215,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         audit: true,
@@ -239,11 +223,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         output: false,
@@ -251,25 +231,21 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "legacyReference",
         kind: "text",
         nullable: true,
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         audit: true,
         key: "chargeKey",
         kind: "text",
         display: { list: false },
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         audit: true,
         key: "current",
         kind: "boolean",
         display: { columnGroup: "Disposition" },
-        validation: { read: z.boolean(), create: null, update: null },
+        validation: readOnly(z.boolean()),
       },
       {
         audit: true,
@@ -277,7 +253,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "timestamp",
         nullable: true,
         display: { columnGroup: "Disposition", format: "timestamp" },
-        validation: { read: dateTime.nullable(), create: null, update: null },
+        validation: readOnly(dateTime.nullable()),
       },
       {
         audit: true,
@@ -287,11 +263,7 @@ export const { definition, readSchemas } = defineEntityModel({
         labelOverride: "Withdrawal proof",
         reference: { entity: "transactionImport" },
         display: { columnGroup: "Disposition" },
-        validation: {
-          read: shortcodeSchema("transactionImport").nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(shortcodeSchema("transactionImport").nullable()),
       },
       {
         audit: true,
@@ -299,7 +271,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "timestamp",
         labelOverride: "Last observed",
         display: { list: false, format: "timestamp" },
-        validation: { read: dateTime, create: null, update: null },
+        validation: readOnly(dateTime),
       },
       {
         audit: true,
@@ -307,11 +279,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         audit: true,
@@ -320,14 +288,14 @@ export const { definition, readSchemas } = defineEntityModel({
         nullable: true,
         labelOverride: "Source metadata",
         display: {},
-        validation: { read: z.json().nullable(), create: null, update: null },
+        validation: readOnly(z.json().nullable()),
       },
       {
         audit: true,
         key: "accountDescriptor",
         kind: "text",
         display: { columnGroup: "Source" },
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         audit: true,
@@ -335,7 +303,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "date",
         labelOverride: "Source date",
         display: { columnGroup: "Source" },
-        validation: { read: plainDate, create: null, update: null },
+        validation: readOnly(plainDate),
       },
       {
         audit: true,
@@ -346,7 +314,7 @@ export const { definition, readSchemas } = defineEntityModel({
           columnBar: true,
           format: "currency",
         },
-        validation: { read: z.number(), create: null, update: null },
+        validation: readOnly(z.number()),
       },
       {
         audit: true,
@@ -354,7 +322,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "number",
         labelOverride: "Original signed amount",
         display: { columnGroup: "Source", format: "currency" },
-        validation: { read: z.number(), create: null, update: null },
+        validation: readOnly(z.number()),
       },
       {
         audit: true,
@@ -362,18 +330,14 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         nullable: true,
         display: { columnGroup: "Source" },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         audit: true,
         key: "rawDescription",
         kind: "text",
         display: { columnGroup: "Source" },
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         audit: true,
@@ -381,11 +345,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         audit: true,
@@ -409,11 +369,7 @@ export const { definition, readSchemas } = defineEntityModel({
             }),
           ),
         },
-        validation: {
-          read: sourceTransactionRecordProviderStatus.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(sourceTransactionRecordProviderStatus.nullable()),
       },
       {
         audit: true,
@@ -421,11 +377,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "accountId",
@@ -538,13 +490,13 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
-        validation: { read: dateTime.nullable(), create: null, update: null },
+        validation: readOnly(dateTime.nullable()),
       },
       {
         output: false,
         key: "shortcode",
         kind: "text",
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         key: "importFingerprint",
@@ -554,7 +506,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         kind: "text",
         display: { list: false },
-        validation: { read: z.string(), create: null, update: null },
+        validation: readOnly(z.string()),
       },
       {
         key: "accountName",
@@ -565,11 +517,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         nullable: true,
         display: { columnGroup: "Reconciliation" },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "supersededBy",
@@ -580,11 +528,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         nullable: true,
         display: { list: false },
-        validation: {
-          read: z.string().nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "matchState",
@@ -610,11 +554,7 @@ export const { definition, readSchemas } = defineEntityModel({
             glyph: { phosphor: "Info", sfSymbol: "info.circle" },
           })),
         },
-        validation: {
-          read: sourceTransactionRecordMatchState,
-          create: null,
-          update: null,
-        },
+        validation: readOnly(sourceTransactionRecordMatchState),
       },
       {
         key: "transactionId",
@@ -622,11 +562,9 @@ export const { definition, readSchemas } = defineEntityModel({
         nullable: true,
         reference: { entity: "financialTransaction" },
         display: { columnGroup: "Reconciliation" },
-        validation: {
-          read: shortcodeSchema("financialTransaction").nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(
+          shortcodeSchema("financialTransaction").nullable(),
+        ),
       },
       {
         key: "vendorInference",
@@ -640,11 +578,7 @@ export const { definition, readSchemas } = defineEntityModel({
           columnGroup: "Reconciliation",
           detailLabelPath: "vendorInference.candidates[].vendorName",
         },
-        validation: {
-          read: merchantVendorInference.nullable(),
-          create: null,
-          update: null,
-        },
+        validation: readOnly(merchantVendorInference.nullable()),
       },
     ],
     storage: [
