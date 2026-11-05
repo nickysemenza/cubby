@@ -11,7 +11,7 @@ import {
 } from "~/contracts/run-detail.contract";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { assessment, assessmentState, run } from "~/server/db/schema";
+import { suggestionTable, run } from "~/server/db/schema";
 import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -70,27 +70,26 @@ export async function readRunDecisions(
 ): Promise<RunDecisionsOut> {
   const runId = await resolveOrThrow(db, "run", code);
   const scope = and(
-    eq(assessmentState.runId, runId),
-    eq(assessmentState.family, family),
+    eq(suggestionTable.runId, runId),
+    eq(suggestionTable.family, family),
   );
   const [rows, [total]] = await Promise.all([
     getDb(db)
       .select({
-        id: assessment.id,
-        family: assessmentState.family,
-        status: assessmentState.status,
-        active: assessmentState.active,
-        judgment: assessment.judgment,
-        producer: assessment.producer,
-        createdAt: assessment.createdAt,
-        updatedAt: assessmentState.updatedAt,
+        id: suggestionTable.id,
+        family: suggestionTable.family,
+        status: suggestionTable.status,
+        active: suggestionTable.active,
+        judgment: suggestionTable.judgment,
+        producer: suggestionTable.producer,
+        createdAt: suggestionTable.createdAt,
+        updatedAt: suggestionTable.updatedAt,
       })
-      .from(assessmentState)
-      .innerJoin(assessment, eq(assessment.id, assessmentState.id))
+      .from(suggestionTable)
       .where(scope)
-      .orderBy(desc(assessment.createdAt), desc(assessment.id))
+      .orderBy(desc(suggestionTable.createdAt), desc(suggestionTable.id))
       .limit(RUN_DECISION_LIMIT),
-    getDb(db).select({ value: count() }).from(assessmentState).where(scope),
+    getDb(db).select({ value: count() }).from(suggestionTable).where(scope),
   ]);
   return {
     rows: rows.map((row) => ({

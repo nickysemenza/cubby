@@ -1,5 +1,3 @@
-import { sql, type AnyColumn, type SQL } from "drizzle-orm";
-
 const TEXT_HASH_REF = ["md5((", ")::text)::uuid"] as const;
 
 /**
@@ -9,6 +7,3 @@ const TEXT_HASH_REF = ["md5((", ")::text)::uuid"] as const;
  */
 export const textHashRefSqlText = (expression: string): string =>
   `${TEXT_HASH_REF[0]}${expression}${TEXT_HASH_REF[1]}`;
-
-export const textHashRefSql = (expression: AnyColumn | SQL): SQL =>
-  sql`${sql.raw(TEXT_HASH_REF[0])}${expression}${sql.raw(TEXT_HASH_REF[1])}`;

@@ -17,7 +17,6 @@ import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { runAfterCommit, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { assessmentState } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   previewFinancialSpending,
@@ -35,7 +34,10 @@ import {
 import { isMoneyMoveKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
-import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
+import {
+  type SuggestionStateRow,
+  transitionAssessmentState,
+} from "~/server/generic/assessment/repo/assessment-state";
 import { settlementRefsIncluding } from "~/server/generic/entity-links/repo/entity-external-ids";
 
 import {
@@ -54,7 +56,7 @@ const refused = (message: string) =>
 export async function applyStatementTransactionSuggestion(
   db: Database,
   context: EntityKernelContext,
-  state: typeof assessmentState.$inferSelect,
+  state: SuggestionStateRow,
   input: {
     application: StatementTransactionApplication;
     corrected: boolean;

@@ -431,22 +431,6 @@ const currentWorkExecution = sql`j.state = ${jobState.enum.running}
   AND w."executionTicket" = w.ticket
   AND w."executionStartedAt" >= w."readyAt" AND w."readyAt" <= now()`;
 
-const workNotRunning = sql`(${currentWorkExecution}) IS NOT TRUE`;
-const workNotFailed = sql`(w."lastError" IS NULL OR w."waitCause" IS NOT NULL)`;
-
-/** Read-only state of a producer's exact targets, using the backlog's lease and wait rules. */
-export const pendingWorkStatusSql = (
-  eligible: (target: SQL, ref: SQL) => SQL,
-): SQL =>
-  sql`(SELECT count(*)::int AS count,
-    count(*) FILTER (WHERE ${workNotRunning} AND ${workNotFailed} AND w."readyAt" <= now())::int AS queued,
-    count(*) FILTER (WHERE ${currentWorkExecution})::int AS running,
-    count(*) FILTER (WHERE ${workNotRunning} AND ${workNotFailed} AND w."readyAt" > now())::int AS waiting,
-    count(*) FILTER (WHERE ${workNotRunning} AND NOT ${workNotFailed})::int AS failed,
-    min(w."readyAt") FILTER (WHERE w."readyAt" > now()) AS "nextAttemptAt"
-    FROM ${workItem} w LEFT JOIN ${job} j ON j.key = w.drain
-    WHERE ${eligible(sql`w.target`, sql`w.ref`)})`;
-
 /**
  * Owed work is an input to derived computations; Job execution is not. An
  * explicit wait outranks a retained `lastError`, which is history, not its state.

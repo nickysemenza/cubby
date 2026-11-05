@@ -50,7 +50,7 @@ export async function listAutomaticDecisions(
   const assessmentFamilyFilter =
     input.family && isReviewFamily(input.family) ? input.family : undefined;
   const includesAssessments = !mailFamily;
-  const rule = automaticApplicationRule(sql`a.id`);
+  const rule = automaticApplicationRule(sql`s.id`);
   const touching = includesAssessments
     ? await touchingAssessmentIds(db, {
         records,
@@ -74,19 +74,20 @@ export async function listAutomaticDecisions(
     // Record-scoped discovery has already proved automatic admission. Repeating
     // it here validates the same correction receipts for the count and page.
     const admission = touching
-      ? sql`a.id = ANY(${uuidArrayParam([...touching])})`
-      : sql`a.served AND ${automaticAssessmentEligibility(rule)}
-        ${assessmentFamilyFilter ? sql`AND a.family = ${assessmentFamilyFilter}` : sql``}`;
-    const from = sql`FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
-      LEFT JOIN LATERAL (SELECT f.id, f.verdict, f."createdAt" FROM "Feedback" f
-        WHERE f."assessmentId" = a.id AND f.authority = ${feedbackAuthority.enum.member} AND f."operationId" <> ${"decision"}
+      ? sql`s.id = ANY(${uuidArrayParam([...touching])})`
+      : sql`s.served AND ${automaticAssessmentEligibility(rule)}
+        ${assessmentFamilyFilter ? sql`AND s.family = ${assessmentFamilyFilter}` : sql``}`;
+    const from = sql`FROM "Suggestion" s
+      LEFT JOIN LATERAL (SELECT f.id, f.verdict, f."createdAt"
+        FROM jsonb_to_recordset(s.decisions) f(id text, verdict text, "createdAt" text, authority text, "operationId" text, metadata jsonb)
+        WHERE f.authority = ${feedbackAuthority.enum.member} AND f."operationId" <> ${"decision"}
           AND f.metadata->>${"kind"} IS DISTINCT FROM ${correctionAuthorityReceiptKinds.enum.assessment_application}
         ORDER BY f."createdAt" DESC, f.id DESC LIMIT 1) latest ON true`;
     branches.push({
-      page: sql`SELECT a.id, a.family::text AS family, a.judgment, a."createdAt", s.fingerprint,
+      page: sql`SELECT s.id, s.family::text AS family, s.judgment, s."createdAt", s.fingerprint,
         ${rule} AS "automaticRule", true AS "applicationVerified", latest.verdict,
         latest."createdAt" AS "reviewedAt", s.active, s.status,
-        a."createdAt" AS "sortAt", NULL::jsonb AS refs
+        s."createdAt" AS "sortAt", NULL::jsonb AS refs
         ${from} WHERE ${admission} ${reviewFilter}`,
       count: sql`SELECT count(*)::int AS count ${from} WHERE ${admission} ${reviewFilter}`,
     });

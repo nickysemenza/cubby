@@ -4,13 +4,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import {
-  assessment,
-  assessmentState,
-  feedback,
-  inventoryEntry,
-  product,
-} from "~/server/db/schema";
+import { suggestionTable, inventoryEntry, product } from "~/server/db/schema";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import {
   prepareProductIdentityPair,
@@ -110,10 +104,22 @@ describe("retained Product identity conflict guards", () => {
         ?.fingerprint ?? null;
     const [first, second] = [...ids].sort();
     const [row] = await getDb(ctx.db)
-      .insert(assessment)
+      .insert(suggestionTable)
       .values({
         publicationKey: `synthetic:historical:${crypto.randomUUID()}`,
         family: "product_pair",
+        entity: "product",
+        recordId: first!,
+        status: "superseded",
+        active: false,
+        data: {
+          otherId: second!,
+          source: "detector",
+          evidence: "Synthetic retained pair",
+          sourceUrls: [],
+          actionable: true,
+          conflict,
+        },
         subject: {
           kind: "product_pair",
           entity: "product",
@@ -203,8 +209,8 @@ describe("retained Product identity conflict guards", () => {
         (
           await getDb(ctx.db)
             .select()
-            .from(assessment)
-            .where(eq(assessment.id, history.id))
+            .from(suggestionTable)
+            .where(eq(suggestionTable.id, history.id))
         )[0]?.evidence,
       ).toEqual(history.evidence);
     },
@@ -331,8 +337,8 @@ describe("retained Product identity conflict guards", () => {
       (
         await getDb(ctx.db)
           .select()
-          .from(assessment)
-          .where(eq(assessment.id, history.id))
+          .from(suggestionTable)
+          .where(eq(suggestionTable.id, history.id))
       )[0]?.subject,
     ).toEqual(history.subject);
   });
@@ -386,12 +392,10 @@ describe("retained Product identity conflict guards", () => {
             .select()
             .from(inventoryEntry)
             .orderBy(inventoryEntry.id),
-          getDb(ctx.db).select().from(assessment).orderBy(assessment.id),
           getDb(ctx.db)
             .select()
-            .from(assessmentState)
-            .orderBy(assessmentState.id),
-          getDb(ctx.db).select().from(feedback).orderBy(feedback.id),
+            .from(suggestionTable)
+            .orderBy(suggestionTable.id),
         ]);
       const before = await readPreserved();
       const input = {

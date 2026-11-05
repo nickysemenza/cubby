@@ -7,11 +7,7 @@ import { and, count, desc, eq, inArray, max, sql } from "drizzle-orm";
 import type { RunDetailStep } from "~/contracts/run-detail.contract";
 import type { Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
-import {
-  assessment,
-  assessmentState,
-  auditLog,
-} from "~/server/db/retained-tables";
+import { suggestionTable, auditLog } from "~/server/db/retained-tables";
 
 const RECORD_LIMIT = 25;
 
@@ -54,7 +50,7 @@ export async function runResultsBlocks(
     .groupBy(auditLog.entityKind, auditLog.entityId)
     .as("changed");
   const publicationScope = eq(
-    sql<string>`${assessment.producer}->>'runId'`,
+    sql<string>`${suggestionTable.producer}->>'runId'`,
     runId,
   );
   const [rows, [totals], publications, [assessed]] = await Promise.all([
@@ -81,32 +77,31 @@ export async function runResultsBlocks(
       .from(changed),
     connection
       .select({
-        family: assessment.family,
-        status: assessmentState.status,
-        active: assessmentState.active,
+        family: suggestionTable.family,
+        status: suggestionTable.status,
+        active: suggestionTable.active,
         total: count(),
       })
-      .from(assessment)
-      .leftJoin(assessmentState, eq(assessmentState.id, assessment.id))
+      .from(suggestionTable)
       // Producer is immutable history; later review or supersession must not erase publication.
       .where(publicationScope)
       .groupBy(
-        assessment.family,
-        assessmentState.status,
-        assessmentState.active,
+        suggestionTable.family,
+        suggestionTable.status,
+        suggestionTable.active,
       ),
     connection
       .select({
         records:
-          sql<number>`count(distinct (${assessment.subject}->>'entity', ${assessment.subject}->>'recordId')) filter (where ${assessment.subject}->>'recordId' is not null)`.mapWith(
+          sql<number>`count(distinct (${suggestionTable.subject}->>'entity', ${suggestionTable.subject}->>'recordId')) filter (where ${suggestionTable.subject}->>'recordId' is not null)`.mapWith(
             Number,
           ),
       })
-      .from(assessment)
+      .from(suggestionTable)
       .where(
         and(
           publicationScope,
-          inArray(assessment.family, suggestionListFamily.options),
+          inArray(suggestionTable.family, suggestionListFamily.options),
         ),
       ),
   ]);

@@ -41,6 +41,8 @@ export type EntityRosterData = Record<
     browserRoutes: boolean;
     hasImages: boolean;
     imageStorage: false | "gallery" | "cover" | "logo";
+    /** Review families this entity declares. */
+    suggestionFamilies: readonly string[];
     searchable: boolean;
     embeddable: boolean;
     auditable: boolean;

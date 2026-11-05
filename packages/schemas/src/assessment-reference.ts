@@ -4,13 +4,6 @@ import { z } from "zod";
 export const assessmentChildHandle = z.guid();
 
 /** Unknown membership is a coverage gap, never a precise count of missing results. */
-export const assessmentReadCoverage = z.object({
-  missing: z.boolean(),
-  stale: z.boolean(),
-  unresolved: z.boolean(),
-  failed: z.boolean(),
-});
-export type AssessmentReadCoverage = z.infer<typeof assessmentReadCoverage>;
 
 export const assessmentSuppression = z.object({
   scope: z.string(),

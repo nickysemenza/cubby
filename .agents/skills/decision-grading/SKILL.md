@@ -34,7 +34,9 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
 ## Field decisions (Jev vs Clef, prompts, options)
 
 1. Sample `suggestions_read.list` across pending, applied, rejected
-   and superseded statuses with `family: "field"`, filtered by `entity` and
+   and superseded statuses with `family: "field"`. Field rows are the one family
+   that keeps replaced opinions; other families delete a replaced row nobody
+   decided on, so grade those from a deliberate fresh sample. Filter by `entity` and
    `where {field: {in: [...]}}`.
    Luna/Sol may grade any sample independently from its captured evidence.
    Lock the model grade before revealing acceptance or rejection. Keep model

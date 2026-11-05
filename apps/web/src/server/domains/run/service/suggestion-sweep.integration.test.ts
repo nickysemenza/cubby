@@ -12,17 +12,17 @@ import {
   aiEvaluationRequest,
   auditLog,
   expense as expenseTable,
-  feedback,
   run as runTable,
   vendor as vendorTable,
   product as productTable,
-  assessment,
+  suggestionTable,
 } from "~/server/db/schema";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { declaredFilterPredicates } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import { pauseSuggestionSweep } from "./suggestion-sweep";
 import {
@@ -123,10 +123,10 @@ describe("persisted Suggestion sweeps", () => {
     const rows = await runSuggestions(ctx.db, started.id);
     expect(rows).toHaveLength(1);
     const histories = await getDb(ctx.db)
-      .select({ served: assessment.served })
-      .from(assessment)
+      .select({ served: suggestionTable.served })
+      .from(suggestionTable)
       .where(
-        sql`${assessment.id} IN (${sql.join(
+        sql`${suggestionTable.id} IN (${sql.join(
           rows.map((row) => sql`${row.id}::uuid`),
           sql`, `,
         )})`,
@@ -180,10 +180,7 @@ describe("persisted Suggestion sweeps", () => {
     expect(audits.map((audit) => audit.userId)).toEqual(
       audits.map(() => systemActor().userId),
     );
-    const events = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, row!.id));
+    const events = await readSuggestionDecisions(ctx.db, row!.id);
     const rule = {
       key: "field.addition",
       revision: expect.any(String),
@@ -503,12 +500,7 @@ describe("persisted Suggestion sweeps", () => {
     const [pending] = await runSuggestions(ctx.db, started.id);
     expect(pending).toMatchObject({ kind: "addition", status: "pending" });
     // A refused automatic application leaves no Feedback: nobody reviewed it.
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(feedback)
-        .where(eq(feedback.assessmentId, pending!.id)),
-    ).toEqual([]);
+    expect(await readSuggestionDecisions(ctx.db, pending!.id)).toEqual([]);
     expect(await productCategoryId(ctx.db, product.id)).toBeNull();
     const finished = await savedRun(ctx.db, started.id);
     expect(finished.progress).toMatchObject({

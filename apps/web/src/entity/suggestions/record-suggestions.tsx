@@ -16,7 +16,6 @@ import type {
   AssessmentReviewBatchOut,
   AssessmentReviewOut,
 } from "@cubby/schemas/assessment";
-import { assessmentReadCoverage } from "@cubby/schemas/assessment-read-publication";
 import type { BatchOut } from "@cubby/schemas/batch";
 import {
   classificationFieldRefusal,
@@ -81,7 +80,6 @@ import { readReferenceField } from "~/entity/entity-references";
 import { NotApplicableField } from "~/entity/fields/field-applicability";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
-import { publicationCoverageMessage } from "~/entity/suggestions/publication-coverage";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { assessment } from "~/integrations/tanstack-query/generated/domains/assessment.gen";
@@ -259,7 +257,6 @@ const RecordSuggestionsContext = createContext<{
 
 const storedSuggestionPacket = z.object({
   items: suggestionReviewRowSchema.array(),
-  coverage: assessmentReadCoverage.optional(),
 });
 type StoredSuggestionPacket = z.infer<typeof storedSuggestionPacket>;
 
@@ -302,20 +299,6 @@ type PendingPageInput = Parameters<StoredSuggestionOperations["list"]>[0];
 /** One cursor page of pending field rows; `next` is null on the last page. */
 type PendingPage = StoredSuggestionPacket & { next: string | null };
 
-function mergeCoverage(
-  left: StoredSuggestionPacket["coverage"],
-  right: StoredSuggestionPacket["coverage"],
-): StoredSuggestionPacket["coverage"] {
-  if (!left) return right;
-  if (!right) return left;
-  return {
-    missing: left.missing || right.missing,
-    stale: left.stale || right.stale,
-    unresolved: left.unresolved || right.unresolved,
-    failed: left.failed || right.failed,
-  };
-}
-
 /**
  * Every pending row for a list page's records, with no confidence floor.
  * Rosters larger than one read accepts are split, and each read pages to
@@ -345,7 +328,6 @@ export const everyPendingSuggestion =
     const pages = await Promise.all(
       rosters.map(async (recordIds) => {
         const rows: SuggestionReviewRow[] = [];
-        let coverage: StoredSuggestionPacket["coverage"];
         let cursor: string | undefined;
         do {
           const page = await read(
@@ -358,18 +340,13 @@ export const everyPendingSuggestion =
             options,
           );
           rows.push(...page.items);
-          coverage = mergeCoverage(coverage, page.coverage);
           cursor = page.next ?? undefined;
         } while (cursor);
-        return { items: rows, coverage };
+        return { items: rows };
       }),
     );
     return {
       items: pages.flatMap((page) => page.items),
-      coverage: pages.reduce<StoredSuggestionPacket["coverage"]>(
-        (coverage, page) => mergeCoverage(coverage, page.coverage),
-        undefined,
-      ),
     };
   };
 
@@ -392,7 +369,6 @@ const productionStoredSuggestionOperations: StoredSuggestionOperations = {
           row.family === "field" ? [row.evidence] : [],
         ),
         next: page.next,
-        coverage: page.meta.coverage,
       };
     },
   ),
@@ -984,16 +960,7 @@ function statusFieldsForRows(
 type StoredPageRead = {
   recordIds: readonly string[];
   rows: StoredSuggestionPacket["items"];
-  coverage: StoredSuggestionPacket["coverage"];
 };
-function StoredReadCoverage({ read }: { read: StoredPageRead | undefined }) {
-  const message = publicationCoverageMessage(read?.coverage);
-  return message ? (
-    <p data-needs-row className="text-sm text-muted-foreground">
-      {message}
-    </p>
-  ) : null;
-}
 const firstStoredPageQuery = (results: UseQueryResult<StoredPageRead>[]) =>
   results[0];
 /** A single-field question the server can answer from remembered declines;
@@ -1459,7 +1426,6 @@ function BoundRecordSuggestions({
               return {
                 recordIds: pageRecordIds,
                 rows: packet.items,
-                coverage: packet.coverage,
               };
             },
             retry: false,
@@ -1945,7 +1911,6 @@ function BoundRecordSuggestions({
         fields={statusFieldsForRows(queryClient, entity, rows)}
         unasked={unasked}
       />
-      <StoredReadCoverage read={storedData} />
       {storedQuery?.error ? (
         <div data-needs-row>
           <ErrorDisplay

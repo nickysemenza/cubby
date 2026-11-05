@@ -36,7 +36,7 @@ import {
   mealRecipePortion,
   orderMail,
   orderMailAttachment,
-  assessmentState as suggestion,
+  suggestionTable as suggestion,
   photoGroupProposal,
   photoGroupSourceEvidence,
   runPushRegistration,
@@ -804,7 +804,7 @@ const SOURCE_FACTORIES = {
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
     }),
 
-  "AssessmentState.ledgerPartyId": async (db, targetId) => {
+  "Suggestion.ledgerPartyId": async (db, targetId) => {
     const run = await mkRun(db);
     return publishAssessment(
       db,

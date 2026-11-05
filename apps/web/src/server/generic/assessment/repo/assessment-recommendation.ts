@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { assessment } from "~/server/db/schema";
+import { suggestionTable } from "~/server/db/schema";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { assessmentCandidateKey } from "~/server/generic/assessment/repo/assessment-state";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -27,9 +27,9 @@ export async function assessRecommendation(
   const fingerprint = await sha256Hex(canonicalJson(snapshot));
   const publicationKey = `recommendation:${recordId}:${scope}:${candidateKey}:${fingerprint}`;
   const [existing] = await getDb(db)
-    .select({ id: assessment.id })
-    .from(assessment)
-    .where(eq(assessment.publicationKey, publicationKey))
+    .select({ id: suggestionTable.id })
+    .from(suggestionTable)
+    .where(eq(suggestionTable.publicationKey, publicationKey))
     .limit(1);
   const prediction =
     existing ??

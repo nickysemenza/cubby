@@ -39,12 +39,11 @@ import { withTransactionDatabase } from "~/server/db/helpers";
 import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
-  assessmentState as suggestion,
+  suggestionTable as suggestion,
   run,
   email,
   product,
   appSettings,
-  feedback,
 } from "~/server/db/schema";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
@@ -54,7 +53,6 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { rebuildAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import {
   acceptSuggestion,
@@ -71,6 +69,7 @@ import {
   makeProductInput,
   insertEntityFixtures,
 } from "~/server/testing/repo.fixtures";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
 import { settleAppliedFieldRefresh } from "../repo/ai-refresh-state";
@@ -637,7 +636,7 @@ describe("targeted prompt refresh", () => {
       runId: evaluation!.runId,
     });
     expect(applied.acceptanceReceipt!.auditIds.length).toBeGreaterThan(0);
-    // Refresh updates preserve the full receipt and rebuild from ledger events.
+    // Refresh updates preserve the full receipt.
     const refreshedProvenance = aiProvenance.parse(applied.provenance);
     await withTransactionDatabase(ctx.db, async (tx) => {
       const refreshedFingerprint = await fieldInputFingerprint(
@@ -652,37 +651,11 @@ describe("targeted prompt refresh", () => {
         refreshedFingerprint,
         refreshedProvenance,
       );
-      const before = await getDb(tx)
+      const [refreshed] = await getDb(tx)
         .select()
         .from(suggestion)
-        .where(
-          inArray(
-            suggestion.id,
-            history.map((row) => row.id),
-          ),
-        );
-      await rebuildAssessmentStates(
-        tx,
-        history.map((row) => row.id),
-      );
-      const rebuilt = await getDb(tx)
-        .select()
-        .from(suggestion)
-        .where(
-          inArray(
-            suggestion.id,
-            history.map((row) => row.id),
-          ),
-        );
-      for (const row of before)
-        expect(rebuilt.find((entry) => entry.id === row.id)).toMatchObject({
-          status: row.status,
-          acceptanceReceipt: row.acceptanceReceipt,
-          supersessionReceipt: row.supersessionReceipt,
-        });
-      expect(
-        rebuilt.find((row) => row.id === applied.id)?.acceptanceReceipt,
-      ).toEqual({
+        .where(eq(suggestion.id, applied.id));
+      expect(refreshed?.acceptanceReceipt).toEqual({
         ...applied.acceptanceReceipt,
         evaluatedInput: {
           fingerprint: refreshedFingerprint,
@@ -987,10 +960,7 @@ describe("targeted prompt refresh", () => {
       intent: "history",
     });
     await drainDerivedRefreshFrontier(ctx.db);
-    const historicalFeedback = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .orderBy(feedback.id);
+    const historicalFeedback = await readSuggestionDecisions(ctx.db);
     const ordinary = categoryPorts(0.6).suggestPorts;
     const decisionPort = vi.fn(ordinary.decisionPort);
     const ports = {
@@ -1039,27 +1009,8 @@ describe("targeted prompt refresh", () => {
         },
       },
     });
-    const recordedFeedback = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .orderBy(feedback.id);
-    const historicalIds = new Set(historicalFeedback.map((entry) => entry.id));
-    expect(
-      recordedFeedback.filter((entry) => historicalIds.has(entry.id)),
-    ).toEqual(historicalFeedback);
-    expect(
-      recordedFeedback.filter((entry) => !historicalIds.has(entry.id)),
-    ).toEqual([
-      expect.objectContaining({
-        assessmentId: applied!.id,
-        intent: "projection",
-        authority: "system",
-        projection: {
-          acceptanceReceipt: rows.find((row) => row.id === applied!.id)!
-            .acceptanceReceipt,
-        },
-      }),
-    ]);
+    // The member's decision stays exactly as recorded; a refresh adds none.
+    expect(await readSuggestionDecisions(ctx.db)).toEqual(historicalFeedback);
     for (let pass = 0; pass < 3; pass++)
       expect(await discoverFieldRefresh(ports)).toEqual([]);
     expect(decisionPort).toHaveBeenCalledTimes(1);
@@ -1756,7 +1707,7 @@ describe("targeted prompt refresh", () => {
     });
     await seedPending(ctx, {
       entity: "product",
-      recordId: original!.recordId,
+      recordId: original!.recordId!,
       field: "categoryId",
       currentValue: null,
       suggestedValue: original!.suggestedValue,

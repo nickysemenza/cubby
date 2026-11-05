@@ -291,24 +291,7 @@ describe("suggestion lifecycle", () => {
   it("retains a loaded proposal and exposes diagnostics when the stored-suggestion refresh fails", async () => {
     const list = vi
       .fn<StoredSuggestionOperations["list"]>()
-      .mockResolvedValueOnce({
-        items: [],
-        coverage: {
-          missing: true,
-          stale: false,
-          unresolved: true,
-          failed: false,
-        },
-      })
-      .mockResolvedValueOnce({
-        items: [],
-        coverage: {
-          missing: false,
-          stale: false,
-          unresolved: false,
-          failed: true,
-        },
-      })
+      .mockResolvedValueOnce({ items: [] })
       .mockRejectedValue(new Error("Synthetic stored-suggestion refusal"));
     const calls: FieldSuggestionsInput[] = [];
     render(
@@ -319,21 +302,7 @@ describe("suggestion lifecycle", () => {
       { wrapper: harness.wrapper },
     );
     await waitFor(() => expect(categoryButton()).toBeEnabled());
-    expect(
-      await screen.findByText("Some suggestions have not been assessed yet."),
-    ).toBeVisible();
     const count = calls.length;
-    await act(async () =>
-      invalidateOperationTags(
-        harness.queryClient,
-        exactRippleTags([["product"]]),
-      ),
-    );
-    expect(
-      await screen.findByText(
-        "Suggestion refresh failed. Showing known results.",
-      ),
-    ).toBeVisible();
     await act(async () =>
       invalidateOperationTags(
         harness.queryClient,

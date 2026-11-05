@@ -32,7 +32,8 @@ import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { aiAnalysis, assessmentState, feedback } from "~/server/db/schema";
+import { aiAnalysis, suggestionTable } from "~/server/db/schema";
+import { memberRejectedSql } from "~/server/generic/assessment/repo/suggestion-decisions";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { settleBatch } from "~/server/workflows/settle-batch";
 
@@ -289,11 +290,11 @@ export async function readSettledQuestions(
       key: aiAnalysis.inputFingerprint,
       result: aiAnalysis.result,
       missId: sql<string | null>`(
-        SELECT ${feedback.id}::text FROM ${feedback}
-        WHERE ${feedback.assessmentId}::text = ${aiAnalysis.result}->'outcome'->>'assessmentId'
-          AND ${feedback.authority} = ${"member"}
-          AND ${feedback.verdict} = ${"wrong"}
-        ORDER BY ${feedback.createdAt} DESC, ${feedback.id} DESC
+        SELECT miss.id FROM "Suggestion" answer
+        CROSS JOIN LATERAL jsonb_to_recordset(answer.decisions) miss(id text, authority text, verdict text, "createdAt" text)
+        WHERE answer.id::text = ${aiAnalysis.result}->'outcome'->>'assessmentId'
+          AND miss.authority = ${"member"} AND miss.verdict = ${"wrong"}
+        ORDER BY miss."createdAt" DESC, miss.id DESC
         LIMIT 1
       )`,
     })
@@ -415,12 +416,12 @@ async function readSavedAnswerPreviews(
           result: aiAnalysis.result,
           withheld: sql<boolean>`(
             EXISTS (
-              SELECT 1 FROM ${assessmentState} AS "answer"
+              SELECT 1 FROM ${suggestionTable} AS "answer"
               WHERE "answer"."id" = ${answerAssessment}
                 AND (
                   "answer"."status" IN (${rejected}, ${superseded})
                   OR EXISTS (
-                    SELECT 1 FROM ${assessmentState} AS "sibling"
+                    SELECT 1 FROM ${suggestionTable} AS "sibling"
                     WHERE "sibling"."family" = ${"field"}
                       AND "sibling"."status" = ${rejected}
                       AND "sibling"."data"->>${"reviewKey"}::text
@@ -429,10 +430,9 @@ async function readSavedAnswerPreviews(
                 )
             )
             OR EXISTS (
-              SELECT 1 FROM ${feedback}
-              WHERE ${feedback.assessmentId} = ${answerAssessment}
-                AND ${feedback.authority} = ${"member"}
-                AND ${feedback.verdict} = ${"wrong"}
+              SELECT 1 FROM ${suggestionTable} AS "reviewed"
+              WHERE "reviewed"."id" = ${answerAssessment}
+                AND ${memberRejectedSql(sql`"reviewed"."decisions"`, { dismissed: false })}
             )
           )`,
         })

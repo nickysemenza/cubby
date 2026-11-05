@@ -298,7 +298,7 @@ describe("Sweeps", () => {
         .map((item) => item.chargeKey);
       const excludedAssessments = () =>
         getDb(ctx.db).execute(sql`
-      SELECT * FROM "AssessmentState" WHERE family = ${assessmentFamily.enum.statement_transaction}
+      SELECT * FROM "Suggestion" WHERE family = ${assessmentFamily.enum.statement_transaction}
         AND data->>${"chargeKey"} IN (${sql.join(
           excludedKeys.map((key) => sql`${key}`),
           sql`, `,
@@ -343,7 +343,7 @@ describe("Sweeps", () => {
       const { rows: proposed } = await getDb(ctx.db).execute<{
         id: string;
       }>(sql`
-      SELECT data->>${"chargeKey"} AS id FROM "AssessmentState"
+      SELECT data->>${"chargeKey"} AS id FROM "Suggestion"
       WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
         AND data->>${"recommended"} = ${"void"}
     `);
@@ -498,7 +498,7 @@ describe("Sweeps", () => {
       meta: { input: { mode: "count" } },
     });
     const { rows } = await getDb(ctx.db).execute<{ count: number }>(
-      sql`SELECT count(*)::int AS count FROM "AssessmentState" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active`,
+      sql`SELECT count(*)::int AS count FROM "Suggestion" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active`,
     );
     expect(rows[0]?.count).toBe(3);
   });
@@ -544,7 +544,7 @@ describe("Sweeps", () => {
       meta: { retryRefs: [], retriedFailures: 1 },
     });
     const { rows: counts } = await getDb(ctx.db).execute<{ count: number }>(sql`
-      SELECT count(*)::int AS count FROM "AssessmentState" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
+      SELECT count(*)::int AS count FROM "Suggestion" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
     `);
     expect(counts[0]?.count).toBe(3);
     await recordRunStepPage(ctx.db, runId, "statement_label", {
@@ -625,12 +625,12 @@ describe("Sweeps", () => {
     });
     await drive(runId);
     const { rows: waiting } = await getDb(ctx.db).execute<{ id: string }>(
-      sql`SELECT id FROM "AssessmentState" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active AND (data->>'needsLabel')::boolean ORDER BY "createdAt", id`,
+      sql`SELECT id FROM "Suggestion" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active AND (data->>'needsLabel')::boolean ORDER BY "createdAt", id`,
     );
     expect(waiting).toHaveLength(2);
     // The oldest suggestion's evidence moved after publication.
     await getDb(ctx.db).execute(
-      sql`UPDATE "AssessmentState" SET data = jsonb_set(data, '{evidenceFingerprint}', '"moved"') WHERE id = ${waiting[0]!.id}::uuid`,
+      sql`UPDATE "Suggestion" SET data = jsonb_set(data, '{evidenceFingerprint}', '"moved"') WHERE id = ${waiting[0]!.id}::uuid`,
     );
     const labelRun = await ensureRun(ctx.db, ctx.actor, {
       purpose: "background",
@@ -662,8 +662,8 @@ describe("Sweeps", () => {
     expect(broken.failed[0]?.message).toContain("statement timeout");
     const { rows: retained } = await getDb(ctx.db).execute<{
       subject: unknown;
-    }>(sql`SELECT a.subject
-      FROM "Assessment" a WHERE a.id=${waiting[1]!.id}::uuid`);
+    }>(sql`SELECT s.subject
+      FROM "Suggestion" s WHERE s.id=${waiting[1]!.id}::uuid`);
     const later = await recordRows(
       [row({ providerAmount: 40, sourceCategory: null })],
       "synthetic-later-label-arrival",
@@ -696,7 +696,7 @@ describe("Sweeps", () => {
     expect(second.failed).toEqual([]);
     expect(second).toMatchObject({ labelled: 1, stale: 0, next: null });
     const { rows: remaining } = await getDb(ctx.db).execute<{ count: number }>(
-      sql`SELECT count(*)::int AS count FROM "AssessmentState" WHERE active AND (data->>'needsLabel')::boolean`,
+      sql`SELECT count(*)::int AS count FROM "Suggestion" WHERE active AND (data->>'needsLabel')::boolean`,
     );
     expect(remaining[0]?.count).toBe(2);
   });

@@ -5,9 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
-  assessmentState,
+  suggestionTable,
   expense,
-  feedback,
   financialTransactionAllocation,
   product,
 } from "~/server/db/schema";
@@ -22,6 +21,7 @@ import {
   createLocationFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import { retrieveConnectionCandidates } from "../repo/connection-candidates";
 import {
@@ -139,11 +139,11 @@ describe("connection application through generic Feedback", () => {
     // Neither the read nor the refused apply moves the review state.
     const [state] = await getDb(ctx.db)
       .select({
-        active: assessmentState.active,
-        status: assessmentState.status,
+        active: suggestionTable.active,
+        status: suggestionTable.status,
       })
-      .from(assessmentState)
-      .where(eq(assessmentState.id, proposal.review.assessmentId));
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, proposal.review.assessmentId));
     expect(state).toEqual({ active: true, status: "pending" });
     expect(
       await getDb(ctx.db)
@@ -285,10 +285,10 @@ describe("connection application through generic Feedback", () => {
     expect((await work()).items).not.toContainEqual(
       expect.objectContaining({ key: `pending-suggestions:${item.id}` }),
     );
-    const events = await getDb(ctx.db)
-      .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, proposal.review.assessmentId));
+    const events = await readSuggestionDecisions(
+      ctx.db,
+      proposal.review.assessmentId,
+    );
     expect(
       events.filter(
         (event) =>

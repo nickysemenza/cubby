@@ -561,6 +561,13 @@
       "when": 1793871171961,
       "tag": "0079_quality_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1793873362293,
+      "tag": "0080_suggestion_table",
+      "breakpoints": true
     }
   ]
 }

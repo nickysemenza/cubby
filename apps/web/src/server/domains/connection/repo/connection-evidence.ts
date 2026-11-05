@@ -6,7 +6,6 @@ import {
   CONNECTION_TRANSFER_WINDOW_DAYS,
 } from "@cubby/schemas/entity-connections";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { financialTransferPairSuggestionsOut } from "@cubby/schemas/household-contribution";
 import {
   parseEntityId,
   parseShortcodeFor,
@@ -24,7 +23,7 @@ import {
   expense,
   financialTransactionAllocation,
   inventoryEntry,
-  assessmentState,
+  suggestionTable,
 } from "~/server/db/schema";
 import {
   expenseProjectRecommendationContext,
@@ -185,7 +184,7 @@ export const connectionReadEvidence = connectionAssessmentEvidence.omit({
 
 /** Lists validate the candidate; stored snapshots stay in PostgreSQL. */
 export const connectionReadEvidenceSql = (evidence: SQL) => sql<unknown>`CASE
-  WHEN ${evidence} ? 'basis' THEN jsonb_build_object(
+  WHEN ${evidence} ? 'candidate' THEN jsonb_build_object(
     'version', ${evidence}->'version', 'candidate', ${evidence}->'candidate'
   ) ELSE NULL END`;
 
@@ -196,12 +195,12 @@ export async function connectionBasisIsCurrent(
   basis: Awaited<ReturnType<typeof captureConnectionBasis>>,
 ) {
   const [match] = await getDb(db)
-    .select({ id: assessmentState.id })
-    .from(assessmentState)
+    .select({ id: suggestionTable.id })
+    .from(suggestionTable)
     .where(
       and(
-        eq(assessmentState.id, assessmentId),
-        sql`${assessmentState.data}->'connectionEvidence'->'basis' = ${JSON.stringify(basis)}::jsonb`,
+        eq(suggestionTable.id, assessmentId),
+        sql`${suggestionTable.data}->'connectionEvidence'->'basis' = ${JSON.stringify(basis)}::jsonb`,
       ),
     )
     .limit(1);
@@ -588,139 +587,6 @@ export async function captureConnectionBasis(
   prepared?: PreparedConnectionBases,
 ) {
   return (await captureConnectionEvidence(db, raw, lock, prepared)).basis;
-}
-
-const settlementRecordBasis = z.object({
-  source: z.object({ accountId: z.string().nullable().optional() }),
-  target: z.object({
-    vendorId: z.string().nullable().optional(),
-    vendorAccountId: z.string().nullable().optional(),
-  }),
-  dependencies: z.object({
-    candidates: z.array(z.object({ transactionId: z.string() })),
-    allocations: z.array(
-      z.object({
-        transactionId: z.string(),
-        purchaseId: z.string().nullable(),
-      }),
-    ),
-  }),
-});
-const stockRecordBasis = z.object({
-  source: z.object({ productId: z.string().nullable().optional() }),
-  dependencies: z.array(
-    z.object({
-      entityId: z.string(),
-      location: z.object({ entityId: z.string() }),
-    }),
-  ),
-});
-const purchaseRecordBasis = z.object({
-  dependencies: z.object({ expenses: z.array(z.object({ id: z.string() })) }),
-});
-const recordedTransferRecordBasis = z.object({
-  source: z.object({ accountId: z.string().nullable().optional() }),
-  dependencies: financialTransferPairSuggestionsOut,
-});
-const expenseProjectRecordBasis = z.object({
-  dependencies: z.object({
-    source: z.object({
-      purchaseId: z.string().nullable(),
-      productId: z.string().nullable(),
-    }),
-    history: z.array(
-      z.object({
-        id: z.string(),
-        projectId: z.string(),
-        productId: z.string().nullable(),
-      }),
-    ),
-  }),
-});
-
-/** Record identities from the current basis, including inputs of stale proposals. */
-export function connectionBasisRecordRefs(
-  candidate: ConnectionCandidate,
-  basis: ConnectionJson,
-): { entity: string; id: string }[] {
-  const refs = [candidate.source, candidate.target].map((record) => ({
-    entity: record.entityKind,
-    id: record.entityId,
-  }));
-  const add = (
-    entity: EntityRef["entityKind"],
-    id: string | null | undefined,
-  ) => {
-    if (id) refs.push({ entity, id });
-  };
-  if (candidate.relation === "expense-project") {
-    const parsed = expenseProjectRecordBasis.safeParse(basis);
-    if (parsed.success) {
-      add("purchase", parsed.data.dependencies.source.purchaseId);
-      add("product", parsed.data.dependencies.source.productId);
-      // Observe current history even when the proposal is stale: removing a
-      // newly included row can restore the retained proposal's fingerprint.
-      for (const row of parsed.data.dependencies.history) {
-        add("expense", row.id);
-        add("project", row.projectId);
-        add("product", row.productId);
-      }
-    }
-  }
-  if (
-    candidate.relation === "transaction-purchase" ||
-    candidate.relation === "transaction-refund"
-  ) {
-    const parsed = settlementRecordBasis.safeParse(basis);
-    if (parsed.success) {
-      add("financialAccount", parsed.data.source.accountId);
-      add("vendor", parsed.data.target.vendorId);
-      add("vendorAccount", parsed.data.target.vendorAccountId);
-      for (const row of parsed.data.dependencies.candidates)
-        add("financialTransaction", row.transactionId);
-      for (const row of parsed.data.dependencies.allocations) {
-        add("financialTransaction", row.transactionId);
-        add("purchase", row.purchaseId);
-      }
-    }
-  }
-  if (candidate.relation === "inventory-location") {
-    const parsed = stockRecordBasis.safeParse(basis);
-    if (parsed.success) {
-      add("product", parsed.data.source.productId);
-      for (const row of parsed.data.dependencies) {
-        add("inventory", row.entityId);
-        add("location", row.location.entityId);
-      }
-    }
-  }
-  if (candidate.relation === "product-purchase") {
-    const parsed = purchaseRecordBasis.safeParse(basis);
-    if (parsed.success)
-      for (const row of parsed.data.dependencies.expenses)
-        add("expense", row.id);
-  }
-  if (candidate.relation === "transaction-transfer") {
-    const parsed = recordedTransferRecordBasis.safeParse(basis);
-    if (parsed.success) {
-      add("financialAccount", parsed.data.source.accountId);
-      for (const row of parsed.data.dependencies.suggestions) {
-        add("financialTransaction", row.transactionId);
-        for (const peer of row.candidates) {
-          add("financialTransaction", peer.transactionId);
-          add("financialAccount", peer.fromAccountId);
-          add("financialAccount", peer.toAccountId);
-          add("ledgerParty", peer.from?.id);
-          add("ledgerParty", peer.to?.id);
-        }
-      }
-    }
-  }
-  return [
-    ...new Map(
-      refs.map((ref) => [JSON.stringify([ref.entity, ref.id]), ref]),
-    ).values(),
-  ];
 }
 
 /**

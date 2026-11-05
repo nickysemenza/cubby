@@ -344,7 +344,7 @@ describe("transfer pairs in the global queue", () => {
       const [projection] = await Promise.allSettled([
         withTransaction(ctx.db, async (probe) => {
           await probe.execute(
-            sql`SELECT id FROM "AssessmentState" WHERE id=${statement.assessmentId}::uuid FOR UPDATE NOWAIT`,
+            sql`SELECT id FROM "Suggestion" WHERE id=${statement.assessmentId}::uuid FOR UPDATE NOWAIT`,
           );
         }),
       ]);

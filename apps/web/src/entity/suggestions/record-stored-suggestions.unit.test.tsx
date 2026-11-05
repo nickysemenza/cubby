@@ -298,63 +298,13 @@ describe("stored suggestions in generic list cells", () => {
       await act(async () => {
         harness.queryClient.setQueryData(key, {
           records: [{ id: record.id, pending: 2 }],
-          coverage: {
-            missing: false,
-            stale: false,
-            unresolved: false,
-            failed: false,
-          },
         });
       });
       await screen.findAllByRole("button", { name: "2 pending suggestions" });
       expect(commits).toHaveBeenCalledTimes(before);
       expect(identityReads).toHaveBeenCalledTimes(readsBefore);
       expect(screen.getByText("12 expenses")).toBeVisible();
-      await act(async () => {
-        harness.queryClient.setQueryData(key, {
-          records: [{ id: record.id, pending: 2 }],
-          coverage: {
-            missing: false,
-            stale: true,
-            unresolved: true,
-            failed: false,
-          },
-        });
-      });
-      await screen.findAllByRole("button", {
-        name: "2 known pending suggestions. Suggestions may be out of date.",
-      });
-      expect(screen.getAllByText("2+")).toHaveLength(2);
-      await act(async () => {
-        harness.queryClient.setQueryData(key, {
-          records: [{ id: record.id, pending: 0 }],
-          coverage: {
-            missing: true,
-            stale: false,
-            unresolved: true,
-            failed: false,
-          },
-        });
-      });
-      await screen.findAllByRole("button", {
-        name: "0 known pending suggestions. Some suggestions have not been assessed yet.",
-      });
-      expect(screen.getAllByText("?")).toHaveLength(2);
-      const retained = {
-        records: [{ id: record.id, pending: 2 }],
-        coverage: {
-          missing: false,
-          stale: false,
-          unresolved: false,
-          failed: true,
-        },
-      };
-      await act(async () => {
-        harness.queryClient.setQueryData(key, retained);
-      });
-      await screen.findAllByRole("button", {
-        name: "2 known pending suggestions. Suggestion refresh failed. Showing known results.",
-      });
+      const retained = { records: [{ id: record.id, pending: 2 }] };
       const query = harness.queryClient.getQueryCache().find({ queryKey: key });
       if (!query) throw new Error("Count query missing");
       const retry = vi.spyOn(query, "fetch").mockResolvedValue(retained);
@@ -970,12 +920,6 @@ describe("stored suggestions in generic list cells", () => {
       return {
         items: all.slice(offset, end),
         next: end < all.length ? String(end) : null,
-        coverage: {
-          missing: offset === 0,
-          stale: false,
-          unresolved: false,
-          failed: offset > 0,
-        },
       };
     });
     const rows = await everyPendingSuggestion(read)({
@@ -984,12 +928,6 @@ describe("stored suggestions in generic list cells", () => {
       fields: [],
     });
     expect(rows.items).toHaveLength(1_750);
-    expect(rows.coverage).toEqual({
-      missing: true,
-      stale: false,
-      unresolved: false,
-      failed: true,
-    });
     expect(
       read.mock.calls.every(
         ([input]) => input.limit === SUGGESTION_LIST_PAGE_MAX,

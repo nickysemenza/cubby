@@ -817,6 +817,7 @@ export const { definition, readSchemas } = defineEntityModel({
     ],
   },
   capabilities: {
+    suggestions: ["statement_transaction", "transfer_pair"],
     classificationPolicies: [
       {
         classifier: "identity",

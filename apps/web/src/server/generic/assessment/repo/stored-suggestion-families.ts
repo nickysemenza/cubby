@@ -44,7 +44,7 @@ const outcomes =
     const { rows } = await unwrapDb(db).execute<{
       status: string;
       count: number;
-    }>(sql`SELECT s.status, count(*)::int AS count FROM "AssessmentState" s WHERE s.family = ${family}
+    }>(sql`SELECT s.status, count(*)::int AS count FROM "Suggestion" s WHERE s.family = ${family}
     ${filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``} GROUP BY s.status`);
     const count = (status: string) =>
       rows.find((row) => row.status === status)?.count ?? 0;
@@ -70,14 +70,14 @@ async function storedKeys(
     createdAt: Date | string;
     conflict: boolean;
   }>(sql`
-    SELECT a.id, s.fingerprint, a."createdAt", COALESCE((a.judgment->>${assessmentJudgments.product_pair.keyof().enum.conflict})::boolean, false) AS conflict
-    FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
-    WHERE ${family === "image_description" ? pendingImageDescriptionEligibility() : sql`a.family = ${family} AND a.served AND s.active AND s.status = ${suggestionStatus.enum.pending} AND s.suppression IS NULL AND ${declaration.actionable}`}
-      AND ${assessmentIdScope(query.assessmentIds, sql`a.id`)}
+    SELECT s.id, s.fingerprint, s."createdAt", COALESCE((s.judgment->>${assessmentJudgments.product_pair.keyof().enum.conflict})::boolean, false) AS conflict
+    FROM "Suggestion" s
+    WHERE ${family === "image_description" ? pendingImageDescriptionEligibility() : sql`s.family = ${family} AND s.served AND s.active AND s.status = ${suggestionStatus.enum.pending} AND s.suppression IS NULL AND ${declaration.actionable}`}
+      AND ${assessmentIdScope(query.assessmentIds, sql`s.id`)}
       ${query.filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${query.filters.runId})` : sql``}
       ${
         family === "product_pair"
-          ? sql`AND ${currentProductPairPolicySql(sql`a.producer`)} AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id = s."recordId" AND ${notDeleted("p")})
+          ? sql`AND ${currentProductPairPolicySql(sql`s.producer`)} AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id = s."recordId" AND ${notDeleted("p")})
         AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id::text = s.data->>'otherId' AND ${notDeleted("p")})`
           : sql``
       }`);
@@ -179,9 +179,9 @@ export const imageDescriptionFamily: SuggestionFamilyPresentation<"image_descrip
       const { rows } = await unwrapDb(db).execute<{
         id: string;
         judgment: unknown;
-      }>(sql`SELECT a.id, a.judgment FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
+      }>(sql`SELECT s.id, s.judgment FROM "Suggestion" s
       JOIN "Image" i ON i.id = s."recordId" AND ${notDeleted("i")}
-      WHERE a.id IN (${sql.join(
+      WHERE s.id IN (${sql.join(
         keys.map((key) => sql`${key.assessmentId}::uuid`),
         sql`, `,
       )}) AND s.active AND s.status = ${suggestionStatus.enum.pending}`);

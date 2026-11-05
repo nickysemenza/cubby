@@ -27,12 +27,7 @@ import {
   withTransactionDatabase,
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
-import {
-  assessment,
-  assessmentState,
-  feedback,
-  image,
-} from "~/server/db/schema";
+import { suggestionTable, image } from "~/server/db/schema";
 import {
   lockImageDescriptionSubject,
   withImageCorrectionIntent,
@@ -57,10 +52,14 @@ import {
 } from "~/server/generic/assessment/repo/assessment";
 import { acknowledgeSavedField } from "~/server/generic/assessment/repo/assessment-field-receipt";
 import {
+  type SuggestionStateRow,
+  suggestionStateColumns,
+  suggestionRecordId,
   transitionAssessmentState,
   transitionAssessmentStates,
 } from "~/server/generic/assessment/repo/assessment-state";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
+import { decisionForOperation } from "~/server/generic/assessment/repo/suggestion-decisions";
 import {
   acceptSuggestion,
   applyFieldCorrection,
@@ -95,17 +94,20 @@ type Handler = {
   /** Domain parent locks must precede the suggestion's projection row lock. */
   lockForApply?: (
     db: Database,
-    prediction: Pick<typeof assessment.$inferSelect, "subject" | "judgment">,
+    prediction: Pick<
+      typeof suggestionTable.$inferSelect,
+      "subject" | "judgment"
+    >,
   ) => Promise<void>;
   /** The fingerprint a review must match; defaults to the stored one. */
   currentFingerprint?: (
     db: Database,
-    state: typeof assessmentState.$inferSelect,
+    state: SuggestionStateRow,
   ) => Promise<string | null>;
   apply: (
     db: Database,
     context: EntityKernelContext & { reviewFeedbackId: string },
-    state: typeof assessmentState.$inferSelect,
+    state: SuggestionStateRow,
     input: Review,
     automatic: AutomaticReview | null,
   ) => Promise<z.infer<typeof assessmentReviewOut>["applicationResult"] | void>;
@@ -274,9 +276,9 @@ const assessmentFamilies = {
     actions: ["correct", "wrong", "uncertain", "dismissed"],
     apply: async (db, context, state, input) => {
       const [prediction] = await getDb(db)
-        .select({ subject: assessment.subject })
-        .from(assessment)
-        .where(eq(assessment.id, state.id))
+        .select({ subject: suggestionTable.subject })
+        .from(suggestionTable)
+        .where(eq(suggestionTable.id, state.id))
         .limit(1);
       const subject = assessmentSubjects.recommendation.parse(
         prediction?.subject,
@@ -424,23 +426,23 @@ async function settleReview(
   const authority = automatic ? "automatic" : "member";
   let prediction:
     | Pick<
-        typeof assessment.$inferSelect,
+        typeof suggestionTable.$inferSelect,
         "id" | "family" | "subject" | "judgment" | "producer" | "evidence"
       >
     | undefined;
   if (input.assessmentId) {
     [prediction] = await getDb(db)
       .select({
-        id: assessment.id,
-        family: assessment.family,
-        subject: assessment.subject,
-        judgment: assessment.judgment,
-        producer: assessment.producer,
+        id: suggestionTable.id,
+        family: suggestionTable.family,
+        subject: suggestionTable.subject,
+        judgment: suggestionTable.judgment,
+        producer: suggestionTable.producer,
         // Only field application consumes captured correction inputs; history must not load unrelated snapshots.
-        evidence: sql`CASE WHEN ${assessment.family} = ${assessmentFamily.enum.field} AND ${input.intent === "apply"} THEN ${assessment.evidence} ELSE NULL END`,
+        evidence: sql`CASE WHEN ${suggestionTable.family} = ${assessmentFamily.enum.field} AND ${input.intent === "apply"} THEN ${suggestionTable.evidence} ELSE NULL END`,
       })
-      .from(assessment)
-      .where(eq(assessment.id, input.assessmentId))
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, input.assessmentId))
       .limit(1);
     // A mail decision's owner answers for its handle; carried rows kept their id.
     if (
@@ -607,19 +609,15 @@ async function settleReview(
         await getDb(transactionDb).execute(
           sql`SELECT pg_advisory_xact_lock(hashtextextended(${`assessment-review:${prediction.id}`},0))`,
         );
-        const [receipt] = await getDb(transactionDb)
-          .select()
-          .from(feedback)
-          .where(
-            and(
-              eq(feedback.assessmentId, prediction.id),
-              eq(
-                feedback.operationId,
-                `command-application:${input.operationId}`,
-              ),
-            ),
-          )
-          .limit(1);
+        const [owner] = await getDb(transactionDb)
+          .select({ decisions: suggestionTable.decisions })
+          .from(suggestionTable)
+          .where(eq(suggestionTable.id, prediction.id));
+        const receipt = decisionForOperation(
+          prediction.id,
+          owner?.decisions ?? [],
+          `command-application:${input.operationId}`,
+        );
         if (receipt) {
           assertApplicationReceipt(receipt, event, "assessment_application");
           const priorOutcome = assessmentReviewOut.parse(receipt.receipt);
@@ -650,9 +648,9 @@ async function settleReview(
           if ("lockForApply" in family && family.lockForApply)
             await family.lockForApply(transactionDb, prediction);
           const query = getDb(transactionDb)
-            .select()
-            .from(assessmentState)
-            .where(eq(assessmentState.id, prediction.id))
+            .select(suggestionStateColumns)
+            .from(suggestionTable)
+            .where(eq(suggestionTable.id, prediction.id))
             .limit(1);
           const [state] = family.transactionBound
             ? await query.for("update")
@@ -689,8 +687,8 @@ async function settleReview(
             await transitionAssessmentStates(
               transactionDb,
               and(
-                eq(assessmentState.id, state.id),
-                eq(assessmentState.active, true),
+                eq(suggestionTable.id, state.id),
+                eq(suggestionTable.active, true),
               ),
               { status: "applied" },
               { kind: "assessment_applied", feedbackId: event.id },
@@ -705,9 +703,9 @@ async function settleReview(
           input.correction.present
         ) {
           const [field] = await getDb(transactionDb)
-            .select()
-            .from(assessmentState)
-            .where(eq(assessmentState.id, prediction.id))
+            .select(suggestionStateColumns)
+            .from(suggestionTable)
+            .where(eq(suggestionTable.id, prediction.id))
             .limit(1);
           if (!field)
             throw new Error("Corrected field application has no saved lineage");
@@ -716,7 +714,7 @@ async function settleReview(
             appliedInputFingerprint: await fieldInputFingerprint(
               transactionDb,
               field.entity,
-              field.recordId,
+              suggestionRecordId(field),
               field.field,
             ),
           };
@@ -754,9 +752,14 @@ async function settleReview(
   }
   const writeHistory = async (transactionDb: Database) => {
     const [state] = await getDb(transactionDb)
-      .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.id, prediction.id))
+      .select({
+        id: suggestionTable.id,
+        active: suggestionTable.active,
+        status: suggestionTable.status,
+        data: suggestionTable.data,
+      })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, prediction.id))
       .for("update")
       .limit(1);
     if (state?.active && input.suppression) {
@@ -786,12 +789,12 @@ async function settleReview(
       await transitionAssessmentStates(
         transactionDb,
         or(
-          eq(assessmentState.id, state.id),
+          eq(suggestionTable.id, state.id),
           reviewKey
             ? and(
-                eq(assessmentState.family, "field"),
-                eq(assessmentState.status, "pending"),
-                sql`${assessmentState.data}->>'reviewKey' = ${reviewKey}`,
+                eq(suggestionTable.family, "field"),
+                eq(suggestionTable.status, "pending"),
+                sql`${suggestionTable.data}->>'reviewKey' = ${reviewKey}`,
               )
             : undefined,
         ),

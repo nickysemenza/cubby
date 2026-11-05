@@ -5,13 +5,14 @@ import {
   assessmentProjectionTargets,
   feedbackAuthority,
   feedbackEvent,
+  suggestionDecision,
 } from "@cubby/schemas/assessment";
 import { connectionCandidate } from "@cubby/schemas/entity-connections";
 import {
   CORRECTION_OUTCOME_RECEIPT_KIND,
   correctionAuthorityReceiptKinds,
 } from "@cubby/schemas/suggestion-correction";
-import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { eq, inArray, sql, type SQL } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
@@ -20,25 +21,22 @@ import {
   repositoryQueries as getDb,
   repositoryTransactionDatabase as withTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
-import {
-  assessment,
-  assessmentState,
-  feedback,
-} from "~/server/db/retained-tables";
+import { suggestionTable } from "~/server/db/retained-tables";
 import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
-import {
-  assessmentProjectionSnapshot,
-  insertPublishedAssessmentStates,
-} from "./assessment-state";
 import { fieldInputFingerprint } from "./field-input-fence";
+import {
+  decisionForOperation,
+  type StoredDecision,
+} from "./suggestion-decisions";
 
 const candidateKey = connectionCandidate.keyof().enum;
 
 /** A matching operation ID alone never proves that a domain mutation committed. */
 export function assertApplicationReceipt(
-  receipt: typeof feedback.$inferSelect,
-  command: typeof feedback.$inferSelect,
+  receipt: StoredDecision,
+  command: StoredDecision,
   kind: string,
 ) {
   const metadata = z
@@ -67,7 +65,9 @@ export const automaticApplicationRule = (assessmentId: SQL) => sql<
   string | null
 >`(SELECT CASE WHEN f.metadata->>${"kind"} = ${CORRECTION_OUTCOME_RECEIPT_KIND} THEN 'member-correction@1'
     ELSE (f.metadata->${"rule"}->>${"key"}) || '@' || (f.metadata->${"rule"}->>${"revision"}) END
-  FROM "Feedback" f WHERE f."assessmentId" = ${assessmentId}
+  FROM "Suggestion" owner
+  CROSS JOIN LATERAL jsonb_to_recordset(owner.decisions) f(metadata jsonb, receipt jsonb, authority text, "createdAt" text, id text)
+  WHERE owner.id = ${assessmentId}
     AND f.authority = ${feedbackAuthority.enum.automatic}
     AND (f.metadata->>${"kind"} = ${"assessment_application"}
       OR (f.metadata->>${"kind"} = ${CORRECTION_OUTCOME_RECEIPT_KIND} AND f.receipt->>${"status"} = ${"applied"}))
@@ -83,7 +83,7 @@ export async function publishAssessments(
   db: Database,
   entries: readonly {
     input: z.input<typeof assessmentPublication>;
-    projection?: Partial<typeof assessmentState.$inferInsert>;
+    projection?: Partial<typeof suggestionTable.$inferInsert>;
   }[],
 ) {
   // Validate every publication and creation snapshot before any writes.
@@ -94,30 +94,24 @@ export async function publishAssessments(
       projection.suggestedValue === undefined
         ? input.judgment
         : projection.suggestedValue;
-    const target =
-      input.subject.kind === "evaluation_sample" ||
-      input.subject.recordId === null
-        ? null
-        : {
-            entity: input.subject.entity,
-            recordId: input.subject.recordId,
-          };
-    // The creation snapshot is the row's first state; rebuild replays it.
-    const state = target && {
-      ...assessmentProjectionTargets[input.family].parse({
-        ...target,
-        ...projection,
-      }),
+    if (input.subject.kind === "evaluation_sample")
+      throw new Error("A Suggestion needs a target record");
+    const { entity, recordId } = input.subject;
+    const state = {
+      // An answer for an unsaved record has no target to validate yet.
+      ...(recordId === null
+        ? { entity, recordId }
+        : assessmentProjectionTargets[input.family].parse({
+            entity,
+            recordId,
+            ...projection,
+          })),
       field: input.subject.kind === "field" ? input.subject.field : "",
       fingerprint: input.fingerprint,
       ...projection,
       suggestedValue,
     };
-    return {
-      input,
-      state,
-      snapshot: state && assessmentProjectionSnapshot(state),
-    };
+    return { input, state };
   });
   if (!prepared.length) return [];
   const publications = new Map<string, (typeof prepared)[number]>();
@@ -133,16 +127,22 @@ export async function publishAssessments(
   return withTransactionDatabase(db, async (transactionDb) => {
     const client = getDb(transactionDb);
     const inserted = await client
-      .insert(assessment)
+      .insert(suggestionTable)
       .values(
-        [...publications.values()].map(({ input, snapshot }) => ({
+        [...publications.values()].map(({ input, state }) => ({
           ...input,
+          ...state,
+          family: input.family,
           judgment:
             input.judgment === null ? sql`'null'::jsonb` : input.judgment,
-          projection: snapshot,
+          // A JSON null suggestion stays a JSON value, not SQL NULL.
+          suggestedValue:
+            state.suggestedValue === null
+              ? sql`'null'::jsonb`
+              : state.suggestedValue,
         })),
       )
-      .onConflictDoNothing({ target: assessment.publicationKey })
+      .onConflictDoNothing({ target: suggestionTable.publicationKey })
       .returning();
     const rowsByKey = new Map(inserted.map((row) => [row.publicationKey, row]));
     const conflicts = [...publications.keys()].filter(
@@ -151,26 +151,37 @@ export async function publishAssessments(
     if (conflicts.length) {
       const existing = await client
         .select()
-        .from(assessment)
-        .where(inArray(assessment.publicationKey, conflicts));
+        .from(suggestionTable)
+        .where(inArray(suggestionTable.publicationKey, conflicts));
       for (const row of existing) rowsByKey.set(row.publicationKey, row);
     }
     const rows = prepared.map(({ input }) => {
       const row = rowsByKey.get(input.publicationKey);
       if (!row) throw new Error("Assessment publication returned no row");
-      if (!isEqual(input, assessmentPublication.parse(row)))
+      // State may later take its own fingerprint; a retry compares what it proposed.
+      if (
+        !isEqual(
+          { ...input, fingerprint: null },
+          { ...assessmentPublication.parse(row), fingerprint: null },
+        )
+      )
         throw new Error(
           "Assessment publication retry changed immutable evidence",
         );
       return row;
     });
-    await insertPublishedAssessmentStates(
-      transactionDb,
-      inserted.flatMap((row) => {
-        const state = publications.get(row.publicationKey)?.state;
-        return state ? [{ ...state, id: row.id, family: row.family }] : [];
-      }),
-    );
+    if (inserted.length)
+      await recordChange(transactionDb, {
+        kind: "projection",
+        categories: [
+          ...new Set([
+            "ai",
+            "suggestions",
+            "problems",
+            ...inserted.map((row) => row.entity),
+          ]),
+        ],
+      });
     return rows;
   });
 }
@@ -179,7 +190,7 @@ export async function publishAssessments(
 export async function publishAssessment(
   db: Database,
   raw: z.input<typeof assessmentPublication>,
-  projection: Partial<typeof assessmentState.$inferInsert> = {},
+  projection: Partial<typeof suggestionTable.$inferInsert> = {},
 ) {
   const [row] = await publishAssessments(db, [{ input: raw, projection }]);
   if (!row) throw new Error("Assessment publication returned no row");
@@ -189,8 +200,12 @@ export async function publishAssessment(
 /** Field producers publish evidence before its live projection; serving is a producer decision. */
 export async function publishFieldAssessment(
   db: Database,
-  projection: Omit<typeof assessmentState.$inferInsert, "id" | "family"> & {
+  projection: Omit<
+    typeof suggestionTable.$inferInsert,
+    "id" | "family" | "publicationKey" | "subject" | "judgment"
+  > & {
     field: string;
+    recordId: string;
   },
   served: boolean,
 ) {
@@ -262,25 +277,27 @@ export async function recordFeedbackWithInsertion(
   raw: z.input<typeof feedbackEvent>,
 ) {
   const input = feedbackEvent.parse(raw);
+  const { assessmentId, projection: _projection, ...event } = input;
   return withTransactionDatabase(db, async (transactionDb) => {
     const client = getDb(transactionDb);
     const [prediction] = await client
       .select({
-        served: assessment.served,
-        family: assessment.family,
-        subject: assessment.subject,
-        // Only the endpoints: wide connection evidence must not cross per review.
+        served: suggestionTable.served,
+        family: suggestionTable.family,
+        subject: suggestionTable.subject,
+        decisions: suggestionTable.decisions,
+        // Only the endpoints: evidence need not cross per review.
         candidate: sql<unknown>`jsonb_build_object(${sql.join(
           [candidateKey.relation, candidateKey.source, candidateKey.target].map(
             (key) =>
-              sql`${key}::text, ${assessment.evidence}->'candidate'->${key}`,
+              sql`${key}::text, ${suggestionTable.evidence}->'candidate'->${key}`,
           ),
           sql`, `,
         )})`,
       })
-      .from(assessment)
-      .where(eq(assessment.id, input.assessmentId))
-      .limit(1);
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, assessmentId))
+      .for("update");
     if (!prediction) throw new Error("Assessment not found");
     if (!prediction.served && input.authority === "member")
       throw new Error(
@@ -293,35 +310,41 @@ export async function recordFeedbackWithInsertion(
       throw new Error(
         "Evaluation Feedback cannot apply or suppress operational results",
       );
-    const [inserted] = await client
-      .insert(feedback)
-      .values(input)
-      .onConflictDoNothing({
-        target: [feedback.assessmentId, feedback.operationId],
+    const existing = decisionForOperation(
+      assessmentId,
+      prediction.decisions,
+      input.operationId,
+    );
+    if (existing) {
+      const {
+        id: _id,
+        createdAt: _at,
+        assessmentId: _owner,
+        ...stored
+      } = existing;
+      if (!isEqual(event, stored))
+        throw new Error("Immutable Feedback retry changed its event");
+      return { event: existing, inserted: false };
+    }
+    const row: StoredDecision = suggestionDecision
+      .extend({ assessmentId: assessmentChildHandle })
+      .parse({
+        ...event,
+        assessmentId,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+      });
+    const { assessmentId: _owner, ...decision } = row;
+    await client
+      .update(suggestionTable)
+      .set({
+        decisions: sql`${suggestionTable.decisions} || ${JSON.stringify([decision])}::jsonb`,
       })
-      .returning();
-    const row =
-      inserted ??
-      (
-        await client
-          .select()
-          .from(feedback)
-          .where(
-            and(
-              eq(feedback.assessmentId, input.assessmentId),
-              eq(feedback.operationId, input.operationId),
-            ),
-          )
-          .limit(1)
-      )[0];
-    if (!row) throw new Error("Feedback publication returned no row");
-    if (!isEqual(input, feedbackEvent.parse(row)))
-      throw new Error("Immutable Feedback retry changed its event");
+      .where(eq(suggestionTable.id, assessmentId));
     // A member's review of an Email-to-Purchase connection protects that Email,
     // and the protecting read has one owner. The two rows share an id, so a
     // command's Feedback and its frontier name the same review.
     if (
-      inserted &&
       row.authority === "member" &&
       prediction.subject.kind === "recommendation" &&
       prediction.subject.entity === "email" &&
@@ -335,7 +358,7 @@ export async function recordFeedbackWithInsertion(
       await appendEmailReview(transactionDb, {
         id: row.id,
         family: "recommendation",
-        subjectId: row.assessmentId,
+        subjectId: assessmentId,
         emailId: prediction.subject.recordId,
         originalId: null,
         checksum: null,
@@ -354,6 +377,6 @@ export async function recordFeedbackWithInsertion(
         metadata: row.metadata,
       });
     }
-    return { event: row, inserted: inserted !== undefined };
+    return { event: row, inserted: true };
   });
 }

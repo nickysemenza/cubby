@@ -1,10 +1,7 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record";
-import {
-  statementTransactionAction,
-  statementSuggestionOut,
-} from "@cubby/schemas/statement-suggestion";
+import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { type SQL, sql } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -34,56 +31,6 @@ export const LIVE_REFS = sql`(
  * equal descriptions and amounts alone do not establish charge equivalence.
  */
 export const chargeKeyOf = (alias: string) => sql.raw(`${alias}."chargeKey"`);
-
-const statementReadFields = statementSuggestionOut.keyof();
-
-/** Indexed current associations complement a publication's retained read set. */
-export function statementSourceAssessmentIdsSql(
-  kind:
-    | "sourceTransactionRecord"
-    | "financialTransaction"
-    | "financialAccount"
-    | "ledgerParty",
-  refs: SQL,
-): SQL {
-  const pending = sql`s.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.statement_transaction)}
-    AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}`;
-  if (kind === "sourceTransactionRecord")
-    return sql`WITH changed_statement_sources AS MATERIALIZED (${refs})
-      SELECT s.id FROM "SourceTransactionRecord" r
-      JOIN "AssessmentState" s ON s.data->>${sqlEnumConstant(statementReadFields, statementReadFields.enum.source)} = r.source
-        AND s.data->>${sqlEnumConstant(statementReadFields, statementReadFields.enum.chargeKey)} = ${chargeKeyOf("r")}
-      WHERE r.id IN (SELECT id FROM changed_statement_sources) AND ${pending}`;
-  if (kind === "financialAccount" || kind === "ledgerParty") {
-    const accounts =
-      kind === "financialAccount"
-        ? refs
-        : sql`SELECT account.id FROM "FinancialAccount" account
-          WHERE account."ledgerPartyId" IN (${refs})`;
-    return sql`SELECT s.id FROM (${accounts}) account
-      JOIN "AssessmentState" s ON s.data->>'accountId' = account.id::text
-      WHERE ${pending}`;
-  }
-  // Include removed evidence: deleting a settlement reference must refresh the
-  // same retained advice as inserting it. Identity narrowing precedes JSON.
-  return sql`WITH changed_settlement_keys AS MATERIALIZED (
-      SELECT evidence.source, evidence."externalId" FROM "EntityExternalId" evidence
-      WHERE evidence."entityId" IN (${refs}) AND evidence.kind = 'settlement_ref'
-    ) SELECT s.id FROM changed_settlement_keys key
-      JOIN "AssessmentState" s ON s.data->'refs' @> jsonb_build_array(key.source || ':' || key."externalId")
-      WHERE ${pending}
-    UNION SELECT s.id FROM changed_settlement_keys key
-      CROSS JOIN LATERAL (
-        SELECT a.id FROM "Assessment" a WHERE a.served
-          AND a.judgment #>> '{create,sourceRef,source}' IS NOT NULL
-          AND a.judgment #>> '{create,sourceRef,externalId}' IS NOT NULL
-          AND md5(a.judgment #>> '{create,sourceRef,source}') = md5(key.source)
-          AND md5(a.judgment #>> '{create,sourceRef,externalId}') = md5(key."externalId")
-          AND a.judgment #>> '{create,sourceRef,source}' = key.source
-          AND a.judgment #>> '{create,sourceRef,externalId}' = key."externalId"
-        OFFSET 0
-      ) a JOIN "AssessmentState" s ON s.id = a.id WHERE ${pending}`;
-}
 
 /**
  * Charge-level state over ALL live observations of a source, never a filtered

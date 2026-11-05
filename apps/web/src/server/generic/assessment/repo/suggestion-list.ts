@@ -1,8 +1,3 @@
-import type {
-  AssessmentReadFilterFacts,
-  AssessmentReadDependency,
-  AssessmentReadMembership,
-} from "@cubby/schemas/assessment-read-publication";
 import {
   suggestionRecordCountsInput,
   suggestionRecordCountsOut,
@@ -47,7 +42,6 @@ import {
   type SuggestionFactQuery,
   type SuggestionFamilyQuery,
   type SuggestionKey,
-  type SuggestionReadObserver,
   emptyPendingCounts,
   suggestionFamilies,
 } from "~/server/generic/assessment/repo/suggestion-families";
@@ -55,18 +49,9 @@ import { compileDeclaredFilters } from "~/server/generic/list/repo/declared-filt
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
-  readAssessmentReadMemberships,
   readAssessmentRecordRefs,
   touchingAssessmentFamilies,
 } from "./review-families";
-
-// Canonical admission has completed in this request; publication lag is irrelevant.
-const canonicalCoverage = {
-  missing: false,
-  stale: false,
-  unresolved: false,
-  failed: false,
-};
 
 const STRENGTH_RANK = { strong: 2, medium: 1, weak: 0 } as const;
 const ARRAY_COLUMNS = new Set(["account", "owner", "entityKind", "merchant"]);
@@ -90,9 +75,7 @@ type SortTerm = { by: string; direction: "asc" | "desc" };
  * validated fact stream as a relation; the shared compiler is the only owner
  * of filter operators, and PostgreSQL owns ordering and paging.
  */
-export function suggestionKeyFacts(
-  key: SuggestionKey,
-): AssessmentReadFilterFacts {
+function suggestionKeyFacts(key: SuggestionKey) {
   return {
     id: key.assessmentId,
     family: key.family,
@@ -250,13 +233,6 @@ function factNeeds(
     needs.add(name === "strengthRank" ? "strength" : name);
     needs.add(name);
   }
-  // An explicit Strength filter or sort reads judged labels; default order need not.
-  if (
-    values.get("strength") !== undefined ||
-    values.get("strengthExclude") !== undefined ||
-    order.some((term) => term.by === "strength")
-  )
-    needs.add("exactStrength");
   return needs;
 }
 
@@ -459,95 +435,6 @@ async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
   return { families, touching, matchedFamilies, familyScope };
 }
 
-async function currentCandidates(
-  db: Database,
-  filters: SuggestionListFilters,
-  prepared?: Awaited<ReturnType<typeof scopedFamilyQuery>>,
-  observeInputs?: SuggestionReadObserver,
-) {
-  const { families, touching, matchedFamilies, familyScope } =
-    prepared ?? (await scopedFamilyQuery(db, filters));
-  if (touching?.size === 0)
-    return { families, keys: [], rows: new Map<string, SuggestionListRow>() };
-  const keys = (
-    await Promise.all(
-      families
-        .filter((family) => !matchedFamilies || matchedFamilies.has(family))
-        .map((family) =>
-          suggestionFamilies[family].keys(db, familyScope, observeInputs),
-        ),
-    )
-  )
-    .flat()
-    .filter(
-      (key) =>
-        (filters.status !== "pending" || key.automaticRule === null) &&
-        (!touching || touching.has(key.assessmentId)),
-    );
-  // Admission must precede both counting and paging. Family hydration owns
-  // freshness checks that cannot be inferred from a stored pending status.
-  const rows = await hydrate(db, keys, observeInputs);
-  const current = keys.filter((key) => rows.has(key.assessmentId));
-  return { families, keys: current, rows };
-}
-
-/** Background publication and live actions use the same family admission owner. */
-export async function prepareSuggestionAdmission(
-  db: Database,
-  assessmentIds: readonly string[],
-): Promise<{
-  keys: SuggestionKey[];
-  rows: Map<string, SuggestionListRow>;
-  /** Only observed read sets are present; a missing entry must not be treated as complete. */
-  dependencies: Map<string, AssessmentReadDependency[]>;
-  memberships: Map<string, AssessmentReadMembership[]>;
-}> {
-  const filters = suggestionListFilters.parse({});
-  const identities = [...new Set(assessmentIds)];
-  const dependencies = new Map<string, AssessmentReadDependency[]>();
-  const observeInputs: SuggestionReadObserver = (id, sources) => {
-    const unique = new Map(
-      (dependencies.get(id) ?? []).map((source) => [
-        JSON.stringify([source.sourceKind, source.sourceId]),
-        source,
-      ]),
-    );
-    for (const source of sources)
-      unique.set(JSON.stringify([source.sourceKind, source.sourceId]), source);
-    dependencies.set(
-      id,
-      [...unique]
-        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-        .map(([, source]) => source),
-    );
-  };
-  const admitted = await currentCandidates(
-    db,
-    filters,
-    {
-      families: familiesOf(filters),
-      touching: new Set(identities),
-      matchedFamilies: null,
-      familyScope: {
-        filters: { ...filters, recordEntity: undefined, recordIds: undefined },
-        assessmentIds: identities,
-      },
-    },
-    observeInputs,
-  );
-  const memberships = await readAssessmentReadMemberships(
-    db,
-    identities,
-    observeInputs,
-  );
-  return {
-    keys: admitted.keys,
-    rows: admitted.rows,
-    dependencies,
-    memberships,
-  };
-}
-
 /** Counts use the queue's eligibility and declared subjects, including either endpoint. */
 export async function suggestionRecordCounts(
   db: Database,
@@ -557,7 +444,6 @@ export async function suggestionRecordCounts(
   if (!input.recordIds.length)
     return suggestionRecordCountsOut.parse({
       records: [],
-      coverage: canonicalCoverage,
     });
   // Discovery already applies family, status and record scope. A badge may count
   // a row whose evidence went stale; opening the row revalidates it.
@@ -569,7 +455,6 @@ export async function suggestionRecordCounts(
   if (only && !others.length)
     return suggestionRecordCountsOut.parse({
       records: [{ id: only, pending: touching?.size ?? 0 }],
-      coverage: canonicalCoverage,
     });
   const refs = await readAssessmentRecordRefs(db, [...(touching ?? [])]);
   const counts = new Map(input.recordIds.map((id) => [id, 0]));
@@ -579,21 +464,19 @@ export async function suggestionRecordCounts(
         counts.set(record.id, (counts.get(record.id) ?? 0) + 1);
   return suggestionRecordCountsOut.parse({
     records: [...counts].map(([id, pending]) => ({ id, pending })),
-    coverage: canonicalCoverage,
   });
 }
 
 async function hydrate(
   db: Database,
   keys: readonly SuggestionKey[],
-  observeInputs?: SuggestionReadObserver,
 ): Promise<Map<string, SuggestionListRow>> {
   const byFamily = new Map<SuggestionListFamily, SuggestionKey[]>();
   for (const key of keys)
     byFamily.set(key.family, [...(byFamily.get(key.family) ?? []), key]);
   const maps: Map<string, SuggestionListRow>[] = await Promise.all(
     [...byFamily].map(([family, familyKeys]) =>
-      suggestionFamilies[family].rows(db, familyKeys, observeInputs),
+      suggestionFamilies[family].rows(db, familyKeys),
     ),
   );
   return new Map(maps.flatMap((map) => [...map]));
@@ -702,7 +585,6 @@ export async function listSuggestionPage(
     meta: {
       pageIndex: Math.floor(input.offset / input.limit),
       pageSize: input.limit,
-      coverage: canonicalCoverage,
       totalCount: totals?.total ?? 0,
       cleanCount: totals?.clean ?? 0,
       ...(grouped
@@ -796,7 +678,6 @@ export async function suggestionCountsByFamily(
   );
   return suggestionCountsOut.parse({
     families: counts,
-    coverage: canonicalCoverage,
   });
 }
 

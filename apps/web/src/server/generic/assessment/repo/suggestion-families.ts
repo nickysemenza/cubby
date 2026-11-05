@@ -3,10 +3,6 @@ import {
   assessmentFamily,
   type assessmentReviewInput,
 } from "@cubby/schemas/assessment";
-import type {
-  AssessmentReadKey,
-  AssessmentReadDependency,
-} from "@cubby/schemas/assessment-read-publication";
 import {
   type DataCheck,
   dataCheckKind,
@@ -19,8 +15,8 @@ import {
   type ConnectionProposal,
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
-import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import type {
   StatementSuggestionOut,
   StatementTransactionAction,
@@ -31,6 +27,7 @@ import {
   recommendationSuggestionRow,
   statementSuggestionRow,
   transferPairSuggestionRow,
+  type SuggestionColumnValue,
   type SuggestionCountsOut,
   type SuggestionImpact,
   type SuggestionListFamily,
@@ -47,11 +44,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
-import { connectionBasisRecordRefs } from "~/server/domains/connection/repo/connection-evidence";
-import {
-  readEntityConnectionsBatch,
-  readStoredConnectionProposals,
-} from "~/server/domains/connection/repo/entity-connections";
+import { readStoredConnectionProposals } from "~/server/domains/connection/repo/entity-connections";
 import {
   currentTransferPairs,
   transferPairEvidenceFingerprint,
@@ -68,7 +61,6 @@ import { kindAgreed } from "~/server/domains/transaction-import/repo/statement-t
 import {
   reviewFamilyDeclarations,
   pendingRecommendationEligibility,
-  resolveAssessmentReadInputRefs,
 } from "~/server/generic/assessment/repo/review-families";
 import {
   fieldSuggestionKeys,
@@ -88,8 +80,18 @@ type ShortcodeEntity = SuggestionRecordRef["entity"];
  * One Suggestion's list facts, read for every row in scope before any row is
  * hydrated: Strength, clean, Impact and its family's declared relation columns.
  */
-export type SuggestionKey = Omit<AssessmentReadKey, "createdAt"> & {
+export type SuggestionKey = {
+  family: SuggestionListFamily;
+  assessmentId: string;
+  status: z.infer<typeof suggestionStatus>;
+  fingerprint: string | null;
+  clean: boolean;
+  strength: SuggestionStrength;
+  impact: SuggestionImpact[];
   createdAt: Date;
+  columns: Record<string, SuggestionColumnValue | SuggestionColumnValue[]>;
+  matchedRules: string[];
+  automaticRule: string | null;
 };
 
 const stamps = z.array(z.string()).catch([]);
@@ -134,12 +136,6 @@ export type SuggestionFactQuery = {
   where: SQL;
 };
 
-/** Canonical input observations for background publication; absence is not a complete read set. */
-export type SuggestionReadObserver = (
-  id: string,
-  sources: readonly AssessmentReadDependency[],
-) => void;
-
 type SuggestionOutcomes = {
   applied: number;
   rejected: number;
@@ -165,13 +161,11 @@ export type SuggestionFamilyPresentation<F extends SuggestionListFamily> = {
   keys: (
     db: Database,
     query: SuggestionFamilyQuery,
-    observeInputs?: SuggestionReadObserver,
   ) => Promise<SuggestionKey[]>;
   /** Current rows by Assessment id; a key whose evidence went stale is absent. */
   rows: (
     db: Database,
     keys: readonly SuggestionKey[],
-    observeInputs?: SuggestionReadObserver,
   ) => Promise<Map<string, RowOf<F>>>;
   outcomes: (
     db: Database,
@@ -246,21 +240,17 @@ const shortcodeEntity = z.enum(shortcodeEntities);
 const fieldKind = z.enum(["correction", "addition"]);
 
 const field: SuggestionFamilyPresentation<"field"> = {
-  keys: async (db, query, observeInputs) => {
+  keys: async (db, query) => {
     const { filters, records } = query;
     // Pushed into SQL: the record roster, entity and Run. Column filters
     // apply to every family's keys in the generic list.
-    const rows = await fieldSuggestionKeys(
-      db,
-      {
-        status: filters.status,
-        entities: filters.recordEntity ? [filters.recordEntity] : undefined,
-        recordUuids: records?.map((record) => record.id),
-        runId: runCode(query),
-        assessmentIds: query.assessmentIds,
-      },
-      observeInputs && ((id, read) => observeInputs(id, read.dependencies)),
-    );
+    const rows = await fieldSuggestionKeys(db, {
+      status: filters.status,
+      entities: filters.recordEntity ? [filters.recordEntity] : undefined,
+      recordUuids: records?.map((record) => record.id),
+      runId: runCode(query),
+      assessmentIds: query.assessmentIds,
+    });
     return rows.map((row) => {
       const entity = shortcodeEntity.parse(row.entity);
       const kind = fieldKind.parse(row.kind);
@@ -290,11 +280,10 @@ const field: SuggestionFamilyPresentation<"field"> = {
       };
     });
   },
-  rows: async (db, keys, observeInputs) => {
+  rows: async (db, keys) => {
     const rows = await readFieldSuggestions(
       db,
       keys.map((key) => key.assessmentId),
-      observeInputs && ((id, read) => observeInputs(id, read.dependencies)),
     );
     const byId = new Map(keys.map((key) => [key.assessmentId, key]));
     return new Map(
@@ -412,15 +401,12 @@ function statementAcceptApplication(
   };
 }
 
-const STATEMENT_ENTITIES: readonly ShortcodeEntity[] = [
-  "financialAccount",
-  "financialTransaction",
-  "purchase",
-  "expense",
-  "vendor",
-  "spendingCategory",
-  "ledgerParty",
-];
+const owesFamily = (entity: ShortcodeEntity, family: SuggestionListFamily) =>
+  entityRoster[entity].suggestionFamilies.some((owed) => owed === family);
+const entitiesOwing = (family: SuggestionListFamily) =>
+  shortcodeEntities.filter((entity) => owesFamily(entity, family));
+const STATEMENT_ENTITIES = entitiesOwing("statement_transaction");
+const TRANSFER_ENTITIES = entitiesOwing("transfer_pair");
 
 function statementScope(
   query: SuggestionFamilyQuery,
@@ -626,8 +612,6 @@ const connectionActions = (proposal: ConnectionProposal): Action[] => {
   ];
 };
 
-const READ_BATCH = 250;
-
 const connectionImpactCount = sql.join(
   Object.entries(connectionImpact).map(
     ([relation, impacts]) =>
@@ -643,25 +627,27 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
     const target = (key: "entityKind" | "entityId") =>
       sql`s.data->'connectionTarget'->>${key}`;
     const { recordEntity, runId } = query.filters;
+    const reasons = sql`s.evidence#>'{candidate,evidence,reasons}'`;
+    const retrieved = sql`EXISTS (SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(${reasons}) = 'array' THEN ${reasons} ELSE '[]'::jsonb END) reason(value)
+      WHERE starts_with(reason.value, ${RETRIEVED_REASON}))`;
+    const contradicted = sql`coalesce(jsonb_array_length(CASE WHEN jsonb_typeof(s.evidence#>'{candidate,evidence,contradictions}') = 'array' THEN s.evidence#>'{candidate,evidence,contradictions}' END), 0) > 0`;
     return {
       columns: {
         clean: sql`false`,
-        // Connection evidence averages hundreds of kB per row, so browse order
-        // cannot read Strength from it. The hydrated row reports the real one.
-        strength: sql`${"medium"}`,
+        // `connectionStrength` over the slim candidate; tag additions are medium.
+        strength: sql`CASE WHEN s.evidence->'candidate' IS NULL THEN ${"medium"}
+          WHEN ${retrieved} THEN CASE WHEN ${contradicted} THEN ${"weak"} ELSE ${"medium"} END
+          WHEN ${contradicted} THEN ${"medium"} ELSE ${"strong"} END`,
         createdAt: sql`to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
-        impact: sql`CASE a.subject->>'scope' ${connectionImpactCount} ELSE 0 END`,
-        relation: sql`substr(a.subject->>'scope', ${"connection.".length + 1})`,
+        impact: sql`CASE s.subject->>'scope' ${connectionImpactCount} ELSE 0 END`,
+        relation: sql`substr(s.subject->>'scope', ${"connection.".length + 1})`,
         entityKind: sql`array_remove(ARRAY[s.entity, ${target("entityKind")}], NULL)`,
         source: sql`source_identity.shortcode`,
         target: target("entityId"),
       },
       from: sql.join(
         [
-          sql`"AssessmentState" s`,
-          ...(has("impact", "relation")
-            ? [sql`JOIN "Assessment" a ON a.id = s.id`]
-            : []),
+          sql`"Suggestion" s`,
           ...(has("source")
             ? [
                 sql`LEFT JOIN "Entity" source_identity ON source_identity.id = s."recordId"`,
@@ -677,12 +663,12 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         ${runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runId})` : sql``}`,
     };
   },
-  keys: async (db, query, observeInputs) => {
+  keys: async (db, query) => {
     const { filters, records } = query;
     if (filters.status !== "pending") return [];
     if (records?.length === 0) return [];
     const side = (end: "source" | "target", key: "entityKind" | "entityId") =>
-      sql`(a.evidence->'candidate'->${end}->>${key})`;
+      sql`(s.evidence->'candidate'->${end}->>${key})`;
     const endpoint = (end: "source" | "target") =>
       sql`${side(end, "entityKind")} || ':' || ${side(end, "entityId")}`;
     const roster = records
@@ -699,10 +685,10 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
       createdAt: Date | string;
       candidate: unknown;
     }>(sql`
-      SELECT a.id, a.fingerprint, a."createdAt", a.evidence->'candidate' AS candidate
-      FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
-      WHERE a.family = ${assessmentFamily.enum.recommendation} AND a.served AND s.active
-        AND ${assessmentIdScope(query.assessmentIds, sql`a.id`)}
+      SELECT s.id, s.fingerprint, s."createdAt", s.evidence->'candidate' AS candidate
+      FROM "Suggestion" s
+      WHERE s.family = ${assessmentFamily.enum.recommendation} AND s.served AND s.active
+        AND ${assessmentIdScope(query.assessmentIds, sql`s.id`)}
         AND s.status = ${suggestionStatus.enum.pending}
         AND ${reviewFamilyDeclarations.recommendation.scopes.connection}
         AND ${pendingRecommendationEligibility()}
@@ -742,12 +728,9 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         },
       ];
     });
-    return [
-      ...connectionKeys,
-      ...(await tagSuggestionKeys(db, query, observeInputs)),
-    ];
+    return [...connectionKeys, ...(await tagSuggestionKeys(db, query))];
   },
-  rows: async (db, keys, observeInputs) => {
+  rows: async (db, keys) => {
     if (!keys.length) return new Map();
     const byId = new Map(keys.map((key) => [key.assessmentId, key]));
     const found = await tagSuggestionRows(db, keys);
@@ -780,49 +763,11 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         }),
       );
     };
-    if (!observeInputs) {
-      for (const proposal of await readStoredConnectionProposals(
-        db,
-        keys.map((key) => key.assessmentId),
-      ))
-        addProposal(proposal);
-      return found;
-    }
-    // Publication observes every basis input; retires with the publication tables.
-    const { rows: sources } = await unwrapDb(db).execute<{
-      entityKind: string;
-      entityId: string;
-    }>(sql`
-      SELECT DISTINCT a.evidence->'candidate'->${"source"}->>'entityKind' AS "entityKind",
-        a.evidence->'candidate'->${"source"}->>'entityId' AS "entityId"
-      FROM "Assessment" a
-      WHERE ${reviewFamilyDeclarations.recommendation.scopes.connection} AND a.id IN (${sql.join(
-        keys.map((key) => sql`${key.assessmentId}::uuid`),
-        sql`, `,
-      )})
-    `);
-    const currentInputs = new Map<
-      string,
-      ReturnType<typeof connectionBasisRecordRefs>
-    >();
-    for (let start = 0; start < sources.length; start += READ_BATCH) {
-      const groups = await readEntityConnectionsBatch(
-        db,
-        entityGraphRootSchema
-          .array()
-          .parse(sources.slice(start, start + READ_BATCH)),
-        keys.map((key) => key.assessmentId),
-        (id, candidate, basis) => {
-          currentInputs.set(id, connectionBasisRecordRefs(candidate, basis));
-        },
-      );
-      for (const proposal of groups.flat()) addProposal(proposal);
-    }
-    for (const [id, sources] of await resolveAssessmentReadInputRefs(
+    for (const proposal of await readStoredConnectionProposals(
       db,
-      [...currentInputs].map(([id, refs]) => ({ id, refs })),
+      keys.map((key) => key.assessmentId),
     ))
-      observeInputs(id, sources);
+      addProposal(proposal);
     return found;
   },
   outcomes: async (db, filters) => {
@@ -831,7 +776,7 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
       count: number;
     }>(sql`
       SELECT s.status, count(*)::int AS count
-      FROM "AssessmentState" s
+      FROM "Suggestion" s
       WHERE s.family = ${assessmentFamily.enum.recommendation}
         ${filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}
       GROUP BY s.status
@@ -854,19 +799,14 @@ async function transferPairRows(
   query: SuggestionFamilyQuery,
   ids?: readonly string[],
 ) {
-  const entities: readonly ShortcodeEntity[] = [
-    "financialAccount",
-    "financialTransaction",
-    "ledgerParty",
-  ];
   if (
     query.filters.recordEntity &&
-    !entities.includes(query.filters.recordEntity)
+    !TRANSFER_ENTITIES.includes(query.filters.recordEntity)
   )
     return [];
   if (
     query.records &&
-    !query.records.some((record) => entities.includes(record.entity))
+    !query.records.some((record) => TRANSFER_ENTITIES.includes(record.entity))
   )
     return [];
   const { rows } = await unwrapDb(db).execute<{
@@ -876,8 +816,8 @@ async function transferPairRows(
     judgment: unknown;
     data: unknown;
   }>(sql`
-    SELECT s.id, s.fingerprint, a."createdAt", a.judgment, s.data
-    FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
+    SELECT s.id, s.fingerprint, s."createdAt", s.judgment, s.data
+    FROM "Suggestion" s
     WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.status = ${query.filters.status}
       AND ${assessmentIdScope(query.assessmentIds, sql`s.id`)}
       ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}
@@ -975,27 +915,27 @@ const transferPair: SuggestionFamilyPresentation<"transfer_pair"> = {
       sql`array_remove(ARRAY[${sql.join(legs.map(value), sql`, `)}], NULL)`;
     return {
       columns: {
-        clean: sql`coalesce((a.judgment->>'clean')::boolean, false)`,
-        strength: sql`CASE WHEN a.judgment->'blockers' ?| ARRAY[${sql.join(
+        clean: sql`coalesce((s.judgment->>'clean')::boolean, false)`,
+        strength: sql`CASE WHEN s.judgment->'blockers' ?| ARRAY[${sql.join(
           TRANSFER_WEAK_BLOCKERS.map((blocker) => sql`${blocker}`),
           sql`, `,
         )}]::text[] THEN ${"weak"}
-          WHEN a.judgment->'blockers' ? ${"date_gap"} THEN ${"medium"} ELSE ${"strong"} END`,
-        createdAt: sql`to_char(a."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
-        date: sql`a.judgment->>${"date"}`,
-        amount: sql`a.judgment->>${"amount"}`,
-        dateGapDays: sql`a.judgment->>${"dateGapDays"}`,
-        account: legArray((end) => sql`a.judgment->${end}->>${"accountId"}`),
-        owner: legArray((end) => sql`a.judgment->${end}->${"owner"}->>${"id"}`),
+          WHEN s.judgment->'blockers' ? ${"date_gap"} THEN ${"medium"} ELSE ${"strong"} END`,
+        createdAt: sql`to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+        date: sql`s.judgment->>${"date"}`,
+        amount: sql`s.judgment->>${"amount"}`,
+        dateGapDays: sql`s.judgment->>${"dateGapDays"}`,
+        account: legArray((end) => sql`s.judgment->${end}->>${"accountId"}`),
+        owner: legArray((end) => sql`s.judgment->${end}->${"owner"}->>${"id"}`),
         merchant: sql`ARRAY[concat_ws(' ', ${sql.join(
           [
-            ...legs.map((end) => sql`a.judgment->${end}->>${"merchant"}`),
-            ...legs.map((end) => sql`a.judgment->${end}->>${"description"}`),
+            ...legs.map((end) => sql`s.judgment->${end}->>${"merchant"}`),
+            ...legs.map((end) => sql`s.judgment->${end}->>${"description"}`),
           ],
           sql`, `,
         )})]`,
       },
-      from: sql`"AssessmentState" s JOIN "Assessment" a ON a.id = s.id`,
+      from: sql`"Suggestion" s`,
       where: sql`s.family = ${assessmentFamily.enum.transfer_pair} AND s.status = ${status}
         ${status === suggestionStatus.enum.pending ? sql`AND s.active` : sql``}
         AND ${assessmentIdScope(query.assessmentIds, sql`s.id`)}
@@ -1095,7 +1035,7 @@ const transferPair: SuggestionFamilyPresentation<"transfer_pair"> = {
       status: string;
       count: number;
     }>(sql`
-      SELECT status, count(*)::int AS count FROM "AssessmentState"
+      SELECT status, count(*)::int AS count FROM "Suggestion"
       WHERE family = ${assessmentFamily.enum.transfer_pair}
         ${filters.runId ? sql`AND "runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}
       GROUP BY status

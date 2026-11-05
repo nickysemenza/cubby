@@ -22,6 +22,7 @@ import { workRecordFactsFor } from "~/server/domains/work/repo/record-facts";
 import {
   pendingSuggestionRecordsSql,
   touchingAssessmentIds,
+  UNAPPLIED_CORRECTION_REASON,
 } from "~/server/generic/assessment/repo/review-families";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -77,6 +78,7 @@ const source: WorkSource = {
     statement_transaction: "Pending statement transactions",
     transfer_pair: "Pending transfer pairs",
     product_pair: "Pending product pairs",
+    [UNAPPLIED_CORRECTION_REASON]: "Unapplied member correction",
   }).map(([family, label]) => ({ key: `suggestions:${family}`, label })),
   candidates: async (db, scope) => {
     // A record read discovers its own suggestions; the unscoped queue reads State.

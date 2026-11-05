@@ -134,7 +134,7 @@ export const ENTITY_EDGE_OWNERS = {
     excluded: "Registry metadata naming the vendor a source slug is.",
   },
   AuditLog: { excluded: "History attribution." },
-  AssessmentState: { excluded: WORKFLOW },
+  Suggestion: { excluded: WORKFLOW },
   RunFinding: { excluded: WORKFLOW },
   ImportPreparedOrder: { excluded: WORKFLOW },
   SourceOrderObservation: { excluded: "Immutable source extraction history." },

@@ -25,7 +25,7 @@ import { getDb } from "~/server/db/helpers";
 import {
   expense as expenseTable,
   product as productTable,
-  assessmentState as suggestionTable,
+  suggestionTable,
 } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
@@ -135,8 +135,8 @@ export async function seedPending(
   ctx: Ctx,
   row: Pick<
     typeof suggestionTable.$inferInsert,
-    "entity" | "recordId" | "field" | "currentValue" | "suggestedValue" | "kind"
-  > & { field: string },
+    "entity" | "field" | "currentValue" | "suggestedValue" | "kind"
+  > & { field: string; recordId: string },
 ) {
   const runId = await ensureRun(ctx.db, ctx.actor, {
     purpose: "ai_suggest",

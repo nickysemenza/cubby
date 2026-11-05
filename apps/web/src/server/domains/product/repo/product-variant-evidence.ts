@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { assessment, assessmentState } from "~/server/db/schema";
+import { suggestionTable } from "~/server/db/schema";
 
 const variantDimension = z.enum(["color", "size", "pack"]);
 export const productIdentitySide = z.object({
@@ -75,12 +75,12 @@ export async function historicalConflictInputsChanged(
 ) {
   if (conflictIds.length === 0) return true;
   const prior = await getDb(db)
-    .select({ fingerprint: assessment.fingerprint })
-    .from(assessment)
+    .select({ fingerprint: suggestionTable.fingerprint })
+    .from(suggestionTable)
     .where(
       and(
-        eq(assessment.family, "product_pair"),
-        inArray(assessment.id, [...conflictIds]),
+        eq(suggestionTable.family, "product_pair"),
+        inArray(suggestionTable.id, [...conflictIds]),
       ),
     );
   return (
@@ -114,25 +114,24 @@ export async function readVariantVerifications(
   const result = new Map<string, ProductVariantVerification>();
   if (!unique.size) return result;
   const keys = [...unique.keys()];
-  const subjectKey = sql<string>`least(${assessment.subject}->>'recordId', ${assessment.subject}->>'otherId') || '|' || greatest(${assessment.subject}->>'recordId', ${assessment.subject}->>'otherId')`;
-  const stateKey = sql<string>`least(${assessmentState.recordId}::text, ${assessmentState.data}->>'otherId') || '|' || greatest(${assessmentState.recordId}::text, ${assessmentState.data}->>'otherId')`;
+  const subjectKey = sql<string>`least(${suggestionTable.subject}->>'recordId', ${suggestionTable.subject}->>'otherId') || '|' || greatest(${suggestionTable.subject}->>'recordId', ${suggestionTable.subject}->>'otherId')`;
+  const stateKey = sql<string>`least(${suggestionTable.recordId}::text, ${suggestionTable.data}->>'otherId') || '|' || greatest(${suggestionTable.recordId}::text, ${suggestionTable.data}->>'otherId')`;
   const historyQuery = getDb(db)
     .select({
-      id: assessment.id,
-      evidence: assessment.evidence,
+      id: suggestionTable.id,
+      evidence: suggestionTable.evidence,
       subjectKey: subjectKey.as("subjectKey"),
       stateKey: stateKey.as("stateKey"),
     })
-    .from(assessment)
-    .leftJoin(assessmentState, eq(assessmentState.id, assessment.id))
+    .from(suggestionTable)
     .where(
       and(
-        eq(assessment.family, "product_pair"),
-        eq(assessment.served, true),
+        eq(suggestionTable.family, "product_pair"),
+        eq(suggestionTable.served, true),
         sql`(${inArray(subjectKey, keys)} OR ${inArray(stateKey, keys)})`,
       ),
     )
-    .orderBy(desc(assessment.createdAt), desc(assessment.id));
+    .orderBy(desc(suggestionTable.createdAt), desc(suggestionTable.id));
   const allRows = z
     .object({
       rows: z.array(
@@ -149,8 +148,8 @@ export async function readVariantVerifications(
     WITH history AS MATERIALIZED (${historyQuery}), ancestors AS (
       SELECT DISTINCT jsonb_array_elements_text(CASE WHEN jsonb_typeof(evidence->'signals'->'conflictLineage') = 'array' THEN evidence->'signals'->'conflictLineage' ELSE '[]'::jsonb END) AS id FROM history
     ) SELECT * FROM history
-    UNION ALL SELECT a.id, a.evidence, NULL::text AS "subjectKey", NULL::text AS "stateKey" FROM "Assessment" a JOIN ancestors p ON a.id::text = p.id
-    WHERE a.family = ${"product_pair"} AND NOT EXISTS (SELECT 1 FROM history h WHERE h.id = a.id)
+    UNION ALL SELECT s.id, s.evidence, NULL::text AS "subjectKey", NULL::text AS "stateKey" FROM "Suggestion" s JOIN ancestors p ON s.id::text = p.id
+    WHERE s.family = ${"product_pair"} AND NOT EXISTS (SELECT 1 FROM history h WHERE h.id = s.id)
   `),
     ).rows;
   const history = allRows.filter(

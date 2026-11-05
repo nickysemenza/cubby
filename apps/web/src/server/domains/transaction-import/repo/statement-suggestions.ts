@@ -51,7 +51,7 @@ import {
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import {
-  assessmentState,
+  suggestionTable,
   financialTransaction,
   financialAccount,
   sourceTransactionRecord,
@@ -135,9 +135,9 @@ import {
   prepareStatementSpendingPage,
 } from "./statement-spending";
 
-const STATE = "AssessmentState";
+const STATE = "Suggestion";
 const log = createLogger("statement-suggestions");
-const pendingStatementState = sql`${assessmentState.family} = ${assessmentFamily.enum.statement_transaction} AND ${assessmentState.active} AND ${assessmentState.status} = ${suggestionStatus.enum.pending}`;
+const pendingStatementState = sql`${suggestionTable.family} = ${assessmentFamily.enum.statement_transaction} AND ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}`;
 const stateData = z.record(z.string(), z.json());
 
 /** Matching revision and Automatic attach rule revision; clean-only changes use the policy below. */
@@ -586,20 +586,20 @@ async function merchantHistory(
     -- separator suggestionRefKey writes after the source.
     ruled AS MATERIALIZED (
       SELECT DISTINCT fx."entityId" AS id
-      FROM "Feedback" f
-      JOIN "Assessment" a ON a.id = f."assessmentId"
-        AND a.family = ${assessmentFamily.enum.statement_transaction}
-        AND (a.judgment->>'clean')::boolean
-        AND a.judgment->>'recommended' = ${statementTransactionAction.enum.create}
-      JOIN "AssessmentState" s ON s.id = a.id AND s.status = ${suggestionStatus.enum.applied}
-        AND (${suggestionField("accountId")})::uuid IN (SELECT account FROM p)
+      FROM "Suggestion" s
+      CROSS JOIN LATERAL jsonb_array_elements(s.decisions) f(event)
       CROSS JOIN LATERAL jsonb_array_elements_text(s.data->'refs') ref(key)
       JOIN "EntityExternalId" fx ON fx.kind = 'settlement_ref' AND ${notDeleted("fx")}
         AND fx.source = split_part(ref.key, ':', 1)
         AND fx."externalId" = substr(ref.key, length(split_part(ref.key, ':', 1)) + 2)
-      WHERE f.intent = ${feedbackEvent.shape.intent.unwrap().enum.apply}
-        AND f.verdict = ${feedbackVerdict.enum.correct}
-        AND f.correction = ${JSON.stringify({ present: false })}::jsonb
+      WHERE s.family = ${assessmentFamily.enum.statement_transaction}
+        AND (s.judgment->>'clean')::boolean
+        AND s.judgment->>'recommended' = ${statementTransactionAction.enum.create}
+        AND s.status = ${suggestionStatus.enum.applied}
+        AND (${suggestionField("accountId")})::uuid IN (SELECT account FROM p)
+        AND f.event->>'intent' = ${feedbackEvent.shape.intent.unwrap().enum.apply}
+        AND f.event->>'verdict' = ${feedbackVerdict.enum.correct}
+        AND f.event @> ${JSON.stringify({ correction: { present: false } })}::jsonb
     )
     SELECT p.key, array_agg(DISTINCT ft.kind) AS kinds, count(*)::int AS count,
       bool_or(EXISTS (
@@ -1705,7 +1705,7 @@ async function retireSettledChargeAdvice(db: Database, charge: ChargeRef) {
 }
 
 type ReusablePublication = Pick<
-  typeof assessmentState.$inferSelect,
+  typeof suggestionTable.$inferSelect,
   "active" | "fingerprint"
 > & {
   producer: AssessmentProducer | null;
@@ -2111,7 +2111,7 @@ const statementSuggestions: SuggestionFamily<
             await assertWorkflowEffect(retirement);
             await transitionAssessmentStates(
               retirement,
-              sql`${assessmentState.id} = ${assessmentId}::uuid AND ${assessmentState.status} = ${suggestionStatus.enum.pending}
+              sql`${suggestionTable.id} = ${assessmentId}::uuid AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}
                 AND EXISTS (
                   SELECT 1 FROM ${chargeStateOf(
                     sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
@@ -2205,7 +2205,7 @@ async function retireStatementPublications(
     await assertWorkflowEffect(retirement);
     await transitionAssessmentStates(
       retirement,
-      sql`${inArray(assessmentState.id, [...input.assessmentIds])}
+      sql`${inArray(suggestionTable.id, [...input.assessmentIds])}
           AND ${pendingStatementState}
           AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.void}
           AND EXISTS (SELECT 1 FROM ${chargeStateOf(
@@ -3066,7 +3066,7 @@ export async function recordStatementLabelCheckpoint(
     await assertWorkflowEffect(tx);
     if (input.scope) {
       const { rows } = await unwrapDb(tx).execute<{ id: string }>(sql`
-        SELECT s.id FROM "AssessmentState" s WHERE ${pendingSuggestion()}
+        SELECT s.id FROM "Suggestion" s WHERE ${pendingSuggestion()}
           AND ${suggestionField("source")} = ${input.charge.source}
           AND ${suggestionField("chargeKey")} = ${input.charge.chargeKey}
           AND ${suggestionField("evidenceFingerprint")} = ${input.evidenceFingerprint}
@@ -3153,7 +3153,7 @@ export async function recordStatementLabelCheckpoint(
       return "saved";
     }
     const { rows: settled } = await unwrapDb(tx).execute(sql`
-    SELECT 1 FROM "AssessmentState" s
+    SELECT 1 FROM "Suggestion" s
     WHERE s.family = ${assessmentFamily.enum.statement_transaction}
       AND ${suggestionField("source")} = ${input.charge.source}
       AND ${suggestionField("chargeKey")} = ${input.charge.chargeKey}
@@ -3189,7 +3189,7 @@ export async function completeStatementApplications(
     if (!admitted.length) return [];
     await transitionAssessmentStates(
       tx,
-      inArray(assessmentState.id, admitted),
+      inArray(suggestionTable.id, admitted),
       (row) => {
         const {
           applicationPending: _pending,
@@ -3240,20 +3240,20 @@ export async function completeNoActionStatementPrefix(
     WHERE matched.value IS NULL OR NOT ${inArray(sql`matched.value`, excluded)})`;
   const first = window[0]!;
   const [candidate] = await getDb(db)
-    .select({ id: assessmentState.id })
-    .from(assessmentState)
+    .select({ id: suggestionTable.id })
+    .from(suggestionTable)
     .where(
       and(
-        eq(assessmentState.id, first.assessmentId),
-        eq(assessmentState.family, assessmentFamily.enum.statement_transaction),
-        eq(assessmentState.active, true),
-        eq(assessmentState.status, suggestionStatus.enum.pending),
-        isNull(assessmentState.suppression),
+        eq(suggestionTable.id, first.assessmentId),
+        eq(suggestionTable.family, assessmentFamily.enum.statement_transaction),
+        eq(suggestionTable.active, true),
+        eq(suggestionTable.status, suggestionStatus.enum.pending),
+        isNull(suggestionTable.suppression),
         sql`${suggestionField("source", STATE)} = ${first.charge.source}`,
         sql`${suggestionField("chargeKey", STATE)} = ${first.charge.chargeKey}`,
         sql`${suggestionField("evidenceFingerprint", STATE)} = ${first.evidenceFingerprint}`,
-        sql`${assessmentState.data}->'applicationPending' = 'true'::jsonb`,
-        sql`NOT ${hasApplicableRules(sql`${assessmentState.data}`)}`,
+        sql`${suggestionTable.data}->'applicationPending' = 'true'::jsonb`,
+        sql`NOT ${hasApplicableRules(sql`${suggestionTable.data}`)}`,
       ),
     )
     .limit(1);
@@ -3262,22 +3262,22 @@ export async function completeNoActionStatementPrefix(
     await assertWorkflowEffect(tx);
     const rows = await getDb(tx)
       .select({
-        id: assessmentState.id,
-        family: assessmentState.family,
-        active: assessmentState.active,
-        status: assessmentState.status,
-        suppression: assessmentState.suppression,
-        data: assessmentState.data,
-        hasRules: hasApplicableRules(sql`${assessmentState.data}`),
+        id: suggestionTable.id,
+        family: suggestionTable.family,
+        active: suggestionTable.active,
+        status: suggestionTable.status,
+        suppression: suggestionTable.suppression,
+        data: suggestionTable.data,
+        hasRules: hasApplicableRules(sql`${suggestionTable.data}`),
       })
-      .from(assessmentState)
+      .from(suggestionTable)
       .where(
         inArray(
-          assessmentState.id,
+          suggestionTable.id,
           window.map((entry) => entry.assessmentId),
         ),
       )
-      .orderBy(assessmentState.id)
+      .orderBy(suggestionTable.id)
       .for("update");
     const byId = new Map(rows.map((row) => [row.id, row]));
     const scoped = scope
@@ -3348,7 +3348,7 @@ async function statementLabelCandidates(
     const at = position === "native" ? sql`s."createdAt"` : positionAt;
     const id = position === "native" ? sql`s.id` : positionId;
     return sql`SELECT s.id, ${at} AS "positionAt", ${id} AS "positionId"
-      FROM "AssessmentState" s JOIN "Assessment" a ON a.id=s.id
+      FROM "Suggestion" s
       WHERE ${statementSuggestions.labelBacklog}
         AND ${position === "native" ? nativePosition : sql`NOT ${nativePosition}`}
         AND ${scoped}
@@ -3421,10 +3421,10 @@ export async function suggestionsNeedingLabels(
     sql`, `,
   )})
   SELECT s.id,to_char(selected."positionAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",selected."positionId" AS "cursorId",
-    a.subject,a.judgment,s.data->'amount' AS amount,
+    s.subject,s.judgment,s.data->'amount' AS amount,
     ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",s.data->'labelCheckpoint' AS checkpoint,
     coalesce((s.data->>'applicationPending')::boolean,false) AS "applicationPending"
-  FROM selected JOIN "AssessmentState" s ON s.id=selected.id JOIN "Assessment" a ON a.id=s.id
+  FROM selected JOIN "Suggestion" s ON s.id=selected.id
   ORDER BY selected."positionAt",selected."positionId"`;
   const read = (client: Database) =>
     unwrapDb(client).execute<{
@@ -3477,10 +3477,10 @@ async function statementLabelScope(
     }
   >(sql`
     SELECT s.id, ${suggestionField("source")} AS source, ${suggestionField("chargeKey")} AS "chargeKey",
-      a.judgment->${statementTransactionAction.enum.void}->>'transactionId' IS NOT NULL AS "voidTarget",
+      s.judgment->${statementTransactionAction.enum.void}->>'transactionId' IS NOT NULL AS "voidTarget",
       held."accountId" AS "voidAccountId"
-    FROM "AssessmentState" s JOIN "Assessment" a ON a.id=s.id
-    LEFT JOIN "FinancialTransaction" held ON held.id=(a.judgment->${statementTransactionAction.enum.void}->>'transactionId')::uuid
+    FROM "Suggestion" s
+    LEFT JOIN "FinancialTransaction" held ON held.id=(s.judgment->${statementTransactionAction.enum.void}->>'transactionId')::uuid
       AND ${notDeleted("held")}
     WHERE ${eligible} AND ${identity} AND ${selected}
   `);
@@ -3527,7 +3527,7 @@ export async function statementLabelTargetsInScope(
 ) {
   const scoped = await statementLabelScope(db, scope, assessmentIds);
   const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
-    SELECT s.id FROM "AssessmentState" s JOIN "Assessment" a ON a.id=s.id
+    SELECT s.id FROM "Suggestion" s
     WHERE s.family = ${assessmentFamily.enum.statement_transaction} AND ${scoped}
   `);
   return new Set(rows.map((row) => row.id));

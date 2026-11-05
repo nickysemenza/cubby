@@ -3569,6 +3569,7 @@ Rules:
       ],
     },
     capabilities: {
+      suggestions: ["product_pair"],
       timeline: "custom",
       // `dataQuality asc` is the enrichment worklist: most missing checks first.
       // Identity applies to every Product, catalog-only included, so a named

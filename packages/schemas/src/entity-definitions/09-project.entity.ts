@@ -1086,8 +1086,7 @@ Rules:
           // and retained matching evidence. Saves only defer fixed-anchor fanout.
           ...[
             "AiAnalysis",
-            "Assessment",
-            "AssessmentState",
+            "Suggestion",
             "Cookbook",
             "Device",
             "Email",
@@ -1096,7 +1095,6 @@ Rules:
             "EntityLink",
             "Expense",
             "ExpenseAttribution",
-            "Feedback",
             "FinancialAccount",
             "FinancialTransaction",
             "FinancialTransactionAllocation",

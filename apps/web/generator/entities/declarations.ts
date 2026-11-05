@@ -340,6 +340,7 @@ export type CompiledEntity = Readonly<{
   >;
   /** `capabilities.timeline`: how `resources.<entity>.timeline` is served. */
   timeline: "default" | "custom" | null;
+  suggestionFamilies: readonly string[];
   descriptor: DeclarationObject;
   contract: Readonly<{
     create: SourceRef | null;
