@@ -20,7 +20,10 @@ import {
   sql,
 } from "drizzle-orm";
 
-import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
+import {
+  sourceOccurrenceHasUnresolvedHistory,
+  sourceHistoricalTransactionRows,
+} from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sourceTransactionRecord } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
@@ -50,10 +53,7 @@ const sourceObservationFacts = sql`(
     CASE WHEN r."occurrenceId" IS NULL THEN a."updatedAt" ELSE greatest(a."updatedAt", o."updatedAt") END AS "updatedAt",
     a.notes, CASE WHEN o."reviewState"=${sourceOccurrenceReviewState.enum.ready} AND ${sourceOccurrenceHasUnresolvedHistory(sql`o.id`, sql`o."acceptedTransactionId"`)} THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE o."reviewState" END AS "reviewState", o.version AS "occurrenceVersion", o."acceptedTransactionId",
     ft.shortcode AS "transactionShortcode",
-    ARRAY(SELECT DISTINCT historical.shortcode FROM "FinancialEvidenceAlias" observed_alias
-      JOIN "FinancialEvidenceAlias" binding ON binding.source=observed_alias.source AND binding.value=observed_alias.value
-      JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}
-      WHERE (observed_alias."observationId"=r.id OR (r."occurrenceId" IS NOT NULL AND observed_alias."occurrenceId"=r."occurrenceId")) ORDER BY historical.shortcode) AS "historicalTransactionIds"
+    ARRAY(SELECT history.code FROM (${sourceHistoricalTransactionRows(sql`r.id`, sql`ARRAY[r."occurrenceId"]::uuid[]`)}) history ORDER BY history.code) AS "historicalTransactionIds"
   FROM "SourceTransactionRecord" r
   LEFT JOIN "SourceOccurrence" o ON o.id = r."occurrenceId"
   LEFT JOIN "SourceObservationAnnotation" a ON a."observationId" = r.id
@@ -66,7 +66,7 @@ const sourceObservationFacts = sql`(
 export const sourceObservations = sql`(SELECT observation.*,
   CASE WHEN observation.disposition = ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} THEN ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}
     WHEN observation."supersededByRowId" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.superseded}
-    WHEN observation."transactionShortcode" IS NULL AND (observation."occurrenceId" IS NULL OR observation."reviewState" <> ${sourceOccurrenceReviewState.enum.ready} OR cardinality(observation."historicalTransactionIds") > 0) THEN ${sourceTransactionRecordMatchState.enum.held}
+    WHEN observation."transactionShortcode" IS NULL AND (observation."occurrenceId" IS NULL OR observation."reviewState" <> ${sourceOccurrenceReviewState.enum.ready} OR cardinality(observation."historicalTransactionIds") > 0 OR observation."acceptedTransactionId" IS NOT NULL) THEN ${sourceTransactionRecordMatchState.enum.held}
     WHEN observation."transactionShortcode" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.matched} ELSE ${sourceTransactionRecordMatchState.enum.unmatched} END AS "matchState"
   FROM ${sourceObservationFacts} observation)`;
 
@@ -170,4 +170,16 @@ export const sourceOccurrenceSuppressed = (id: SQL) => sql`${id} IN (
     ON alias.source=held.source AND alias.value=held.key AND alias."observationId" IS NOT NULL WHERE alias."occurrenceId" IS NOT NULL
   UNION
   SELECT owner.id FROM held_sources held JOIN "SourceOccurrence" owner ON owner.source=held.source AND owner.shortcode=held.key
+)`;
+
+export const SOURCE_HELD_REASON =
+  "Source identity or historical ownership needs an explicit review. Retained advice and member decisions are unchanged; money stays unchanged until reviewed.";
+
+/** Held advice can be dismissed, but cannot suppress a later proven occurrence. */
+export const statementSuggestionSourceHeld = (alias: string) => sql`NOT EXISTS (
+  SELECT 1 FROM ${sourceObservations} reviewed
+  WHERE reviewed.id=${sql.identifier(alias)}."recordId" AND reviewed."occurrenceId" IS NOT NULL
+    AND reviewed.current AND reviewed."reviewState"=${sourceOccurrenceReviewState.enum.ready}
+    AND reviewed."withdrawnAt" IS NULL AND reviewed."supersededByRowId" IS NULL
+    AND reviewed."chargeKey"=${sql.identifier(alias)}.data->>'chargeKey'
 )`;

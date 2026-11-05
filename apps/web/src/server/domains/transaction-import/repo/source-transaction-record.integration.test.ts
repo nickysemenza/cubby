@@ -3,8 +3,9 @@ import {
   type TransactionImportInput,
   type SourceTransactionRecordInput,
 } from "@cubby/schemas/source-transaction-record";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -18,10 +19,15 @@ import {
   financialEvidenceAlias,
 } from "~/server/db/schema";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
+import { createMcpServer } from "~/server/mcp/server";
 import {
   deleteThroughKernel,
   updateThroughKernel,
 } from "~/server/testing/entity-kernel";
+import {
+  callMcpTool,
+  kernelRequestContext,
+} from "~/server/testing/mcp-test-utils";
 
 import {
   recordSourceTransactionRecords,
@@ -174,6 +180,27 @@ describe("statement row ledger", () => {
         ctx.actor,
       ),
     ).rejects.toThrow("unpositioned evidence");
+    await expect(
+      recordSourceTransactionRecords(
+        ctx.db,
+        {
+          ...input,
+          rows: input.rows.map((row, index) => ({
+            ...row,
+            providerTransactionId: `synthetic-replayed-${index}`,
+            providerAccountId: "synthetic-account",
+            providerData: {
+              transaction: {
+                id: `synthetic-replayed-${index}`,
+                account_id: "synthetic-account",
+              },
+              account: { id: "synthetic-account" },
+            },
+          })),
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow("unpositioned evidence");
     expect(await getDb(ctx.db).select().from(sourceTransactionRecord)).toEqual(
       ignoredEvidence,
     );
@@ -201,29 +228,87 @@ describe("statement row ledger", () => {
       amount: 128.5,
       sourceRefs: [],
     });
-    await updateThroughKernel(
-      ctx.db,
-      ctx.actor,
-      "sourceTransactionRecord",
-      unresolved.id,
+    const review = {
+      decision: "accept_existing",
+      expectedDisposition: "ignored",
+      expectedFactFingerprint: unresolved.factFingerprint,
+      expectedOccurrenceVersion: null,
+      expectedAcceptedTransactionId: null,
+      historicalTransactionIds: [],
+      accountId: account.output.id,
+      transactionId: target.output.id,
+      note: "Member confirmed this source evidence belongs to the existing transaction",
+      judgment: {
+        disposition: "ignored",
+        dispositionReason: "not_modeled",
+        dispositionNote: "Explicit synthetic member ignore",
+      },
+    };
+    const other = (await listSourceTransactionRecords(ctx.db, {})).data.find(
+      (row) => row.id !== unresolved.id,
+    );
+    if (!other) throw new Error("Synthetic second held observation missing");
+    const kernel = buildKernelContext(ctx.db, ctx.actor.userId);
+    const bulk = await callMcpTool(
+      createMcpServer(),
+      "entity",
       {
-        identityResolution: {
-          decision: "accept_existing",
-          expectedFactFingerprint: unresolved.factFingerprint,
-          expectedOccurrenceVersion: null,
-          expectedAcceptedTransactionId: null,
-          historicalTransactionIds: [],
-          accountId: account.output.id,
-          transactionId: target.output.id,
-          note: "Member confirmed this source evidence belongs to the existing transaction",
-          judgment: {
-            disposition: "ignored",
-            dispositionReason: "not_modeled",
-            dispositionNote: "Explicit synthetic member ignore",
+        action: "commands",
+        resultDetail: "full",
+        commands: [
+          {
+            action: "update",
+            entity: "sourceTransactionRecord",
+            id: other.id,
+            data: {
+              identityResolution: {
+                ...review,
+                expectedFactFingerprint: other.factFingerprint,
+                expectedDisposition: "open",
+                judgment: { disposition: "open" },
+              },
+            },
+          },
+          {
+            action: "update",
+            entity: "sourceTransactionRecord",
+            id: unresolved.id,
+            data: { identityResolution: review },
+          },
+        ],
+      },
+      kernelRequestContext(kernel),
+      { entityKernel: kernel },
+    );
+    expect(bulk.isError).not.toBe(true);
+    expect(bulk.structuredContent).toMatchObject({
+      summary: { requested: 2, succeeded: 1, failed: 1 },
+      results: [
+        { index: 0, status: "failed" },
+        { index: 1, status: "succeeded" },
+      ],
+    });
+    const [acceptedOwner] = await getDb(ctx.db).select().from(sourceOccurrence);
+    if (!acceptedOwner) throw new Error("Synthetic accepted owner missing");
+    await expect(
+      updateThroughKernel(
+        ctx.db,
+        ctx.actor,
+        "sourceTransactionRecord",
+        other.id,
+        {
+          identityResolution: {
+            ...review,
+            decision: "assign",
+            expectedDisposition: "ignored",
+            expectedFactFingerprint: other.factFingerprint,
+            occurrenceId: acceptedOwner.shortcode,
+            expectedTargetVersion: acceptedOwner.version,
+            transactionId: undefined,
           },
         },
-      },
-    );
+      ),
+    ).rejects.toThrow(/account or disposition differs/);
     expect(
       (await getDb(ctx.db).select().from(sourceOccurrence))[0],
     ).toMatchObject({
@@ -232,6 +317,32 @@ describe("statement row ledger", () => {
       reviewState: "ready",
       acceptedTransactionId: target.entityId,
     });
+    const [historicalBinding] = await getDb(ctx.db)
+      .insert(financialEvidenceAlias)
+      .values({
+        source: unresolved.source,
+        kind: "transaction_ref",
+        value: unresolved.externalId,
+        historicalTransactionId: target.entityId,
+        provenanceKey: "synthetic-retained-history",
+        provenance: { kind: "retained_legacy_binding" },
+        scopeEvidence: {},
+      })
+      .returning();
+    expect(
+      (await listSourceTransactionRecords(ctx.db, {})).data.every((row) =>
+        row.historicalTransactionIds.includes(target.output.id),
+      ),
+    ).toBe(true);
+    await getDb(ctx.db)
+      .update(financialEvidenceAlias)
+      .set({ deletedAt: new Date() })
+      .where(eq(financialEvidenceAlias.id, historicalBinding!.id));
+    expect(
+      (await listSourceTransactionRecords(ctx.db, {})).data.every(
+        (row) => row.historicalTransactionIds.length === 0,
+      ),
+    ).toBe(true);
     expect(
       await getDb(ctx.db).select().from(sourceObservationAnnotation),
     ).toEqual(ignoredJudgments);
@@ -392,8 +503,9 @@ describe("statement row ledger", () => {
       version: 3,
     });
     expect(
-      (await listSourceTransactionRecords(ctx.db, { current: true })).data[0]
-        ?.id,
+      (await listSourceTransactionRecords(ctx.db, {})).data.find(
+        (row) => row.current,
+      )?.id,
     ).toBe(successor.id);
     const reviewedOwners = await getDb(ctx.db).select().from(sourceOccurrence);
     const reviewedAudits = await getDb(ctx.db).select().from(auditLog);
@@ -527,6 +639,14 @@ describe("statement row ledger", () => {
       JOIN "SourceTransactionRecord" head ON head.id=owner."currentObservationId"
       WHERE owner."acceptedTransactionId" IS NOT NULL AND head."deletedAt" IS NOT NULL`);
     expect(violations[0]).toMatchObject({ count: 0 });
+    await deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
+      transaction.id,
+    ]);
+    expect(
+      (await listSourceTransactionRecords(ctx.db, {})).data.find(
+        (observation) => observation.id === row.id,
+      ),
+    ).toMatchObject({ matchState: "held", transactionId: null });
   });
 
   it("retains explicit replacement decisions with cycle and deletion guards", async () => {
@@ -629,6 +749,7 @@ describe("statement row ledger", () => {
       throw new Error("Synthetic withdrawal evidence missing");
     const resolution = {
       decision: "distinct" as const,
+      expectedDisposition: "open",
       expectedFactFingerprint: evidence.factFingerprint,
       expectedOccurrenceVersion: before.version,
       expectedAcceptedTransactionId: null,

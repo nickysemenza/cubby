@@ -1,3 +1,7 @@
+import {
+  sourceObservationColumns,
+  sourceObservationFrom,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
 import { recordSourceTransactionRecordsOut } from "@cubby/schemas/source-transaction-record";
 import type { ConvergenceNames } from "#web/tooling/convergence-harness.ts";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -48,13 +52,16 @@ export async function recordReviewedConvergenceStatement(
     where: eq(schema.transactionImport.shortcode, result.batchId),
   });
   if (!collection) throw new Error("Retained transaction import missing");
-  const evidence = await getDb(db).query.sourceTransactionRecord.findFirst({
-    where: and(
-      eq(schema.sourceTransactionRecord.source, source),
-      eq(schema.sourceTransactionRecord.batchId, collection.id),
-      notDeleted(schema.sourceTransactionRecord),
-    ),
-  });
+  const [evidence] = await getDb(db)
+    .select(sourceObservationColumns)
+    .from(sourceObservationFrom)
+    .where(
+      and(
+        eq(schema.sourceTransactionRecord.source, source),
+        eq(schema.sourceTransactionRecord.batchId, collection.id),
+        notDeleted(schema.sourceTransactionRecord),
+      ),
+    );
   if (!evidence) throw new Error("Normalized statement evidence missing");
   const created = await entityApi(page.request).create("financialTransaction", {
     accountId,
@@ -65,7 +72,7 @@ export async function recordReviewedConvergenceStatement(
     kind: "purchase",
     status: "posted",
     postedDate: row.statementDate,
-    sourceRefs: [{ source, externalId: evidence.externalId }],
+    sourceRefs: [{ source, externalId: evidence.chargeKey }],
   });
   expect(created.ok(), await created.text()).toBe(true);
 }

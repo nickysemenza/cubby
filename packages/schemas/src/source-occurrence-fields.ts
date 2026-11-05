@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { sourceTransactionRecordDispositionReason } from "./source-transaction-record-fields";
+import {
+  sourceTransactionRecordDisposition,
+  sourceTransactionRecordDispositionReason,
+} from "./source-transaction-record-fields";
 import { shortcodeSchema } from "./identifier-fields";
 
 export const sourceOccurrenceIdentityKind = z.enum([
@@ -17,6 +20,7 @@ export const sourceOccurrenceReviewState = z.enum([
 ]);
 
 const sourceResolutionReview = z.object({
+  expectedDisposition: sourceTransactionRecordDisposition,
   expectedFactFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   expectedOccurrenceVersion: z.number().int().positive().nullable(),
   expectedAcceptedTransactionId: shortcodeSchema(

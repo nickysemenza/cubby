@@ -272,6 +272,14 @@ export async function importReconciliationSummary(
       }),
     )
     .parse(bookingResult.rows);
+  const { rows: heldHistory } = await unwrapDb(db).execute<{
+    historical: number;
+    neverMatched: number;
+  }>(sql`
+    SELECT count(*) FILTER (WHERE cardinality(r."historicalTransactionIds") > 0)::int AS historical,
+      count(*) FILTER (WHERE cardinality(r."historicalTransactionIds") = 0)::int AS "neverMatched"
+    FROM "TransactionImportRecord" member JOIN ${sourceObservations} r ON r.id=member."statementRowId"
+    WHERE member."importId"=${storedImportId}::uuid AND ${notDeleted("r")} AND r."matchState"=${sourceTransactionRecordMatchState.enum.held}`);
   const bookingLabels = {
     missing: "Unbooked",
     partial: "Partly booked",
@@ -286,11 +294,23 @@ export async function importReconciliationSummary(
     {
       kind: "stats",
       title: "Retained observations",
-      figures: counts.map(({ state, count }) => ({
-        label: state.charAt(0).toUpperCase() + state.slice(1),
-        value: count,
-        format: "count",
-      })),
+      figures: [
+        ...counts.map(({ state, count }) => ({
+          label: state.charAt(0).toUpperCase() + state.slice(1),
+          value: count,
+          format: "count" as const,
+        })),
+        {
+          label: "Held with historical links",
+          value: heldHistory[0]?.historical ?? 0,
+          format: "count",
+        },
+        {
+          label: "Held without historical links",
+          value: heldHistory[0]?.neverMatched ?? 0,
+          format: "count",
+        },
+      ],
     },
     {
       kind: "note",
@@ -298,7 +318,7 @@ export async function importReconciliationSummary(
     },
     {
       kind: "stats",
-      title: "Matched transaction booking",
+      title: "Accepted-owner transaction booking",
       figures: financialTransactionCoverage.shape.booking.options.map(
         (booking) => ({
           label: bookingLabels[booking],

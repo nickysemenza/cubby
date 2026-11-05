@@ -370,6 +370,8 @@ export const sourceTransactionRecordSummaryOut = z.object({
   total: z.number().int(),
   matched: z.number().int(),
   held: z.number().int(),
+  heldHistorical: z.number().int(),
+  heldWithoutHistoricalLinks: z.number().int(),
   unmatched: z.number().int(),
   ignored: z.number().int(),
   superseded: z.number().int(),

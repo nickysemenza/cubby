@@ -3,7 +3,6 @@ import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { FinancialSpendingPlan } from "@cubby/schemas/financial-booking";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import {
   statementSuggestionOut,
   statementTransactionAction,
@@ -30,6 +29,10 @@ import {
 } from "~/server/generic/assessment/repo/assessment";
 import { reviewFamilyDeclarations } from "~/server/generic/assessment/repo/review-families";
 
+import {
+  SOURCE_HELD_REASON,
+  statementSuggestionSourceHeld,
+} from "./source-observation-state";
 import { isClean } from "./statement-suggestions";
 
 const currentClean = sql`${sourceSuggestionAutomaticEligible()} AND coalesce((coalesce((${suggestionField("clean")})::boolean, false) AND (
@@ -233,7 +236,7 @@ export async function readStatementSuggestions(
     sourceHeld: boolean;
   }>(sql`
     SELECT s.id, s.fingerprint, s.data, s.judgment, s.model, s."createdAt",
-      (r."occurrenceId" IS NULL OR NOT r.current OR r."reviewState" <> ${sourceOccurrenceReviewState.enum.ready} OR r."chargeKey" <> s.data->>'chargeKey') AS "sourceHeld",
+      ${statementSuggestionSourceHeld("s")} AS "sourceHeld",
       fa.shortcode AS "accountCode", account_owner.shortcode AS "ownerCode",
       r.merchant, r."rawDescription", r."sourceCategory"
     ${FROM}
@@ -358,9 +361,7 @@ export async function readStatementSuggestions(
       sourceCategories: categories.get(row.id) ?? [],
       providerStatus: judgment.providerStatus,
       recommended: judgment.recommended,
-      reviewReason: row.sourceHeld
-        ? "Source identity or historical ownership needs an explicit review. Retained advice and member decisions are unchanged."
-        : judgment.reviewReason,
+      reviewReason: row.sourceHeld ? SOURCE_HELD_REASON : judgment.reviewReason,
       clean: !row.sourceHeld && isClean(judgment, judgment.create?.amount ?? 0),
       spending: judgment.spending,
       matchedTransactionId:

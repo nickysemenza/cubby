@@ -1263,7 +1263,9 @@ export const validateRelationSections = (
         for (const key of route) {
           const relation: CompiledEntity["relations"][number] | undefined =
             target?.relations.find((candidate) => candidate.key === key);
-          const provenance =
+          const provenance:
+            | z.infer<typeof relationshipProvenanceSchema>
+            | undefined =
             relation && relationshipProvenanceSchema.parse(relation.provenance);
           target =
             relation &&

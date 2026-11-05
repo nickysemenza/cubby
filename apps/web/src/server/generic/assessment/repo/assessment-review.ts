@@ -42,6 +42,7 @@ import {
   resolveMailDecisionHandle,
   settleMailDecisionReview,
 } from "~/server/domains/purchase-import/repo/mail-decision-review";
+import { statementSuggestionSourceHeld } from "~/server/domains/transaction-import/repo/source-observation-state";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
@@ -499,6 +500,16 @@ async function settleReview(
   const family = assessmentFamilies[name];
   family.subject.parse(prediction.subject);
   assertReviewAction(name, input.verdict, automatic);
+  if (
+    prediction.subject.kind === "statement_transaction" &&
+    input.suppression
+  ) {
+    const { rows: sourceState } = await getDb(db).execute<{ held: boolean }>(
+      sql`SELECT ${statementSuggestionSourceHeld("s")} AS held FROM "Suggestion" s WHERE s.id=${prediction.id}::uuid`,
+    );
+    if (sourceState[0]?.held) input = { ...input, suppression: undefined };
+  }
+
   if (input.suppression) {
     if (
       !["dismissed", "wrong"].includes(input.verdict) ||

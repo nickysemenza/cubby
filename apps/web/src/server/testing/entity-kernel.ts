@@ -16,6 +16,7 @@ import {
   entityBrowserMutationCommandSchema,
   entityBulkUpdateCommandSchema,
   type EntityKernelEntity,
+  type EntityBrowserMutationCommand,
 } from "~/server/entity-kernel/contracts";
 import {
   lookupShortcodes,
@@ -119,7 +120,7 @@ export const updateThroughKernel = (
   actor: ActorContext,
   entity: EntityKernelEntity,
   id: string,
-  data: Record<string, string | number | boolean | null>,
+  data: Extract<EntityBrowserMutationCommand, { action: "update" }>["data"],
 ) =>
   executeEntity(
     createTestKernelContext(db, actor),

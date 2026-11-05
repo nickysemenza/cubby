@@ -50,3 +50,5 @@ Ambiguous history remains ambiguous. Fresh previews use opaque SOC handles while
 shipped dollar-number money fields keep their wire shape. ProviderData remains the
 first annotation of equal normalized facts; per-membership fingerprints freeze new
 collection replays. No scheduler or recurrence is introduced.
+
+Owner cutover ruling (2026-11-05): unproven observations stay held with unchanged money and retained paid/member review. Existing `entity.commands` supplies reviewed bulk resolution as independent SourceRecord updates, each with expectedDisposition and the observation/owner/history fences. An assign cannot discard a different original account or disposition. Held apply reports the held reason; held dismissal settles advice without suppressing a later live owner. Current publication supersedes old-key pending advice on the same observations and reuses paid labels only on exact model-input/policy agreement. Read summaries separate held historical links from holds without live historical links; weak sibling links are presentation/review evidence, never accepted ownership.

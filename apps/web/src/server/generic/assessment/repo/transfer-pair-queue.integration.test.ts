@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -393,7 +394,12 @@ describe("transfer pairs in the global queue", () => {
           source: observed.source,
           externalIds: [observed.externalId],
         },
-        data: { accountId: destination.shortcode },
+        data: {
+          accountId: parseShortcodeFor(
+            "financialAccount",
+            destination.shortcode,
+          ),
+        },
       },
       ctx.actor,
     );

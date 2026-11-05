@@ -17,6 +17,10 @@ import { createAppError } from "~/server/errors/app-error";
 import type { SuggestionStateRow } from "~/server/generic/assessment/repo/assessment-state";
 
 import {
+  SOURCE_HELD_REASON,
+  statementSuggestionSourceHeld,
+} from "./source-observation-state";
+import {
   buildChargeProposals,
   buildHoldVoidProposals,
 } from "./statement-suggestions";
@@ -45,6 +49,11 @@ export async function loadStatementApplication(
     .from(suggestionTable)
     .where(eq(suggestionTable.id, state.id))
     .limit(1);
+  const { rows: sourceState } = await unwrapDb(db).execute<{ held: boolean }>(
+    sql`SELECT ${statementSuggestionSourceHeld("s")} AS held FROM "Suggestion" s WHERE s.id=${state.id}::uuid`,
+  );
+  if (sourceState[0]?.held)
+    throw refuseStatementApplication(SOURCE_HELD_REASON);
   const published = statementTransactionJudgment.parse(prediction?.judgment);
   // A published review hold blocks preview and apply even if its draft can be planned.
   if (published.reviewReason)

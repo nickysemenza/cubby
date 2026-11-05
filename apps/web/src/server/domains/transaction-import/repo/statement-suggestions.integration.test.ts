@@ -2742,6 +2742,14 @@ describe("statement Transaction suggestions", () => {
         counterparty: { label: "business" },
       },
     });
+    const [original] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!original?.legacyExternalId)
+      throw new Error("Synthetic retained alias missing");
+    const legacyKey = original.legacyExternalId;
+    await getDb(ctx.db).execute(
+      sql`UPDATE "Suggestion" SET data=jsonb_set(data,'{chargeKey}',to_jsonb(${legacyKey}::text)), subject=jsonb_set(subject,'{chargeKey}',to_jsonb(${legacyKey}::text)) WHERE id=${before!.assessmentId}::uuid`,
+    );
+    await expect(accept(ctx, before!)).rejects.toThrow(/explicit review/);
     await record(
       ctx,
       [{ ...observed, rowPosition: 10, providerNotes: "Synthetic memo" }],
@@ -2771,11 +2779,33 @@ describe("statement Transaction suggestions", () => {
       },
       model: before!.model,
     });
+    expect(await stateOf(ctx, before!.assessmentId)).toMatchObject({
+      active: false,
+      status: "superseded",
+    });
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      operationId: "synthetic-obsolete-dismissal",
+      assessmentId: before!.assessmentId,
+      verdict: "dismissed",
+      intent: "history",
+      suppression: {
+        scope: "statement_transaction",
+        candidateKey: `${original.source}:${legacyKey}`,
+        fingerprint: null,
+      },
+      evidence: { note: "Dismiss obsolete held advice only" },
+    });
+    const [obsolete] = await getDb(ctx.db)
+      .select({ suppression: suggestionTable.suppression })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, before!.assessmentId));
+    expect(obsolete?.suppression).toBeNull();
+    expect(await readPendingStatements(ctx)).toHaveLength(1);
     await accept(ctx, after!);
     expect(
-      (
-        await listSourceTransactionRecords(ctx.db, { current: true })
-      ).data.every((row) => row.matchState === "matched"),
+      (await listSourceTransactionRecords(ctx.db, {})).data
+        .filter((row) => row.current)
+        .every((row) => row.matchState === "matched"),
     ).toBe(true);
   });
 

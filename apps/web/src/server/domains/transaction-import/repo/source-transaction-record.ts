@@ -129,6 +129,8 @@ export async function getSourceTransactionRecordSummary(
     total: number;
     matched: number;
     held: number;
+    heldHistorical: number;
+    heldWithoutHistoricalLinks: number;
     unmatched: number;
     ignored: number;
     superseded: number;
@@ -151,9 +153,11 @@ export async function getSourceTransactionRecordSummary(
         ),
         sql`,`,
       )},
+      count(*) FILTER (WHERE ms = ${sourceTransactionRecordMatchState.enum.held} AND historical)::int AS "heldHistorical",
+      count(*) FILTER (WHERE ms = ${sourceTransactionRecordMatchState.enum.held} AND NOT historical)::int AS "heldWithoutHistoricalLinks",
       count(DISTINCT charge) FILTER (WHERE ms = ${sourceTransactionRecordMatchState.enum.unmatched})::int AS "unmatchedCharges"
     FROM (
-      SELECT ${matchStateSql} AS ms, ${sourceObservationColumns.amount} AS amount,
+      SELECT cardinality(${sourceObservationColumns.historicalTransactionIds}) > 0 AS historical, ${matchStateSql} AS ms, ${sourceObservationColumns.amount} AS amount,
         "SourceTransactionRecord".source || ':' || ${chargeKeyOf('"SourceTransactionRecord"')} AS charge
       ${FROM_WITH_REFS}
       WHERE ${where}
@@ -164,6 +168,8 @@ export async function getSourceTransactionRecordSummary(
     total: Number(row?.total ?? 0),
     matched: Number(row?.matched ?? 0),
     held: Number(row?.held ?? 0),
+    heldHistorical: Number(row?.heldHistorical ?? 0),
+    heldWithoutHistoricalLinks: Number(row?.heldWithoutHistoricalLinks ?? 0),
     unmatched: Number(row?.unmatched ?? 0),
     ignored: Number(row?.ignored ?? 0),
     superseded: Number(row?.superseded ?? 0),

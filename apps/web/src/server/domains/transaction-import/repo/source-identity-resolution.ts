@@ -5,6 +5,7 @@ import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { DrizzleTransaction } from "~/server/db";
+import { sourceHistoricalTransactionRows } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import {
   financialAccount,
@@ -183,6 +184,21 @@ export async function resolveSourceIdentity(
     .for("update");
   if (!annotation) return refuse("Original source judgments are missing.");
   if (
+    (originalOwner?.disposition ?? annotation.disposition) !==
+    input.expectedDisposition
+  )
+    return refuse(
+      "The source disposition changed after review. Read the current member judgment before resolving identity.",
+    );
+  if (
+    input.decision === "assign" &&
+    (annotation.accountId !== owner?.accountId ||
+      annotation.disposition !== owner?.disposition)
+  )
+    return refuse(
+      "The observation account or disposition differs from the target owner; preserve and review both member judgments before assignment.",
+    );
+  if (
     input.decision === "assign" &&
     (owner?.accountId !== account.id ||
       financialJudgment.disposition !== owner.disposition ||
@@ -193,19 +209,13 @@ export async function resolveSourceIdentity(
       "Resolve conflicting account or ignore judgments explicitly before assigning the observation.",
     );
   const { rows: history } = await db.execute<{ id: string; code: string }>(sql`
-    SELECT DISTINCT historical.id,historical.shortcode AS code
-    FROM "FinancialEvidenceAlias" observed
-    JOIN "FinancialEvidenceAlias" binding ON binding.source=observed.source AND binding.value=observed.value AND ${notDeleted("binding")}
-    JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}
-    WHERE observed."observationId"=${observation.id}::uuid ${
-      owners.length
-        ? sql`OR observed."occurrenceId" IN (${sql.join(
-            owners.map((item) => sql`${item.id}::uuid`),
-            sql`, `,
-          )})`
-        : sql``
-    }
-    ORDER BY historical.id`);
+    SELECT * FROM (${sourceHistoricalTransactionRows(
+      sql`${observation.id}::uuid`,
+      sql`ARRAY[${sql.join(
+        owners.map((item) => sql`${item.id}::uuid`),
+        sql`, `,
+      )}]::uuid[]`,
+    )}) history ORDER BY history.id`);
   if (
     !sameSet(
       history.map((item) => item.code),
@@ -257,6 +267,7 @@ export async function resolveSourceIdentity(
       accountId: account.id,
       acceptedTransactionId: target?.id ?? null,
       note: input.note,
+      expectedDisposition: input.expectedDisposition,
       judgment: input.judgment,
       priorWithdrawal: originalOwner
         ? {

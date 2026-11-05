@@ -417,7 +417,8 @@ export async function recordSourceTransactionRecords(
         // A parser-supplied ordinal cannot retroactively attest an old collection.
         // Refuse even an ignored twin before a new occurrence could authorize money.
         if (
-          incoming.identity?.kind === "positioned" &&
+          (incoming.identity?.kind === "positioned" ||
+            incoming.identity?.kind === "provider") &&
           members.some(
             (member) =>
               member.membership.rowPosition === null &&

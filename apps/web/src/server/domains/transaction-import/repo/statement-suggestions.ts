@@ -17,6 +17,7 @@ import {
   financialTransactionKind,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
+import { financialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
 import { financialTransactionProviderStatus } from "@cubby/schemas/financial-transaction-fields";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
@@ -1692,6 +1693,67 @@ type ChargePublicationHistory = SuggestionRow & {
   applicationOrder: unknown;
 };
 
+/** Retained paid publications follow observations and their aliases across slot changes. */
+async function priorStatementPublications(
+  db: Database,
+  proposals: readonly ChargeProposal[],
+) {
+  const roots = proposals.flatMap((proposal) =>
+    proposal.observations.map(
+      (row) => sql`(${chargeId(proposal.charge)}, ${row.id}::uuid)`,
+    ),
+  );
+  const result = new Map<string, ChargePublicationHistory[]>();
+  if (!roots.length) return result;
+  const { rows } = await getDb(db).execute<
+    SuggestionRow & { owner: string }
+  >(sql`
+    WITH roots(owner, observation) AS (VALUES ${sql.join(roots, sql`, `)})
+    SELECT DISTINCT roots.owner, s.id::text AS id, s.status, s.active, s.fingerprint, s.suppression, s.data,
+      s.data->>'evidenceFingerprint' AS "evidenceFingerprint", to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt", s.producer, s.judgment
+    FROM roots JOIN "Suggestion" s ON s.family=${assessmentFamily.enum.statement_transaction}
+      AND (s."recordId"=roots.observation OR EXISTS (
+        SELECT 1 FROM "FinancialEvidenceAlias" evidence
+        WHERE evidence."observationId"=roots.observation AND ${notDeleted("evidence")} AND evidence.source=s.data->>${financialTransactionSourceRef.keyof().enum.source} AND evidence.value=s.data->>'chargeKey'))
+    ORDER BY "createdAt" DESC, id DESC`);
+  for (const row of rows) {
+    const data = z.record(z.string(), z.json()).parse(row.data);
+    const value: ChargePublicationHistory = {
+      ...row,
+      data,
+      producer: assessmentProducer.nullable().parse(row.producer),
+      needsLabel: jsonText(data.needsLabel),
+      checkpoint: data.labelCheckpoint ?? null,
+      applicationPending: jsonText(data.applicationPending),
+      applicationOrder: data.applicationOrder ?? null,
+    };
+    const history = result.get(row.owner) ?? [];
+    history.push(value);
+    result.set(row.owner, history);
+  }
+  return result;
+}
+
+/** Keep the immutable old publication and labels, replacing only its active queue slot. */
+async function retireRetainedStatementAdvice(
+  db: Database,
+  proposal: ChargeProposal,
+) {
+  if (!proposal.observations.length) return;
+  await transitionAssessmentStates(
+    db,
+    sql`${suggestionTable.family}=${assessmentFamily.enum.statement_transaction}
+    AND ${suggestionTable.active} AND ${suggestionTable.status}=${suggestionStatus.enum.pending}
+    AND ${inArray(
+      suggestionTable.recordId,
+      proposal.observations.map((row) => row.id),
+    )}
+    AND ${suggestionTable.data}->>${financialTransactionSourceRef.keyof().enum.source}=${proposal.charge.source}
+    AND ${suggestionTable.data}->>'chargeKey' IS DISTINCT FROM ${proposal.charge.chargeKey}`,
+    { active: false, status: "superseded" },
+  );
+}
+
 /** The text `->>` reads from a JSON scalar. */
 const jsonText = (value: unknown) =>
   value === undefined || value === null
@@ -1764,7 +1826,10 @@ const statementSuggestions: SuggestionFamily<
   StatementCandidate,
   ChargePublicationHistory,
   "settled",
-  Map<string, ChargeState> | null
+  {
+    states: Map<string, ChargeState> | null;
+    history: Map<string, ChargePublicationHistory[]>;
+  }
 > = {
   family: assessmentFamily.enum.statement_transaction,
   slot: ({ proposal: { charge } }) => ({
@@ -1786,20 +1851,31 @@ const statementSuggestions: SuggestionFamily<
       tx,
       candidates.map(({ proposal }) => proposal),
     ),
-  load: async (tx, candidates, batch) =>
-    batch
-      ? currentChargeStates(
+  load: async (tx, candidates, batch) => ({
+    states: batch
+      ? await currentChargeStates(
           tx,
           candidates.map(({ proposal }) => proposal.charge),
         )
       : null,
+    history: await priorStatementPublications(
+      tx,
+      candidates.map(({ proposal }) => proposal),
+    ),
+  }),
   batchable: ({ proposal }) =>
     proposal.judgment.recommended !== "void" &&
     !isSettledBooking(proposal.judgment),
   async precheck(tx, { proposal, labelPublication }, rows, _producer, context) {
     const { charge, judgment } = proposal;
+    if (
+      rows.some(
+        (row) => row.active && row.status === suggestionStatus.enum.pending,
+      )
+    )
+      await retireRetainedStatementAdvice(tx, proposal);
     if (context.batch) {
-      const state = context.loaded?.get(chargeId(charge));
+      const state = context.loaded.states?.get(chargeId(charge));
       return !state || chargeSettled(state, judgment)
         ? { kind: "defer" }
         : undefined;
@@ -1854,15 +1930,19 @@ const statementSuggestions: SuggestionFamily<
   onUnchanged: "none",
   async prepare(tx, candidate, rows, producer, context) {
     const { proposal } = candidate;
+    const history = [
+      ...rows,
+      ...(context.loaded.history.get(chargeId(proposal.charge)) ?? []),
+    ];
     if (context.batch)
-      return reusableRuleLabels(rows, proposal)
+      return reusableRuleLabels(history, proposal)
         ? "defer"
         : { candidate, producer };
     if (producer.kind !== "rule" || !proposal.judgment.create)
       return { candidate, producer };
     // Retain the paid votes, not their old rule/history conclusions. Evidence
     // still gets a fresh fingerprint and current apply-time validation.
-    const reusable = reusableRuleLabels(rows, proposal);
+    const reusable = reusableRuleLabels(history, proposal);
     if (!reusable) return { candidate, producer };
     const previous = assessmentJudgments.statement_transaction.parse(
       reusable.judgment,
@@ -1963,6 +2043,8 @@ const statementSuggestions: SuggestionFamily<
     );
   },
   async afterPublish(tx, published, context) {
+    for (const { candidate } of published)
+      await retireRetainedStatementAdvice(tx, candidate.proposal);
     if (context.batch) {
       // Reference writers use evidence-key locks. Their transaction may commit
       // after our admission read but before these new states become visible.

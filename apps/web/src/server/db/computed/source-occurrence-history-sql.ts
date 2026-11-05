@@ -17,3 +17,16 @@ export const sourceOccurrenceHasUnresolvedHistory = (
     AND binding."historicalTransactionId" IS DISTINCT FROM ${acceptedId}
     AND NOT COALESCE(owner."identityProof"->'resolvedHistoricalTransactionIds' ? binding."historicalTransactionId"::text,false)
 )`;
+
+/** Presentation/review closure includes weakly related sibling history, never accepted ownership. */
+export const sourceHistoricalTransactionRows = (
+  observationId: SQL,
+  occurrenceIds: SQL,
+) => sql`
+  SELECT DISTINCT historical.id, historical.shortcode AS code
+  FROM "FinancialEvidenceAlias" observed
+  JOIN "FinancialEvidenceAlias" sibling ON sibling.source=observed.source AND sibling.value=observed.value AND sibling."observationId" IS NOT NULL
+  JOIN "FinancialEvidenceAlias" evidence ON evidence."observationId"=sibling."observationId" OR (sibling."occurrenceId" IS NOT NULL AND evidence."occurrenceId"=sibling."occurrenceId")
+  JOIN "FinancialEvidenceAlias" binding ON binding.source=evidence.source AND binding.value=evidence.value AND ${notDeleted("binding")}
+  JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}
+  WHERE observed."observationId"=${observationId} OR observed."occurrenceId" IN (SELECT unnest(${occurrenceIds}))`;

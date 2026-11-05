@@ -164,11 +164,11 @@ Read a selected `STR-` or `TIM-` through `entity_read.get`. Consult the live
 schema for filters, related records and projection fields; the import fingerprint
 alone proves neither retained membership nor complete coverage.
 
-Use `finance_read.summary` to distinguish matched, held and unmatched evidence; held history is not new spending to book. SourceRecord historicalTransactionIds are labelled historical evidence and never imply accepted ownership. Use
+Use `finance_read.summary` to distinguish matched, held and unmatched evidence; heldHistorical and heldWithoutHistoricalLinks separate retained matching history from evidence without a historical link. Neither authorizes booking while held; a never-matched hold may still represent unbooked spending after explicit reviewed identity resolution. SourceRecord historicalTransactionIds are labelled historical evidence and never imply accepted ownership. Use
 `finance_read.drift` to investigate possible descriptor revisions. These are
 workflow computations, not roster APIs. Judgment corrections use the declared
 `entity.update` fields on `sourceTransactionRecord`; obtain record IDs from
-retained reads before setting a reviewed successor. Exact replay preserves a selected head and withdrawal. Stronger holds survive revisions. For an actual explicit identity judgment, the same entity.update accepts identityResolution (distinct, accept_existing or assign) with the observation fingerprint, owner version, accepted owner, complete live historical transaction set, account and decision note from the reviewed read. Never invent that judgment merely to clear a hold; preserve the existing evidence-backed review. Re-read affected evidence before each write. Transaction imports remain
+retained reads before setting a reviewed successor. Exact replay preserves a selected head and withdrawal. Stronger holds survive revisions. For an actual explicit identity judgment, the same entity.update accepts identityResolution (distinct, accept_existing or assign) with expectedDisposition, the observation fingerprint, owner version, accepted owner, complete live historical transaction set, account and decision note from the reviewed read. Never invent that judgment merely to clear a hold; preserve the existing evidence-backed review. Re-read affected evidence before each write. Transaction imports remain
 read-only outside intake. Provider facts and memberships change only through
 recording source evidence. The [evidence lifecycle](../../../docs/import-evidence-convergence.md#financial-evidence-entities)
 owns create/merge restrictions and deletion guards.
@@ -192,3 +192,5 @@ Expenses. Report pending/unknown status, revisions, withdrawals, correction
 reviews and failed durable work without claiming source capabilities from
 synthetic tests. Routine success needs no per-row approval; unresolved decisions
 remain in Suggestions and execution failures in existing Job/Run diagnostics.
+
+Reviewed bulk identity resolution uses the existing `entity.commands` action (up to50 independent update commands). Each command is `action: update`, `entity: sourceTransactionRecord`, the reviewed STR shortcode and `data.identityResolution` with its own expectedDisposition, fact fingerprint, occurrence version, accepted owner and complete live historical set. The batch preserves per-row refusal; one stale review never supplies a judgment for another row. Re-read affected records immediately before each bounded batch and retain each result. Do not use one shared bulkUpdate judgment for unrelated evidence. Only explicitly authorized, evidence-backed decisions may be submitted; unresolved items remain held, visible, and money-unchanged. No web action or automatic identity guessing is required.

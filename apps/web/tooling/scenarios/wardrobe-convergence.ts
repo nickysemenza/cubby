@@ -1,3 +1,7 @@
+import {
+  sourceObservationColumns,
+  sourceObservationFrom,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
 import { createPostgresPool } from "../postgres-pool";
 import { makeMcpCaller } from "./mcp-caller";
 import { attachRecorder } from "playwright-recorder-plus";
@@ -510,6 +514,11 @@ async function recordSyntheticStatement(
     rows: [
       {
         providerTransactionId: "synthetic-statement-1",
+        providerAccountId: "synthetic-wardrobe-visa",
+        providerData: {
+          id: "synthetic-statement-1",
+          account_id: "synthetic-wardrobe-visa",
+        },
         accountDescriptor: "Fixture Visa (...4242)",
         statementDate: "2026-09-21",
         providerAmount: -29.99,
@@ -519,6 +528,11 @@ async function recordSyntheticStatement(
       },
       {
         providerTransactionId: "synthetic-statement-2",
+        providerAccountId: "synthetic-wardrobe-visa",
+        providerData: {
+          id: "synthetic-statement-2",
+          account_id: "synthetic-wardrobe-visa",
+        },
         accountDescriptor: "Fixture Visa (...4242)",
         statementDate: "2026-09-22",
         providerAmount: 50,
@@ -533,17 +547,20 @@ async function recordSyntheticStatement(
   const recorded = await recordSourceTransactionRecords(db, input, actor);
   if (recorded.inserted !== 2 || !recorded.batchId)
     throw new Error("Synthetic normalized statement evidence missing");
-  const evidence = await getDb(db).query.sourceTransactionRecord.findFirst({
-    where: and(
-      eq(sourceTransactionRecord.source, "monarch"),
-      eq(sourceTransactionRecord.batchId, recorded.batchId),
-      eq(
-        sourceTransactionRecord.providerTransactionId,
-        "synthetic-statement-1",
+  const [evidence] = await getDb(db)
+    .select(sourceObservationColumns)
+    .from(sourceObservationFrom)
+    .where(
+      and(
+        eq(sourceTransactionRecord.source, "monarch"),
+        eq(sourceTransactionRecord.batchId, recorded.batchId),
+        eq(
+          sourceTransactionRecord.providerTransactionId,
+          "synthetic-statement-1",
+        ),
+        notDeleted(sourceTransactionRecord),
       ),
-      notDeleted(sourceTransactionRecord),
-    ),
-  });
+    );
   if (!evidence) throw new Error("Synthetic charge evidence missing");
   // This reviewed fixture approves only the purchase; the card payment stays evidence.
   const transaction = await createFixtureWithContext(
@@ -558,9 +575,7 @@ async function recordSyntheticStatement(
       merchant: evidence.merchant,
       rawDescription: evidence.rawDescription,
       sourceCategory: evidence.sourceCategory,
-      sourceRefs: [
-        { source: evidence.source, externalId: evidence.externalId },
-      ],
+      sourceRefs: [{ source: evidence.source, externalId: evidence.chargeKey }],
     },
   );
   const replay = await recordSourceTransactionRecords(db, input, actor);
@@ -840,6 +855,11 @@ async function recordOverlappingStatementAndDecoy(
   const overlapAndDecoyRows = [
     {
       providerTransactionId: "synthetic-statement-1",
+      providerAccountId: "synthetic-wardrobe-visa",
+      providerData: {
+        id: "synthetic-statement-1",
+        account_id: "synthetic-wardrobe-visa",
+      },
       sourceCategory: "Clothing",
       accountDescriptor: "Fixture Visa (...4242)",
       statementDate: "2026-09-21",
@@ -850,6 +870,11 @@ async function recordOverlappingStatementAndDecoy(
     {
       accountDescriptor: "Fixture Visa (...4242)",
       providerTransactionId: "synthetic-statement-2",
+      providerAccountId: "synthetic-wardrobe-visa",
+      providerData: {
+        id: "synthetic-statement-2",
+        account_id: "synthetic-wardrobe-visa",
+      },
       sourceCategory: "Credit Card Payment",
       statementDate: "2026-09-22",
       providerAmount: 50,
@@ -859,6 +884,11 @@ async function recordOverlappingStatementAndDecoy(
     {
       accountDescriptor: "Fixture Visa (...4242)",
       providerTransactionId: "synthetic-statement-decoy",
+      providerAccountId: "synthetic-wardrobe-visa",
+      providerData: {
+        id: "synthetic-statement-decoy",
+        account_id: "synthetic-wardrobe-visa",
+      },
       sourceCategory: "Clothing",
       statementDate: "2026-08-05",
       providerAmount: -29.99,
@@ -903,16 +933,19 @@ async function recordOverlappingStatementAndDecoy(
   const fixtureVisaId = fixtureVisa[0]?.shortcode;
   if (fixtureVisa.length !== 1 || !fixtureVisaId)
     throw new Error("Fixture Visa account is unavailable for the decoy charge");
-  const evidence = await getDb(db).query.sourceTransactionRecord.findFirst({
-    where: and(
-      eq(sourceTransactionRecord.source, "monarch"),
-      eq(
-        sourceTransactionRecord.providerTransactionId,
-        "synthetic-statement-decoy",
+  const [evidence] = await getDb(db)
+    .select(sourceObservationColumns)
+    .from(sourceObservationFrom)
+    .where(
+      and(
+        eq(sourceTransactionRecord.source, "monarch"),
+        eq(
+          sourceTransactionRecord.providerTransactionId,
+          "synthetic-statement-decoy",
+        ),
+        notDeleted(sourceTransactionRecord),
       ),
-      notDeleted(sourceTransactionRecord),
-    ),
-  });
+    );
   if (!evidence) throw new Error("Synthetic decoy evidence missing");
   const created = await createFixtureWithContext(
     kernel,
@@ -927,9 +960,7 @@ async function recordOverlappingStatementAndDecoy(
       merchant: "Synthetic Deceptive Retail",
       rawDescription: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
       sourceCategory: "Clothing",
-      sourceRefs: [
-        { source: evidence.source, externalId: evidence.externalId },
-      ],
+      sourceRefs: [{ source: evidence.source, externalId: evidence.chargeKey }],
     },
   );
   const transaction = await resolveOrThrow(
