@@ -59,9 +59,10 @@ owns the execution contract; mailbox page and retention behavior lives in the
 [purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md#mail-import-end-to-end).
 
 `cubby-background` carries only the version-3 wake envelope. Every delivery,
-including an unreadable envelope, attempts the same due-Job drain and is always
-acknowledged. Transport has no retry budget. Lost wakes are recovered by the
-minute cron and app-open catch-up. Telemetry has its separate queue.
+including an unreadable envelope, attempts the same due-Job drain and acknowledges
+successful processing. Runtime or transport failures retry delivery up to three
+times; durable Job policy still owns execution retries. Daily recovery and
+app-open catch-up repair lost wakes. Telemetry has its separate queue.
 
 One SQL window query interleaves due kinds, starting with the least recently
 served kind derived from existing Job timestamps. Priority ranks only within a

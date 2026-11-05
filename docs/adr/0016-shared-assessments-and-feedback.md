@@ -775,3 +775,9 @@ read publications must not turn existing review work into an empty queue.
 The derived drain retains but does not claim `assessment.reviewFacts` tickets:
 activation exhausted PostgreSQL memory and rolled back unrelated publications.
 Member decisions, evidence, paid work and all existing tickets remain retained.
+
+Browse reads project from `AssessmentState` and revalidate nothing beyond the
+requested page: connection evidence averages about 200 kB a row, so reading it
+per row cannot finish. Counts may include a stale row, and connection Strength
+is provisional in browse order. Accept rechecks current evidence, and money
+application keeps its strict checks.

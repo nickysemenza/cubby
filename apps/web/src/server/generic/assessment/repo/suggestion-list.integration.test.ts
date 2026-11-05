@@ -999,17 +999,8 @@ describe("cross-family Suggestion list", () => {
       );
     const missingWork = await readPublishedWork();
     expect(missingWork.meta.totalCount).toBeGreaterThan(0);
-    expect(missingWork.meta.incompleteSources?.[0]?.count).toBeNull();
-    expect(missingWork.meta.incompleteSources?.[0]?.message).toContain(
-      "Global Assessment coverage",
-    );
-    expect(
-      (await readPublishedWork({ view: "agent" })).meta.incompleteSources,
-    ).toEqual([]);
-    expect(
-      (await readPublishedWork({ view: "human" })).meta.incompleteSources?.[0]
-        ?.count,
-    ).toBeNull();
+    // Work reads pending State directly, so there is no publication coverage warning.
+    expect(missingWork.meta.incompleteSources).toEqual([]);
     expect(await publishedFacts()).toEqual([]);
     expect(await readPublishedPage(ctx.db, {})).toMatchObject({
       meta: { totalCount: ids.length, coverage: { missing: false } },
@@ -1425,9 +1416,6 @@ describe("cross-family Suggestion list", () => {
       { lastError: "Synthetic publication failure", attempts: 1 },
     );
     expect((await coverage()).failed).toBe(true);
-    expect(
-      (await readPublishedWork()).meta.incompleteSources?.[0]?.message,
-    ).toContain("refresh work has failed");
     await deleteWorkItems(ctx.db, { target: `${ASSESSMENT_READ_TARGET}@0` });
     await deleteWorkItems(ctx.db, { target: ASSESSMENT_READ_TARGET });
     // Complete the source work enrolled by real registration as well as the
@@ -1664,13 +1652,6 @@ describe("cross-family Suggestion list", () => {
       .update(assessmentState)
       .set({ family: "image_description" })
       .where(eq(assessmentState.id, proposal.review.assessmentId));
-    await publishReadFacts([proposal.review.assessmentId]);
-    expect(
-      (
-        await refreshAndListSuggestions(ctx.db, { recordIds: [item.id] })
-      ).items.map((row) => row.id),
-    ).toEqual([proposal.review.assessmentId]);
-    expect(await batchCounts([item.id])).toEqual([{ id: item.id, pending: 1 }]);
     const divergentInputs: AssessmentReadDependency[] = [];
     const divergent =
       (
@@ -1736,11 +1717,6 @@ describe("cross-family Suggestion list", () => {
       { id: item.id, pending: 1 },
       { id: charge.output.id, pending: 1 },
     ]);
-    expect(
-      (
-        await refreshAndCountSuggestions(ctx.db, { recordIds: [item.id] })
-      ).families.find((row) => row.family === "recommendation")?.pending,
-    ).toBe(1);
     await getDb(ctx.db)
       .update(assessmentState)
       .set({ family: "recommendation" })

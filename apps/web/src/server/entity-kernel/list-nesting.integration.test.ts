@@ -29,20 +29,20 @@ describe("list nesting scope", () => {
     return row.shortcode;
   };
 
-  /** A background parent with one background and one AI child, plus an AI root. */
+  /** A maintenance parent with one maintenance and one sweep child, plus a sweep root. */
   const seedRuns = async () => {
     const parentId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "background",
+      purpose: "maintenance",
     });
     const sameChild = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "background",
+      purpose: "maintenance",
       parentRunId: parentId,
     });
     const otherChild = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
+      purpose: "sweep",
       parentRunId: parentId,
     });
-    const root = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const root = await ensureRun(ctx.db, ctx.actor, { purpose: "sweep" });
     return {
       parentId,
       parent: await runCode(parentId),
@@ -124,7 +124,7 @@ describe("list nesting scope", () => {
     // A filtered child scope keeps only the matching child.
     const filtered = await readRuns({
       nesting: children,
-      filters: { purpose: ["background"] },
+      filters: { purpose: ["maintenance"] },
     });
     expect(outline(filtered.items)).toEqual([[runs.sameChild, 0]]);
     expect(filtered.meta.totalCount).toBe(1);
@@ -134,14 +134,14 @@ describe("list nesting scope", () => {
     const runs = await seedRuns();
     const ai = await readRuns({
       nesting: { scope: "roots" },
-      filters: { purpose: ["ai_suggest"] },
+      filters: { purpose: ["sweep"] },
     });
     expect(outline(ai.items)).toEqual(
       sorted([runs.otherChild, 0], [runs.root, 0]),
     );
     const mail = await readRuns({
       nesting: { scope: "roots" },
-      filters: { purpose: ["background"] },
+      filters: { purpose: ["maintenance"] },
     });
     // The parent counts only the child that matches the same filters.
     expect(outline(mail.items)).toEqual([[runs.parent, 1]]);

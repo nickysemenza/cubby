@@ -615,8 +615,9 @@ batches (retires moot work, gives open rows without a live execution one;
 failed image executions count as live) and keeps the device wake armed. Every
 six hours it also prunes completed and cancelled Jobs older than
 `JOB_RETENTION_MS` with their `Entity` identities, and observed captures, in
-bounded batches, continuing at once while a batch fills. Failed Jobs and all
-domain evidence (image attempts, AI evaluations, Run history, audit) stay.
+bounded batches, continuing at once while a batch fills. Failed Jobs prune after
+30 days under the same pending-work, wake and identity safeguards. Domain evidence
+(image attempts, AI evaluations, Run history, audit) stays.
 There is no per-kind queue health or alerting: with a few dozen coarse Jobs,
 Activity's counts and a stalled Run show a stuck queue directly.
 
@@ -636,10 +637,10 @@ record (~55k), which starved every other kind for days.
 
 - Routine connection discovery (`discovery.connections`) queues one
   evaluation page (`CONNECTION_ROSTER_PAGE`, 100 records) per pass and holds
-  its cursor for 30 s while `CONNECTION_DISCOVERY_PENDING_CAP` (1,000)
-  connection evaluations wait (`rate_limit`). A full pass over ~55k records
-  is meant to finish within an hour; a longer wait idled the pass, not the
-  queue. It walks the newest records first, and never appends to a stopped Run. A changed
+  its cursor while `CONNECTION_DISCOVERY_PENDING_CAP` (1,000)
+  connection evaluations wait (`rate_limit`). Evaluation settlements make the
+  existing discovery Job due; a one-hour deadline repairs a missed release.
+  There is no 30-second idle polling. It walks the newest records first, and never appends to a stopped Run. A changed
   record updates its queued slot in place, retaining its Job. Cancelled work whose Run
   failed with `failureCode = "superseded"` (a cleared backlog, not a member's
   decision) is re-admitted at that pace; a member's cancel stays final. A
@@ -971,3 +972,13 @@ are on demand. Inactive Activity panels unmount, except maintenance preserves
 inspected previews with hidden queries disabled. Only runnable work keeps the
 work feed's periodic refresh active. Scheduler transitions use structured Worker
 logs and bounded DO history, with no database-backed idle heartbeat.
+
+### Routine Run history
+
+Default Run lists and counts omit `ai_suggest` and `background`. An explicit
+purpose filter includes them, and direct record reads still work. Creation stays:
+AI usage and evaluations require their Run reference, and automatic funding uses
+that Run to enforce the existing background budget. Executed workflow retries can
+resume the same Run and its committed steps; a retry does not universally create
+a successor. Queue runtime failures receive three delivery retries in addition to
+the durable Job's execution retry policy.

@@ -1,4 +1,4 @@
-import { entitySchema } from "@cubby/schemas/entity";
+import { suggestionStatus } from "@cubby/schemas/ai";
 import {
   shortcodeEntities,
   type ShortcodeEntity,
@@ -20,10 +20,9 @@ import { workPurchaseSourceOwners } from "~/server/domains/purchase/repo/work-ow
 import { workRunReviewOwners } from "~/server/domains/run/repo/work-owners";
 import { workRecordFactsFor } from "~/server/domains/work/repo/record-facts";
 import {
-  publishedAssessmentCoverageSql,
-  type AssessmentPublishedScope,
-} from "~/server/generic/assessment/repo/read-publication";
-import { canonicalSuggestionRecordRefs } from "~/server/generic/assessment/repo/suggestion-list";
+  pendingSuggestionRecordsSql,
+  touchingAssessmentIds,
+} from "~/server/generic/assessment/repo/review-families";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
@@ -32,6 +31,9 @@ import {
   selectWorkCandidates,
   type WorkSource,
 } from "~/server/generic/work-queue/repo/work-source";
+
+const UUID_PATTERN =
+  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
 
 const recordAuthority = (entity: ShortcodeEntity, id: SQL) => {
   switch (entity) {
@@ -67,7 +69,6 @@ const source: WorkSource = {
   family: "suggestion",
   executor: "human",
   entity: null,
-  inputLabel: "Assessment review coverage",
   link: { kind: "suggestions" },
   reasons: Object.entries({
     field: "Pending field suggestions",
@@ -78,8 +79,9 @@ const source: WorkSource = {
     product_pair: "Pending product pairs",
   }).map(([family, label]) => ({ key: `suggestions:${family}`, label })),
   candidates: async (db, scope) => {
-    const selection: AssessmentPublishedScope = scope.record
-      ? {
+    // A record read discovers its own suggestions; the unscoped queue reads State.
+    const ids = scope.record
+      ? await touchingAssessmentIds(db, {
           entity: scope.record.entity,
           records: [
             {
@@ -92,9 +94,15 @@ const source: WorkSource = {
               code: scope.record.id,
             },
           ],
-        }
-      : {};
-    const identity = alias(entityIdentity, "work_identity");
+          eligibility: {
+            kind: "suggestions",
+            families: suggestionListFamily.options,
+            status: suggestionStatus.enum.pending,
+          },
+        })
+      : null;
+    if (ids?.size === 0) return null;
+    const liveIdentity = sql`${notDeleted(alias(entityIdentity, "work_identity"))} AND work_identity."mergedIntoId" IS NULL`;
     const queries = shortcodeEntities
       .filter((entity) => !scope.record || scope.record.entity === entity)
       .map((entity) => {
@@ -125,32 +133,29 @@ const source: WorkSource = {
         queries.map((query) => sql`(${query})`),
         sql` UNION ALL `,
       ),
-      // Global conservative flags have no record count and must share this statement's snapshot.
-      inputCoverage: sql`SELECT concat_ws(' ', ${"Global Assessment coverage:"}::text,
-        CASE WHEN missing THEN ${"Some open Assessment reviews have no publication."}::text END,
-        CASE WHEN stale THEN ${"Published Assessment reviews may be out of date."}::text END,
-        CASE WHEN unresolved THEN ${"Review dependencies or memberships remain unresolved."}::text END,
-        CASE WHEN failed THEN ${"Assessment refresh work has failed."}::text END
-      ) AS message FROM (${publishedAssessmentCoverageSql()}) coverage
-      WHERE missing OR stale OR unresolved OR failed`,
       ctes: [
         {
-          name: "work_published_suggestion_refs",
-          sql: sql`SELECT * FROM jsonb_to_recordset(${JSON.stringify(await canonicalSuggestionRecordRefs(db, selection))}::jsonb)
-            AS refs(families text[], entity text, "recordCode" text)`,
+          name: "work_suggestion_refs",
+          sql: sql`SELECT family, entity, token,
+            CASE WHEN token ~ ${UUID_PATTERN} THEN token::uuid END AS record_uuid
+            FROM (${pendingSuggestionRecordsSql(ids ? [...ids] : undefined)}) refs`,
         },
         {
           name: "work_pending_records",
-          sql: sql`SELECT work_identity.kind AS entity, work_identity.id AS record_id,
-          array_agg(DISTINCT ('suggestions:' || family) ORDER BY ('suggestions:' || family)) AS reason_keys
-          FROM work_published_suggestion_refs refs
-          JOIN "Entity" work_identity ON work_identity.kind = refs.entity AND work_identity.shortcode = refs."recordCode"
-          -- Statement review belongs to the account, not every settlement reference.
-          CROSS JOIN LATERAL unnest(refs.families) family
-          WHERE ${notDeleted(identity)} AND work_identity."mergedIntoId" IS NULL
-          AND (family <> ${suggestionListFamily.enum.statement_transaction}
-            OR work_identity.kind = ${entitySchema.enum.financialAccount})
-          GROUP BY work_identity.kind, work_identity.id`,
+          sql: sql`SELECT entity, record_id,
+            array_agg(DISTINCT ('suggestions:' || family) ORDER BY ('suggestions:' || family)) AS reason_keys
+          FROM (
+            SELECT refs.family, work_identity.kind AS entity, work_identity.id AS record_id
+            FROM work_suggestion_refs refs
+            JOIN "Entity" work_identity ON work_identity.kind = refs.entity AND work_identity.id = refs.record_uuid
+            WHERE ${liveIdentity}
+            UNION ALL
+            SELECT refs.family, work_identity.kind, work_identity.id
+            FROM work_suggestion_refs refs
+            JOIN "Entity" work_identity ON work_identity.kind = refs.entity AND work_identity.shortcode = refs.token
+            WHERE refs.record_uuid IS NULL AND ${liveIdentity}
+          ) identities
+          GROUP BY entity, record_id`,
         },
       ],
     };

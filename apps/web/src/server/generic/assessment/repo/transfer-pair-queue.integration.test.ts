@@ -493,14 +493,8 @@ describe("transfer pairs in the global queue", () => {
         { ledgerPartyId: other.output.id },
         ctx.actor,
       );
-      // Canonical admission rereads current evidence, so the changed pair leaves
-      // the list at once. A direct apply with the old fingerprint stays refused.
-      const stale = await listSuggestionPage(ctx.db, {
-        family: "transfer_pair",
-      });
-      expect(stale.items.map((row) => row.assessmentId)).not.toContain(
-        pair.assessmentId,
-      );
+      // Browse does not recheck evidence, so the changed pair may stay listed.
+      // Applying it with the old fingerprint must still be refused.
       const bulk = await acceptCleanSuggestions(ctx.db, kernelCtx(ctx), {
         filters: { family: "statement_transaction" },
       });

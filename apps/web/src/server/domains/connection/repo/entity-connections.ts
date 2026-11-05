@@ -273,6 +273,35 @@ const connectionReadSelection = {
   evidence: connectionReadEvidenceSql(sql`${assessment.evidence}`),
 };
 
+function storedConnectionProposal(prediction: {
+  id: string;
+  subject: unknown;
+  fingerprint: string | null;
+  evidence: unknown;
+}) {
+  const evidence = connectionReadEvidence.safeParse(prediction.evidence);
+  const subject = assessmentSubjects.recommendation.safeParse(
+    prediction.subject,
+  );
+  if (!evidence.success || !subject.success || !prediction.fingerprint)
+    return [];
+  return [
+    connectionProposal.parse({
+      ...evidence.data.candidate,
+      fingerprint: prediction.fingerprint,
+      review: {
+        assessmentId: prediction.id,
+        suppression: {
+          scope: subject.data.scope,
+          candidateKey: subject.data.candidateKey,
+          fingerprint: null,
+        },
+      },
+      integration: { kind: "connection-review" },
+    }),
+  ];
+}
+
 /** Batched Assessment selection; freshness also rereads family-owned evidence. */
 export async function readEntityConnectionsBatch(
   db: Database,
@@ -328,29 +357,9 @@ export async function readEntityConnectionsBatch(
       ),
     )
     .orderBy(assessment.createdAt, assessment.id);
-  const parsed = rows.flatMap(({ prediction }) => {
-    const evidence = connectionReadEvidence.safeParse(prediction.evidence);
-    const subject = assessmentSubjects.recommendation.safeParse(
-      prediction.subject,
-    );
-    if (!evidence.success || !subject.success || !prediction.fingerprint)
-      return [];
-    return [
-      connectionProposal.parse({
-        ...evidence.data.candidate,
-        fingerprint: prediction.fingerprint,
-        review: {
-          assessmentId: prediction.id,
-          suppression: {
-            scope: subject.data.scope,
-            candidateKey: subject.data.candidateKey,
-            fingerprint: null,
-          },
-        },
-        integration: { kind: "connection-review" },
-      }),
-    ];
-  });
+  const parsed = rows.flatMap(({ prediction }) =>
+    storedConnectionProposal(prediction),
+  );
   const endpointCodes = [
     ...new Set(parsed.flatMap((p) => [p.source.entityId, p.target.entityId])),
   ];
@@ -451,6 +460,53 @@ export async function readEntityConnectionsBatch(
           : undefined,
       };
     }),
+  );
+}
+
+/**
+ * Stored proposals for a page of pending Assessments, read without rechecking
+ * their basis. Review revalidates the fingerprint when one is accepted, so a
+ * stale row can be listed but not applied. Deleted or merged endpoints drop out.
+ */
+export async function readStoredConnectionProposals(
+  db: Database,
+  ids: readonly string[],
+): Promise<ConnectionProposal[]> {
+  if (!ids.length) return [];
+  const rows = await getDb(db)
+    .select({ prediction: connectionReadSelection })
+    .from(assessment)
+    .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+    .where(
+      and(
+        sql`${assessment.id} = ANY(${uuidArrayParam(ids)})`,
+        eq(assessmentState.active, true),
+        eq(assessmentState.status, "pending"),
+      ),
+    );
+  const proposals = rows.flatMap(({ prediction }) =>
+    storedConnectionProposal(prediction),
+  );
+  const refs = await resolveShortcodes(db, [
+    ...new Set(
+      proposals.flatMap((p) => [p.source.entityId, p.target.entityId]),
+    ),
+  ]);
+  const names = await lookupEntityLabels(db, [...refs.values()]);
+  const name = (code: string) => {
+    const ref = refs.get(code);
+    return ref ? names.get(`${ref.entity}:${ref.id}`) : undefined;
+  };
+  return proposals.flatMap((proposal) =>
+    refs.has(proposal.source.entityId) && refs.has(proposal.target.entityId)
+      ? [
+          {
+            ...proposal,
+            sourceName: name(proposal.source.entityId),
+            targetName: name(proposal.target.entityId),
+          },
+        ]
+      : [],
   );
 }
 

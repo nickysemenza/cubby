@@ -839,7 +839,9 @@ discovery (outside the connection code path)
 
 **Suggestions page**:
 The one place to review pending Suggestions of every family without opening
-each record, with each family's evidence beside its review actions.
+each record, with each family's evidence beside its review actions. A listed
+Suggestion may have gone stale since it was made. Accepting it rechecks current
+evidence, and a stale one is refused rather than applied.
 _Avoid_: inbox, review queue
 
 **Strength**:

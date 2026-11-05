@@ -127,7 +127,7 @@ describe("Job maintenance", () => {
     ).toEqual([{ id: saved.id }]);
   });
 
-  it("prunes old finished Jobs and their entity identities, retaining failures", async () => {
+  it("prunes terminal Jobs and identities only after their retention window", async () => {
     const old = new Date(Date.now() - JOB_RETENTION_MS - 60_000);
     const retained: JobId[] = [];
     for (const [key, state] of [
@@ -139,7 +139,27 @@ describe("Job maintenance", () => {
       await updateJobs(ctx.db, { id: saved.id }, { state, updatedAt: old });
     }
 
+    const expired = await enqueueJob(ctx.db, {
+      key: "synthetic.retention.expired-failure",
+      kind: "synthetic.retention",
+      input: {},
+    });
+    await updateJobs(
+      ctx.db,
+      { id: expired.id },
+      {
+        state: "failed",
+        updatedAt: new Date(Date.now() - 31 * 24 * 60 * 60_000),
+      },
+    );
     await expect(runMaintenance()).resolves.toBe("succeeded");
+    expect(await readJobs(ctx.db, { id: expired.id })).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select({ id: entityIdentity.id })
+        .from(entityIdentity)
+        .where(eq(entityIdentity.id, parseEntityId("job", expired.id))),
+    ).toEqual([]);
     expect(await readJobs(ctx.db, { id: retained[0]! })).toEqual([]);
     expect(
       await getDb(ctx.db)
