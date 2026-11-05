@@ -361,7 +361,8 @@ describe("category-based service Products", () => {
           },
         );
       const explained = await explainCost();
-      expect(explained.publication.kind).not.toBe("superseded");
+      expect(explained.publication).toBeDefined();
+      expect(explained.publication?.kind).not.toBe("superseded");
       expect(explained.sources).toContainEqual(
         expect.objectContaining({ label: "Positive charge total", value: 230 }),
       );
