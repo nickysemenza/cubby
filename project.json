@@ -18,6 +18,10 @@
         "{workspaceRoot}/packages/**/*",
         "{workspaceRoot}/apps/web/src/**/*",
         "{workspaceRoot}/apps/web/tooling/checks/apple-preview-fixtures.ts",
+        // Handwritten Swift callers select the typed native operations (swift-callers.ts).
+        "{workspaceRoot}/apps/apple/**/*.swift",
+        "!{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyAPI/Models/**",
+        "!{workspaceRoot}/apps/apple/**/Generated/**",
         // Purchase-import prompt sources (apps/web/generator/agent-prompts.ts)
         // and the playbooks with the Markdown they link to (playbooks.ts).
         "{workspaceRoot}/.agents/skills/**/*.md",

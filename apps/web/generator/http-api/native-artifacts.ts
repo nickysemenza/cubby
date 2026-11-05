@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 import { generatedHeader } from "../artifacts.ts";
@@ -8,12 +9,20 @@ import { loadContracts } from "../operations/collect.ts";
 import { checkHeroActionPlans } from "./native-plan-validation.ts";
 import { collectNativeContract } from "./native-contract.ts";
 import { renderNativeCommands } from "./native-commands.ts";
-import { renderNativeOperations } from "./native-operations.ts";
+import { CLIENT_PASSTHROUGH_METHODS } from "./native-methods.ts";
+import { renderNativeOperations, swiftId } from "./native-operations.ts";
 import { pascal, registerSchemaNames } from "./schema-names.ts";
+import { scanSwiftCallers } from "./swift-callers.ts";
 import { renderSwiftModels } from "./swift-models.ts";
 import { NATIVE_TYPED_RECORDS, TYPE_OVERRIDES } from "./type-overrides.ts";
 
 type EntityOutputs = ReadonlyMap<string, string | null>;
+
+// Device callers depend on these exact wire names, so the scan cannot drop them.
+const ALWAYS_TYPED_OPERATIONS = new Set([
+  "job.deviceBacklog",
+  "run.reportDeviceWork",
+]);
 
 /** Native artifacts are derived from declarations, independently of documentation formats. */
 export async function renderDirectNativeArtifacts(
@@ -72,19 +81,27 @@ export async function renderDirectNativeArtifacts(
     }
   }
   checkHeroActionPlans({ bodies, generatedOperationIds: exposed, actions });
-  const models = renderSwiftModels(contract);
-  const aliases = models.names.map(
-    (name) => `public typealias ${name} = CubbyAPI.${name}`,
+  const missing = [...ALWAYS_TYPED_OPERATIONS].filter((id) => !exposed.has(id));
+  if (missing.length > 0)
+    throw new Error(
+      `Missing required native operations: ${missing.join(", ")}`,
+    );
+  const callers = scanSwiftCallers(
+    fileURLToPath(new URL("../../../apple/", import.meta.url)),
   );
-  // Record roots can share a registered schema with a differently named operation
-  // output. Keep the requested native API name without projecting a second model.
-  for (const [index, alias] of [...records.keys()].entries()) {
-    const reference = contract.records[index];
-    const model = reference && models.types.get(`native://${reference}`);
-    if (!model) throw new Error(`Missing native record model ${alias}`);
-    if (model !== alias && !models.names.includes(alias))
-      aliases.push(`public typealias ${alias} = CubbyAPI.${model}`);
-  }
+  const passthrough: Readonly<Record<string, { method: string }>> =
+    CLIENT_PASSTHROUGH_METHODS;
+  const typedOperations = contract.operations.filter(
+    ({ id }) =>
+      ALWAYS_TYPED_OPERATIONS.has(id) ||
+      callers.operationIds.has(id) ||
+      callers.tokens.has(`native_${swiftId(id)}`) ||
+      (passthrough[id] !== undefined &&
+        callers.tokens.has(passthrough[id].method)),
+  );
+  const fullModels = renderSwiftModels(contract);
+  const modelOf = (reference: string) =>
+    fullModels.types.get(`native://${reference}`);
   const photoAliases = {
     PhotoImportContentType: "PhotoImportStageInputItemsItemContentType",
     PhotoImportSourceEntity: "PhotoImportCommitInputImagesItemSourceEntity",
@@ -112,11 +129,48 @@ export async function renderDirectNativeArtifacts(
       "PhotoImportCommitInputImagesItemAnalysisProvenance",
     PhotoImportCreatePayload: "PhotoImportCommitInputCreatesItem",
   };
-  for (const [alias, model] of Object.entries(photoAliases)) {
-    if (!models.names.includes(model))
+  for (const model of Object.values(photoAliases))
+    if (!fullModels.names.includes(model))
       throw new Error(`Missing native photo model ${model}`);
-    aliases.push(`public typealias ${alias} = CubbyAPI.${model}`);
+  const entityAlias = (entity: string) => {
+    const base = pascal(entity);
+    return base === "Task" || base === "Image" ? `${base}Record` : base;
+  };
+  // Roots: what kept operations reach, record roots, and any model or alias named
+  // in handwritten Swift. Inferred types are reached through the operation closure.
+  const models = fullModels.prune(
+    [
+      ...typedOperations.flatMap(({ body, output }) => [
+        ...(body ? [modelOf(body)] : []),
+        modelOf(output),
+      ]),
+      ...contract.records.map(modelOf),
+      ...fullModels.names.filter((name) => callers.tokens.has(name)),
+      ...Object.entries(photoAliases)
+        .filter(([alias]) => callers.tokens.has(alias))
+        .map(([, model]) => model),
+      ...[...entityOutputs].flatMap(([entity, output]) =>
+        output !== null && callers.tokens.has(entityAlias(entity))
+          ? [modelOf(`output/${pascal(output)}`)]
+          : [],
+      ),
+    ].filter((name) => name !== undefined),
+  );
+  const aliases = models.names.map(
+    (name) => `public typealias ${name} = CubbyAPI.${name}`,
+  );
+  // Record roots can share a registered schema with a differently named operation
+  // output. Keep the requested native API name without projecting a second model.
+  for (const [index, alias] of [...records.keys()].entries()) {
+    const reference = contract.records[index];
+    const model = reference && models.types.get(`native://${reference}`);
+    if (!model) throw new Error(`Missing native record model ${alias}`);
+    if (model !== alias && !models.names.includes(alias))
+      aliases.push(`public typealias ${alias} = CubbyAPI.${model}`);
   }
+  for (const [alias, model] of Object.entries(photoAliases))
+    if (models.names.includes(model))
+      aliases.push(`public typealias ${alias} = CubbyAPI.${model}`);
   for (const [name, type] of Object.entries(TYPE_OVERRIDES)) {
     if (
       models.types.has(`native://input/${name}`) ||
@@ -127,9 +181,8 @@ export async function renderDirectNativeArtifacts(
   for (const [entity, output] of entityOutputs) {
     if (output === null) continue;
     const model = models.types.get(`native://output/${pascal(output)}`);
-    const base = pascal(entity);
-    const alias = base === "Task" || base === "Image" ? `${base}Record` : base;
-    if (model && !models.names.includes(alias))
+    const alias = entityAlias(entity);
+    if (model && models.names.includes(model) && !models.names.includes(alias))
       aliases.push(`public typealias ${alias} = CubbyAPI.${model}`);
   }
   const identifiable = [...models.types].flatMap(([ref, name]) => {
@@ -141,7 +194,11 @@ export async function renderDirectNativeArtifacts(
   });
   return [
     ...models.artifacts,
-    ...renderNativeOperations(contract, models),
+    ...renderNativeOperations(
+      contract,
+      new Set(typedOperations.map(({ id }) => id)),
+      models,
+    ),
     renderNativeCommands(contract),
     ...renderEntityKernelArtifacts(actions, operationIds),
     {

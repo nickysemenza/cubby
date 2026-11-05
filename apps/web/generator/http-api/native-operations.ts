@@ -4,13 +4,18 @@ import type { NativeContract, NativeOperation } from "./native-contract.ts";
 import { CLIENT_PASSTHROUGH_METHODS } from "./native-methods.ts";
 import type { SwiftModels } from "./swift-models.ts";
 
-const swiftId = (id: string) =>
+export const swiftId = (id: string) =>
   id
     .replaceAll(".", "_")
     .replace(/-([a-z])/gu, (_, letter: string) => letter.toUpperCase());
 
+/**
+ * Typed methods cover `typed`. The catalog lists every operation, so the CLI
+ * and manifest-driven raw JSON calls stay available for the rest.
+ */
 export function renderNativeOperations(
   contract: NativeContract,
+  typed: ReadonlySet<string>,
   models: SwiftModels,
 ): EntityArtifacts[] {
   const type = (key: string) => {
@@ -26,12 +31,14 @@ export function renderNativeOperations(
     return "";
   };
   const methods = contract.operations
+    .filter(({ id }) => typed.has(id))
     .map(
       (operation) =>
         `    func native_${swiftId(operation.id)}(${parameter(operation)}) async throws -> ${type(operation.output)} {\n        try await request(${JSON.stringify(operation.id)}${argument(operation)})\n    }`,
     )
     .join("\n\n");
   const conveniences = Object.entries(CLIENT_PASSTHROUGH_METHODS)
+    .filter(([id]) => typed.has(id))
     .map(([id, entry]) => {
       const operation = contract.operations.find(
         (operation) => operation.id === id,
