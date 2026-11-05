@@ -501,9 +501,9 @@ export function pendingSuggestionRecordsSql(ids?: readonly string[]) {
         ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}
     UNION ALL
     SELECT s.family, record->>'entity', record->>'id'
-      FROM "Suggestion" s AND s.served
+      FROM "Suggestion" s
       CROSS JOIN LATERAL jsonb_array_elements(${assessmentRecordsSql(undefined, sql`s.family`)}) record
-      WHERE ${pending([
+      WHERE s.served AND ${pending([
         assessmentFamily.enum.field,
         assessmentFamily.enum.transfer_pair,
         assessmentFamily.enum.product_pair,

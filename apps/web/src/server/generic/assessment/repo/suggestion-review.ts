@@ -111,7 +111,7 @@ function reviewableRow(
   ];
 }
 /** Only served Assessments are member review candidates. */
-const reviewableSuggestionSql = suggestionTable.served;
+const reviewableSuggestionSql = eq(suggestionTable.served, true);
 
 /** Pending review queue, or reviewed history by `status` (the label set a
  * decision eval replays). Every filter composes, including a list page's
