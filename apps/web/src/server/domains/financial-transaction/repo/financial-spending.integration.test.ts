@@ -4,6 +4,7 @@ import {
   financialSpendingSource,
   financialSpendingPlan,
 } from "@cubby/schemas/financial-booking";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
@@ -26,6 +27,7 @@ import {
   spendingCategory,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
 import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -33,6 +35,8 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import {
   previewFinancialBooking,
   commitFinancialBooking,
+  loadFinancialBookingLineage,
+  digestValue,
 } from "./financial-booking";
 import {
   previewFinancialSpending,
@@ -1081,6 +1085,52 @@ describe("shared spending booking", () => {
       });
       expect(replay.status).toBe("already_booked");
       await commitFinancialSpending(ctx.db, replay, ctx.actor);
+      const [bookedExpense] = await getDb(ctx.db)
+        .select({ shortcode: expense.shortcode })
+        .from(expense)
+        .where(eq(expense.bookingTransactionCode, transaction.output.id));
+      const claimed = await updateExpense.read(
+        ["sourceClaims"],
+        ctx.db,
+        parseShortcodeFor("expense", bookedExpense!.shortcode),
+        {
+          sourceClaims: [
+            {
+              source: "synthetic-booking",
+              providerId: "synthetic-booking-claim",
+              normalizedEvidence: {
+                amount: 42.5,
+                occurredOn: "2026-05-04",
+                description: "Synthetic booked source",
+                context: null,
+                disambiguator: null,
+              },
+              reconciliation: { decision: "amounts_match" },
+            },
+          ],
+        },
+        ctx.actor,
+      );
+      expect(claimed.output.sourceClaims).toMatchObject([
+        { targetAmountAtClaim: 42.5 },
+      ]);
+      const lineage = await loadFinancialBookingLineage(
+        ctx.db,
+        transaction.output.id,
+      );
+      await expect(digestValue(lineage)).resolves.toMatch(/^[0-9a-f]{64}$/);
+      expect(lineage.sourceClaims[0]?.LedgerSourceClaim).toMatchObject({
+        targetAmountAtClaim: 42.5,
+      });
+      expect(
+        await previewFinancialSpending(ctx.db, {
+          transactionId: transaction.output.id,
+          advice,
+        }),
+      ).toMatchObject({
+        status: "review_required",
+        reason: "The booking lineage changed; reconcile the existing Expenses.",
+      });
       const result = await getDb(ctx.db).execute<{
         cost: number;
         costType: string;

@@ -51,6 +51,35 @@ it("preserves source claims and their dollar-number wire through the minor-unit 
     const before = await client.query(
       `SELECT to_jsonb(c) AS value FROM "LedgerSourceClaim" c ORDER BY id`,
     );
+    const run = "00000000-0000-4000-8000-000000000301";
+    await client.query(
+      `INSERT INTO "user" (id,name,email) VALUES ('money-migration','Synthetic member','money@example.test')`,
+    );
+    await client.query(
+      `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'run','RUN-SYNMONEY')`,
+      [run],
+    );
+    await client.query(
+      `INSERT INTO "Run" (id,shortcode,"actorName",trigger,purpose,"actorUserId","actorEmail",status)
+      VALUES ($1,'RUN-SYNMONEY','Synthetic member','manual','sweep','money-migration','money@example.test','failed')`,
+      [run],
+    );
+    await client.query(
+      `INSERT INTO "RunStep" ("runId",key,label,position,state) VALUES ($1,'statement_generate','Synthetic generation',0,'running')`,
+      [run],
+    );
+    await expect(
+      migrateDatabase(db, { through: "0084_source_claim_minor_units" }),
+    ).rejects.toMatchObject({
+      cause: {
+        code: "P0001",
+        message:
+          "Financial refresh has unfinished steps; complete or explicitly cancel its retained work before the money cutover",
+      },
+    });
+    await client.query(`UPDATE "RunStep" SET state='done' WHERE "runId"=$1`, [
+      run,
+    ]);
     // The old epsilon permits noise that the new contract must not silently round.
     await client.query(
       `UPDATE "LedgerSourceClaim" SET "targetAmountAtClaim"=10.010000000001 WHERE "sourceKey"='synthetic-key-0'`,
@@ -62,6 +91,28 @@ it("preserves source claims and their dollar-number wire through the minor-unit 
         code: "P0001",
         message:
           "Source-claim money is not exactly representable in the supported minor-unit range",
+      },
+    });
+    expect(
+      (
+        await client.query(
+          `SELECT to_regclass('archive."LedgerSourceClaim_dollar_preimage"') AS archived`,
+        )
+      ).rows,
+    ).toEqual([{ archived: null }]);
+    await client.query(
+      `UPDATE "LedgerSourceClaim" SET "targetAmountAtClaim"=10.01 WHERE "sourceKey"='synthetic-key-0'`,
+    );
+    await client.query(
+      `UPDATE "LedgerSourceClaim" SET "targetAmountAtClaim"=10.010000000000002 WHERE "sourceKey"='synthetic-key-0'`,
+    );
+    await expect(
+      migrateDatabase(db, { through: "0084_source_claim_minor_units" }),
+    ).rejects.toMatchObject({
+      cause: {
+        code: "P0001",
+        message:
+          "Source-claim money failed independent IEEE round-trip preservation",
       },
     });
     expect(

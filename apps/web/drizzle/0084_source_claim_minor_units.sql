@@ -8,6 +8,19 @@ DECLARE
   source_oid oid := 'public."LedgerSourceClaim"'::regclass;
   locks text;
 BEGIN
+  -- Block new step admission/checkpoints while checking active work and the latest retained financial continuation.
+  LOCK TABLE public."RunStep" IN SHARE MODE;
+  IF EXISTS (
+    SELECT 1 FROM public."RunStep" step JOIN public."Run" run ON run.id = step."runId"
+    WHERE (step.key LIKE 'statement\_%' ESCAPE '\' OR step.key LIKE 'transfer\_pair\_%' ESCAPE '\')
+      AND step.state NOT IN ('done', 'skipped', 'cancelled')
+      AND (run.status = 'running' OR step."runId" = (
+        SELECT latest."runId" FROM public."RunStep" latest
+        WHERE latest.key = 'statement_generate' ORDER BY latest."createdAt" DESC, latest.id DESC LIMIT 1
+      ))
+  ) THEN
+    RAISE EXCEPTION 'Financial refresh has unfinished steps; complete or explicitly cancel its retained work before the money cutover';
+  END IF;
   -- Include incoming and outgoing FK endpoints before capturing their DDL.
   SELECT string_agg(format('%I.%I', n.nspname, c.relname), ', ' ORDER BY n.nspname, c.relname)
     INTO locks FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -70,6 +83,14 @@ BEGIN
       "normalizedEvidence", ("targetAmountAtClaim"::numeric * 100)::bigint,
       "reconciliationDecision", "reconciliationNote", "createdAt", "updatedAt", "deletedAt"
     FROM archive."LedgerSourceClaim_dollar_preimage";
+  IF EXISTS (
+    SELECT 1 FROM archive."LedgerSourceClaim_dollar_preimage" original
+    FULL JOIN public."LedgerSourceClaim" converted USING (id)
+    WHERE original.id IS NULL OR converted.id IS NULL
+      OR original."targetAmountAtClaim" IS DISTINCT FROM (converted."targetAmountMinor"::float8 / 100)
+  ) THEN
+    RAISE EXCEPTION 'Source-claim money failed independent IEEE round-trip preservation';
+  END IF;
   ALTER TABLE public."LedgerSourceClaim" ADD PRIMARY KEY (id);
   ALTER TABLE public."LedgerSourceClaim" ADD CONSTRAINT "LedgerSourceClaim_reconciliation_check" CHECK (
     abs("targetAmountMinor") <= 100000000000000

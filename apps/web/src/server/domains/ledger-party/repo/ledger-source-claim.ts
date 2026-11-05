@@ -5,7 +5,6 @@ import {
   ledgerSourceClaimNormalizedEvidence,
   type LedgerSourceClaimInput,
 } from "@cubby/schemas/ledger-transfer";
-import { settledMoney } from "@cubby/schemas/money";
 import { moneyToMinor } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray } from "drizzle-orm";
@@ -76,11 +75,24 @@ const isExpenseOwner = (
   { expenseId: ExpenseId }
 > => owner.expenseId !== undefined;
 
+const exactClaimAmount = (amount: number | null): bigint => {
+  if (amount !== null) {
+    try {
+      return moneyToMinor(amount);
+    } catch {
+      // SILENT: Replace the conversion failure with the owning source-claim constraint below.
+    }
+  }
+  throw createAppError(
+    "CONSTRAINT_VIOLATION",
+    "The source claim target amount must be an exact, supported whole-cent amount.",
+  );
+};
+
 const sameAmount = (left: number | null, right: number | null) =>
   left === null || right === null
     ? left === right
-    : moneyToMinor(settledMoney.parse(left)) ===
-      moneyToMinor(settledMoney.parse(right));
+    : exactClaimAmount(left) === exactClaimAmount(right);
 
 const assertClaimAmounts = (
   targetAmount: number | null,
@@ -226,7 +238,7 @@ export async function replaceLedgerSourceClaims(
     sourceKey: key,
     sourceKeyVersion: version,
     normalizedEvidence: claim.normalizedEvidence,
-    targetAmountMinor: moneyToMinor(settledMoney.parse(targetAmount)),
+    targetAmountMinor: exactClaimAmount(targetAmount),
     reconciliationDecision: claim.reconciliation.decision,
     reconciliationNote:
       claim.reconciliation.decision === "accept_target_amount"

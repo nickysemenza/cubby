@@ -465,6 +465,9 @@ must wait for the active financial refresh's generation and subsequent statement
 steps to reach terminal outcomes before merging it. No writer hold, branch-copy
 rehearsal or dual writer is required. Parent owns merge sequencing with other
 migration lanes; regenerate its journal position on current main before release.
+The migration takes a short `RunStep` share lock and refuses unfinished financial
+steps in any running Run or the latest statement Run, including a failed Run
+awaiting recovery. A failed parent status does not prove its continuation finished.
 
 The migration locks the claim table and its FK endpoints with a two-second lock
 timeout. It refuses unrepresentable money and unhandled view dependencies before
@@ -472,7 +475,9 @@ changing storage. It moves the complete original table to
 `archive.LedgerSourceClaim_dollar_preimage`, creates the replacement with signed
 bigint `targetAmountMinor`, and compares complete row-level hash multisets, including nulls
 and tombstones, against the exact allowed conversion. Original rows are checked
-again unchanged. It rebinds incoming/outgoing FKs and current triggers, then
+again unchanged. An independent ID join also requires every archived dollar
+double to equal converted cents divided by 100 in IEEE arithmetic; this catches
+noise hidden by PostgreSQL's rounded `float8::numeric` cast. It rebinds incoming/outgoing FKs and current triggers, then
 removes archived outgoing FKs, triggers and nonessential indexes. The archive is
 retained indefinitely in this goal; no table or original source JSON is dropped.
 

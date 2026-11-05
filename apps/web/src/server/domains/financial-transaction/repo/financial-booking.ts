@@ -11,7 +11,7 @@ import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
-import { cents } from "@cubby/shared";
+import { cents, minorToMoney } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
@@ -660,7 +660,24 @@ export async function loadFinancialBookingLineage(
       ),
     )
     .orderBy(ledgerSourceClaim.id);
-  return { lines, attributions, sourceClaims };
+  return {
+    lines,
+    attributions,
+    sourceClaims: sourceClaims.map((row) => ({
+      ...row,
+      // Preserve predecessor fingerprint key order and dollar values; storage bigint never enters JSON.
+      LedgerSourceClaim: Object.fromEntries(
+        Object.entries(row.LedgerSourceClaim).map(([key, value]) =>
+          key === "targetAmountMinor"
+            ? [
+                "targetAmountAtClaim",
+                minorToMoney(row.LedgerSourceClaim.targetAmountMinor),
+              ]
+            : [key, value],
+        ),
+      ),
+    })),
+  };
 }
 
 /**

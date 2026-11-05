@@ -688,7 +688,11 @@ weights and provider usage charges. Classify null, finite exact decimal cents,
 near-cent floating noise, genuine sub-cent, non-finite and minor-unit overflow
 values. A diagnostic tolerance classifies noise; it never authorizes rounding
 stored money. Include Purchase totals, Project estimates and receipt-payment
-amounts in the field inventory, plus monetary values nested in retained JSON.
+amounts in the field inventory. Require exact IEEE round-trip equality between
+the original double and proposed integer cents divided by 100; `float8::numeric`
+can hide stored noise. The follow-up audit found three noisy Expense costs;
+they remain unchanged and need original decimal evidence before conversion. Include
+monetary values nested in retained JSON.
 Compare proposed conversions with the existing JavaScript cent semantics and
 retained original decimal evidence before migration. Successful scalar-column
 classification alone does not establish full JSON, Rust or native wire coverage.
