@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest";
 
 import { derivedRebuild } from "~/server/db/derived-rebuild-schema";
 import { getDb } from "~/server/db/helpers";
-import type { DerivedComputes } from "~/server/generic/derived/repo/compute";
+import {
+  derivedSink,
+  type DerivedComputes,
+} from "~/server/generic/derived/repo/compute";
 import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
 import {
   createProductIdentityFixture,
@@ -133,7 +136,12 @@ describe("hourly deterministic rebuild", () => {
       ...Object.fromEntries(
         Object.entries(derivedComputes).map(([key, adapter]) => [
           key,
-          realPhases.has(key) ? adapter : async () => new Map(),
+          realPhases.has(key)
+            ? adapter
+            : derivedSink({
+                prepare: async () => null,
+                publish: async () => [],
+              }),
         ]),
       ),
       "product.price": Object.assign(
