@@ -4,25 +4,33 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { qualityDerivedComputes } from "~/server/generic/data-quality/repo/derived";
 import { storedEntryFor } from "~/server/generic/data-quality/repo/entry";
-import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
-import { markWorkFrom } from "~/server/generic/jobs/repo/work-items";
-import { drainStoredDerived } from "~/server/testing/background-queue";
+import { isDerivedSink } from "~/server/generic/derived/repo/compute";
 
-/**
- * Explicit publication for read-contract fixtures, including deliberately raw
- * input edits a declared trigger does not see: mark every record of `kind`
- * and drain stored derived values (ADR 0021).
- */
+/** Publish this capability only, preserving deliberately seeded snapshots of other families. */
 export async function publishQualityFixtures(db: Database, kind: ScoredEntity) {
+  const adapter = qualityDerivedComputes[`quality.${kind}`];
+  if (!adapter || !isDerivedSink(adapter))
+    throw new Error(`Missing quality fixture adapter: ${kind}`);
   const table = storedEntryFor(kind).table;
-  await markWorkFrom(
-    db,
-    DERIVED_DRAIN,
-    sql`SELECT ${`${kind}.dataQuality`}, t.id, 0, NULL::text FROM ${table} t`,
-    { wake: false },
-  );
-  await drainStoredDerived(db);
+  const ids = z
+    .array(z.object({ id: z.uuid() }))
+    .parse(
+      (
+        await unwrapDb(db).execute(
+          sql`SELECT t.id FROM ${table} t ORDER BY t.id`,
+        )
+      ).rows,
+    )
+    .map((row) => row.id);
+  for (let start = 0; start < ids.length; start += 200) {
+    const page = ids.slice(start, start + 200);
+    const prepared = await adapter.prepare(db, page);
+    await adapter.publish(db, page, prepared, {
+      notify: () => {},
+    });
+  }
 }
 
 /** Publishes every stored-mode entity, for reads that filter on published rows. */

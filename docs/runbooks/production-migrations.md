@@ -219,6 +219,32 @@ deployment. Everything committed so far must stay compatible with the running Wo
 because the next Deploy resumes from there. One statement can hold several commands
 in one transaction, so a cutover's copy and retirement stay atomic.
 
+## Remaining derived retirement gates
+
+The typed reader/writer removal must deploy before destructive retirement.
+The parent serializes all migration merges. Until deployment and live coverage
+readback, retain every derived ticket and trigger: test output and a frozen copy
+comparison are insufficient. B3 owns assessment.reviewFacts; B1 owns the other
+WorkItem drains and the eventual WorkItem drop. Derived execution itself no
+longer claims WorkItem. ProductConversionCoverage remains its typed table.
+
+After three full Worker rebuilds, record their durations against 15 minutes;
+require each full pass under 45 minutes and inspect CPU/memory termination logs.
+Take the manual snapshot and record its id immediately before each table drop,
+following the recovery procedure in this runbook. Replace derived_mark with a
+no-op first, then use a separate transaction-per-statement migration with
+idempotent table-specific trigger drops and 2-second lock timeout. Catalog
+verification must inspect pg_proc function bodies and pg_trigger, because
+PostgreSQL does not track plpgsql table dependencies. Retire tickets only for
+proven replacement kinds and only where drain = 'derived:drain'.
+
+Before DerivedValue drops, recheck decidedBy legacy counts by key, require zero
+for any key without current replacement output, hand trace FKs/native/MCP and
+identity cleanup, and confirm the deployed Worker has no reader or writer. A
+snapshot restore is unfinalized on a separate verify branch; export that one
+table and load it back if needed. Never finalize or reset production. Retain
+snapshot ids through the final report for the owner to delete.
+
 ## Hourly deterministic pass
 
 The Worker cutover adds one DerivedRebuild cursor row and switches execution off
@@ -271,7 +297,8 @@ field explanations. Quality's snapshot source is declared on its capability,
 so its field envelope retains cached revision, missing and pending states.
 
 Freeze other migration merges from this migration's merge through its deploy.
-The old Worker can publish only to DerivedValue between migration and deploy,
+When the hourly pass is deployed, request maintenance.rebuildDerived instead of
+marking tickets below. The old Worker can publish only to DerivedValue between migration and deploy,
 including in-flight invocations. At least 16 minutes after the deployed Worker
 is verified (past the 15-minute consumer wall limit), admit the scoped cutover
 repair through the authorized production maintenance procedure:

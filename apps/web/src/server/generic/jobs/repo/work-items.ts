@@ -221,78 +221,6 @@ export async function markWork(
   await wakeJob(db, { key: drain.key, kind: drain.kind, input: {} });
 }
 
-/**
- * Mark the rows `source` selects, as `(target text, ref uuid, priority int, reason text)`,
- * in one statement. Returns each target's marked count and up to `sample`
- * refs, so a large fanout never materializes in the Worker. `wake: false` is
- * for the drain's own publication, which is already due again while items
- * remain.
- */
-export async function markWorkFrom(
-  db: RepositoryQueryInput,
-  drain: Drain,
-  source: SQL,
-  {
-    sample = 0,
-    wake = true,
-    existing = "remark",
-  }: {
-    sample?: number;
-    wake?: boolean;
-    /** `keep` leaves an owed item's ticket, attempts and backoff alone (reconcile, clock expiry). */
-    existing?: "remark" | "keep";
-  } = {},
-): Promise<{ target: string; count: number; refs: string[] }[]> {
-  const queries = repositoryQueries(db);
-  // Several inputs can reach one item: grouping keeps the most urgent
-  // priority and never updates one conflict row twice in a statement.
-  const insert = queries.insert(workItem).select(
-    sql`SELECT ${drain.key}, s.target, s.ref, nextval('"WorkTicket"'),
-          min(s.priority), now(), now(), 0, NULL, NULL, NULL, NULL,
-          (array_agg(s.reason ORDER BY s.priority, s.reason) FILTER (WHERE s.reason IS NOT NULL))[1],
-          NULL, NULL, NULL
-          FROM (${source}) AS s(target, ref, priority, reason)
-         WHERE s.ref IS NOT NULL
-         GROUP BY s.target, s.ref ORDER BY s.target, s.ref`,
-  );
-  const marked = queries
-    .$with("marked")
-    .as(
-      (existing === "keep"
-        ? insert.onConflictDoNothing()
-        : insert.onConflictDoUpdate(remark)
-      ).returning({ target: workItem.target, ref: workItem.ref }),
-    );
-  const ordinal = sql<number>`row_number() OVER (PARTITION BY ${marked.target} ORDER BY ${marked.ref})`;
-  const numbered = queries.$with("numbered").as(
-    queries
-      .select({
-        target: marked.target,
-        ref: marked.ref,
-        ordinal: ordinal.as("ordinal"),
-      })
-      .from(marked),
-  );
-  const rows = await queries
-    .with(marked, numbered)
-    .select({
-      target: numbered.target,
-      count: sql<number>`count(*)::int`,
-      refs: sql<
-        string[] | null
-      >`array_agg(${numbered.ref}::text ORDER BY ${numbered.ref}) FILTER (WHERE ${numbered.ordinal} <= ${sample})`,
-    })
-    .from(numbered)
-    .groupBy(numbered.target);
-  if (wake && rows.length)
-    await wakeJob(db, { key: drain.key, kind: drain.kind, input: {} });
-  return rows.map(({ target, count, refs }) => ({
-    target,
-    count,
-    refs: refs ?? [],
-  }));
-}
-
 /** The items still current and free, locked without waiting; skipped items stay for a later page. */
 export async function lockWork(
   tx: RepositoryQueryInput,
@@ -313,22 +241,6 @@ export async function lockWork(
     .for("update", { skipLocked: true });
   const held = new Set(rows.map(({ target, ref }) => `${target}\0${ref}`));
   return items.filter(({ target, ref }) => held.has(`${target}\0${ref}`));
-}
-
-/** Hold a target's items until `until`, whatever their ticket; a page already holding one keeps it. */
-export async function postponeWorkRefs(
-  tx: RepositoryQueryInput,
-  target: string,
-  refs: readonly string[],
-  until: Date,
-): Promise<string[]> {
-  if (!refs.length) return [];
-  const rows = await repositoryQueries(tx)
-    .update(workItem)
-    .set({ readyAt: until })
-    .where(and(eq(workItem.target, target), inArray(workItem.ref, [...refs])))
-    .returning({ drain: workItem.drain });
-  return [...new Set(rows.map((row) => row.drain))].sort();
 }
 
 /** A target's items whose ref is in `refs` (a subquery or array), as composable rows. */
@@ -372,53 +284,6 @@ export const workItemStates = (
           and(eq(workItem.target, target), inArray(workItem.ref, [...refs])),
         )
     : Promise.resolve([]);
-
-/** Every item of a drain with its retry state, in claim order. */
-export const drainItems = (db: RepositoryQueryInput, drain: string) =>
-  repositoryQueries(db)
-    .select({
-      ...itemColumns,
-      lastError: workItem.lastError,
-      readyAt: workItem.readyAt,
-    })
-    .from(workItem)
-    .where(eq(workItem.drain, drain))
-    .orderBy(workItem.priority, workItem.readyAt, workItem.ticket);
-
-/** Whether the drain has an item ready now (not backing off). */
-export async function drainReady(db: RepositoryQueryInput, drain: string) {
-  const [row] = await repositoryQueries(db)
-    .select({ ref: workItem.ref })
-    .from(workItem)
-    .where(and(eq(workItem.drain, drain), lte(workItem.readyAt, sql`now()`)))
-    .limit(1);
-  return row !== undefined;
-}
-
-/** Whether any item whose target matches `target` is still owed. */
-export const workPendingWhere = (target: (column: SQL) => SQL) =>
-  sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${target(sql`${workItem.target}`)})`;
-
-/** Fenced caller only. An observation grants no authority over a work ticket. */
-export async function observeWorkExecution(
-  tx: RepositoryQueryInput,
-  items: readonly WorkItem[],
-  leaseToken: string,
-) {
-  if (!items.length) return;
-  // Producers may hold marks while saving domain rows; observation must not
-  // delay independent members of this page behind those busy marks.
-  const held = await lockWork(tx, items);
-  if (!held.length) return;
-  await repositoryQueries(tx)
-    .update(workItem)
-    .set({
-      executionLeaseToken: leaseToken,
-      executionTicket: workItem.ticket,
-      executionStartedAt: sql`now()`,
-    })
-    .where(workTickets(held));
-}
 
 /** Whether a drain (a key or a correlated key column) still owes any item. */
 export const drainPending = (drain: string | SQL) =>

@@ -13,9 +13,16 @@ export function storedSourceSql(
   id: SQL,
 ): SQL {
   const source = declaration.snapshotSource;
-  if (!source)
-    return sql`SELECT v.value, v."decidedBy", v."computedAt", v."sortNumber", v."sortText", v."sortDate" FROM "DerivedValue" v
-    WHERE v."entityId" = ${id} AND v.kind = ${declaration.entity} AND v.key = ${declaration.key}`;
+  if (!source) {
+    const row = declaration.recordSource;
+    if (!row && declaration.publishes === "derivedValue")
+      throw new Error(`Missing declared snapshot: ${declaration.target}`);
+    return sql`SELECT ${row ? sql`to_jsonb(r.${sql.identifier(row.value)})` : sql`NULL::jsonb`} AS value,
+      '{"outcome":{"kind":"value"},"provenance":{"kind":"computed"}}'::jsonb AS "decidedBy",
+      ${row ? sql`r.${sql.identifier(row.computedAt)}` : sql`NULL::timestamp`} AS "computedAt",
+      NULL::double precision AS "sortNumber", NULL::text AS "sortText", NULL::timestamp AS "sortDate"
+      FROM ${sql.identifier(declaration.table)} r WHERE r.id = ${id} ${row ? sql`` : sql`AND false`}`;
+  }
   const value =
     typeof source.value === "string"
       ? sql`COALESCE(to_jsonb(q.${sql.identifier(source.value)}), 'null'::jsonb)`

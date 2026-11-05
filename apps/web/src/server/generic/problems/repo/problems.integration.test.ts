@@ -351,6 +351,7 @@ describe("problems — view-backed uniform rows", () => {
       ctx.actor,
     );
 
+    await drainStoredDerived(ctx.db);
     await publishAllQualityFixtures(ctx.db);
     const views = await findViewProblems(ctx.db);
     expect(

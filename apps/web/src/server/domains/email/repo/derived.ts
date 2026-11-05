@@ -9,7 +9,6 @@ import {
   loadRelationshipPurchaseGates,
   foldScopedEmailPurchaseFacts,
   strongestLinkState,
-  emailPurchaseSourceIdsSql,
 } from "~/server/domains/email/repo/email-purchase-links";
 import type {
   DerivedCompute,
@@ -81,8 +80,5 @@ const emailRelationshipCompute: DerivedCompute = async (db, ids) => {
 export const emailDerivedComputes = {
   "email.relationshipFacts": Object.assign(emailRelationshipCompute, {
     preparationBatchSize: 200,
-    fanoutSelections: {
-      purchaseEvidence: emailPurchaseSourceIdsSql,
-    },
   }),
 };

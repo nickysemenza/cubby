@@ -11,7 +11,6 @@ import { markRecipesStale } from "~/server/domains/recipe/repo/totals";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import {
-  drainDerivedPage,
   drainStoredDerived,
   reconcileDerivedRefreshInputs,
   derivedMarkTickets,
@@ -75,46 +74,12 @@ describe("recipe Job publication", () => {
         : null,
     );
     await drain();
-    expect(
-      await derivedMarkTickets(ctx.db, "recipe.totals", subject.entityId),
-    ).toEqual([]);
     const superseded = await explainField(context, {
       ...request,
       displayedResult: published.envelope.result,
     });
     expect(superseded.publication?.kind).toBe("superseded");
     expect(superseded.sources).toEqual([]);
-  });
-
-  it("rejects prepared totals after a later authoritative save", async () => {
-    const subject = await createRecipeFixture(
-      ctx.db,
-      makeRecipeInput({ name: "Synthetic fenced recipe" }),
-      ctx.actor,
-    );
-    let tickets: number[] = [];
-    await drainDerivedPage(ctx.db, {
-      only: (mark) => mark.target === "recipe.totals",
-      during: async () => {
-        await getDb(ctx.db)
-          .update(recipe)
-          .set({ name: "Synthetic revised recipe" })
-          .where(eq(recipe.id, subject.entityId));
-        tickets = await derivedMarkTickets(
-          ctx.db,
-          "recipe.totals",
-          subject.entityId,
-        );
-      },
-    });
-    expect(
-      await derivedMarkTickets(ctx.db, "recipe.totals", subject.entityId),
-    ).toEqual(tickets);
-    expect(tickets).toHaveLength(1);
-    await drain();
-    expect(
-      await derivedMarkTickets(ctx.db, "recipe.totals", subject.entityId),
-    ).toEqual([]);
   });
 
   it.each(["price edit", "removal", "endpoint reassignment"])(

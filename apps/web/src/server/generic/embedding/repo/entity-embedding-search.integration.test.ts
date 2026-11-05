@@ -1,11 +1,9 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
-import { getDb } from "~/server/db/helpers";
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
@@ -96,19 +94,6 @@ describe("validated semantic candidates", () => {
         )
       ).complete,
     ).toBe(true);
-    await getDb(ctx.db).execute(
-      sql`SELECT derived_mark('product.searchDocument', ARRAY[${first.subject.entityId}::uuid])`,
-    );
-    const degraded = await findSemanticEntityCandidates(
-      ctx.db,
-      productionVectorStore,
-      values,
-      { entityKinds: ["product"], limit: 5, config },
-    );
-    expect(
-      degraded.candidates.map((candidate) => candidate.entityId),
-    ).toContain(first.subject.entityId);
-    expect(degraded.complete).toBe(true);
     const ref = {
       entityKind: "product",
       entityId: first.subject.entityId,

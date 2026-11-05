@@ -2723,6 +2723,14 @@ derived side so clearing an explicit override cannot reuse that old override.
 An unpublished rollup remains missing, rather than becoming a successful empty
 date. This avoids repeating the household Expense allocation on each page.
 
+The former ticket drain, dependency fan-out, publication fences and per-value
+clock admission are removed. Recipe invalidation only marks totals stale; USDA
+release activation and selected image descriptions converge through the same
+hourly pass without explicit SQL ticket admission. Explicit search repair joins the same pass and
+survives a disconnected status reader. Retained source triggers and predecessor
+tickets retire only after deployed replacement coverage. The Assessment source
+relevance adapter is removed after the Suggestion cutover retired its last caller.
+
 The pass skips declared views. Named read snapshots hold Product, Inventory,
 Location, Project, Expense, Email and Shipment results. Each manifest declaration
 names its typed value, decision, sort and publication-time columns; there is no
@@ -2764,12 +2772,9 @@ changed, embeddable documents, preserving unchanged documents' failure backoff.
 Quality's 28 declared evaluators publish `QualitySnapshot` check states, rules
 version and publication time. Browse, gap-count ordering, filters and Work use
 the same snapshot. `DataException` owns waivers. SearchDocument, Recipe totals
-and ProductConversionCoverage retain their existing typed storage. Remaining
-legacy values temporarily publish in `DerivedValue` until their typed/view
-cutovers; their retained source tickets are neither claimed nor deleted.
-Project start-date ordering/filtering reads canonical recursive SQL. Its display
-view folds all requested roots as a set, sharing one Expense allocation and
-Task-date aggregation across the page instead of repeating the ledger per row.
+and ProductConversionCoverage retain their existing typed storage. Legacy rows
+remain only for preservation checks before the separate table drop; retained
+source tickets are neither claimed nor cleared without replacement proof.
 
 Typed result slots distinguish an absent publication from a published null through
 their own publication time. A published SQL NULL becomes JSON null on the generic

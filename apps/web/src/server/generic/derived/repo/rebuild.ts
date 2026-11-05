@@ -178,7 +178,7 @@ export async function releaseRebuild(
     WHERE key = ${DERIVED_REBUILD_KEY} AND token = ${token}::uuid`);
 }
 
-/** Transitional publication for kinds whose typed snapshot cutover has not shipped yet. */
+/** Publish each result to the typed columns its entity declares. */
 export async function publishRebuiltValues(
   db: RepositoryQueryInput,
   declaration: EntityStoredDerivedDeclaration,
@@ -243,20 +243,7 @@ export async function publishRebuiltValues(
     return;
   }
   if (source?.view) return;
-  await getDb(db).execute(sql`
-    INSERT INTO "DerivedValue" ("entityId", kind, key, value, "decidedBy", "sortNumber", "sortText", "sortDate", "computedAt")
-    SELECT r."entityId", ${declaration.entity}, ${declaration.key}, r.value, r."decidedBy", r."sortNumber", r."sortText", r."sortDate", now() AT TIME ZONE 'UTC'
-    FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) r("entityId" uuid, value jsonb, "decidedBy" jsonb, "sortNumber" double precision, "sortText" text, "sortDate" timestamp)
-    JOIN "Entity" e ON e.id = r."entityId" AND e.kind = ${declaration.entity} AND ${notDeleted("e")}
-    ON CONFLICT ("entityId", key) DO UPDATE SET value = EXCLUDED.value, "decidedBy" = EXCLUDED."decidedBy",
-      "sortNumber" = EXCLUDED."sortNumber", "sortText" = EXCLUDED."sortText", "sortDate" = EXCLUDED."sortDate", "computedAt" = EXCLUDED."computedAt"
-    WHERE ("DerivedValue".value, "DerivedValue"."decidedBy", "DerivedValue"."sortNumber", "DerivedValue"."sortText", "DerivedValue"."sortDate")
-      IS DISTINCT FROM (EXCLUDED.value, EXCLUDED."decidedBy", EXCLUDED."sortNumber", EXCLUDED."sortText", EXCLUDED."sortDate")`);
-  const missing = ids.filter((id) => !values.has(id));
-  if (missing.length)
-    await getDb(db).execute(
-      sql`DELETE FROM "DerivedValue" WHERE key = ${declaration.key} AND "entityId" = ANY(${uuidArrayParam(missing)})`,
-    );
+  throw new Error(`Missing writable snapshot: ${declaration.target}`);
 }
 
 /** A duplicate delivery must retry after the coarse lease, including an isolate killed mid-page. */

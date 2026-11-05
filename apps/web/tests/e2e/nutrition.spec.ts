@@ -109,22 +109,31 @@ test("recipe nutrition keeps per-serving totals independent of recipe scale", as
   await expect(contributions).toContainText("75–125 kcal");
 });
 
-test("calendar discloses partial planned nutrition and pending cleared totals", async ({
-  page,
-}, testInfo) => {
-  const name = `E2E calendar nutrition ${Date.now()}-${testInfo.workerIndex}`;
-  const { recipe } = await seedNutritionPrerequisite(page, name, {
-    missingCalories: true,
+test.describe("nutrition between hourly rebuilds", () => {
+  // This journey observes a cleared publication before the next scheduled pass.
+  // Fixture seeding still explicitly rebuilds its prerequisites.
+  test.use({
+    e2eDerivedRefresh: async ({ e2eRuntime: _runtime }, provide) => {
+      await provide();
+    },
   });
-  await gotoAuthenticatedPage(page, "/calendar?period=week&date=2026-09-09");
-  const event = page.getByRole("button", {
-    name: `${name} meal, All day`,
-    exact: true,
+  test("calendar discloses partial planned nutrition and pending cleared totals", async ({
+    page,
+  }, testInfo) => {
+    const name = `E2E calendar nutrition ${Date.now()}-${testInfo.workerIndex}`;
+    const { recipe } = await seedNutritionPrerequisite(page, name, {
+      missingCalories: true,
+    });
+    await gotoAuthenticatedPage(page, "/calendar?period=week&date=2026-09-09");
+    const event = page.getByRole("button", {
+      name: `${name} meal, All day`,
+      exact: true,
+    });
+    await expect(event).toBeVisible();
+    await expect(event).toContainText("100–200 kcal known · partial");
+    await clearNutritionCachePrerequisite(recipe.id);
+    await page.reload();
+    await waitForAppHydration(page);
+    await expect(event).toContainText("Pending");
   });
-  await expect(event).toBeVisible();
-  await expect(event).toContainText("100–200 kcal known · partial");
-  await clearNutritionCachePrerequisite(recipe.id);
-  await page.reload();
-  await waitForAppHydration(page);
-  await expect(event).toContainText("Pending");
 });

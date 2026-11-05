@@ -224,7 +224,6 @@ describe("search source selection", () => {
       const publish = () =>
         repositoryTransactionDatabase(ctx.db, (tx) =>
           adapter.publish(tx, [first.source.entityId], changed, {
-            tickets: new Map(),
             notify: () => {},
           }),
         );

@@ -4,7 +4,6 @@ import {
 } from "@cubby/schemas/derived-value";
 import type { Entity } from "@cubby/schemas/entity";
 import { storedResultSchemas } from "@cubby/schemas/entity-stored-derived";
-import type { SQL } from "drizzle-orm";
 
 /**
  * The compute seam for stored derived values. An adapter receives a batch of
@@ -14,10 +13,6 @@ import type { SQL } from "drizzle-orm";
  * derived value unless the declaration lists it in `dependsOn`.
  */
 import type { Database } from "~/server/db/database";
-import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
-
-/** Current target IDs reached from an input's source-reference relation. */
-export type DerivedFanoutSelection = (refs: SQL) => SQL;
 
 export interface DerivedComputed {
   /** The published value; JSON. */
@@ -26,8 +21,6 @@ export interface DerivedComputed {
   readonly sort: number | string | null;
   /** Override the default computed mechanism when an assignment or resolver decides. */
   readonly decision?: StoredFieldDecision;
-  /** Paid work only: the hash of the declared input projection. */
-  readonly inputHash?: string | null;
 }
 
 /** An absent scalar is a successful empty computation; omitted records remain missing. */
@@ -70,18 +63,7 @@ export type DerivedCompute = {
   ): Promise<ReadonlyMap<string, DerivedComputed>>;
   /** Maximum same-adapter records sharing a preparation page; omitted keeps the conservative default. */
   readonly preparationBatchSize?: number;
-  readonly sharedPreparation?: DerivedSharedPreparation;
-  readonly fanoutSelections?: Readonly<Record<string, DerivedFanoutSelection>>;
 };
-
-export interface DerivedSharedPreparation<Prepared = unknown> {
-  readonly source: object;
-  prepare(db: Database, ids: readonly string[]): Promise<Prepared>;
-  project(
-    prepared: Prepared,
-    ids: readonly string[],
-  ): ReadonlyMap<string, DerivedComputed>;
-}
 
 /** One immutable authoritative input set, shared only by a preparation page. */
 export const sharedDerivedPreparation =
@@ -94,24 +76,11 @@ export const sharedDerivedPreparation =
       ids: readonly string[],
     ) => ReadonlyMap<string, DerivedComputed>,
   ): DerivedCompute =>
-    Object.assign(
-      async (db: Database, ids: readonly string[]) =>
-        project(await prepare(db, ids), ids),
-      {
-        sharedPreparation: {
-          source: prepare,
-          prepare,
-          // SAFETY: the source token identifies this exact preparation function.
-          project: (prepared: unknown, ids: readonly string[]) =>
-            project(prepared as Prepared, ids),
-        },
-      },
-    );
+  async (db: Database, ids: readonly string[]) =>
+    project(await prepare(db, ids), ids);
 
 /** One sink publication's reader notification, committed with its transaction. */
 interface DerivedSinkPublication {
-  /** Exact held tickets; staged output must belong to this invalidation generation. */
-  readonly tickets: ReadonlyMap<string, number>;
   /**
    * Ring these entity records through the drain's bounded publication. An
    * internal record's refs are not entity ids, so its sink names the old and
@@ -124,8 +93,6 @@ interface DerivedSinkPublication {
 interface DerivedSinkContinuation {
   readonly changed: readonly string[];
   readonly retain: readonly string[];
-  /** Exact peer generations whose identical effect committed with this publication. */
-  readonly covered?: readonly WorkItem[];
 }
 
 /**
@@ -137,15 +104,6 @@ interface DerivedSinkContinuation {
 export interface DerivedSink<Prepared = unknown> {
   readonly kind: "sink";
   readonly preparationBatchSize?: number;
-  /** Read surfaces invalidated by every completed publication, including no-ops. */
-  readonly notificationCategories?: readonly string[];
-  /** Own-table clock expiry, enrolled through the existing derived Job. */
-  readonly clockExpiredRefs?: (householdDay: SQL) => SQL;
-  /**
-   * An internal record's whole fanout selector: given source refs as one `id`
-   * column, its query returns current and retained target ids as `id`.
-   */
-  readonly fanoutSelections?: Readonly<Record<string, DerivedFanoutSelection>>;
   prepare(db: Database, ids: readonly string[]): Promise<Prepared>;
   /**
    * Refs `prepare` could not prepare, with their errors. Each settles like a
@@ -154,8 +112,6 @@ export interface DerivedSink<Prepared = unknown> {
    * empty output.
    */
   preparationFailures?(prepared: Prepared): ReadonlyMap<string, unknown>;
-  /** Reuse the sink's snapshot observations and complete source/peer relevance rule. */
-  publicationBlocked?(prepared: Prepared, ids: readonly string[]): SQL;
   /** `tx` is the publication transaction's repository handle. */
   publish(
     tx: Database,
@@ -171,23 +127,14 @@ export type DerivedAdapter = DerivedCompute | DerivedSink;
 export const derivedSink = <Prepared>(
   sink: Omit<DerivedSink<Prepared>, "kind">,
 ): DerivedSink => {
-  const blocked = sink.publicationBlocked;
   return {
     kind: "sink",
     preparationBatchSize: sink.preparationBatchSize,
-    fanoutSelections: sink.fanoutSelections,
-    notificationCategories: sink.notificationCategories,
-    clockExpiredRefs: sink.clockExpiredRefs,
     prepare: sink.prepare,
     // SAFETY: the drain hands `preparationFailures` and `publish` exactly the
     // value this sink's own `prepare` returned for the same page.
     preparationFailures: (prepared) =>
       sink.preparationFailures?.(prepared as Prepared) ?? new Map(),
-    publicationBlocked: blocked
-      ? (prepared, ids) =>
-          // SAFETY: the drain supplies this sink's own preparation result.
-          blocked(prepared as Prepared, ids)
-      : undefined,
     // SAFETY: publish receives this sink's own preparation result for the same page.
     publish: (tx, ids, prepared, publication) =>
       sink.publish(tx, ids, prepared as Prepared, publication),
