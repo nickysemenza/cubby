@@ -52,3 +52,28 @@ export const sourceIdentityResolution = z.discriminatedUnion("decision", [
   }),
 ]);
 export type SourceIdentityResolution = z.infer<typeof sourceIdentityResolution>;
+
+/** Bounded owner read-back; rows retain stable identities and their owning field representations. */
+export const sourceOccurrenceClosure = z.strictObject({
+  root: shortcodeSchema("sourceOccurrence"),
+  scope: z.array(shortcodeSchema("sourceOccurrence")).max(10),
+  snapshot: z.string(),
+  sets: z.strictObject({
+    occurrences: z.array(z.json()),
+    observations: z.array(z.json()),
+    judgments: z.array(z.json()),
+    aliases: z.array(z.json()),
+    memberships: z.array(z.json()),
+    collections: z.array(z.json()),
+    transactions: z.array(z.json()),
+    allocations: z.array(z.json()),
+    purchases: z.array(z.json()),
+    expenses: z.array(z.json()),
+    recordedAttribution: z.array(z.json()),
+    effectiveExpenses: z.array(z.json()),
+    transfers: z.array(z.json()),
+    sourceClaims: z.array(z.json()),
+    paymentEvidence: z.array(z.json()),
+    receiptReferences: z.array(z.json()),
+  }),
+});

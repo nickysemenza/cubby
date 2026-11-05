@@ -1,0 +1,211 @@
+import { sourceOccurrenceRawOut } from "@cubby/schemas/entity-contracts/sourceOccurrence";
+import { sourceOccurrenceClosure } from "@cubby/schemas/source-occurrence-fields";
+import { sql } from "drizzle-orm";
+import { z } from "zod";
+
+import type { Database, DrizzleTransaction } from "~/server/db";
+import {
+  databaseForTransaction,
+  isTransaction,
+  unwrapDb,
+  withTransaction,
+} from "~/server/db/helpers";
+import { sourceOccurrence } from "~/server/db/schema";
+import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
+import { createAppError } from "~/server/errors/app-error";
+import { listScaffold } from "~/server/generic/list/repo/list";
+import type { ListReadOptions } from "~/server/generic/list/repo/list-projection";
+import { jsonSnapshot } from "~/server/lib/canonical-json";
+
+const rawSets = sourceOccurrenceClosure.shape.sets.omit({
+  effectiveExpenses: true,
+});
+const resultSchema = z.object({ snapshot: z.string(), sets: rawSets });
+const rowIdentity = z.object({ id: z.string() });
+const refuse = (message: string): never => {
+  throw createAppError("CONSTRAINT_VIOLATION", message);
+};
+
+/** One snapshot and one shared graph load per requested owner page. Never authorizes a write. */
+async function loadOccurrenceClosures(
+  db: Database | DrizzleTransaction,
+  rows: readonly (typeof sourceOccurrence.$inferSelect)[],
+) {
+  if (rows.length > 10)
+    return refuse("Read occurrence closure in groups of at most ten owners.");
+  if (!rows.length)
+    return new Map<string, z.infer<typeof sourceOccurrenceClosure>>();
+  const database = isTransaction(db) ? databaseForTransaction(db) : db;
+  return withTransaction(
+    database,
+    async (tx) => {
+      const query = unwrapDb(tx);
+      const { rows: isolation } = await query.execute(
+        sql`SELECT current_setting('transaction_isolation') AS level`,
+      );
+      if (
+        isolation[0]?.level !== "repeatable read" &&
+        isolation[0]?.level !== "serializable"
+      )
+        return refuse(
+          "Occurrence closure needs a snapshot read outside a read-committed write transaction.",
+        );
+      const ids = sql.join(
+        rows.map((row) => sql`${row.id}::uuid`),
+        sql`, `,
+      );
+      // CTEs select complete sets, including tombstones. LIMIT is only a sentinel: overflow refuses the bundle.
+      const definitions = sql`
+      WITH owners AS MATERIALIZED (SELECT * FROM "SourceOccurrence" WHERE id IN (${ids})),
+      observations AS MATERIALIZED (SELECT * FROM "SourceTransactionRecord" WHERE "occurrenceId" IN (SELECT id FROM owners)),
+      observation_aliases AS MATERIALIZED (SELECT * FROM "FinancialEvidenceAlias" WHERE "observationId" IN (SELECT id FROM observations) OR "occurrenceId" IN (SELECT id FROM owners)),
+      bindings AS MATERIALIZED (SELECT DISTINCT binding.* FROM "FinancialEvidenceAlias" binding JOIN observation_aliases evidence ON evidence.source=binding.source AND evidence.value=binding.value WHERE binding."historicalTransactionId" IS NOT NULL),
+      transactions AS MATERIALIZED (SELECT * FROM "FinancialTransaction" WHERE id IN (SELECT "acceptedTransactionId" FROM owners UNION SELECT "historicalTransactionId" FROM bindings)),
+      allocations AS MATERIALIZED (SELECT * FROM "FinancialTransactionAllocation" WHERE "transactionId" IN (SELECT id FROM transactions)),
+      purchases AS MATERIALIZED (SELECT * FROM "Purchase" WHERE id IN (SELECT "purchaseId" FROM allocations)),
+      expenses AS MATERIALIZED (SELECT * FROM "Expense" WHERE "purchaseId" IN (SELECT id FROM purchases)),
+      memberships AS MATERIALIZED (SELECT * FROM "TransactionImportRecord" WHERE "statementRowId" IN (SELECT id FROM observations)),
+      aliases AS MATERIALIZED (SELECT * FROM observation_aliases UNION SELECT * FROM bindings),
+      judgments AS MATERIALIZED (SELECT * FROM "SourceObservationAnnotation" WHERE "observationId" IN (SELECT id FROM observations)),
+      collections AS MATERIALIZED (SELECT * FROM "TransactionImport" WHERE id IN (SELECT "importId" FROM memberships)),
+      attribution AS MATERIALIZED (SELECT * FROM "ExpenseAttribution" WHERE "expenseId" IN (SELECT id FROM expenses)),
+      transfers AS MATERIALIZED (SELECT * FROM "LedgerTransfer" WHERE id IN (SELECT "ledgerTransferId" FROM transactions)),
+      claims AS MATERIALIZED (SELECT * FROM "LedgerSourceClaim" WHERE "expenseId" IN (SELECT id FROM expenses) OR "ledgerTransferId" IN (SELECT id FROM transfers)),
+      payment_evidence AS MATERIALIZED (SELECT * FROM "PurchasePaymentEvidence" WHERE "purchaseId" IN (SELECT id FROM purchases)),
+      receipts AS MATERIALIZED (
+        SELECT id,"runId","operationId",kind,"inputFingerprint",state,"completedAt" FROM "RunOperation" receipt
+        WHERE EXISTS (SELECT 1 FROM transactions t WHERE jsonb_path_exists(receipt.result, '$.** ? (@ == $code)', jsonb_build_object('code',t.shortcode)))
+      )`;
+      const selections: ReadonlyArray<readonly [string, string, string]> = [
+        ["occurrences", "owners", "to_jsonb(r)"],
+        [
+          "observations",
+          "observations",
+          `to_jsonb(r)||jsonb_build_object('amountMinor',r."amountMinor"::text,'providerAmountMinor',r."providerAmountMinor"::text)`,
+        ],
+        ["judgments", "judgments", "to_jsonb(r)"],
+        ["aliases", "aliases", "to_jsonb(r)"],
+        ["memberships", "memberships", "to_jsonb(r)"],
+        ["collections", "collections", "to_jsonb(r)"],
+        ["transactions", "transactions", "to_jsonb(r)"],
+        ["allocations", "allocations", "to_jsonb(r)"],
+        ["purchases", "purchases", "to_jsonb(r)"],
+        ["expenses", "expenses", "to_jsonb(r)"],
+        [
+          "recordedAttribution",
+          "attribution",
+          `to_jsonb(r)||jsonb_build_object('weight',r.weight::text)`,
+        ],
+        [
+          "transfers",
+          "transfers",
+          `to_jsonb(r)||jsonb_build_object('amountMinor',r."amountMinor"::text)`,
+        ],
+        [
+          "sourceClaims",
+          "claims",
+          `to_jsonb(r)||jsonb_build_object('targetAmountMinor',r."targetAmountMinor"::text)`,
+        ],
+        ["paymentEvidence", "payment_evidence", "to_jsonb(r)"],
+        ["receiptReferences", "receipts", "to_jsonb(r)"],
+      ];
+      const sets = selections.map(
+        ([name, table, value]) =>
+          sql`${name}::text, (SELECT coalesce(jsonb_agg(data ORDER BY identity), '[]'::jsonb) FROM (SELECT ${sql.raw(table === "judgments" ? 'r."observationId"::text' : table === "memberships" ? 'jsonb_build_array(r."importId", r."statementRowId")::text' : "r.id::text")} AS identity, ${sql.raw(value)} AS data FROM ${sql.identifier(table)} r ORDER BY identity LIMIT 1001) captured)`,
+      );
+      const { rows: loaded } = await query.execute(
+        sql`${definitions} SELECT txid_current_snapshot()::text AS snapshot, jsonb_build_object(${sql.join(sets, sql`, `)}) AS sets`,
+      );
+      const captured = resultSchema.parse(loaded[0]);
+      if (Object.values(captured.sets).some((set) => set.length > 1000))
+        return refuse(
+          "Occurrence closure exceeds one thousand rows in a named set; narrow the owner scope.",
+        );
+      const expenseIds = captured.sets.expenses.map(
+        (row) => rowIdentity.parse(row).id,
+      );
+      // The canonical Expense read supplies recorded inputs and effective attribution/category with provenance.
+      const effectiveExpenses = expenseIds.length
+        ? (
+            await expenseScaffold.getByIds(tx, expenseIds, [
+              "beneficiaries",
+              "funders",
+              "spendingCategoryId",
+              "spendingCategoryName",
+              "projectAllocations",
+              "spendingCategoryAllocations",
+            ])
+          ).data
+        : [];
+      const shared = {
+        scope: rows.map((row) => row.shortcode),
+        snapshot: captured.snapshot,
+        sets: {
+          ...captured.sets,
+          effectiveExpenses: jsonSnapshot.parse(effectiveExpenses),
+        },
+      };
+      return new Map(
+        rows.map((row) => [
+          row.id,
+          sourceOccurrenceClosure.parse({ root: row.shortcode, ...shared }),
+        ]),
+      );
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+}
+
+const read = {
+  references: {
+    physicalImportId: { kind: "lookup", missing: "null", includeDeleted: true },
+    currentObservationId: {
+      kind: "lookup",
+      missing: "null",
+      includeDeleted: true,
+    },
+    accountId: { kind: "lookup", missing: "null", includeDeleted: true },
+    supersededByOccurrenceId: {
+      kind: "lookup",
+      missing: "null",
+      includeDeleted: true,
+    },
+    replacementObservationId: {
+      kind: "lookup",
+      missing: "null",
+      includeDeleted: true,
+    },
+    withdrawalImportId: {
+      kind: "lookup",
+      missing: "null",
+      includeDeleted: true,
+    },
+    acceptedTransactionId: {
+      kind: "lookup",
+      missing: "null",
+      includeDeleted: true,
+    },
+  },
+  bindings: (bind) => {
+    const closure = bind.batch(({ db, rows }) =>
+      loadOccurrenceClosures(db, rows),
+    );
+    return [
+      closure.fields(
+        sourceOccurrenceRawOut.pick({ closure: true }),
+        (row, loaded) => ({
+          closure:
+            loaded.get(row.id) ??
+            refuse(
+              "Occurrence closure was not captured for this owner; refresh the evidence read.",
+            ),
+        }),
+      ),
+    ];
+  },
+} satisfies ListReadOptions<typeof sourceOccurrence.$inferSelect>;
+
+export const sourceOccurrenceRepository = defineRepository("sourceOccurrence", {
+  scaffold: listScaffold("sourceOccurrence", sourceOccurrence, { read }),
+});

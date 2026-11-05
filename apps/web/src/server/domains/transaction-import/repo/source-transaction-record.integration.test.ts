@@ -2,6 +2,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   sourceOccurrenceReviewState,
   sourceIdentityResolution,
+  sourceOccurrenceClosure,
   type SourceIdentityResolution,
 } from "@cubby/schemas/source-occurrence-fields";
 import {
@@ -44,6 +45,7 @@ import {
   kernelRequestContext,
 } from "~/server/testing/mcp-test-utils";
 
+import { sourceOccurrenceRepository } from "./source-occurrence-read";
 import {
   recordSourceTransactionRecords,
   updateSourceTransactionRecords,
@@ -128,6 +130,21 @@ describe("statement row ledger", () => {
     expect(before).toHaveLength(2);
     expect(new Set(before.map((row) => row.chargeKey)).size).toBe(2);
     expect(owners.map((owner) => owner.version)).toEqual([1, 1]);
+    const closureRead = await sourceOccurrenceRepository.repository.read(
+      buildKernelContext(ctx.db, ctx.actor.userId),
+      owners.map((owner) => owner.shortcode),
+      ["closure"],
+    );
+    const closure = sourceOccurrenceClosure.parse(closureRead.data[0]?.closure);
+    expect(closure.scope).toHaveLength(2);
+    expect(closure.sets.occurrences).toHaveLength(2);
+    expect(closure.sets.observations).toHaveLength(2);
+    expect(closure.sets.judgments).toHaveLength(2);
+    expect(closure.sets.memberships).toHaveLength(2);
+    expect(closure.sets.collections).toHaveLength(1);
+    expect(closure.sets.transactions).toEqual([]);
+    expect(closure.sets.effectiveExpenses).toEqual([]);
+
     await expect(
       recordSourceTransactionRecords(ctx.db, input, ctx.actor),
     ).resolves.toMatchObject({
@@ -688,6 +705,49 @@ describe("statement row ledger", () => {
       transactionId: transaction.id,
       amount: 128.5,
       accountId: account.id,
+    });
+    const linkedVendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic closure vendor",
+    });
+    const linkedPurchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: linkedVendor.output.id,
+      name: "Synthetic closure purchase",
+      date: "2026-05-04",
+    });
+    await createRepoEntity(ctx, "expense", {
+      name: "Synthetic closure Expense",
+      trade: "other",
+      date: "2026-05-04",
+      cost: 128.5,
+      costType: "materials",
+      purchaseId: linkedPurchase.output.id,
+      beneficiaries: [{ partyId: null, weight: 1 }],
+    });
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "financialTransaction",
+      transaction.id,
+      {
+        allocations: [{ purchaseId: linkedPurchase.output.id, amount: 128.5 }],
+      },
+    );
+    const readBack = await sourceOccurrenceRepository.repository.read(
+      buildKernelContext(ctx.db, ctx.actor.userId),
+      [row.chargeKey],
+      ["closure"],
+    );
+    const bundle = sourceOccurrenceClosure.parse(readBack.data[0]?.closure);
+    expect(bundle.sets.transactions).toHaveLength(1);
+    expect(bundle.sets.allocations).toHaveLength(1);
+    expect(bundle.sets.purchases).toHaveLength(1);
+    expect(bundle.sets.expenses).toHaveLength(1);
+    expect(bundle.sets.recordedAttribution).toHaveLength(1);
+    expect(bundle.sets.effectiveExpenses).toHaveLength(1);
+    expect(bundle.sets.expenses[0]).toMatchObject({ cost: 128.5 });
+    expect(bundle.sets.recordedAttribution[0]).toMatchObject({
+      ledgerPartyId: null,
+      weight: "1",
     });
     await expect(
       deleteThroughKernel(ctx.db, ctx.actor, "sourceTransactionRecord", [
