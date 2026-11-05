@@ -659,6 +659,49 @@ identities, revisions, collection memberships and accepted settlement references
 before guarded reconciliation. Truncation and an empty candidate list do not
 prove historical completeness. The read grants no bulk supersession authority.
 
+### Identity and money measurement before a financial cutover
+
+Before changing financial identity or money representation, measure the full
+retained population, including deleted observations. Report proven identities
+first; provider-ID counts and charge-key groups are candidate partitions.
+
+- Provider proof requires the source, retained provider transaction ID and
+  attested provider account namespace. Compare both IDs with original provider
+  evidence. A resolved Cubby account, matching descriptor, unique alias or null
+  scope cannot supply missing provider scope. Measure current-head, judgment,
+  account and ownership conflicts separately, including supersession.
+- Physical proof requires a positive position in the original collection,
+  matching source and retained original membership. Compare the frozen v2
+  digest with source, original collection fingerprint and position; count
+  position collisions. This proves collection-local identity only. It never
+  deduplicates separate imports or orders provider revisions.
+- Count unproven observations separately. Keep their money and provenance
+  unchanged and block automatic acceptance/correction where identity is
+  required. Do not manufacture member review tasks for missing source proof;
+  retain existing evidence-backed review for judgments a member can make.
+- Enumerate all historical accepted alias bindings as evidence candidates,
+  including tombstones. A sole live alias owner is not proven accepted
+  ownership. Check each promoted owner against complete retained bindings.
+
+Audit settled amounts separately from unit prices, fractional quantities,
+weights and provider usage charges. Classify null, finite exact decimal cents,
+near-cent floating noise, genuine sub-cent, non-finite and minor-unit overflow
+values. A diagnostic tolerance classifies noise; it never authorizes rounding
+stored money. Include Purchase totals, Project estimates and receipt-payment
+amounts in the field inventory, plus monetary values nested in retained JSON.
+Compare proposed conversions with the existing JavaScript cent semantics and
+retained original decimal evidence before migration. Successful scalar-column
+classification alone does not establish full JSON, Rust or native wire coverage.
+
+Choose a reconciliation cohort covering existing-spend links, missing
+aggregates, recorded attribution, source revisions and unresolved identity.
+Record elapsed time, model usage, round trips, separate mutations, evidence
+volume and committed checkpoints only where observable. Mark unmeasured
+workflow costs explicitly; population counts and relation sizes are not
+performance baselines. Observe the existing financial refresh through terminal
+results before coordinating a migration with the release owner. Never change
+its tables under running statement generation.
+
 ## Normalized financial evidence intake
 
 Claude/Codex use the [financial-evidence-import skill](../.agents/skills/financial-evidence-import/SKILL.md)
