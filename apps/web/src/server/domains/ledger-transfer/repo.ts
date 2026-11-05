@@ -14,7 +14,6 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { LedgerSourceClaimOut } from "@cubby/schemas/ledger-transfer";
-import { moneyToMinor } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -30,6 +29,7 @@ import {
   financialTransaction,
   ledgerTransfer,
 } from "~/server/db/schema";
+import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import {
   assertExplicitSourceClaimsForAmountChange,
@@ -180,7 +180,7 @@ type LedgerTransferChange = {
   columns: Partial<typeof ledgerTransfer.$inferInsert>;
   parties: { fromPartyId: LedgerPartyId; toPartyId: LedgerPartyId };
   amount: number;
-  evidence: readonly FinancialTransactionId[];
+  evidence: readonly FinancialTransactionId[] | undefined;
   sourceClaims: LedgerTransferUpdateData["sourceClaims"];
 };
 
@@ -206,11 +206,12 @@ const crud = createEntityCrud({
       return row ?? {};
     },
     write: async (tx, id, change) => {
-      await replaceEvidence(
-        tx,
-        { id, ...change.parties, amount: change.amount },
-        change.evidence,
-      );
+      if (change.evidence !== undefined)
+        await replaceEvidence(
+          tx,
+          { id, ...change.parties, amount: change.amount },
+          change.evidence,
+        );
       if (change.sourceClaims !== undefined)
         await replaceLedgerSourceClaims(
           tx,
@@ -320,7 +321,8 @@ async function assertEvidenceSet(
     rows.some(
       (row) =>
         transferEvidenceLegProblem(row) !== null ||
-        moneyToMinor(Math.abs(row.amount)) !== moneyToMinor(transfer.amount),
+        financialEvidenceAmountMinor(Math.abs(row.amount)) !==
+          financialEvidenceAmountMinor(transfer.amount),
     )
   )
     throw createAppError(
@@ -414,7 +416,7 @@ export const createLedgerTransfer = defineMutationWriter({
       const { sourceClaims, evidenceTransactionIds, ...columns } = data;
       const created = await insertWithShortcode(tx, "ledgerTransfer", {
         ...columns,
-        amount: moneyToMinor(columns.amount),
+        amount: financialEvidenceAmountMinor(columns.amount),
         ...parties,
       });
       const evidence = evidenceTransactionIds
@@ -512,22 +514,27 @@ export const updateLedgerTransfer = defineMutationWriter({
         ...columnData
       } = data;
       const evidence =
-        evidenceTransactionIds === undefined
-          ? await tx
-              .select({ id: financialTransaction.id })
-              .from(financialTransaction)
-              .where(
-                and(
-                  eq(financialTransaction.ledgerTransferId, id),
-                  notDeleted(financialTransaction),
-                ),
-              )
-              .then((rows) => rows.map((row) => row.id))
-          : await resolveAllOrThrow(
-              tx,
-              "financialTransaction",
-              evidenceTransactionIds ?? [],
-            );
+        evidenceTransactionIds === undefined &&
+        data.amount === undefined &&
+        data.fromPartyId === undefined &&
+        data.toPartyId === undefined
+          ? undefined
+          : evidenceTransactionIds === undefined
+            ? await tx
+                .select({ id: financialTransaction.id })
+                .from(financialTransaction)
+                .where(
+                  and(
+                    eq(financialTransaction.ledgerTransferId, id),
+                    notDeleted(financialTransaction),
+                  ),
+                )
+                .then((rows) => rows.map((row) => row.id))
+            : await resolveAllOrThrow(
+                tx,
+                "financialTransaction",
+                evidenceTransactionIds ?? [],
+              );
       await crud.update(
         tx,
         id,
@@ -536,7 +543,7 @@ export const updateLedgerTransfer = defineMutationWriter({
             ...columnData,
             ...(data.amount === undefined
               ? {}
-              : { amount: moneyToMinor(data.amount) }),
+              : { amount: financialEvidenceAmountMinor(data.amount) }),
           },
           parties,
           amount,

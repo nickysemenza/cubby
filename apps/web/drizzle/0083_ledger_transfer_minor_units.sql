@@ -8,6 +8,19 @@ DECLARE
   source_oid oid := 'public."LedgerTransfer"'::regclass;
   locks text;
 BEGIN
+  -- Block new step admission/checkpoints while checking active work and the latest retained financial continuation.
+  LOCK TABLE public."RunStep" IN SHARE MODE;
+  IF EXISTS (
+    SELECT 1 FROM public."RunStep" step JOIN public."Run" run ON run.id = step."runId"
+    WHERE (step.key LIKE 'statement\_%' ESCAPE '\' OR step.key LIKE 'transfer\_pair\_%' ESCAPE '\')
+      AND step.state NOT IN ('done', 'skipped', 'cancelled')
+      AND (run.status = 'running' OR step."runId" = (
+        SELECT latest."runId" FROM public."RunStep" latest
+        WHERE latest.key = 'statement_generate' ORDER BY latest."createdAt" DESC, latest.id DESC LIMIT 1
+      ))
+  ) THEN
+    RAISE EXCEPTION 'Financial refresh has unfinished steps; complete or explicitly cancel its retained work before the money cutover';
+  END IF;
   -- Include incoming and outgoing FK endpoints before capturing their DDL.
   SELECT string_agg(format('%I.%I', n.nspname, c.relname), ', ' ORDER BY n.nspname, c.relname)
     INTO locks FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -67,6 +80,14 @@ BEGIN
     SELECT id, shortcode, "fromPartyId", "toPartyId", (amount::numeric * 100)::bigint,
       date, notes, "createdAt", "updatedAt", "deletedAt"
     FROM archive."LedgerTransfer_dollar_preimage";
+  IF EXISTS (
+    SELECT 1 FROM archive."LedgerTransfer_dollar_preimage" original
+    FULL JOIN public."LedgerTransfer" converted USING (id)
+    WHERE original.id IS NULL OR converted.id IS NULL
+      OR original.amount IS DISTINCT FROM (converted."amountMinor"::float8 / 100)
+  ) THEN
+    RAISE EXCEPTION 'Transfer money failed independent IEEE round-trip preservation';
+  END IF;
   ALTER TABLE public."LedgerTransfer" ADD PRIMARY KEY (id);
   ALTER TABLE public."LedgerTransfer" ADD CONSTRAINT "LedgerTransfer_amount_whole_cent_check"
     CHECK ("amountMinor" > 0 AND "amountMinor" <= 100000000000000);
@@ -93,7 +114,7 @@ BEGIN
   END LOOP;
   IF EXISTS (SELECT 1 FROM pg_constraint WHERE contype='f' AND conrelid='archive."LedgerTransfer_dollar_preimage"'::regclass)
     OR EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='archive."LedgerTransfer_dollar_preimage"'::regclass AND NOT tgisinternal) THEN
-    RAISE EXCEPTION 'Archived source claims retain active relationships or triggers';
+    RAISE EXCEPTION 'Archived transfers retain active relationships or triggers';
   END IF;
 END
 $migration$;

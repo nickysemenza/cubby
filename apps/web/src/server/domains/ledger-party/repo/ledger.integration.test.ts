@@ -1,5 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, isNull } from "drizzle-orm";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -36,7 +37,9 @@ import {
   updateLedgerTransfer,
 } from "~/server/domains/ledger-transfer/repo";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import { executeEntity } from "~/server/entity-kernel";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import { makeExpenseInput } from "~/server/testing/repo.fixtures";
@@ -228,6 +231,14 @@ describe("consolidated household ledger", () => {
       ).rejects.toThrow(message);
     await expectInvalidEvidence([voidEvidence], "observed, pending, or posted");
     await expectInvalidEvidence([wrongAmount], "match the transfer amount");
+    await unwrapDb(ctx.db)
+      .update(financialTransaction)
+      .set({ amount: 12.000000000000002 })
+      .where(eq(financialTransaction.id, wrongAmount.id));
+    await expectInvalidEvidence(
+      [wrongAmount],
+      "exact, supported whole-cent amount",
+    );
     await expectInvalidEvidence([wrongParty], "endpoint party");
     await expectInvalidEvidence([outflow, secondPositive], "one positive");
     await expectInvalidEvidence(
@@ -236,9 +247,11 @@ describe("consolidated household ledger", () => {
       { fromPartyId: member.output.id, toPartyId: member.output.id },
     );
     await expectInvalidEvidence([allocated], "be unallocated");
-    const transfer = await createLedgerTransfer(
-      ctx.db,
-      {
+    const context = buildKernelContext(ctx.db, ctx.actor.userId);
+    const createdReceipt = await executeEntity(context, {
+      action: "create",
+      entity: "ledgerTransfer",
+      data: {
         fromPartyId: member.output.id,
         toPartyId: otherMember.output.id,
         amount: 12,
@@ -250,8 +263,44 @@ describe("consolidated household ledger", () => {
           parseShortcodeFor("financialTransaction", inflow.shortcode),
         ],
       },
-      ctx.actor,
-    );
+    });
+    expect(createdReceipt).toMatchObject({
+      action: "create",
+      item: { amount: 12 },
+    });
+    if (createdReceipt.action !== "create")
+      throw new Error("Expected transfer creation");
+    const code = parseShortcodeFor("ledgerTransfer", createdReceipt.item.id);
+    const output = await readLedgerTransfer(ctx.db, code);
+    if (!output) throw new Error("Expected created transfer");
+    const transfer = {
+      output,
+      entityId: await resolveOrThrow(ctx.db, "ledgerTransfer", code),
+    };
+    expect(
+      await executeEntity(context, {
+        action: "update",
+        entity: "ledgerTransfer",
+        id: code,
+        data: { amount: 12 },
+      }),
+    ).toMatchObject({ action: "update", item: { amount: 12 } });
+    await unwrapDb(ctx.db)
+      .update(financialTransaction)
+      .set({ amount: 12.000000000000002 })
+      .where(eq(financialTransaction.id, outflow.id));
+    await expect(
+      updateLedgerTransfer(
+        ctx.db,
+        code,
+        { notes: "Synthetic note-only edit" },
+        ctx.actor,
+      ),
+    ).resolves.toMatchObject({ output: { amount: 12 } });
+    await unwrapDb(ctx.db)
+      .update(financialTransaction)
+      .set({ amount: 12 })
+      .where(eq(financialTransaction.id, outflow.id));
     expect(transfer.output?.classification).toBe("reimbursement");
     expect(transfer.output).toMatchObject({
       fromPartyName: member.output.name,

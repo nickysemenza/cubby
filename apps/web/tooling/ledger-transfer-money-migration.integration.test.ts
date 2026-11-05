@@ -47,6 +47,24 @@ it("preserves transfer parties, claims and original evidence through minor-unit 
     const claims = await client.query(
       `SELECT to_jsonb(c) AS value FROM "LedgerSourceClaim" c`,
     );
+    await client.query(`UPDATE "LedgerTransfer" SET amount=10.010000000000002`);
+    await expect(
+      migrateDatabase(db, { through: "0083_ledger_transfer_minor_units" }),
+    ).rejects.toMatchObject({
+      cause: {
+        code: "P0001",
+        message:
+          "Transfer money failed independent IEEE round-trip preservation",
+      },
+    });
+    expect(
+      (
+        await client.query(
+          `SELECT to_regclass('archive."LedgerTransfer_dollar_preimage"') AS archived`,
+        )
+      ).rows,
+    ).toEqual([{ archived: null }]);
+    await client.query(`UPDATE "LedgerTransfer" SET amount=10.01`);
     await migrateDatabase(db, { through: "0083_ledger_transfer_minor_units" });
     expect(
       (
