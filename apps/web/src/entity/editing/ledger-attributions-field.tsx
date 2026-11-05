@@ -181,7 +181,7 @@ export function LedgerAttributionsField({
 }
 
 /** The same relative-share editor serves generic forms and reviewed aggregate booking. */
-export function LedgerAttributionsEditor({
+function LedgerAttributionsEditor({
   rows,
   label,
   onChangeRows,
