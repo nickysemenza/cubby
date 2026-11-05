@@ -14,16 +14,15 @@ import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
+  sourceOccurrenceSuppressed,
+  sourceObservations,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
+import {
   CHARGE_STATE,
   chargeKeyOf,
   chargeStateOf,
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
-
-import {
-  sourceOccurrenceSuppressed,
-  sourceObservations,
-} from "./source-observation-state";
 
 /** Which charge identities a generation or label pass covers; empty covers the ledger. */
 export type StatementSuggestionScope = {

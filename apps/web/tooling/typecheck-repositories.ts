@@ -54,6 +54,7 @@ export const repositoryOwners = [
   "src/server/domains/image-processing/repo/image-representations.ts",
   "src/server/generic/relatedness/repo/relationship-query.ts",
   "src/server/db/computed/source-transaction-settlement-sql.ts",
+  "src/server/db/computed/source-occurrence-history-sql.ts",
   "src/server/domains/purchase/repo/purchase-purchaser.ts",
   "src/server/domains/financial-transaction/repo/settlement-conflicts.ts",
   "src/server/generic/derived/repo/assignment-read.ts",

@@ -13,11 +13,10 @@ import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
 import { transactionImport, sourceTransactionRecord } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { reconcileFinancialEvidenceCorrection } from "~/server/domains/financial-transaction/repo/financial-evidence-correction";
-
 import {
   sourceObservationColumns,
   sourceObservationFrom,
-} from "./source-observation-state";
+} from "~/server/domains/transaction-import/repo/source-observation-state";
 
 /** A ready occurrence supplies current facts; all accepted occurrences corroborate independently. */
 export async function reconcileRecordedFinancialEvidence(

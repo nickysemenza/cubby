@@ -38,6 +38,7 @@ import {
   financialAccountPurchaser,
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
+import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { createPurchase } from "~/server/domains/purchase/repo/purchase";
 import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { resolveNames } from "~/server/entity-kernel/resolve";
@@ -45,7 +46,6 @@ import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { lockFinancialTransactionSources } from "./financial-source-evidence";
 import { updateFinancialTransaction } from "./financial-transaction";
 
 /** Preserve persisted JSON fingerprint bytes without a separate encoding buffer. */

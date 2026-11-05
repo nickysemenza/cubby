@@ -7,11 +7,10 @@ import { type SQL, sql } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
-
 import {
   sourceObservations,
   sourceOccurrenceStates,
-} from "./source-observation-state";
+} from "~/server/domains/transaction-import/repo/source-observation-state";
 
 /** Accepted ownership is the occurrence FK; external strings never resolve an owner. */
 export const LIVE_REFS = sql`(

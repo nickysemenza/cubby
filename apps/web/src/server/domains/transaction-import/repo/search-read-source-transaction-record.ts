@@ -7,17 +7,16 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, notDeleted } from "~/server/db/helpers";
 import { sourceTransactionRecord as searchTablesourceTransactionRecord } from "~/server/db/schema";
 import { sourceTransactionRecord } from "~/server/db/schema";
+import {
+  sourceObservationColumns,
+  sourceObservationFrom,
+  sourceObservations,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
 import type {
   EmbeddingLoadOptions,
   SearchableEntityText,
   SearchReadPort,
 } from "~/server/generic/search/repo/search-read-port";
-
-import {
-  sourceObservationColumns,
-  sourceObservationFrom,
-  sourceObservations,
-} from "./source-observation-state";
 
 async function loadEmbeddingText(
   db: Database | DrizzleTransaction,

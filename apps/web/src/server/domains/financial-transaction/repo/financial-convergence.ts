@@ -40,6 +40,7 @@ import {
   paymentFundingPartySql,
 } from "~/server/domains/financial-account/repo/funding-sql";
 import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { findSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import {
   assertMailFinancialEvidenceCurrent,
@@ -60,7 +61,6 @@ import {
   loadFinancialBookingLineage,
   previewFinancialBooking,
 } from "./financial-booking";
-import { lockFinancialTransactionSources } from "./financial-source-evidence";
 import {
   previewFinancialSpending,
   commitFinancialSpending,

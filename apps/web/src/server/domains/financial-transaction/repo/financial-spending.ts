@@ -47,6 +47,7 @@ import {
   financialSourceRefsFor,
   financialSourceRefsIncluding,
 } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   planPurchaseRetainedSettlement,
   prepareRetainedSettlementDiscovery,
@@ -71,7 +72,6 @@ import {
   loadFinancialBookingLineage,
   previewFinancialBooking,
 } from "./financial-booking";
-import { lockFinancialTransactionSources } from "./financial-source-evidence";
 
 function refuse(message: string): never {
   throw createAppError("CONSTRAINT_VIOLATION", message);

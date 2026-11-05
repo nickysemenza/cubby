@@ -30,6 +30,7 @@ import {
   createFinancialTransaction,
   updateFinancialTransaction,
 } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { sourceObservationFrom } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
   type ChargeProposal,
@@ -43,7 +44,6 @@ import {
   transitionAssessmentState,
 } from "~/server/generic/assessment/repo/assessment-state";
 
-import { sourceObservationFrom } from "./source-observation-state";
 import {
   currentStatementApplication,
   loadStatementApplication,

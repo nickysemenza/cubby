@@ -18,14 +18,14 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { financialAccount, sourceTransactionRecord } from "~/server/db/schema";
+import {
+  sourceObservationColumns,
+  sourceObservationFrom,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { createAppError } from "~/server/errors/app-error";
 
-import {
-  sourceObservationColumns,
-  sourceObservationFrom,
-} from "./source-observation-state";
 import { updateSourceObservationJudgments } from "./source-occurrence";
 
 const FROM_WITH_REFS = sql`FROM ${sourceObservationFrom}`;

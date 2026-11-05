@@ -16,6 +16,10 @@ import { sourceTransactionRecord } from "~/server/db/schema";
 import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import { sourceTransactionRecordSearch } from "~/server/domains/transaction-import/repo/search-read-source-transaction-record";
 import {
+  sourceObservations,
+  sourceObservationField,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
+import {
   merchantVendorInferences,
   normalizeMerchant,
 } from "~/server/domains/vendor/repo/merchant-vendor-inference";
@@ -30,10 +34,6 @@ import { listScaffold } from "~/server/generic/list/repo/list";
 import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import {
-  sourceObservations,
-  sourceObservationField,
-} from "./source-observation-state";
 import { updateSourceObservationJudgments } from "./source-occurrence";
 import {
   lockSourceObservationRemoval,

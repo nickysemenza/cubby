@@ -20,15 +20,15 @@ import {
   financialAccount,
 } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
-import { createAppError } from "~/server/errors/app-error";
-import { recordChange } from "~/server/generic/changes/repo/change";
-
-import { auditEvidenceRows, evidenceChanges } from "./intake-audit";
 import {
   sourceObservationColumns,
   sourceObservationFrom,
   sourceObservations,
-} from "./source-observation-state";
+} from "~/server/domains/transaction-import/repo/source-observation-state";
+import { createAppError } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
+
+import { auditEvidenceRows, evidenceChanges } from "./intake-audit";
 
 export type SourceJudgmentPatch = {
   accountId?: FinancialAccountId | null;

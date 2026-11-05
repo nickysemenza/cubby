@@ -19,6 +19,11 @@ import {
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
+  sourceObservationColumns,
+  sourceObservationFrom,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
+import { sourceTransactionRecordExternalId } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
+import {
   insertPayloadsWithIdentities,
   isEntityShortcodeCollision,
 } from "~/server/entity-kernel/repo/entity-identity-writer";
@@ -29,11 +34,6 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { auditEvidenceRows } from "./intake-audit";
-import {
-  sourceObservationColumns,
-  sourceObservationFrom,
-} from "./source-observation-state";
-import { sourceTransactionRecordExternalId } from "./source-transaction-record-identity";
 
 const refuse = (message: string): never => {
   throw createAppError("CONSTRAINT_VIOLATION", message);

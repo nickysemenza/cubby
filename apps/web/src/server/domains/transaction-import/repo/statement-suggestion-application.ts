@@ -13,13 +13,13 @@ import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { suggestionTable } from "~/server/db/schema";
-import { createAppError } from "~/server/errors/app-error";
-import type { SuggestionStateRow } from "~/server/generic/assessment/repo/assessment-state";
-
 import {
   SOURCE_HELD_REASON,
   statementSuggestionSourceHeld,
-} from "./source-observation-state";
+} from "~/server/domains/transaction-import/repo/source-observation-state";
+import { createAppError } from "~/server/errors/app-error";
+import type { SuggestionStateRow } from "~/server/generic/assessment/repo/assessment-state";
+
 import {
   buildChargeProposals,
   buildHoldVoidProposals,

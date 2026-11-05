@@ -64,6 +64,8 @@ import {
   findTransferPairsForCharges,
   transferPairSourceCharges,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
+import { sourceOccurrenceSuppressed } from "~/server/domains/transaction-import/repo/source-observation-state";
+import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { PROVIDER_IDENTITY_REVIEW } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
   chargeKeyOf,
@@ -120,8 +122,6 @@ import {
 } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
-import { sourceOccurrenceSuppressed } from "./source-observation-state";
-import { sourceObservations } from "./source-observation-state";
 import {
   statementHoldAccounts as holdAccounts,
   statementInputCharges,

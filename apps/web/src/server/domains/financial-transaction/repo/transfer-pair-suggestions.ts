@@ -49,6 +49,7 @@ import {
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { suggestionTable } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
+import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   lockFinancialTransactionSources,
   financialSourceRefsFor,
@@ -95,8 +96,6 @@ import {
   isWorkflowInterrupted,
 } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
-
-import { lockFinancialEvidenceKeys } from "./financial-evidence";
 
 /** Rule revision stamped on every published pair; bump with any policy change. */
 const TRANSFER_PAIR_REVISION = "2026-10-29.1";

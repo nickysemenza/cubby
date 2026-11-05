@@ -15,12 +15,12 @@ import {
   financialTransactionAllocation,
   purchase,
 } from "~/server/db/schema";
+import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { transactionSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import { createAppError } from "~/server/errors/app-error";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { lockFinancialTransactionSources } from "./financial-source-evidence";
 import {
   lockUpdatePurchases,
   updateFinancialTransaction,

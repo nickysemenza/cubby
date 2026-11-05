@@ -20,16 +20,15 @@ import {
   sourceTransactionRecord,
   financialEvidenceAlias,
   financialTransaction,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
+import {
+  financialEvidenceAmountMinor,
+  lockFinancialEvidenceKeys,
+} from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
-
-import {
-  financialEvidenceAmountMinor,
-  lockFinancialEvidenceKeys,
-} from "./financial-evidence";
 
 type SourceRef = FinancialTransactionSourceRef;
 const refKey = (ref: SourceRef) => JSON.stringify([ref.source, ref.externalId]);

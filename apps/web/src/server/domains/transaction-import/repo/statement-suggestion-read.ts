@@ -16,6 +16,10 @@ import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
+  SOURCE_HELD_REASON,
+  statementSuggestionSourceHeld,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
+import {
   pendingSuggestion,
   sourceSuggestionAutomaticEligible,
   suggestionField,
@@ -29,10 +33,6 @@ import {
 } from "~/server/generic/assessment/repo/assessment";
 import { reviewFamilyDeclarations } from "~/server/generic/assessment/repo/review-families";
 
-import {
-  SOURCE_HELD_REASON,
-  statementSuggestionSourceHeld,
-} from "./source-observation-state";
 import { isClean } from "./statement-suggestions";
 
 const currentClean = sql`${sourceSuggestionAutomaticEligible()} AND coalesce((coalesce((${suggestionField("clean")})::boolean, false) AND (

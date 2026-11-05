@@ -25,7 +25,7 @@ import {
   sourceHistoricalTransactionRows,
 } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { sourceTransactionRecord } from "~/server/db/schema";
+import { sourceTransactionRecord } from "~/server/db/retained-tables";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 
 /** Read projection only. Observation facts never inherit another observation's decisions. */

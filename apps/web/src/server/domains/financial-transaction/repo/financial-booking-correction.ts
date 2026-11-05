@@ -23,6 +23,7 @@ import {
   deleteExpenses,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
+import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   readLedgerTransfer,
   updateLedgerTransfer,
@@ -31,7 +32,6 @@ import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { digestValue, loadFinancialBookingLineage } from "./financial-booking";
-import { lockFinancialTransactionSources } from "./financial-source-evidence";
 import { updateFinancialTransaction } from "./financial-transaction";
 
 const fail = (message: string): never => {
