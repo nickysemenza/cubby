@@ -5,10 +5,7 @@ import { entityDetailFor } from "~/entity/entity-detail";
 import { usdaFood } from "~/integrations/tanstack-query/generated/domains/usdaFood.gen";
 import type { CubbyOperationMeta } from "~/integrations/tanstack-query/operation-meta";
 
-import {
-  type DetailEntity,
-  detailEntities,
-} from "./generated/entity-details.gen";
+import { type DetailEntity, detailEntities } from "./model/detail-contracts";
 
 export const isDetailEntity = (entity: Entity): entity is DetailEntity =>
   detailEntities.some((candidate) => candidate === entity);

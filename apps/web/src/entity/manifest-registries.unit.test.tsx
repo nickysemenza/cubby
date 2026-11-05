@@ -7,8 +7,8 @@ import { actionVerbs } from "~/entity/actions/action-verbs";
 import { entityActionCatalogDescriptors } from "~/entity/actions/entity-actions";
 import type { GenericDetailEntity } from "~/entity/entity-detail/detail-record";
 import { featureRegistry } from "~/entity/feature-registry";
-import { detailEntities } from "~/entity/generated/entity-details.gen";
 import { entityOverrideComparisons } from "~/entity/generated/entity-override-comparisons.gen";
+import { detailEntities } from "~/entity/model/detail-contracts";
 import { installFeatures } from "~/features/registry";
 
 import {

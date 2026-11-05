@@ -6,11 +6,11 @@ import {
   type EntityListParams,
   entityListFor,
 } from "~/entity/entity-list";
+import { useEntityMetadata } from "~/entity/metadata";
 import type {
   EntityListResultByEntity,
   ListEntity,
-} from "~/entity/generated/entity-lists.gen";
-import { useEntityMetadata } from "~/entity/metadata";
+} from "~/entity/model/list-contracts";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 
 import { flattenUniquePageItems } from "../../ui/hooks/infinite-page-utils";

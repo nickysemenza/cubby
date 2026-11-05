@@ -7,10 +7,7 @@ import { dateTime } from "@cubby/schemas/codec";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { z } from "zod";
 
-import {
-  listEntities,
-  type ListEntity,
-} from "~/entity/generated/entity-lists.gen";
+import { listEntities, type ListEntity } from "~/entity/model/list-contracts";
 import {
   listReadRowSchema,
   type ListReadRow,

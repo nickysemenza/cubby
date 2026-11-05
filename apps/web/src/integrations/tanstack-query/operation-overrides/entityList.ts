@@ -1,5 +1,5 @@
 import type { entityListContract } from "~/contracts/entity-list.contract";
-import { type ListEntity } from "~/entity/generated/entity-lists.gen";
+import { type ListEntity } from "~/entity/model/list-contracts";
 import { loadEntityListSchemas } from "~/entity/model/read-schemas/loaders";
 
 import type { OperationPolicies } from "../operation-catalog";

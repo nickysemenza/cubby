@@ -5,7 +5,7 @@ import type { ListGroupSummary } from "@cubby/schemas/pagination";
 import type {
   EntityListResultByEntity,
   ListEntity,
-} from "~/entity/generated/entity-lists.gen";
+} from "~/entity/model/list-contracts";
 
 export type BoardFilters = EntityBoardListView["filters"];
 /** Board columns use scalar field values, independently of list path identities. */

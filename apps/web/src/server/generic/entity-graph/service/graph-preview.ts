@@ -7,7 +7,7 @@ import { entityGraphNodeSchema } from "@cubby/schemas/entity-graph";
 import { entityPreviewFieldKeys } from "@cubby/schemas/entity-preview";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 
-import { listEntities } from "~/entity/generated/entity-lists.gen";
+import { listEntities } from "~/entity/model/list-contracts";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { listOperations } from "~/server/entity-kernel/list-operations";
 import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";

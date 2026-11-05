@@ -44,7 +44,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { listEntities } from "~/entity/generated/entity-lists.gen";
+import { listEntities } from "~/entity/model/list-contracts";
 import { mock } from "~/lib/test/mock-schema";
 import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";

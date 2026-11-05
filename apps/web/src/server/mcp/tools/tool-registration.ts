@@ -70,7 +70,7 @@ import { safeToJsonSchema, sdkOutputSchema } from "./tool-json-schema";
 
 /**
  * The MCP SDK adapter registers every generated tool binding
- * (`server/generated/mcp-tools.gen.ts`). Capability groups publish compact
+ * (`server/mcp/tool-bindings.ts`). Capability groups publish compact
  * `{ action, input }` schemas with a `describe` action; the entity-kernel tools
  * keep detailed schemas. Every action runs through the shared runner
  * (`executeOperation`): an operation action by id through

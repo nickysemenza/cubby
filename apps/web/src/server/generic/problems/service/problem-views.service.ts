@@ -19,7 +19,7 @@ import {
   parseEntityListInput,
   listEntities,
   type ListEntity,
-} from "~/entity/generated/entity-lists.gen";
+} from "~/entity/model/list-contracts";
 import {
   type ViewProblemDeclaration,
   viewProblemDeclarations,

@@ -26,13 +26,13 @@ import { entityListFor } from "~/entity/entity-list";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { buildFiltersFromManifest } from "~/entity/filters";
+import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import {
   listEntities,
   entityListParamsFromParsed,
   parseEntityListInput,
   type ListEntity,
-} from "~/entity/generated/entity-lists.gen";
-import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
+} from "~/entity/model/list-contracts";
 import {
   connectionRefs,
   ConnectionPaths,

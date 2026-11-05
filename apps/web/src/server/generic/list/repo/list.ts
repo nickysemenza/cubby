@@ -58,7 +58,7 @@ import type { PgColumn, PgSelect, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { ListFacet } from "~/contracts/entity-list.contract";
-import type { ListEntity } from "~/entity/generated/entity-lists.gen";
+import type { ListEntity } from "~/entity/model/list-contracts";
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -82,8 +82,8 @@ import {
 } from "~/server/db/helpers";
 import { executeListQueryWithoutCount } from "~/server/db/helpers/query";
 import { registerReadPorts } from "~/server/entity-kernel/repo/read-ports";
+import { ENTITY_LIST_READ_SCHEMAS } from "~/server/entity-reads/list-contracts";
 import { createAppError } from "~/server/errors/app-error";
-import { ENTITY_LIST_READ_SCHEMAS } from "~/server/generated/entity-lists.server.gen";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { loadCurrentFieldOwnership } from "~/server/generic/assessment/repo/automatic-fields";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";

@@ -21,8 +21,8 @@ import { entityMedia } from "~/integrations/tanstack-query/generated/domains/ent
 import { entityTimeline } from "~/integrations/tanstack-query/generated/domains/entityTimeline.gen";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { mock } from "~/lib/test/mock-schema";
+import { getEntityDetailOutputSchema } from "~/server/entity-reads/detail-contracts";
 import { getEntityListItemSchema } from "~/server/entity-reads/list-contracts";
-import { getEntityDetailOutputSchema } from "~/server/generated/entity-details.server.gen";
 const inventoryListItem = getEntityListItemSchema("inventory");
 
 import { buildQualityBreakdown } from "~/server/generic/data-quality/repo/hydrate";

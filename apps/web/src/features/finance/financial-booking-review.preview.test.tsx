@@ -17,7 +17,7 @@ import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { mock } from "~/lib/test/mock-schema";
 import { getEntityListItemSchema } from "~/server/entity-reads/list-contracts";
-import { getEntityListOutputSchema } from "~/server/generated/entity-lists.server.gen";
+import { getEntityListOutputSchema } from "~/server/entity-reads/list-contracts";
 const purchaseListItem = getEntityListItemSchema("purchase");
 
 import { FinancialBookingReview } from "./financial-booking-review";

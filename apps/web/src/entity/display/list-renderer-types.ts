@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type {
   EntityListResultByEntity,
   ListEntity,
-} from "~/entity/generated/entity-lists.gen";
+} from "~/entity/model/list-contracts";
 import type {
   CubbyColumnCollection,
   CubbyColumnHelper,

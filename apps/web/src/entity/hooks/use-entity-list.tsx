@@ -34,11 +34,11 @@ import {
   hideSectionValues,
   summarizeListState,
 } from "~/entity/filters";
-import { listEntities } from "~/entity/generated/entity-lists.gen";
 import { loadSelectionRecords } from "~/entity/hooks/selection-records";
 import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
 import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
 import { useEntityMetadata } from "~/entity/metadata";
+import { listEntities } from "~/entity/model/list-contracts";
 import { useProblemContinuation } from "~/entity/problems/problem-continuation";
 import { defaultSortFor } from "~/entity/sortable-fields";
 import type { RowLinkResolver } from "~/entity/table/column-helpers";

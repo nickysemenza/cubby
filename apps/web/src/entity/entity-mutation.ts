@@ -10,7 +10,7 @@ import type {
 
 import type { EntityEditResultFor } from "./editing/intent-types";
 import type { EditableEntity } from "./editing/types";
-import { parseEntityMutationOutput } from "./generated/entity-mutation-results.gen";
+import { parseEntityMutationOutput } from "./model/mutation-contracts";
 
 const entityMutationResultInputSchema = z.unknown();
 type EntityMutationResultInput = z.input<

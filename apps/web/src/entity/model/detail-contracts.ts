@@ -7,6 +7,7 @@ export type EntityDetailByEntity = {
   >;
 };
 import { detailEntities } from "../generated/entity-read-keys.gen";
+export { detailEntities };
 export type DetailEntity = (typeof detailEntities)[number];
 const detailVariant = (entity: DetailEntity) =>
   z.object({ entity: z.literal(entity), shortcode: shortcodeSchema(entity) });

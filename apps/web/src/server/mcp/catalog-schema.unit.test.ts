@@ -7,11 +7,11 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { type JSONType, z } from "zod";
 
 import { withErrorReporting } from "~/server/errors/report-error";
+import { encodeAuditCursor } from "~/server/generic/audit-log/repo/audit-log";
 import {
   MCP_TOOL_BINDINGS,
   MCP_TOOL_DECLARATIONS,
-} from "~/server/generated/mcp-tools.gen";
-import { encodeAuditCursor } from "~/server/generic/audit-log/repo/audit-log";
+} from "~/server/mcp/tool-bindings";
 
 import {
   callMcpTool,

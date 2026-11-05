@@ -3,11 +3,8 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import { z } from "zod";
 
 import { isBrowserRoutedEntity } from "~/entity/entities";
-import {
-  type ListEntity,
-  listEntities,
-} from "~/entity/generated/entity-lists.gen";
-import { getEntityListOutputSchema } from "~/server/generated/entity-lists.server.gen";
+import { type ListEntity, listEntities } from "~/entity/model/list-contracts";
+import { getEntityListOutputSchema } from "~/server/entity-reads/list-contracts";
 import { mock } from "~/lib/test/mock-schema";
 import type { BaseListRow } from "~/entity/hooks/use-entity-list";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";

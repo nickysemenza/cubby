@@ -17,11 +17,11 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
 import { multiSelectFilterFn } from "~/entity/filters";
-import type { EntityListParamsByEntity } from "~/entity/generated/entity-lists.gen";
 import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { useProductCategories } from "~/entity/hooks/use-product-categories";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
+import type { EntityListParamsByEntity } from "~/entity/model/list-contracts";
 import type { SearchProviderProps } from "~/entity/picker/with-search-hook";
 import { CategoryLabel } from "~/entity/presentation/category-label";
 import {

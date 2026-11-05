@@ -6,7 +6,7 @@ import type { MutationContract, QueryContract } from "~/contracts/define";
  * The MCP tool surface is declared as DATA: each tool is a named group of
  * actions, and each action is one `query()`/`mutation()` contract member or one
  * entity-kernel verb. `pnpm generate` binds every member to its
- * `implementOperationDomain` handler (`server/generated/mcp-tools.gen.ts`) and
+ * `implementOperationDomain` handler (`server/mcp/tool-bindings.ts`) and
  * emits the `${tool}.${action}` name unions (`@cubby/schemas/mcp-tools`).
  *
  * Operation actions are generated from capability members. This file keeps

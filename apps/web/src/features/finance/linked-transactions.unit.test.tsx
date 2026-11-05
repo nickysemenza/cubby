@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
-import { getEntityListOutputSchema } from "~/server/generated/entity-lists.server.gen";
+import { getEntityListOutputSchema } from "~/server/entity-reads/list-contracts";
 const financialTransactionListResponse = getEntityListOutputSchema(
   "financialTransaction",
 );

@@ -12,7 +12,7 @@ import {
   type EntitySelectedListResultByEntity,
   listEntities,
   type ListEntity,
-} from "~/entity/generated/entity-lists.gen";
+} from "~/entity/model/list-contracts";
 
 /**
  * One declared filter's facet under every OTHER filter: per-value counts for

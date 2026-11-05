@@ -9,12 +9,12 @@ import { entityInspectorHealthContract } from "~/contracts/entity-inspector-heal
 import { entityIntegrityContract } from "~/contracts/entity-integrity.contract";
 import { entityMutationContract } from "~/contracts/entity-mutation.contract";
 import { entityTimelineContract } from "~/contracts/entity-timeline.contract";
-import { entityDetailInputSchema } from "~/entity/generated/entity-details.gen";
 import { generatedEntityRelationListCommandSchema } from "~/entity/generated/entity-relation-lists.gen";
 import {
   entityTimelineInputSchema,
   getEntityTimelineOutputSchema,
 } from "~/entity/generated/entity-timelines.gen";
+import { entityDetailInputSchema } from "~/entity/model/detail-contracts";
 import { loadEntityDetailSchemas } from "~/entity/model/read-schemas/loaders";
 import { getEntityCounts } from "~/server/domains/dashboard/repo/dashboard";
 import { executeEntity, executeEntityAs } from "~/server/entity-kernel";

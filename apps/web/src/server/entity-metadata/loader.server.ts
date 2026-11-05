@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 
-import { entityMetadataLoaders } from "~/server/generated/entity-metadata-loaders.gen";
+import { entityMetadataLoaders } from "~/server/entity-metadata/loaders";
 
 /** Only the route entity and its directly declared relations cross this read.
  * Dependencies are deliberately not traversed transitively into a catalog. */

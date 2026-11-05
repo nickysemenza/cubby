@@ -1,8 +1,8 @@
 import { entityRoster } from "@cubby/schemas/entity-roster";
 
 import { entityLabel } from "~/entity/entities";
-import { detailEntities } from "~/entity/generated/entity-details.gen";
-import { listEntities } from "~/entity/generated/entity-lists.gen";
+import { detailEntities } from "~/entity/model/detail-contracts";
+import { listEntities } from "~/entity/model/list-contracts";
 import type { PickerEntity } from "~/ui/combobox/combobox-types";
 import {
   Picker as ValuePicker,

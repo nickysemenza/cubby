@@ -5,9 +5,9 @@ import { useMemo } from "react";
 import { entityListHiddenColumns } from "~/entity/display/entity-display";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
-import type { EntityListParamsByEntity } from "~/entity/generated/entity-lists.gen";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import { useEntityMetadata } from "~/entity/metadata";
+import type { EntityListParamsByEntity } from "~/entity/model/list-contracts";
 import {
   createEntityInlineLinkColumn,
   createSingleEntityInlineLinkColumn,

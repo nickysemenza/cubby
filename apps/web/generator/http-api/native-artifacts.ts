@@ -35,7 +35,7 @@ export async function renderDirectNativeArtifacts(
   );
   const contracts = await loadContracts();
   const { detailEntities, getEntityDetailOutputSchema } =
-    await import("../../src/server/generated/entity-details.server.gen.ts");
+    await import("../../src/server/entity-reads/detail-contracts.ts");
   const records = new Map<string, z.ZodType>();
   for (const name of NATIVE_TYPED_RECORDS) {
     const exported = named.get(name);

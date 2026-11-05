@@ -13,7 +13,7 @@ import { generatedEntityFilterCodecs } from "~/entity/generated/entity-filter-co
 import {
   listEntities,
   parseEntityListInput,
-} from "~/entity/generated/entity-lists.gen";
+} from "~/entity/model/list-contracts";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { kernelScaffold } from "~/server/entity-kernel/scaffolds";

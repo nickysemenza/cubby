@@ -1,5 +1,5 @@
 import type { entityDetailContract } from "~/contracts/entity-detail.contract";
-import { type DetailEntity } from "~/entity/generated/entity-details.gen";
+import { type DetailEntity } from "~/entity/model/detail-contracts";
 import { loadEntityDetailSchemas } from "~/entity/model/read-schemas/loaders";
 
 import type { OperationPolicies } from "../operation-catalog";

@@ -57,7 +57,7 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { sum, sumBy, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
 
-import { listEntities } from "~/entity/generated/entity-lists.gen";
+import { listEntities } from "~/entity/model/list-contracts";
 import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import {
   BASE_KINDS,

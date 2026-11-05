@@ -18,7 +18,7 @@ import {
   filterGetterFromColumnFilters,
   resolveOpeningFilters,
 } from "./filters";
-import type { ListEntity } from "./generated/entity-lists.gen";
+import type { ListEntity } from "./model/list-contracts";
 import { entityListDefaultSort } from "./sortable-fields";
 
 const ROOTS_SCOPE = { scope: "roots" } as const;

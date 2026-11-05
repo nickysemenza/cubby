@@ -6,7 +6,7 @@ import { afterEach } from "vitest";
 
 import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { entityMetadataLoaders } from "~/server/generated/entity-metadata-loaders.gen";
+import { entityMetadataLoaders } from "~/server/entity-metadata/loaders";
 
 // Test fixtures exercise the real compiler output while keeping production caches scoped.
 const slices = await Promise.all(

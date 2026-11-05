@@ -72,38 +72,5 @@ export const renderEntityReadArtifacts = (
         ],
       }),
     },
-    {
-      relativePath:
-        "apps/web/src/server/generated/entity-details.server.gen.ts",
-      source: tsModule({
-        exports: [
-          {
-            from: "../entity-reads/detail-contracts",
-            names: ["detailEntities", "getEntityDetailOutputSchema"],
-          },
-        ],
-      }),
-    },
-    {
-      relativePath: "apps/web/src/server/generated/entity-lists.server.gen.ts",
-      source: tsModule({
-        exports: [
-          {
-            from: "../entity-reads/list-contracts",
-            names: [
-              "listEntities",
-              "entityListInputSchema",
-              "ENTITY_LIST_READ_SCHEMAS",
-              "getEntityListOutputSchema",
-            ],
-          },
-          {
-            from: "../entity-reads/list-contracts",
-            typeOnly: true,
-            names: ["ListEntity", "EntityListResultByEntity"],
-          },
-        ],
-      }),
-    },
   ];
 };

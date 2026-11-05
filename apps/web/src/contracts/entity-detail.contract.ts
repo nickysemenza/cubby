@@ -7,7 +7,7 @@ import {
   type DetailEntity,
   type EntityDetailByEntity,
   type EntityDetailInputByEntity,
-} from "~/entity/generated/entity-details.gen";
+} from "~/entity/model/detail-contracts";
 
 export const entityDetailContract = defineContract(
   "entity",
