@@ -34,6 +34,18 @@ export function createRowActivityStore() {
   };
 }
 
+/**
+ * Whether a popup opened from a cell rail in `from`'s table is still open.
+ * Hovering moves activity only once it closes. Regression: the pointer
+ * crossing a neighbour cell on its way to an ⓘ popover (or resting there
+ * once the spill-over hid) made that cell active, which unmounted the rail
+ * and closed the popover it had just opened.
+ */
+export const railPopupOpen = (from: Element) =>
+  !!from
+    .closest("table")
+    ?.querySelector("[data-cell-rail] [aria-expanded='true']");
+
 type RowActivityStore = ReturnType<typeof createRowActivityStore>;
 
 /** One store per table; rows rendered outside a table share a fallback. */
