@@ -1264,185 +1264,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.Assessment": {
-      "name": "Assessment",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "publicationKey": {
-          "name": "publicationKey",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "family": {
-          "name": "family",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "subject": {
-          "name": "subject",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "judgment": {
-          "name": "judgment",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "projection": {
-          "name": "projection",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "fingerprint": {
-          "name": "fingerprint",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "producer": {
-          "name": "producer",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "evidence": {
-          "name": "evidence",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "origin": {
-          "name": "origin",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "served": {
-          "name": "served",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "Assessment_publication_key": {
-          "name": "Assessment_publication_key",
-          "columns": [
-            {
-              "expression": "publicationKey",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Assessment_family_idx": {
-          "name": "Assessment_family_idx",
-          "columns": [
-            {
-              "expression": "family",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "createdAt",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Assessment_served_other_id_idx": {
-          "name": "Assessment_served_other_id_idx",
-          "columns": [
-            {
-              "expression": "md5(\"subject\"->>'otherId')",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"Assessment\".\"served\" AND (\"Assessment\".\"subject\"->>'otherId') IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Assessment_served_source_ref_idx": {
-          "name": "Assessment_served_source_ref_idx",
-          "columns": [
-            {
-              "expression": "md5(\"judgment\" #>> '{create,sourceRef,source}')",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "md5(\"judgment\" #>> '{create,sourceRef,externalId}')",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"Assessment\".\"served\" AND (\"Assessment\".\"judgment\" #>> '{create,sourceRef,source}') IS NOT NULL AND (\"Assessment\".\"judgment\" #>> '{create,sourceRef,externalId}') IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Assessment_reference_records_idx": {
-          "name": "Assessment_reference_records_idx",
-          "columns": [
-            {
-              "expression": "(\"evidence\"->'records')",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"Assessment\".\"served\"",
-          "concurrently": false,
-          "method": "gin",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.AssessmentCorrectionLock": {
       "name": "AssessmentCorrectionLock",
       "schema": "",
@@ -1541,21 +1362,7 @@
           "with": {}
         }
       },
-      "foreignKeys": {
-        "AssessmentReadDependency_assessmentId_Assessment_id_fk": {
-          "name": "AssessmentReadDependency_assessmentId_Assessment_id_fk",
-          "tableFrom": "AssessmentReadDependency",
-          "tableTo": "Assessment",
-          "columnsFrom": [
-            "assessmentId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1716,21 +1523,7 @@
           "with": {}
         }
       },
-      "foreignKeys": {
-        "AssessmentReadMembership_assessmentId_Assessment_id_fk": {
-          "name": "AssessmentReadMembership_assessmentId_Assessment_id_fk",
-          "tableFrom": "AssessmentReadMembership",
-          "tableTo": "Assessment",
-          "columnsFrom": [
-            "assessmentId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1947,21 +1740,7 @@
           "with": {}
         }
       },
-      "foreignKeys": {
-        "AssessmentReadPublication_assessmentId_Assessment_id_fk": {
-          "name": "AssessmentReadPublication_assessmentId_Assessment_id_fk",
-          "tableFrom": "AssessmentReadPublication",
-          "tableTo": "Assessment",
-          "columnsFrom": [
-            "assessmentId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2081,454 +1860,6 @@
         "AssessmentReadStage_progress_check": {
           "name": "AssessmentReadStage_progress_check",
           "value": "cardinality(\"AssessmentReadStage\".\"assessmentIds\") > 0 AND \"AssessmentReadStage\".\"nextIndex\" >= 0 AND \"AssessmentReadStage\".\"nextIndex\" <= cardinality(\"AssessmentReadStage\".\"assessmentIds\")"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.AssessmentState": {
-      "name": "AssessmentState",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "runId": {
-          "name": "runId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ledgerPartyId": {
-          "name": "ledgerPartyId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "entity": {
-          "name": "entity",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "recordId": {
-          "name": "recordId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "field": {
-          "name": "field",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "financeReviewFingerprint": {
-          "name": "financeReviewFingerprint",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "evaluationId": {
-          "name": "evaluationId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "provenance": {
-          "name": "provenance",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "acceptanceReceipt": {
-          "name": "acceptanceReceipt",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "supersessionReceipt": {
-          "name": "supersessionReceipt",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "currentValue": {
-          "name": "currentValue",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "suggestedValue": {
-          "name": "suggestedValue",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'null'::jsonb"
-        },
-        "confidence": {
-          "name": "confidence",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "runnerUpValue": {
-          "name": "runnerUpValue",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "runnerUpConfidence": {
-          "name": "runnerUpConfidence",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "model": {
-          "name": "model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'unknown'"
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'addition'"
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "correctValue": {
-          "name": "correctValue",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "family": {
-          "name": "family",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'field'"
-        },
-        "data": {
-          "name": "data",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "fingerprint": {
-          "name": "fingerprint",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "confirmedValue": {
-          "name": "confirmedValue",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "suppression": {
-          "name": "suppression",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "active": {
-          "name": "active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "AssessmentState_family_active_idx": {
-          "name": "AssessmentState_family_active_idx",
-          "columns": [
-            {
-              "expression": "family",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "active",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "AssessmentState_run_status_idx": {
-          "name": "AssessmentState_run_status_idx",
-          "columns": [
-            {
-              "expression": "runId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "AssessmentState_active_suppression_idx": {
-          "name": "AssessmentState_active_suppression_idx",
-          "columns": [
-            {
-              "expression": "entity",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "recordId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"AssessmentState\".\"active\" AND \"AssessmentState\".\"suppression\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "AssessmentState_ledger_party_idx": {
-          "name": "AssessmentState_ledger_party_idx",
-          "columns": [
-            {
-              "expression": "ledgerPartyId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "family",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "AssessmentState_evaluation_idx": {
-          "name": "AssessmentState_evaluation_idx",
-          "columns": [
-            {
-              "expression": "evaluationId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "AssessmentState_entity_field_status_idx": {
-          "name": "AssessmentState_entity_field_status_idx",
-          "columns": [
-            {
-              "expression": "entity",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "field",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "AssessmentState_entity_record_status_idx": {
-          "name": "AssessmentState_entity_record_status_idx",
-          "columns": [
-            {
-              "expression": "entity",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "recordId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "AssessmentState_active_value_status_idx": {
-          "name": "AssessmentState_active_value_status_idx",
-          "columns": [
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "md5(\"suggestedValue\" #>> '{}')",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"AssessmentState\".\"active\"",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "AssessmentState_runId_Run_id_fk": {
-          "name": "AssessmentState_runId_Run_id_fk",
-          "tableFrom": "AssessmentState",
-          "tableTo": "Run",
-          "columnsFrom": [
-            "runId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "AssessmentState_ledgerPartyId_LedgerParty_id_fk": {
-          "name": "AssessmentState_ledgerPartyId_LedgerParty_id_fk",
-          "tableFrom": "AssessmentState",
-          "tableTo": "LedgerParty",
-          "columnsFrom": [
-            "ledgerPartyId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "AssessmentState_evaluationId_AiEvaluation_id_fk": {
-          "name": "AssessmentState_evaluationId_AiEvaluation_id_fk",
-          "tableFrom": "AssessmentState",
-          "tableTo": "AiEvaluation",
-          "columnsFrom": [
-            "evaluationId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "AssessmentState_history_fk": {
-          "name": "AssessmentState_history_fk",
-          "tableFrom": "AssessmentState",
-          "tableTo": "Assessment",
-          "columnsFrom": [
-            "id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "AssessmentState_kind_check": {
-          "name": "AssessmentState_kind_check",
-          "value": "\"AssessmentState\".\"kind\" IN ('correction', 'addition')"
-        },
-        "AssessmentState_status_check": {
-          "name": "AssessmentState_status_check",
-          "value": "\"AssessmentState\".\"status\" IN ('pending', 'applied', 'rejected', 'superseded', 'resolved')"
-        },
-        "AssessmentState_confidence_check": {
-          "name": "AssessmentState_confidence_check",
-          "value": "\"AssessmentState\".\"confidence\" BETWEEN 0 AND 1"
         }
       },
       "isRLSEnabled": false
@@ -6691,181 +6022,6 @@
         "ExternalSource_slug_check": {
           "name": "ExternalSource_slug_check",
           "value": "\"ExternalSource\".\"slug\" ~ '^[a-z0-9]+(-[a-z0-9]+)*$'"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.Feedback": {
-      "name": "Feedback",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "assessmentId": {
-          "name": "assessmentId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "operationId": {
-          "name": "operationId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "verdict": {
-          "name": "verdict",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "correction": {
-          "name": "correction",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "evidence": {
-          "name": "evidence",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "intent": {
-          "name": "intent",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "authority": {
-          "name": "authority",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actorUserId": {
-          "name": "actorUserId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "suppression": {
-          "name": "suppression",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "receipt": {
-          "name": "receipt",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "metadata": {
-          "name": "metadata",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "projection": {
-          "name": "projection",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "Feedback_operation_key": {
-          "name": "Feedback_operation_key",
-          "columns": [
-            {
-              "expression": "assessmentId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "operationId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "Feedback_assessment_idx": {
-          "name": "Feedback_assessment_idx",
-          "columns": [
-            {
-              "expression": "assessmentId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "createdAt",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "Feedback_assessmentId_Assessment_id_fk": {
-          "name": "Feedback_assessmentId_Assessment_id_fk",
-          "tableFrom": "Feedback",
-          "tableTo": "Assessment",
-          "columnsFrom": [
-            "assessmentId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "Feedback_verdict_check": {
-          "name": "Feedback_verdict_check",
-          "value": "\"Feedback\".\"verdict\" IN ('correct', 'wrong', 'uncertain', 'dismissed', 'ungraded')"
-        },
-        "Feedback_authority_check": {
-          "name": "Feedback_authority_check",
-          "value": "\"Feedback\".\"authority\" IN ('member', 'evaluation', 'automatic', 'unknown', 'system')"
-        },
-        "Feedback_system_check": {
-          "name": "Feedback_system_check",
-          "value": "\"Feedback\".\"authority\" <> 'system' OR (\"Feedback\".\"actorUserId\" IS NULL AND \"Feedback\".\"verdict\" = 'ungraded' AND \"Feedback\".\"suppression\" IS NULL)"
         }
       },
       "isRLSEnabled": false
@@ -22274,6 +21430,553 @@
         "SpendingCategory_productExpectation_check": {
           "name": "SpendingCategory_productExpectation_check",
           "value": "\"SpendingCategory\".\"productExpectation\" IN ('unknown', 'required', 'not_expected', 'not_allowed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.Suggestion": {
+      "name": "Suggestion",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "publicationKey": {
+          "name": "publicationKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "family": {
+          "name": "family",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subject": {
+          "name": "subject",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "judgment": {
+          "name": "judgment",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "producer": {
+          "name": "producer",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "served": {
+          "name": "served",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "decisions": {
+          "name": "decisions",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ledgerPartyId": {
+          "name": "ledgerPartyId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "entity": {
+          "name": "entity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recordId": {
+          "name": "recordId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "field": {
+          "name": "field",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "financeReviewFingerprint": {
+          "name": "financeReviewFingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evaluationId": {
+          "name": "evaluationId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provenance": {
+          "name": "provenance",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "acceptanceReceipt": {
+          "name": "acceptanceReceipt",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "supersessionReceipt": {
+          "name": "supersessionReceipt",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "currentValue": {
+          "name": "currentValue",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suggestedValue": {
+          "name": "suggestedValue",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'null'::jsonb"
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "runnerUpValue": {
+          "name": "runnerUpValue",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "runnerUpConfidence": {
+          "name": "runnerUpConfidence",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unknown'"
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'addition'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "correctValue": {
+          "name": "correctValue",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "data": {
+          "name": "data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confirmedValue": {
+          "name": "confirmedValue",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suppression": {
+          "name": "suppression",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "Suggestion_publication_key": {
+          "name": "Suggestion_publication_key",
+          "columns": [
+            {
+              "expression": "publicationKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_family_active_idx": {
+          "name": "Suggestion_family_active_idx",
+          "columns": [
+            {
+              "expression": "family",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_run_status_idx": {
+          "name": "Suggestion_run_status_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_active_suppression_idx": {
+          "name": "Suggestion_active_suppression_idx",
+          "columns": [
+            {
+              "expression": "entity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "recordId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"Suggestion\".\"active\" AND \"Suggestion\".\"suppression\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_ledger_party_idx": {
+          "name": "Suggestion_ledger_party_idx",
+          "columns": [
+            {
+              "expression": "ledgerPartyId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "family",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_evaluation_idx": {
+          "name": "Suggestion_evaluation_idx",
+          "columns": [
+            {
+              "expression": "evaluationId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_entity_field_status_idx": {
+          "name": "Suggestion_entity_field_status_idx",
+          "columns": [
+            {
+              "expression": "entity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "field",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_entity_record_status_idx": {
+          "name": "Suggestion_entity_record_status_idx",
+          "columns": [
+            {
+              "expression": "entity",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "recordId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_active_value_status_idx": {
+          "name": "Suggestion_active_value_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "md5(\"suggestedValue\" #>> '{}')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"Suggestion\".\"active\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_served_other_id_idx": {
+          "name": "Suggestion_served_other_id_idx",
+          "columns": [
+            {
+              "expression": "md5(\"subject\"->>'otherId')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"Suggestion\".\"served\" AND (\"Suggestion\".\"subject\"->>'otherId') IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_served_source_ref_idx": {
+          "name": "Suggestion_served_source_ref_idx",
+          "columns": [
+            {
+              "expression": "md5(\"judgment\" #>> '{create,sourceRef,source}')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "md5(\"judgment\" #>> '{create,sourceRef,externalId}')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"Suggestion\".\"served\" AND (\"Suggestion\".\"judgment\" #>> '{create,sourceRef,source}') IS NOT NULL AND (\"Suggestion\".\"judgment\" #>> '{create,sourceRef,externalId}') IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Suggestion_reference_records_idx": {
+          "name": "Suggestion_reference_records_idx",
+          "columns": [
+            {
+              "expression": "(\"evidence\"->'records')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"Suggestion\".\"served\"",
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "Suggestion_runId_Run_id_fk": {
+          "name": "Suggestion_runId_Run_id_fk",
+          "tableFrom": "Suggestion",
+          "tableTo": "Run",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "Suggestion_ledgerPartyId_LedgerParty_id_fk": {
+          "name": "Suggestion_ledgerPartyId_LedgerParty_id_fk",
+          "tableFrom": "Suggestion",
+          "tableTo": "LedgerParty",
+          "columnsFrom": [
+            "ledgerPartyId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Suggestion_evaluationId_AiEvaluation_id_fk": {
+          "name": "Suggestion_evaluationId_AiEvaluation_id_fk",
+          "tableFrom": "Suggestion",
+          "tableTo": "AiEvaluation",
+          "columnsFrom": [
+            "evaluationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "Suggestion_kind_check": {
+          "name": "Suggestion_kind_check",
+          "value": "\"Suggestion\".\"kind\" IN ('correction', 'addition')"
+        },
+        "Suggestion_status_check": {
+          "name": "Suggestion_status_check",
+          "value": "\"Suggestion\".\"status\" IN ('pending', 'applied', 'rejected', 'superseded', 'resolved')"
+        },
+        "Suggestion_confidence_check": {
+          "name": "Suggestion_confidence_check",
+          "value": "\"Suggestion\".\"confidence\" BETWEEN 0 AND 1"
         }
       },
       "isRLSEnabled": false
