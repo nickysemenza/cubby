@@ -11,15 +11,19 @@ export function RetryJobsButton({
   filter,
   disabled = false,
   label = "Retry now",
+  onRetried,
 }: {
   filter: JobSetFilter;
   disabled?: boolean;
   label?: string;
+  onRetried?: () => void;
 }) {
   const retry = useMutation(
     job.retryNow.mutationOptions({
-      onSuccess: ({ retried }) =>
-        toast.success(`Retry now: ${countLabel(retried, "Job")} made due`),
+      onSuccess: ({ retried }) => {
+        toast.success(`Retry now: ${countLabel(retried, "Job")} made due`);
+        onRetried?.();
+      },
       onError: (error) => showErrorToast(error, "Retry now failed"),
     }),
   );

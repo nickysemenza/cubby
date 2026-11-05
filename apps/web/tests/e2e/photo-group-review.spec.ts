@@ -659,9 +659,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   // Title similarity alone stays informational. Seed the separately published
   // actionable proposal whose merge preview this journey exercises.
   await expect(
-    page.getByText(
-      "No pending suggestions here. Find suggestions to look again.",
-    ),
+    page.getByText("No pending suggestions.", { exact: true }),
   ).toBeVisible();
   const { db } = await createEvidenceHarnessContext(page);
   await publishProductPair(db, {

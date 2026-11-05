@@ -51,6 +51,7 @@ import { WorkActions } from "~/entity/work-queue/work-actions";
 import { ownerLabel, OwnerPill } from "~/entity/work-queue/work-queue-display";
 import {
   hasIncompleteWorkInputs,
+  type WorkInputMeta,
   WorkInputStatus,
 } from "~/features/work-queue/work-input-status";
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
@@ -462,14 +463,19 @@ function WorkQueueRoute() {
 }
 
 /** Embedded attention groups use the same queries and canonical actions as the full queue. */
+export type WorkQueueMeta = WorkInputMeta & { totalCount?: number };
+
 export function WorkQueue({
   scope: fixedScope,
   groupBy,
   label = "Work queue",
+  onMeta,
 }: {
   scope?: QueueFilters;
   groupBy?: string;
   label?: string;
+  /** Reports the unfiltered population, for a caller that frames this queue. */
+  onMeta?: (meta: WorkQueueMeta) => void;
 }) {
   const navigate = useNavigate();
   const embedded = fixedScope !== undefined;
@@ -724,6 +730,10 @@ export function WorkQueue({
   const isLoading = useHydratedLoading(list.isLoading);
   const isTransitioning = list.infiniteScroll.isTransitioning;
   const hasFilters = tableState.columnFilters.length > 0;
+  const meta = firstPage?.meta;
+  useEffect(() => {
+    if (meta && !hasFilters) onMeta?.(meta);
+  }, [meta, hasFilters, onMeta]);
   const viewCounts = firstPage?.meta.viewCounts;
   const view = buildQueueFilters(tableState).view;
   const setView = (next: WorkQueueView | undefined) =>

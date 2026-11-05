@@ -9,7 +9,7 @@ import { PlugsIcon } from "@phosphor-icons/react/dist/csr/Plugs";
 import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -21,9 +21,10 @@ import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { Picker } from "~/entity/picker/picker";
 import { AiFundingSettings } from "~/features/account/ai-funding";
 import { ChatGptPlanSettings } from "~/features/account/chatgpt-plan-card";
-import { PurchaseImportAgentConnection } from "~/features/activity/purchase-import-agent-connection";
+import { PurchaseImportAgentConnection } from "~/features/account/purchase-import-agent-connection";
 import { CalendarConnectDialog } from "~/features/calendar/calendar-connect-dialog";
 import { MailImportSettings } from "~/features/email/mail-import-card";
+import { MaintenanceSettings } from "~/features/maintenance/maintenance-settings";
 import { calendar } from "~/integrations/tanstack-query/generated/domains/calendar.gen";
 import { ledgerParty } from "~/integrations/tanstack-query/generated/domains/ledgerParty.gen";
 import { authClient } from "~/lib/auth-client";
@@ -140,15 +141,7 @@ function SettingsPage() {
                 id: "maintenance",
                 title: "Work and maintenance",
                 icon: WrenchIcon,
-                content: (
-                  <Link
-                    to="/activity"
-                    search={{ tab: "maintenance" }}
-                    className="text-link hover:underline"
-                  >
-                    Open Advanced maintenance in Work
-                  </Link>
-                ),
+                content: <MaintenanceSettings />,
               },
               {
                 id: "diagnostics",

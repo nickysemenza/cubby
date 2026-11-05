@@ -39,12 +39,13 @@ import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embe
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
 import {
+  readWorkItems,
   updateJobs,
   updateWorkItems,
 } from "~/server/generic/jobs/jobs.fixtures";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import { jobFactsOf } from "~/server/generic/jobs/repo/job-queue";
-import { drainBacklog, markWork } from "~/server/generic/jobs/repo/work-items";
+import { markWork } from "~/server/generic/jobs/repo/work-items";
 import { readRunEvaluationsByCode } from "~/server/generic/run-detail/repo/run-evaluations";
 import {
   refreshSearchDocument,
@@ -719,9 +720,8 @@ describe("connection evaluation pages", () => {
 
     // The explicit wait outranks retained history, and its Job explains it.
     const drain = aiEvaluationDrain("entity-connections").key;
-    const { targets } = await drainBacklog(ctx.db, drain);
-    expect(targets).toEqual([
-      expect.objectContaining({ count: 1, waiting: 1, failed: 0 }),
+    expect(await readWorkItems(ctx.db, { drain })).toEqual([
+      expect.objectContaining({ waitCause: expect.any(String) }),
     ]);
     const [sleeping] = await updateJobs(
       ctx.db,

@@ -55,6 +55,7 @@ import {
 import { domainChipClass } from "../../ui/navigation/domain-wayfinding";
 import { createInAppHistory } from "../../ui/navigation/in-app-history";
 import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
+import { WorkNavStatus } from "../../ui/navigation/work-nav-status";
 
 const LOGO_SRC = import.meta.env.DEV ? "/favicon-dev.svg" : "/favicon.svg";
 const collapsedPreferenceSchema = z.boolean();
@@ -578,6 +579,7 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
       />
       <span className="min-w-0 truncate">{item.label}</span>
       {item.entity && <NavigationCountBadge entity={item.entity} />}
+      {item.to === "/activity" && <WorkNavStatus />}
     </Link>
   );
 }

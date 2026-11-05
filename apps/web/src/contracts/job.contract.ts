@@ -173,7 +173,6 @@ const workStream = z.object({
   oldestDueAt: z.iso.datetime().nullable(),
   runIds: z.array(runShortcode),
 });
-export type WorkStream = z.infer<typeof workStream>;
 const workActivity = z.object({
   measuredAt: z.iso.datetime(),
   windows: z.object({

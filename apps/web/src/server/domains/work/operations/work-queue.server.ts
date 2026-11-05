@@ -3,9 +3,15 @@ import {
   readRecordWorkQueue,
   readWorkQueue,
 } from "~/server/domains/work/service/work-queue-read";
+import { readWorkStatus } from "~/server/domains/work/service/work-status";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 export const workQueueHandlers = implementOperationDomain(workQueueContract, {
+  status: async (context) =>
+    readWorkStatus(context.db, {
+      memberPartyId: (await context.currentParty())?.id ?? null,
+      memberOnly: context.actorContext.channel === "mcp",
+    }),
   // An agent reads its own member's queue: shared work and work routed only
   // to it. The household web reads everything.
   queue: async (context, input) =>

@@ -351,26 +351,6 @@ export function withAssessmentReadSnapshot<T>(
   });
 }
 
-const publicationActivityBucket = z.object({
-  age: z.number().int(),
-  count: z.number().int(),
-});
-
-/** One successful revision counts once, including empty results and multiple family rows. */
-export async function readAssessmentPublicationActivity(
-  db: RepositoryQueryInput,
-  windowMinutes: number,
-): Promise<z.infer<typeof publicationActivityBucket>[]> {
-  const rows = await repositoryQueries(db).execute(sql`
-    SELECT floor(extract(epoch FROM now() - ${assessmentReadPublication.computedAt}) / 60)::int AS age,
-      count(DISTINCT (${assessmentReadPublication.assessmentId}, ${assessmentReadPublication.revision}))::int AS count
-    FROM ${assessmentReadPublication}
-    WHERE ${assessmentReadPublication.active}
-      AND ${assessmentReadPublication.computedAt} > now() - ${windowMinutes} * interval '1 minute'
-    GROUP BY 1`);
-  return publicationActivityBucket.array().parse(rows.rows);
-}
-
 export async function readAssessmentReadStage(
   db: RepositoryQueryInput,
   componentKey: string,

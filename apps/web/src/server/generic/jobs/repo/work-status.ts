@@ -1,0 +1,500 @@
+import {
+  JOB_NEEDS_ATTENTION_ATTEMPTS,
+  jobKindDeclaration,
+  jobState,
+} from "@cubby/schemas/job";
+import {
+  ATTENTION_RUN_PURPOSES,
+  RUN_PURPOSE_LABEL,
+  isMemberStartedRun,
+  runStatus,
+} from "@cubby/schemas/run-fields";
+import type { WorkStuckItem } from "@cubby/schemas/work-status";
+import { countLabel } from "@cubby/shared/pluralize";
+import { sql } from "drizzle-orm";
+
+import type { Database } from "~/server/db";
+import {
+  DERIVED_DRAIN_JOB_KEY,
+  DERIVED_UNCLAIMED_TARGETS,
+} from "~/server/db/derived-trigger-ddl";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import { run } from "~/server/db/schema";
+import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
+import {
+  readRunRollups,
+  runStalledSql,
+} from "~/server/generic/jobs/repo/job-queue";
+
+/**
+ * Due work with no completion for this long is stuck. A drain sleeps between
+ * bursts and its pages finish within minutes, so half an hour of silence is not
+ * a pause; it is also half the one-hour lag members were promised, so the alarm
+ * shows before that promise breaks.
+ */
+export const STUCK_WINDOW_MINUTES = 30;
+/** Due work this old that is still finishing reads as catching up, not stuck. */
+const BEHIND_MINUTES = 15;
+/** A failure this old with no retry stays in `/jobs` instead of warning forever. */
+const FAILURE_LOOKBACK_DAYS = 7;
+/** `WorkItem.priority`: member demand, background, reconcile. */
+const WORK_PRIORITIES = [0, 1, 2] as const;
+/** A scheduled Run retries on its own; this many failures in a row is not a blip. */
+const REPEATED_RUN_FAILURES = 3;
+const MINUTE_MS = 60_000;
+
+const runLink = (code: string): WorkStuckItem["action"] => ({
+  type: "link",
+  label: "Open Run",
+  href: `/runs/${code}`,
+});
+
+const minutesAgo = (now: Date, minutes: number) =>
+  new Date(now.getTime() - minutes * MINUTE_MS);
+const stamp = (value: Date) => sql`${value.toISOString()}::timestamp`;
+/** Raw `execute` rows keep `timestamp` columns as text without a zone; they are UTC. */
+const utc = (value: string | null) =>
+  value === null ? null : new Date(`${value}Z`);
+const latest = (...values: readonly (Date | null)[]) =>
+  values.reduce<Date | null>(
+    (best, value) => (value && (!best || value > best) ? value : best),
+    null,
+  );
+
+/** "45 minutes", "12 hours", "3 days". */
+function formatStuckAge(ms: number) {
+  const minutes = Math.max(1, Math.round(ms / MINUTE_MS));
+  if (minutes < 90) return countLabel(minutes, "minute");
+  if (minutes < 48 * 60) return countLabel(Math.round(minutes / 60), "hour");
+  return countLabel(Math.round(minutes / (24 * 60)), "day");
+}
+
+const kindLabel = (kind: string) => {
+  const declared = jobKindDeclaration(kind);
+  return declared?.activityLabel ?? declared?.label ?? kind;
+};
+
+const stoppedItem = (
+  kind: string,
+  stoppedAt: Date,
+  now: Date,
+  diagnostic: string | null,
+): WorkStuckItem => {
+  const declared = jobKindDeclaration(kind)?.stuck;
+  return {
+    key: kind,
+    title: declared?.title ?? `${kindLabel(kind)} stopped`,
+    body: [
+      `Nothing has finished for ${formatStuckAge(now.getTime() - stoppedAt.getTime())}.`,
+      declared?.consequence,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    since: stoppedAt.toISOString(),
+    action: { type: "retry", kinds: [kind] },
+    diagnostic,
+  };
+};
+
+const failingItem = (
+  kind: string,
+  failedAt: Date,
+  attempts: number,
+  diagnostic: string | null,
+  retry: boolean,
+): WorkStuckItem => {
+  const declared = jobKindDeclaration(kind)?.stuck;
+  return {
+    key: `${kind}:failing`,
+    title: declared?.failingTitle ?? `${kindLabel(kind)} keeps failing`,
+    body: [
+      attempts > 1
+        ? `The last ${countLabel(attempts, "attempt")} failed.`
+        : "The last attempt failed.",
+      declared?.consequence,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    since: failedAt.toISOString(),
+    action: retry
+      ? { type: "retry", kinds: [kind], needsAttention: true }
+      : { type: "none" },
+    diagnostic,
+  };
+};
+
+type StatusFacts = {
+  stuck: WorkStuckItem[];
+  behind: boolean;
+  lastFinishedAt: Date | null;
+};
+
+/**
+ * Drains keep their work in `WorkItem` and their Job never reaches a terminal
+ * state, so their completions are published values and the page results on the
+ * Job. Each read is one index probe per drain and priority, never a scan of the
+ * queue; the walk past tickets no drain claims is bounded by their retained count.
+ */
+async function readDrains(
+  db: Database,
+  now: Date,
+): Promise<StatusFacts & { kinds: Set<string> }> {
+  const at = stamp(now);
+  const priorities = sql.raw(`ARRAY[${WORK_PRIORITIES.join(",")}]`);
+  const { rows } = await getDb(db).execute<{
+    drain: string;
+    kind: string | null;
+    jobUpdatedAt: string | null;
+    published: number | null;
+    jobAttempts: number | null;
+    jobError: string | null;
+    dueSince: string | null;
+    dueError: string | null;
+    failingError: string | null;
+    failingAttempts: number | null;
+    failingAt: string | null;
+  }>(sql`
+    WITH RECURSIVE drains(drain) AS (
+      (SELECT drain FROM "WorkItem" ORDER BY drain LIMIT 1)
+      UNION ALL
+      SELECT (SELECT w.drain FROM "WorkItem" w WHERE w.drain > d.drain ORDER BY w.drain LIMIT 1)
+      FROM drains d WHERE d.drain IS NOT NULL
+    )
+    SELECT d.drain, j.kind, j."updatedAt" AS "jobUpdatedAt",
+      (j.result->>'published')::int AS published,
+      j.attempts AS "jobAttempts", j.error AS "jobError",
+      due."readyAt" AS "dueSince", due."lastError" AS "dueError",
+      failing."lastError" AS "failingError", failing.attempts AS "failingAttempts",
+      failing."dirtiedAt" AS "failingAt"
+    FROM drains d
+    LEFT JOIN "Job" j ON j.key = d.drain
+    LEFT JOIN LATERAL (
+      SELECT oldest."readyAt", oldest."lastError"
+      FROM unnest(${priorities}) p(priority)
+      CROSS JOIN LATERAL (
+        SELECT w."readyAt", w."lastError" FROM "WorkItem" w
+        WHERE w.drain = d.drain AND w.priority = p.priority AND w."readyAt" <= ${at}
+          AND w.target NOT LIKE ${DERIVED_UNCLAIMED_TARGETS}
+        ORDER BY w."readyAt" LIMIT 1
+      ) oldest
+      ORDER BY oldest."readyAt" LIMIT 1
+    ) due ON true
+    LEFT JOIN LATERAL (
+      SELECT backoff."lastError", backoff.attempts, backoff."dirtiedAt"
+      FROM unnest(${priorities}) p(priority)
+      CROSS JOIN LATERAL (
+        SELECT w."lastError", w.attempts, w."dirtiedAt" FROM "WorkItem" w
+        WHERE w.drain = d.drain AND w.priority = p.priority AND w."readyAt" > ${at}
+          AND w.target NOT LIKE ${DERIVED_UNCLAIMED_TARGETS}
+          AND w."waitCause" IS NULL AND w."lastError" IS NOT NULL
+          AND w.attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
+        ORDER BY w."readyAt" LIMIT 1
+      ) backoff
+      ORDER BY backoff.attempts DESC LIMIT 1
+    ) failing ON true
+    WHERE d.drain IS NOT NULL`);
+  const published = rows.some((row) => row.drain === DERIVED_DRAIN_JOB_KEY)
+    ? await getDb(db).execute<{ at: string | null }>(
+        sql`SELECT max("computedAt") AS at FROM "DerivedValue"`,
+      )
+    : null;
+  const facts: StatusFacts & { kinds: Set<string> } = {
+    stuck: [],
+    behind: false,
+    lastFinishedAt: null,
+    kinds: new Set(),
+  };
+  for (const row of rows) {
+    const kind = row.kind ?? row.drain;
+    facts.kinds.add(kind);
+    const lastCompletion = latest(
+      // Claims touch `updatedAt` and failures keep the old result, but only a
+      // landed page resets attempts: a failing drain must not read as moving.
+      row.published && row.jobAttempts === 0 ? utc(row.jobUpdatedAt) : null,
+      row.drain === DERIVED_DRAIN_JOB_KEY
+        ? utc(published?.rows[0]?.at ?? null)
+        : null,
+    );
+    facts.lastFinishedAt = latest(facts.lastFinishedAt, lastCompletion);
+    const dueSince = utc(row.dueSince);
+    const stopped =
+      dueSince !== null &&
+      dueSince <= minutesAgo(now, STUCK_WINDOW_MINUTES) &&
+      !(
+        lastCompletion && lastCompletion > minutesAgo(now, STUCK_WINDOW_MINUTES)
+      );
+    if (stopped) {
+      facts.stuck.push(
+        stoppedItem(
+          kind,
+          lastCompletion ?? dueSince,
+          now,
+          row.jobError ?? row.dueError,
+        ),
+      );
+      continue;
+    }
+    if (dueSince && dueSince <= minutesAgo(now, BEHIND_MINUTES))
+      facts.behind = true;
+    if (row.failingError)
+      facts.stuck.push(
+        failingItem(
+          kind,
+          utc(row.failingAt) ?? now,
+          row.failingAttempts ?? 1,
+          row.failingError,
+          false,
+        ),
+      );
+  }
+  return facts;
+}
+
+/**
+ * Jobs with their own rows. Live and failed rows are few and the completion
+ * probes walk `Job_kind_claimed_idx` backward, so retained history costs
+ * nothing. `drained: false` kinds wait for something outside the server (the
+ * Apple device rule owns those), so only their failures count here.
+ */
+async function readJobKinds(
+  db: Database,
+  now: Date,
+  drainKinds: ReadonlySet<string>,
+): Promise<StatusFacts & { deviceDueSince: Date | null }> {
+  const at = stamp(now);
+  const live = [
+    jobState.enum.queued,
+    jobState.enum.retry_wait,
+    jobState.enum.running,
+  ];
+  const { rows } = await getDb(db).execute<{
+    kind: string;
+    dueSince: string | null;
+    lastCompletedAt: string | null;
+    failedAt: string | null;
+    failedError: string | null;
+    failedAttempts: number | null;
+    failedCode: string | null;
+    failedLive: boolean | null;
+  }>(sql`
+    WITH candidates AS MATERIALIZED (
+      SELECT kind, state, "availableAt", "leaseExpiresAt", "updatedAt", attempts, error, shortcode
+      FROM "Job"
+      WHERE state IN (${sql.join(
+        live.map((state) => sql`${state}`),
+        sql`, `,
+      )}) OR (state = ${jobState.enum.failed}
+          AND "updatedAt" > ${stamp(new Date(now.getTime() - FAILURE_LOOKBACK_DAYS * 24 * 60 * MINUTE_MS))})
+    ), kinds AS (
+      SELECT kind,
+        min(CASE WHEN state = ${jobState.enum.running} THEN "leaseExpiresAt" ELSE "availableAt" END)
+          FILTER (WHERE (state = ${jobState.enum.running} AND "leaseExpiresAt" <= ${at})
+            OR (state <> ${jobState.enum.running} AND state <> ${jobState.enum.failed} AND "availableAt" <= ${at})) AS "dueSince",
+        (array_agg(jsonb_build_object(
+            'at', "updatedAt", 'message', error, 'attempts', attempts, 'code', shortcode,
+            'live', state <> ${jobState.enum.failed})
+          ORDER BY "updatedAt" DESC)
+          FILTER (WHERE state = ${jobState.enum.failed} OR attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}))[1] AS failure
+      FROM candidates GROUP BY kind
+    )
+    SELECT k.kind, k."dueSince", done."updatedAt" AS "lastCompletedAt",
+      k.failure->>'at' AS "failedAt", k.failure->>'message' AS "failedError",
+      (k.failure->>'attempts')::int AS "failedAttempts", k.failure->>'code' AS "failedCode",
+      (k.failure->>'live')::boolean AS "failedLive"
+    FROM kinds k
+    LEFT JOIN LATERAL (
+      SELECT j."updatedAt" FROM "Job" j
+      WHERE j.kind = k.kind AND j."lastClaimedAt" IS NOT NULL AND j.state = ${jobState.enum.completed}
+      ORDER BY j."lastClaimedAt" DESC LIMIT 1
+    ) done ON true`);
+  const lastAny = await getDb(db).execute<{ at: string | null }>(sql`
+    SELECT "updatedAt" AS at FROM "Job"
+    WHERE "lastClaimedAt" IS NOT NULL AND state = ${jobState.enum.completed}
+    ORDER BY "lastClaimedAt" DESC LIMIT 1`);
+  const facts: StatusFacts & { deviceDueSince: Date | null } = {
+    stuck: [],
+    behind: false,
+    lastFinishedAt: utc(lastAny.rows[0]?.at ?? null),
+    deviceDueSince: null,
+  };
+  for (const row of rows) {
+    const lastCompletedAt = utc(row.lastCompletedAt);
+    const dueSince = utc(row.dueSince);
+    if (!jobKindPolicy(row.kind).drained) {
+      if (
+        dueSince &&
+        (!facts.deviceDueSince || dueSince < facts.deviceDueSince)
+      )
+        facts.deviceDueSince = dueSince;
+    } else if (!drainKinds.has(row.kind) && dueSince) {
+      if (
+        dueSince <= minutesAgo(now, STUCK_WINDOW_MINUTES) &&
+        !(
+          lastCompletedAt &&
+          lastCompletedAt > minutesAgo(now, STUCK_WINDOW_MINUTES)
+        )
+      ) {
+        facts.stuck.push(
+          stoppedItem(
+            row.kind,
+            lastCompletedAt ?? dueSince,
+            now,
+            row.failedError,
+          ),
+        );
+        continue;
+      }
+      if (dueSince <= minutesAgo(now, BEHIND_MINUTES)) facts.behind = true;
+    }
+    const failedAt = utc(row.failedAt);
+    // A later success means the kind works; a live repeat failure is still happening.
+    if (
+      failedAt &&
+      (row.failedLive || !lastCompletedAt || lastCompletedAt < failedAt)
+    )
+      facts.stuck.push(
+        failingItem(
+          row.kind,
+          failedAt,
+          row.failedAttempts ?? 1,
+          [row.failedError, row.failedCode].filter(Boolean).join("\n"),
+          true,
+        ),
+      );
+  }
+  return facts;
+}
+
+/**
+ * Runs a member started or reviews that stopped. Stalled Runs are listed one by
+ * one. Failures collapse to each purpose's latest and clear when a later Run of
+ * that purpose completes. A member's own failed Run shows at once; a scheduled
+ * or discovered Run retries on its own, so it counts only once it keeps failing.
+ * Paused Runs are a member's choice.
+ */
+async function readStoppedRuns(db: Database, now: Date) {
+  const purposes = sql.join(
+    ATTENTION_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
+    sql`, `,
+  );
+  const columns = {
+    id: run.id,
+    shortcode: run.shortcode,
+    purpose: run.purpose,
+    trigger: run.trigger,
+    status: run.status,
+    startedAt: run.startedAt,
+    endedAt: run.endedAt,
+    failureCode: run.failureCode,
+    dispatchError: run.dispatchError,
+  };
+  const stalled = await getDb(db)
+    .select(columns)
+    .from(run)
+    .where(
+      sql`${notDeleted(run)} AND ${run.purpose} IN (${purposes})
+        AND ${run.status} = ${runStatus.enum.running} AND ${runStalledSql(now)}`,
+    )
+    .orderBy(sql`${run.startedAt} DESC`)
+    .limit(8);
+  const failed = await getDb(db)
+    .select(columns)
+    .from(run)
+    .where(
+      sql`${notDeleted(run)} AND ${run.purpose} IN (${purposes})
+        AND ${run.status} IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed})
+        AND ${run.endedAt} > ${stamp(new Date(now.getTime() - FAILURE_LOOKBACK_DAYS * 24 * 60 * MINUTE_MS))}
+        AND NOT EXISTS (SELECT 1 FROM "Run" next
+          WHERE next."predecessorRunId" = ${run.id} AND ${notDeleted("next")})`,
+    )
+    .orderBy(sql`${run.endedAt} DESC`);
+  const failedPurposes = [...new Set(failed.map((row) => row.purpose))];
+  const completed = failedPurposes.length
+    ? await getDb(db)
+        .select({
+          purpose: run.purpose,
+          endedAt: sql<string>`max(${run.endedAt})`,
+        })
+        .from(run)
+        .where(
+          sql`${run.status} = ${runStatus.enum.completed} AND ${run.purpose} IN (${sql.join(
+            failedPurposes.map((purpose) => sql`${purpose}`),
+            sql`, `,
+          )})`,
+        )
+        .groupBy(run.purpose)
+    : [];
+  const lastCompleted = new Map(
+    completed.map((row) => [row.purpose, utc(row.endedAt)]),
+  );
+  const open = failedPurposes.flatMap((purpose) => {
+    const later = lastCompleted.get(purpose);
+    const failures = failed.filter(
+      (row) =>
+        row.purpose === purpose &&
+        row.endedAt &&
+        (!later || row.endedAt > later),
+    );
+    const newest = failures[0];
+    if (!newest) return [];
+    return isMemberStartedRun(newest) ||
+      failures.length >= REPEATED_RUN_FAILURES
+      ? [{ row: newest, failures: failures.length }]
+      : [];
+  });
+  const rollups = stalled.length ? await readRunRollups(db, stalled, now) : [];
+  const progress = new Map<string, string | null>(
+    rollups.map((rollup) => [rollup.runId, rollup.lastProgressAt]),
+  );
+  return [
+    ...stalled.map((row): WorkStuckItem => {
+      const lastProgress = progress.get(row.shortcode);
+      const since = lastProgress ? new Date(lastProgress) : row.startedAt;
+      return {
+        key: `run:${row.shortcode}`,
+        title: `${RUN_PURPOSE_LABEL[row.purpose] ?? row.purpose} Run stopped`,
+        body: `${row.shortcode} has made no progress for ${formatStuckAge(now.getTime() - since.getTime())}.`,
+        since: since.toISOString(),
+        action: runLink(row.shortcode),
+        diagnostic: row.dispatchError ?? row.failureCode,
+      };
+    }),
+    ...open.map(({ row, failures }): WorkStuckItem => {
+      const since = row.endedAt ?? row.startedAt;
+      const label = RUN_PURPOSE_LABEL[row.purpose] ?? row.purpose;
+      return {
+        key: `run:${row.shortcode}`,
+        title: failures > 1 ? `${label} keeps failing` : `${label} Run failed`,
+        body:
+          failures > 1
+            ? `The last ${failures} Runs failed, most recently ${row.shortcode} ${formatStuckAge(now.getTime() - since.getTime())} ago.`
+            : `${row.shortcode} failed ${formatStuckAge(now.getTime() - since.getTime())} ago.`,
+        since: since.toISOString(),
+        action: runLink(row.shortcode),
+        diagnostic: row.dispatchError ?? row.failureCode,
+      };
+    }),
+  ];
+}
+
+export async function readBackgroundWorkStatus(db: Database, now = new Date()) {
+  const drains = await readDrains(db, now);
+  const [kinds, runs] = await Promise.all([
+    readJobKinds(db, now, drains.kinds),
+    readStoppedRuns(db, now),
+  ]);
+  // A kind that stopped says so once, whichever row noticed first.
+  const seen = new Set<string>();
+  const stuck = [...drains.stuck, ...kinds.stuck].filter((item) => {
+    const kind = item.key.replace(/:failing$/, "");
+    if (seen.has(kind)) return false;
+    seen.add(kind);
+    return true;
+  });
+  return {
+    stuck: [...stuck, ...runs],
+    behind: drains.behind || kinds.behind,
+    lastFinishedAt: latest(drains.lastFinishedAt, kinds.lastFinishedAt),
+    deviceDueSince: kinds.deviceDueSince,
+  };
+}

@@ -1,5 +1,4 @@
-import { workQueueInput } from "@cubby/schemas/work-queue";
-import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
+import { NEEDS_YOU_FILTERS, workQueueInput } from "@cubby/schemas/work-queue";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
@@ -25,21 +24,19 @@ import { Button } from "~/ui/primitives/button";
 import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";
 
 /**
- * Work a member must decide (the queue's Review view) that I own, shared
- * work included. The strip's count and the list share this one read.
+ * Work a member must decide that I own, shared work included: the same
+ * population as the Work page and the sidebar. The strip's count and the list
+ * share this one read.
  */
 export const NEEDS_YOU_INPUT = workQueueInput.parse({
-  view: "human",
-  owner: CURRENT_MEMBER_FILTER,
-  familyExclude: "suggestion",
+  ...NEEDS_YOU_FILTERS,
   pageSize: 3,
 });
 
 const NEEDS_YOU_SEARCH = {
-  view: "human",
-  owner: CURRENT_MEMBER_FILTER,
-  familyExclude: "suggestion",
-} as const;
+  ...NEEDS_YOU_FILTERS,
+  reasonExclude: NEEDS_YOU_FILTERS.reasonExclude.join(","),
+};
 
 /** The key-number strip shares the streamed section's query. */
 export function useNeedsYou() {

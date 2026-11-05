@@ -1,21 +1,18 @@
 # One view of the work
 
-Work is the household's operational entry point at `/activity`. Its four main
-views share the existing queue and execution evidence:
+Work is the household's operational entry point at `/activity`: one screen with
+an always-present background health line, a Stuck section only when something is
+stuck, and one Needs you queue grouped by reason. Needs you holds decisions,
+required proposals and concrete Problems that are mine or shared; the sidebar
+count and Home's preview read the same `NEEDS_YOU_FILTERS` population. Waiting
+never implies failure.
 
-- **Needs you** holds decisions, financial proposals and concrete Problems.
-- **Automatic work** shows actual execution, retries and dependencies, with
-  external waits labelled separately. Waiting never implies failure.
-- **Improvements** holds optional field, connection and image-description
-  proposals, agent research and declared missing-fact views. Missing optional
-  enrichment is not an error.
-- **History** retains Run outcomes and recorded changes.
-
-Advanced maintenance stays available beside those views. All work and filters
-opens the existing `/work-queue` workbench with its executor, family, owner and
-reason facets. Both legacy URLs and `tab=now` remain usable, including native
-handoffs. Suggestions, automatic decisions and rules remain accessible from
-Improvements, and list counts, detail and inspector suggestion review stay in place.
+Footer links open Suggestions, Missing facts (the research view of `/work-queue`),
+All work (`/work-queue` with its executor, family, owner and reason facets) and
+History (`/history`: Run outcomes and recorded changes). Raw Job rows live at
+`/jobs`, and maintenance at Settings → Maintenance. Old `/activity?tab=…` links
+redirect to those owners; a `refresh=` locator opens the value's record. List
+counts, detail and inspector suggestion review stay in place.
 These views do not persist lanes, assignments or another work ledger. A record
 can appear in more than one view when it has different actionable work.
 Home and Work disclose the same incomplete Project or diagnostic publications.
@@ -29,10 +26,6 @@ are excluded. Search uses the source's possible reason labels until facts exist.
 Counts and view counts cover known work only while any admitted source is
 incomplete. Publication makes the ordinary read complete without a read repair.
 
-Automatic work distinguishes remaining refreshes, observed execution states and
-current publications by age. When supplied by the backend, internal sources keep their labels beside stored
-entity fields. Queue shrinkage is not a completion count or an ETA; publication
-age is not an execution-event rate. Missing execution observations stay unknown.
 Assessment source observations remain pending the separately owned producer
 cutover; this UI contract does not imply that registration has shipped.
 
@@ -266,16 +259,13 @@ second completed-task ledger.
 
 ### Work entry point
 
-Work’s Needs you view embeds the existing decision, financial-proposal and
-Problems queues with their canonical queries, group actions and affected-record
-navigation. Automatic work retains automatic recovery and ordinary waits;
-persistent Run stalls and Job failure attention follow existing policies.
-The feed keeps measured completion pace separate from finish estimates.
-Scheduled work, retry backoff and member pauses leave time remaining unknown; a recent pace
-does not predict when those waits will end.
+Work's Needs you queue embeds the existing decision, proposal and Problems
+sources with their canonical group actions and affected-record navigation.
+Automatic recovery and ordinary waits stay out of it; what stopped appears under
+Stuck ([the rule](../jobs.md#member-facing-work-explanations)).
 All Work queue executor views remain available at `/work-queue`.
-Work History opens retained Runs and audit changes; it is not a second
-completed-task ledger. Advanced maintenance holds the nightly pass and
-one-off repairs formerly in Settings. Recipe re-parsing previews a bounded
+History opens retained Runs and audit changes; it is not a second completed-task
+ledger. Settings → Maintenance holds the nightly pass and one-off repairs.
+Recipe re-parsing previews a bounded
 Current/Proposed sample before application; the server recomputes eligibility
 at execution, so preview is not a record lock or a frozen write promise.

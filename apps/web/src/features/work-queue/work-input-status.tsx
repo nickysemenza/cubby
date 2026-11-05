@@ -3,7 +3,7 @@ import { countLabel } from "@cubby/shared/pluralize";
 
 import { AttentionInputStatus } from "~/features/project/attention-input-status";
 
-type WorkInputMeta = Pick<
+export type WorkInputMeta = Pick<
   WorkQueueOut["meta"],
   "incompleteProjectIds" | "incompleteDiagnosticSources" | "incompleteSources"
 >;

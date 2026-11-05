@@ -10,6 +10,7 @@ import { Input } from "~/ui/primitives/input";
 
 import { domainChipClass } from "../../ui/navigation/domain-wayfinding";
 import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
+import { WorkNavStatus } from "../../ui/navigation/work-nav-status";
 import {
   sidebarSections,
   settingsNavItem,
@@ -68,6 +69,7 @@ function NavigatorLink({
       />
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {item.entity && <NavigationCountBadge entity={item.entity} />}
+      {item.to === "/activity" && <WorkNavStatus />}
       {section && (
         <span className="shrink-0 text-xs text-muted-foreground">
           {section}

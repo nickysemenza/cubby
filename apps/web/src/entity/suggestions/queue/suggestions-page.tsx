@@ -949,8 +949,8 @@ function SuggestionsTableBody({
         emptyState={
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
             {coverage
-              ? "No known pending suggestions here."
-              : "No pending suggestions here. Find suggestions to look again."}
+              ? "No known pending suggestions."
+              : "No pending suggestions."}
           </p>
         }
       />

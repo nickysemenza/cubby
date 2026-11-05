@@ -3,6 +3,8 @@ import {
   workQueueOutSchema,
   workQueueRecordInput,
 } from "@cubby/schemas/work-queue";
+import { workStatus } from "@cubby/schemas/work-status";
+import { z } from "zod";
 
 import { ENTITY_ROOT_TAGS, type CacheTag } from "~/contracts/cache-policy";
 import { defineContract, query } from "~/contracts/define";
@@ -23,6 +25,15 @@ const WORK_QUEUE_TAGS: readonly CacheTag[] = [
 export const workQueueContract = defineContract(
   "workQueue",
   {
+    status: query({
+      exposure: "capability",
+      description:
+        "Whether background work is healthy: stuck work with its raw failure, whether work is catching up, when work last finished, and how many items need the current member (mine plus shared). A kind is stuck when work has been due for 30 minutes with no completion in that time, when it keeps failing, or when Apple-device work has no device. Use job.activity and job.queue to diagnose a stuck kind.",
+      input: z.strictObject({}),
+      output: workStatus,
+      // Not entity roots: a status mounted in the shell must not refetch on every write.
+      cache: { tags: [["run"], ["workQueue"]], profile: "stable" },
+    }),
     queue: query({
       exposure: "capability",
       description:

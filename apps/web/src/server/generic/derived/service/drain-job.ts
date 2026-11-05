@@ -13,6 +13,7 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import type { DerivedComputes } from "~/server/generic/derived/repo/compute";
 import {
   DERIVED_DRAIN_JOB_KEY,
+  DERIVED_UNCLAIMED_TARGETS,
   DERIVED_COMPUTE_BATCH,
   admitDerivedPage,
   derivedChunk,
@@ -76,7 +77,7 @@ const derivedDrain = (
         ? (target) =>
             and(
               derivedWorkEligible(target),
-              notLike(target, "assessment.reviewFacts%"),
+              notLike(target, DERIVED_UNCLAIMED_TARGETS),
             )!
         : derivedWorkEligible),
     chunk,
@@ -203,7 +204,7 @@ export const derivedDrainHandler = (
         eligible: (target) =>
           and(
             derivedWorkEligible(target),
-            notLike(target, "assessment.reviewFacts%"),
+            notLike(target, DERIVED_UNCLAIMED_TARGETS),
             notLike(target, "%@%"),
           )!,
         admit(items) {

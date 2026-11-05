@@ -593,19 +593,13 @@ failure count alone does not establish uninterrupted execution.
   minutes. The completion sample excludes normalization, failed attempts and stale
   image sources. Without a successful completion sample the ETA is unknown.
 
-Work’s Automatic work view presents the device backlog banner, compact lane/reason
-counts, Runs needing attention, then Jobs. Needs you also exposes Run and Job
-attention alongside the Work queue’s Decisions and Problems groups. Navigable counts use the Job entity
+The Jobs list presents lane/reason filters over the Job entity. Navigable counts use the Job entity
 population, hiding internal work with the table. Every supplied retry
 restriction intersects, including mixed entity filters, row IDs and Run scope.
-Count chips scope the Job table; web records that scope in Activity's URL.
 Runs use the generic `attention` saved view: member-visible stopped Runs that
 have no successor, plus stalled Runs, ordered stalled first then newest.
-The embed shows ten rows and links to all matching Runs. AI cost is the Run's
-recorded charged usage. Jobs use the generic In progress view, including image
-subject thumbnails, and a chevron expands Explain, that Job's Worker logs and
-Retry now underneath its row. Closed web rows remain 32 px. There is one
-shared table renderer. Apple Activity hands the household queue off to
+AI cost is the Run's
+recorded charged usage. Apple Activity hands the household queue off to
 `/work-queue` ([native Activity](../apps/apple/README.md#activity)).
 The web audit-log changes feed follows the queue.
 
@@ -906,18 +900,33 @@ the minimum only for unsafe writes; see
 
 ## Member-facing work explanations
 
-Work is the web entry point at `/activity`, with Needs you, Automatic work,
-Improvements and History. Advanced maintenance remains available.
-`tab=now` keeps its compatible URL and now labels the Automatic work view;
-legacy queue filters select it and audit filters select History. Needs you
-reuses the canonical Work queue and Run/Job attention predicates, separating
-financial proposals and concrete blockers from optional enrichment. Improvements
-retains optional suggestions, agent research and declared missing-fact views.
-Normal retries, dependencies and external waits remain in Automatic work;
-external waits are explicitly labelled. These views add no alert engine,
-scheduler or stored lanes and do not change retry policy. Field refresh links
-retain `tab=now` and the Derived values anchor. Existing
-Work queue filters, Suggestions, automatic rules and audit remain usable.
+Work is the web entry point at `/activity`: one health line, Stuck when something
+is, and one Needs you queue. `workQueue.status` is the single read behind the page
+and the sidebar, and agents can read it too. It adds no alert engine, stored lanes
+or retry policy; old `tab=` links redirect to `/jobs`, `/history`, `/suggestions`
+and Settings, and a `refresh=` locator to the value's record.
+
+Stuck is decided on the server from completions over a window, never from a
+snapshot of what is running, which reads as stopped between a drain's bursts:
+
+- A drain or Job kind has work due for 30 minutes with no completion in those 30
+  minutes. Retained tickets the drain never claims are not owed work. A drain's completions are published `DerivedValue` rows and its Job's
+  latest page result. Thirty minutes outlasts the gaps between bursts and is half
+  the one-hour lag members are promised, so the alarm shows before that breaks.
+- A kind keeps failing: failed in the last 7 days with no later completion, or
+  live with `JOB_NEEDS_ATTENTION_ATTEMPTS` failures. A drain item in that state
+  counts, but Retry is withheld because retrying its Job does not move the item.
+- Apple-device work has been due for 30 minutes and no device worked in 10.
+- A Run a member started or reviews stalled, or its purpose failed in the last 7
+  days with no successor and no later completion. A scheduled or discovered Run
+  retries on its own, so it needs three failures in a row. Paused Runs are a
+  member's choice and are never stuck.
+
+Due for 15 minutes while still completing reads as catching up. Copy lives on the
+kind (`stuck` in `JOB_KIND_POLICY`); an undeclared kind falls back to its label so
+it cannot be silently invisible. The read probes indexes per drain and priority
+and reads live and recently failed Jobs, so its cost does not follow queue size.
+It takes the `run` and `workQueue` cache tags, not entity roots.
 
 `RUN_KINDS` owns Run purpose, triggers, effects and declared steps.
 `JOB_KIND_POLICY` in `packages/schemas/src/job.ts` co-locates each Job kind’s
@@ -964,14 +973,7 @@ Deployment's first request bootstraps existing work and AI activation once per W
 version; deployment probes initiate this explicitly. App-open coalesces recovery
 and mail discovery. Gmail provider push is not implemented here.
 
-Work → Automatic work shows Running, Next wake, Waiting and Last recovery enrollment, known deadlines
-linked to Jobs and disclosed wake/delivery/recovery history. Observation timestamps
-are explicit. No known deadline does not establish that Neon is suspended. An
-observed wake delivery or still-armed alarm over five minutes overdue appears in
-Needs you; stale snapshots alone do not establish scheduler failure. Status reads
-are on demand. Inactive Activity panels unmount, except maintenance preserves
-inspected previews with hidden queries disabled. Only runnable work keeps the
-work feed's periodic refresh active. Scheduler transitions use structured Worker
+`job.schedule` reports Running, Next wake, Waiting and Last recovery enrollment, known deadlines and wake/delivery/recovery history to agents. No known deadline does not establish that Neon is suspended. Status reads are on demand. Scheduler transitions use structured Worker
 logs and bounded DO history, with no database-backed idle heartbeat.
 
 ### Routine Run history
