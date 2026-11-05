@@ -94,6 +94,19 @@ it("reviews a reimbursement against the chosen Purchase and commits its exact ap
       name: "Synthetic contribution",
       accountName: "Synthetic review account",
       snapshot: "synthetic-reviewed-credit",
+      beneficiaries: [{ partyId: null, weight: 1 }],
+      candidateCategoryId: null,
+      categoryOverride: null,
+      effectiveCategory: {
+        mode: "none",
+        storedValue: null,
+        value: null,
+        fallbackValue: null,
+        source: "none",
+        sourceEntity: null,
+        matchesFallback: true,
+        canReset: false,
+      },
       existingBookedAmount: 100,
     },
   });
@@ -101,7 +114,24 @@ it("reviews a reimbursement against the chosen Purchase and commits its exact ap
   const commits: unknown[] = [];
   restore = overrideOperationDispatch(async (operation, input) => {
     if (operation === "entity.list") {
-      z.object({ entity: z.literal("purchase") }).parse(input);
+      const request = z
+        .object({ entity: z.enum(["purchase", "ledgerParty"]) })
+        .parse(input);
+      if (request.entity === "ledgerParty")
+        return {
+          ok: true,
+          data: mock(getEntityListOutputSchema("ledgerParty"), {
+            overrides: {
+              items: [],
+              meta: {
+                hasNextPage: false,
+                totalCount: 0,
+                pageIndex: 0,
+                pageSize: 20,
+              },
+            },
+          }),
+        };
       return {
         ok: true,
         data: mock(getEntityListOutputSchema("purchase"), {
@@ -152,8 +182,10 @@ it("reviews a reimbursement against the chosen Purchase and commits its exact ap
     await screen.findByRole("option", { name: /Synthetic shared lodge/ }),
   );
   expect(commits).toEqual([]);
+  await userEvent.click(screen.getByRole("button", { name: "Add share" }));
   await userEvent.click(screen.getByRole("button", { name: "Review Expense" }));
   await screen.findByText(/as a reimbursement credit/);
+  expect(screen.getByText("Uncategorized")).toBeVisible();
   expect(previews).toEqual([
     {
       transactionId,
@@ -164,6 +196,7 @@ it("reviews a reimbursement against the chosen Purchase and commits its exact ap
       economicRole: "reimbursement",
       trade: "other",
       costType: "materials",
+      beneficiaries: [{ partyId: null, weight: 1 }],
     },
   ]);
   expect(commits).toEqual([]);
