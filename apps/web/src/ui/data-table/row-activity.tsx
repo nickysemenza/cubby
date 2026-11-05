@@ -34,6 +34,9 @@ export function createRowActivityStore() {
   };
 }
 
+/** An open popup trigger inside a cell rail. */
+export const RAIL_POPUP_OPEN = "[data-cell-rail] [aria-expanded='true']";
+
 /**
  * Whether a popup opened from a cell rail in `from`'s table is still open.
  * Hovering moves activity only once it closes. Regression: the pointer
@@ -42,9 +45,7 @@ export function createRowActivityStore() {
  * and closed the popover it had just opened.
  */
 export const railPopupOpen = (from: Element) =>
-  !!from
-    .closest("table")
-    ?.querySelector("[data-cell-rail] [aria-expanded='true']");
+  !!from.closest("table")?.querySelector(RAIL_POPUP_OPEN);
 
 type RowActivityStore = ReturnType<typeof createRowActivityStore>;
 

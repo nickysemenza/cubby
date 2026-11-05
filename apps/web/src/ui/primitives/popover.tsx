@@ -4,18 +4,54 @@ import * as React from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 
 import { cn } from "cn"
+import { anchorOf } from "~/ui/overlays/anchor-proxy"
 import { popoverElevationClassName } from "~/ui/overlays/popover-elevation"
+
+/**
+ * The trigger inside this root, so content can anchor to its stand-in
+ * (`anchorOf`). A detached trigger (`handle`) lives outside the root and keeps
+ * Base UI's own anchoring.
+ */
+const PopoverTriggerContext = React.createContext<{
+  trigger: HTMLElement | null
+  setTrigger: (node: HTMLElement | null) => void
+} | null>(null)
 
 function Popover<Payload = unknown>({
   ...props
 }: PopoverPrimitive.Root.Props<Payload>) {
-  return <PopoverPrimitive.Root data-slot="popover" {...props} />
+  const [trigger, setTrigger] = React.useState<HTMLElement | null>(null)
+  const value = React.useMemo(
+    () => (props.handle ? null : { trigger, setTrigger }),
+    [props.handle, trigger]
+  )
+  return (
+    <PopoverTriggerContext.Provider value={value}>
+      <PopoverPrimitive.Root data-slot="popover" {...props} />
+    </PopoverTriggerContext.Provider>
+  )
 }
 
 function PopoverTrigger<Payload = unknown>({
+  ref,
   ...props
 }: PopoverPrimitive.Trigger.Props<Payload>) {
-  return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
+  const setTrigger = React.useContext(PopoverTriggerContext)?.setTrigger
+  const setRef = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      setTrigger?.(node)
+      if (typeof ref === "function") ref(node)
+      else if (ref) ref.current = node
+    },
+    [ref, setTrigger]
+  )
+  return (
+    <PopoverPrimitive.Trigger
+      data-slot="popover-trigger"
+      ref={setRef}
+      {...props}
+    />
+  )
 }
 
 function PopoverContent({
@@ -32,10 +68,15 @@ function PopoverContent({
     PopoverPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "anchor"
   >) {
+  const trigger = React.useContext(PopoverTriggerContext)?.trigger
+  const proxied = React.useCallback(
+    () => (trigger ? anchorOf(trigger) : null),
+    [trigger]
+  )
   return (
     <PopoverPrimitive.Portal keepMounted={keepMounted}>
       <PopoverPrimitive.Positioner
-        anchor={anchor}
+        anchor={anchor ?? (trigger ? proxied : undefined)}
         align={align}
         alignOffset={alignOffset}
         side={side}

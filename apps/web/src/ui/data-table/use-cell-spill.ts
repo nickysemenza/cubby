@@ -1,6 +1,15 @@
 import { type RefObject, useEffect } from "react";
 
+import { setAnchorProxy } from "~/ui/overlays/anchor-proxy";
+
+import { RAIL_POPUP_OPEN } from "./row-activity";
+
 const SPILL_DELAY_MS = 250;
+/**
+ * How long a closed popup's overlay waits for focus to come back to its
+ * cell's ⓘ (Base UI returns it after the exit animation).
+ */
+const RELEASE_SETTLE_MS = 400;
 const SPILL_MAX_PX = 480;
 const EDGE_PX = 4;
 /** What a cell can spill, outermost first in document order. */
@@ -172,13 +181,15 @@ const FORWARDED_EVENTS = [
  * The cell's rail (its ⓘ) drawn at the spill-over's end, or
  * its start beside a number, where padding keeps it clear of the full text.
  * Regression: drawn at its own spot, it hid the characters it sat on. The
- * copy forwards clicks to the real controls.
+ * copy forwards clicks to the real controls; a popup trigger's copy `pin`s
+ * the overlay as that popup's anchor instead of ending the spill.
  */
 function railCopy(
   rail: HTMLElement,
   start: boolean,
   overlay: HTMLElement,
   done: () => void,
+  pin: (trigger: HTMLElement, proxy: HTMLElement) => void,
 ) {
   const clone = rail.cloneNode(true);
   if (!(clone instanceof HTMLElement)) return;
@@ -207,11 +218,20 @@ function railCopy(
   clone.querySelectorAll<HTMLElement>("button, a").forEach((copy, index) => {
     copy.tabIndex = -1;
     copy.style.pointerEvents = "auto";
+    // Pressing an open popup's copy closes it as an outside press; the click
+    // that follows must not reopen it.
+    let wasOpen = false;
+    copy.addEventListener("pointerdown", () => {
+      wasOpen = controls[index]?.getAttribute("aria-expanded") === "true";
+    });
     copy.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      done();
-      controls[index]?.click();
+      const control = controls[index];
+      if (!control || wasOpen) return;
+      if (control.hasAttribute("aria-haspopup")) pin(control, copy);
+      else done();
+      control.click();
     });
   });
   clone.addEventListener("pointerdown", (event) => event.preventDefault());
@@ -236,12 +256,76 @@ export function useCellSpill(
     let timer = 0;
     let current: HTMLElement | null = null;
     let overlay: HTMLElement | null = null;
+    // A popup opened from the overlay's copied rail. While it is open the
+    // overlay is its anchor and stays up; the rest of the pane shows no
+    // other spill.
+    let pinned: {
+      trigger: HTMLElement;
+      cell: HTMLElement;
+      observer: MutationObserver;
+    } | null = null;
+
+    const unpin = () => {
+      if (!pinned) return;
+      pinned.observer.disconnect();
+      setAnchorProxy(pinned.trigger, null);
+      pinned = null;
+    };
 
     const hide = () => {
+      unpin();
       window.clearTimeout(timer);
       overlay?.remove();
       overlay = null;
       current = null;
+    };
+
+    // Escape returns focus to the cell's own ⓘ, which shows in place over
+    // the clipped text unless the overlay still covers it.
+    const release = () => {
+      const cell = pinned?.cell;
+      unpin();
+      timer = window.setTimeout(() => {
+        if (current === cell && !cell?.contains(document.activeElement)) hide();
+      }, RELEASE_SETTLE_MS);
+    };
+
+    const pin = (
+      cell: HTMLElement,
+      trigger: HTMLElement,
+      proxy: HTMLElement,
+    ) => {
+      unpin();
+      setAnchorProxy(trigger, proxy);
+      let opened = false;
+      const observer = new MutationObserver(() => {
+        const expanded = trigger.getAttribute("aria-expanded");
+        if (expanded) proxy.setAttribute("aria-expanded", expanded);
+        proxy.toggleAttribute(
+          "data-popup-open",
+          trigger.hasAttribute("data-popup-open"),
+        );
+        if (expanded === "true") opened = true;
+        else if (opened) release();
+      });
+      observer.observe(trigger, {
+        attributes: true,
+        attributeFilter: ["aria-expanded", "data-popup-open"],
+      });
+      pinned = { trigger, cell, observer };
+      // A trigger that never opens (a disabled explanation) lets go.
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (pinned?.trigger === trigger && !opened) release();
+        }),
+      );
+    };
+
+    // Scrolling the table or page moves the row out from under the popup.
+    const closePinned = () => {
+      const trigger = pinned?.trigger;
+      hide();
+      if (trigger?.getAttribute("aria-expanded") === "true") trigger.click();
     };
 
     const show = (cell: HTMLElement) => {
@@ -296,7 +380,10 @@ export function useCellSpill(
       const box = element.getBoundingClientRect();
       if (box.right > limit)
         element.style.left = `${Math.max(EDGE_PX, limit - box.width)}px`;
-      if (rail) railCopy(rail, start, element, hide);
+      if (rail)
+        railCopy(rail, start, element, hide, (trigger, proxy) =>
+          pin(cell, trigger, proxy),
+        );
       // Presses replay on the original under the copied element, so a
       // clipped link, suggestion accept or edit trigger acts, and selection
       // (the cell's mousedown) moves, even where the spill paints over a
@@ -343,6 +430,7 @@ export function useCellSpill(
       }
       element.addEventListener("pointerleave", (event) => {
         if (
+          !pinned &&
           !(
             event.relatedTarget instanceof Node &&
             cell.contains(event.relatedTarget)
@@ -372,6 +460,9 @@ export function useCellSpill(
 
     const onPointerOver = (event: PointerEvent) => {
       if (event.pointerType === "touch") return;
+      // A rail popup holds its cell; crossing others on the way to it must
+      // not raise their spills over its path.
+      if (pinned || root.querySelector(RAIL_POPUP_OPEN)) return;
       const cell = cellOf(event.target);
       if (cell && root.contains(cell)) schedule(cell);
       else hide();
@@ -391,29 +482,49 @@ export function useCellSpill(
     // The rail copy sits outside the pane; reaching it keeps the overlay.
     const onPointerLeave = (event: PointerEvent) => {
       if (
-        event.relatedTarget instanceof Node &&
-        overlay?.contains(event.relatedTarget)
+        pinned ||
+        (event.relatedTarget instanceof Node &&
+          overlay?.contains(event.relatedTarget))
       )
         return;
       hide();
+    };
+    // Focus moving into the pinned popup keeps its anchor.
+    const onFocusOut = () => {
+      if (!pinned) hide();
+    };
+    // The popup's own scrolling content leaves it open; the pane or page
+    // scrolling under it closes it.
+    const onScroll = (event: Event) => {
+      if (!pinned) hide();
+      else if (
+        event.target instanceof Node &&
+        event.target.contains(pinned.cell)
+      )
+        closePinned();
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (!pinned) hide();
+      else if (event.target instanceof Node && root.contains(event.target))
+        closePinned();
     };
 
     root.addEventListener("pointerover", onPointerOver);
     root.addEventListener("pointerleave", onPointerLeave);
     root.addEventListener("focusin", onFocusIn);
-    root.addEventListener("focusout", hide);
+    root.addEventListener("focusout", onFocusOut);
     root.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("scroll", hide, true);
-    window.addEventListener("wheel", hide, { passive: true });
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("wheel", onWheel, { passive: true });
     return () => {
       hide();
       root.removeEventListener("pointerover", onPointerOver);
       root.removeEventListener("pointerleave", onPointerLeave);
       root.removeEventListener("focusin", onFocusIn);
-      root.removeEventListener("focusout", hide);
+      root.removeEventListener("focusout", onFocusOut);
       root.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("scroll", hide, true);
-      window.removeEventListener("wheel", hide);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("wheel", onWheel);
     };
   }, [pane, enabled]);
 }
