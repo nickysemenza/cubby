@@ -1,9 +1,10 @@
 /** Predictions remain immutable after member labels; accepted content survives
  * contradictory predictions, and retrieval failures never invent classifications. */
 import { emailClassificationPublicationEvidence } from "@cubby/schemas/email-observations";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import {
-  listFeedbackByKind,
+  listEmailReviewsByKind,
   seedEmailClassificationFeedback,
 } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
@@ -16,14 +17,13 @@ import {
   emailRetrievalFailure,
   email as emailTable,
   importSourceClaim,
+  runOperation,
 } from "~/server/db/schema";
 import { orderMailEvent } from "~/server/db/schema";
+import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { productionMailTriage } from "~/server/domains/purchase-import/service/gmail/triage-model";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
-import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
-import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -55,6 +55,13 @@ const gmail: GmailProvider = {
 };
 describe("immutable Email observations", () => {
   const ctx = withTestDb();
+  const publicationOf = async (id: string) =>
+    (
+      await getDb(ctx.db)
+        .select({ publication: emailClassificationObservation.publication })
+        .from(emailClassificationObservation)
+        .where(eq(emailClassificationObservation.id, id))
+    )[0]?.publication;
   // Event-only authority can predate a retained Email. Audit expansion must
   // recover the Email through the original, alongside the current Purchase.
   it("finds an automatic event-only link from either later-retained endpoint", async () => {
@@ -96,45 +103,59 @@ describe("immutable Email observations", () => {
       },
       "automatic",
     );
-    expect(prediction.subject).toMatchObject({ recordId: null });
+    expect(prediction.emailId).toBeNull();
     await getDb(ctx.db)
       .update(emailTable)
       .set({ deletedAt: null })
       .where(eq(emailTable.id, mail.id));
-    const outcome = await publishAssessment(ctx.db, {
-      publicationKey: `synthetic-mail-outcome:${mail.id}`,
-      family: "mail_import_outcome",
-      subject: {
-        kind: "mail_import_outcome",
-        entity: "email",
-        recordId: mail.id,
-        checksum: mail.checksum!,
-        runId: fixture.parent.id,
-      },
-      judgment: {
-        kind: "imported",
-        lines: [{ name: "Synthetic packet", cost: 5 }],
-        total: 5,
-      },
-      producer: null,
-      fingerprint: mail.checksum,
-      evidence: null,
-    });
-    const legacy = await publishAssessment(ctx.db, {
-      publicationKey: `synthetic-legacy:${mail.id}`,
-      family: "email_relevance",
-      subject: {
-        kind: "email_relevance",
-        entity: "email",
-        recordId: mail.id,
-        checksum: mail.checksum!,
-        observationId: crypto.randomUUID(),
-      },
-      judgment: { classification: "unrelated", stage: "decision" },
-      producer: null,
-      fingerprint: mail.checksum,
-      evidence: null,
-    });
+    const outcomeId = crypto.randomUUID();
+    await getDb(ctx.db)
+      .insert(runOperation)
+      .values({
+        runId: parseEntityId("run", fixture.parent.id),
+        operationId: `synthetic-mail-outcome:${mail.id}`,
+        kind: "target_outcome",
+        state: "completed",
+        inputFingerprint: "synthetic",
+        completedAt: new Date(),
+        result: {
+          mailOutcome: {
+            id: outcomeId,
+            judgment: {
+              kind: "imported",
+              lines: [{ name: "Synthetic packet", cost: 5 }],
+              total: 5,
+            },
+            producer: null,
+            checksum: mail.checksum,
+            fingerprint: mail.checksum,
+            createdAt: new Date().toISOString(),
+          },
+          target: {
+            entityKind: "email",
+            entityId: mail.id,
+            workKey: mail.id,
+            state: "completed",
+            outcome: "verified",
+            warning: null,
+            diff: null,
+            completedAt: new Date().toISOString(),
+            targetFingerprint: mail.checksum,
+          },
+        },
+      });
+    // A prediction from before routing recorded whether it was used.
+    const [legacy] = await getDb(ctx.db)
+      .insert(emailClassificationObservation)
+      .values({
+        emailId: mail.id,
+        checksum: mail.checksum,
+        classification: "unrelated",
+        stage: "decision",
+        application: "unverified",
+      })
+      .returning();
+    if (!legacy) throw new Error("Synthetic legacy prediction missing");
     const legacyHistory = await listAutomaticDecisions(ctx.db, {
       family: "email_relevance",
       recordIds: [mail.shortcode],
@@ -147,7 +168,7 @@ describe("immutable Email observations", () => {
     });
     const pending = await listSuggestionPage(ctx.db, {});
     expect(pending.items.map((row) => row.assessmentId)).not.toContain(
-      outcome.id,
+      outcomeId,
     );
     expect(pending.items.map((row) => row.assessmentId)).not.toContain(
       legacy.id,
@@ -173,11 +194,11 @@ describe("immutable Email observations", () => {
         family: "mail_import_outcome",
         recordIds: codes,
       });
+      expect(outcomes.items.filter((row) => row.id === outcomeId)).toHaveLength(
+        1,
+      );
       expect(
-        outcomes.items.filter((row) => row.id === outcome.id),
-      ).toHaveLength(1);
-      expect(
-        outcomes.items.find((row) => row.id === outcome.id)?.records,
+        outcomes.items.find((row) => row.id === outcomeId)?.records,
       ).toEqual(
         expect.arrayContaining([
           { entity: "email", id: mail.shortcode },
@@ -258,9 +279,7 @@ describe("immutable Email observations", () => {
       .select()
       .from(emailClassificationObservation);
     if (!observation) throw new Error("Synthetic staged observation missing");
-    expect(
-      (await ensureEmailAssessment(ctx.db, observation.id)).evidence,
-    ).toMatchObject({
+    expect(await publicationOf(observation.id)).toMatchObject({
       originalCapture: { status: "complete" },
       logicalInputCapture: {
         version: "gmail-logical-inputs-v1",
@@ -292,7 +311,7 @@ describe("immutable Email observations", () => {
       classificationVersion: "synthetic-v1",
     };
     const legacy = await recordEmailClassificationObservation(ctx.db, input);
-    const legacyAssessment = await ensureEmailAssessment(ctx.db, legacy.id);
+    const legacyPublication = await publicationOf(legacy.id);
     const originalCapture = await captureGmailOriginal({
       ledgerPartyId: party.id,
       mailboxId: mail.mailboxId,
@@ -306,12 +325,8 @@ describe("immutable Email observations", () => {
       { originalCapture },
     );
     expect(captured.id).not.toBe(legacy.id);
-    expect((await ensureEmailAssessment(ctx.db, legacy.id)).evidence).toEqual(
-      legacyAssessment.evidence,
-    );
-    expect(
-      (await ensureEmailAssessment(ctx.db, captured.id)).evidence,
-    ).toMatchObject({ originalCapture });
+    expect(await publicationOf(legacy.id)).toEqual(legacyPublication);
+    expect(await publicationOf(captured.id)).toMatchObject({ originalCapture });
     expect(
       (
         await recordEmailClassificationObservation(ctx.db, input, undefined, {
@@ -340,7 +355,7 @@ describe("immutable Email observations", () => {
       {},
       { originalCapture },
     ]) {
-      const before = await ensureEmailAssessment(ctx.db, captured.id);
+      const before = await publicationOf(captured.id);
       const next = await recordEmailClassificationObservation(
         ctx.db,
         input,
@@ -358,18 +373,14 @@ describe("immutable Email observations", () => {
           )
         ).id,
       ).toBe(next.id);
-      const retained = await ensureEmailAssessment(ctx.db, next.id);
-      const proof = emailClassificationPublicationEvidence.parse(
-        retained.evidence,
-      );
-      expect(retained.evidence).toMatchObject(publication);
+      const retained = await publicationOf(next.id);
+      const proof = emailClassificationPublicationEvidence.parse(retained);
+      expect(retained).toMatchObject(publication);
       expect("originalCapture" in proof).toBe("originalCapture" in publication);
       expect("logicalInputCapture" in proof).toBe(
         "logicalInputCapture" in publication,
       );
-      expect(
-        (await ensureEmailAssessment(ctx.db, captured.id)).evidence,
-      ).toEqual(before.evidence);
+      expect(await publicationOf(captured.id)).toEqual(before);
     }
     await expect(
       recordEmailClassificationObservation(ctx.db, input, undefined, {
@@ -419,9 +430,7 @@ describe("immutable Email observations", () => {
     expect(predictions).toHaveLength(1);
     const prediction = predictions[0];
     if (!email || !prediction) throw new Error("Synthetic prediction missing");
-    expect(
-      (await ensureEmailAssessment(ctx.db, prediction.id)).evidence,
-    ).toMatchObject({
+    expect(await publicationOf(prediction.id)).toMatchObject({
       originalCapture: {
         status: "complete",
         version: "gmail-original-v1",
@@ -434,16 +443,7 @@ describe("immutable Email observations", () => {
     });
     // A saved prediction alone cannot establish that routing used it. Ingest
     // must record application in the same publication transaction.
-    expect(
-      await listFeedbackByKind(ctx.db, "email_classification_application"),
-    ).toEqual([
-      expect.objectContaining({
-        metadata: expect.objectContaining({
-          predictionId: prediction.id,
-          applied: true,
-        }),
-      }),
-    ]);
+    expect(prediction.application).toBe("applied");
     expect(
       (
         await listAutomaticDecisions(ctx.db, {
@@ -478,7 +478,7 @@ describe("immutable Email observations", () => {
       await getDb(ctx.db).select().from(emailClassificationObservation),
     ).toEqual(predictions);
     expect(
-      await listFeedbackByKind(ctx.db, "email_classification_review"),
+      await listEmailReviewsByKind(ctx.db, "email_classification_review"),
     ).toHaveLength(1);
     const raw = "404 Not Found: Synthetic upstream response";
     await ingestGmailMessages(

@@ -963,12 +963,9 @@ export const { definition, readSchemas } = defineEntityModel({
           columns: ["vendorAccountId", "deletedAt"],
           path: [
             {
-              table: "AssessmentState",
-              from: "data",
-              to: "data",
-              where: { family: "email_link" },
-              fromJsonKey: "purchaseId",
-              jsonKey: "eventId",
+              table: "EmailPurchaseDecision",
+              from: "purchaseId",
+              to: "eventId",
             },
             { table: "OrderMailEvent", from: "id", to: "orderMailId" },
             { table: "Email", from: "orderMailId", to: "id" },
@@ -981,12 +978,9 @@ export const { definition, readSchemas } = defineEntityModel({
           path: [
             { table: "Purchase", from: "vendorAccountId", to: "id" },
             {
-              table: "AssessmentState",
-              from: "data",
-              to: "data",
-              where: { family: "email_link" },
-              fromJsonKey: "purchaseId",
-              jsonKey: "eventId",
+              table: "EmailPurchaseDecision",
+              from: "purchaseId",
+              to: "eventId",
             },
             { table: "OrderMailEvent", from: "id", to: "orderMailId" },
             { table: "Email", from: "orderMailId", to: "id" },
@@ -994,11 +988,9 @@ export const { definition, readSchemas } = defineEntityModel({
         },
 
         {
-          table: "AssessmentState",
-          match: { data: "orderMailId" },
+          table: "EmailPurchaseDecision",
+          match: { eventId: "orderMailId" },
           path: [{ table: "OrderMailEvent", from: "id", to: "orderMailId" }],
-          where: { family: "email_link" },
-          json: { key: "eventId" },
         },
 
         {
@@ -1042,14 +1034,17 @@ export const { definition, readSchemas } = defineEntityModel({
             { table: "Email", from: "ledgerPartyId", to: "id" },
           ],
         },
+        // Retired captures keep their positions, so pending tickets still expand.
         {
           table: "Assessment",
+          capture: false,
           match: { subject: "id" },
           json: { key: "recordId" },
           where: { family: "email_relevance" },
         },
         {
           table: "Feedback",
+          capture: false,
           match: { assessmentId: "id" },
           path: [
             {
@@ -1077,6 +1072,8 @@ export const { definition, readSchemas } = defineEntityModel({
           where: { purpose: "mail_import" },
           columns: ["status", "deletedAt", "input", "ledgerPartyId"],
         },
+        // Appended: a member's review is an Email quality input.
+        { table: "EmailReview", match: { emailId: "id" } },
       ],
       checks: [
         {

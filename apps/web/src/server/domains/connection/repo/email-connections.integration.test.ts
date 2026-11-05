@@ -9,7 +9,6 @@ import { getDb } from "~/server/db/helpers";
 import { purchase as purchaseTable, vendorAccount } from "~/server/db/schema";
 import {
   assessment,
-  assessmentEmailLink,
   email,
   importSourceClaim,
   importSourceOrder,
@@ -31,6 +30,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 // or superseded event applies; foreign members/agents bypass purchase_import.mail_resolve;
 // a failed outer transaction leaks a link and a retry applies twice.
 import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
+import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 
 import { retrieveConnectionCandidates } from "./connection-candidates";
 import {
@@ -116,7 +116,9 @@ describe("fresh retained Email connection recommendations", () => {
     });
     expect(JSON.stringify(proposal)).not.toContain(f.original.id);
     expect(JSON.stringify(proposal)).not.toContain(f.event.id);
-    expect(await getDb(ctx.db).select().from(assessmentEmailLink)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select().from(activeEmailPurchaseDecision),
+    ).toEqual([]);
     expect(await getDb(ctx.db).select().from(orderMailEvent)).toHaveLength(1);
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
     expect(
@@ -345,9 +347,9 @@ describe("fresh retained Email connection recommendations", () => {
           expectedFingerprint: proposal.fingerprint,
         }),
       ).rejects.toThrow(/changed|stale|retained/i);
-      expect(await getDb(ctx.db).select().from(assessmentEmailLink)).toEqual(
-        [],
-      );
+      expect(
+        await getDb(ctx.db).select().from(activeEmailPurchaseDecision),
+      ).toEqual([]);
     },
   );
 
@@ -375,14 +377,16 @@ describe("fresh retained Email connection recommendations", () => {
         throw new Error("synthetic rollback");
       }),
     ).rejects.toThrow("synthetic rollback");
-    expect(await getDb(ctx.db).select().from(assessmentEmailLink)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select().from(activeEmailPurchaseDecision),
+    ).toEqual([]);
     const receipt = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
     expect(receipt.applied).toBe(true);
     expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
       receipt,
     );
     expect(
-      await getDb(ctx.db).select().from(assessmentEmailLink),
+      await getDb(ctx.db).select().from(activeEmailPurchaseDecision),
     ).toMatchObject([{ eventId: f.event.id, decision: "linked" }]);
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toEqual([]);
   });
@@ -435,7 +439,9 @@ describe("fresh retained Email connection recommendations", () => {
         operationId: "synthetic-foreign-email",
       }),
     ).rejects.toThrow(/owner/i);
-    expect(await getDb(ctx.db).select().from(assessmentEmailLink)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select().from(activeEmailPurchaseDecision),
+    ).toEqual([]);
   });
 
   it("omits accepted import sources and invalidates a recommendation accepted since publication", async () => {
@@ -480,7 +486,9 @@ describe("fresh retained Email connection recommendations", () => {
         expectedFingerprint: proposal.fingerprint,
       }),
     ).rejects.toThrow(/changed|stale/i);
-    expect(await getDb(ctx.db).select().from(assessmentEmailLink)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select().from(activeEmailPurchaseDecision),
+    ).toEqual([]);
   });
 
   it("replaces only the selected event's prior reviewed link through the domain writer", async () => {
@@ -539,7 +547,9 @@ describe("fresh retained Email connection recommendations", () => {
       verdict: "correct",
       expectedFingerprint: proposal.fingerprint,
     });
-    const active = await getDb(ctx.db).select().from(assessmentEmailLink);
+    const active = await getDb(ctx.db)
+      .select()
+      .from(activeEmailPurchaseDecision);
     expect(active).toHaveLength(2);
     expect(active.find((row) => row.eventId === f.event.id)).toMatchObject({
       purchaseId: expect.any(String),

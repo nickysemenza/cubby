@@ -923,9 +923,8 @@ A single included link-state filter fixes the sort rank, so ordering reuses that
 constant and retains date and stable ties without computing the state again.
 After page selection, independent association, review, Purchase-link and owner
 facts start together; awaiting an array element before `Promise.all` adds a
-serial database stage. Review facts join each observation's canonical
-`email-observation:` Assessment publication key and check its subject lineage
-before reading member Feedback, reusing the Assessment judgment in that join.
+serial database stage. Review facts read the Email's `EmailReview` rows for its
+current checksum; a label is the row's stored `classification`.
 
 **Report choices.** A `records` row may carry a `choice` (a decision the person makes) and the block
 a `form` (its own choices, the progress wording, a `disabledReason` and the one command the answers
@@ -1495,7 +1494,7 @@ object keys while preserving array order and JSON scalar encoding; it must not
 revalidate or clone each nested subtree. Normalize dates and optional values at
 the input boundary before serialization.
 
-All five review families use this storage: fields, Email relevance and event/Purchase links, image descriptions, Product pairs, and generic recommendations. `assessment.review` and `assessment.reviewBatch` (MCP `suggestions.review` and `suggestions.review_batch`) settle immutable review independently of apply intent. Each batch item has its own outcome. Draft acceptance records history; saved application has a separate transaction-bound receipt. Current-evidence and domain-authority checks fence field writes, Email corrections and pair merges. Email link application revalidates its expected active Assessment and current target after Purchase, Original and Email locks, so a waiting review cannot replace newer authority. Relevance application requires an explicit domain-supported related or uncertain correction before recording Feedback; unrelated grading remains history-only. Unserved model trials stay outside member review.
+These review families use this storage: fields, image descriptions, Product pairs, and generic recommendations. Mail decisions and findings have [domain owners](adr/0011-email-as-a-first-class-entity.md#decisions-and-reviews-have-email-owners). `assessment.review` and `assessment.reviewBatch` (MCP `suggestions.review` and `suggestions.review_batch`) settle immutable review independently of apply intent. Each batch item has its own outcome. Draft acceptance records history; saved application has a separate transaction-bound receipt. Current-evidence and domain-authority checks fence field writes, Email corrections and pair merges. Email link application revalidates its expected active Assessment and current target after Purchase, Original and Email locks, so a waiting review cannot replace newer authority. Relevance application requires an explicit domain-supported related or uncertain correction before recording Feedback; unrelated grading remains history-only. Unserved model trials stay outside member review.
 
 A new bare wrong verdict is a Miss, without suppressing future evidence. It resolves the current Problem, and canonical publication of the same pair evidence and decision policy preserves that review. Relevant evidence or policy revisions may publish a fresh Assessment. Publication identity excludes requesting Run and execution IDs; the first actual producer and evidence snapshot remain immutable. Exact command retries replay the same receipt; conflicting operation-ID reuse is refused. Legacy ambiguous reject/dismiss outcomes remain ungraded, retaining their original field-value, pair, recommendation-group, relatedness or tag-preference suppression. Existing corrected values and explicit labels retain their recorded semantics. Field applications keep existing AuditLog receipts and distinguish automatic acceptance from explicit member acceptance. New evaluation-only Email grades never change routing; frozen sample rosters retain original predictions, strata and inclusion probabilities.
 
@@ -3844,7 +3843,7 @@ queue branch read stored outcomes; no mailbox-wide acceptance or review relation
 runs on those reads. Missing publications stay unassessed until refresh.
 
 Email metadata, original/attachment persistence, candidate/classification
-observations, email Assessment/Feedback, linked Purchase writes and Mail import
+observations, `EmailReview`, `EmailPurchaseDecision`, linked Purchase writes and Mail import
 Run/source-roster changes enroll the existing quality family transactionally.
 Run source changes enroll quality even when other families ignore Run execution
 metadata; progress-only projections still enroll no family. Old publications
@@ -3928,11 +3927,9 @@ queue counts read the published outcome. Source checks retain JSON containment. 
 extra fields, excludes missing keys and malformed source arrays, and distinguishes
 an explicit JSON null from an absent key.
 
-Bulk Email review checks resolve each member Feedback's Assessment lineage
-before joining current-checksum predictions to their owner. Only valid member
-labels count; the latest valid label wins, and a correct verdict without a
-correction uses the Assessment judgment. Review metadata never supplies a second
-observation identity.
+Bulk Email review checks read `EmailReview` for the current checksum and the
+Email's owner. Only member labels count; the latest wins, and a correct verdict
+without a correction stored the prediction's classification when it was written.
 
 A Vendor Account has no stored or editable name. Its title is always
 `<Vendor> · <member>` from the current parent names (`vendorAccountLabelSql`
@@ -5029,18 +5026,18 @@ first, with family and review-status filters. `/automatic-decisions` redirects
 there, preserving record and audit-family scope. It also appears on each affected
 record's detail page. Email relevance, automatic Email links, mail-import outcomes
 and automatic-rule application receipts enter through declarations; member-made
-Email link decisions remain ordinary history. Report incorrect records Wrong
-Feedback through the existing family path, without applying a correction or
+Email link decisions remain ordinary history. Mail decisions read from
+`EmailClassificationObservation`, `EmailPurchaseDecision` and the `target_outcome`
+RunOperation in the same list. Report incorrect records Wrong
+Feedback through the existing family path (an `EmailReview` for mail), without applying a correction or
 pausing automation. Applied effects remain; affected records link to their domain
 actions. Feedback participates in supported later reassessment without promising
 universal historical record repair. Confirmed field corrections have the exact-input
 propagation described below. Wrong and corrected decisions remain in the audit.
-Legacy Email predictions without application receipts are included with
+Legacy Email predictions with `application` `unverified` are included with
 **Unverified application**, even if they disagree with the Email's current relevance.
-New ingestion records observation and application receipts atomically with routing;
-known unapplied predictions stay ordinary history. Observation receipts coexist
-with member Feedback: readers select the intended operation or authority instead
-of assuming Feedback row order. No status reset or backlog cleanup is needed.
+New ingestion sets `application` atomically with routing; known unapplied
+predictions stay ordinary history. No status reset or backlog cleanup is needed.
 The former automatic-application URL redirects to this audit, and
 Workbench bookmarks redirect to the shared queue or informational Product detail.
 Apple queue/audit/list/detail parity is tracked separately in [#2654](https://github.com/nickysemenza/cubby/issues/2654).

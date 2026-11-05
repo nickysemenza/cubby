@@ -80,6 +80,11 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "Import findings retain the member scope.",
   },
+  "RunFinding.ledgerPartyId": {
+    code: "block-import-findings",
+    effect: "block",
+    description: "Import findings retain the member scope.",
+  },
   "MailboxCursor.ledgerPartyId": {
     code: "block-mailbox-cursor",
     effect: "block",
@@ -195,6 +200,11 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     description: "Import source identity prevents member merges.",
   },
   "AssessmentState.ledgerPartyId": {
+    code: "block-import-findings",
+    effect: "block",
+    description: "Import findings prevent member merges.",
+  },
+  "RunFinding.ledgerPartyId": {
     code: "block-import-findings",
     effect: "block",
     description: "Import findings prevent member merges.",

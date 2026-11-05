@@ -814,6 +814,29 @@ const SOURCE_FACTORIES = {
     }),
 
   "AssessmentState.ledgerPartyId": async (db, targetId) => {
+    const run = await mkRun(db);
+    return publishAssessment(
+      db,
+      {
+        publicationKey: uniq("ledger-party-recommendation"),
+        family: "recommendation",
+        subject: {
+          kind: "recommendation",
+          entity: "run",
+          recordId: run.id,
+          scope: "liveness-fixture",
+          candidateKey: uniq("candidate"),
+        },
+        judgment: { candidateKey: "liveness-fixture" },
+        fingerprint: null,
+        producer: null,
+        evidence: null,
+      },
+      { ledgerPartyId: parseEntityId("ledgerParty", targetId) },
+    );
+  },
+
+  "RunFinding.ledgerPartyId": async (db, targetId) => {
     // A finding's target is anchored on Entity, so it must name a real run.
     const run = await mkRun(db);
     return seedRunFinding(db, {

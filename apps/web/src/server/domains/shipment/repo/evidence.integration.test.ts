@@ -21,7 +21,7 @@ import {
   shipmentSourceCapture,
   shipmentSourcePackage,
   vendor,
-  assessmentState,
+  runFinding,
   expense,
   inventoryEntry,
   email,
@@ -337,11 +337,9 @@ describe("Shipment retained evidence", () => {
           .where(eq(shipment.shortcode, code))
       )[0],
     ).toMatchObject({ carrierId: betaId });
-    const findings = await getDb(ctx.db).select().from(assessmentState);
+    const findings = await getDb(ctx.db).select().from(runFinding);
     await recordShipmentEvidence(ctx.db, proof, ctx.actor);
-    expect(await getDb(ctx.db).select().from(assessmentState)).toEqual(
-      findings,
-    );
+    expect(await getDb(ctx.db).select().from(runFinding)).toEqual(findings);
     await setCarrierFixture(code, alphaId);
     const other = await recordShipmentEvidence(
       ctx.db,
@@ -680,12 +678,7 @@ describe("Shipment retained evidence", () => {
     expect(await getDb(ctx.db).select().from(shipmentObservation)).toHaveLength(
       1,
     );
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(assessmentState)
-        .where(eq(assessmentState.family, "run_finding")),
-    ).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(runFinding)).toHaveLength(1);
   });
 
   it("review regression: alias replay recovers package-level references when event numbers are absent", async () => {
@@ -2661,12 +2654,7 @@ describe("Shipment retained evidence", () => {
       },
     ]);
     const heldFindings = async () =>
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(assessmentState)
-          .where(eq(assessmentState.family, "run_finding"))
-      ).length;
+      (await getDb(ctx.db).select().from(runFinding)).length;
     expect(await heldFindings()).toBe(1);
 
     // Another member's package is not a candidate, and never refuses the tracked sibling.

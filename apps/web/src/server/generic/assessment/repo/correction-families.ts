@@ -58,21 +58,6 @@ export const correctionRepairFamilies = {
   statement_transaction: register(statementTransactionCorrectionRepair),
   transfer_pair: register(transferPairCorrectionRepair),
   image_description: register(imageDescriptionCorrectionRepair),
-  email_relevance: register(
-    heldAdapter(
-      "Email correction propagation requires current owned-original routing proof",
-    ),
-  ),
-  email_link: register(
-    heldAdapter(
-      "Email links require independent current Purchase identity evidence",
-    ),
-  ),
-  mail_import_outcome: register(
-    heldAdapter(
-      "Mail import outcome Feedback is history-only, not import repair authority",
-    ),
-  ),
   product_pair: register(
     heldAdapter(
       "Product merges require supported pair identity and survivor authority",

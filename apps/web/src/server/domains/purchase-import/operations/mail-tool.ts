@@ -1,7 +1,4 @@
-import {
-  assessmentSubjects,
-  mailImportOutcome,
-} from "@cubby/schemas/assessment";
+import { mailImportOutcome } from "@cubby/schemas/assessment";
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 /**
  * The public `mail` tool: read a member's retained Email and record what it
@@ -34,7 +31,7 @@ import {
 } from "@cubby/schemas/mailbox-research";
 import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
@@ -48,14 +45,12 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
-  assessment,
-  assessmentState,
   entityAttachment,
   ledgerParty,
   email as emailTable,
   orderMail,
   orderMailAttachment,
-  assessmentEmailLink,
+  emailPurchaseDecision,
   orderMailEvent,
   purchase,
   runOperation,
@@ -63,6 +58,7 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { readEmailFinancialAssociations } from "~/server/domains/email/repo/email-financial-associations";
+import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
 import {
   readEmailAcceptedSourceOrders,
   readEmailPurchaseAssociations,
@@ -84,7 +80,6 @@ import { learnAcceptedSender } from "~/server/domains/purchase-import/repo/sende
 import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { createAppError } from "~/server/errors/app-error";
 import { isSerializationFailure } from "~/server/errors/db-errors";
-import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { loadMailAttachmentOriginal } from "../repo/gmail/attachment-original";
@@ -110,8 +105,10 @@ import {
 import {
   importedMailJudgment,
   linkedMailJudgment,
-  publishMailImportOutcome,
-} from "../repo/mail-outcome/assessment";
+  mailOutcomeOfEmailSql,
+  mailOutcomeSnapshotFor,
+  storedMailOutcome,
+} from "../repo/mail-outcome/outcome";
 import { ingestGmailMessages } from "../service/gmail/ingest";
 import { prepareMailFinancialEvent } from "../service/mail-financial-event";
 import {
@@ -297,40 +294,32 @@ export async function readMailImportOutcomes(
       "No Email in this mailbox belongs to this member.",
     );
   const rows = await getDb(db)
-    .select({
-      assessmentId: assessment.id,
-      judgment: assessment.judgment,
-      producer: assessment.producer,
-      producerRun: runTable.shortcode,
-      subject: assessment.subject,
-      createdAt: assessment.createdAt,
-    })
-    .from(assessment)
-    .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
-    .leftJoin(runTable, eq(runTable.id, assessmentState.runId))
-    .where(
-      and(
-        eq(assessmentState.family, "mail_import_outcome"),
-        eq(assessmentState.entity, "email"),
-        eq(assessmentState.recordId, source.id),
-      ),
+    .select({ result: runOperation.result, producerRun: runTable.shortcode })
+    .from(runOperation)
+    .leftJoin(runTable, eq(runTable.id, runOperation.runId))
+    .where(mailOutcomeOfEmailSql(source.id))
+    .orderBy(
+      desc(sql`(${runOperation.result} #>> '{mailOutcome,createdAt}')`),
+      desc(sql`(${runOperation.result} #>> '{mailOutcome,id}')`),
     )
-    .orderBy(desc(assessment.createdAt), desc(assessment.id))
     .offset(input.offset)
     .limit(input.limit + 1);
   return mailImportOutcomesOut.parse({
-    items: rows.slice(0, input.limit).map((row) => ({
-      ...row,
-      producer: row.producer
-        ? {
-            ...row.producer,
-            runId: row.producer.runId ? row.producerRun : null,
-          }
-        : null,
-      checksum: assessmentSubjects.mail_import_outcome.parse(row.subject)
-        .checksum,
-      createdAt: row.createdAt.toISOString(),
-    })),
+    items: rows.slice(0, input.limit).map((row) => {
+      const { mailOutcome } = storedMailOutcome.parse(row.result);
+      return {
+        assessmentId: mailOutcome.id,
+        judgment: mailOutcome.judgment,
+        producer: mailOutcome.producer
+          ? {
+              ...mailOutcome.producer,
+              runId: mailOutcome.producer.runId ? row.producerRun : null,
+            }
+          : null,
+        checksum: mailOutcome.checksum,
+        createdAt: mailOutcome.createdAt,
+      };
+    }),
     nextOffset: rows.length > input.limit ? input.offset + input.limit : null,
   });
 }
@@ -608,17 +597,18 @@ async function linkOrderMail(
   // A member's dismissal of this Email for this Purchase, on any of its
   // events, wins over a later automatic or session link.
   const [dismissed] = await tx
-    .select({ id: assessmentEmailLink.id })
-    .from(assessmentEmailLink)
+    .select({ id: emailPurchaseDecision.id })
+    .from(emailPurchaseDecision)
     .innerJoin(
       orderMailEvent,
-      eq(orderMailEvent.id, assessmentEmailLink.eventId),
+      eq(orderMailEvent.id, emailPurchaseDecision.eventId),
     )
     .where(
       and(
         eq(orderMailEvent.orderMailId, input.mail.id),
-        eq(assessmentEmailLink.purchaseId, chosen.id),
-        eq(assessmentEmailLink.decision, "dismissed"),
+        eq(emailPurchaseDecision.purchaseId, chosen.id),
+        eq(emailPurchaseDecision.decision, "dismissed"),
+        eq(emailPurchaseDecision.active, true),
       ),
     )
     .limit(1);
@@ -630,12 +620,13 @@ async function linkOrderMail(
   // One accepted Purchase per event: an existing link elsewhere stays the
   // member's to change through review.
   const [other] = await tx
-    .select({ purchaseId: assessmentEmailLink.purchaseId })
-    .from(assessmentEmailLink)
+    .select({ purchaseId: emailPurchaseDecision.purchaseId })
+    .from(emailPurchaseDecision)
     .where(
       and(
-        eq(assessmentEmailLink.eventId, event.id),
-        eq(assessmentEmailLink.decision, "linked"),
+        eq(emailPurchaseDecision.eventId, event.id),
+        eq(emailPurchaseDecision.decision, "linked"),
+        eq(emailPurchaseDecision.active, true),
       ),
     )
     .limit(1);
@@ -819,12 +810,13 @@ export async function settleMail(
                   }
                 : { kind: "linked", event: "financial", purchases: [] },
         );
-      await publishMailImportOutcome(databaseForTransaction(tx), {
-        emailId,
+      const now = new Date();
+      const mailOutcome = await mailOutcomeSnapshotFor({
         runId: input.importRunId,
         checksum: input.mail.rawChecksum,
         judgment,
         ruleRevision: input.ruleRevision,
+        createdAt: now,
       });
       const fingerprint = await sha256Hex(
         JSON.stringify({
@@ -833,9 +825,10 @@ export async function settleMail(
           status: input.status,
           classification: input.classification ?? null,
           detail: input.detail,
+          // A distinct result is another retained outcome; a retry replays.
+          outcome: mailOutcome.fingerprint,
         }),
       );
-      const now = new Date();
       await tx
         .insert(runOperation)
         .values({
@@ -846,19 +839,24 @@ export async function settleMail(
           inputFingerprint: fingerprint,
           startedAt: now,
           completedAt: now,
-          result: runTargetOutcomeReceipt.parse({
-            target: {
-              entityKind: "email",
-              entityId: emailId,
-              workKey: input.mail.id,
-              state: input.status === "completed" ? "completed" : "unresolved",
-              outcome: input.status === "completed" ? "verified" : "ambiguous",
-              warning: input.status === "blocked" ? input.detail : null,
-              diff: null,
-              completedAt: now.toISOString(),
-              targetFingerprint: input.mail.rawChecksum,
-            },
-          }),
+          result: {
+            mailOutcome,
+            ...runTargetOutcomeReceipt.parse({
+              target: {
+                entityKind: "email",
+                entityId: emailId,
+                workKey: input.mail.id,
+                state:
+                  input.status === "completed" ? "completed" : "unresolved",
+                outcome:
+                  input.status === "completed" ? "verified" : "ambiguous",
+                warning: input.status === "blocked" ? input.detail : null,
+                diff: null,
+                completedAt: now.toISOString(),
+                targetFingerprint: input.mail.rawChecksum,
+              },
+            }),
+          },
         })
         .onConflictDoNothing({
           target: [runOperation.runId, runOperation.operationId],
@@ -1069,17 +1067,18 @@ export async function resolveMail(
           "The Email and a Purchase belong to different members.",
         );
       const [dismissed] = await getDb(tdb)
-        .select({ id: assessmentEmailLink.id })
-        .from(assessmentEmailLink)
+        .select({ id: emailPurchaseDecision.id })
+        .from(emailPurchaseDecision)
         .innerJoin(
           orderMailEvent,
-          eq(orderMailEvent.id, assessmentEmailLink.eventId),
+          eq(orderMailEvent.id, emailPurchaseDecision.eventId),
         )
         .where(
           and(
             eq(orderMailEvent.orderMailId, mail.id),
-            inArray(assessmentEmailLink.purchaseId, ids),
-            eq(assessmentEmailLink.decision, "dismissed"),
+            inArray(emailPurchaseDecision.purchaseId, ids),
+            eq(emailPurchaseDecision.decision, "dismissed"),
+            eq(emailPurchaseDecision.active, true),
           ),
         )
         .limit(1);
@@ -1139,19 +1138,20 @@ export async function resolveMail(
         // The reviewed refund set explains every refunded Purchase this
         // Email/checksum links, including links from earlier resolutions.
         const refunded = await getDb(tdb)
-          .selectDistinct({ purchaseId: assessmentEmailLink.purchaseId })
-          .from(assessmentEmailLink)
+          .selectDistinct({ purchaseId: emailPurchaseDecision.purchaseId })
+          .from(emailPurchaseDecision)
           .innerJoin(
             orderMailEvent,
-            eq(orderMailEvent.id, assessmentEmailLink.eventId),
+            eq(orderMailEvent.id, emailPurchaseDecision.eventId),
           )
           .where(
             and(
               eq(orderMailEvent.orderMailId, mail.id),
               eq(orderMailEvent.event, "refunded"),
               isNull(orderMailEvent.supersededAt),
-              eq(assessmentEmailLink.decision, "linked"),
-              eq(assessmentEmailLink.evidenceChecksum, input.checksum),
+              eq(emailPurchaseDecision.decision, "linked"),
+              eq(emailPurchaseDecision.active, true),
+              eq(emailPurchaseDecision.evidenceChecksum, input.checksum),
             ),
           );
         await reconcileMailRefundReview(

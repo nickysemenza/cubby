@@ -27,13 +27,12 @@ import {
   aiUsage,
   run,
   image,
-  feedback,
+  emailReview,
   imageProcessingOrphan,
 } from "~/server/db/schema";
 import { readEmailProtectingIntent } from "~/server/domains/purchase-import/repo/email-review-intent";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -179,8 +178,7 @@ describe("member-only exact original relevance correction", () => {
       await getDb(ctx.db).select().from(emailClassificationObservation)
     ).filter((row) => row.stage === "resolution");
     if (!resolution) throw new Error("Synthetic resolution missing");
-    const published = await ensureEmailAssessment(ctx.db, resolution.id);
-    expect(published.evidence).toMatchObject({
+    expect(resolution.publication).toMatchObject({
       originalCapture: {
         status: "incomplete",
         problem: { reason: "invalid_encoding" },
@@ -203,9 +201,8 @@ describe("member-only exact original relevance correction", () => {
       classificationVersion: "synthetic",
       model: "typesafe/jev",
     });
-    const prediction = await ensureEmailAssessment(ctx.db, observation.id);
     const review = {
-      assessmentId: prediction.id,
+      assessmentId: observation.id,
       operationId: "synthetic-prepared-review",
       verdict: "wrong" as const,
       intent: "apply" as const,
@@ -388,8 +385,8 @@ describe("member-only exact original relevance correction", () => {
     ).rejects.toThrow("Synthetic preparation unavailable");
     const events = await getDb(ctx.db)
       .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, f.review.assessmentId));
+      .from(emailReview)
+      .where(eq(emailReview.subjectId, f.review.assessmentId));
     expect(
       events.find((event) => event.operationId === f.review.operationId),
     ).toMatchObject({ intent: "apply", authority: "member", verdict: "wrong" });
@@ -435,8 +432,8 @@ describe("member-only exact original relevance correction", () => {
     const application = (
       await getDb(ctx.db)
         .select()
-        .from(feedback)
-        .where(eq(feedback.assessmentId, f.review.assessmentId))
+        .from(emailReview)
+        .where(eq(emailReview.subjectId, f.review.assessmentId))
     ).find(
       (event) =>
         event.operationId === `command-application:${f.review.operationId}`,
@@ -479,8 +476,8 @@ describe("member-only exact original relevance correction", () => {
     expect(f.put).toHaveBeenCalledTimes(1);
     const events = await getDb(ctx.db)
       .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, f.review.assessmentId));
+      .from(emailReview)
+      .where(eq(emailReview.subjectId, f.review.assessmentId));
     expect(
       events.filter(
         (event) =>
@@ -506,8 +503,8 @@ describe("member-only exact original relevance correction", () => {
     ).rejects.toBeInstanceOf(EmailCorrectionCleanupError);
     const events = await getDb(ctx.db)
       .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, f.review.assessmentId));
+      .from(emailReview)
+      .where(eq(emailReview.subjectId, f.review.assessmentId));
     expect(
       events.filter(
         (event) =>
@@ -737,10 +734,9 @@ describe("member-only exact original relevance correction", () => {
       classificationVersion: "synthetic",
       model: "typesafe/jev",
     });
-    const prediction = await ensureEmailAssessment(ctx.db, observation.id);
     expect(
       await reviewAssessment(ctx.db, kernelCtx(ctx), {
-        assessmentId: prediction.id,
+        assessmentId: observation.id,
         operationId: "synthetic-valid-relevance",
         verdict: "wrong",
         intent: "apply",
@@ -933,9 +929,7 @@ describe("member-only exact original relevance correction", () => {
         (prediction) => prediction.stage === "resolution",
       );
       if (!resolution) throw new Error("Synthetic resolution missing");
-      expect(
-        (await ensureEmailAssessment(ctx.db, resolution.id)).evidence,
-      ).toMatchObject({
+      expect(resolution.publication).toMatchObject({
         originalCapture: {
           status: "complete",
           binding: {

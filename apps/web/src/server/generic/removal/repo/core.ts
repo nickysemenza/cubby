@@ -62,6 +62,8 @@ import { inArray } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { dataExceptionRecord } from "~/server/db/schema";
+import { retireEmailDecisionTargetsTx } from "~/server/domains/email/repo/email-link-decision";
+import { retireRunFindingTargetsTx } from "~/server/domains/purchase-import/repo/run-finding";
 import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { retireAssessmentTargetsTx } from "~/server/generic/assessment/repo/assessment-state";
 import type { AuditEntryInput } from "~/server/generic/audit-log/repo/audit-log";
@@ -174,6 +176,8 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
   // Retirement covers every review family, including import findings: their
   // Assessments and Feedback stay as history.
   await retireAssessmentTargetsTx(tx, entity, [...ids]);
+  await retireRunFindingTargetsTx(tx, entity, [...ids]);
+  await retireEmailDecisionTargetsTx(tx, entity, [...ids]);
 
   // An exception is a decision about one entity's evidence (ADR 0006); it
   // goes with the entity rather than carrying onto a merge survivor.

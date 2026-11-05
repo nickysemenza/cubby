@@ -3,15 +3,14 @@ import {
   commitPurchaseImportInput,
   type ExtractedOrderCandidate,
 } from "@cubby/schemas/purchase-import";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb } from "~/server/db/helpers";
 import {
-  assessment,
-  assessmentState,
+  runOperation,
   expense,
   importPreparedOrder,
   importPreparedLine,
@@ -19,13 +18,13 @@ import {
   importSourceOrder,
   email as emailTable,
   orderMail,
-  assessmentEmailLink as orderMailCandidateDecision,
   orderMailEvent,
   product,
   purchase,
   user,
 } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { admitMailImport } from "../repo/mail-import-run";
@@ -292,15 +291,14 @@ describe("retained mail source associations", () => {
     const outcomes = () =>
       getDb(ctx.db)
         .select({
-          judgment: assessment.judgment,
-          active: assessmentState.active,
+          judgment: sql`${runOperation.result} #> '{mailOutcome,judgment}'`,
+          active: sql<boolean>`true`,
         })
-        .from(assessment)
-        .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+        .from(runOperation)
         .where(
           and(
-            eq(assessmentState.family, "mail_import_outcome"),
-            eq(assessmentState.runId, runId),
+            eq(runOperation.runId, runId),
+            sql`(${runOperation.result}->'mailOutcome') IS NOT NULL`,
           ),
         );
     const expected = [

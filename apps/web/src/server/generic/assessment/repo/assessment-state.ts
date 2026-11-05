@@ -1,4 +1,7 @@
-import { assessmentProjectionPatch } from "@cubby/schemas/assessment";
+import {
+  assessmentProjectionPatch,
+  retiredAssessmentFamilies,
+} from "@cubby/schemas/assessment";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
@@ -8,6 +11,7 @@ import {
   getTableColumns,
   inArray,
   isNotNull,
+  notInArray,
   or,
   is,
   sql,
@@ -29,7 +33,7 @@ import {
   feedback,
 } from "~/server/db/retained-tables";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
+import { jsonSnapshot } from "~/server/lib/canonical-json";
 
 /**
  * Versioned positional input deliberately avoids free-form JSON key ordering.
@@ -419,45 +423,20 @@ export async function retireAssessmentTargetsTx(
 ): Promise<void> {
   if (!entityIds.length) return;
   const ids = [...entityIds];
-  // A removed Email keeps its link review on the retained order event.
-  if (entityKind === "email")
-    await transitionAssessmentStates(
-      tx,
-      and(
-        eq(assessmentState.family, "email_link"),
-        eq(assessmentState.entity, "email"),
-        inArray(assessmentState.recordId, ids),
-      ),
-      (row) => ({
-        entity: "orderMailEvent",
-        recordId: z.object({ eventId: z.uuid() }).passthrough().parse(row.data)
-          .eventId,
-      }),
-      { kind: "target_removed" },
-    );
   await transitionAssessmentStates(
     tx,
-    or(
-      and(
-        eq(assessmentState.entity, entityKind),
-        or(
-          inArray(assessmentState.recordId, ids),
-          inArray(sql`${assessmentState.data}->>'otherId'`, ids),
-        ),
+    and(
+      notInArray(assessmentState.family, [...retiredAssessmentFamilies]),
+      eq(assessmentState.entity, entityKind),
+      or(
+        inArray(assessmentState.recordId, ids),
+        inArray(sql`${assessmentState.data}->>'otherId'`, ids),
       ),
-      entityKind === "purchase"
-        ? and(
-            eq(assessmentState.family, "email_link"),
-            inArray(sql`${assessmentState.data}->>'purchaseId'`, ids),
-          )
-        : undefined,
     ),
     retired,
     { kind: "target_removed" },
   );
 }
-
-const findingData = z.object({ kind: z.string() }).passthrough();
 
 /** Repoint only current projections onto a merge survivor; subjects never change. */
 export async function repointAssessmentTargetsTx(
@@ -467,7 +446,6 @@ export async function repointAssessmentTargetsTx(
   loserIds: readonly string[],
 ) {
   if (!loserIds.length) return;
-  const cause = { kind: "target_merged" };
   await transitionAssessmentStates(
     tx,
     and(
@@ -476,96 +454,6 @@ export async function repointAssessmentTargetsTx(
       eq(assessmentState.family, "field"),
     ),
     { recordId: keepId, status: "superseded", confirmedValue: null },
-    cause,
+    { kind: "target_merged" },
   );
-  // An open finding the survivor already carries for the same evidence is
-  // one finding; any other finding follows the survivor with its review.
-  const open = await tx
-    .select()
-    .from(assessmentState)
-    .where(
-      and(
-        eq(assessmentState.family, "run_finding"),
-        eq(assessmentState.entity, entity),
-        eq(assessmentState.recordId, keepId),
-        eq(assessmentState.active, true),
-        eq(assessmentState.status, "pending"),
-      ),
-    );
-  const openKey = (row: StateRow) =>
-    canonicalJson([
-      row.ledgerPartyId,
-      findingData.parse(row.data).kind,
-      row.fingerprint,
-    ]);
-  const survivorOpen = new Set(open.map(openKey));
-  await transitionAssessmentStates(
-    tx,
-    and(
-      eq(assessmentState.family, "run_finding"),
-      eq(assessmentState.entity, entity),
-      inArray(assessmentState.recordId, [...loserIds]),
-    ),
-    (row) => {
-      if (row.active && row.status === "pending") {
-        const key = openKey(row);
-        if (survivorOpen.has(key))
-          return { active: false, status: "superseded" };
-        survivorOpen.add(key);
-      }
-      return { recordId: keepId };
-    },
-    cause,
-  );
-  if (entity !== "purchase") return;
-  const rows = await tx
-    .select()
-    .from(assessmentState)
-    .where(
-      and(
-        eq(assessmentState.family, "email_link"),
-        eq(assessmentState.active, true),
-        inArray(sql`${assessmentState.data}->>'purchaseId'`, [
-          keepId,
-          ...loserIds,
-        ]),
-      ),
-    )
-    .orderBy(assessmentState.id)
-    .for("update");
-  const linkTarget = z
-    .object({
-      eventId: z.uuid(),
-      purchaseId: z.uuid(),
-      decision: z.enum(["linked", "dismissed"]),
-    })
-    .passthrough();
-  const events = new Map<string, StateRow[]>();
-  for (const row of rows) {
-    const data = linkTarget.parse(row.data);
-    events.set(data.eventId, [...(events.get(data.eventId) ?? []), row]);
-  }
-  for (const values of events.values()) {
-    const winner =
-      values.find((row) => linkTarget.parse(row.data).decision === "linked") ??
-      values.find((row) => linkTarget.parse(row.data).purchaseId === keepId) ??
-      values[0]!;
-    await transitionAssessmentStates(
-      tx,
-      inArray(
-        assessmentState.id,
-        values.map((row) => row.id),
-      ),
-      (row) =>
-        row.id === winner.id
-          ? {
-              data: {
-                ...linkTarget.parse(row.data),
-                purchaseId: keepId,
-              },
-            }
-          : { active: false, status: "superseded" },
-      cause,
-    );
-  }
 }

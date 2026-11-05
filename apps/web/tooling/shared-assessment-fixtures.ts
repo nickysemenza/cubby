@@ -1,14 +1,15 @@
-import { assessmentJudgments } from "@cubby/schemas/assessment";
 import { randomUUID } from "node:crypto";
 
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { feedback } from "~/server/db/schema";
+import {
+  emailClassificationObservation,
+  emailReview,
+} from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
-import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
-import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
-import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
+import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
+import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
 
 type EmailLinkDecision = Omit<
   Parameters<typeof publishEmailLinkDecision>[1],
@@ -17,11 +18,12 @@ type EmailLinkDecision = Omit<
   proposedBy?: Parameters<typeof publishEmailLinkDecision>[1]["proposedBy"];
 };
 
-export async function listFeedbackByKind(db: Database, kind: string) {
+/** Retained Email reviews of one recorded metadata kind. */
+export async function listEmailReviewsByKind(db: Database, kind: string) {
   return getDb(db)
     .select()
-    .from(feedback)
-    .where(sql`${feedback.metadata} @> ${JSON.stringify({ kind })}::jsonb`);
+    .from(emailReview)
+    .where(sql`${emailReview.metadata} @> ${JSON.stringify({ kind })}::jsonb`);
 }
 
 /** Seed a real shared Email link decision for integration-test setup. */
@@ -35,7 +37,7 @@ export async function seedEmailLinkDecision(
   return publishEmailLinkDecision(db, { ...input, proposedBy }, authority);
 }
 
-/** Replace the retired label fixture with member Feedback on its Assessment. */
+/** A member's label on a retained prediction. */
 export async function seedEmailClassificationFeedback(
   db: Database,
   input: {
@@ -43,28 +45,42 @@ export async function seedEmailClassificationFeedback(
     classification: "related" | "unrelated" | "uncertain";
     reason: string | null;
     actorUserId: string | null;
-    authority?: "member" | "evaluation";
+    authority?: "member" | "automatic";
   },
 ) {
-  const prediction = await ensureEmailAssessment(db, input.predictionId);
-  const predicted = assessmentJudgments.email_relevance.parse(
-    prediction.judgment,
-  ).classification;
+  const [prediction] = await getDb(db)
+    .select()
+    .from(emailClassificationObservation)
+    .where(eq(emailClassificationObservation.id, input.predictionId))
+    .limit(1);
+  if (!prediction) throw new Error("Frozen Email prediction not found");
   const authority = input.authority ?? "member";
-  return recordFeedback(db, {
-    assessmentId: prediction.id,
+  return appendEmailReview(db, {
+    family: "email_relevance",
+    subjectId: prediction.id,
+    emailId: prediction.emailId,
+    originalId: null,
+    checksum: prediction.checksum,
+    classification: input.classification,
     operationId: `email-classification-review:${input.predictionId}:${randomUUID()}`,
     verdict:
       input.classification === "uncertain"
         ? "uncertain"
-        : input.classification === predicted
+        : input.classification === prediction.classification
           ? "correct"
           : "wrong",
     correction: { present: true, value: input.classification },
     reason: input.reason,
-    intent: authority === "evaluation" ? "history" : "apply",
+    intent: "apply",
     authority,
     actorUserId: input.actorUserId,
+    subject: {
+      kind: "email_relevance",
+      entity: "email",
+      recordId: prediction.emailId,
+      checksum: prediction.checksum,
+      observationId: prediction.id,
+    },
     metadata: {
       kind: "email_classification_review",
       predictionId: input.predictionId,

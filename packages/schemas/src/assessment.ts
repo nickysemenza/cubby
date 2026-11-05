@@ -42,6 +42,20 @@ export const assessmentFamily = z.enum([
   "run_finding",
   "evaluation_sample",
 ]);
+/**
+ * Families whose decisions live with their domain owners: Assessment, State and
+ * Feedback keep only their retained history and refuse new rows.
+ */
+export const mailDecisionFamily = z.enum([
+  "email_relevance",
+  "email_link",
+  "mail_import_outcome",
+]);
+export type MailDecisionFamily = z.infer<typeof mailDecisionFamily>;
+export const retiredAssessmentFamilies = [
+  ...mailDecisionFamily.options,
+  "run_finding",
+] as const;
 export const feedbackVerdict = z.enum([
   "correct",
   "wrong",

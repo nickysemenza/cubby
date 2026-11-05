@@ -757,6 +757,11 @@ A preference to stop presenting a candidate, without asserting whether the
 underlying judgment is correct. Confirming distinct Products is Feedback,
 not a Dismissal.
 
+**Email review**:
+Feedback about Email: a member's relevance label, a relevance resolution, a
+link decision or a grade of a mail import outcome. Email reviews are retained
+with the Email they judged and decide whether unattended work may reopen it.
+
 **Identity conflict**:
 Evidence that assigns incompatible identities to the same supposed variant,
 such as a shared exact identifier with conflicting verified sizes or colors.

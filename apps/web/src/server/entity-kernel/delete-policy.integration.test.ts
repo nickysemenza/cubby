@@ -105,6 +105,7 @@ import {
   photoRunImage,
   sourceTransactionRecord,
 } from "~/server/db/schema";
+import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
 import { attachExistingImageToEntity } from "~/server/domains/image/repo/image";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import {
@@ -131,7 +132,6 @@ import {
 } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
-import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";

@@ -23,7 +23,8 @@ afterEach(() => {
     );
 });
 
-function fixture() {
+function fixture(failure?: { text: string; code: string; times: number }) {
+  let failures = failure?.times ?? 0;
   const migrationsFolder = mkdtempSync(
     join(tmpdir(), "cubby-migration-boundary-"),
   );
@@ -66,6 +67,12 @@ function fixture() {
   vi.spyOn(client, "query").mockImplementation(async (...args: unknown[]) => {
     const query = z.object({ text: z.string() }).parse(args[0]);
     const text = query.text.trim();
+    if (failure?.text === text && failures > 0) {
+      failures -= 1;
+      throw Object.assign(new Error("Synthetic failure"), {
+        code: failure.code,
+      });
+    }
     let rows: object[] = [];
     if (text.includes("to_regclass")) rows = [{ exists: applied.length > 0 }];
     else if (text.includes("FROM pg_class")) rows = [{ count: 0 }];
@@ -99,6 +106,44 @@ it("applies every pending predecessor through the exact boundary without executi
     "SELECT 'synthetic_base';",
     "SELECT 'synthetic_expand';",
   ]);
+});
+
+it.each(["55P03", "40P01"])(
+  "rolls back and retries lock contention %s across the pending series",
+  async (code) => {
+    const failed = "SELECT 'synthetic_contract';";
+    const state = fixture({ text: failed, code, times: 1 });
+    await migrateDatabase(state.db, {
+      migrationsFolder: state.migrationsFolder,
+      lockRetryDelayMs: 0,
+    });
+    expect(state.writes.some((text) => /^rollback/i.test(text))).toBe(true);
+    // The whole pending series repeats after the rollback, not just its tail.
+    expect(state.executed).toEqual([
+      "SELECT 'synthetic_expand';",
+      "SELECT 'synthetic_expand';",
+      failed,
+    ]);
+  },
+);
+
+it("fails at once on any other migration error, and bounds lock retries", async () => {
+  const attempts = async (code: string) => {
+    const state = fixture({
+      text: "SELECT 'synthetic_expand';",
+      code,
+      times: Number.POSITIVE_INFINITY,
+    });
+    await expect(
+      migrateDatabase(state.db, {
+        migrationsFolder: state.migrationsFolder,
+        lockRetryDelayMs: 0,
+      }),
+    ).rejects.toThrow("Failed query");
+    return state.writes.filter((text) => /^rollback/i.test(text)).length;
+  };
+  expect(await attempts("23505")).toBe(1);
+  expect(await attempts("55P03")).toBe(6);
 });
 
 it("keeps the unbounded runner applying all pending migrations after the applied prefix", async () => {

@@ -1605,7 +1605,7 @@ export default defineEntity(
     r
       .derived("email", "many", "vendorId", [
         "ImportSourceOrder",
-        "AssessmentState",
+        "EmailPurchaseDecision",
         "OrderMailEvent",
       ])
       .named("emails", "Emails", {

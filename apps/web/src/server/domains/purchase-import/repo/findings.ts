@@ -34,16 +34,10 @@ import {
 import { isEqual } from "es-toolkit";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import {
-  databaseForTransaction,
-  getDb,
-  notDeleted,
-  withTransaction,
-} from "~/server/db/helpers";
+import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   expense,
   auditLog,
-  assessmentState,
   expenseAttribution,
   inventoryEntry,
   ledgerParty,
@@ -51,14 +45,13 @@ import {
   orderMailEvent,
   product,
   purchase,
+  runFinding,
 } from "~/server/db/schema";
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
 import { receivableProductIds } from "~/server/domains/inventory/repo/stock-tracking";
 import { decideLineWrite } from "~/server/domains/purchase-import/repo/writer-policy";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { createAppError } from "~/server/errors/app-error";
-import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
-import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
@@ -73,8 +66,8 @@ import { findingHasExpired } from "./finding-expiry";
 import { commitSourceOrderReconciliation } from "./reconciliation";
 import { lockFindingSettlement } from "./reconciliation-state";
 import {
-  isRunFinding,
   publishRunFinding,
+  resolveRunFindingRow,
   runFindingColumns,
   runFindingStatus,
   runFindingStatusSql,
@@ -526,18 +519,18 @@ export async function resolveRunFinding(
         entityKind: runFindingColumns.entityKind,
         entityId: runFindingColumns.entityId,
       })
-      .from(assessmentState)
+      .from(runFinding)
       .innerJoin(
         ledgerParty,
         and(
-          eq(ledgerParty.id, assessmentState.ledgerPartyId),
+          eq(ledgerParty.id, runFinding.ledgerPartyId),
           eq(ledgerParty.userId, actor.userId),
           notDeleted(ledgerParty),
         ),
       )
-      .where(and(isRunFinding, eq(assessmentState.id, input.id)))
+      .where(eq(runFinding.id, input.id))
       .limit(1)
-      .for("update", { of: assessmentState });
+      .for("update", { of: runFinding });
     if (!finding) throw new Error("Import finding not found for this member.");
     await assertFindingOwner(tx, actor, finding.ledgerPartyId);
     if (finding.status !== runFindingStatus.enum.open) {
@@ -592,21 +585,12 @@ export async function resolveRunFinding(
       }
     }
     const applied = input.action === "apply";
-    // The member's decision is the Feedback; the current row follows it.
-    const decision = await recordFeedback(databaseForTransaction(tx), {
-      assessmentId: finding.id,
-      operationId: "resolution",
+    await resolveRunFindingRow(tx, finding.id, {
       verdict: applied ? "correct" : "dismissed",
       intent: applied ? "apply" : "history",
-      authority: "member",
       actorUserId: actor.userId,
+      status: applied ? "applied" : "rejected",
     });
-    await transitionAssessmentState(
-      tx,
-      finding.id,
-      { status: applied ? "applied" : "rejected" },
-      { kind: "member_review", feedbackId: decision.id },
-    );
     return resolveRunFindingOut.parse({
       id: finding.id,
       status: applied
@@ -633,9 +617,8 @@ export async function resolveRunFinding(
  * so it stays correct regardless of how many partial receives happened first.
  */
 const openArrivedFinding = and(
-  isRunFinding,
-  eq(assessmentState.entity, "purchase"),
-  sql`${runFindingColumns.kind} = ${"arrived"}`,
+  eq(runFinding.entityKind, "purchase"),
+  eq(runFinding.kind, "arrived"),
   sql`${runFindingStatusSql} = ${runFindingStatus.enum.open}`,
 );
 
@@ -647,11 +630,11 @@ export async function settleArrivedFindingsForProduct(
 ) {
   const purchases = await getDb(db)
     .selectDistinct({ id: runFindingColumns.entityId })
-    .from(assessmentState)
+    .from(runFinding)
     .innerJoin(
       expense,
       and(
-        eq(expense.purchaseId, assessmentState.recordId),
+        eq(expense.purchaseId, runFinding.entityId),
         eq(expense.productId, productId),
         notDeleted(expense),
       ),
@@ -668,20 +651,18 @@ export async function resolveArrivedFindingsForPurchase(
 ): Promise<{ resolved: number }> {
   return withTransaction(db, async (tx) => {
     const openFindings = await tx
-      .select({ id: assessmentState.id })
-      .from(assessmentState)
+      .select({ id: runFinding.id })
+      .from(runFinding)
       .innerJoin(
         ledgerParty,
         and(
-          eq(ledgerParty.id, assessmentState.ledgerPartyId),
+          eq(ledgerParty.id, runFinding.ledgerPartyId),
           eq(ledgerParty.userId, actor.userId),
           notDeleted(ledgerParty),
         ),
       )
-      .where(
-        and(openArrivedFinding, eq(assessmentState.recordId, input.purchaseId)),
-      )
-      .for("update", { of: assessmentState });
+      .where(and(openArrivedFinding, eq(runFinding.entityId, input.purchaseId)))
+      .for("update", { of: runFinding });
     if (openFindings.length === 0) return { resolved: 0 };
 
     const productLines = await tx
@@ -722,23 +703,14 @@ export async function resolveArrivedFindingsForPurchase(
     const ids = openFindings.map((finding) => finding.id);
     // Receiving is the member's act; each prompt records that member as its
     // resolver and closes as the consequence.
-    for (const id of ids) {
-      const decision = await recordFeedback(databaseForTransaction(tx), {
-        assessmentId: id,
-        operationId: "resolution",
+    for (const id of ids)
+      await resolveRunFindingRow(tx, id, {
         verdict: "correct",
         intent: "apply",
-        authority: "member",
         actorUserId: actor.userId,
         metadata: { kind: "arrival_received" },
+        status: "applied",
       });
-      await transitionAssessmentState(
-        tx,
-        id,
-        { status: "applied" },
-        { kind: "arrival_received", feedbackId: decision.id },
-      );
-    }
     return { resolved: ids.length };
   });
 }

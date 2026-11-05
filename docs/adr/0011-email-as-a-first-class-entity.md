@@ -317,11 +317,34 @@ Observation reuse compares both evidence components, including their absence.
 Changed or newly missing proof creates a new observation without modifying the
 previous Assessment. No historical capture is inferred or backfilled.
 
+### Decisions and reviews have Email owners
+
+`EmailPurchaseDecision` holds an event's link or dismissal of one Purchase: one
+active row per event and Purchase, and at most one active `linked` row per event.
+Its writer holds the event's advisory and row locks, refuses stale evidence and
+repeats nothing on an identical retry. Removing an Email clears `emailId` and
+leaves the decision on its retained event; removing a Purchase retires its
+decisions; merging Purchases keeps the event's linked decision, then the
+survivor's own.
+
+`EmailReview` is the append-only record of member labels, resolutions, link
+decisions and connection reviews. It retains each retained subject and checksum,
+keeps an explicit JSON null correction distinct from no correction, and owns
+`emailHasProtectingIntentSql`, `readEmailProtectingIntent`, the member
+classification and review conflict. A review of an Email/Purchase connection
+keeps its Feedback id as its EmailReview id, so one review has one identity.
+`email_relevance` predictions are `EmailClassificationObservation` rows, whose
+`application` records whether routing used them. Their `publication` holds the
+original and logical input proof. A mail import's frozen result sits on the
+Email's `target_outcome` RunOperation as `mailOutcome`, and its grades are
+EmailReview rows. Every carried row kept its old Assessment or Feedback id, and
+a stored `assessment.review` handle resolves to its current owner.
+
 ### Retained review frontier
 
 A new shared member Email relevance/link review (including an Email/Purchase
 connection review) retains a system-history frontier receipt in the same
-transaction as its command Feedback. It records sorted retained protecting event
+transaction as its command review. It records sorted retained protecting event
 handles across checksums and superseded subjects. Direct resolutions and actual
 link decisions protect intent; application receipts and model observations do
 not become new member commands. Connection endpoints require retained proof.
@@ -350,12 +373,12 @@ source/routing snapshot fence used by Gmail evidence publication is rechecked
 after retrieval and under publication locks. A newer same-original routing
 publication makes older preparation stale even when the reviewed checksum and
 account identity still match. This does not establish a complete member-intent
-frontier: Feedback-only intent changes and routing ABA protection still require
+frontier: review-only intent changes and routing ABA protection still require
 the separate ownership contract.
 
-Shared review preserves validation → durable member command Feedback → canonical
+Shared review preserves validation → durable member command review → canonical
 replay → preparation → transactional replay/publication. A preparation failure
-retains Feedback and raw retrieval diagnostics without an application receipt or
+retains the review and raw retrieval diagnostics without an application receipt or
 routing change. A successful application replays without consulting Gmail; a
 concurrent successful receipt can also settle an invocation whose preparation
 failed, provided cleanup succeeded. Cleanup failures cannot be hidden by a

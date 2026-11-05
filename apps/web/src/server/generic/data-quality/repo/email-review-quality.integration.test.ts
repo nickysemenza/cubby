@@ -2,14 +2,16 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { emailClassificationObservation, feedback } from "~/server/db/schema";
-import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
+import {
+  emailClassificationObservation,
+  emailReview,
+} from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { emailChecks } from "./checks/email";
 
-// Current checksum, owner authority and immutable Assessment lineage decide
-// whether member review satisfies the stored relevance check.
+// Current checksum and owner authority decide whether member review satisfies
+// the stored relevance check.
 describe("Email review quality", () => {
   const ctx = withTestDb();
 
@@ -25,7 +27,7 @@ describe("Email review quality", () => {
       "uncertain-correction",
       "missing-correction",
       "foreign-reviewer",
-      "evaluation",
+      "automatic",
       "stale",
       "older-valid",
       "metadata-mismatch",
@@ -53,12 +55,27 @@ describe("Email review quality", () => {
         })
         .returning();
       if (!prediction) throw new Error("Synthetic prediction missing");
-      const assessment = await ensureEmailAssessment(ctx.db, prediction.id);
+      const review = {
+        family: "email_relevance",
+        subjectId: prediction.id,
+        emailId: message.id,
+        checksum: prediction.checksum,
+        subject: { kind: "email_relevance" },
+        intent: "history",
+      } as const;
       await getDb(ctx.db)
-        .insert(feedback)
+        .insert(emailReview)
         .values({
-          assessmentId: assessment.id,
+          ...review,
           operationId: `synthetic-review-${scenario}`,
+          classification:
+            scenario === "missing-correction"
+              ? null
+              : scenario === "corrected" || scenario === "resolution"
+                ? "unrelated"
+                : scenario === "uncertain-correction"
+                  ? "uncertain"
+                  : "related",
           verdict:
             scenario === "missing-correction" ||
             scenario === "corrected" ||
@@ -77,8 +94,7 @@ describe("Email review quality", () => {
                       : "uncertain",
                 }
               : { present: false },
-          intent: "history",
-          authority: scenario === "evaluation" ? "evaluation" : "member",
+          authority: scenario === "automatic" ? "automatic" : "member",
           actorUserId:
             scenario === "foreign-reviewer"
               ? "synthetic-foreign-reviewer"
@@ -91,13 +107,12 @@ describe("Email review quality", () => {
         });
       if (scenario === "older-valid")
         await getDb(ctx.db)
-          .insert(feedback)
+          .insert(emailReview)
           .values({
-            assessmentId: assessment.id,
+            ...review,
             operationId: "synthetic-newer-invalid",
             verdict: "wrong",
             correction: { present: false },
-            intent: "history",
             authority: "member",
             actorUserId: ctx.actor.userId,
             createdAt: new Date("2026-01-02T00:00:00Z"),
@@ -106,7 +121,7 @@ describe("Email review quality", () => {
       const gap = [
         "missing-correction",
         "foreign-reviewer",
-        "evaluation",
+        "automatic",
         "stale",
       ].includes(scenario);
       expect({

@@ -110,8 +110,7 @@ pending: nothing here starts Product research.
    Email the classifier confidently called unrelated (stage `rule`,
    `decision` or `model`, in a Run the member did not select, from a sender
    that proves no Vendor) resolves
-   `unrelated` (its resolution observation carries the revision, so its
-   `email_relevance` Assessment's producer is that rule). Everything else,
+   `unrelated` (its resolution observation carries the revision). Everything else,
    an incomplete or paged compact read, and any refusal `purchase_import.mail_resolve`
    returns, goes to the coordinator. A rule
    link skips the `mail-attribution` judgment: on the owner's own account it

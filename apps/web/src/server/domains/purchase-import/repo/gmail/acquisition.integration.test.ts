@@ -14,7 +14,6 @@ import {
   orderMail,
   orderMailAttachment,
   orderMailEvent,
-  assessmentEmailLink as orderMailCandidateDecision,
   importSourceClaim,
   importSourceOrder,
   emailClassificationObservation,
@@ -22,6 +21,7 @@ import {
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
 import { ingestGmailMessages } from "../../service/gmail/ingest";

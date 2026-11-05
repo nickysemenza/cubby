@@ -16,7 +16,7 @@ import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
   aiUsage,
-  assessmentState,
+  runFinding,
   oauthRefreshToken,
   photoGroupProposal,
   run as runTable,
@@ -28,10 +28,7 @@ import {
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/domains/purchase-import/repo/agent-auth";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
-import {
-  isRunFinding,
-  runFindingColumns,
-} from "~/server/domains/purchase-import/repo/run-finding";
+import { runFindingColumns } from "~/server/domains/purchase-import/repo/run-finding";
 
 type Db = TestDbContext["db"];
 
@@ -139,8 +136,8 @@ export async function workerdDiagnostic(
           kind: runFindingColumns.kind,
           summary: runFindingColumns.summary,
         })
-        .from(assessmentState)
-        .where(and(isRunFinding, eq(assessmentState.runId, id))),
+        .from(runFinding)
+        .where(eq(runFinding.runId, id)),
       getDb(db)
         .select({ history: runTable.progressHistory })
         .from(runTable)

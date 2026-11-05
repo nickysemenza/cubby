@@ -1,5 +1,4 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { assessmentFamily } from "@cubby/schemas/assessment";
 import { inventoryReceiveExpenseInput } from "@cubby/schemas/inventory";
 import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -236,7 +235,7 @@ describe("atomic reviewed Expense receiving", () => {
             );
       const before = await rows();
       await getDb(ctx.db).execute(
-        sql`ALTER TABLE "AssessmentState" ADD CONSTRAINT receiving_fixture_refuse_apply CHECK (family <> ${sql.raw(`'${assessmentFamily.enum.run_finding}'`)} OR status <> ${sql.raw(`'${suggestionStatus.enum.applied}'`)})`,
+        sql`ALTER TABLE "RunFinding" ADD CONSTRAINT receiving_fixture_refuse_apply CHECK (status <> ${sql.raw(`'${suggestionStatus.enum.applied}'`)})`,
       );
       const action =
         kind === "create"
@@ -262,7 +261,7 @@ describe("atomic reviewed Expense receiving", () => {
         expect(await findingState(f.finding.id)).toBe("open");
       } finally {
         await getDb(ctx.db).execute(
-          sql`ALTER TABLE "AssessmentState" DROP CONSTRAINT receiving_fixture_refuse_apply`,
+          sql`ALTER TABLE "RunFinding" DROP CONSTRAINT receiving_fixture_refuse_apply`,
         );
       }
     },

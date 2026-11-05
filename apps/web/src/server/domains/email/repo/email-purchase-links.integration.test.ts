@@ -1,8 +1,5 @@
 import type { EmailFilters } from "@cubby/schemas/email";
-import {
-  emailPurchaseLink,
-  emailPurchaseLinkState,
-} from "@cubby/schemas/email-fields";
+import { emailPurchaseLink } from "@cubby/schemas/email-fields";
 import { emailRelationshipResult } from "@cubby/schemas/email-relationship-facts";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
@@ -41,10 +38,8 @@ import {
   email as emailTable,
   orderMail,
   orderMailAttachment,
-  assessmentEmailLink as orderMailCandidateDecision,
-  assessmentState,
-  assessment,
-  feedback,
+  emailPurchaseDecision,
+  emailReview,
   orderMailEvent,
   purchase as purchaseTable,
   run as runTable,
@@ -65,10 +60,7 @@ import {
 } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
-import { automaticApplicationRule } from "~/server/generic/assessment/repo/assessment";
-import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { touchingAssessmentIds } from "~/server/generic/assessment/repo/review-families";
 import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
@@ -84,6 +76,7 @@ import {
   drainDerivedPage,
   drainStoredDerived,
 } from "~/server/testing/background-queue";
+import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 import {
   callMcpTool,
   kernelRequestContext,
@@ -1148,153 +1141,6 @@ describe("Email Purchase links", () => {
     }
   });
 
-  // The view exposes UUID event IDs. Its lookup must not scan every active
-  // decision through the separate text-key uniqueness indexes.
-  it("bounds UUID event lookups across reviewed Email links", async () => {
-    const f = await retainedReviewFixture();
-    const prediction = await seedEmailLinkDecision(ctx.db, {
-      eventId: f.event.id,
-      purchaseId: f.purchase.id,
-      decision: "linked",
-      evidenceChecksum: f.checksum,
-      decidedByUserId: ctx.actor.userId,
-      proposedBy: "heuristic",
-    });
-    const [history] = await getDb(ctx.db)
-      .select()
-      .from(assessment)
-      .where(eq(assessment.id, prediction.id));
-    const [state] = await getDb(ctx.db)
-      .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.id, prediction.id));
-    if (!history || !state) throw new Error("Synthetic link decision missing");
-    const events = await getDb(ctx.db)
-      .insert(orderMailEvent)
-      .values(
-        Array.from({ length: 512 }, (_, i) => ({
-          orderMailId: f.source.id,
-          event: "placed" as const,
-          orderId: `SYNTHETIC-INDEX-${i}`,
-          sourceKey: `synthetic-index-event-${i}`,
-        })),
-      )
-      .returning({ id: orderMailEvent.id });
-    const copies = events.map((event) => ({ event, id: crypto.randomUUID() }));
-    await getDb(ctx.db)
-      .insert(assessment)
-      .values(
-        copies.map(({ event, id }) => ({
-          ...history,
-          id,
-          publicationKey: `synthetic-index-link:${event.id}`,
-          subject: { ...history.subject, eventId: event.id },
-        })),
-      );
-    await getDb(ctx.db)
-      .insert(assessmentState)
-      .values(
-        copies.map(({ event, id }) => ({
-          ...state,
-          id,
-          data: {
-            eventId: event.id,
-            purchaseId: f.purchase.id,
-            decision: "linked",
-            evidenceChecksum: f.checksum,
-            decidedByUserId: ctx.actor.userId,
-            proposedBy: "member",
-          },
-        })),
-      );
-    await getDb(ctx.db).execute(sql`ANALYZE "AssessmentState"`);
-    const statement = sql`SELECT "purchaseId" FROM "AssessmentEmailLink"
-      WHERE "eventId" = ${f.event.id}::uuid AND decision = ${emailPurchaseLinkState.enum.linked}`;
-    expect((await getDb(ctx.db).execute(statement)).rows).toEqual([
-      { purchaseId: f.purchase.id },
-    ]);
-    const result = await getDb(ctx.db).execute(
-      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
-    );
-    const nodeSchema = z.object({
-      "Relation Name": z.string().optional(),
-      "Actual Rows": z.number().default(0),
-      "Actual Loops": z.number().default(0),
-      "Rows Removed by Filter": z.number().default(0),
-      get Plans() {
-        return z.array(nodeSchema).optional();
-      },
-    });
-    const plans = z
-      .array(
-        z.object({ "QUERY PLAN": z.array(z.object({ Plan: nodeSchema })) }),
-      )
-      .parse(result.rows);
-    let examined = 0;
-    const visit = (node: z.infer<typeof nodeSchema>) => {
-      if (node["Relation Name"] === "AssessmentState")
-        examined +=
-          (node["Actual Rows"] + node["Rows Removed by Filter"]) *
-          node["Actual Loops"];
-      node.Plans?.forEach(visit);
-    };
-    for (const row of plans)
-      row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
-    expect(examined).toBeLessThan(10);
-
-    const [identity] = await getDb(ctx.db)
-      .select({ id: emailTable.id })
-      .from(emailTable)
-      .where(eq(emailTable.shortcode, f.email));
-    if (!identity) throw new Error("Synthetic Email identity missing");
-    const touchesEmail = () =>
-      touchingAssessmentIds(ctx.db, {
-        records: [{ entity: "email", id: identity.id, code: f.email }],
-        eligibility: {
-          kind: "automatic",
-          family: "email_link",
-          appliedRule: automaticApplicationRule,
-        },
-      });
-    for (const [recordId, expected] of [
-      [identity.id, true],
-      [undefined, true],
-      ["", false],
-      [crypto.randomUUID(), false],
-    ] as const) {
-      await getDb(ctx.db)
-        .update(assessment)
-        .set({
-          subject: sql`${JSON.stringify({ ...history.subject, originalId: f.source.id, recordId })}::jsonb`,
-        })
-        .where(eq(assessment.id, prediction.id));
-      expect((await touchesEmail())?.has(prediction.id)).toBe(expected);
-    }
-    await getDb(ctx.db)
-      .update(assessment)
-      .set({
-        subject: sql`${JSON.stringify({ ...history.subject, originalId: "synthetic-invalid-original", recordId: undefined })}::jsonb`,
-      })
-      .where(eq(assessment.id, prediction.id));
-    expect((await touchesEmail())?.has(prediction.id)).toBe(false);
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ deletedAt: new Date() })
-      .where(eq(emailTable.id, identity.id));
-    for (const [recordId, expected] of [
-      [undefined, false],
-      [identity.id, true],
-    ] as const) {
-      await getDb(ctx.db)
-        .update(assessment)
-        .set({
-          subject: sql`${JSON.stringify({ ...history.subject, originalId: f.source.id, recordId })}::jsonb`,
-        })
-        .where(eq(assessment.id, prediction.id));
-      expect((await touchesEmail())?.has(prediction.id)).toBe(expected);
-    }
-  });
-
   // A boolean link check must stop at accepted evidence instead of reading and
   // deduplicating every accepted order before it can return true.
   it("bounds link existence work when one Email has many accepted orders", async () => {
@@ -1462,7 +1308,10 @@ describe("Email Purchase links", () => {
     };
     const first = await seedEmailLinkDecision(ctx.db, input);
     expect((await seedEmailLinkDecision(ctx.db, input)).id).toBe(first.id);
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(1);
+    expect(
+      await getDb(ctx.db).select().from(emailPurchaseDecision),
+    ).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(emailReview)).toHaveLength(1);
   });
   it("refuses to republish authority on a superseded retained event", async () => {
     const f = await retainedReviewFixture();
@@ -1483,7 +1332,7 @@ describe("Email Purchase links", () => {
     expect(
       await getDb(ctx.db).select().from(orderMailCandidateDecision),
     ).toHaveLength(1);
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(emailReview)).toHaveLength(1);
   });
   it("retains a fresh historical decision when a linked event returns to a prior Purchase", async () => {
     const f = await retainedReviewFixture();
@@ -1502,7 +1351,9 @@ describe("Email Purchase links", () => {
     await seedEmailLinkDecision(ctx.db, { ...input, purchaseId: other.id });
     const last = await seedEmailLinkDecision(ctx.db, input);
     expect(last.id).not.toBe(first.id);
-    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(3);
+    expect(
+      await getDb(ctx.db).select().from(emailPurchaseDecision),
+    ).toHaveLength(3);
   });
   // Shared review must preserve the original decision, apply an explicit typed
   // correction to one event only, and use repointed current Purchase targets.
@@ -1533,21 +1384,22 @@ describe("Email Purchase links", () => {
           : { present: false as const },
       };
       const first = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
-      const history = await getDb(ctx.db).select().from(feedback);
+      const history = await getDb(ctx.db).select().from(emailReview);
       expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
         first,
       );
-      expect(await getDb(ctx.db).select().from(feedback)).toEqual(history);
+      expect(await getDb(ctx.db).select().from(emailReview)).toEqual(history);
       const [current] = await getDb(ctx.db)
         .select()
         .from(orderMailCandidateDecision)
         .where(eq(orderMailCandidateDecision.eventId, f.event.id));
       expect(current?.decision).toBe(expected);
       expect(
-        (await getDb(ctx.db).select().from(assessment)).find(
-          (row) => row.id === prediction.id,
-        )?.judgment,
-      ).toEqual({ decision: original });
+        (await getDb(ctx.db).select().from(emailReview)).find(
+          (row) =>
+            row.subjectId === prediction.id && row.operationId === "decision",
+        )?.correction,
+      ).toEqual({ present: true, value: { decision: original } });
     },
   );
   it("reviews event A without altering event B decision or history", async () => {
@@ -1577,10 +1429,9 @@ describe("Email Purchase links", () => {
       decidedByUserId: ctx.actor.userId,
       proposedBy: "heuristic",
     });
-    const before = (await getDb(ctx.db).select().from(assessment)).filter(
-      (row) =>
-        row.subject.kind === "email_link" && row.subject.eventId === b!.id,
-    );
+    const before = (
+      await getDb(ctx.db).select().from(emailPurchaseDecision)
+    ).filter((row) => row.eventId === b!.id);
     await reviewAssessment(ctx.db, kernelCtx(ctx), {
       assessmentId: a.id,
       operationId: "synthetic-event-a-review",
@@ -1596,9 +1447,8 @@ describe("Email Purchase links", () => {
       decision: "dismissed",
     });
     expect(
-      (await getDb(ctx.db).select().from(assessment)).filter(
-        (row) =>
-          row.subject.kind === "email_link" && row.subject.eventId === b!.id,
+      (await getDb(ctx.db).select().from(emailPurchaseDecision)).filter(
+        (row) => row.eventId === b!.id,
       ),
     ).toEqual(before);
   });
@@ -1662,8 +1512,8 @@ describe("Email Purchase links", () => {
     ]);
     const reviews = await getDb(ctx.db)
       .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, prediction.id));
+      .from(emailReview)
+      .where(eq(emailReview.subjectId, prediction.id));
     expect(reviews.map((row) => row.operationId)).toContain(
       "synthetic-waiting-link",
     );
@@ -1701,8 +1551,9 @@ describe("Email Purchase links", () => {
       .where(eq(orderMailCandidateDecision.eventId, f.event.id));
     expect(current?.purchaseId).toBe(keeper.id);
     expect(
-      (await getDb(ctx.db).select().from(assessment)).find(
-        (row) => row.id === prediction.id,
+      (await getDb(ctx.db).select().from(emailReview)).find(
+        (row) =>
+          row.subjectId === prediction.id && row.operationId === "decision",
       )?.subject,
     ).toMatchObject({ purchaseId: f.purchase.id });
   });
@@ -1725,7 +1576,7 @@ describe("Email Purchase links", () => {
       classificationVersion: "synthetic",
       model: "typesafe/jev",
     });
-    const prediction = await ensureEmailAssessment(ctx.db, observation.id);
+    const prediction = observation;
     const result = await callMcpTool(
       createMcpServer(),
       "suggestions",
@@ -1754,11 +1605,11 @@ describe("Email Purchase links", () => {
     ).toBe("unrelated");
     const [review] = await getDb(ctx.db)
       .select()
-      .from(feedback)
+      .from(emailReview)
       .where(
         and(
-          eq(feedback.assessmentId, prediction.id),
-          eq(feedback.operationId, "synthetic-relevance-review"),
+          eq(emailReview.subjectId, prediction.id),
+          eq(emailReview.operationId, "synthetic-relevance-review"),
         ),
       );
     expect(review).toMatchObject({
@@ -1783,12 +1634,12 @@ describe("Email Purchase links", () => {
       classificationVersion: "synthetic",
       model: "typesafe/jev",
     });
-    const prediction = await ensureEmailAssessment(ctx.db, observation.id);
+    const prediction = observation;
     const existingFeedback = await getDb(ctx.db)
       .select()
-      .from(feedback)
-      .where(eq(feedback.assessmentId, prediction.id))
-      .orderBy(feedback.id);
+      .from(emailReview)
+      .where(eq(emailReview.subjectId, prediction.id))
+      .orderBy(emailReview.id);
     for (const [index, command] of [
       { correction: { present: false as const }, reason: null },
       {
@@ -1817,9 +1668,9 @@ describe("Email Purchase links", () => {
       expect(
         await getDb(ctx.db)
           .select()
-          .from(feedback)
-          .where(eq(feedback.assessmentId, prediction.id))
-          .orderBy(feedback.id),
+          .from(emailReview)
+          .where(eq(emailReview.subjectId, prediction.id))
+          .orderBy(emailReview.id),
       ).toEqual(existingFeedback);
     }
   });
@@ -1827,18 +1678,15 @@ describe("Email Purchase links", () => {
     const f = await retainedReviewFixture();
     await decide(f.email, f.purchase, f.checksum, "linked");
     const resolutions = await getDb(ctx.db)
-      .select({ review: feedback })
-      .from(feedback)
-      .innerJoin(assessment, eq(assessment.id, feedback.assessmentId))
+      .select({ actorUserId: emailReview.actorUserId })
+      .from(emailReview)
       .where(
         and(
-          eq(assessment.family, "email_relevance"),
-          eq(feedback.authority, "member"),
+          eq(emailReview.family, "email_relevance"),
+          eq(emailReview.authority, "member"),
         ),
       );
-    expect(resolutions).toContainEqual({
-      review: expect.objectContaining({ actorUserId: ctx.actor.userId }),
-    });
+    expect(resolutions).toContainEqual({ actorUserId: ctx.actor.userId });
   });
 
   it.each(["deleted", "excluded"] as const)(
@@ -2496,30 +2344,21 @@ describe("Email Purchase links", () => {
     await decide(f.email, f.purchase, f.checksum, "linked");
     const states = await getDb(ctx.db)
       .select()
-      .from(assessmentState)
-      .where(
-        and(
-          eq(assessmentState.family, "email_link"),
-          sql`${assessmentState.data}->>'eventId' = ${f.event.id}`,
-        ),
-      );
+      .from(emailPurchaseDecision)
+      .where(eq(emailPurchaseDecision.eventId, f.event.id));
     expect(states).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           status: "superseded",
           active: false,
-          data: expect.objectContaining({
-            purchaseId: other.id,
-            proposedBy: "agent",
-          }),
+          purchaseId: other.id,
+          proposedBy: "agent",
         }),
         expect.objectContaining({
           status: "resolved",
           active: true,
-          data: expect.objectContaining({
-            purchaseId: f.purchase.id,
-            proposedBy: "heuristic",
-          }),
+          purchaseId: f.purchase.id,
+          proposedBy: "heuristic",
         }),
       ]),
     );

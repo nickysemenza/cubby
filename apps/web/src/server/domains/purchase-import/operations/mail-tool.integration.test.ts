@@ -33,8 +33,7 @@ import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
   emailClassificationObservation,
-  feedback,
-  assessment,
+  emailReview,
   importSourceClaim,
   importSourceOrder,
   mailboxCursor,
@@ -42,7 +41,6 @@ import {
   orderMail,
   purchase,
   orderMailAttachment,
-  assessmentEmailLink as orderMailCandidateDecision,
   orderMailEvent,
   run,
   financialAccount,
@@ -61,6 +59,7 @@ import {
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 
 import { loadMailAttachmentOriginal } from "../repo/gmail/attachment-original";
 import type { OrderMailAttachmentStorage } from "../repo/gmail/attachment-storage";
@@ -336,13 +335,15 @@ describe("public mail tool", () => {
       ]),
     );
     const memberResolution = await getDb(ctx.db)
-      .select({ actor: feedback.actorUserId, authority: feedback.authority })
-      .from(feedback)
-      .innerJoin(assessment, eq(assessment.id, feedback.assessmentId))
+      .select({
+        actor: emailReview.actorUserId,
+        authority: emailReview.authority,
+      })
+      .from(emailReview)
       .where(
         and(
-          eq(assessment.family, "email_relevance"),
-          eq(feedback.authority, "member"),
+          eq(emailReview.family, "email_relevance"),
+          eq(emailReview.authority, "member"),
         ),
       );
     expect(memberResolution).toContainEqual({

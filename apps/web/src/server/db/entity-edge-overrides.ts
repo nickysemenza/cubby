@@ -56,6 +56,7 @@ import {
   run as runTable,
   runApproval,
   runControlEvent,
+  runFinding,
   runOperation,
   importSourceClaim,
   importSourceOrder,
@@ -707,6 +708,13 @@ export const ENTITY_EDGE_OVERRIDES = {
       role: "history",
       label: "import findings",
       description: "The member whose import requires review.",
+      liveness: { kind: "must-target-live" },
+    },
+    "RunFinding.ledgerPartyId": {
+      column: runFinding.ledgerPartyId,
+      role: "history",
+      label: "run findings",
+      description: "The member whose import finding requires review.",
       liveness: { kind: "must-target-live" },
     },
     "MailboxCursor.ledgerPartyId": {
@@ -1645,6 +1653,18 @@ export const ENTITY_EDGE_OVERRIDES = {
         kind: "allow-target-deleted",
         reason:
           "Field reviews retain execution provenance after archival or deletion.",
+      },
+    },
+    "RunFinding.runId": {
+      column: runFinding.runId,
+      role: "history",
+      label: "Findings",
+      description:
+        "Nullable execution provenance; deleting the Run preserves the finding and its resolutions.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Import findings retain execution provenance after archival or deletion.",
       },
     },
     "Purchase.runId": {

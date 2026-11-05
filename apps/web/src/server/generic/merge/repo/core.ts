@@ -6,6 +6,7 @@ import type { ActorContext } from "@cubby/schemas/context";
  */
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { EntityId } from "@cubby/schemas/identifiers";
 import { type AnyColumn, and, getTableColumns, inArray } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
@@ -16,6 +17,8 @@ import type { IncomingEdge } from "~/server/db/entity-incoming-edges";
 import type { IncomingEdgeKey } from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { notDeleted } from "~/server/db/helpers";
+import { repointEmailDecisionTargetsTx } from "~/server/domains/email/repo/email-link-decision";
+import { repointRunFindingTargetsTx } from "~/server/domains/purchase-import/repo/run-finding";
 import { recordMergeRedirects } from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
 import { repointAssessmentTargetsTx } from "~/server/generic/assessment/repo/assessment-state";
@@ -173,6 +176,13 @@ export const finalizeMerge = async <E extends RemovableEntity>(
   // Field, Email link and import finding projections follow the survivor; a
   // duplicate open finding is retired there, never deleted.
   await repointAssessmentTargetsTx(tx, entity, keepId, loserIds);
+  await repointRunFindingTargetsTx(tx, entity, keepId, loserIds);
+  if (entity === "purchase")
+    await repointEmailDecisionTargetsTx(
+      tx,
+      parseEntityId("purchase", keepId),
+      loserIds.map((id) => parseEntityId("purchase", id)),
+    );
 
   // The row removal stays here rather than moving into `cascadeRemoval`:
   // removal differs per entity (soft for products/purchases/vendors, hard for

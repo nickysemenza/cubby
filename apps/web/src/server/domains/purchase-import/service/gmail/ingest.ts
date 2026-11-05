@@ -32,7 +32,6 @@ import {
   type GmailNormalizedMessage,
 } from "~/server/domains/purchase-import/repo/gmail/types";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { recordEmailClassificationApplication } from "~/server/generic/assessment/repo/assessment-email";
 
 import {
   deferClassificationRefresh,
@@ -53,6 +52,7 @@ import {
   recordEmailClassificationObservation,
   recordEmailCandidateObservation,
   recordEmailRetrievalFailure,
+  recordEmailClassificationApplication,
 } from "../../repo/gmail/observations";
 import {
   attachmentHasRetainedBytes,

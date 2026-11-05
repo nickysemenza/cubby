@@ -1,18 +1,11 @@
 /** Application publishers own append-only histories and projection creation. */
 export const assessmentHistoryDdl = () => `
-CREATE OR REPLACE VIEW "AssessmentEmailLink" AS
-SELECT id,(data->>'eventId')::uuid AS "eventId",(data->>'purchaseId')::uuid AS "purchaseId",
- data->>'decision' AS decision,data->>'evidenceChecksum' AS "evidenceChecksum",data->>'decidedByUserId' AS "decidedByUserId",data->>'proposedBy' AS "proposedBy","createdAt","updatedAt"
-FROM "AssessmentState" WHERE family='email_link' AND active;
+-- Frozen with the retired email_link rows; the ledger archive drops them, since
+-- dropping them here would hold ACCESS EXCLUSIVE on State through the copy.
 CREATE UNIQUE INDEX IF NOT EXISTS "AssessmentState_email_event_purchase_key" ON "AssessmentState" ((data->>'eventId'),(data->>'purchaseId')) WHERE family='email_link' AND active;
 CREATE UNIQUE INDEX IF NOT EXISTS "AssessmentState_email_one_link_key" ON "AssessmentState" ((data->>'eventId')) WHERE family='email_link' AND active AND data->>'decision'='linked';
--- Match linked association reads: both the UUID key and linked predicate keep
--- the planner from choosing an unselective scan of the text uniqueness key.
 CREATE INDEX IF NOT EXISTS "AssessmentState_email_linked_event_uuid_idx" ON "AssessmentState" (((data->>'eventId')::uuid)) WHERE family='email_link' AND active AND data->>'decision'='linked';
--- Every reviewed decision of an order event, joined per Email row by the
--- link-state rank: the text key and the linked-only UUID index cannot serve it.
 CREATE INDEX IF NOT EXISTS "AssessmentState_email_event_uuid_idx" ON "AssessmentState" (((data->>'eventId')::uuid)) WHERE family='email_link' AND active;
--- A Purchase's reviewed links, read per row by purchaseAssociatedEmailsSql.
 CREATE INDEX IF NOT EXISTS "AssessmentState_email_purchase_uuid_idx" ON "AssessmentState" (((data->>'purchaseId')::uuid)) WHERE family='email_link' AND active;
 
 -- Removal repositories retire current targets; mail reads require a retained live event.
@@ -23,6 +16,37 @@ DROP FUNCTION IF EXISTS "assessment_mail_lifecycle"();
 DROP TRIGGER IF EXISTS "Assessment_immutable" ON "Assessment";
 DROP TRIGGER IF EXISTS "Feedback_immutable" ON "Feedback";
 DROP FUNCTION IF EXISTS "assessment_history_immutable"();
+
+-- These families moved to domain owners. A stale writer fails rather than
+-- losing a decision nothing reads any more; a Run deletion still detaches them.
+CREATE OR REPLACE FUNCTION "assessment_retired_family_refused"() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.family IN ('email_relevance', 'email_link', 'mail_import_outcome', 'run_finding') THEN
+    RAISE EXCEPTION 'Assessment family % moved to its domain owner', NEW.family;
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS "Assessment_retired_family" ON "Assessment";
+CREATE TRIGGER "Assessment_retired_family" BEFORE INSERT ON "Assessment"
+  FOR EACH ROW EXECUTE FUNCTION "assessment_retired_family_refused"();
+DROP TRIGGER IF EXISTS "AssessmentState_retired_family" ON "AssessmentState";
+CREATE TRIGGER "AssessmentState_retired_family" BEFORE INSERT OR UPDATE OF status, active, data, entity, "recordId" ON "AssessmentState"
+  FOR EACH ROW EXECUTE FUNCTION "assessment_retired_family_refused"();
+
+-- A review of a retained decision would commit where nothing reads it.
+CREATE OR REPLACE FUNCTION "feedback_retired_family_refused"() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM "Assessment" a WHERE a.id = NEW."assessmentId"
+    AND a.family IN ('email_relevance', 'email_link', 'mail_import_outcome', 'run_finding')) THEN
+    RAISE EXCEPTION 'Feedback on Assessment % moved to its domain owner', NEW."assessmentId";
+  END IF;
+  RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS "Feedback_retired_family" ON "Feedback";
+CREATE TRIGGER "Feedback_retired_family" BEFORE INSERT ON "Feedback"
+  FOR EACH ROW EXECUTE FUNCTION "feedback_retired_family_refused"();
 
 -- Point-match immutable connection endpoints without reopening wide evidence
 -- for every unrelated Assessment. Both UUID and shortcode values remain text.

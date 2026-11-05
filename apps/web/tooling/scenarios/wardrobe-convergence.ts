@@ -1070,9 +1070,9 @@ async function runForgeWearTraps(
     purchaseProduct.shortcode,
   );
   const duplicateFinding = await pool.query<{ count: string }>(
-    `SELECT count(*)::text AS count FROM "AssessmentState"
-     WHERE family = 'run_finding' AND entity = 'purchase' AND "recordId" = $1
-       AND data->'proposedFix'->>'kind' = 'reconcile_source_order'`,
+    `SELECT count(*)::text AS count FROM "RunFinding"
+     WHERE "entityKind" = 'purchase' AND "entityId" = $1
+       AND "proposedFix"->>'kind' = 'reconcile_source_order'`,
     [facts.purchases[0]?.id ?? null],
   );
   const decoyAllocations = await pool.query<{ count: string }>(

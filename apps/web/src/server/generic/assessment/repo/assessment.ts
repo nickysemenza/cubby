@@ -6,7 +6,11 @@ import {
   feedbackAuthority,
   feedbackEvent,
 } from "@cubby/schemas/assessment";
-import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
+import { connectionCandidate } from "@cubby/schemas/entity-connections";
+import {
+  CORRECTION_OUTCOME_RECEIPT_KIND,
+  correctionAuthorityReceiptKinds,
+} from "@cubby/schemas/suggestion-correction";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
@@ -21,16 +25,16 @@ import {
   assessmentState,
   feedback,
 } from "~/server/db/retained-tables";
-import {
-  recordAssessmentChange,
-  recordChange,
-} from "~/server/generic/changes/repo/change";
+import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
+import { recordAssessmentChange } from "~/server/generic/changes/repo/change";
 
 import {
   assessmentProjectionSnapshot,
   insertPublishedAssessmentStates,
 } from "./assessment-state";
 import { fieldInputFingerprint } from "./field-input-fence";
+
+const candidateKey = connectionCandidate.keyof().enum;
 
 /** A matching operation ID alone never proves that a domain mutation committed. */
 export function assertApplicationReceipt(
@@ -92,16 +96,13 @@ export async function publishAssessments(
         ? input.judgment
         : projection.suggestedValue;
     const target =
-      input.subject.kind === "evaluation_sample"
+      input.subject.kind === "evaluation_sample" ||
+      input.subject.recordId === null
         ? null
-        : input.subject.kind === "email_link" && input.subject.recordId === null
-          ? { entity: "orderMailEvent", recordId: input.subject.eventId }
-          : input.subject.recordId === null
-            ? null
-            : {
-                entity: input.subject.entity,
-                recordId: input.subject.recordId,
-              };
+        : {
+            entity: input.subject.entity,
+            recordId: input.subject.recordId,
+          };
     // The creation snapshot is the row's first state; rebuild replays it.
     const state = target && {
       ...assessmentProjectionTargets[input.family].parse({
@@ -110,9 +111,6 @@ export async function publishAssessments(
       }),
       field: input.subject.kind === "field" ? input.subject.field : "",
       fingerprint: input.fingerprint,
-      ...(input.subject.kind === "run_finding" && {
-        ledgerPartyId: input.subject.ledgerPartyId,
-      }),
       ...projection,
       suggestedValue,
     };
@@ -183,16 +181,6 @@ export async function publishAssessments(
         ids: correctionTargets.map((row) => row.id),
       });
     }
-    if (
-      inserted.some(
-        (row) =>
-          row.family === "email_relevance" || row.family === "email_link",
-      )
-    )
-      await recordChange(transactionDb, {
-        kind: "source",
-        categories: ["email"],
-      });
     return rows;
   });
 }
@@ -295,6 +283,14 @@ export async function recordFeedbackWithInsertion(
         served: assessment.served,
         family: assessment.family,
         subject: assessment.subject,
+        // Only the endpoints: wide connection evidence must not cross per review.
+        candidate: sql<unknown>`jsonb_build_object(${sql.join(
+          [candidateKey.relation, candidateKey.source, candidateKey.target].map(
+            (key) =>
+              sql`${key}::text, ${assessment.evidence}->'candidate'->${key}`,
+          ),
+          sql`, `,
+        )})`,
       })
       .from(assessment)
       .where(eq(assessment.id, input.assessmentId))
@@ -346,22 +342,42 @@ export async function recordFeedbackWithInsertion(
         receiptId: row.id,
       });
     }
+    // A member's review of an Email-to-Purchase connection protects that Email,
+    // and the protecting read has one owner. The two rows share an id, so a
+    // command's Feedback and its frontier name the same review.
     if (
       inserted &&
-      (prediction.family === "email_relevance" ||
-        prediction.family === "email_link")
+      row.authority === "member" &&
+      prediction.subject.kind === "recommendation" &&
+      prediction.subject.entity === "email" &&
+      prediction.subject.scope === "connection.email-purchase" &&
+      !correctionAuthorityReceiptKinds.options.some(
+        (kind) =>
+          kind ===
+          z.object({ kind: z.string() }).safeParse(row.metadata).data?.kind,
+      )
     ) {
-      await recordChange(transactionDb, {
-        kind: "source",
-        categories: ["email"],
+      await appendEmailReview(transactionDb, {
+        id: row.id,
+        family: "recommendation",
+        subjectId: row.assessmentId,
+        emailId: prediction.subject.recordId,
+        originalId: null,
+        checksum: null,
+        operationId: row.operationId,
+        verdict: row.verdict,
+        correction: row.correction,
+        reason: row.reason,
+        evidence: row.evidence,
+        intent: row.intent,
+        authority: row.authority,
+        actorUserId: row.actorUserId,
+        subject: {
+          ...prediction.subject,
+          candidate: z.json().parse(prediction.candidate),
+        },
+        metadata: row.metadata,
       });
-      // Member review is an Email quality input no column path reaches.
-      // Calls the generated mark function directly: importing the derived
-      // repo here broke the Worker's Env type inference.
-      if ("recordId" in prediction.subject && prediction.subject.recordId)
-        await client.execute(
-          sql`SELECT derived_mark('email.dataQuality', ARRAY[${prediction.subject.recordId}::uuid], 'Assessment review changed')`,
-        );
     }
     return { event: row, inserted: inserted !== undefined };
   });

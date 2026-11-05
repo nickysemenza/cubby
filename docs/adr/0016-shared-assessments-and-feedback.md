@@ -781,3 +781,18 @@ requested page: connection evidence averages about 200 kB a row, so reading it
 per row cannot finish. Counts may include a stale row, and connection Strength
 is provisional in browse order. Accept rechecks current evidence, and money
 application keeps its strict checks.
+
+## Amendment: mail decisions and findings left the ledger (2026-11)
+
+Under [ADR 0025](0025-radical-simplification-of-background-work.md),
+`email_link`, `email_relevance`, `mail_import_outcome` and `run_finding` stopped
+writing Assessment, AssessmentState and Feedback.
+`EmailPurchaseDecision`, `EmailReview`, `EmailClassificationObservation`, the
+`target_outcome` RunOperation and `RunFinding` own them
+([ADR 0011](0011-email-as-a-first-class-entity.md#decisions-and-reviews-have-email-owners)).
+The other families are unchanged. Their retained rows stay in the ledgers until
+a later migration archives them, and a trigger refuses new rows in these
+families so a stale writer fails instead of writing what nothing reads.
+`assessment.review` keeps its wire shape and routes these handles to their
+owners. Automation history reads them through `mailAutomaticDecisionBranches`
+beside the Assessment families.

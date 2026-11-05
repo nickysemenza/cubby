@@ -37,7 +37,7 @@ import {
   ledgerParty,
   purchase,
   purchasePaymentEvidence,
-  assessmentState,
+  runFinding,
   sourceOrderObservation,
 } from "~/server/db/schema";
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
@@ -53,7 +53,6 @@ import {
 } from "~/server/domains/purchase-import/repo/writer-policy";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { createAppError } from "~/server/errors/app-error";
-import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
@@ -76,11 +75,10 @@ import {
   type ReconciliationState,
 } from "./reconciliation-state";
 import {
-  isRunFinding,
   publishRunFinding,
   runFindingColumns,
-  runFindingData,
   runFindingStatus,
+  updateRunFinding,
 } from "./run-finding";
 import { recordImportedShipmentEvidence } from "./shipment-intake";
 import { receiptProductQuantity, resolveLineProduct } from "./writer";
@@ -677,8 +675,8 @@ export async function prepareSourceOrderReconciliation(
     await lockFindingSettlement(tx, input.id, actor);
     const [finding] = await tx
       .select(runFindingColumns)
-      .from(assessmentState)
-      .where(and(isRunFinding, eq(assessmentState.id, input.id)))
+      .from(runFinding)
+      .where(eq(runFinding.id, input.id))
       .for("update");
     if (!finding || finding.status !== runFindingStatus.enum.open)
       throw createAppError(
@@ -715,23 +713,15 @@ export async function prepareSourceOrderReconciliation(
       input.resolution,
     );
     const review = await reviewResolution(tx, state, fix, input.resolution);
-    // The reviewed preview belongs to the current finding; its Assessment
-    // keeps the original proposal.
-    await transitionAssessmentStates(
-      tx,
-      eq(assessmentState.id, finding.id),
-      (row) => ({
-        data: {
-          ...runFindingData.parse(row.data),
-          proposedFix: proposedImportFix.parse({
-            ...fix,
-            reviewedFingerprint: review.reviewedFingerprint,
-            review,
-          }),
-        },
+    // The reviewed preview belongs to the current finding; `judgment` keeps
+    // the original proposal.
+    await updateRunFinding(tx, finding.id, {
+      proposedFix: proposedImportFix.parse({
+        ...fix,
+        reviewedFingerprint: review.reviewedFingerprint,
+        review,
       }),
-      { kind: "run_finding_review_prepared" },
-    );
+    });
     return prepareSourceOrderReconciliationOut.parse({
       id: finding.id,
       ...review,

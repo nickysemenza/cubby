@@ -130,6 +130,9 @@ export async function assertMigrationBookkeeping(
 const LOCK_CONTENTION_CODES = new Set(["55P03", "40P01"]);
 /** About two minutes against live writers, then the deployment stops, fail closed. */
 const LOCK_RETRIES = 30;
+/** A whole-transaction attempt is much heavier than one idempotent statement. */
+const TRANSACTION_LOCK_RETRIES = 5;
+const TRANSACTION_LOCK_RETRY_DELAY_MS = 15_000;
 
 /**
  * Live queue traffic can hold or cross a cutover's locks (0037 deadlocked on every
@@ -162,7 +165,12 @@ export async function retryingLockContention<T>(
 /** Advance through an inclusive journal boundary; omitted means every pending migration. */
 export async function migrateDatabase(
   db: NodePgDatabase,
-  options: { migrationsFolder?: string; through?: string } = {},
+  options: {
+    migrationsFolder?: string;
+    through?: string;
+    /** The pause between whole-transaction attempts after lock contention. */
+    lockRetryDelayMs?: number;
+  } = {},
 ): Promise<void> {
   const migrationsFolder = options.migrationsFolder ?? MIGRATIONS_FOLDER;
   const journal = readMigrationFiles({ migrationsFolder });
@@ -203,19 +211,27 @@ export async function migrateDatabase(
   // default PgQueryResultHKT signature loses the concrete driver variance.
   const session = db._.session as Parameters<PgDialect["migrate"]>[1];
   const pending = journal.slice(appliedCount, boundary + 1);
+  // Each attempt is one transaction: contention rolls back all of it, including
+  // earlier pending migrations it holds, and the next attempt rereads bookkeeping.
+  const retryTransaction = (migrations: typeof journal) =>
+    retryingLockContention(
+      () => new PgDialect().migrate(migrations, session, { migrationsFolder }),
+      {
+        retries: TRANSACTION_LOCK_RETRIES,
+        delayMs: options.lockRetryDelayMs ?? TRANSACTION_LOCK_RETRY_DELAY_MS,
+      },
+    );
   if (
     !pending.some((migration) =>
       migration.sql[0]?.includes("-- cubby:transaction-per-statement"),
     )
   ) {
-    await new PgDialect().migrate(journal.slice(0, boundary + 1), session, {
-      migrationsFolder,
-    });
+    await retryTransaction(journal.slice(0, boundary + 1));
     return;
   }
   for (const migration of pending) {
     if (!migration.sql[0]?.includes("-- cubby:transaction-per-statement")) {
-      await new PgDialect().migrate([migration], session, { migrationsFolder });
+      await retryTransaction([migration]);
       continue;
     }
     // Opt-in backfills must be restartable: a crash leaves committed batches
