@@ -12,7 +12,6 @@ import {
   completeImageProcessingJob,
 } from "~/server/domains/image-processing/repo/image-processing";
 import { describeOriginalImage } from "~/server/domains/image/service/image-description.service";
-import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 
 /** The same cloud policy, immutable history, and followups for edge and companion JPEG inputs. */
 export async function completeCloudImageDescription(
@@ -33,15 +32,10 @@ export async function completeCloudImageDescription(
   // rather than a fresh background run. No user rides along with a job
   // that has none, so it books under the system actor like every other
   // background AI call.
-  const runId =
-    input.runId ??
-    (await ensureRun(db, systemActor(), {
-      purpose: "background",
-    }));
   const { result, fingerprint, model } = await describe(db, {
     imageId: input.imageId,
     attemptId: input.attemptId,
-    runId,
+    runId: input.runId ?? undefined,
     normalizedInput: input.normalizedInput,
   });
   const completion = await completeImageProcessingJob(db, {

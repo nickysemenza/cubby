@@ -37,8 +37,8 @@ export type RecordAiUsageInput = {
   costEvidence?: AiCostEvidence | null;
   feature: string;
   operation: string;
-  /** Every AI call belongs to a run; see `ensureRun`. */
-  runId: RunId;
+  /** The session this call belongs to; automatic work has none. */
+  runId?: RunId;
   jobKind?: string | null;
   jobId?: string | null;
   inputTokens?: number | null;

@@ -19,7 +19,6 @@ import {
   runEmbeddingFeature,
 } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
-import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { getSemanticEmbeddingConfig } from "./config";
@@ -134,14 +133,6 @@ export async function embedTexts(
       "ai.input_count": texts.length,
     });
     const metadata: GatewayMetadata = { feature, operation };
-    const runId = opts?.db
-      ? (opts.runId ??
-        (await ensureRun(opts.db, systemActor(), {
-          purpose: "background",
-          // oxlint-disable-next-line cubby/no-ad-hoc-calendar-day -- an operational daily bucket
-          clientKey: `embeddings:${new Date().toISOString().slice(0, 10)}`,
-        })))
-      : undefined;
     return runEmbeddingFeature(
       { feature, model: config.model },
       {
@@ -187,7 +178,7 @@ export async function embedTexts(
           };
         },
       },
-      { db: opts?.db, runId, operation, entity: opts?.entity },
+      { db: opts?.db, runId: opts?.runId, operation, entity: opts?.entity },
     );
   });
 }

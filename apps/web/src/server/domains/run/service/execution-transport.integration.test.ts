@@ -124,7 +124,7 @@ describe("household AI funding at the paid transport boundary", () => {
   }
 
   async function spend(
-    runId: RunId,
+    runId: RunId | null,
     usd: number,
     options: {
       feature?: string;
@@ -259,6 +259,27 @@ describe("household AI funding at the paid transport boundary", () => {
     ).toBeNull();
     await expect(automaticPaid(chatRequest())).resolves.toBeUndefined();
     await expect(interactivePaid(chatRequest())).resolves.toBeUndefined();
+  });
+
+  // With no Run there is no origin to read, so the signal has to fail closed.
+  it("refuses an automatic call with no Run at an exhausted window, but not a waiting member", async () => {
+    await spend(null, DEFAULT_CREDIT_BUDGET_USD, { credit: true });
+    const automatic = withFreeBudget(
+      ctx.db,
+      { model: "claude-opus-5-5" },
+      undefined,
+    );
+    const interactive = withFreeBudget(
+      ctx.db,
+      { model: "claude-opus-5-5", interactive: true },
+      undefined,
+    );
+    if (!automatic || !interactive)
+      throw new Error("Synthetic free admissions missing");
+    expect(await automatic(chatRequest(), "subscriber_credit")).toContain(
+      "Claude credit budget reached",
+    );
+    expect(await interactive(chatRequest(), "subscriber_credit")).toBeNull();
   });
 
   // Storage refuses a paid amount that is not a positive run_now_paid grant.

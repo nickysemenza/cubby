@@ -30,7 +30,7 @@ import {
 
 export type SpendingAdvicePort = (input: {
   judgment: StatementTransactionJudgment;
-  runId: RunId;
+  runId?: RunId;
 }) => Promise<FinancialSpendingAdvice>;
 
 export function needsSpendingAdvice(judgment: StatementTransactionJudgment) {
@@ -45,7 +45,7 @@ export async function adviseSpending(
   db: Database,
   input: {
     judgment: StatementTransactionJudgment;
-    runId: RunId;
+    runId?: RunId;
     model?: SupportedDecisionModel;
     port?: DecisionPort;
     spendingAdvice?: SpendingAdvicePort;

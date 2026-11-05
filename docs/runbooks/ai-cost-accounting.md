@@ -97,6 +97,12 @@ an external processor makes coverage incomplete; device-completed work proves
 zero charge but does not invent a standard-cost comparison. Reads never call a
 model or count budget reservations as spend.
 
+`AiUsage.runId` names the member or agent session that spent the call. Automatic
+work and a member's one-off AI action have no Run: read those by `feature`,
+`operation` and `entity`. Budget totals read every row, whatever its Run. A call
+with no Run stops at its window budget unless it says a member is waiting
+(`isAutomaticAiCall`).
+
 Run usage membership is an indexed union of directly attributed calls, linked
 image-job calls, and linked image-attempt calls. Resolve that set before reading
 the subtotal and page; a correlated job-membership check for each unrelated

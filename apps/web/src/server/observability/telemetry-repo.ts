@@ -15,15 +15,6 @@ import { snapshotAiUsagePrice } from "~/server/ai/pricing";
 import type { Database } from "~/server/db";
 import { withTransaction } from "~/server/db/helpers";
 import { aiUsage, run as runTable, mcpToolCall } from "~/server/db/schema";
-import {
-  aiCallRunInput,
-  ensureRun,
-  systemActor,
-} from "~/server/domains/run/repo/ensure-run";
-
-const unreachableFallback = (): never => {
-  throw new Error("An orphaned AI usage row always opens a fallback run");
-};
 
 /** Recover only raw legacy queue accounting; current events never enter this path. */
 export async function prepareLegacyAiUsageTelemetry(
@@ -130,14 +121,6 @@ export async function persistTelemetryMessages(
               .where(inArray(runTable.id, requestedRuns))
           ).map((row): string => row.id),
     );
-    const orphaned = ai.some(
-      (event) => !event.runId || !knownRuns.has(event.runId),
-    );
-    // Opened on the root connection like every ephemeral run, so the batch's
-    // rollback cannot orphan the rows that name it.
-    const fallbackRunId = orphaned
-      ? await ensureRun(db, systemActor(), aiCallRunInput(systemActor()))
-      : null;
     if (mcp.length > 0) {
       await tx
         .insert(mcpToolCall)
@@ -181,7 +164,7 @@ export async function persistTelemetryMessages(
             runId:
               event.runId && knownRuns.has(event.runId)
                 ? runEntityId.parse(event.runId)
-                : (fallbackRunId ?? unreachableFallback()),
+                : null,
             jobKind: event.jobKind ?? null,
             jobId: event.jobId ?? null,
             inputTokens: event.inputTokens,

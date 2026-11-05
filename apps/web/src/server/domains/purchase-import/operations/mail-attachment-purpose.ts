@@ -14,10 +14,7 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { orderMailAttachment } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
-import {
-  aiCallRunInput,
-  ensureRun,
-} from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner } from "~/server/domains/run/repo/ensure-run";
 import { wasm } from "~/server/wasm";
 
 type AttachmentEvidence = Pick<
@@ -128,7 +125,7 @@ export async function prepareMailAttachmentDecisions(
   if (eligible.length) {
     const usage: AiRunContext = {
       db,
-      runId: await ensureRun(db, actor, aiCallRunInput(actor)),
+      ...aiCallOwner(actor),
       operation: "mail-attachment-purpose",
     };
     const results = await shouldPromoteMailAttachments(

@@ -207,6 +207,17 @@ export async function assertRunParent(
  * burst of previews or one-off actions is one `ai_suggest` run, not one each.
  * `now` is a parameter so the hour boundary is testable.
  */
+/**
+ * Who an AI call with no Run of its own answers to: the session the actor is already
+ * in, else a waiting member. The system actor has nobody waiting.
+ */
+export const aiCallOwner = (
+  actor: ActorContext,
+): { runId: RunId } | { interactive: boolean } =>
+  actor.runId
+    ? { runId: actor.runId }
+    : { interactive: actor.channel !== "system" };
+
 export function aiCallRunInput(
   actor: ActorContext,
   options: { runKey?: string; now?: Date } = {},

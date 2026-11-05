@@ -29,7 +29,6 @@ import {
   type TransferPairLabelCursor,
   TRANSFER_PAIR_PUBLISH_CONCURRENCY,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
-import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
@@ -121,10 +120,11 @@ export async function labelTransferPairSuggestions(
     runId: input.runId,
   });
   if (!rows.length) return { ...empty, active: true };
-  const runId =
-    input.runId ??
-    (await ensureRun(db, systemActor(), { purpose: "background" }));
-  const usage = { db, runId, operation: "transfer-pair-label" };
+  const usage = {
+    db,
+    runId: input.runId ?? undefined,
+    operation: "transfer-pair-label",
+  };
   const failed: RunStepError[] = [];
   const skippedIds: string[] = [];
   const pauses: AiBudgetExhaustedError[] = [];
@@ -266,7 +266,7 @@ export async function labelTransferPairSuggestions(
               kind: "model",
               model,
               revision: TRANSFER_PAIR_MOVEMENT_FEATURE.promptVersion,
-              runId,
+              runId: input.runId ?? null,
               evaluationId: null,
             },
           );

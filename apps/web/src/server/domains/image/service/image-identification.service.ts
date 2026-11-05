@@ -81,7 +81,7 @@ export async function readImageIdentificationRendition(
 /** No identity writes: immutable observations are adopted only by the fenced job completion. */
 export async function identifyOriginalImage(
   db: Database,
-  input: { imageId: ImageId; attemptId: string; runId: RunId },
+  input: { imageId: ImageId; attemptId: string; runId?: RunId },
 ) {
   const source = await getUploadedImageProcessingSource(db, input.imageId);
   if (!source)

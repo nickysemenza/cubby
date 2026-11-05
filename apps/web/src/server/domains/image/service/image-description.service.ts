@@ -113,7 +113,7 @@ export async function describeOriginalImage(
   input: {
     imageId: ImageId;
     attemptId: string;
-    runId: RunId;
+    runId?: RunId;
     normalizedInput?: { bytes: Uint8Array; key: string };
   },
 ): Promise<{

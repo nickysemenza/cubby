@@ -131,8 +131,13 @@ export interface AiRunContext<T = unknown> extends Pick<
    * (the eval harness and smoke paths that have no database).
    */
   db?: Database;
-  /** Every AI call belongs to a run; see `ensureRun`. */
-  runId: RunId;
+  /** The member or agent session this call belongs to; automatic work has none. */
+  runId?: RunId;
+  /**
+   * With no Run, a member is waiting on this answer. Anything else without a Run is
+   * automatic work, which stops at its window budget (`isAutomaticAiCall`).
+   */
+  interactive?: boolean;
   /** The code path placing the call — `suggestCategory`, `select`, … */
   operation: string;
   /** Correlates calls emitted while one durable job is executing. */
@@ -327,7 +332,7 @@ export function planStructuredRun<T = unknown>(
       ),
       beforeFreeRequest: withFreeBudget(
         ctx.db,
-        { model: spec.model, runId: ctx.runId },
+        { model: spec.model, runId: ctx.runId, interactive: ctx.interactive },
         ctx.beforeFreeRequest,
       ),
     },
@@ -1163,9 +1168,9 @@ export async function runEmbeddingFeature(
       costEvidence?: AiCostEvidence;
     }>;
   },
-  ctx: Omit<AiRunContext, "runId"> & { runId?: RunId },
+  ctx: AiRunContext,
 ): Promise<number[][]> {
-  const usageCtx = ctx.runId ? { ...ctx, runId: ctx.runId } : null;
+  const usageCtx = ctx.db ? ctx : null;
   const texts = [...new Set(args.texts)];
   const vector = z
     .array(z.number().finite())

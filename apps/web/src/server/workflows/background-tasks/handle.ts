@@ -77,17 +77,10 @@ export async function handleBackgroundTask(
     case "location-ai.description.refresh": {
       const { describeLocation, isLocationHasNoImagesToAnalyzeError } =
         await import("~/server/ai/enrichment/location-vision");
-      const { ensureRun, systemActor } =
-        await import("~/server/domains/run/repo/ensure-run");
       try {
         // Attribute to the mutation's actor run when the publisher recorded
-        // one; older queue messages (and backfills) carry no `runId`, so
-        // those book under the system actor instead of guessing.
-        const runId =
-          (task.runId ? runEntityId.parse(task.runId) : null) ??
-          (await ensureRun(db, systemActor(), {
-            purpose: "background",
-          }));
+        // one; older queue messages (and backfills) carry no `runId`.
+        const runId = task.runId ? runEntityId.parse(task.runId) : undefined;
         await describeLocation(db, task.locationId, runId, undefined, fenced);
       } catch (error) {
         if (isLocationHasNoImagesToAnalyzeError(error)) return "skipped";
@@ -98,14 +91,8 @@ export async function handleBackgroundTask(
     case "location-ai.inventory.refresh": {
       const { detectInventoryItems, isLocationHasNoImagesToAnalyzeError } =
         await import("~/server/ai/enrichment/location-vision");
-      const { ensureRun, systemActor } =
-        await import("~/server/domains/run/repo/ensure-run");
       try {
-        const runId =
-          (task.runId ? runEntityId.parse(task.runId) : null) ??
-          (await ensureRun(db, systemActor(), {
-            purpose: "background",
-          }));
+        const runId = task.runId ? runEntityId.parse(task.runId) : undefined;
         await detectInventoryItems(
           db,
           task.locationId,

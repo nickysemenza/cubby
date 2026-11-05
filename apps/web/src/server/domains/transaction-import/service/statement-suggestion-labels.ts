@@ -43,7 +43,6 @@ import {
   needsSpendingAdvice,
   type SpendingAdvicePort,
 } from "~/server/domains/financial-transaction/service/spending-advice";
-import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import {
   statementLabelSubject,
   statementCandidateSubject,
@@ -767,10 +766,12 @@ async function runStatementLabelBatch(
     ),
   );
   if (!rows.length) return { ...empty, active: true };
-  const runId =
-    input.runId ??
-    (await ensureRun(db, systemActor(), { purpose: "background" }));
-  const usage = { db, runId, operation: "statement-suggestion-label" };
+  const runId = input.runId ?? null;
+  const usage = {
+    db,
+    runId: runId ?? undefined,
+    operation: "statement-suggestion-label",
+  };
   const producer = (model: string | null) => ({
     kind: "model" as const,
     model,
@@ -1005,7 +1006,12 @@ async function runStatementLabelBatch(
       const usageFor = (operation: string) => {
         let current = usages.get(operation);
         if (!current) {
-          current = { db, runId, operation, cacheStatus: "none" };
+          current = {
+            db,
+            runId: runId ?? undefined,
+            operation,
+            cacheStatus: "none",
+          };
           usages.set(operation, current);
         }
         return current;

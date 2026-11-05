@@ -622,8 +622,8 @@ export const aiUsage = pgTable(
     model: text("model").notNull(),
     operation: text("operation").notNull(),
     // Every AI call belongs to a Run, which carries the caller attribution.
+    /** The member or agent session that spent this; automatic work has none. */
     runId: uuid("runId")
-      .notNull()
       .$type<RunId>()
       .references(() => run.id),
     jobKind: text("jobKind"),

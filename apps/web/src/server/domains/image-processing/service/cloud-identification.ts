@@ -9,7 +9,6 @@ import { providerFor } from "@cubby/shared/ai/models";
 import type { Database } from "~/server/db";
 import { completeImageProcessingJob } from "~/server/domains/image-processing/repo/image-processing";
 import { identifyOriginalImage } from "~/server/domains/image/service/image-identification.service";
-import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 
 /** Decisions are persisted only inside the current source/lease adoption transaction. */
 export async function completeCloudImageIdentification(
@@ -21,13 +20,10 @@ export async function completeCloudImageIdentification(
     runId: RunId | null;
   },
 ): Promise<boolean> {
-  const runId =
-    input.runId ??
-    (await ensureRun(db, systemActor(), { purpose: "background" }));
   const { result, fingerprint } = await identifyOriginalImage(db, {
     imageId: input.imageId,
     attemptId: input.attemptId,
-    runId,
+    runId: input.runId ?? undefined,
   });
   const provider = providerFor(IMAGE_IDENTIFICATION_MODEL);
   const completion = await completeImageProcessingJob(db, {
