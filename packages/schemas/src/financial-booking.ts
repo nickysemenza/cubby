@@ -19,6 +19,8 @@ import {
   financialTransactionSourceRef,
 } from "./financial-transaction-fields";
 import { plainDate } from "./project";
+import { ledgerAttributions } from "./ledger-party-fields";
+import { fieldResolutionSchema } from "./field-resolution";
 
 export const FINANCIAL_SPENDING_POLICY = "2026-10-29.2";
 
@@ -58,6 +60,8 @@ export const financialSpendingRequest = z.object({
   spendingCategoryId: spendingCategoryShortcode.optional(),
   /** Reviewed classification for a newly created aggregate; absence keeps source defaults. */
   costType: z.enum(["materials", "tools", "services"]).optional(),
+  /** Creation-only reviewed intent; empty resets to defaults, null-party means unknown. */
+  beneficiaries: ledgerAttributions.optional(),
   categoryHistoryReviewed: z.boolean().optional(),
   rejectedPurchaseIds: z.array(purchaseShortcode).default([]),
 });
@@ -93,6 +97,8 @@ export const financialSpendingPlan = z.discriminatedUnion("status", [
     vendorId: vendorShortcode.nullable(),
     vendorName: z.string(),
     spendingCategoryId: spendingCategoryShortcode.nullable(),
+    categoryOverride: spendingCategoryShortcode.nullable().optional(),
+    effectiveCategory: fieldResolutionSchema.optional(),
     purchaseId: purchaseShortcode.nullable(),
   }),
 ]);
@@ -113,11 +119,23 @@ export const financialBookingInput = z.object({
   trade: tradeSchema.default("other"),
   economicRole: z.enum(["vendor", "reimbursement"]).default("vendor"),
   purchaserId: ledgerPartyShortcode.nullable().default(null),
+  beneficiaries: ledgerAttributions.optional(),
 });
 export const financialBookingPreview = financialBookingInput.extend({
   purchaserSnapshot: z.string(),
   spendingCategoryId: spendingCategoryShortcode.nullable().default(null),
   categoryOverride: spendingCategoryShortcode.nullable().default(null),
+  /** Optional only so completed predecessor receipts keep their exact parsed bytes. */
+  effectiveCategory: fieldResolutionSchema.optional(),
+  candidateCategoryId: spendingCategoryShortcode.nullable().optional(),
+  existingCategories: z
+    .array(
+      z.object({
+        expenseId: expenseShortcode,
+        resolution: fieldResolutionSchema,
+      }),
+    )
+    .optional(),
   action: z.enum(["create_aggregate", "link_existing"]),
   accountName: z.string(),
   funderName: z.string().nullable().default(null),
