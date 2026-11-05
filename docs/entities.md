@@ -645,26 +645,13 @@ declared verbs (generation fails on any other); each client's DESIGN.md owns
 their placement, and they leave the More menu.
 Web record-level slot actions render once in the detail header through
 `DetailActionTarget` (`apps/web/src/entity/entity-detail/detail-action-bar.tsx`).
-Collection verbs derive from the declared sections and `reportSlotActions`;
-the typed header hook registry supplies specialist workflow controls.
-Registry declarations preserve each
-entity's record type; generic JSX dispatch erases both the component and its
-record at one documented boundary, matching the existing detail-slot renderer.
-The header owns component lifetime, so switching Overview, Relations, or a
-dedicated tab does not remove controls or abandon an open dialog. Section consumers use `DetailAction` to retain local
-controls only when rendered outside the full detail page. Report header reads
-reuse the section cache and the existing Run batch poll; they do not add a
-separate Run query. Agent controls reuse their existing cached work read;
-walkthrough controls and automatic/guided generation share one mutation gate
-per recipe and observe the latest generation outcome, so another surface cannot
-launch competing generation or leave a stale failure after a successful retry. `reportDetailActions` explicitly identifies record-level
-report commands and diagnostic rows, leaving approvals, selections, recipe
-scales, per-row imports, guided regeneration, ownership confirmations, and other contextual work
-beside its evidence. Finance verbs with `scope: "section"` use the header;
+`reportDetailActions` identifies record-level report commands and diagnostic
+rows, leaving approvals, selections, recipe scales, per-row imports, guided
+regeneration, ownership confirmations and other contextual work beside its
+evidence. Finance verbs with `scope: "section"` use the header;
 `scope: "selection"` verbs stay with the checked rows and their disabled reasons.
-Vendor search and product indexing controls observe the same cached job/readiness
-state as their worklists. Stored URLs, source mail links, map coordinates, and
-linked entity/identifier values remain facts rather than header actions.
+Stored URLs, source mail links, map coordinates and linked identifier values
+remain facts rather than header actions.
 
 `detail.sections` is required on every entity and lists the detail page's
 sections in reading order, under readable ids: `fields` (a named subset of the
@@ -683,18 +670,7 @@ predicate; Swift reads its generated constant. This is presentation, not
 execution authority: agent-coordinated purposes include photo inventory and
 exclude historical file imports, while discovery and the Imports saved view
 have their own deliberately different scopes. A photo batch keeps its own
-review and durable transcript rather than purchase report sections. Its review
-snapshot shares one current image-evidence read between proposal cross-checks,
-the photo list, and lifecycle readiness. Reuse lasts only for that read; the
-next refresh observes newly settled image work and proposal edits. Image analysis
-summaries and rich description provenance share `loadImageAnalysisEvidence`,
-which selects source-fenced descriptions and member corrections once.
-Summary-only consumers project from the same read. Local-analysis summaries
-select the newest live row per requested Image in SQL, using descending IDs
-for equal timestamps, and transfer only classifications and recognized text.
-Missing keys keep their defaults; explicit null or malformed newest evidence
-contributes no local summary rather than reviving an older row. Full payloads
-and historical rows remain in retained storage.
+review and durable transcript rather than purchase report sections.
 
 Expense analytical reads use `server/domains/expense/repo/expense-derived-read.ts`: a declared
 scope and SQL projection batch share one materialized allocation relation.
@@ -725,37 +701,12 @@ Unclassified receipt roles keep one unresolved allocation with the original
 signed amount; they never enter adjustment weighting. Role completeness is
 reported separately from amount completeness.
 
-Broad Work queue Product filters explicitly request statement-local on-hand
-stock evidence through the shared read context. One grouped inventory/location
-relation preserves the canonical absent, mixed-unit and installed-stock rules;
-record-scoped queue and ordinary Product reads retain indexed scalar lookups.
-Unsupported evidence fields fall back to their canonical reads, and unused
-relations are omitted. `prepareWhere` passes its caller's read context explicitly
-to `where`; nested scope filters still clear that context before compiling their
-own derived SQL. Catalog quality filters read published quality rows.
-Positive-stock applicability guards resolve unavailable stock to false before
-kit or ledger-quantity reads; the underlying quantity stays null.
-
 Entity reports declare lazy dependencies in `server/generic/entity-report/repo/`.
-Each batch memoizes dependency promises by declaration identity, preserving
-slot order, duplicates, cursors and status. Distinct slots share compatible
-project trees and scopes, record identities, Purchase finance inputs and Run
-headers. Member-gated histories resolve viewer membership before record identity,
-preserving the authorization error when both inputs are invalid. Project analytics supplies the budget summary when both are requested;
-budget alone does not load charts. Reuse ends with the batch: there is no
-cross-request cache or encompassing transaction. Cheap identity/status dependencies stay separate from
-reference, quality and content hydration. Slot loaders request the projection
-they render and reuse broader reads only when another requested slot needs them.
-Purchase finance slots select the batch's union of scalar finance inputs, sharing
-signed Expense spend and one canonical financial aggregate scan (including posted
-refund evidence for reconciliation). Allocation alone skips financial aggregates;
-settlement alone skips vendor reconciliation inputs. Images, quality, category
-summaries, references and coverage stay with explicit full-detail readers.
-Settlement predicates use existence checks when they only need to know whether
-live evidence is present.
-Run report headers select purpose/status; non-import Runs skip import detail,
-and standalone timelines select public operation metadata without result bodies.
-Full import slots share their detail and its operation evidence within the batch.
+Each batch memoizes them by declaration identity, preserving slot order,
+duplicates, cursors and status. Reuse ends with the batch: there is no
+cross-request cache or encompassing transaction. Member-gated histories resolve
+viewer membership before record identity, preserving the authorization error
+when both inputs are invalid.
 
 The full-filter Product price footer groups live sibling quantities and
 visited kit-ancestor Expenses. Page-sized scalar pricing keeps its correlated
@@ -822,66 +773,16 @@ shows several slots of one record (a Run) polls one `entityReport.getMany`, so t
 record once per poll.
 
 **Run work progress.** The storage-only `getRunWorkProgress` projection supplies
-both `run_read.work_snapshot.workProgress` and the Run's shared `progress`
-report block. Every Run purpose declares a count source: step receipts,
-target outcomes, operations, images, model calls, or its typed checkpoint.
-Exploratory populations have `total: null`, never an invented zero. Step drivers
-can declare phase and units; the runtime persists absolute samples in RunStep
-metadata, preserving completed phases across pages and Workflow attempts.
-The shared report labels the current-phase ETA explicitly. Capacity and retry
-waits identify their activity and mark a reused rate as stale; later phases do
-not acquire an overall ETA from the current phase's throughput.
-The Run list exposes `workProgress` and `activityAt` as read-only derived
-fields. Its hydration batches step receipts across the page and reuses the
-detail calculation; other purposes use their persisted samples, so row counters
-can lag the detail's live counters. The list never
-requests a work snapshot per row or infers throughput from timeline frequency.
-Web detail report blocks and Activity's Run Work cells share the Base UI Progress
-primitive. Known totals show processed / total; unknown totals retain work text
-without a percentage bar. Producers fill the existing `runWorkItems` contract:
-`{ phase, label, unit, processed, total: number | null, failures, activity? }`.
-`processed` is an absolute completed count, including failures and skips. Persist
-compatible samples through `sampleRunWork` into `liveProgress.work` (or the step's
-`meta.work`): `{ current: { ...items, sampledAt, ratePerSecond, finished,
-intervals: [{ processed, elapsedMs }] }, completed: [...] }`. The intervals are
-bounded to 12; rates include queue delays, and ETA needs at least three intervals.
-Use a new phase/unit or reset on a restarted population. Connection discovery's
-`{ completed, total }` checkpoint maps to `processed: completed`; its owning lane
-must adapt that checkpoint to this existing projection. Existing AI-owned
-checkpoint writers use `aiRefreshProgress.selected` for the denominator; a new
-`total` key alone is not that schema's count source. `progressHistory` retains
-phase events, not numeric samples; timeline event frequency is never throughput.
-Apple still uses the shared report's counts and estimates; the new Base UI bar
-presentation is web-only.
-Activity is the latest recorded progress, step update, or heartbeat. A missing
-sample remains unavailable, and stale/paused samples do not read as live rates.
-Other Run checkpoints and progress events retain samples in live-progress
-metadata; samples use the checkpoint write time, while heartbeat-only events
-do not refresh a work sample. Timeline history
-retains its small event payload. Legacy records start sampling from their next
-checkpoint without rewriting earlier history. A missing first-phase total and
-earlier completed work can be recovered from the existing step ledger at read
-time; later phase totals are never inferred from mixed-phase counters. Statement
-generation counts the scoped candidate charges once at the start of the pass
-and carries that existing count across handoffs, including pre-sample work;
-progress adds no repeated candidate-count query. Account resolution can exclude
-some candidates during generation; those still count as scanned charges.
-Mail Runs with no stored roster
-report an unknown total; progress delivery does not invent sources or change
-Mail membership validation. Target counts reuse the roster's
-latest applicable outcomes, and photo preparation includes device failures.
-Live reads resolve current outcomes rather than serving a cached count; Mail
-import, product enrichment, and purchase validation admit at most 50 sources
-per Run.
-Processed means succeeded, skipped, and failed; failures remain separately
-visible. Generation charges and label suggestions never share a percentage.
-Retries clear terminal samples and failure counts immediately, then reset
-sampling while retaining a compatible phase/unit rate. ETA uses
-that rate only with a known total; paused or stale estimates identify the reused
-rate and last progress time. Unknown totals show counts and a rate without a
-finish time. Web and Apple draw the same server-composed summary and estimate.
-Consecutive successful Workflow starts fold into one expandable timeline entry;
-phase changes and errors stay separate, and stored events are retained.
+both `run_read.work_snapshot.workProgress` and the Run's shared `progress` report
+block. Every Run purpose declares a count source. Exploratory populations have
+`total: null`, never an invented zero. Producers fill `runWorkItems`, where
+`processed` is an absolute completed count including failures and skips, and
+persist samples through `sampleRunWork`. Use a new phase or unit, or reset, on a
+restarted population. ETA needs a known total and at least three intervals; stale
+or paused estimates name the reused rate and last progress time. Later phases never
+acquire an overall ETA from the current phase's throughput, and timeline event
+frequency is never throughput. Generation charges and label suggestions never share
+a percentage. Web and Apple draw the same server-composed summary and estimate.
 
 **Derived relationships.** A relationship whose provenance is `derived` is
 inferred from stored evidence rather than one FK path and stores nothing of its
@@ -908,17 +809,7 @@ proposed the link (member, agent, import or the suggestion heuristic), and the
 Emails Accuracy view counts dismissed proposals per proposer. The Email page
 holds the Gmail original, per-Purchase links with Link/Dismiss, and changed-
 since-review warnings; another member's Email reads as metadata only.
-Accepted-source association reads resolve message and attachment source keys
-through the composite identity index, then use the canonical root and alias
-indexes. Attachment keys still require the original to belong to the Email
-owner. An Email's family lookup must not scan unrelated accepted mailbox history.
-Link-state lists evaluate exact source-identity candidates and order-event
-presence once per statement before applying the full evidence policy. Emails
-with neither have state `none`; candidates still pass all owner, lifecycle and
-scope checks. Suggestion reads split disjoint exact-order and amount/date
-Purchase candidates so order matches do not scan the Vendor's entire history;
-the fallback date range allows the existing date index and keeps the inclusive
-45-day window.
+Attachment source keys require the original to belong to the Email owner.
 A single included link-state filter fixes the sort rank, so ordering reuses that
 constant and retains date and stable ties without computing the state again.
 After page selection, independent association, review, Purchase-link and owner
@@ -986,15 +877,9 @@ server-side: issues land at `GenericEntityEditModel.nestedError(key, path:)` on 
 nested form path on web. A new structured field needs only its Zod input schema, a renderer in that
 list or a `structuredField` entry, and a vector, never per-entity UI.
 
-The descriptor wire shape is declared once in `packages/schemas/src/manifest-wire.ts`:
-property types, Swift associated-value labels (`_0` for unlabelled payloads), raw enums,
-conformances, and public initializer defaults. `structured-value-schema.ts` derives web types
-from it; the native catalog generator validates its JSON and emits `EntityDescriptors.swift`,
-including recursive `ValueSchema`. Synthesized Codable still owns encoding and decoding;
-optionals and initializer defaults stay distinct, and the catalog stays bundled JSON to avoid
-the Release compiler stall from a giant Swift literal. `LabeledOption.color` is retained
-in both web and native descriptors and resolves to the shared adaptive palette. Computed
-native conveniences remain extensions in `Manifest/EntityManifest.swift`.
+The descriptor wire shape is declared once in `packages/schemas/src/manifest-wire.ts`.
+Synthesized Codable owns encoding and decoding; the catalog stays bundled JSON to
+avoid the Release compiler stall from a giant Swift literal.
 
 A source claim is edited under the identity its read exposes: the read carries `sourceKey` (a hash
 of the provider id or the evidence, so the provider id is unrecoverable) and the input accepts it
@@ -1057,11 +942,6 @@ presentation-only view without adding a filter schema. Entities with no curated
 view need no separate enrollment or omission roster. Explicit `inverseKey` values
 must name reciprocal views with matching endpoints.
 
-Broad related-view filters over product-linked principal Expenses resolve
-effective Project assignments once per statement through the existing bulk
-inheritance owner. Bounded related-record reads retain scalar resolution.
-Both preserve explicit/default/household precedence and live-record guards;
-ID/presence alternatives remain separate from name-search witnesses.
 A relation section's create button seeds the descriptor's field on the new
 record: the descriptor key itself when it is a create field there, otherwise
 the one reference field on the target whose `reference.entity` equals the
@@ -1258,22 +1138,6 @@ priority after directly owned images; ordering defaults to `declared`, with expl
 `oldest` when needed. Borrowed display imagery always compiles with
 `identityEvidence: false`. Visual-evidence ranking remains a separate contract.
 
-Shipment reads use this same resolver and defer `displayImages` in the list
-media group, including when the Shipment has no eligible related image.
-Its declared fallback order is directly attached Purchase images, Purchase
-Product images, seller Vendor images, then carrier Vendor images. Seller Vendor
-is read from the linked Purchase and supports list sorting and filtering without
-duplicating that association on Shipment.
-
-List readers infer stored reference outputs from field references and label
-paths. To-one record-valued derived paths hydrate through compiled traversal in
-bounded page batches, using the canonical public-ID and label resolver. Explicit
-bindings and missing/deleted-reference policies override defaults. Inherited
-references require an explicit lookup; admitted lookups still derive label
-outputs from the declaration. To-many, inherited and domain-enriched values
-retain their existing projection owners.
-Base, count and empty reads skip unrequested relation hydration.
-
 `extensions.ports` is the explicit seam map for entity-wide behavior the
 compiler must not infer: the kernel repository binding, entity label and
 shortcode resolver, filter declaration, and search-document
@@ -1299,24 +1163,6 @@ fields audit by default. Use field-level `audit: false` for intentional exclusio
 or `audit: true` for retained read-only evidence. The compiler derives the
 create/update/output/audit arrays in field declaration order; source declarations
 never maintain those arrays separately.
-
-`defineEntityModel` constructs the raw `readSchemas.output`, `list`, and `detail`
-objects once. Simple declarations share one base object; a domain composer passed
-as its second argument extends or narrows that base in declaration-safe schema
-owners. Product keeps its richer food/detail composition, Location keeps its
-recursive detail shape, and Recipe keeps its lean list. Canonical public exports
-and generated wrappers reuse those instances; relationship and domain schema
-literals have one owner. Output flags select base fields, not the complete
-list/detail composition. Generated field maps retain each original Zod instance
-under its field key.
-
-The base constructor owns the synthesized `dataQuality` field. Its composer
-facts include the declaration's own check-ID enum, built by the same
-`ownDataCheckSchema` helper used by the global generated check catalog. A raw
-composer never imports generated field maps or the generated quality registry.
-Public list/detail consumers and the compiler apply the existing media
-decorators after declarations initialize; those decorators do not belong in
-`defineEntity`, whose Image dependency would cycle.
 
 Generic MCP inputs reuse the canonical create/update contracts. MCP output
 contracts name their audience-specific projections explicitly, which can extend
@@ -1367,13 +1213,6 @@ before the conventional name and preserve the target's identity. Never put an
 identifier in a label projection. Moving a projected result into a governed
 envelope retains its declared label path: path readers resolve the canonical
 result, and reference renderers use a projected name only for its matching id.
-`defineEntity` checks simple declarations' label and detail-label paths at
-TypeScript compile time. Shared compilation validates every displayed path
-against its actual decorated list/detail schema, including
-nested properties and array projections. Compile-only schema contracts use
-`*.typecheck.ts` entry points in Knip and run through the schema TypeScript
-check without being imported by the application. The generator also rejects custom
-`<stem>Label` / `<stem>DisplayLabel` companions without a declared label path.
 
 A reference may declare `multiple: true` and an ordered `scope` mapping. Each
 scope item maps a sibling form `sourceField` to a filter `targetField` on the
@@ -1389,11 +1228,6 @@ The generic list hook supplies ordinary reference rosters. The optional
 inventory, Ingredients with Products, or Products serving as Locations; feature
 column overrides do not wire those feeds. Counted and tree rosters remain
 explicit runtime overrides.
-
-Generic entity filter-option rosters use the shortcode when the stored display
-name is null or the computed title has no stored display column. Page ordering,
-search, and selected-value hydration use that same label, without loading full
-entity records.
 
 `control.suggest: { basis, mode }` marks a field whose value the decision tier
 (Jev/Clef trial) infers from named sibling fields, so the browser editor can auto-fill it
@@ -1415,33 +1249,12 @@ when their identity is nested in the read projection. A declared suggestion
 consumer permits that path even when the field has no visible display surface.
 Unavailable governed inputs fail preparation instead of becoming empty additions.
 
-Shared read owners construct context-free validators once and validate each
-record at the same boundary. Stored decisions and raw nullable references reuse
-their canonical schema instances across rows.
-
 The kernel-owned `readSelectedEntityRecords` assembles canonical selected detail
-rows for connection preparation, generic field refresh, queued suggestion checks
-and publication validation. Each caller declares its basis, target and resolution
-context keys; input-only keys stay absent just as in a complete public read.
-Selections containing governed root fields retain `fieldResolutions` and their
-field-read contexts, so narrowing does not change effective outcomes or
-provenance. Selections with no governed root fields hydrate their declared
-values without building root ownership, assignments or freshness facts. Embedded
-governed records still obtain their own canonical contexts during serialization.
-Public page metadata admits only publications consumed by model fields or their
-declared stored keys; domain-only publications, including private diagnostic
-findings, stay behind explicit domain readers rather than entering every page.
-These partial rows never authorize a write or replace live publication fences.
-Connection field guards share immutable target snapshots by target entity kind
-within one evaluation page. The first capture precedes inference, each source
-retains its own evidence, and publication still checks the selected target and
-source against live locked evidence. A fresh page captures fresh catalogs;
-there is no cross-page cache or skipped target validation.
-Initial connection candidate ranking and basis capture share the canonical
-Expense recommendation preparation within one capture call. Each source retains
-its own history and date exclusion; candidate batches retain the same frozen
-evidence. Per-source failure fallback and locked publication load fresh inputs
-independently. This preparation never crosses capture calls or inference.
+rows for connection preparation, field refresh, queued suggestion checks and
+publication validation. Selections containing governed root fields retain
+`fieldResolutions`, so narrowing does not change effective outcomes or provenance.
+These partial rows never authorize a write or replace live publication fences;
+publication still checks the selected target and source against live locked evidence.
 Enum targets may declare `allowNone: true` to offer an evaluated decline when
 their basis does not support a value. A decline proposes no replacement or
 clearing of the current field; exhaustive enums keep `allowNone: false`.
@@ -1471,14 +1284,6 @@ value is an array. The resulting `FieldSuggestion` carries
 generic review surfaces render it as a removal proposal, never an auto-apply,
 and a form-mode `FieldSuggestionProvider` skips prune targets by default
 (record surfaces — list/detail — request them). Prune acceptance verifies the saved remaining array and records the same saved-field Feedback receipt as a set proposal; removed tokens are not compared with the remaining value.
-
-The generated `suggestFieldKeys` tuple
-(`packages/schemas/src/generated/entity-field-model.gen.ts`) lists every
-declared `"entity.field"` suggest target, and its `GeneratedSuggestFieldKey`
-union type-enforces that the server's field-suggest declarations
-(`server/ai/policy/field-suggest.ts`) and runtime registry
-(`server/ai/field-suggest/registry.ts`, which adds rosters and candidates)
-each carry exactly one entry per key.
 
 Assessments store immutable typed subjects, judgments, evidence and nullable original producer metadata. Assessment and Feedback child handles accept the full PostgreSQL GUID shape, including retained hash-derived identifiers with arbitrary UUID version/variant bits; readers, review commands and receipts preserve them exactly. Entity, Run and observation identifiers keep their own stricter contracts. Successful applications commit an immutable command-bound Feedback receipt with the domain write. Explicit single and batch finance Apply acknowledge each Assessment only after the finance writer saves; recording the saved default preserves any newer draft. An identical command replays its receipt before current projection checks; conflicting operation reuse is rejected and another command cannot inherit a resolved application. Public operation IDs reserve internal receipt namespaces; replay validates the immutable receipt kind, exact command Feedback binding and recorded outcome. Feedback records correct, wrong, uncertain and presentation-only dismissal separately, with an explicit correction-presence discriminator so corrected JSON null survives. AssessmentState holds rebuildable current targets, field supersession, confirmed values and exactly scoped suppression. Merges and deletes change these projections, never historical subjects. Live field inference shares one immutable publication per subject, full evidence, exact proposal and served model/prompt policy, preserving the first actual producer and proposal across requesting Runs. Live and stored inference also share an internal review identity over the actual captured feature, prompt, model, policy dependencies, field subject, exact proposed value and operation kind. An exact wrong review remains resolved across either entry point until evidence, policy or candidate changes; unknown legacy evidence receives no invented identity. It retains history with an inactive projection; only stored sweep advice enters the queue. A wrong review resolves that exact evidence and served policy without declaring universal value suppression; revised evidence or policy can be assessed again. Runs are nullable provenance references rather than history owners. The family registry validates current projection targets. Email link authority can target the real retained `orderMailEvent` internally when its Email is absent; that target is never a public entity, shortcode, search, or HTTP resource. Email removal repoints link authority to the event and retires relevance projections. Event deletion or supersession retires current link authority while immutable history survives.
 
@@ -1717,14 +1522,7 @@ identities and domain summaries outside the field model remain explicit columns
 alongside the compiled collection. Composite cells suppress their supporting
 fields in list metadata so IDs, names, and logos are not displayed twice.
 Standard name and image columns are declared by `display.standard` on their
-fields. The shared table renders them once, preserving its name editing, image,
-and tree controls; scalar column compilation skips those fields. Flat generated
-CRUD lists derive identity editing only when `presentation.titleField` is the
-same readable, updateable, non-null text field. Trees, transformed or custom
-data sources, and explicit editors opt out automatically. The identity column
-uses the title field's declared width and otherwise keeps the canonical
-`w-64`; contextual `nameClassName` remains the low-level escape hatch. There is
-no second standard-column roster in the browser registry.
+fields; there is no second standard-column roster in the browser registry.
 
 Compiled `display.detailOrder` places the title first, then follows model order.
 `display.listOrderOverride` orders list columns independently (model order also
@@ -1856,18 +1654,9 @@ Every `fields` entry is a `model.fields` key, a `model.derived` key, or a
 `related:<view>` count. A sort whose value is not its stored column (a
 vendor's live purchase count, a product's expected-quantity variance, a
 reference ordered by its effective record's name) is a `model.derived` key,
-so no repository resolves a sort by hand. The generator
-emits the roster as `generatedEntitySort` in
-`packages/schemas/src/generated/entity-sort.gen.ts`, and `defineRepository`
-derives the kernel's `EntitySortContract` from that map, so no repository
-hand-lists its own sort roster. The compiler enforces
-`default ∈ fields` and rejects a sort entry whose derived field cannot order
-(below). The same roster narrows the `entity.list` operation input (`sort` refined to
-`fields`).
-The native `EntityDescriptor.sortFields` is emitted from that same roster;
-generic table headers enable server sorting only for those column ids. Native
-sort changes restart pagination and replay the active search with its current
-filters, rather than sorting only the already loaded page.
+so no repository resolves a sort by hand. `defineRepository` derives the kernel's
+sort contract from the generated roster, and native sort changes restart pagination
+with the active search and filters rather than sorting the loaded page.
 
 `model.grouping` supplies the preferred ordered Group by choices, including
 explicit text fields and related paths. The compiler then infers eligible enum,
@@ -1973,47 +1762,14 @@ expands the standard created/updated date filters. A `stored`, `anyOf` or
 SQL stays in the repository's filter builder
 ([Filters and search](#filters-and-search)).
 
-`model.intents` owns the browser editor's field fragments: `fields` maps each
-semantic intent (`capture`, `full`, `identity`, ...) to model field keys,
-`create`/`update` list the ordered intent names each operation accepts (the
-first is the default), and `editorFields` names editor-only pseudo fields an
-intent may reference without a model field (a flattened identity). The
-generator emits `generatedEntityEditIntents`; the editing registry reads
-rosters and defaults from it and keeps only per-intent behaviour (defaults,
-seeds, builders). `generatedEntityFieldSchemaMaps` exposes every entity's
-create/update/read field maps by key for form resolvers.
+`model.intents` owns the browser editor's field fragments; a declaration module must
+not export `filterSchemas`, because a `deriveSchema: true` filter descriptor owns its
+field's Zod.
 
-A descriptor with `deriveSchema: true` also owns its filter field's Zod, which
-the generator emits into `generated<Entity>FilterFields` next to the field
-schemas; canonical modules spread that map and add only computed filters (a
-canonical key that shadows a generated one fails the identity test). The key
-is `field ?? columnId`. `text` derives an optional string (the model field's
-read schema with `schemaFromRead`, or a named value schema with `schemaRef`,
-such as expense's several OR-ed `expenseSearchTerms`), `boolean` an optional boolean,
-`presence` the shared presence filter, `multiselect` `oneOrMany` of
-the read schema (`schemaFromRead`), a named enum export (`schemaRef`), the
-static option values, or a plain string, and `range` the shared min/max or
-from/to fields, with the numeric/date kind inferred from the model field
-(`range.kind` overrides; `range.int`/`range.nonnegative` tighten it). A
-declaration module must not export `filterSchemas`.
-
-Generated artifacts provide the exhaustive entity keys and traits, public
-shortcode contracts (the inbound-only `P-`/`L-` label aliases live only in
-`packages/shared/src/shortcode.ts`, never in the manifest), schema bindings,
-inspector metadata (server and the `entity/platform` schema surfaces only), browser route roster, the typed list search
-schema per entity (`entity/generated/entity-search.gen.ts`: manifest filter
-keys, table keys and `create`, with `defaults` naming every key for
-`stripSearchParams`), kernel and MCP action capabilities, relation-specific
-command schemas, repository/relation-adapter assembly, and contract cases.
-The server's generated shortcode table bindings also carry physical title
-columns, derived through `presentation.titleField`, the field's `readKey`, and
-its storage mapping. Computed titles remain null and use the shortcode
-resolver's explicit label overrides: a stored column, or a relational SQL
-expression over the unaliased table. Resolving identities and labels therefore
-does not load the complete entity field model.
-Repository read declarations can also publish computed SQL titles through
-`read.title`; `scaffold.title()` otherwise resolves the stored title column.
-The Inventory declaration's title combines its Product and Location names.
+Inbound-only `P-`/`L-` label aliases live only in `packages/shared/src/shortcode.ts`,
+never in the manifest. Computed titles remain null in shortcode bindings and resolve
+through the shortcode resolver's explicit label overrides, so resolving a label does
+not load the complete entity field model.
 Two rosters follow from the declaration. The **list roster** is every routed
 entity with a contract: its index — generated, or hand-written like Image's —
 and every client (native browse, HTTP `entity.list`, MCP) read the
@@ -2028,28 +1784,10 @@ update-only entities such as imported Cookbooks. The generic editor accepts
 entities with declared create or update intents; an update-only entity exposes
 no create operation.
 
-Complete client vocabularies use `entityListFor`'s infinite read, draining
-complete pages through the same cache identity as list consumers. Category
-pickers retain all taxonomy pages, hierarchy relations, aliases, descriptions
-and inherited features. Picker thumbnails retain their compact display-image read.
-
-The list and detail route modules for a routed entity are generated by default
-(`routes/_authenticated/<basePath>.index.tsx`
-and `.$shortcode.tsx`, with the generated header); a `null` slot keeps that
-module hand-written, composing route-only keys onto
-`entitySearch.<entity>.schema.shape`. Every entity's detail is the generic
-page over the kernel `get`, which every kernel entity serves whether or not it
-accepts writes (image, cookbook, and the read-only Run included); the generator
-rejects `route.detail: null` except for `recipe` (its route still renders
-`GenericEntityDetail`, hand-written only for URL search keys) and `usda-food`
-(the external USDA catalog). Specialized screens stay as detail slots in
-shared shells — a Run's import workflow, photo batch, AI usage and changes are
-slots gated by `purpose`.
-
-Inspector metadata projects declared actions, filter keys, MCP operations,
-lifecycle/capability flags, reference targets, schema source-reference strings,
-and port source references. It is safe for browser imports because it contains
-data and type-only imports, never server bindings or executable schema modules.
+List and detail route modules are generated by default; a `null` slot keeps that
+module hand-written. Every entity's detail is the generic page over the kernel `get`,
+and the generator rejects `route.detail: null` except for `recipe` and `usda-food`.
+Specialized screens stay as detail slots gated in shared shells.
 
 The declaration is authoritative only for declared mechanical behavior. A spec
 does not replace a repository's transactions, locking, SQL, or workflow rules.
@@ -3170,9 +2908,7 @@ disabled. Inputs 10 and 11 capture the changed Claim and its old/new canonical
 parents. Their seed-inclusive, cycle-guarded one-edge up/down paths retain both
 families after a move or detach, without filtering source ownership or liveness;
 canonical computation decides eligibility. Other source-claim consumers retain
-their declared conservative fanout. Activating these new input positions requires
-the [staged cutover](runbooks/production-migrations.md#source-claim-fanout-capture)
-so incompatible consumers cannot discard its pending work.
+their declared conservative fanout.
 
 Service Cost captures the positive actual charge total beside its average, count
 and latest dated charge. The explanation reads those operands from the same
