@@ -457,3 +457,38 @@ neon snapshots restore <id> --name verify-<table>
 
 Never pass `--finalize`, never run `snapshots finalize`, and never reset or restore onto
 the production branch. If table-level recovery would not be enough, stop and report.
+
+## Source-claim minor units
+
+`0084_source_claim_minor_units` is a direct contract cutover. The release owner
+must wait for the active financial refresh's generation and subsequent statement
+steps to reach terminal outcomes before merging it. No writer hold, branch-copy
+rehearsal or dual writer is required. Parent owns merge sequencing with other
+migration lanes; regenerate its journal position on current main before release.
+
+The migration locks the claim table and its FK endpoints with a two-second lock
+timeout. It refuses unrepresentable money and unhandled view dependencies before
+changing storage. It moves the complete original table to
+`archive.LedgerSourceClaim_dollar_preimage`, creates the replacement with signed
+bigint `targetAmountMinor`, and compares complete row-level hash multisets, including nulls
+and tombstones, against the exact allowed conversion. Original rows are checked
+again unchanged. It rebinds incoming/outgoing FKs and current triggers, then
+removes archived outgoing FKs, triggers and nonessential indexes. The archive is
+retained indefinitely in this goal; no table or original source JSON is dropped.
+
+Run the populated-predecessor source-claim migration regression and `db:check`
+before merge. Parent's independent reviewer must examine signed conversion,
+full-row preservation, FK/trigger rebinding, archive inertness and the unchanged
+native dollar-number boundary. After deployment, independently compare retained
+claim IDs, source keys, decisions, normalized evidence and timestamps; verify
+target cents exactly match archived dollars × 100 and that Expense/transfer
+reads still return dollar numbers. Verify live source-claim replacement and
+exact replay through supported commands. A successful migration alone proves
+neither runtime acceptance nor completed historical reconciliation.
+
+When a monetary column changes units, give the physical minor-unit column a
+new name. Keeping a numeric predecessor column name can silently accept an old
+Worker's whole-dollar integer as cents, especially on a reviewed mismatch.
+Old writers must fail at the database boundary; downtime does not authorize
+wrong-unit writes. Keep client dollar-number fields at the checked output
+boundary. Verify a predecessor write refuses after the cutover.

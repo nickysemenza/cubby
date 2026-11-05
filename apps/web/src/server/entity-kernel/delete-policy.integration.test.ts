@@ -901,7 +901,7 @@ async function seedLedgerSourceClaims(db: Database, ids: StagingIds) {
       context: null,
       disambiguator: null,
     },
-    targetAmountAtClaim: 10,
+    targetAmountMinor: 1000n,
     reconciliationDecision: "amounts_match" as const,
     sourceKeyVersion: 1,
   };

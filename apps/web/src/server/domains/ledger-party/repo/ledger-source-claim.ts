@@ -5,7 +5,8 @@ import {
   ledgerSourceClaimNormalizedEvidence,
   type LedgerSourceClaimInput,
 } from "@cubby/schemas/ledger-transfer";
-import { cents } from "@cubby/shared";
+import { settledMoney } from "@cubby/schemas/money";
+import { moneyToMinor } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
@@ -78,7 +79,8 @@ const isExpenseOwner = (
 const sameAmount = (left: number | null, right: number | null) =>
   left === null || right === null
     ? left === right
-    : cents(left) === cents(right);
+    : moneyToMinor(settledMoney.parse(left)) ===
+      moneyToMinor(settledMoney.parse(right));
 
 const assertClaimAmounts = (
   targetAmount: number | null,
@@ -117,15 +119,14 @@ export async function assertExplicitSourceClaimsForAmountChange(
   nextAmount: number | null,
   sourceClaims: readonly LedgerSourceClaimInput[] | null | undefined,
 ): Promise<void> {
-  if (sourceClaims !== undefined || sameAmount(previousAmount, nextAmount))
-    return;
+  if (sourceClaims !== undefined || previousAmount === nextAmount) return;
 
   const [claim] = await tx
     .select({ id: ledgerSourceClaim.id })
     .from(ledgerSourceClaim)
     .where(and(ownerClaims(owner), notDeleted(ledgerSourceClaim)))
     .limit(1);
-  if (!claim) return;
+  if (!claim || sameAmount(previousAmount, nextAmount)) return;
 
   const target = isExpenseOwner(owner) ? "Expense cost" : "transfer amount";
   throw createAppError(
@@ -225,7 +226,7 @@ export async function replaceLedgerSourceClaims(
     sourceKey: key,
     sourceKeyVersion: version,
     normalizedEvidence: claim.normalizedEvidence,
-    targetAmountAtClaim: targetAmount!,
+    targetAmountMinor: moneyToMinor(settledMoney.parse(targetAmount)),
     reconciliationDecision: claim.reconciliation.decision,
     reconciliationNote:
       claim.reconciliation.decision === "accept_target_amount"
@@ -359,7 +360,7 @@ export async function replaceLedgerSourceClaims(
       row.deletedAt === null &&
       row.sourceKeyVersion === values.sourceKeyVersion &&
       isEqual(row.normalizedEvidence, values.normalizedEvidence) &&
-      cents(row.targetAmountAtClaim) === cents(values.targetAmountAtClaim) &&
+      row.targetAmountMinor === values.targetAmountMinor &&
       row.reconciliationDecision === values.reconciliationDecision &&
       row.reconciliationNote === values.reconciliationNote;
     if (unchanged) continue;

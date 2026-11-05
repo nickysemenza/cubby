@@ -13,6 +13,7 @@ import {
 } from "@cubby/schemas/image";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
 import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
+import { minorToMoney } from "@cubby/shared";
 
 import {
   resolveLiveJoinName,
@@ -171,7 +172,7 @@ type ExpenseRow = {
     sourceKey: string;
     sourceKeyVersion: number;
     normalizedEvidence: RawExpenseOut["sourceClaims"][number]["normalizedEvidence"];
-    targetAmountAtClaim: number;
+    targetAmountMinor: bigint;
     reconciliationDecision: "amounts_match" | "accept_target_amount";
     reconciliationNote: string | null;
     createdAt: Date;
@@ -211,7 +212,7 @@ const expenseSourceClaims = (
             },
       sourceKey: value.sourceKey,
       sourceKeyVersion: value.sourceKeyVersion,
-      targetAmountAtClaim: value.targetAmountAtClaim,
+      targetAmountAtClaim: minorToMoney(value.targetAmountMinor),
       createdAt: value.createdAt,
       updatedAt: value.updatedAt,
     }));

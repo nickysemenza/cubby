@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { moneyToMinor } from "@cubby/shared";
 
 const CENT_EPSILON = 1e-7;
 
@@ -27,3 +28,13 @@ export const money = z.number();
 export const moneyNullable = money.nullable();
 export const positiveMoney = z.number().nonnegative();
 export const positiveMoneyNullable = positiveMoney.nullable();
+
+/** Exact settled-dollar input; the numeric JSON shape is retained for native clients. */
+export const settledMoney = z.number().refine((value) => {
+  try {
+    moneyToMinor(value);
+    return true;
+  } catch {
+    return false;
+  }
+}, "money must be exact whole cents within the supported dollar-number wire range");

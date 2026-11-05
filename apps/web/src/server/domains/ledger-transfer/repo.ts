@@ -76,7 +76,7 @@ const transferSourceClaimsSql = sql<LedgerSourceClaimRow[]>`COALESCE((
     CASE WHEN c."reconciliationDecision" = 'amounts_match'
       THEN jsonb_build_object('decision', c."reconciliationDecision")
       ELSE jsonb_build_object('decision', c."reconciliationDecision", 'note', c."reconciliationNote") END,
-    'targetAmountAtClaim', c."targetAmountAtClaim", 'createdAt', c."createdAt", 'updatedAt', c."updatedAt")) ORDER BY c."createdAt", c.id)
+    'targetAmountAtClaim', c."targetAmountMinor"::numeric / 100, 'createdAt', c."createdAt", 'updatedAt', c."updatedAt")) ORDER BY c."createdAt", c.id)
   FROM "LedgerSourceClaim" c
   WHERE c."ledgerTransferId" = "LedgerTransfer".id AND ${notDeleted("c")}
 ), '[]'::jsonb)`;
