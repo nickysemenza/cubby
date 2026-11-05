@@ -230,7 +230,7 @@ describe("suggestFields", () => {
     });
     const out = await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         entity: "financialAccount",
         targets: ["network"],
@@ -255,7 +255,7 @@ describe("suggestFields", () => {
     const decisionPort = decisionPortPicking("No listed choice");
     const out = await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         basisMode: "provided",
         entity: "location",
@@ -543,7 +543,7 @@ describe("suggestFields", () => {
     async ({ entity, targets, basis, decisionPort, registry, assert }) => {
       const out = await suggestFields(
         fakeDb,
-        fixtureRunId,
+        { runId: fixtureRunId },
         { entity, targets, basis, basisMode: "suggested" },
         { decisionPort, registry },
       );
@@ -620,7 +620,7 @@ describe("suggestFields", () => {
       };
       const result = suggestFields(
         fakeDb,
-        fixtureRunId,
+        { runId: fixtureRunId },
         {
           entity: "meal",
           targets: ["mealType", "mealKind"],
@@ -640,7 +640,7 @@ describe("suggestFields", () => {
     const labels = vi.fn(async () => new Map<string, string>());
     await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         entity: "expense",
         targets: ["projectId", "trade"],
@@ -674,7 +674,7 @@ describe("suggestFields", () => {
     const decisionPort = decisionPortPicking("food:");
     const out = await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         entity: "productCategory",
         targets: ["feature"],
@@ -731,7 +731,7 @@ describe("suggestFields", () => {
     }));
     const out = await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         entity: "product",
         targets: ["categoryId"],
@@ -798,7 +798,7 @@ describe("suggestFields", () => {
       }));
       const out = await suggestFields(
         fakeDb,
-        fixtureRunId,
+        { runId: fixtureRunId },
         {
           entity: "product",
           targets: ["categoryId"],
@@ -867,7 +867,7 @@ describe("suggestFields", () => {
       }));
       return suggestFields(
         fakeDb,
-        fixtureRunId,
+        { runId: fixtureRunId },
         {
           entity: "product",
           targets: ["categoryId"],
@@ -896,7 +896,7 @@ describe("suggestFields", () => {
     await expect(
       suggestFields(
         fakeDb,
-        fixtureRunId,
+        { runId: fixtureRunId },
         {
           basisMode: "provided",
           entity: "task",
@@ -919,7 +919,7 @@ describe("suggestFields", () => {
       await expect(
         suggestFields(
           fakeDb,
-          fixtureRunId,
+          { runId: fixtureRunId },
           {
             basisMode: "provided",
             entity: "expense",
@@ -945,7 +945,7 @@ describe("suggestFields", () => {
     const decisionPort = decisionPortPicking("Kitchen Remodel");
     const result = await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         basisMode: "provided",
         entity: "expense",
@@ -963,7 +963,7 @@ describe("suggestFields", () => {
     await expect(
       suggestFields(
         fakeDb,
-        fixtureRunId,
+        { runId: fixtureRunId },
         {
           basisMode: "suggested",
           entity: "expense",
@@ -1002,7 +1002,7 @@ describe("suggestFields", () => {
     };
     const result = await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         basisMode: "suggested",
         entity: "expense",
@@ -1069,7 +1069,7 @@ describe("suggestFields", () => {
     };
     const result = await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         basisMode: "suggested",
         entity: "task",
@@ -1109,7 +1109,7 @@ describe("suggestFields", () => {
     };
     const result = await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         basisMode: "provided",
         entity: "expense",
@@ -1136,7 +1136,7 @@ describe("suggestFields", () => {
   it("does not invent an empty allocation outcome before draft shares are evaluated", async () => {
     const result = await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         basisMode: "provided",
         entity: "expense",
@@ -1192,7 +1192,7 @@ describe("suggestFields", () => {
     };
     const result = await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         basisMode: "provided",
         entity: "task",
@@ -1231,7 +1231,7 @@ describe("suggestFields", () => {
     };
     const result = await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         basisMode: "suggested",
         entity: "task",
@@ -1280,7 +1280,7 @@ describe("suggestFields", () => {
     // must chain the value `projectId` itself just resolved.
     const chained = await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         basisMode: "suggested",
         entity: "expense",
@@ -1312,7 +1312,7 @@ describe("suggestFields", () => {
     );
     const explicit = await suggestFields(
       fakeDb,
-      fixtureRunId,
+      { runId: fixtureRunId },
       {
         basisMode: "suggested",
         entity: "expense",

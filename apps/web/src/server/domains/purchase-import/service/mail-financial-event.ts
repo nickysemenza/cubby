@@ -29,7 +29,7 @@ import {
   type PreparedMailFinancialEvent,
 } from "~/server/domains/purchase-import/repo/mail-financial-event";
 import { readMailOwnerEvidence } from "~/server/domains/purchase-import/repo/mail-owner";
-import { aiCallOwner } from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 
 import {
   describeMailAttribution,

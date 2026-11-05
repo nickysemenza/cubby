@@ -16,7 +16,7 @@ import type {
   ExpenseLineRoleClassifier,
   ExpenseLineRoleEvidence,
 } from "~/server/domains/expense/repo/line-role-classifier";
-import { aiCallOwner } from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 
 const roleChoices = expenseLineKindValues.filter(
   (lineKind): lineKind is Exclude<ExpenseLineKind, "unclassified"> =>

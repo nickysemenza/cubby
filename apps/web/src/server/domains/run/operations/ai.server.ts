@@ -15,7 +15,6 @@ import { usesSavedFieldSuggestionContext } from "@cubby/schemas/field-suggestion
 import {
   parseEntityId,
   type IngredientId,
-  type RunId,
   type LocationId,
 } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -74,9 +73,9 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import { applyFinanceCategorySuggestion } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import {
-  aiCallRunInput,
-  ensureRun,
-} from "~/server/domains/run/repo/ensure-run";
+  aiCallOwner,
+  type AiCallOwner,
+} from "~/server/domains/run/repo/ai-call-owner";
 import {
   pauseSuggestionSweep,
   resumeSuggestionSweep,
@@ -107,24 +106,12 @@ import {
 const log = createLogger("precomputeEnrichmentProposals");
 const suggestionLog = createLogger("suggestFields");
 
-/** The actor's AI run for the hour: every AI operation opens it once with
- * `ensureRun` before calling out. */
-const actorAiRun = (
-  context: Pick<AuthenticatedOperationContext, "db" | "actorContext">,
-  options?: { runKey?: string },
-) =>
-  ensureRun(
-    context.db,
-    context.actorContext,
-    aiCallRunInput(context.actorContext, options),
-  );
-
 type EnrichmentPrecomputeInput = z.output<
   typeof enrichmentProposalPrecomputeInput
 >;
 type EnrichmentPrecomputeItem = EnrichmentPrecomputeInput["items"][number] & {
   ingredientId: IngredientId;
-  runId: RunId;
+  owner: AiCallOwner;
 };
 const skippedUsda: EnrichmentProposal["usda"] = {
   food: null,
@@ -137,14 +124,7 @@ const precomputeEnrichmentDefinition = defineBulkWorkflow({
     "ai.precomputeEnrichmentProposals.items",
   )
     .call("resolved", async ({ context }, { input }) => {
-      // One run for the whole precompute request, not one per item:
-      // `resolved` runs once before the item stage fans out, so every
-      // item's usda/merge lookup below carries the same run id.
-      const runId = await ensureRun(
-        context.db,
-        context.actorContext,
-        aiCallRunInput(context.actorContext),
-      );
+      const owner = aiCallOwner(context.actorContext);
       const resolved = await resolveLiveShortcodes(
         context.db,
         input.items.map((item) => item.id),
@@ -157,7 +137,7 @@ const precomputeEnrichmentDefinition = defineBulkWorkflow({
               {
                 ...item,
                 ingredientId: parseEntityId("ingredient", id),
-                runId,
+                owner,
               },
             ]
           : [];
@@ -172,7 +152,7 @@ const precomputeEnrichmentDefinition = defineBulkWorkflow({
         input.wantUsda
           ? suggestUsdaFood(context.usdaService, context.db, input.name, {
               ingredientId: input.ingredientId,
-              runId: input.runId,
+              owner: input.owner,
             })
           : skippedUsda,
       merge: async ({ context }, { input }) =>
@@ -183,7 +163,7 @@ const precomputeEnrichmentDefinition = defineBulkWorkflow({
                 id: input.ingredientId,
                 name: input.name,
               },
-              input.runId,
+              input.owner,
             )
           : null,
     })
@@ -259,13 +239,11 @@ export const inferFieldAssessments = async (
   input: FieldSuggestionsInput,
   ports?: Parameters<typeof suggestFields>[3],
   prepared?: {
-    runId: RunId;
     manifest: Awaited<ReturnType<typeof producingAiManifest>>;
     recordId?: Awaited<ReturnType<typeof resolveOrThrow>>;
   },
 ) => {
-  const runId =
-    prepared?.runId ?? (await actorAiRun(context, { runKey: input.runKey }));
+  const owner = aiCallOwner(context.actorContext);
   const manifest =
     prepared?.manifest ?? (await producingAiManifest(context.db));
   const recordId = input.entityId
@@ -294,7 +272,7 @@ export const inferFieldAssessments = async (
       );
   }
   const captured = await withAiInputs(false, () =>
-    suggestFields(context.db, runId, input, {
+    suggestFields(context.db, owner, input, {
       ...ports,
       ...(recordId ? { recordId } : {}),
       ...(input.decisionModel ? { decisionModel: input.decisionModel } : {}),
@@ -387,7 +365,7 @@ export const inferFieldAssessments = async (
                   kind: "model",
                   model: producer.model,
                   revision: producer.promptVersion,
-                  runId,
+                  runId: owner.runId ?? null,
                   evaluationId: null,
                 }
               : null,
@@ -399,7 +377,7 @@ export const inferFieldAssessments = async (
             }),
           },
           {
-            runId,
+            runId: owner.runId ?? null,
             model: producer?.model ?? "unknown",
             suggestedValue: suggestion?.value ?? null,
             confidence: suggestion?.probability ?? outcome.probability ?? 0,
@@ -578,39 +556,30 @@ export async function inferFieldAssessmentsBatch(
     );
     for (const [code, id] of resolved) recordIds.set(code, id);
   }
-  const runs = new Map<string | undefined, Promise<RunId>>();
   const usages = new Map<string, AiSelectionUsage>();
   const results = await withFieldSuggestionBatch(() =>
     settleDecisionWorkItems(input.items, async (item) => {
-      let pendingRun = runs.get(item.runKey);
-      if (!pendingRun) {
-        pendingRun = actorAiRun(context, { runKey: item.runKey });
-        runs.set(item.runKey, pendingRun);
-      }
-      const runId = await pendingRun;
       return inferFieldAssessments(
         context,
         item,
         {
           ...ports,
           usageFor: (operation) => {
-            const key = JSON.stringify([runId, operation]);
-            let usage = usages.get(key);
+            let usage = usages.get(operation);
             if (!usage) {
               usage = {
                 db: ports?.recordUsage === false ? undefined : context.db,
-                runId,
+                ...aiCallOwner(context.actorContext),
                 operation,
                 cacheStatus: "none",
                 force: ports?.force,
               };
-              usages.set(key, usage);
+              usages.set(operation, usage);
             }
             return usage;
           },
         },
         {
-          runId,
           manifest,
           recordId: item.entityId ? recordIds.get(item.entityId) : undefined,
         },
@@ -634,19 +603,17 @@ export async function inferFieldAssessmentsBatch(
 
 export const aiHandlers = implementOperationDomain(aiContract, {
   describeLocation: async (context, input) => {
-    const runId = await actorAiRun(context);
     return describeLocation(
       context.db,
       await resolveOrThrow(context.db, "location", input.locationId),
-      runId,
+      aiCallOwner(context.actorContext),
     );
   },
   detectInventoryItems: async (context, input) => {
-    const runId = await actorAiRun(context);
     const detected = await detectInventoryItems(
       context.db,
       await resolveOrThrow(context.db, "location", input.locationId),
-      runId,
+      aiCallOwner(context.actorContext),
       input.imageIds,
     );
     const matches = await publicFieldEnvelopeBatch({
@@ -690,16 +657,15 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   identifyProduct: async (context, input) =>
     getAiClient().identifyProduct(input.imageUrls, {
       db: context.db,
-      runId: await actorAiRun(context),
+      ...aiCallOwner(context.actorContext),
       operation: "identifyProduct",
       cacheStatus: "none",
     }),
   suggestUsdaFood: async (context, input) =>
     suggestUsdaFood(context.usdaService, context.db, input.ingredientName, {
-      runId: await actorAiRun(context),
+      owner: aiCallOwner(context.actorContext),
     }),
   suggestUsdaFoodBatch: async (context, input) => {
-    const runId = await actorAiRun(context);
     const ids = await resolveAllOrThrow(
       context.db,
       "ingredient",
@@ -712,11 +678,10 @@ export const aiHandlers = implementOperationDomain(aiContract, {
         id: ids[index]!,
         name: item.name,
       })),
-      runId,
+      aiCallOwner(context.actorContext),
     );
   },
   suggestIngredientMergeBatch: async (context, input) => {
-    const runId = await actorAiRun(context);
     const ids = await resolveAllOrThrow(
       context.db,
       "ingredient",
@@ -729,7 +694,7 @@ export const aiHandlers = implementOperationDomain(aiContract, {
         shortcode: item.id,
         name: item.name,
       })),
-      runId,
+      aiCallOwner(context.actorContext),
     );
     return suggestions.map(({ source, target, ...suggestion }) => ({
       ...suggestion,
@@ -778,7 +743,7 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   suggestExternalIdKind: async (context, input) =>
     suggestExternalIdKind(input, {
       db: context.db,
-      runId: await actorAiRun(context, { runKey: input.runKey }),
+      ...aiCallOwner(context.actorContext),
       operation: "suggestExternalIdKind",
       cacheStatus: "none",
     }),

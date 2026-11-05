@@ -38,7 +38,6 @@ import {
   type FieldSuggestionResolutionEvidence,
 } from "@cubby/schemas/field-suggestion";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { RunId } from "@cubby/schemas/identifiers";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
@@ -68,6 +67,7 @@ import {
   loadFinanceSuggestionContext,
 } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { resolveDraftEvidenceFields } from "~/server/domains/purchase/repo/purchase-evidence-policy";
+import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { classificationRefusesField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { resolveDraftTaskFields } from "~/server/domains/task/repo/task-project-inheritance";
@@ -133,14 +133,14 @@ export interface SuggestFieldsPorts {
 
 function suggestionUsage(
   db: Database,
-  runId: RunId | undefined,
+  owner: AiCallOwner,
   operation: string,
   ports: SuggestFieldsPorts | undefined,
 ): AiSelectionUsage {
   if (ports?.usageFor) return ports.usageFor(operation);
   return {
     db: ports?.recordUsage === false ? undefined : db,
-    runId,
+    ...owner,
     operation,
     cacheStatus: "none",
     force: ports?.force,
@@ -1018,7 +1018,7 @@ function reviewedSuggestion(
 
 export async function suggestFields(
   db: Database,
-  runId: RunId | undefined,
+  owner: AiCallOwner,
   rawInput: FieldSuggestionsInput,
   ports?: SuggestFieldsPorts,
 ): Promise<FieldSuggestionsOut> {
@@ -1188,7 +1188,7 @@ export async function suggestFields(
 
       const usage = suggestionUsage(
         db,
-        runId,
+        owner,
         `suggestFields.${input.entity}.${target}`,
         ports,
       );

@@ -1,4 +1,4 @@
-import type { RunId, RecipeId } from "@cubby/schemas/identifiers";
+import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
   type RecipeFlowAiPlan,
   type RecipeFlowArtifact,
@@ -23,6 +23,7 @@ import {
   recipeFlowOrThrow,
   type RecipeFlowReadPorts,
 } from "~/server/domains/recipe/repo/recipe-flow-state";
+import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 
 import { validateRecipeFlowPlan } from "./validation";
 
@@ -127,14 +128,14 @@ export function assessRecipeFlowCandidate(
 async function recordFlowCacheHit(
   db: Database,
   recipeId: RecipeId,
-  runId: RunId,
+  owner: AiCallOwner,
   ports: RecipeFlowPorts,
 ): Promise<void> {
   await ports.recordFeatureUsage(
     RECIPE_FLOW_PRIMARY_FEATURE,
     {
       db,
-      runId,
+      ...owner,
       operation: "generateRecipeFlow",
       entity: { entityKind: "recipe", entityId: recipeId },
     },
@@ -154,7 +155,7 @@ async function persistFlowArtifact(
 export async function generateRecipeFlow(
   db: Database,
   input: RecipeFlowGenerateRequest,
-  runId: RunId,
+  owner: AiCallOwner,
   ports: RecipeFlowPorts = productionRecipeFlowPorts,
 ): Promise<RecipeFlowArtifact> {
   const [recipe, candidates] = await Promise.all([
@@ -174,7 +175,7 @@ export async function generateRecipeFlow(
       candidate.result.contentFingerprint === fingerprint,
   );
   if (current && !input.force) {
-    await recordFlowCacheHit(db, input.id, runId, ports);
+    await recordFlowCacheHit(db, input.id, owner, ports);
     return current.result;
   }
 
@@ -184,7 +185,7 @@ export async function generateRecipeFlow(
     guidance,
     {
       db,
-      runId,
+      ...owner,
       operation: "generateRecipeFlow",
       cacheStatus: "miss",
       entity: { entityKind: "recipe", entityId: input.id },

@@ -22,6 +22,7 @@ import {
   retrieveAcquisitionNotes,
 } from "~/server/domains/connection/repo/connection-candidates";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
+import { aiRunOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { semanticEntityCandidateScan } from "~/server/generic/embedding/service/semantic-search.service";
 import { SEMANTIC_MATCH_MIN_SIMILARITY } from "~/server/generic/embedding/service/semantic/constants";
 import { findLexicalSearchCandidates } from "~/server/generic/search/service/search.service";
@@ -105,7 +106,13 @@ export async function discoverAcquisitionCandidateScan(
                 10,
               )
             : [],
-          semanticEntityCandidateScan(db, query, 10, kind, options.runId),
+          semanticEntityCandidateScan(
+            db,
+            query,
+            10,
+            kind,
+            aiRunOwner(options.runId),
+          ),
         ]);
         return { kind, lexical, semantic };
       }),

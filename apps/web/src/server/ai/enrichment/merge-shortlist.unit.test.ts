@@ -48,7 +48,7 @@ describe("buildMergeShortlist", () => {
     const shortlist = await buildMergeShortlist(
       db,
       source,
-      runId,
+      { runId },
       20,
       portOf([green], [scallionAlt]),
     );
@@ -66,7 +66,7 @@ describe("buildMergeShortlist", () => {
     const shortlist = await buildMergeShortlist(
       db,
       source,
-      runId,
+      { runId },
       20,
       portOf([shared], [sharedFromSemantic]),
     );
@@ -87,7 +87,7 @@ describe("buildMergeShortlist", () => {
     const shortlist = await buildMergeShortlist(
       db,
       source,
-      runId,
+      { runId },
       20,
       portOf([self, other], []),
     );
@@ -103,7 +103,7 @@ describe("buildMergeShortlist", () => {
     const shortlist = await buildMergeShortlist(
       db,
       source,
-      runId,
+      { runId },
       20,
       portOf(many, []),
     );
@@ -117,7 +117,7 @@ describe("buildMergeShortlist", () => {
     const shortlist = await buildMergeShortlist(
       db,
       source,
-      runId,
+      { runId },
       20,
       portOf([green], []),
     );

@@ -14,7 +14,6 @@ import type {
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import {
-  type RunId,
   type LocationId,
   type ProductId,
   type ProductShortcode,
@@ -64,6 +63,7 @@ import {
   quickCreateProductRecord,
 } from "~/server/domains/product/repo/crud";
 import { findProductByNameWithBrandClaim } from "~/server/domains/product/repo/lookup";
+import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -233,14 +233,14 @@ async function recordLocationAiUsage(
     cacheStatus: "hit";
     durationMs: number;
     locationId: LocationId;
-    runId: RunId | undefined;
+    owner: AiCallOwner;
   },
 ): Promise<void> {
   await recordFeatureUsage(
     input.feature,
     {
       db,
-      runId: input.runId,
+      ...input.owner,
       operation: input.operation,
       entity: { entityKind: "location", entityId: input.locationId },
     },
@@ -330,7 +330,7 @@ async function publishLocationAnalysis(
 export async function describeLocation(
   db: Database,
   locationId: LocationId,
-  runId: RunId | undefined,
+  owner: AiCallOwner,
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
   /** The executing Job's fence; a member request owns no Job. */
   fenced: Fenced = outsideJob(db),
@@ -371,7 +371,7 @@ export async function describeLocation(
       cacheStatus: "hit",
       durationMs: 0,
       locationId,
-      runId,
+      owner,
     });
     return {
       ...cached.result,
@@ -386,7 +386,7 @@ export async function describeLocation(
     location.name,
     {
       db,
-      runId,
+      ...owner,
       operation: "locationDescription",
       cacheStatus: "miss",
       entity: { entityKind: "location", entityId: locationId },
@@ -432,7 +432,7 @@ async function matchDetectedItems(
   db: Database,
   locationId: LocationId,
   items: DetectedInventoryItem[],
-  runId: RunId | undefined,
+  owner: AiCallOwner,
 ): Promise<DetectedItem[]> {
   const existingInventory = await getInventoryByLocationIds(db, [locationId]);
   const existingProductIds = new Set(
@@ -494,7 +494,7 @@ async function matchDetectedItems(
           const [semanticMatch] = await semanticProductCandidatesBestEffort(
             db,
             productName,
-            runId,
+            owner,
           );
           const semanticShortcode =
             semanticMatch?.item.entityKind === "product"
@@ -548,10 +548,10 @@ async function matchDetectedItems(
 async function semanticProductCandidatesBestEffort(
   db: Database,
   query: string,
-  runId: RunId | undefined,
+  owner: AiCallOwner,
 ): ReturnType<typeof semanticProductCandidates> {
   try {
-    return await semanticProductCandidates(db, query, 3, runId);
+    return await semanticProductCandidates(db, query, 3, owner);
   } catch (error) {
     const parsedError = error instanceof Error ? error : null;
     log.warn("inventory semantic-product-match failed", {
@@ -580,7 +580,7 @@ export interface DetectedInventoryResult extends DetectedInventory {
 export async function detectInventoryItems(
   db: Database,
   locationId: LocationId,
-  runId: RunId | undefined,
+  owner: AiCallOwner,
   imageIds?: readonly string[],
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
   /** The executing Job's fence; a member request owns no Job. */
@@ -617,7 +617,7 @@ export async function detectInventoryItems(
       cacheStatus: "hit",
       durationMs: 0,
       locationId,
-      runId,
+      owner,
     });
   } else {
     raw = await ai.detectInventoryItems(
@@ -625,7 +625,7 @@ export async function detectInventoryItems(
       location.name,
       {
         db,
-        runId,
+        ...owner,
         operation: "locationInventoryDetection",
         cacheStatus: "miss",
         entity: { entityKind: "location", entityId: locationId },
@@ -661,7 +661,7 @@ export async function detectInventoryItems(
 
   return {
     ...raw,
-    items: await matchDetectedItems(db, locationId, raw.items, runId),
+    items: await matchDetectedItems(db, locationId, raw.items, owner),
     cache,
     analyzedAt,
   };

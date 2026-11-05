@@ -52,7 +52,7 @@ describe("reviewed finance suggestions", () => {
     decisionPort: DecisionPort,
   ) {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
-    return suggestFields(ctx.db, runId, input, { decisionPort });
+    return suggestFields(ctx.db, { runId }, input, { decisionPort });
   }
 
   it.each(["purchase", "expense"] as const)(

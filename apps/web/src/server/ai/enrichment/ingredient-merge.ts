@@ -7,7 +7,6 @@
 // `runAiSelection` (no agentic search loop). Suggestions only — merge is
 // destructive, so the user confirms.
 import {
-  type RunId,
   type IngredientId,
   type IngredientShortcode,
   parseShortcodeFor,
@@ -18,6 +17,7 @@ import { settleDecisionWorkItems } from "~/server/ai/decision-model";
 import { INGREDIENT_MERGE_FEATURE } from "~/server/ai/policy/features";
 import { runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
+import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 
 import {
   buildMergeShortlist,
@@ -49,14 +49,14 @@ import type { IngredientMergeSuggestion } from "./proposals";
 export async function suggestIngredientMerge(
   db: Database,
   source: { id: IngredientId; name: string },
-  runId: RunId,
+  owner: AiCallOwner,
   ai: IngredientMergeAiPort = productionIngredientMergeAiPort,
   shortlistPort?: MergeShortlistPort,
 ): Promise<IngredientMergeSuggestion> {
   const shortlist = await buildMergeShortlist(
     db,
     source,
-    runId,
+    owner,
     20,
     shortlistPort,
   );
@@ -75,7 +75,7 @@ export async function suggestIngredientMerge(
       candidates: shortlist,
       usage: {
         db,
-        runId,
+        ...owner,
         operation: "suggestIngredientMerge",
         cacheStatus: "none",
         entity: { entityKind: "ingredient", entityId: source.id },
@@ -109,12 +109,12 @@ interface IngredientMergeBatchSuggestion extends IngredientMergeSuggestion {
 export async function suggestIngredientMergeBatch(
   db: Database,
   sources: { id: IngredientId; shortcode: IngredientShortcode; name: string }[],
-  runId: RunId,
+  owner: AiCallOwner,
 ): Promise<IngredientMergeBatchSuggestion[]> {
   const capped = sources.slice(0, 20);
   const out: IngredientMergeBatchSuggestion[] = [];
   const results = await settleDecisionWorkItems(capped, (s) =>
-    suggestIngredientMerge(db, s, runId),
+    suggestIngredientMerge(db, s, owner),
   );
   results.forEach((result, j) => {
     const source = capped[j]!;

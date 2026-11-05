@@ -100,16 +100,9 @@ export async function embedTexts(
     /** A durable refresh must execute the configuration it content-addressed. */
     config?: ReturnType<typeof getSemanticEmbeddingConfig>;
     db?: Database;
-    /**
-     * Every AI call belongs to a run. Most `embedTexts` callers sit several
-     * layers below the request handler that could mint one (generic search
-     * infrastructure fanned out across many read paths) — omitted, this
-     * books the call under a `background`-purpose run rather than forcing
-     * that plumbing everywhere `db` is threaded. Those land in one system
-     * run per day, not one per search. A caller that already has the
-     * request's `ai_suggest` (or an inherited) run should pass it.
-     */
+    /** The session this search belongs to. With no Run, nobody is assumed to be waiting. */
     runId?: RunId;
+    interactive?: boolean;
     feature?: string;
     entity?: { entityKind: string; entityId: string };
   },
@@ -178,14 +171,20 @@ export async function embedTexts(
           };
         },
       },
-      { db: opts?.db, runId: opts?.runId, operation, entity: opts?.entity },
+      {
+        db: opts?.db,
+        runId: opts?.runId,
+        interactive: opts?.interactive,
+        operation,
+        entity: opts?.entity,
+      },
     );
   });
 }
 
 export async function embedQuery(
   query: string,
-  opts?: { db?: Database; runId?: RunId },
+  opts?: { db?: Database; runId?: RunId; interactive?: boolean },
 ): Promise<number[] | null> {
   if (!semanticEmbeddingsConfigured()) return null;
   const normalized = query.trim().replace(/\s+/g, " ").toLowerCase();
@@ -204,6 +203,7 @@ export async function embedQuery(
     operation: "queryEmbedding",
     db: opts?.db,
     runId: opts?.runId,
+    interactive: opts?.interactive,
     feature: SEMANTIC_QUERY_FEATURE.feature,
   })
     .then(([embedding]) => {

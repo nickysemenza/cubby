@@ -1,7 +1,6 @@
 import type { AiProvenance } from "@cubby/schemas/ai-evaluation";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entitySchema } from "@cubby/schemas/entity-core";
-import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import { isMiscProduct } from "@cubby/shared";
 import { getErrorMessage } from "@cubby/shared";
@@ -45,6 +44,7 @@ import {
   loadProductIdentifierClaims,
   type DroppedProductIdentifierClaim,
 } from "~/server/domains/product/repo/product-identity-claims";
+import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { findSimilarEntitiesPage } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
@@ -440,7 +440,7 @@ async function prepareProductIdentityCatalog(db: Database, id: ProductId) {
 export async function evaluatePreparedProductIdentityPair(
   db: Database,
   raw: z.infer<typeof preparedProductIdentityPair>,
-  runId: RunId,
+  owner: AiCallOwner,
   options: {
     decisionPort?: DecisionPort;
     model?: string | null;
@@ -454,14 +454,14 @@ export async function evaluatePreparedProductIdentityPair(
   const current = options.preparedPage
     ? pair
     : await prepareProductIdentityPair(db, pair.productIds);
-  return evaluateCurrentProductIdentityPair(db, pair, current, runId, options);
+  return evaluateCurrentProductIdentityPair(db, pair, current, owner, options);
 }
 
 async function evaluateCurrentProductIdentityPair(
   db: Database,
   pair: z.infer<typeof preparedProductIdentityPair>,
   current: z.infer<typeof preparedProductIdentityPair> | null,
-  runId: RunId,
+  owner: AiCallOwner,
   options: NonNullable<
     Parameters<typeof evaluatePreparedProductIdentityPair>[3]
   >,
@@ -474,7 +474,7 @@ async function evaluateCurrentProductIdentityPair(
         ? undefined
         : supportedDecisionModelSchema.parse(options.model),
     port: options.decisionPort,
-    usage: options.usage ?? { db, runId, operation: "product-identity" },
+    usage: options.usage ?? { db, ...owner, operation: "product-identity" },
   };
   const model = decisionModelFor(question);
   if (!current || current.fingerprint !== pair.fingerprint)
@@ -518,14 +518,14 @@ async function evaluateCurrentProductIdentityPair(
           kind: "rule" as const,
           model: null,
           revision: PRODUCT_IDENTITY_RULE_REVISION,
-          runId,
+          runId: owner.runId ?? null,
           evaluationId: options.evaluationId ?? null,
         }
       : {
           kind: "model" as const,
           model,
           revision: PRODUCT_IDENTITY_FEATURE.promptVersion,
-          runId,
+          runId: owner.runId ?? null,
           evaluationId: options.evaluationId ?? null,
         },
   };
@@ -533,7 +533,7 @@ async function evaluateCurrentProductIdentityPair(
 export async function evaluateProductIdentity(
   db: Database,
   id: ProductId,
-  runId: RunId,
+  owner: AiCallOwner,
   ports: NonNullable<
     Parameters<typeof evaluatePreparedProductIdentityPair>[3]
   > & { preparedCatalog?: PreparedProductIdentityPageOutcome } = {},
@@ -549,11 +549,11 @@ export async function evaluateProductIdentity(
     throw new Error("Product identity catalog changed during preparation");
   const pairs = [];
   let failure: string | null = null;
-  const usage = ports.usage ?? { db, runId, operation: "product-identity" };
+  const usage = ports.usage ?? { db, ...owner, operation: "product-identity" };
   const settled = await evaluatePreparedProductIdentityPairs(
     db,
     prepared.pairs,
-    runId,
+    owner,
     { ...ports, usage },
   );
   for (const result of settled) {
@@ -567,7 +567,7 @@ export async function evaluateProductIdentity(
 async function evaluatePreparedProductIdentityPairs(
   db: Database,
   pairs: readonly z.infer<typeof preparedProductIdentityPair>[],
-  runId: RunId,
+  owner: AiCallOwner,
   options: NonNullable<
     Parameters<typeof evaluatePreparedProductIdentityPair>[3]
   > = {},
@@ -582,6 +582,6 @@ async function evaluatePreparedProductIdentityPairs(
       current: current.get(productIdentityPairKey(pair.productIds)) ?? null,
     })),
     ({ pair, current }) =>
-      evaluateCurrentProductIdentityPair(db, pair, current, runId, options),
+      evaluateCurrentProductIdentityPair(db, pair, current, owner, options),
   );
 }

@@ -41,7 +41,7 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 
-import { aiCallRunInput, ensureRun } from "../repo/ensure-run";
+import { ensureRun } from "../repo/ensure-run";
 import {
   PRIMARY_MODEL,
   SUGGESTED_CATEGORY,
@@ -679,11 +679,10 @@ describe("Suggestion review", () => {
     const product = await productFixture(ctx, "Synthetic dismissed item", {
       categoryId: taxonomyId("tools"),
     });
-    const runId = await ensureRun(
-      ctx.db,
-      context.actorContext,
-      aiCallRunInput(context.actorContext, { runKey: crypto.randomUUID() }),
-    );
+    const runId = await ensureRun(ctx.db, context.actorContext, {
+      purpose: "ai_suggest",
+      clientKey: crypto.randomUUID(),
+    });
     const prediction = await publishAssessment(
       ctx.db,
       {

@@ -176,7 +176,7 @@ function usageRecord(
   durationMs: number,
   gateway: GatewayResponseInfo & Pick<AiUsageRecord, "costEvidence">,
   transport: GatewayTransport | "unknown",
-  runId: RunId,
+  runId: RunId | undefined,
 ): AiUsageRecord {
   return {
     feature,
@@ -266,7 +266,12 @@ async function foldResponsesStream(response: Response): Promise<Response> {
 
 export async function forwardGatewayRequest(
   request: GatewayForwardRequest,
-  opts: { db?: Database; runId?: RunId; feature: string },
+  opts: {
+    db?: Database;
+    runId?: RunId;
+    interactive?: boolean;
+    feature: string;
+  },
   port: GatewayForwardPort = productionGatewayForwardPort,
 ): Promise<GatewayForwardResponse> {
   const { provider } = splitProviderRoute(request.path);
@@ -305,7 +310,12 @@ export async function forwardGatewayRequest(
  */
 async function forwardGatewayAttempt(
   request: GatewayForwardRequest,
-  opts: { db?: Database; runId?: RunId; feature: string },
+  opts: {
+    db?: Database;
+    runId?: RunId;
+    interactive?: boolean;
+    feature: string;
+  },
   port: GatewayForwardPort,
   funding: InferenceFunding,
 ): Promise<GatewayForwardResponse> {
@@ -315,7 +325,7 @@ async function forwardGatewayAttempt(
   const startedAt = performance.now();
   let transport: GatewayTransport | "unknown" = "unknown";
   const recordFailure = async (failed?: Response) => {
-    if (!opts.db || !opts.runId || !model) return;
+    if (!opts.db || !model) return;
     await port.recordUsage(opts.db, {
       feature: opts.feature,
       provider,
@@ -337,7 +347,11 @@ async function forwardGatewayAttempt(
       funding,
       // Paid calls and background free calls use their own funding budgets.
       beforeFreeRequest: model
-        ? withFreeBudget(opts.db, { model, runId: opts.runId }, undefined)
+        ? withFreeBudget(
+            opts.db,
+            { model, runId: opts.runId, interactive: opts.interactive },
+            undefined,
+          )
         : undefined,
       beforePaidRequest: model
         ? withAiBudget(opts.db, { model, runId: opts.runId }, undefined)
@@ -368,7 +382,7 @@ async function forwardGatewayAttempt(
 
   const usage =
     opts.db && response.ok && model ? port.callUsage(model, body) : undefined;
-  if (opts.db && opts.runId && model && usage) {
+  if (opts.db && model && usage) {
     await port.recordUsage(
       opts.db,
       usageRecord(

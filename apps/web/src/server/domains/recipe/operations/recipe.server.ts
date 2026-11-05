@@ -45,10 +45,7 @@ import {
 } from "~/server/domains/recipe/repo/queries";
 import { getRecipeFlowState } from "~/server/domains/recipe/repo/recipe-flow-state";
 import { generateRecipeFlow } from "~/server/domains/recipe/service/recipe-flow/recipe-flow.service";
-import {
-  aiCallRunInput,
-  ensureRun,
-} from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import {
   type EntityKernelContext,
   executeEntityAs,
@@ -404,15 +401,10 @@ export const recipeHandlers = implementOperationDomain(recipeContract, {
       await recipeShortcodes.one(context.db, input.id),
     ),
   generateFlow: async (context, input) => {
-    const runId = await ensureRun(
-      context.db,
-      context.actorContext,
-      aiCallRunInput(context.actorContext),
-    );
     return generateRecipeFlow(
       context.db,
       { ...input, id: await recipeShortcodes.one(context.db, input.id) },
-      runId,
+      aiCallOwner(context.actorContext),
     );
   },
   harvestEquivalences: (context) =>

@@ -2,7 +2,6 @@ import {
   financialSpendingAdvice,
   type FinancialSpendingAdvice,
 } from "@cubby/schemas/financial-booking";
-import type { RunId } from "@cubby/schemas/identifiers";
 import { merchantIdentityProposal } from "@cubby/schemas/merchant-identity";
 import type { StatementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
@@ -21,6 +20,7 @@ import {
 } from "~/server/ai/policy/features";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
+import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 
 import {
   financialSpendingCategoryHistory,
@@ -30,7 +30,7 @@ import {
 
 export type SpendingAdvicePort = (input: {
   judgment: StatementTransactionJudgment;
-  runId?: RunId;
+  owner: AiCallOwner;
 }) => Promise<FinancialSpendingAdvice>;
 
 export function needsSpendingAdvice(judgment: StatementTransactionJudgment) {
@@ -45,7 +45,7 @@ export async function adviseSpending(
   db: Database,
   input: {
     judgment: StatementTransactionJudgment;
-    runId?: RunId;
+    owner: AiCallOwner;
     model?: SupportedDecisionModel;
     port?: DecisionPort;
     spendingAdvice?: SpendingAdvicePort;
@@ -81,7 +81,7 @@ export async function adviseSpending(
     identity = await runStructuredFeature(
       MERCHANT_IDENTITY_FEATURE,
       MERCHANT_IDENTITY_FEATURE.request(merchant, create.rawDescription),
-      { db, runId: input.runId, operation: "spending.merchantIdentity" },
+      { db, ...input.owner, operation: "spending.merchantIdentity" },
     );
     if (identity.name && identity.counterparty === "business") {
       const subject = JSON.stringify({
@@ -96,7 +96,7 @@ export async function adviseSpending(
         decisionModel: input.model,
         usage: {
           db,
-          runId: input.runId,
+          ...input.owner,
           operation: "spending.merchantIdentitySupport",
         },
       });
@@ -115,7 +115,7 @@ export async function adviseSpending(
   }
   const result = await suggestFields(
     db,
-    input.runId,
+    input.owner,
     {
       entity: "expense",
       targets: ["spendingCategoryId"],

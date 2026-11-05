@@ -21,10 +21,7 @@ import {
   type ImageProvenanceCandidateRow,
   type ImageSourceClassificationPublication,
 } from "~/server/domains/image/repo/image";
-import {
-  aiCallRunInput,
-  ensureRun,
-} from "~/server/domains/run/repo/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type ImageDecision = Awaited<
@@ -76,8 +73,13 @@ const productionPorts: ImageProvenanceClassifierPorts = {
       throw new Error(`Decision Run ${runId} has no live public identity`);
     return reference.id;
   },
+  // The classification's receipts name this Run, so a member can reopen the pass.
   ensureRun: (db, actorContext) =>
-    ensureRun(db, actorContext, aiCallRunInput(actorContext)),
+    ensureRun(db, actorContext, {
+      purpose: "maintenance",
+      execution: false,
+      clientKey: `image-provenance:${actorContext.userId}:${new Date().toISOString().slice(0, 13)}`,
+    }),
 };
 
 const MAX_CLASSIFICATION_CANDIDATES = 100;

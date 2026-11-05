@@ -98,7 +98,8 @@ zero charge but does not invent a standard-cost comparison. Reads never call a
 model or count budget reservations as spend.
 
 `AiUsage.runId` names the member or agent session that spent the call. Automatic
-work and a member's one-off AI action have no Run: read those by `feature`,
+work and a member's one-off AI action (a suggestion, preview, recipe flow) have no
+Run: read those by `feature`,
 `operation` and `entity`. Budget totals read every row, whatever its Run. A call
 with no Run stops at its window budget unless it says a member is waiting
 (`isAutomaticAiCall`).

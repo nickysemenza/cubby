@@ -200,43 +200,6 @@ export async function assertRunParent(
     );
 }
 
-/**
- * Where an AI call's usage is filed when the caller has no run of its own.
- * A page's `runKey` groups every suggestion the page asks for into one run;
- * every other caller shares one run per actor, channel and UTC hour, so a
- * burst of previews or one-off actions is one `ai_suggest` run, not one each.
- * `now` is a parameter so the hour boundary is testable.
- */
-/**
- * Who an AI call with no Run of its own answers to: the session the actor is already
- * in, else a waiting member. The system actor has nobody waiting.
- */
-export const aiCallOwner = (
-  actor: ActorContext,
-): { runId: RunId } | { interactive: boolean } =>
-  actor.runId
-    ? { runId: actor.runId }
-    : { interactive: actor.channel !== "system" };
-
-export function aiCallRunInput(
-  actor: ActorContext,
-  options: { runKey?: string; now?: Date } = {},
-): EnsureRunInput {
-  if (options.runKey)
-    return {
-      purpose: "ai_suggest",
-      clientKey: `decisionPort:${options.runKey}`,
-    };
-  const hour = (options.now ?? new Date()).toISOString().slice(0, 13);
-  // The system user is one actor by definition; the MCP session id is not on
-  // `ActorContext`, so an MCP actor's calls group by user instead.
-  const who = actor.channel === "system" ? "" : `${actor.userId}:`;
-  return {
-    purpose: "ai_suggest",
-    clientKey: `${actor.channel}:${who}${hour}`,
-  };
-}
-
 /** `actor` with its run set, opening one when nothing encloses the work. */
 export async function actorWithRun(
   db: Database,

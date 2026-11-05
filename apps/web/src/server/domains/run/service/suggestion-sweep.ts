@@ -147,7 +147,7 @@ async function suggestTarget(
     basis: target.basis,
   };
   const primaryCall = await withAiInputs(false, () =>
-    recommend(db, runId, fieldInput, {
+    recommend(db, { runId }, fieldInput, {
       ...ports.suggestPorts,
       decisionModel: input.decisionModelOverride,
     }),

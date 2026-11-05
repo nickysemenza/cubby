@@ -126,7 +126,7 @@ describe("reviewed linked finance category suggestions", () => {
     ) =>
       suggestFields(
         ctx.db,
-        runId,
+        { runId },
         fieldSuggestionsInput.parse({
           entity,
           entityId,
