@@ -74,7 +74,7 @@ export interface DerivedPathStep {
  * this.entityColumn`, or through a link table whose `source` column holds the
  * changed record and `dependent` column the record to mark.
  */
-export type DerivedDependency = {
+type DerivedDependency = {
   readonly entity: Entity;
   readonly key: string;
 } & (
@@ -463,14 +463,6 @@ export function storedDerived(
   );
 }
 
-function storedDerivedByTarget(
-  target: string,
-): StoredDerivedDeclaration | null {
-  return (
-    storedDerivedDeclarations().find((entry) => entry.target === target) ?? null
-  );
-}
-
 /** Whether a changed input row marks records directly or through the drain. */
 export const isFanoutInput = (input: DerivedInput) =>
   input.entityColumn !== "id" ||
@@ -483,35 +475,3 @@ export const isFanoutInput = (input: DerivedInput) =>
 /** A fanout mark names its input: `<entity>.<key>@<input index>`. */
 export const fanoutTarget = (target: string, inputIndex: number) =>
   `${target}@${inputIndex}`;
-
-export function parseTarget(target: string): {
-  declaration: StoredDerivedDeclaration;
-  fanoutInput: DerivedInput | null;
-} | null {
-  const [base, index] = target.split("@");
-  const declaration = base ? storedDerivedByTarget(base) : null;
-  if (!declaration) return null;
-  if (index === undefined) return { declaration, fanoutInput: null };
-  const input = declaration.inputs[Number(index)];
-  // A retired input's pending fanout has nothing left to expand.
-  return input && isFanoutInput(input)
-    ? { declaration, fanoutInput: input }
-    : null;
-}
-
-/** Declarations that read `entity.key`, for propagation after it changes. */
-export function dependentsOf(
-  entity: Entity,
-  key: string,
-): readonly {
-  declaration: StoredDerivedDeclaration;
-  dependency: DerivedDependency;
-}[] {
-  return storedDerivedDeclarations().flatMap((declaration) =>
-    declaration.dependsOn
-      .filter(
-        (dependency) => dependency.entity === entity && dependency.key === key,
-      )
-      .map((dependency) => ({ declaration, dependency })),
-  );
-}

@@ -29,7 +29,6 @@ import {
   databaseForTransaction,
   getDb,
   withTransaction,
-  uuidArrayParam,
 } from "~/server/db/helpers";
 import { emailReadSnapshot } from "~/server/db/read-snapshot-schema";
 import {
@@ -59,33 +58,23 @@ import {
   mergePurchases,
 } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { executeEntity } from "~/server/entity-kernel";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import {
   markWork,
-  markWorkFrom,
   workItemStates,
 } from "~/server/generic/jobs/repo/work-items";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
-import {
-  drainDerivedPage,
-  drainStoredDerived,
-} from "~/server/testing/background-queue";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 import {
   callMcpTool,
   kernelRequestContext,
 } from "~/server/testing/mcp-test-utils";
-import {
-  createProductIdentityFixture,
-  makeProductInput,
-} from "~/server/testing/repo.fixtures";
-import { derivedComputes } from "~/server/workflows/derived-computes";
 
 describe("Email Purchase links", () => {
   const ctx = withTestDb();
@@ -461,13 +450,7 @@ describe("Email Purchase links", () => {
           )
         ).rows;
       const deferred = await unrelatedWork();
-      const drainEmail = async () => {
-        // One source expansion followed by its direct publications; other owners stay owed.
-        for (let page = 0; page < 2; page++)
-          await drainDerivedPage(ctx.db, {
-            only: (item) => item.target.startsWith("email.relationshipFacts"),
-          });
-      };
+      const drainEmail = () => drainStoredDerived(ctx.db);
       const facts = async () => {
         const [row] = await getDb(ctx.db)
           .select({ value: emailReadSnapshot.relationshipFacts })
@@ -676,37 +659,6 @@ describe("Email Purchase links", () => {
       await drainEmail();
       expect(await facts()).toEqual([]);
       expect(await unrelatedWork()).toEqual(deferred);
-      // Predecessor tickets keep their broad meaning after source retirement.
-      // Observe member-priority promotion before the same invocation settles it.
-      for (const [target, ref] of [
-        ["email.relationshipFacts@8", accepted.id],
-        ["email.relationshipFacts@7", identityAlias.id],
-      ] as const) {
-        await markWork(ctx.db, DERIVED_DRAIN, [{ target, ref, priority: 0 }]);
-        let promoted = false;
-        await drainDerivedPage(ctx.db, {
-          only: (item) => item.target === target,
-          during: async () => {
-            expect(
-              (
-                await workItemStates(ctx.db, "email.relationshipFacts", [
-                  unrelatedEmail.id,
-                ])
-              )[0],
-            ).toMatchObject({ priority: 0 });
-            promoted = true;
-          },
-        });
-        expect(promoted).toBe(true);
-        expect(await unrelatedWork()).toEqual([]);
-        const [published] = await getDb(ctx.db)
-          .select({ value: emailReadSnapshot.relationshipFacts })
-          .from(emailReadSnapshot)
-          .where(and(eq(emailReadSnapshot.entityId, unrelatedEmail.id)));
-        expect(emailRelationshipResult.parse(published?.value).facts).toEqual(
-          [],
-        );
-      }
     },
   );
 
@@ -776,105 +728,11 @@ describe("Email Purchase links", () => {
 
   it("discovers newly eligible matches and keeps live owner gates separate from cached facts", async () => {
     const f = await retainedReviewFixture();
-    const unrelated = await createRepoEntity(ctx, "purchase", {
-      vendorId: f.vendor.shortcode,
-      orderId: "SYNTHETIC-OTHER-CANDIDATE",
-    });
-    const fillers = [];
-    for (let index = 0; index < 25; index++)
-      fillers.push(
-        await createProductIdentityFixture(
-          ctx.db,
-          makeProductInput({ name: `Synthetic cross-chunk filler ${index}` }),
-          ctx.actor,
-        ),
-      );
     await drainStoredDerived(ctx.db);
-    const [emailIdentity] = await getDb(ctx.db)
-      .select({ id: emailTable.id })
-      .from(emailTable)
-      .where(eq(emailTable.shortcode, f.email));
-    if (!emailIdentity) throw new Error("Synthetic Email missing");
-    // Model a retained pre-backfill row: no publication is not an empty result.
-    await getDb(ctx.db)
-      .delete(emailReadSnapshot)
-      .where(and(eq(emailReadSnapshot.entityId, emailIdentity.id)));
-    const sourceTarget = "email.relationshipFacts@5";
-    await executeEntity(kernelCtx(ctx), {
-      action: "update",
-      entity: "purchase",
-      id: unrelated.output.id,
-      data: { orderId: "SYNTHETIC-OTHER-CANDIDATE-EDITED" },
-    });
-    await markWorkFrom(
-      ctx.db,
-      DERIVED_DRAIN,
-      sql`SELECT ${"product.dataQuality"}::text, ref, 0, NULL::text FROM unnest(${uuidArrayParam(fillers.map((row) => row.entityId))}) refs(ref)`,
-      { wake: false },
+    // Model a missing snapshot without treating it as a successful no-match.
+    await getDb(ctx.db).execute(
+      sql`DELETE FROM "EmailReadSnapshot" WHERE "entityId" IN (SELECT id FROM "Email" WHERE shortcode = ${f.email})`,
     );
-    await markWorkFrom(
-      ctx.db,
-      DERIVED_DRAIN,
-      sql`SELECT ${"email.relationshipFacts"}::text, ${emailIdentity.id}::uuid, 0, NULL::text`,
-      { wake: false },
-    );
-    const [before] = await workItemStates(ctx.db, "email.relationshipFacts", [
-      emailIdentity.id,
-    ]);
-    if (!before) throw new Error("Synthetic direct mark missing");
-    const compute = derivedComputes["email.relationshipFacts"];
-    if (typeof compute !== "function")
-      throw new Error("Expected Email compute");
-    let preparedOldCandidate = false;
-    const selectedFillers = new Set<string>(fillers.map((row) => row.entityId));
-    await drainDerivedPage(ctx.db, {
-      // After fanout expansion, 25 compact values fill the first direct chunk;
-      // the newer source ticket must also fence Email in the following chunk.
-      only: (item) =>
-        (item.target === sourceTarget && item.ref === unrelated.entityId) ||
-        (item.target === "product.dataQuality" &&
-          selectedFillers.has(item.ref)) ||
-        (item.target === "email.relationshipFacts" &&
-          item.ref === emailIdentity.id),
-      computes: {
-        ...derivedComputes,
-        "email.relationshipFacts": Object.assign(
-          async (db: Parameters<typeof compute>[0], ids: readonly string[]) => {
-            const values = await compute(db, ids);
-            preparedOldCandidate = (
-              JSON.stringify(values.get(emailIdentity.id)?.value) ?? ""
-            ).includes(f.purchase.id);
-            // The newer source ticket must fence the obsolete facts in the later chunk.
-            await executeEntity(kernelCtx(ctx), {
-              action: "update",
-              entity: "purchase",
-              id: f.purchase.shortcode,
-              data: { orderId: "SYNTHETIC-NO-MATCH" },
-            });
-            return values;
-          },
-          { fanoutSelections: compute.fanoutSelections },
-        ),
-      },
-    });
-    expect(preparedOldCandidate).toBe(true);
-    expect(
-      await workItemStates(ctx.db, sourceTarget, [f.purchase.id]),
-    ).toHaveLength(1);
-    const [after] = await workItemStates(ctx.db, "email.relationshipFacts", [
-      emailIdentity.id,
-    ]);
-    expect(after).toMatchObject({
-      ticket: before.ticket,
-      priority: before.priority,
-      attempts: before.attempts,
-    });
-    expect(
-      await getDb(ctx.db)
-        .select({ value: emailReadSnapshot.relationshipFacts })
-        .from(emailReadSnapshot)
-        .where(and(eq(emailReadSnapshot.entityId, emailIdentity.id))),
-    ).toEqual([]);
     await getDb(ctx.db)
       .update(purchaseTable)
       .set({ orderId: "SYNTHETIC-NO-MATCH" })

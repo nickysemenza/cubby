@@ -30,8 +30,6 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { DERIVED_COMPUTE_BATCH } from "~/server/generic/derived/repo/drain";
-import { markAllStoredDerived } from "~/server/generic/derived/repo/drain";
 import {
   derivedMarkTickets,
   drainDerivedPage,
@@ -415,7 +413,7 @@ describe("Shipment evidence quality", () => {
       ctx.db,
       shipment,
       "shipment",
-      Array.from({ length: DERIVED_COMPUTE_BATCH }, (_, index) => ({
+      Array.from({ length: 200 }, (_, index) => ({
         name: `Synthetic historical parcel ${index}`,
         shortcode: generateShortcode("shipment"),
       })),
@@ -463,7 +461,6 @@ describe("Shipment evidence quality", () => {
     await unwrapDb(ctx.db).execute(sql`
       UPDATE "QualitySnapshot" SET "rulesVersion" = 0
        WHERE "entityId" = ${parcel.row.id}`);
-    await markAllStoredDerived(ctx.db);
     await refresh();
     expect(await storedQuality(ctx.db, parcel.row.id)).toMatchObject({
       rulesVersion: SHIPMENT_QUALITY_RULES_VERSION,
@@ -516,7 +513,7 @@ describe("Shipment evidence quality", () => {
     const parcel = await seed([shipped, delivered]);
     const timeline = await readShipmentTimeline(ctx.db, parcel.code);
     await drainDerivedPage(ctx.db, {
-      only: (mark) => mark.target === "shipment.dataQuality",
+      target: "shipment.dataQuality",
       during: () =>
         editShipmentObservation(
           ctx.db,

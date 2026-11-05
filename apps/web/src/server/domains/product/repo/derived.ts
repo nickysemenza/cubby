@@ -1,6 +1,5 @@
 import { fieldProvenance } from "@cubby/schemas/field-envelope";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { productCost } from "@cubby/schemas/product-fields";
 import { and, isNull, sql } from "drizzle-orm";
 /**
  * Product's stored derived values (ADR 0021): the effective price and the
@@ -97,27 +96,8 @@ const computeProductQuantity = (
     );
   });
 
-/** Legacy fixture adapters read the live view until the ticket engine retires. */
-const computeServiceCost: DerivedCompute = async (db, ids) => {
-  const rows = await unwrapDb(db)
-    .execute(sql`SELECT "entityId", value, "sortNumber" FROM "ProductCostView"
-    WHERE "entityId" = ANY(${uuidArrayParam(ids)})`);
-  return new Map(
-    rows.rows.map((row) => [
-      String(row.entityId),
-      {
-        value: productCost.nullable().parse(row.value),
-        sort: typeof row.sortNumber === "number" ? row.sortNumber : null,
-      },
-    ]),
-  );
-};
-
 export const productDerivedComputes = {
   "product.ownership": productOwnershipCompute,
-  "product.cost": Object.assign(computeServiceCost, {
-    preparationBatchSize: 200,
-  }),
   "product.price": Object.assign(computeProductPrice, {
     preparationBatchSize: 200,
   }),

@@ -29,7 +29,6 @@ import {
 } from "~/server/domains/work/service/work-diagnostics";
 import { readWorkQueue as readComposedQueue } from "~/server/domains/work/service/work-queue-read";
 import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
-import { markAllStoredDerived } from "~/server/generic/derived/repo/drain";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
@@ -481,7 +480,6 @@ describe("composed Work queue engine", () => {
       .where(eq(project.id, anchor));
     expect((await loadWorkDiagnosticFacts(ctx.db))?.pending).toBe(false);
     // The next pass converges after its upstream roots publish.
-    await markAllStoredDerived(ctx.db);
     await drainStoredDerived(ctx.db);
     const ready = await loadWorkDiagnosticFacts(ctx.db);
     expect(ready?.counts?.dependencyCycles).toBe(0);
