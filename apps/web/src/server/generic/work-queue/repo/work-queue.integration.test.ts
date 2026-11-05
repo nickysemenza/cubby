@@ -491,10 +491,11 @@ describe("composed Work queue engine", () => {
       (await readDiagnostics({ reason: "dependencyCycles" })).meta
         .incompleteDiagnosticSources,
     ).toEqual([expect.objectContaining({ state: "stale", pending: false })]);
-    // A Project without rollups must not certify a partial computation as a healthy zero.
-    await expect(computeWorkDiagnosticFacts(ctx.db, [anchor])).rejects.toThrow(
-      "project.rollups",
-    );
+    // A Project created mid-pass leaves that source unavailable without failing the pass.
+    const partial = await computeWorkDiagnosticFacts(ctx.db, [anchor]);
+    const facts = workDiagnosticFacts.parse(partial.get(anchor)?.value);
+    expect(facts.counts).not.toHaveProperty("projectsWithDateDrift");
+    expect(facts.counts.dependencyCycles).toBe(0);
     expect(
       (await loadWorkDiagnosticFacts(ctx.db))?.counts?.dependencyCycles,
     ).toBe(17);
@@ -503,7 +504,7 @@ describe("composed Work queue engine", () => {
       .set({ name: "Synthetic changed diagnostic anchor" })
       .where(eq(project.id, anchor));
     expect((await loadWorkDiagnosticFacts(ctx.db))?.pending).toBe(true);
-    // The production adapter publishes only after its declared upstream roots are ready.
+    // The next pass converges after its upstream roots publish.
     await markAllStoredDerived(ctx.db);
     await drainStoredDerived(ctx.db);
     const ready = await loadWorkDiagnosticFacts(ctx.db);

@@ -115,7 +115,7 @@ const definitions = () =>
       : [],
   );
 
-/** Only the existing drain runs canonical population diagnostics. Failure retains the prior publication. */
+/** Publish available diagnostics; missing upstream snapshots remain unavailable until the next pass. */
 export const computeWorkDiagnosticFacts: DerivedCompute = async (
   database,
   targetIds,
@@ -135,8 +135,9 @@ export const computeWorkDiagnosticFacts: DerivedCompute = async (
         {},
         { kind: "sample", limit: Number.POSITIVE_INFINITY },
       );
-      if (result.status.state !== "healthy")
-        throw new Error(result.status.message);
+      // A mid-pass import can leave one source incomplete. Omit its count so
+      // Work reports unavailable rather than certifying a partial healthy zero.
+      if (result.status.state !== "healthy") continue;
       value.privateEntries[definition.key] = await Promise.all(
         result.items.map(async (item) => {
           const entry = privateProblemEntry(definition.key, item);
@@ -168,8 +169,9 @@ export const computeWorkDiagnosticFacts: DerivedCompute = async (
         {},
         { kind: "count" },
       );
-      if (result.status.state !== "healthy")
-        throw new Error(result.status.message);
+      // A mid-pass import can leave one source incomplete. Omit its count so
+      // Work reports unavailable rather than certifying a partial healthy zero.
+      if (result.status.state !== "healthy") continue;
       value.counts[definition.key] = result.count;
     }
   }
