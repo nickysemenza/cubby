@@ -122,8 +122,17 @@ export async function getProductMatchQueue(
   ]);
   const ranked = (id: ProductId): RankedSide | undefined => {
     const side = sides.get(id);
-    // An unscored record ranks below any scored one.
-    return side && { ...side, quality: qualities.get(id)?.score ?? -1 };
+    // Fewest missing checks ranks highest; an unassessed record ranks below any assessed one.
+    const quality = qualities.get(id);
+    return (
+      side && {
+        ...side,
+        quality:
+          !quality || quality.status === "not_assessed"
+            ? Number.NEGATIVE_INFINITY
+            : -quality.gaps.length,
+      }
+    );
   };
   return {
     semanticRanking: false,
