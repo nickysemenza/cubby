@@ -417,10 +417,7 @@ const entityKindOf = async (db: Database, id: string) => {
 const mkPhotoRunImage = async (
   db: Database,
   values: Partial<
-    Pick<
-      typeof photoRunImage.$inferInsert,
-      "imageId" | "runId" | "deviceWorkDeviceId"
-    >
+    Pick<typeof photoRunImage.$inferInsert, "imageId" | "runId">
   > = {},
 ) => {
   const run = values.runId
@@ -433,7 +430,6 @@ const mkPhotoRunImage = async (
   return insertAndReturn(db, photoRunImage, {
     runId: run.id,
     imageId: values.imageId ?? parseEntityId("image", (await mkImage(db)).id),
-    deviceWorkDeviceId: values.deviceWorkDeviceId,
     targetFingerprint: uniq("photo-image-fingerprint"),
   });
 };
@@ -775,11 +771,6 @@ const SOURCE_FACTORIES = {
   "ImportPreparedOrder.screenshotImageId": (db, targetId) =>
     mkImportPreparedOrder(db, {
       screenshotImageId: parseEntityId("image", targetId),
-    }),
-
-  "PhotoRunImage.deviceWorkDeviceId": (db, targetId) =>
-    mkPhotoRunImage(db, {
-      deviceWorkDeviceId: parseEntityId("device", targetId),
     }),
 
   "PhotoRunImage.imageId": (db, targetId) =>

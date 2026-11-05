@@ -137,10 +137,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "ownership",
     reason: "a step-ledger Run's own ordered steps",
   },
-  "PhotoRunImage.deviceWorkDeviceId": {
-    classification: "metadata",
-    reason: "the device that last processed the photo",
-  },
   "SourceOrderObservation.purchaseId": {
     classification: "metadata",
     reason:

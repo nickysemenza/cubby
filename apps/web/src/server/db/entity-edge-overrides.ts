@@ -1766,13 +1766,6 @@ export const ENTITY_EDGE_OVERRIDES = {
         "A Live Activity or notification push registration this install made for a Run it started.",
       liveness: { kind: "must-target-live" },
     },
-    "PhotoRunImage.deviceWorkDeviceId": {
-      column: photoRunImage.deviceWorkDeviceId,
-      role: "history",
-      label: "photo device work",
-      description: "The install processing this photo work item.",
-      liveness: { kind: "must-target-live" },
-    },
     "AuditLog.deviceId": {
       column: auditLog.deviceId,
       role: "history",

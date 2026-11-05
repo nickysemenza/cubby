@@ -31,8 +31,7 @@ import { appleAppVersionTooOld } from "~/server/http/apple-client-gate";
 import { currentMemberLedgerParty } from "~/server/http/member-login";
 
 /** `ImageSighting.deviceId` cascades: a sighting reported by a device is
- * meaningless once that device is gone. `AuditLog.deviceId` and
- * `PhotoRunImage.deviceWorkDeviceId` are cleared. */
+ * meaningless once that device is gone. `AuditLog.deviceId` is cleared. */
 const DEVICE_DELETE_EDGE_POLICY = {
   "AuditLog.deviceId": {
     code: "clearFk",
@@ -51,12 +50,6 @@ const DEVICE_DELETE_EDGE_POLICY = {
     effect: "hard-delete",
     description:
       "A removed install receives no more Run pushes; its registrations go with it.",
-  },
-  "PhotoRunImage.deviceWorkDeviceId": {
-    code: "clearFk",
-    effect: "detach",
-    description:
-      "A run target outlives the install that last reported on it; its recorded device-work state is preserved.",
   },
 } as const satisfies IncomingEdgePolicy<"device", OperationDisposition>;
 

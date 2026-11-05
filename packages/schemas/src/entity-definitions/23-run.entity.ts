@@ -1057,11 +1057,6 @@ export const { definition, readSchemas } = defineEntityModel({
       // Stable queue generation; duplicate and late deliveries are fenced to it.
       { key: "dispatchEventId", kind: "text" },
       { key: "agentSessionId", kind: "text" },
-      // The order-history page the walk resumes from; null before the first
-      // listing.
-      { key: "historyCursorUrl", kind: "text" },
-      // Set when a listing had no next page or predated the account cursor.
-      { key: "historyExhaustedAt", kind: "timestamp" },
       // Caller attribution for the work the run groups (see `ActorContext`).
       {
         key: "channel",
