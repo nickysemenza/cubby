@@ -84,7 +84,6 @@ import {
   ledgerParty,
   location,
   photoGroupProposal,
-  photoGroupSourceEvidence,
   product,
   productCategory,
   entityExternalId,
@@ -1358,25 +1357,6 @@ export async function proposePhotoGroups(
     );
 
     if (input.removeGroupKeys?.length) {
-      const removedKeys = new Set(input.removeGroupKeys);
-      const sourceEvidence = existing.flatMap((row) =>
-        row.state === "proposed" &&
-        removedKeys.has(row.groupKey) &&
-        row.sourceManufacturer !== null
-          ? [
-              {
-                groupKey: row.groupKey,
-                sourceManufacturer: row.sourceManufacturer,
-              },
-            ]
-          : [],
-      );
-      // Regrouping replaces child rows. Archive each original in the owning
-      // Run's durable evidence before deletion, atomically with its replacement.
-      if (sourceEvidence.length)
-        await getDb(txDb)
-          .insert(photoGroupSourceEvidence)
-          .values(sourceEvidence.map((entry) => ({ runId: run.id, ...entry })));
       await getDb(txDb)
         .delete(photoGroupProposal)
         .where(

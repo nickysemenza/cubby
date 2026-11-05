@@ -341,7 +341,7 @@ async function loadImportCosts(client: ReportClient, email: EmailRow) {
       ? client
           .select()
           .from(aiUsage)
-          .where(and(inArray(aiUsage.runId, [...ids]), notDeleted(aiUsage)))
+          .where(and(inArray(aiUsage.runId, [...ids])))
       : Promise.resolve([]);
   const calls = await usageFor(recent.map((item) => item.id));
   const comparable = recent.flatMap((item) => {

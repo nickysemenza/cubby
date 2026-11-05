@@ -3449,8 +3449,8 @@ Photo review's selected-Product evidence read supplies canonical notes, tags,
 category and structured external identifiers alongside purchase and image
 evidence. Comparison panels share that read instead of loading Product detail
 independently; category summaries are bounded to the selected Products.
-RunApproval remains historical storage with Run invalidation; it has no active
-producer, reader or answer UI.
+RunApproval and PhotoGroupSourceEvidence keep their rows as historical storage;
+they have no producer, reader or answer UI.
 
 A column's `generated` SQL uses the same placeholders and emits a stored
 PostgreSQL generated column; it cannot also declare a default or update callback.

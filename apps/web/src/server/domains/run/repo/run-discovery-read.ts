@@ -74,7 +74,7 @@ export async function loadMailDiscoveryRead(
         retryCount: sql<number>`(count(*) filter (where ${aiUsage.attempt} > 1))::int`,
       })
       .from(aiUsage)
-      .where(and(eq(aiUsage.runId, row.id), notDeleted(aiUsage))),
+      .where(and(eq(aiUsage.runId, row.id))),
   ]);
   return {
     emails: await readDiscoveryEmailAudit(

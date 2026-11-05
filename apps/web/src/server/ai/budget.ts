@@ -5,7 +5,7 @@ import {
   type AiBudgetStatus,
 } from "@cubby/schemas/mail-import-settings";
 import { supportedChatModelSchema } from "@cubby/shared/ai/models";
-import { and, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, gte, inArray, sql } from "drizzle-orm";
 
 import { roundTo } from "~/lib/round-to";
 import type { Database } from "~/server/db";
@@ -92,7 +92,6 @@ export async function readAiBudget(
     .where(
       and(
         gte(aiUsage.createdAt, window.start),
-        isNull(aiUsage.deletedAt),
         inArray(aiUsage.model, [...FRONTIER_MODELS]),
       ),
     );

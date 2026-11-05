@@ -76,8 +76,8 @@ struct ImageDiagnosticsCancellationTests {
                 ].map { ($0, missing) })
         ).decoded(ImageDetailOutFields.self)
         let detail = ImageDetailOut(
-            filename: "sample.jpg", id: ImageCode("IMG-4K7M"), key: "synthetic-image",
-            size: 1, contentType: "image/jpeg", status: .uploaded,
+            id: ImageCode("IMG-4K7M"), key: "synthetic-image",
+            filename: "sample.jpg", size: 1, contentType: "image/jpeg", status: .uploaded,
             width: nil, height: nil, detectedContentType: nil, sha256: nil, renderStatus: nil,
             storageStatus: nil,
             source: .unknown, sourcePageUrl: nil, sourceAssetUrl: nil, sourceName: nil, useOriginal: false,

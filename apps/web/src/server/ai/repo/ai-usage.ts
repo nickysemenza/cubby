@@ -69,8 +69,7 @@ export async function listAiUsageFilterOptions(db: Database) {
       model: aiUsage.model,
       feature: aiUsage.feature,
     })
-    .from(aiUsage)
-    .where(notDeleted(aiUsage));
+    .from(aiUsage);
   const values = (key: keyof (typeof rows)[number]) =>
     [...new Set(rows.map((row) => row[key]))].sort((a, b) =>
       a.localeCompare(b),
@@ -115,7 +114,7 @@ export async function listRecentAiUsage(
       createdAt: aiUsage.createdAt,
     })
     .from(aiUsage)
-    .where(and(notDeleted(aiUsage), ...recentFilterConditions(input.filters)))
+    .where(and(...recentFilterConditions(input.filters)))
     .orderBy(desc(aiUsage.createdAt), desc(aiUsage.id))
     .limit(input.limit);
 
@@ -158,9 +157,7 @@ export async function summarizeAiUsage(db: Database, days: number) {
       durationMs: sql<string>`coalesce(sum(${aiUsage.durationMs}), 0)::bigint`,
     })
     .from(aiUsage)
-    .where(
-      sql`${aiUsage.deletedAt} IS NULL AND ${aiUsage.createdAt} >= ${since}`,
-    )
+    .where(sql`${aiUsage.createdAt} >= ${since}`)
     .groupBy(
       usageDayGroup,
       aiUsage.feature,
@@ -240,17 +237,15 @@ export async function listAiUsageForRun(
       WHERE j."runId" = ANY(${uuidArrayParam(runIds)}) AND ${notDeleted("j")}
     )
     SELECT u.id FROM "AiUsage" u
-      WHERE u."runId" = ANY(${uuidArrayParam(runIds)}) AND ${notDeleted("u")}
+      WHERE u."runId" = ANY(${uuidArrayParam(runIds)})
     UNION
     SELECT u.id FROM scoped_jobs j JOIN "AiUsage" u
       ON u."jobKind" = j.kind AND u."jobId" = j.id::text
-      WHERE ${notDeleted("u")}
     UNION
     SELECT u.id FROM scoped_jobs j
       JOIN "ImageProcessingAttempt" a ON a."jobId" = j.id
       JOIN "AiUsage" u ON u."jobKind" = 'image_processing_attempt'
         AND u."jobId" = a.id::text
-      WHERE ${notDeleted("u")}
   )`;
   const externalCoverage = sql`EXISTS (SELECT 1 FROM "Run" r
     WHERE r.id = ANY(${uuidArrayParam(runIds)}) AND ${notDeleted("r")} AND r.input->>${"processor"} = ${photoRunProcessor.enum.external})`;
@@ -274,7 +269,7 @@ export async function listAiUsageForRun(
         ...aiCostSummarySql(),
       })
       .from(aiUsage)
-      .where(and(attributed, notDeleted(aiUsage))),
+      .where(and(attributed)),
     database
       .select({
         id: aiUsage.id,
@@ -302,7 +297,6 @@ export async function listAiUsageForRun(
       .where(
         and(
           attributed,
-          notDeleted(aiUsage),
           cursor
             ? or(
                 lt(aiUsage.createdAt, new Date(cursor.createdAt)),
@@ -333,7 +327,7 @@ export async function listAiUsageForRun(
         cacheWriteTokens: tokenSum(aiUsage.cacheWriteTokens),
       })
       .from(aiUsage)
-      .where(and(attributed, notDeleted(aiUsage)))
+      .where(and(attributed))
       .groupBy(aiUsage.feature, aiUsage.provider, aiUsage.model)
       .orderBy(aiUsage.feature, aiUsage.provider, aiUsage.model),
   ]);

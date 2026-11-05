@@ -16,7 +16,6 @@ import {
 import {
   suggestionTable,
   aiAnalysis,
-  photoGroupSourceEvidence,
   image,
   imageProcessingJob,
   imageProcessingAttempt,
@@ -318,99 +317,6 @@ describe("photo group proposals", () => {
       productCreateBrandId: brand.id,
       productCreate: null,
     });
-  });
-
-  it("archives exact manufacturer evidence in Run history when splitting a predecessor proposal", async () => {
-    const { run, codes } = await seedRun(2);
-    const sourceManufacturer = "\t Synthetic split ORIGINAL \uFEFF\n";
-    await proposePhotoGroups(ctx.db, {
-      runId: run.shortcode,
-      groups: [createGroup("split-source", codes)],
-    });
-    await getDb(ctx.db)
-      .update(photoGroupProposal)
-      .set({ sourceManufacturer })
-      .where(eq(photoGroupProposal.runId, run.id));
-    const split = await proposePhotoGroups(ctx.db, {
-      runId: run.shortcode,
-      removeGroupKeys: ["split-source"],
-      groups: [
-        createGroup("split-a", [codes[0]!]),
-        createGroup("split-b", [codes[1]!]),
-      ],
-    });
-    expect(split.proposals.map((group) => group.groupKey)).toEqual([
-      "split-a",
-      "split-b",
-    ]);
-    expect(await readRow(run.id, "split-source")).toBeUndefined();
-    for (const key of ["split-a", "split-b"])
-      expect(await readRow(run.id, key)).toMatchObject({
-        state: "proposed",
-        sourceManufacturer: null,
-      });
-    const archived = await getDb(ctx.db)
-      .select({
-        groupKey: photoGroupSourceEvidence.groupKey,
-        sourceManufacturer: photoGroupSourceEvidence.sourceManufacturer,
-      })
-      .from(photoGroupSourceEvidence)
-      .where(eq(photoGroupSourceEvidence.runId, run.id))
-      .orderBy(photoGroupSourceEvidence.groupKey);
-    expect(archived).toEqual([
-      { groupKey: "split-source", sourceManufacturer },
-    ]);
-  });
-
-  it("archives every original manufacturer value in Run history when merging predecessor proposals", async () => {
-    const { run, codes } = await seedRun(4);
-    const originals = [
-      { groupKey: "merge-a", sourceManufacturer: " Synthetic ORIGINAL A " },
-      { groupKey: "merge-b", sourceManufacturer: "Synthetic ORIGINAL B" },
-      { groupKey: "merge-empty", sourceManufacturer: "" },
-      { groupKey: "merge-whitespace", sourceManufacturer: "\t \r\n\u00a0" },
-    ];
-    await proposePhotoGroups(ctx.db, {
-      runId: run.shortcode,
-      groups: originals.map((original, index) =>
-        createGroup(original.groupKey, [codes[index]!]),
-      ),
-    });
-    for (const original of originals)
-      await getDb(ctx.db)
-        .update(photoGroupProposal)
-        .set({ sourceManufacturer: original.sourceManufacturer })
-        .where(
-          and(
-            eq(photoGroupProposal.runId, run.id),
-            eq(photoGroupProposal.groupKey, original.groupKey),
-          ),
-        );
-    const merged = await proposePhotoGroups(ctx.db, {
-      runId: run.shortcode,
-      removeGroupKeys: originals.map((original) => original.groupKey),
-      groups: [createGroup("merged-replacement", codes)],
-    });
-    expect(merged.proposals).toHaveLength(1);
-    expect(merged.proposals[0]).toMatchObject({
-      groupKey: "merged-replacement",
-      state: "proposed",
-    });
-    expect(merged.proposals[0]?.images.map((image) => image.id)).toEqual(codes);
-    for (const original of originals)
-      expect(await readRow(run.id, original.groupKey)).toBeUndefined();
-    expect(await readRow(run.id, "merged-replacement")).toMatchObject({
-      sourceManufacturer: null,
-    });
-    const archived = await getDb(ctx.db)
-      .select({
-        groupKey: photoGroupSourceEvidence.groupKey,
-        sourceManufacturer: photoGroupSourceEvidence.sourceManufacturer,
-      })
-      .from(photoGroupSourceEvidence)
-      .where(eq(photoGroupSourceEvidence.runId, run.id))
-      .orderBy(photoGroupSourceEvidence.groupKey);
-    expect(archived).toEqual(originals);
   });
 
   it.each(["create", "update"])(

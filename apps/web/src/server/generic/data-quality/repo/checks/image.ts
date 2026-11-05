@@ -77,10 +77,10 @@ async function loadImageQualityRecords(
           AND ${image.renderStatus} = 'failed'
         )
       )`,
+      // includes-deleted: no ImageSighting has ever been soft deleted; the column is going.
       hasLiveSighting: sql<boolean>`EXISTS (
         SELECT 1 FROM "ImageSighting" dq_image_sighting
         WHERE dq_image_sighting."imageId" = ${imageColumn("id")}
-          AND ${notDeleted("dq_image_sighting")}
       )`,
       hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql(
         "image",

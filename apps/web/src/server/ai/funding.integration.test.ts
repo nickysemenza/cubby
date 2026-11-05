@@ -74,17 +74,6 @@ describe("AI budget admission", () => {
         {
           runId,
           feature: "synthetic-budget",
-          provider: "openai",
-          model: "gpt-6-sol",
-          operation: "synthetic.generation",
-          durationMs: 1,
-          standardCost: 10,
-          createdAt: now,
-          deletedAt: now,
-        },
-        {
-          runId,
-          feature: "synthetic-budget",
           provider: "typesafe",
           model: "typesafe/jev",
           operation: "synthetic.decision",
