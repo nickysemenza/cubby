@@ -79,7 +79,10 @@ test("taxonomy edits keep product classification paths and labels separate from 
     page.getByRole("heading", { level: 1, name: productName }),
   );
   await expect(
-    page.getByText(`${destinationRoot} / ${renamedType}`, { exact: true }),
+    page.getByRole("link", {
+      name: `${destinationRoot} / ${renamedType}`,
+      exact: true,
+    }),
   ).toBeVisible();
   await page.locator("#images").scrollIntoViewIfNeeded();
   await expect(
