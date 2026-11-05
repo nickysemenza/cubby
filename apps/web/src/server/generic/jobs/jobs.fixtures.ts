@@ -102,17 +102,6 @@ export const readWorkItems = (
     .where(workItemWhere(filter))
     .orderBy(asc(workItem.target), asc(workItem.ref));
 
-/** Write WorkItem retry state directly. */
-export const updateWorkItems = (
-  db: RepositoryQueryInput,
-  filter: WorkItemFilter,
-  values: PgUpdateSetSource<typeof workItem>,
-) =>
-  repositoryQueries(db)
-    .update(workItem)
-    .set(values)
-    .where(workItemWhere(filter));
-
 /** Seed items as a writer that predates the triggers (or a fixed mark time) would. */
 export const insertWorkItems = (
   db: RepositoryQueryInput,
