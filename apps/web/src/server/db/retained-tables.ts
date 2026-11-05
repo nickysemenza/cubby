@@ -660,7 +660,6 @@ export const aiUsage = pgTable(
       .$type<AiUsageTransport>(),
     ...entityRef<string>({ nullable: true }),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    ...softDeletedAt(),
   },
   (table) => [
     index("AiUsage_feature_createdAt_idx").on(

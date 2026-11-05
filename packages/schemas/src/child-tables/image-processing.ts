@@ -56,7 +56,6 @@ export const imageProcessingChildren = [
         default: { now: true },
         onUpdateNow: true,
       },
-      { key: "deletedAt", kind: "timestamp" },
     ],
     types: [
       { module: "@cubby/schemas/identifiers", exports: ["ImageId"] },
@@ -70,13 +69,11 @@ export const imageProcessingChildren = [
         name: "ImageDerivative_image_purpose_source_revision_key",
         unique: true,
         on: ["imageId", "purpose", "sourceContentHash", "processorRevision"],
-        where: "{deletedAt} IS NULL",
       },
       {
         name: "ImageDerivative_storage_key_key",
         unique: true,
         on: ["key"],
-        where: "{deletedAt} IS NULL",
       },
       { name: "ImageDerivative_image_idx", on: ["imageId"] },
       { name: "ImageDerivative_status_idx", on: ["status"] },

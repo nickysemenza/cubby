@@ -638,6 +638,13 @@
       "when": 1793892198289,
       "tag": "0090_project_start_view",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1793893291378,
+      "tag": "0091_drop_columns_that_hold_nothing",
+      "breakpoints": true
     }
   ]
 }

@@ -253,11 +253,10 @@ export async function listAiUsageForRun(
     SELECT 1 FROM "ImageProcessingJob" j
     WHERE ${notDeleted("j")} AND j."runId" = ANY(${uuidArrayParam(runIds)}) AND (
       (NOT EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id)
-        AND NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE ${notDeleted("u")}
-          AND u."jobKind" = j.kind AND u."jobId" = j.id::text))
+        AND NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE u."jobKind" = j.kind AND u."jobId" = j.id::text))
       OR EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
         AND NOT coalesce(${allowDeviceCharge} AND a.executor->>${"kind"} = ${"device"} AND a.state IN (${imageProcessingAttemptState.enum.ready}, ${imageProcessingAttemptState.enum.skipped}), false)
-        AND NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE ${notDeleted("u")} AND (
+        AND NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE (
           (u."jobKind" = 'image_processing_attempt' AND u."jobId" = a.id::text)
           OR (u."jobKind" = j.kind AND u."jobId" = j.id::text AND u.attempt = a.number)))))
   )`;

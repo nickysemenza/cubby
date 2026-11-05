@@ -82,7 +82,6 @@ export const imageChildren = [
         default: { now: true },
         onUpdateNow: true,
       },
-      { key: "deletedAt", kind: "timestamp" },
     ],
     types: [
       {
@@ -99,7 +98,6 @@ export const imageChildren = [
         name: "ImageSighting_image_party_asset_key",
         unique: true,
         on: ["imageId", "ledgerPartyId", "assetKey"],
-        where: "{deletedAt} IS NULL",
       },
       { name: "ImageSighting_imageId_idx", on: ["imageId"] },
       { name: "ImageSighting_ledgerPartyId_idx", on: ["ledgerPartyId"] },
