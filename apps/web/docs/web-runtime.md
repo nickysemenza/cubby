@@ -491,6 +491,18 @@ retryable diagnostics on failure. Other evaluation surfaces retain their AI
 stage using `ai.suggestFieldsBatch`: shared policy, Run and roster
 preparation, then individually cached decision waves and existing assessment
 publication. Ordinary `entity.listEnrichment` reads remain provider-free.
+Proposal badges count indexed published memberships for the entire requested
+batch, with current decision gates and coverage read in the same SQL operation.
+They never prepare canonical evidence while browsing. Missing, stale, unresolved
+or failed coverage preserves known counts and remains visible; a known zero is
+not a claim that unpublished suggestions do not exist. Viewport-plus-buffer
+admission and retained batch results still own fetching.
+Pending Suggestions lists and bulk selection use the same published admission
+and declared filter/order compiler. List totals, page payloads and coverage share
+one SQL snapshot; payloads are loaded after page selection. Missing or incomplete
+coverage stays visible even with no known rows. Failed reads retain useful rows
+and expose raw diagnostics with the existing read retry. Bulk execution still
+passes every selected item through its current-evidence action handler.
 Queued batches discard cancelled members after shared admission; started work
 retains normal publication and freshness checks.
 Field renderers subscribe to mutable page review state only for fields in

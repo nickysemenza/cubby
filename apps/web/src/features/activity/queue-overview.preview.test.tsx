@@ -196,7 +196,18 @@ beforeEach(async () => {
         }),
       };
     if (operation === "suggestions.recordCounts")
-      return { ok: true, data: { records: [] } };
+      return {
+        ok: true,
+        data: {
+          records: [],
+          coverage: {
+            missing: false,
+            stale: false,
+            unresolved: false,
+            failed: false,
+          },
+        },
+      };
     if (operation === "entityMedia.displayImages")
       return { ok: true, data: {} };
     if (operation === "entity.graph")

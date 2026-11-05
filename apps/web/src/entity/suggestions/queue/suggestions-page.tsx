@@ -35,6 +35,7 @@ import { useInfiniteTableListScope } from "~/entity/hooks/use-infinite-table-lis
 import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { Page, usePageCount } from "~/entity/page/page";
 import { FindSuggestionsDialog } from "~/entity/suggestions/find-suggestions-dialog";
+import { publicationCoverageMessage } from "~/entity/suggestions/publication-coverage";
 import { ListWorkbench } from "~/entity/table/list-workbench";
 import { useChildListWorkbench } from "~/entity/table/use-child-list-workbench";
 import {
@@ -57,6 +58,7 @@ import {
 import type { CubbyTable, CubbyRow } from "~/ui/data-table/table-features";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
 import type {
   ListQueryOptionsFn,
   ListQueryResponse,
@@ -115,8 +117,14 @@ const familyOf = (search: SuggestionsSearch) =>
 const viewOf = (search: SuggestionsSearch): SuggestionView => familyOf(search);
 
 /** A count as a segment's trailing hint; "…" while it loads. */
-const countHint = (count: number | undefined) =>
-  count === undefined ? "…" : formatCount(count);
+const countHint = (count: number | undefined, incomplete: boolean) =>
+  count === undefined
+    ? "…"
+    : incomplete
+      ? count > 0
+        ? `${formatCount(count)}+`
+        : "?"
+      : formatCount(count);
 
 /** Pending work, optional audit and automation controls share one workspace. */
 function StatusTabs({
@@ -158,7 +166,7 @@ const ORDER_OPTIONS: PickerOption[] = suggestionFilterDeclaration.sorts
 
 type SuggestionTablePage = Omit<SuggestionListOut, "meta"> & {
   meta: ListQueryResponse<Row>["meta"] &
-    Pick<SuggestionListOut["meta"], "cleanCount">;
+    Pick<SuggestionListOut["meta"], "cleanCount" | "coverage">;
   statementGroups?: SuggestionGroup[];
 };
 const queryPlan: ListQueryOptionsFn<QueryFilters, Row, SuggestionTablePage> = ({
@@ -345,27 +353,46 @@ function FamilyChips({
       .filter((row) => !family || row.family === family)
       .reduce((sum, row) => sum + row.pending, 0);
   };
+  const coverage = publicationCoverageMessage(counts.data?.coverage);
+  const incomplete = Boolean(coverage || counts.error);
   return (
-    <div className="max-w-full overflow-x-auto">
-      <Picker
-        mode="segmented"
-        label="Suggestion families"
-        options={[
-          { value: "all", label: "All", hint: countHint(count()) },
-          ...FAMILY_CHIPS.map((chip) => ({
-            value: chip.family,
-            label: chip.label,
-            hint: countHint(count(chip.family)),
-          })),
-        ]}
-        value={familyOf(search)}
-        onValueChange={(value) =>
-          onSearch({
-            family: FAMILY_CHIPS.find((chip) => chip.family === value)?.family,
-            group: undefined,
-          })
-        }
-      />
+    <div className="max-w-full">
+      {counts.error ? (
+        <ErrorDisplay
+          error={counts.error}
+          title="suggestion counts"
+          onRetry={() => void counts.refetch()}
+        />
+      ) : null}
+      {coverage ? (
+        <p className="text-sm text-muted-foreground">{coverage}</p>
+      ) : null}
+      <div className="max-w-full overflow-x-auto">
+        <Picker
+          mode="segmented"
+          label="Suggestion families"
+          options={[
+            {
+              value: "all",
+              label: "All",
+              hint: countHint(count(), incomplete),
+            },
+            ...FAMILY_CHIPS.map((chip) => ({
+              value: chip.family,
+              label: chip.label,
+              hint: countHint(count(chip.family), incomplete),
+            })),
+          ]}
+          value={familyOf(search)}
+          onValueChange={(value) =>
+            onSearch({
+              family: FAMILY_CHIPS.find((chip) => chip.family === value)
+                ?.family,
+              group: undefined,
+            })
+          }
+        />
+      </div>
     </div>
   );
 }
@@ -625,13 +652,14 @@ function SuggestionsTableBody({
     rowContentVersion: review,
   });
   const table = list.model.table;
-  usePageCount(list.isLoading ? undefined : list.totalCount);
+  const firstPage = list.pages?.[0];
+  const coverage = publicationCoverageMessage(firstPage?.meta.coverage);
+  usePageCount(list.isLoading || coverage ? undefined : list.totalCount);
   const rowsById = useMemo(
     () => new Map(list.data.map((row) => [row.id, row.record])),
     [list.data],
   );
   const accept = useAcceptClean((id) => rowsById.get(id));
-  const firstPage = list.pages?.[0];
   const cleanCount = firstPage?.meta.cleanCount ?? 0;
 
   const groups = firstPage?.statementGroups ?? NO_GROUPS;
@@ -792,6 +820,9 @@ function SuggestionsTableBody({
   return (
     <div className="flex min-w-0 flex-col" onKeyDownCapture={onKeyDownCapture}>
       <div className="flex flex-col gap-2 px-2 py-2 md:px-4">
+        {coverage ? (
+          <p className="text-sm text-muted-foreground">{coverage}</p>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <QuickFilters table={table} view={view} tableState={tableState} />
           <Picker
@@ -917,7 +948,9 @@ function SuggestionsTableBody({
         showColumnMenu
         emptyState={
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            No pending suggestions here. Find suggestions to look again.
+            {coverage
+              ? "No known pending suggestions here."
+              : "No pending suggestions here. Find suggestions to look again."}
           </p>
         }
       />

@@ -8,11 +8,15 @@ import type {
   SettledSuggestionQuestionsInput,
   SuggestionReviewRow,
 } from "@cubby/schemas/ai";
-import { SETTLED_SUGGESTION_QUESTION_MAX } from "@cubby/schemas/ai";
+import {
+  SETTLED_SUGGESTION_QUESTION_MAX,
+  suggestionReviewRowSchema,
+} from "@cubby/schemas/ai";
 import type {
   AssessmentReviewBatchOut,
   AssessmentReviewOut,
 } from "@cubby/schemas/assessment";
+import { assessmentReadCoverage } from "@cubby/schemas/assessment-read-publication";
 import type { BatchOut } from "@cubby/schemas/batch";
 import {
   classificationFieldRefusal,
@@ -78,6 +82,7 @@ import { NotApplicableField } from "~/entity/fields/field-applicability";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { CorrectionAuthorityEvidence } from "~/entity/suggestions/correction-authority-evidence";
+import { publicationCoverageMessage } from "~/entity/suggestions/publication-coverage";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { assessment } from "~/integrations/tanstack-query/generated/domains/assessment.gen";
@@ -253,6 +258,12 @@ const RecordSuggestionsContext = createContext<{
   storedCountFor: (records: readonly unknown[]) => number;
 } | null>(null);
 
+const storedSuggestionPacket = z.object({
+  items: suggestionReviewRowSchema.array(),
+  coverage: assessmentReadCoverage.optional(),
+});
+type StoredSuggestionPacket = z.infer<typeof storedSuggestionPacket>;
+
 export interface StoredSuggestionOperations {
   list: (
     input: {
@@ -261,7 +272,7 @@ export interface StoredSuggestionOperations {
       fields: string[];
     },
     options?: OperationCallOptions,
-  ) => Promise<SuggestionReviewRow[]>;
+  ) => Promise<StoredSuggestionPacket>;
   review: (input: {
     assessmentId: string;
     operationId: string;
@@ -290,7 +301,21 @@ export interface StoredSuggestionOperations {
 type PendingPageInput = Parameters<StoredSuggestionOperations["list"]>[0];
 
 /** One cursor page of pending field rows; `next` is null on the last page. */
-type PendingPage = { items: SuggestionReviewRow[]; next: string | null };
+type PendingPage = StoredSuggestionPacket & { next: string | null };
+
+function mergeCoverage(
+  left: StoredSuggestionPacket["coverage"],
+  right: StoredSuggestionPacket["coverage"],
+): StoredSuggestionPacket["coverage"] {
+  if (!left) return right;
+  if (!right) return left;
+  return {
+    missing: left.missing || right.missing,
+    stale: left.stale || right.stale,
+    unresolved: left.unresolved || right.unresolved,
+    failed: left.failed || right.failed,
+  };
+}
 
 /**
  * Every pending row for a list page's records, with no confidence floor.
@@ -308,7 +333,7 @@ export const everyPendingSuggestion =
   async (
     input: PendingPageInput,
     options?: OperationCallOptions,
-  ): Promise<SuggestionReviewRow[]> => {
+  ): Promise<StoredSuggestionPacket> => {
     const rosters: string[][] = [];
     for (
       let start = 0;
@@ -321,6 +346,7 @@ export const everyPendingSuggestion =
     const pages = await Promise.all(
       rosters.map(async (recordIds) => {
         const rows: SuggestionReviewRow[] = [];
+        let coverage: StoredSuggestionPacket["coverage"];
         let cursor: string | undefined;
         do {
           const page = await read(
@@ -333,12 +359,19 @@ export const everyPendingSuggestion =
             options,
           );
           rows.push(...page.items);
+          coverage = mergeCoverage(coverage, page.coverage);
           cursor = page.next ?? undefined;
         } while (cursor);
-        return rows;
+        return { items: rows, coverage };
       }),
     );
-    return pages.flat();
+    return {
+      items: pages.flatMap((page) => page.items),
+      coverage: pages.reduce<StoredSuggestionPacket["coverage"]>(
+        (coverage, page) => mergeCoverage(coverage, page.coverage),
+        undefined,
+      ),
+    };
   };
 
 const productionStoredSuggestionOperations: StoredSuggestionOperations = {
@@ -360,6 +393,7 @@ const productionStoredSuggestionOperations: StoredSuggestionOperations = {
           row.family === "field" ? [row.evidence] : [],
         ),
         next: page.next,
+        coverage: page.meta.coverage,
       };
     },
   ),
@@ -950,8 +984,17 @@ function statusFieldsForRows(
 
 type StoredPageRead = {
   recordIds: readonly string[];
-  rows: Awaited<ReturnType<StoredSuggestionOperations["list"]>>;
+  rows: StoredSuggestionPacket["items"];
+  coverage: StoredSuggestionPacket["coverage"];
 };
+function StoredReadCoverage({ read }: { read: StoredPageRead | undefined }) {
+  const message = publicationCoverageMessage(read?.coverage);
+  return message ? (
+    <p data-needs-row className="text-sm text-muted-foreground">
+      {message}
+    </p>
+  ) : null;
+}
 const firstStoredPageQuery = (results: UseQueryResult<StoredPageRead>[]) =>
   results[0];
 /** A single-field question the server can answer from remembered declines;
@@ -1385,9 +1428,8 @@ function BoundRecordSuggestions({
               signal,
               client,
               queryKey,
-            }): Promise<StoredPageRead> => ({
-              recordIds: pageRecordIds,
-              rows: await storedSuggestionOperations.list(
+            }): Promise<StoredPageRead> => {
+              const packet = await storedSuggestionOperations.list(
                 {
                   entity,
                   recordIds: pageRecordIds,
@@ -1399,8 +1441,13 @@ function BoundRecordSuggestions({
                     ? "strong"
                     : undefined,
                 },
-              ),
-            }),
+              );
+              return {
+                recordIds: pageRecordIds,
+                rows: packet.items,
+                coverage: packet.coverage,
+              };
+            },
             retry: false,
             meta: { cacheTags: [[entity]] },
           },
@@ -1884,6 +1931,7 @@ function BoundRecordSuggestions({
         fields={statusFieldsForRows(queryClient, entity, rows)}
         unasked={unasked}
       />
+      <StoredReadCoverage read={storedData} />
       {storedQuery?.error ? (
         <div data-needs-row>
           <ErrorDisplay

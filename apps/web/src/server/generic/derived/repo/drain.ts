@@ -83,13 +83,20 @@ export function derivedWorkEligible(target: SQL): SQL {
 const ident = (name: string) => sql.raw(`"${name.replaceAll('"', '""')}"`);
 const fixedTargetRows = (
   table: string,
-  where: Readonly<Record<string, string | null>>,
+  where: Readonly<Record<string, string | null | readonly string[]>>,
 ) =>
   sql`SELECT id FROM ${ident(table)} WHERE ${sql.join(
     Object.entries(where).map(([column, value]) =>
       value === null
         ? sql`${ident(column)} IS NULL`
-        : sql`${ident(column)} = ${value}`,
+        : typeof value === "string"
+          ? sql`${ident(column)} = ${value}`
+          : value.length === 0
+            ? sql`false`
+            : sql`${ident(column)} IN (${sql.join(
+                value.map((item) => sql`${item}`),
+                sql`, `,
+              )})`,
     ),
     sql` AND `,
   )}`;
@@ -391,6 +398,10 @@ function selectedTargetRows(
 /** Records whose stored inputs reach a changed record, per kind, bounded for the doorbell ring. */
 class Touched {
   private readonly affected = new Map<string, Set<string>>();
+  private readonly categories = new Set<string>();
+  addCategories(categories: readonly string[]) {
+    for (const category of categories) this.categories.add(category);
+  }
   add(entity: Entity, ids: readonly string[]) {
     const set = this.affected.get(entity) ?? new Set<string>();
     this.affected.set(entity, set);
@@ -421,18 +432,25 @@ class Touched {
             .map((row) => [row.id, row.shortcode]),
     );
     return {
-      categories: [...this.affected.keys()].sort(),
-      changes: Object.fromEntries(
-        [...this.affected].map(([entity, set]) => [
-          entity,
-          set.size > RING_RECORD_LIMIT
-            ? null
-            : [...set].flatMap((id) => {
-                const code = codes.get(id);
-                return code ? [code] : [];
-              }),
-        ]),
-      ),
+      categories: [
+        ...new Set([...this.affected.keys(), ...this.categories]),
+      ].sort(),
+      changes: {
+        ...Object.fromEntries(
+          [...this.categories].map((category) => [category, null]),
+        ),
+        ...Object.fromEntries(
+          [...this.affected].map(([entity, set]) => [
+            entity,
+            set.size > RING_RECORD_LIMIT
+              ? null
+              : [...set].flatMap((id) => {
+                  const code = codes.get(id);
+                  return code ? [code] : [];
+                }),
+          ]),
+        ),
+      },
     };
   }
 }
@@ -591,19 +609,23 @@ export function derivedFanoutSourceScope({
   selections,
   dependentIds,
   sourceRefs,
+  sourceTargets,
 }: {
   declaration: InternalStoredDerivedDeclaration;
   selections: Readonly<Record<string, DerivedFanoutSelection>>;
   dependentIds: readonly string[];
   /** Snapshot input identities survive a move that changes the live selector. */
   sourceRefs: ReadonlyMap<string, readonly string[]>;
+  /** Excluded or unknown inputs keep the conservative target-wide fence. */
+  sourceTargets?: ReadonlySet<string>;
 }): (source: { target: SQL; ref: SQL }) => SQL {
   const inputs = declaration.inputs.flatMap((input, index) => {
     if (!isFanoutInput(input)) return [];
+    const target = `${declaration.target}@${index}`;
+    if (sourceTargets && !sourceTargets.has(target)) return [];
     const select = input.selection
       ? selections[input.selection.key]
       : undefined;
-    const target = `${declaration.target}@${index}`;
     return [
       { target, input, select, refs: [...(sourceRefs.get(target) ?? [])] },
     ];
@@ -971,6 +993,7 @@ export async function publishDerivedChunk(
     retain.push(...group.filter((item) => !publishedIds.has(item.ref)));
     const published = group.filter((item) => publishedIds.has(item.ref));
     if (!published.length) continue;
+    if (sink) touched.addCategories(sink.sink.notificationCategories ?? []);
     changed += changedIds.length;
     const reconciled = new Set(
       published
@@ -1030,9 +1053,21 @@ export async function markAllStoredDerived(
   return marked;
 }
 
-/** Calendar expiry reuses dirty marks and the existing minute drain, without resetting failures. */
+export function hasClockDerived(computes: DerivedComputes): boolean {
+  return (
+    entityStoredDerivedDeclarations().some(
+      (entry) => entry.clock === "householdDay",
+    ) ||
+    Object.values(computes).some(
+      (adapter) => isDerivedSink(adapter) && adapter.clockExpiredRefs,
+    )
+  );
+}
+
+/** Calendar expiry reuses dirty marks and the existing derived Job, without resetting failures. */
 export async function markExpiredClockDerived(
   db: RepositoryQueryInput,
+  computes?: DerivedComputes,
 ): Promise<number> {
   const targets = entityStoredDerivedDeclarations()
     .filter(
@@ -1040,15 +1075,28 @@ export async function markExpiredClockDerived(
         entry.clock === "householdDay" && entry.publishes === "derivedValue",
     )
     .map(({ target, key, entity }) => ({ target, key, entity }));
-  if (targets.length === 0) return 0;
-  const rows = await markWorkFrom(
-    db,
-    DERIVED_DRAIN,
-    sql`SELECT k.target, v."entityId", ${RECONCILE_PRIORITY}::int, 'Daily refresh due'::text
+  const day = householdDaySql(sql`clock_timestamp() AT TIME ZONE 'UTC'`);
+  const sources: SQL[] = [];
+  if (targets.length)
+    sources.push(sql`SELECT k.target, v."entityId", ${RECONCILE_PRIORITY}::int, 'Daily refresh due'::text
         FROM jsonb_to_recordset(${JSON.stringify(targets)}::jsonb) AS k(target text, key text, entity text)
         JOIN "DerivedValue" v ON v.key = k.key
         JOIN ${entityIdentity} ON ${entityIdentity.id} = v."entityId" AND ${entityIdentity.kind} = k.entity AND ${notDeleted(entityIdentity)}
-       WHERE ${householdDaySql(sql`v."computedAt"`)} < ${householdDaySql(sql`now() AT TIME ZONE 'UTC'`)}`,
+        WHERE ${householdDaySql(sql`v."computedAt"`)} < ${day}`);
+  for (const declaration of storedDerivedDeclarations()) {
+    const adapter = computes?.[declaration.compute];
+    if (adapter && isDerivedSink(adapter) && adapter.clockExpiredRefs)
+      sources.push(sql`SELECT ${declaration.target}::text, expired.id, ${RECONCILE_PRIORITY}::int, 'Daily refresh due'::text
+        FROM (${adapter.clockExpiredRefs(day)}) expired`);
+  }
+  if (!sources.length) return 0;
+  const rows = await markWorkFrom(
+    db,
+    DERIVED_DRAIN,
+    sql.join(
+      sources.map((source) => sql`(${source})`),
+      sql` UNION ALL `,
+    ),
     { existing: "keep" },
   );
   return rows.reduce((total, row) => total + row.count, 0);

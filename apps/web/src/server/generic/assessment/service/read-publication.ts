@@ -8,15 +8,17 @@ import {
   connectionEdgeKey,
   type ConnectionEdge,
 } from "@cubby/schemas/entity-connections";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   readConnectionAssessmentEdges,
   readConnectionEdgeAssessmentIds,
-  readPotentialConnectionAssessmentIds,
 } from "~/server/domains/connection/repo/existing-assessments";
 import {
+  assessmentReadStageBlocked,
+  writeAssessmentReadStage,
   readAssessmentReadFrame,
   readAssessmentReadStage,
   readOpenAssessmentReadIds,
@@ -28,6 +30,10 @@ import {
   prepareSuggestionAdmission,
   suggestionKeyFacts,
 } from "~/server/generic/assessment/repo/suggestion-list";
+import type {
+  DerivedSinkPublication,
+  DerivedSinkContinuation,
+} from "~/server/generic/derived/repo/compute";
 import { DERIVED_DRAIN } from "~/server/generic/derived/repo/drain";
 import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
 import {
@@ -38,6 +44,12 @@ import { stopsDrainPage } from "~/server/generic/jobs/service/drain";
 import { sha256CanonicalJson } from "~/server/lib/canonical-json";
 
 const PREPARATION_LIMIT = 20;
+const ticketKey = ({
+  target,
+  ref,
+  ticket,
+}: Pick<WorkItem, "target" | "ref" | "ticket">) =>
+  JSON.stringify([target, ref, ticket]);
 type ReadSourceScope = (
   snapshot: Database,
   frame: Pick<AssessmentReadStagePlan, "assessmentIds" | "groups">,
@@ -105,19 +117,9 @@ async function prepareAssessmentReadComponent<Prepared>(
           return edge ? [edge] : [];
         });
       if (requested.length) {
-        const sources = [
-          ...new Map(
-            requested
-              .flatMap((edge) => [edge.source, edge.target])
-              .map((ref) => [`${ref.entityKind}:${ref.entityId}`, ref]),
-          ).values(),
-        ];
-        const peerIds = [
-          ...new Set([
-            ...(await readConnectionEdgeAssessmentIds(snapshot, requested)),
-            ...(await readPotentialConnectionAssessmentIds(snapshot, sources)),
-          ]),
-        ].filter((id) => !members.has(id));
+        const peerIds = (
+          await readConnectionEdgeAssessmentIds(snapshot, requested)
+        ).filter((id) => !members.has(id));
         const open = await readOpenAssessmentReadIds(snapshot, peerIds);
         const peers = await readConnectionAssessmentEdges(snapshot, open);
         for (const [id, edge] of peers) {
@@ -134,6 +136,11 @@ async function prepareAssessmentReadComponent<Prepared>(
     const assessmentIds = [...members].sort();
     const orderedGroups = [...groups].sort();
     const componentKey = await sha256CanonicalJson(orderedGroups);
+    const clockDay = orderedGroups.some(
+      (group) => connectionEdgeFromKey(group)?.relation === "project-tool",
+    )
+      ? householdLocalDate()
+      : null;
     // The metadata reads already fixed this repeatable snapshot. Observe only
     // relevant sources before canonical preparation, and reuse this predicate
     // with the exact observations at both publication barriers.
@@ -164,13 +171,14 @@ async function prepareAssessmentReadComponent<Prepared>(
       JSON.stringify(existing.groups) !== JSON.stringify(orderedGroups)
     )
       throw new Error("Assessment component hash matched different groups");
-    const observed = new Set(existing?.tickets.map((item) => item.ticket));
+    const observed = new Set(existing?.tickets.map(ticketKey));
     const reusable =
       existing &&
       existing.rulesVersion === ASSESSMENT_READ_RULES_VERSION &&
+      existing.clockDay === clockDay &&
       JSON.stringify(existing.assessmentIds) ===
         JSON.stringify(assessmentIds) &&
-      observations.every((item) => observed.has(item.ticket));
+      observations.every((item) => observed.has(ticketKey(item)));
     if (existing && !reusable) previousStages.add(existing.id);
     const stage: AssessmentReadStagePlan = reusable
       ? existing
@@ -183,6 +191,7 @@ async function prepareAssessmentReadComponent<Prepared>(
           tickets: observations,
           nextIndex: 0,
           rulesVersion: ASSESSMENT_READ_RULES_VERSION,
+          clockDay,
         };
     previousStages.delete(stage.id);
     const plan: AssessmentReadPreparationPlan = {
@@ -317,4 +326,70 @@ export async function prepareCanonicalAssessmentReadPublication(
     },
     readSourceScope,
   );
+}
+
+/** A mixed chunk proceeds when any component can publish; each writer fences its own scope. */
+export function assessmentReadPublicationBlocked(
+  prepared: AssessmentReadPreparation<AssessmentReadStageWrite>,
+  ids: readonly string[],
+): SQL {
+  const held = new Set(ids);
+  const components = prepared.components.filter(({ plan }) =>
+    plan.stage.assessmentIds.some((id) => held.has(id)),
+  );
+  return components.length === 0
+    ? sql`false`
+    : sql`${sql.join(
+        components.map(
+          ({ prepared: component }) =>
+            sql`(${assessmentReadStageBlocked(component.stage, component.sourceScope)})`,
+        ),
+        sql` AND `,
+      )}`;
+}
+
+/** WorkItem settlement stays with the generic drain; the sink reports exact covered generations. */
+export async function publishPreparedAssessmentReadPublication(
+  db: Database,
+  ids: readonly string[],
+  prepared: AssessmentReadPreparation<AssessmentReadStageWrite>,
+  publication: DerivedSinkPublication,
+): Promise<DerivedSinkContinuation> {
+  const held = new Set(ids);
+  const retain = new Set(ids);
+  const changed = new Set<string>();
+  const covered = new Map<string, WorkItem>();
+  for (const component of prepared.components) {
+    const controllers = component.plan.stage.assessmentIds.filter((id) =>
+      held.has(id),
+    );
+    if (controllers.length === 0) continue;
+    const observed = new Map(
+      component.plan.work.map((item) => [item.ref, item.ticket]),
+    );
+    if (
+      controllers.some((id) => {
+        const ticket = observed.get(id);
+        return ticket === undefined || ticket !== publication.tickets.get(id);
+      })
+    )
+      continue;
+    const outcome = await writeAssessmentReadStage(
+      db,
+      component.prepared,
+      publication,
+    );
+    if (outcome.kind !== "activated") continue;
+    for (const id of controllers) retain.delete(id);
+    for (const id of outcome.changed) changed.add(id);
+    const applied = new Set(component.prepared.stage.tickets.map(ticketKey));
+    for (const item of component.plan.work)
+      if (!held.has(item.ref) && applied.has(ticketKey(item)))
+        covered.set(ticketKey(item), item);
+  }
+  return {
+    changed: [...changed],
+    retain: [...retain],
+    covered: [...covered.values()],
+  };
 }

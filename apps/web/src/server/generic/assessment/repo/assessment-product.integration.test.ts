@@ -72,6 +72,7 @@ import { readAssessmentReadMemberships } from "~/server/generic/assessment/repo/
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { findDuplicateProductIdentities } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 const identityPort: DecisionPort = async () => ({
@@ -1299,10 +1300,11 @@ describe("stored Product identity pairs", () => {
     const stored = await listProductMatchRows(ctx.db);
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({ actionable: false, conflict: false });
-    expect(
-      (await listSuggestionPage(ctx.db, {})).items.map(
-        (row) => row.assessmentId,
-      ),
-    ).not.toContain(stored[0]!.id);
+    await drainStoredDerived(ctx.db);
+    const page = await listSuggestionPage(ctx.db, {});
+    expect(page.meta.coverage).toMatchObject({ missing: false, failed: false });
+    expect(page.items.map((row) => row.assessmentId)).not.toContain(
+      stored[0]!.id,
+    );
   });
 });

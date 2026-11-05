@@ -36,6 +36,7 @@ import {
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
+import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import {
   type DerivedAdapter,
   derivedSink,
@@ -61,6 +62,16 @@ const UNDECLARED_READS = new Set(["Entity", "DerivedValue"]);
 
 /** Full read models also load presentation fields these sinks never publish. */
 const INCIDENTAL_READS = {
+  // The sink's retained revisions, continuation and execution observations are
+  // publication bookkeeping; capturing their writes would refresh itself.
+  "assessment.reviewFacts": new Set([
+    "WorkItem",
+    "Job",
+    "AssessmentReadStage",
+    "AssessmentReadPublication",
+    "AssessmentReadMembership",
+    "AssessmentReadDependency",
+  ]),
   // Input availability reads queue status and envelope execution observations.
   // The calculation discards execution metadata; Job lifecycle is not an input.
   "project.workDiagnosticFacts": new Set(["WorkItem", "Job"]),
@@ -199,6 +210,21 @@ describe("stored derived read sets", () => {
       .from(product)
       .limit(1);
     if (!subject) throw new Error("Synthetic Product was not created");
+    await publishFieldAssessment(
+      ctx.db,
+      {
+        entity: "product",
+        recordId: subject.id,
+        field: "model",
+        currentValue: null,
+        suggestedValue: "Synthetic read-set model",
+        confidence: 0.9,
+        model: "typesafe/jev",
+        kind: "addition",
+        status: "pending",
+      },
+      true,
+    );
     // Attached descriptions must be traced for the owner as well as the Image.
     await getDb(ctx.db).insert(entityAttachment).values({
       entityKind: "product",
@@ -286,15 +312,20 @@ describe("stored derived read sets", () => {
             throw new Error(
               `Unregistered fanout selection ${input.selection.key}`,
             );
+          const column = sql`${sql.identifier(input.tableColumn)}`;
+          const json = input.json;
+          const array = json?.array
+            ? sql`${column} #> ${json.array}::text[]`
+            : sql`jsonb_build_array(${column})`;
+          const refs = json
+            ? sql`SELECT (element->>${json.key})::uuid AS id
+                FROM ${sql.identifier(input.table)} CROSS JOIN LATERAL
+                  jsonb_array_elements(CASE WHEN jsonb_typeof(${array}) = 'array' THEN ${array} ELSE '[]'::jsonb END) element
+                WHERE pg_input_is_valid(element->>${json.key}, ${"uuid"}) LIMIT 25`
+            : sql`SELECT ${input.captureKey === "textHash" ? textHashRefSql(column) : column} AS id
+                FROM ${sql.identifier(input.table)} LIMIT 25`;
           // Compile the real selector even when this source currently has no matches.
-          await getDb(ctx.db).execute(
-            select(sql`SELECT ${
-              input.captureKey === "textHash"
-                ? textHashRefSql(sql`${sql.identifier(input.tableColumn)}`)
-                : sql.identifier(input.tableColumn)
-            } AS id
-            FROM ${sql.identifier(input.table)} LIMIT 25`),
-          );
+          await getDb(ctx.db).execute(select(refs));
         }
       } catch (caught) {
         error = String(caught);

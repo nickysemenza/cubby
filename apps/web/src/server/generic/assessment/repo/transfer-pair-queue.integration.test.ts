@@ -31,7 +31,10 @@ import { recordSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
-import { withJobFixtureExecution } from "~/server/testing/background-queue";
+import {
+  drainStoredDerived,
+  withJobFixtureExecution,
+} from "~/server/testing/background-queue";
 
 import { reviewAssessment } from "./assessment-review";
 import { readAssessmentRecordRefs } from "./review-families";
@@ -163,6 +166,7 @@ describe("transfer pairs in the global queue", () => {
       meta: { input: { mode: "count" }, tallies: { pairs: 1 } },
     });
     expect(scan!.found).toBeGreaterThan(0);
+    await drainStoredDerived(ctx.db);
     expect(
       (
         await listSuggestionPage(ctx.db, {
@@ -174,6 +178,7 @@ describe("transfer pairs in the global queue", () => {
     await labelTransferPairSuggestions(ctx.db, {
       port: answering({ kind: "account_move" }),
     });
+    await drainStoredDerived(ctx.db);
     const page = await listSuggestionPage(ctx.db, {
       family: "transfer_pair",
       limit: 100,
@@ -218,6 +223,7 @@ describe("transfer pairs in the global queue", () => {
     expect(legs[0]?.ledgerTransferId).toBeTruthy();
     expect(legs[1]?.ledgerTransferId).toBe(legs[0]?.ledgerTransferId);
     await generateTransferPairSuggestions(ctx.db, { runId: null });
+    await drainStoredDerived(ctx.db);
     expect(
       (
         await listSuggestionPage(ctx.db, {
@@ -237,6 +243,7 @@ describe("transfer pairs in the global queue", () => {
       port: answering({ kind: "account_move" }),
     });
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await drainStoredDerived(ctx.db);
     const rows = await listSuggestionPage(ctx.db, { limit: 100 });
     expect(rows.items.filter((row) => row.clean)).toHaveLength(3);
     const result = await acceptCleanSuggestions(ctx.db, kernelCtx(ctx), {});
@@ -252,6 +259,7 @@ describe("transfer pairs in the global queue", () => {
   it("refreshes statement clean after a transfer-only label pass", async () => {
     await seed();
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await drainStoredDerived(ctx.db);
     expect(
       (
         await listSuggestionPage(ctx.db, { family: "statement_transaction" })
@@ -261,6 +269,7 @@ describe("transfer pairs in the global queue", () => {
     await labelTransferPairSuggestions(ctx.db, {
       port: answering({ kind: "account_move" }),
     });
+    await drainStoredDerived(ctx.db);
     const rows = (
       await listSuggestionPage(ctx.db, { family: "statement_transaction" })
     ).items;
@@ -272,6 +281,7 @@ describe("transfer pairs in the global queue", () => {
   it("serializes a pre-pair statement review with a later pair review", async () => {
     await seed();
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await drainStoredDerived(ctx.db);
     const statement = (
       await listSuggestionPage(ctx.db, { family: "statement_transaction" })
     ).items.find(
@@ -282,6 +292,7 @@ describe("transfer pairs in the global queue", () => {
       throw new Error("Expected a statement suggestion");
     expect(statement.evidence.transferPair).toBeNull();
     await generateTransferPairSuggestions(ctx.db, { runId: null });
+    await drainStoredDerived(ctx.db);
     const [pair] = (
       await listSuggestionPage(ctx.db, { family: "transfer_pair" })
     ).items;
@@ -385,6 +396,7 @@ describe("transfer pairs in the global queue", () => {
     await labelStatementSuggestions(ctx.db, {
       port: answering({ kind: "account_transfer" }),
     });
+    await drainStoredDerived(ctx.db);
     const [row] = (
       await listSuggestionPage(ctx.db, { family: "statement_transaction" })
     ).items;
@@ -418,6 +430,7 @@ describe("transfer pairs in the global queue", () => {
         after: null,
         runId: null,
       });
+      await drainStoredDerived(ctx.db);
       const page = await listSuggestionPage(ctx.db, {
         family: "statement_transaction",
         limit: 100,
@@ -458,6 +471,7 @@ describe("transfer pairs in the global queue", () => {
         after: null,
         runId: null,
       });
+      await drainStoredDerived(ctx.db);
       expect(
         (
           await listSuggestionPage(ctx.db, { family: "statement_transaction" })
@@ -479,9 +493,18 @@ describe("transfer pairs in the global queue", () => {
         { ledgerPartyId: other.output.id },
         ctx.actor,
       );
-      expect(
-        (await listSuggestionPage(ctx.db, { family: "transfer_pair" })).items,
-      ).toEqual([]);
+      // A prior publication remains useful while the owner edit is pending;
+      // current evidence, rather than background completion, must fence apply.
+      const stale = await listSuggestionPage(ctx.db, {
+        family: "transfer_pair",
+      });
+      expect(stale.items.map((row) => row.assessmentId)).toContain(
+        pair.assessmentId,
+      );
+      expect(stale.meta.coverage).toMatchObject({
+        stale: true,
+        unresolved: true,
+      });
       const bulk = await acceptCleanSuggestions(ctx.db, kernelCtx(ctx), {
         filters: { family: "statement_transaction" },
       });

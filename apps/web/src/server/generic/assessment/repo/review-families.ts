@@ -884,6 +884,111 @@ async function resolveStoredRecordRefs(
   );
 }
 
+/** Resolve canonical record observations once per batch, preserving missing-code tokens. */
+export async function resolveAssessmentReadInputRefs(
+  db: Database,
+  inputs: readonly {
+    id: string;
+    refs: readonly { entity: string; id: string }[];
+  }[],
+): Promise<Map<string, AssessmentReadDependency[]>> {
+  const normalized = inputs.map((input) => ({
+    ...input,
+    refs: input.refs.map((value) => ({
+      ...value,
+      code: parseShortcode(value.id),
+    })),
+  }));
+  const result = new Map<string, AssessmentReadDependency[]>();
+  const codes = new Map(
+    normalized.flatMap((input) =>
+      input.refs.flatMap((value) =>
+        value.code?.type === value.entity
+          ? [
+              [
+                JSON.stringify([value.entity, value.code.shortcode]),
+                { entity: value.entity, code: value.code.shortcode },
+              ] as const,
+            ]
+          : [],
+      ),
+    ),
+  );
+  const resolvedInputs =
+    codes.size === 0
+      ? []
+      : z
+          .array(
+            z.object({
+              entity: referenceEntity,
+              code: z.string(),
+              id: z.guid().nullable(),
+              token: z.guid(),
+            }),
+          )
+          .parse(
+            (
+              await unwrapDb(db).execute(sql`
+    SELECT requested.entity, requested.code, identity.id::text AS id,
+      ${textHashRefSql(sql`requested.code`)}::text AS token
+    FROM jsonb_to_recordset(${JSON.stringify([...codes.values()])}::jsonb) requested(entity text, code text)
+    LEFT JOIN ${entityIdentity} identity ON identity.kind = requested.entity AND identity.shortcode = requested.code
+  `)
+            ).rows,
+          );
+  const byCode = new Map(
+    resolvedInputs.map((value) => [
+      JSON.stringify([value.entity, value.code]),
+      value,
+    ]),
+  );
+  for (const row of normalized) {
+    const sources = row.refs.flatMap((value) => {
+      const id = z.guid().safeParse(value.id);
+      if (id.success)
+        return [
+          assessmentReadDependency.parse({
+            sourceKind: value.entity,
+            sourceId: id.data.toLowerCase(),
+          }),
+        ];
+      const code =
+        value.code?.type === value.entity
+          ? byCode.get(JSON.stringify([value.entity, value.code.shortcode]))
+          : undefined;
+      if (!code) return [];
+      return [
+        assessmentReadDependency.parse({
+          sourceKind: assessmentReadScopedSourceKind.enum.referenceCode,
+          sourceId: code.token,
+        }),
+        ...(code.id
+          ? [
+              assessmentReadDependency.parse({
+                sourceKind: code.entity,
+                sourceId: code.id,
+              }),
+            ]
+          : []),
+      ];
+    });
+    result.set(
+      row.id,
+      [
+        ...new Map(
+          sources.map((source) => [
+            JSON.stringify([source.sourceKind, source.sourceId]),
+            source,
+          ]),
+        ).entries(),
+      ]
+        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+        .map(([, source]) => source),
+    );
+  }
+  return result;
+}
+
 /** Publish discovery tokens and count references from their existing family owners. */
 export async function readAssessmentReadMemberships(
   db: Database,
@@ -983,97 +1088,11 @@ export async function readAssessmentReadMemberships(
           const parsed = z
             .object({ entity: z.string(), id: z.string() })
             .safeParse(value);
-          return parsed.success
-            ? [{ ...parsed.data, code: parseShortcode(parsed.data.id) }]
-            : [];
+          return parsed.success ? [parsed.data] : [];
         }),
     }));
-  const codes = new Map(
-    inputs.flatMap((input) =>
-      input.refs.flatMap((value) =>
-        value.code?.type === value.entity
-          ? [
-              [
-                JSON.stringify([value.entity, value.code.shortcode]),
-                { entity: value.entity, code: value.code.shortcode },
-              ] as const,
-            ]
-          : [],
-      ),
-    ),
-  );
-  const resolvedInputs =
-    codes.size === 0
-      ? []
-      : z
-          .array(
-            z.object({
-              entity: referenceEntity,
-              code: z.string(),
-              id: z.guid().nullable(),
-              token: z.guid(),
-            }),
-          )
-          .parse(
-            (
-              await unwrapDb(db).execute(sql`
-    SELECT requested.entity, requested.code, identity.id::text AS id,
-      ${textHashRefSql(sql`requested.code`)}::text AS token
-    FROM jsonb_to_recordset(${JSON.stringify([...codes.values()])}::jsonb) requested(entity text, code text)
-    LEFT JOIN ${entityIdentity} identity ON identity.kind = requested.entity AND identity.shortcode = requested.code
-  `)
-            ).rows,
-          );
-  const byCode = new Map(
-    resolvedInputs.map((value) => [
-      JSON.stringify([value.entity, value.code]),
-      value,
-    ]),
-  );
-  for (const row of inputs) {
-    const sources = row.refs.flatMap((value) => {
-      const id = z.guid().safeParse(value.id);
-      if (id.success)
-        return [
-          assessmentReadDependency.parse({
-            sourceKind: value.entity,
-            sourceId: id.data.toLowerCase(),
-          }),
-        ];
-      const code =
-        value.code?.type === value.entity
-          ? byCode.get(JSON.stringify([value.entity, value.code.shortcode]))
-          : undefined;
-      if (!code) return [];
-      return [
-        assessmentReadDependency.parse({
-          sourceKind: assessmentReadScopedSourceKind.enum.referenceCode,
-          sourceId: code.token,
-        }),
-        ...(code.id
-          ? [
-              assessmentReadDependency.parse({
-                sourceKind: code.entity,
-                sourceId: code.id,
-              }),
-            ]
-          : []),
-      ];
-    });
-    observeInputs?.(
-      row.id,
-      [
-        ...new Map(
-          sources.map((source) => [
-            JSON.stringify([source.sourceKind, source.sourceId]),
-            source,
-          ]),
-        ).entries(),
-      ]
-        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-        .map(([, source]) => source),
-    );
-  }
+  for (const [id, sources] of await resolveAssessmentReadInputRefs(db, inputs))
+    observeInputs?.(id, sources);
   return new Map(
     rows.map((row) => {
       const memberships = [

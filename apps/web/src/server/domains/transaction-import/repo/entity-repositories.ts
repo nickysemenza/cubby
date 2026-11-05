@@ -12,6 +12,7 @@ import { notDeleted, unwrapDb, withTransactionOn } from "~/server/db/helpers";
 import { sourceTransactionRecord } from "~/server/db/schema";
 import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import { sourceTransactionRecordSearch } from "~/server/domains/transaction-import/repo/search-read-source-transaction-record";
+import { CHARGE_STATE } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   merchantVendorInferences,
   normalizeMerchant,
@@ -33,7 +34,6 @@ import {
   assertSourceTransactionRecordDeletionAllowed,
   assertSourceTransactionRecordSupersessionAllowed,
 } from "./source-transaction-record-lifecycle";
-import { CHARGE_STATE } from "./statement-charge";
 
 type ReaderDb = Database | DrizzleTransaction;
 type SourceRow = typeof sourceTransactionRecord.$inferSelect;

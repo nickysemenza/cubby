@@ -1,10 +1,15 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
+import { assessmentFamily } from "@cubby/schemas/assessment";
+import { CONNECTION_TRANSFER_WINDOW_DAYS } from "@cubby/schemas/entity-connections";
 import {
   financialTransactionKind,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
-import { sql } from "drizzle-orm";
+import { transferPairJudgment } from "@cubby/schemas/transfer-pair-suggestion";
+import { sql, type SQL } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 
 /** Kinds that retrieve transfer evidence, without proving a transfer. */
@@ -12,6 +17,51 @@ export const transferPairMoneyMoveKinds = [
   financialTransactionKind.enum.account_transfer,
   financialTransactionKind.enum.credit_card_payment,
 ];
+
+/** Discovery and invalidation use the same rounded absolute money pool. */
+export const transferPoolAmountSql = (amount: SQL): SQL =>
+  sql`round(abs(${amount}) * 100)::bigint`;
+
+/** Recorded connection peers share discovery's numeric cents and date bounds. */
+export function recordedTransferSourceIdsSql(refs: SQL): SQL {
+  return sql`WITH changed_recorded_transfers AS MATERIALIZED (
+      SELECT coalesce(changed."postedDate", changed."transactionDate")::date AS day,
+        ${transferPoolAmountSql(sql`changed.amount::numeric`)} AS cents
+      FROM "FinancialTransaction" changed WHERE changed.id IN (${refs})
+    ) SELECT DISTINCT peer.id FROM changed_recorded_transfers changed
+      JOIN "FinancialTransaction" peer ON
+        coalesce(peer."postedDate", peer."transactionDate")::date BETWEEN
+          changed.day - ${CONNECTION_TRANSFER_WINDOW_DAYS}::int
+          AND changed.day + ${CONNECTION_TRANSFER_WINDOW_DAYS}::int
+        AND ${transferPoolAmountSql(sql`peer.amount::numeric`)} = changed.cents`;
+}
+
+const pairFields = transferPairJudgment.keyof();
+
+/** Find existing advice a newly reachable leg can change, without judging it. */
+export function transferPairSourceAssessmentIdsSql(
+  kind: "financialTransaction" | "sourceTransactionRecord" | "policy",
+  refs: SQL,
+): SQL {
+  const pending = sql`s.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.transfer_pair)}
+    AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}`;
+  if (kind === "policy")
+    // Accounts/cash destinations and removed booking or settlement claims can
+    // admit legs absent from every retained judgment. Keep that scope complete.
+    return sql`SELECT s.id FROM "AssessmentState" s WHERE ${pending}`;
+  const amounts =
+    kind === "financialTransaction"
+      ? sql`SELECT ${transferPoolAmountSql(sql`changed.amount`)} AS cents
+        FROM "FinancialTransaction" changed WHERE changed.id IN (${refs})`
+      : sql`SELECT ${transferPoolAmountSql(sql`changed.amount`)} AS cents
+        FROM "SourceTransactionRecord" changed WHERE changed.id IN (${refs})`;
+  const amount = sql`s.data->>${sqlEnumConstant(pairFields, pairFields.enum.amount)}`;
+  // Historical invalid state stays unavailable; it must not abort unrelated
+  // source expansion before the canonical producer can report its failure.
+  const numericAmount = sql`CASE WHEN pg_input_is_valid(${amount}, ${"numeric"}) THEN (${amount})::numeric END`;
+  return sql`SELECT s.id FROM "AssessmentState" s WHERE ${pending}
+    AND ${transferPoolAmountSql(numericAmount)} IN (${amounts})`;
+}
 
 /**
  * The seed identities a scan pages; `createdBefore` is the population

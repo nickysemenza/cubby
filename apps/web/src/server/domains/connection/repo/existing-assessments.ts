@@ -1,7 +1,9 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
 import {
   type AssessmentProducer,
   type EntityPairAssessmentFamily,
   entityPairAssessmentFamilies,
+  assessmentFamily,
   isEntityPairAssessmentFamily,
 } from "@cubby/schemas/assessment";
 import type { EntityRef } from "@cubby/schemas/entity";
@@ -19,7 +21,12 @@ import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
+import {
+  getDb,
+  notDeleted,
+  uuidArrayParam,
+  sqlEnumConstant,
+} from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
 import {
   assessment,
@@ -198,20 +205,6 @@ function existingConnectionAssessmentIds(
     .union(pairIds);
 }
 
-/** Group preparation includes ineligible peers that can revive after an input change. */
-export async function readPotentialConnectionAssessmentIds(
-  db: Database,
-  sources: readonly EntityRef[],
-): Promise<string[]> {
-  if (!sources.length) return [];
-  const candidates = existingConnectionAssessmentIds(db, sources).as(
-    "potential_connection_assessments",
-  );
-  return (await getDb(db).select({ id: candidates.id }).from(candidates)).map(
-    (row) => row.id,
-  );
-}
-
 /** Source-first barrier shared by selected retrieval and publication grouping. */
 function connectionSourcePeers(db: Database, sourceKind: SQL, sourceCode: SQL) {
   const indexed = alias(assessment, "connection_peer_indexed");
@@ -259,7 +252,7 @@ export async function readSelectedConnectionAssessmentIds(
   return rows.map((row) => row.id);
 }
 
-/** Peers on exact edges, including stale competitors, before family admission. */
+/** Exact current edge identities across families, before evidence admission. */
 export async function readConnectionEdgeAssessmentIds(
   db: Database,
   edges: readonly ConnectionEdge[],
@@ -268,40 +261,104 @@ export async function readConnectionEdgeAssessmentIds(
   const distinct = [
     ...new Map(edges.map((edge) => [connectionEdgeKey(edge), edge])).values(),
   ];
-  const requested = sql.identifier("edge_requested");
-  const matched = sql.identifier("edge_membership");
-  const column = (name: string) => sql`${requested}.${sql.identifier(name)}`;
-  const point = connectionSourcePeers(
-    db,
-    column("sourceKind"),
-    column("sourceCode"),
+  const fieldRequests = distinct.flatMap((edge) =>
+    [...fieldRelations].flatMap(([key, relation]) => {
+      if (relation !== edge.relation) return [];
+      const owner = relation === "product-expense" ? edge.target : edge.source;
+      const suggested =
+        relation === "product-expense" ? edge.source : edge.target;
+      return [{ owner, suggested, field: key.slice(key.indexOf(".") + 1) }];
+    }),
   );
-  const evidence = sql`${matched}.${sql.identifier("evidence")}`;
-  const rows = await getDb(db)
-    .selectDistinct({ id: sql<string>`${matched}.${sql.identifier("id")}` })
-    .from(
-      sql`jsonb_to_recordset(${JSON.stringify(
-        distinct.map((edge) => ({
-          relation: edge.relation,
-          sourceKind: edge.source.entityKind,
-          sourceCode: edge.source.entityId,
-          targetKind: edge.target.entityKind,
-          targetCode: edge.target.entityId,
-        })),
-      )}::jsonb) AS ${requested}(relation text, "sourceKind" text, "sourceCode" text, "targetKind" text, "targetCode" text)`,
+  const pairRequests = distinct.flatMap((edge) =>
+    entityPairAssessmentFamilies.flatMap((family) =>
+      pairFamilies[family].relation === edge.relation ? [{ edge, family }] : [],
+    ),
+  );
+  // Both endpoint predicates stay inside each point probe. A source or target
+  // hub must not materialize unrelated proposals before the edge is checked.
+  // Match the grouping reader exactly: recommendation tokens remain raw;
+  // fields emit identity shortcodes; pair otherId requires canonical UUID text.
+  // includes-deleted: grouping retains tombstoned endpoint identities; canonical
+  // admission decides whether their proposals can still be shown.
+  const rows = await getDb(db).execute<{ id: string }>(sql`
+    WITH requested_edges(relation, "sourceKind", "sourceCode", "targetKind", "targetCode") AS MATERIALIZED (
+      VALUES ${sql.join(
+        distinct.map(
+          (edge) => sql`(${edge.relation}::text,
+        ${edge.source.entityKind}::text, ${edge.source.entityId}::text,
+        ${edge.target.entityKind}::text, ${edge.target.entityId}::text)`,
+        ),
+        sql`, `,
+      )}
+    ), requested_fields(entity, code, field, "targetKind", "targetCode") AS MATERIALIZED (
+      ${
+        fieldRequests.length
+          ? sql`VALUES ${sql.join(
+              fieldRequests.map(
+                ({ owner, suggested, field }) => sql`(
+        ${owner.entityKind}::text, ${owner.entityId}::text, ${field}::text,
+        ${suggested.entityKind}::text, ${suggested.entityId}::text)`,
+              ),
+              sql`, `,
+            )}`
+          : sql`SELECT NULL::text, NULL::text, NULL::text, NULL::text, NULL::text WHERE false`
+      }
+    ), requested_pairs(family, "sourceKind", "sourceCode", "targetKind", "targetCode") AS MATERIALIZED (
+      ${
+        pairRequests.length
+          ? sql`VALUES ${sql.join(
+              pairRequests.map(
+                ({ edge, family }) => sql`(
+        ${family}::text, ${edge.source.entityKind}::text, ${edge.source.entityId}::text,
+        ${edge.target.entityKind}::text, ${edge.target.entityId}::text)`,
+              ),
+              sql`, `,
+            )}`
+          : sql`SELECT NULL::text, NULL::text, NULL::text, NULL::text, NULL::text WHERE false`
+      }
     )
-    .innerJoinLateral(
-      sql`(${point.getSQL()} OFFSET 0) AS ${matched}`,
-      sql`true`,
-    )
-    .where(
-      and(
-        sql`${evidence} #>> '{candidate,target,entityKind}' = ${column("targetKind")}`,
-        sql`${evidence} #>> '{candidate,target,entityId}' = ${column("targetCode")}`,
-        sql`${evidence} #>> '{candidate,relation}' = ${column("relation")}`,
-      ),
-    );
-  return rows.map((row) => row.id);
+    SELECT DISTINCT peers.id FROM (
+      SELECT matched.id FROM requested_edges r
+      CROSS JOIN LATERAL (
+        SELECT a.id FROM ${assessment} a JOIN ${assessmentState} s ON s.id = a.id
+        WHERE a.served AND a.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.recommendation)}
+          AND a.subject->>'scope' LIKE 'connection.%'
+          AND a.evidence #>> '{candidate,source,entityKind}' = r."sourceKind"
+          AND a.evidence #>> '{candidate,source,entityId}' = r."sourceCode"
+          AND a.evidence #>> '{candidate,target,entityKind}' = r."targetKind"
+          AND a.evidence #>> '{candidate,target,entityId}' = r."targetCode"
+          AND a.evidence #>> '{candidate,relation}' = r.relation
+          AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
+        OFFSET 0
+      ) matched
+      UNION ALL
+      SELECT matched.id FROM requested_fields r
+      JOIN ${entityIdentity} owner ON owner.kind = r.entity AND owner.shortcode = r.code
+      JOIN ${entityIdentity} target ON target.kind = r."targetKind" AND target.shortcode = r."targetCode"
+      CROSS JOIN LATERAL (
+        SELECT s.id FROM ${assessmentState} s JOIN ${assessment} a ON a.id = s.id
+        WHERE s.entity = r.entity AND s."recordId" = owner.id AND s.field = r.field
+          AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)} AND a.served AND a.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.field)}
+          AND md5(s."suggestedValue" #>> '{}') = md5(target.shortcode)
+          AND s."suggestedValue" #>> '{}' = target.shortcode
+        OFFSET 0
+      ) matched
+      UNION ALL
+      SELECT matched.id FROM requested_pairs r
+      JOIN ${entityIdentity} owner ON owner.kind = r."sourceKind" AND owner.shortcode = r."sourceCode"
+      JOIN ${entityIdentity} target ON target.kind = r."targetKind" AND target.shortcode = r."targetCode"
+      CROSS JOIN LATERAL (
+        SELECT s.id FROM ${assessment} a JOIN ${assessmentState} s ON s.id = a.id
+        WHERE a.served AND a.family = r.family AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
+          AND s.entity = owner.kind AND s."recordId" = owner.id
+          AND a.subject->>'otherId' IS NOT NULL
+          AND md5(a.subject->>'otherId') = md5(target.id::text)
+          AND a.subject->>'otherId' = target.id::text
+        OFFSET 0
+      ) matched
+    ) peers`);
+  return rows.rows.map((row) => row.id);
 }
 
 /** Identity grouping shares the existing family mappings; it does not admit a peer. */

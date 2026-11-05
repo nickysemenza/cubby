@@ -3281,12 +3281,22 @@ live evidence.
 
 Stored results whose canonical policy depends on today's household date declare
 `clock: "householdDay"`. A publication from an earlier household day reads as
-stale even before work is queued. App-open and daily recovery admit expired
-publications when its ready queue is empty, marks them at reconciliation priority
-and captures its own invalidation. Discovery preserves existing tickets, retry
+stale even before work is queued. App-open, daily recovery and production derived
+preparation admit expired publications at reconciliation priority through the
+same invalidation owner. Discovery preserves existing tickets, retry
 errors and member-edit priority; it adds no per-record timer or separate Job.
 Freshness and pending work remain independent. Inventory and Product acquisition
 ownership use this clock because future acquisitions become eligible with time.
+
+Own-table sinks expose `clockExpiredRefs(day)` to the same expiry owner. Assessment
+project-tool components retain `clockDay` on staged and active results, including
+successful empty results. A day mismatch reads as stale before enrollment and
+blocks an old-day stage from activation. Successful no-op verification advances
+the day without changing content identity, `computedAt` or publication-age history.
+Production derived preparation enrolls expiry before claiming work, so a busy
+queue cannot starve it. An idle derived Job retains the next household-midnight
+deadline, preserving any earlier retry; source invalidations still pull that same
+Job forward. This uses the existing Job and scheduler, with no per-record timer.
 
 On-demand field explanations expose a stored root as `storedResult` in the
 source-dependency projection. A manifest can bind evidence paths there while

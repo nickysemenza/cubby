@@ -35,6 +35,8 @@ export const repositoryOwners = [
   "src/server/generic/assessment/repo/automatic-fields.ts",
   "src/server/generic/assessment/repo/read-publication.ts",
   "src/server/generic/assessment/repo/pending-admission.ts",
+  "src/server/domains/transaction-import/repo/statement-charge.ts",
+  "src/server/domains/financial-transaction/repo/transfer-pair-input.ts",
   "src/server/generic/derived/repo/read.ts",
   "src/server/generic/shortcode/repo/shortcode-resolver.ts",
   "src/server/domains/product/repo/field-envelope.ts",

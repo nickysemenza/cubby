@@ -236,11 +236,15 @@ Assessment does not acquire a public Entity identity to reuse that table.
 
 The staged writer accepts only the next exact identity prefix. A newer peer or
 source-fanout ticket prevents activation; replacing an invalidated continuation
-removes only inactive staged revisions. Completing a component switches its
+removes only inactive staged revisions. A refused final fence resets preparation
+while preserving the recovery roster and provisional dependencies; a completed
+cursor always means activated results. Completing a component switches its
 changed active results, complete memberships and dependencies in one transaction.
 Unchanged results keep their active revision and publication age, with no
 dependency rewrite. Notifications include old and new references and declared
-entity dependencies. This storage writer runs inside the existing drain's
+entity dependencies, including successful no-op completion because coverage changed.
+The registered sink also invalidates Suggestions and Work reads when an empty
+result has no record references. This storage writer runs inside the existing drain's
 source, ticket and lease-fenced transaction; it grants no separate authority.
 Independent components share one twenty-result preparation budget per page;
 unprepared claimed records remain owed without a failed attempt. Component
@@ -271,6 +275,12 @@ old rules, owed work and failed refreshes remain explicit; successful empty
 revisions establish coverage. Until source expansion resolves new memberships,
 coverage is conservative across record scopes and reports no fabricated missing
 count. Consumers must not turn an empty incomplete relation into a complete zero.
+Record badges use this publication relation directly: resolve the requested
+shortcodes, discover across the entire batch, then count revision-matched ref
+memberships and read coverage in one SQL operation. Discovery retains both State
+and immutable family authorities, matching the canonical family-admission seam.
+Browsing does not recapture evidence or enroll work. Member authority gates
+still hide a committed rejection immediately without awaiting publication.
 
 Assessment source scoping reuses the derived drain's fanout resolver, including
 its declared paths and the sink's current-and-retained selection. The producer
@@ -283,6 +293,106 @@ fence. Selector completeness, including newly reachable peers, remains required.
 The internal target and foreground cutover require complete invalidation and
 publication coverage before these tables become the read authority. The storage
 and canonical preparation seam alone establish neither coverage nor latency.
+
+Product-pair capture follows current Product endpoints as well as retained
+dependencies. Import claims, order bindings, acquisition links and lines,
+beneficiary attribution and payment-owner inputs reach those endpoints through
+declared deferred paths. This includes associations created before the first
+publication. Identifier issuer matching reads the entire Vendor/ExternalSource
+registry, so issuer-policy changes enroll the pending pair population rather
+than relying on a prior relationship to the changed issuer. Neither path adds
+dependent reads to a source save.
+
+Statement capture reuses the charge owner for indexed current-association
+selection. A new source observation reaches advice by source and charge key;
+a new settlement edge reaches it through retained reference keys and the
+immutable source-reference index. Import memberships and allocation/line moves
+capture both endpoints. Exact source text remains authoritative after the
+hash-assisted identity probe. These selectors supplement retained dependencies;
+they do not validate advice or introduce a second eligibility calculation.
+
+Transfer source selection shares discovery's rounded absolute-amount SQL.
+New transaction and statement observations enroll existing advice in that money
+pool, while retained dependencies cover former competitors. Account/owner policy,
+settlement-reference changes and Expense booking changes conservatively enroll
+the pending Transfer family: removing a claim can admit an unretained leg, and
+the old booking text need not remain on the Expense. This uses existing bounded
+fanout enrollment rather than a second candidate index or scheduler. Its cost
+and convergence remain part of ordinary-edit acceptance, including wide edits.
+
+Current record enrollment probes both immutable connection endpoints through
+their existing indexes, including UUID and shortcode text, before reverse
+dependencies exist. State primary records use their indexed identity separately.
+The selector preserves identity tombstones and never re-runs admission. Stock
+changes reach sibling Inventory rows through the old/new Product identity;
+Purchase links and lines capture both endpoints, and account/owner changes
+reach transaction and payment-account associations through deferred paths.
+
+Email purchase capture reuses the relationship declaration's stable input
+positions and canonical Purchase-to-Email selector, excluding its retired
+captures. The Assessment adapter adds chosen-event `event` and `sourceKey`,
+because its canonical basis retains those fields while relationship facts do
+not. Enrollment unions current Email evidence and both retained endpoint
+associations; it may ignore account-owner scope only to conservatively find
+work. Canonical preparation and action authority continue to respect ownership.
+
+Connection preparation reports record identities from each current basis before
+its freshness comparison. Stale results therefore keep current settlement
+candidates and stock siblings as dependencies, even when their publication is
+successfully empty. Record-code resolution and missing-code observations reuse
+the membership owner's batched resolver. A candidate that moves out of its
+retrieval window still invalidates the advice whose last preparation read it.
+New settlement candidates use the ranker's shared date-window constant to find
+Purchase targets before endpoint probes. This enrolls work only; canonical
+ranking, receipt validation and action checks remain unchanged.
+
+Recorded-transfer connections use one shared evidence date window and the
+existing numeric cents expression. A new nearby same-amount transaction
+enrolls matching connection endpoints before it becomes a retained dependency.
+Preparation retains the current ranked peers, their accounts and people even
+when a new peer makes the older suggestion stale. This is separate from the
+transfer-pair family's charge/statement policy; neither policy is replaced.
+
+Project-tool publication carries a separate household verification day on both
+Stage and Publication. Midnight expiry includes successful empty results and
+blocks activation of old-day preparation. A complete no-op advances only that
+verification stamp, preserving publication age. The sink's expiry selector feeds
+the existing derived Job, whose next deadline is bounded by household midnight;
+earlier ready work and retry deadlines retain priority.
+
+Expense-to-Project preparation also retains the current included history's
+Expense, Project and Product identities, and the source's Purchase and Product.
+These observations survive an empty stale result, so removing a newly included
+history row can enroll advice whose original fingerprint becomes current again.
+They do not replace capture for newly reachable history or roster inputs.
+Global roster captures watch the columns used by history and Project windows;
+ordinary Product name/model or Expense-note edits enroll their own advice rather
+than the entire Expense-to-Project population. Source context still includes
+category-resolution evidence: category ancestors and Vendor-to-Purchase paths
+reach Expenses before their first dependency publication. True global roster
+changes remain conservative; their fanout and latency require measurement.
+
+The internal declaration enrolls the six Suggestions families. Reconciliation
+currently scans active pending State rows without a family restriction so an
+immutable supported family cannot be missed when State family differs. Canonical
+preparation still applies the exact immutable-or-State six-family population;
+unrelated rows can produce empty publications and publication activity. That
+additional preparation/storage cost remains to be measured. Identity capture explicitly excludes Job and
+Run identities so bootstrapping the drain cannot recursively capture itself.
+Forward field enrollment follows entity kinds with declaration-owned suggestion
+producers. The emoji producer also requires a declared suggestion field, rather
+than accepting every entity model. Historical field reads and retained dependency
+lookups remain unchanged; execution-lifecycle tables are not silently exempted
+from the read-set check as if their values were canonical inputs.
+Field sources include audit revisions, classification rosters, image analysis and
+confirmation changes, and updatedAt-sensitive tag donors. These reuse the
+fingerprint owner's forward selectors and retained dependency index.
+The Assessment sink uses the existing derived registry and generic settlement
+owner. A held controller must match its observed ticket; partial stages retain
+work, activated stages report changed records and exact covered peer tickets.
+A blocked component does not block a healthy sibling in the same publication
+chunk: the outer gate skips a wholly blocked chunk, and each stage writer checks
+its own source fence. The sink never deletes WorkItems.
 The publication assembler serializes keys and declared filter operands from the
 canonical admission result; it does not recompute family eligibility. It emits
 an evaluated-empty revision for closed records, releasing their memberships.

@@ -115,7 +115,7 @@ export const sharedDerivedPreparation =
     );
 
 /** One sink publication's reader notification, committed with its transaction. */
-interface DerivedSinkPublication {
+export interface DerivedSinkPublication {
   /** Exact held tickets; staged output must belong to this invalidation generation. */
   readonly tickets: ReadonlyMap<string, number>;
   /**
@@ -127,7 +127,7 @@ interface DerivedSinkPublication {
 }
 
 /** Staging may commit while its original source work stays owed without an attempt. */
-interface DerivedSinkContinuation {
+export interface DerivedSinkContinuation {
   readonly changed: readonly string[];
   readonly retain: readonly string[];
   /** Exact peer generations whose identical effect committed with this publication. */
@@ -143,6 +143,10 @@ interface DerivedSinkContinuation {
 export interface DerivedSink<Prepared = unknown> {
   readonly kind: "sink";
   readonly preparationBatchSize?: number;
+  /** Read surfaces invalidated by every completed publication, including no-ops. */
+  readonly notificationCategories?: readonly string[];
+  /** Own-table clock expiry, enrolled through the existing derived Job. */
+  readonly clockExpiredRefs?: (householdDay: SQL) => SQL;
   /**
    * An internal record's whole fanout selector: given source refs as one `id`
    * column, its query returns current and retained target ids as `id`.
@@ -178,6 +182,8 @@ export const derivedSink = <Prepared>(
     kind: "sink",
     preparationBatchSize: sink.preparationBatchSize,
     fanoutSelections: sink.fanoutSelections,
+    notificationCategories: sink.notificationCategories,
+    clockExpiredRefs: sink.clockExpiredRefs,
     prepare: sink.prepare,
     // SAFETY: the drain hands `preparationFailures` and `publish` exactly the
     // value this sink's own `prepare` returned for the same page.

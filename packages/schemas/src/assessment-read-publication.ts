@@ -2,6 +2,10 @@ import { z } from "zod";
 
 import { suggestionStatus } from "./ai";
 import { assessmentChildHandle } from "./assessment-reference";
+export {
+  assessmentReadCoverage,
+  type AssessmentReadCoverage,
+} from "./assessment-reference";
 import { assessmentFamily } from "./assessment";
 import {
   suggestionColumnValue,
@@ -16,15 +20,6 @@ import {
 export const ASSESSMENT_READ_RULES_VERSION = 1;
 export const ASSESSMENT_READ_TARGET = "assessment.reviewFacts";
 export const ASSESSMENT_READ_LABEL = "Assessment reviews";
-
-/** Unknown membership is a coverage gap, never a precise count of missing results. */
-export const assessmentReadCoverage = z.object({
-  missing: z.boolean(),
-  stale: z.boolean(),
-  unresolved: z.boolean(),
-  failed: z.boolean(),
-});
-export type AssessmentReadCoverage = z.infer<typeof assessmentReadCoverage>;
 
 /** Serializable form of the canonical family's admitted key, before filtering. */
 export const assessmentReadKey = z.object({

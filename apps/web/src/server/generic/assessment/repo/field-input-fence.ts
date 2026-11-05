@@ -5,7 +5,10 @@ import {
   type AssessmentReadDependency,
 } from "@cubby/schemas/assessment-read-publication";
 import { entitySchema } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import {
+  entityFieldModels,
+  suggestFieldKeys,
+} from "@cubby/schemas/entity-fields";
 import { fieldSuggestionContextKeys } from "@cubby/schemas/field-suggestion";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -34,6 +37,9 @@ import { canonicalJson } from "~/server/lib/canonical-json";
 type FieldSubject = { entity: string; recordId: string; field: string };
 type SourceRef = Pick<FieldSubject, "entity" | "recordId">;
 const sourceRow = z.record(z.string(), z.json());
+const suggestionSourceKinds = new Set<string>(
+  suggestFieldKeys.map((key) => key.slice(0, key.indexOf("."))),
+);
 type SourceRow = z.infer<typeof sourceRow>;
 const sourceKey = (entity: string, id: string) =>
   JSON.stringify([entity, id.toLowerCase()]);
@@ -213,6 +219,10 @@ export function fieldInputAssessmentIdsSql(sourceKind: string, refs: SQL): SQL {
       }`;
   }
   const related = Object.entries(SHORTCODE_TABLE).flatMap(([entity, table]) => {
+    // New suggestions belong to declaration-owned producers. Do not turn Job
+    // or Run execution references into self-invalidating drain dependencies.
+    // Historical reads and retained dependency lookups stay unchanged.
+    if (!suggestionSourceKinds.has(entity)) return [];
     const kind = entitySchema.parse(entity);
     const columns = new Set(
       Object.values(getTableColumns(table)).map((column) => column.name),

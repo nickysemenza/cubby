@@ -121,6 +121,13 @@ surface (destructive for a proposed removal); confidence appears once. Accept st
 source evidence and raw failures retain their existing review disclosure. Activity
 rows may stack provenance beneath the primary change; an arrow stays attached to
 its destination value rather than wrapping alone.
+Proposal badges show a complete known count normally. Incomplete publication
+coverage adds a plus to a positive count, or a question mark when none are known;
+the accessible label and disclosure explain missing, stale or failed coverage.
+These static indicators never imply that refresh work is executing.
+Record and workspace Suggestions keep coverage visible above retained rows and
+say “No known pending suggestions” for incomplete empty results. A failed read
+keeps the last result beside its raw error and read Retry control.
 
 A declared `dateRange` field uses one labelled control and saves both calendar-date
 bounds together. Deadline fields offer Single date and Date range; period fields

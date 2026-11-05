@@ -102,7 +102,21 @@ The migration also adds a nullable `WorkItem.fanoutAfter` cursor.
 Existing unfinished work starts without a cursor; tickets, attempts, deadlines,
 waits and retained errors are unchanged. The updated `derived_mark` clears the
 cursor when a new source ticket is captured. No existing rows are rewritten or
-removed. Storage creation does not seed coverage or enable a publication reader.
+removed. The migration installs the Assessment source captures and enrolls the
+served/open publication population at reconciliation priority. Initial enrollment
+keeps any existing target ticket, attempts, deadline, wait and error intact.
+It never fabricates a successful empty result. Missing publications remain an
+explicit coverage gap until the existing drain publishes them.
+
+Use the normal Actions migration-before-deploy sequence for this direct cutover.
+Downtime and failed predecessor requests are acceptable; no environment boundary,
+writer hold or timed waiting period is required. After the matching Worker is
+serving, re-enroll the open Assessment population through the existing target
+reconciliation with `existing: "keep"`. This recovers initial marks a predecessor
+drain may have consumed without resetting surviving tickets, attempts or waits.
+Verify source-data and unfinished-work preservation and initial coverage
+convergence through committed publications, including explicit empty results,
+rather than merely observing an empty queue.
 
 The same transaction builds `AssessmentState_active_suppression_idx` over
 `(entity, recordId)` for active rows with non-null suppression. It may wait for

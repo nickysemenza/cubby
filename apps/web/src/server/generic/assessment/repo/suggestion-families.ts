@@ -47,6 +47,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { connectionBasisRecordRefs } from "~/server/domains/connection/repo/connection-evidence";
 import { readEntityConnectionsBatch } from "~/server/domains/connection/repo/entity-connections";
 import {
   currentTransferPairs,
@@ -56,7 +57,6 @@ import {
 import {
   readStatementSuggestions,
   statementSuggestionKeys,
-  statementSuggestionCountFacts,
   type StatementSuggestionScope,
   statementSuggestionStatusCounts,
 } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
@@ -65,6 +65,7 @@ import { readCorrectionOutcomes } from "~/server/generic/assessment/repo/correct
 import {
   reviewFamilyDeclarations,
   pendingRecommendationEligibility,
+  resolveAssessmentReadInputRefs,
 } from "~/server/generic/assessment/repo/review-families";
 import {
   fieldSuggestionKeys,
@@ -148,11 +149,6 @@ export type SuggestionFamilyPresentation<F extends SuggestionListFamily> = {
     query: SuggestionFamilyQuery,
     observeInputs?: SuggestionReadObserver,
   ) => Promise<SuggestionKey[]>;
-  /** Optional count projection for scopes without column filters. */
-  pendingCounts?: (
-    db: Database,
-    query: SuggestionFamilyQuery,
-  ) => Promise<SuggestionPendingCounts>;
   /** Current rows by Assessment id; a key whose evidence went stale is absent. */
   rows: (
     db: Database,
@@ -499,17 +495,6 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
         },
       }));
     },
-    pendingCounts: async (db, query) => {
-      const scope = statementScope(query);
-      const counts = emptyPendingCounts();
-      if (!scope) return counts;
-      for (const row of await statementSuggestionCountFacts(db, scope)) {
-        counts.pending += row.count;
-        if (row.clean) counts.clean += row.count;
-        counts[statementStrength(row)] += row.count;
-      }
-      return counts;
-    },
     rows: async (db, keys) => {
       const rows = await readStatementSuggestions(
         db,
@@ -720,7 +705,7 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
       ...(await tagSuggestionKeys(db, query, observeInputs)),
     ];
   },
-  rows: async (db, keys) => {
+  rows: async (db, keys, observeInputs) => {
     if (!keys.length) return new Map();
     const byId = new Map(keys.map((key) => [key.assessmentId, key]));
     const { rows: sources } = await unwrapDb(db).execute<{
@@ -736,6 +721,10 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
       )})
     `);
     const found = await tagSuggestionRows(db, keys);
+    const currentInputs = new Map<
+      string,
+      ReturnType<typeof connectionBasisRecordRefs>
+    >();
     // Stored only: readEntityConnectionsBatch rechecks evidence, never discovers.
     for (let start = 0; start < sources.length; start += READ_BATCH) {
       const groups = await readEntityConnectionsBatch(
@@ -744,6 +733,10 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
           .array()
           .parse(sources.slice(start, start + READ_BATCH)),
         keys.map((key) => key.assessmentId),
+        observeInputs &&
+          ((id, candidate, basis) => {
+            currentInputs.set(id, connectionBasisRecordRefs(candidate, basis));
+          }),
       );
       for (const proposal of groups.flat()) {
         const key = byId.get(proposal.review.assessmentId);
@@ -775,6 +768,12 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         );
       }
     }
+    if (observeInputs)
+      for (const [id, sources] of await resolveAssessmentReadInputRefs(
+        db,
+        [...currentInputs].map(([id, refs]) => ({ id, refs })),
+      ))
+        observeInputs(id, sources);
     return found;
   },
   outcomes: async (db, filters) => {

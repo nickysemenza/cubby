@@ -67,6 +67,7 @@ describe("derived backlog", () => {
             revision: crypto.randomUUID(),
             nextIndex: 0,
             rulesVersion: ASSESSMENT_READ_RULES_VERSION,
+            clockDay: null,
             tickets: [],
           },
           previousStageIds: [],
@@ -102,6 +103,9 @@ describe("derived backlog", () => {
       SELECT entities.id, ${KIND}, ${KEY}, '1'::jsonb,
         now() - (ages.minutes * interval '1 minute') - interval '10 seconds'
       FROM entities JOIN ages ON entities.shortcode = 'PRD-ZZZ' || ages.n`);
+    // These synthetic publications also capture source invalidations; the
+    // queue states below are the explicit observations this journey reports.
+    await deleteWorkItems(ctx.db);
     await insertWorkItems(ctx.db, [
       { target: ASSESSMENT_READ_TARGET, ref: assessment.id },
       { target: `${ASSESSMENT_READ_TARGET}@0`, ref: crypto.randomUUID() },

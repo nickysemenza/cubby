@@ -1,7 +1,9 @@
+import { entitySchema } from "@cubby/schemas/entity";
 import {
   shortcodeEntities,
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
+import { suggestionListFamily } from "@cubby/schemas/suggestion-list";
 import { and, getTableName, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -142,8 +144,11 @@ const source: WorkSource = {
           array_agg(DISTINCT ('suggestions:' || family) ORDER BY ('suggestions:' || family)) AS reason_keys
           FROM work_published_suggestion_refs refs
           JOIN "Entity" work_identity ON work_identity.kind = refs.entity AND work_identity.shortcode = refs."recordCode"
+          -- Statement review belongs to the account, not every settlement reference.
           CROSS JOIN LATERAL unnest(refs.families) family
           WHERE ${notDeleted(identity)} AND work_identity."mergedIntoId" IS NULL
+          AND (family <> ${suggestionListFamily.enum.statement_transaction}
+            OR work_identity.kind = ${entitySchema.enum.financialAccount})
           GROUP BY work_identity.kind, work_identity.id`,
         },
       ],

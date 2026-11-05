@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
+import { publicationCoverageMessage } from "~/entity/suggestions/publication-coverage";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
@@ -37,7 +38,10 @@ export function RecordProposals({ id }: { id: string }) {
         ?.record,
   );
   const clean = query.data?.meta.cleanCount ?? 0;
-  useSectionEmpty(query.isSuccess && query.data.items.length === 0);
+  const coverage = publicationCoverageMessage(query.data?.meta.coverage);
+  useSectionEmpty(
+    query.isSuccess && query.data.items.length === 0 && !coverage,
+  );
   return (
     <section aria-label="Pending suggestions">
       <Stack gap="sm">
@@ -47,6 +51,9 @@ export function RecordProposals({ id }: { id: string }) {
             title="pending suggestions"
             onRetry={() => void query.refetch()}
           />
+        ) : null}
+        {coverage ? (
+          <p className="text-sm text-muted-foreground">{coverage}</p>
         ) : null}
         {clean > 0 ? (
           <Button
@@ -87,7 +94,13 @@ export function RecordProposals({ id }: { id: string }) {
           <RecordList
             aria-label="Record suggestions"
             state={loading ? { status: "pending" } : { status: "success" }}
-            empty="No pending suggestions."
+            empty={
+              query.error && !query.data
+                ? "Pending suggestions are unavailable."
+                : coverage || query.error
+                  ? "No known pending suggestions."
+                  : "No pending suggestions."
+            }
           >
             {query.data?.items.map((row) => (
               <ScopedProposal key={row.id} row={row} />

@@ -91,7 +91,7 @@ const proposal = {
   removals: [],
 };
 const stored: StoredSuggestionOperations = {
-  list: async () => [],
+  list: async () => ({ items: [] }),
   review: async ({ assessmentId, intent }) => ({
     assessmentId,
     feedbackId: "55555555-5555-4555-8555-555555555555",
@@ -291,7 +291,24 @@ describe("suggestion lifecycle", () => {
   it("retains a loaded proposal and exposes diagnostics when the stored-suggestion refresh fails", async () => {
     const list = vi
       .fn<StoredSuggestionOperations["list"]>()
-      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({
+        items: [],
+        coverage: {
+          missing: true,
+          stale: false,
+          unresolved: true,
+          failed: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        items: [],
+        coverage: {
+          missing: false,
+          stale: false,
+          unresolved: false,
+          failed: true,
+        },
+      })
       .mockRejectedValue(new Error("Synthetic stored-suggestion refusal"));
     const calls: FieldSuggestionsInput[] = [];
     render(
@@ -302,7 +319,21 @@ describe("suggestion lifecycle", () => {
       { wrapper: harness.wrapper },
     );
     await waitFor(() => expect(categoryButton()).toBeEnabled());
+    expect(
+      await screen.findByText("Some suggestions have not been assessed yet."),
+    ).toBeVisible();
     const count = calls.length;
+    await act(async () =>
+      invalidateOperationTags(
+        harness.queryClient,
+        exactRippleTags([["product"]]),
+      ),
+    );
+    expect(
+      await screen.findByText(
+        "Suggestion refresh failed. Showing known results.",
+      ),
+    ).toBeVisible();
     await act(async () =>
       invalidateOperationTags(
         harness.queryClient,
@@ -317,12 +348,12 @@ describe("suggestion lifecycle", () => {
   });
 
   it("keeps a loaded row's proposal usable while a larger page checks stored suggestions", async () => {
-    const pending = Promise.withResolvers<[]>();
+    const pending = Promise.withResolvers<{ items: [] }>();
     const list = vi.fn(
       async ({
         recordIds,
       }: Parameters<StoredSuggestionOperations["list"]>[0]) =>
-        recordIds.length > 1 ? pending.promise : [],
+        recordIds.length > 1 ? pending.promise : { items: [] },
     );
     const calls: FieldSuggestionsInput[] = [];
     const operations = operationsReturning(calls);
@@ -342,7 +373,7 @@ describe("suggestion lifecycle", () => {
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
     expect(categoryButton()).toBeEnabled();
     expect(calls).toHaveLength(count);
-    await act(async () => pending.resolve([]));
+    await act(async () => pending.resolve({ items: [] }));
     await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
     expect(categoryButton()).toBeEnabled();
   });

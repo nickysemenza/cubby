@@ -4,7 +4,8 @@ import {
   feedbackAuthority,
   feedbackVerdict,
 } from "@cubby/schemas/assessment";
-import { entitySchema } from "@cubby/schemas/entity";
+import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import { suggestionListFamily } from "@cubby/schemas/suggestion-list";
 import {
   and,
   eq,
@@ -34,6 +35,43 @@ export const recommendationScopes = {
   connection: sql`a.subject->>'scope' LIKE 'connection.%'`,
   tagPropagation: sql`a.subject->>'scope' = 'product.tag-propagation'`,
 };
+
+/** Current endpoint identities reach new advice before reverse dependencies exist. */
+export function assessmentSourceRecordIdsSql(kind: Entity, refs: SQL): SQL {
+  const families = sql.join(
+    suggestionListFamily.options.map((family) => sql`${family}`),
+    sql`, `,
+  );
+  const point = (end: "source" | "target") => {
+    // Literal paths match the existing endpoint indexes, including generic plans.
+    const entity =
+      end === "source"
+        ? sql`a.evidence #>> '{candidate,source,entityKind}'`
+        : sql`a.evidence #>> '{candidate,target,entityKind}'`;
+    const id =
+      end === "source"
+        ? sql`a.evidence #>> '{candidate,source,entityId}'`
+        : sql`a.evidence #>> '{candidate,target,entityId}'`;
+    return sql`SELECT s.id FROM source_record_identities requested
+      CROSS JOIN LATERAL (VALUES (requested.shortcode), (requested.id::text)) token(value)
+      CROSS JOIN LATERAL (
+        SELECT a.id FROM ${assessment} a WHERE a.served
+          AND ${recommendationScopes.connection} AND ${entity} = ${kind} AND ${id} = token.value
+        OFFSET 0
+      ) matched JOIN ${assessmentState} s ON s.id = matched.id
+      WHERE s.active AND s.status = ${suggestionStatus.enum.pending}`;
+  };
+  return sql`WITH source_record_ids AS MATERIALIZED (${refs}),
+    source_record_identities AS MATERIALIZED (
+      SELECT id, shortcode FROM ${entityIdentity} WHERE kind = ${kind}
+        AND id IN (SELECT id FROM source_record_ids)
+    ) SELECT s.id FROM ${assessmentState} s JOIN ${assessment} a ON a.id = s.id
+      WHERE s.active
+      AND s.status = ${suggestionStatus.enum.pending} AND s.entity = ${kind}
+      AND (s.family IN (${families}) OR a.family IN (${families}))
+      AND s."recordId" IN (SELECT id FROM source_record_ids)
+    UNION ${point("source")} UNION ${point("target")}`;
+}
 
 const reviewAssessment = alias(assessment, "a");
 const reviewState = alias(assessmentState, "s");

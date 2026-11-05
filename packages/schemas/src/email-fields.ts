@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { purchaseShortcode } from "./identifier-fields.js";
 
+export { EMAIL_RELATIONSHIP_INPUTS } from "./entity-definitions/email-relationship-inputs";
+
 /** Retained content never grants import authorization. Historical policy stays unknown. */
 export const emailExecutionPolicy = z.enum(["classification_only", "import"]);
 export type EmailExecutionPolicy = z.infer<typeof emailExecutionPolicy>;

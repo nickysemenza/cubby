@@ -55,6 +55,13 @@ const PROPOSER = emailLinkProposer.enum;
 /** A suggestion must fall within this many household days of the Email. */
 const SUGGESTION_WINDOW_DAYS = 45;
 
+/** Conservative current Email associations for deferred source expansion. */
+export function emailPurchaseSourceIdsSql(purchaseIds: SQL): SQL {
+  return sql`SELECT DISTINCT "Email".id FROM "Email"
+    CROSS JOIN LATERAL (${emailPurchaseEvidenceSql("ignore", purchaseIds)}) evidence
+    WHERE ${notDeleted("Email")}`;
+}
+
 /**
  * Every piece of stored evidence relating the correlated `"Email"` row to a
  * Purchase, one row per (order event, Purchase): accepted import sources,

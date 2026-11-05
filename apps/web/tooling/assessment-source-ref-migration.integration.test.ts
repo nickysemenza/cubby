@@ -183,13 +183,62 @@ it("indexes long retained source references without changing evidence or unfinis
       `UPDATE "AssessmentState" SET "suggestedValue"=$2::jsonb WHERE id=$1`,
       [id, JSON.stringify(`${longText} after index`)],
     );
+    const {
+      rows: [unseeded],
+    } = await client.query<{ id: string }>(
+      `SELECT id FROM "Assessment" WHERE "publicationKey"='synthetic-long-source-after'`,
+    );
+    if (!unseeded) throw new Error("Synthetic initial coverage row missing");
+    await client.query(
+      `INSERT INTO "AssessmentState" (id,entity,"recordId") VALUES ($1,'product',$1)`,
+      [unseeded.id],
+    );
+    await client.query(
+      `INSERT INTO "WorkItem" (target,ref,attempts,"lastError","readyAt","waitCause","waitStartedAt")
+       VALUES ('assessment.reviewFacts',$1,2,'Synthetic retained publication failure',now()+interval '1 hour','search_coverage',now())`,
+      [id],
+    );
     const beforePublications = await retained();
     const beforePublicationWork = await durableWork();
     const beforePublicationStates = await states();
     await migrateDatabase(db, { through: "0072_assessment_read_publications" });
-    expect(await retained()).toEqual(beforePublications);
-    expect(await durableWork()).toEqual(beforePublicationWork);
+    const afterPublications = await retained();
+    expect(afterPublications.assessments).toEqual(
+      beforePublications.assessments,
+    );
+    expect(afterPublications.feedback).toEqual(beforePublications.feedback);
+    expect(afterPublications.work).toEqual(
+      expect.arrayContaining(beforePublications.work),
+    );
+    expect(afterPublications.work).toHaveLength(
+      beforePublications.work.length + 1,
+    );
+    const afterPublicationWork = await durableWork();
+    expect(afterPublicationWork.jobs).toEqual(beforePublicationWork.jobs);
+    expect(afterPublicationWork.work).toEqual(
+      expect.arrayContaining(beforePublicationWork.work),
+    );
+    expect(afterPublicationWork.work).toHaveLength(
+      beforePublicationWork.work.length + 1,
+    );
     expect(await states()).toEqual(beforePublicationStates);
+    expect(
+      (
+        await client.query(
+          `SELECT ref,priority,attempts,"lastError","waitCause" FROM "WorkItem"
+       WHERE target='assessment.reviewFacts' AND ref=$1`,
+          [unseeded.id],
+        )
+      ).rows,
+    ).toEqual([
+      {
+        ref: unseeded.id,
+        priority: 2,
+        attempts: 0,
+        lastError: null,
+        waitCause: null,
+      },
+    ]);
     expect(
       (
         await client.query(

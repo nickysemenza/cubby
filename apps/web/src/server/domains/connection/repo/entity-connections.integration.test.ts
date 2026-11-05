@@ -41,6 +41,7 @@ import {
   readEntityConnectionsBatch,
   applyEntityConnection,
 } from "./entity-connections";
+import { readConnectionEdgeAssessmentIds } from "./existing-assessments";
 import { assertConnectionFieldFresh } from "./field-connections";
 
 // Failure modes: reverse reads miss a candidate; bare Wrong suppresses future
@@ -173,6 +174,11 @@ describe("stored connection evidence", () => {
       "synthetic-newer-stale-edge",
       "synthetic-stale-edge-fingerprint",
     );
+    const peers = await readConnectionEdgeAssessmentIds(ctx.db, [candidate]);
+    expect(peers).toEqual(
+      expect.arrayContaining([last.review.assessmentId, staleNewer.id]),
+    );
+    expect(peers).not.toContain(unrelatedEdge.review.assessmentId);
     // A newer stale competitor cannot hide the edge's older fresh survivor.
     const observed = new Set<string>();
     expect(
@@ -291,6 +297,10 @@ describe("stored connection evidence", () => {
     const measured = await measureDatabaseTransfer(
       ctx.databaseUrl,
       async (db) => {
+        const peerIds = () => readConnectionEdgeAssessmentIds(db, [candidate]);
+        expect(new Set(await peerIds())).toEqual(
+          new Set([proposal.review.assessmentId, stored.id]),
+        );
         expect(
           (await readEntityConnections(db, candidate.source)).map(
             (row) => row.review.assessmentId,
@@ -328,6 +338,11 @@ describe("stored connection evidence", () => {
         ).not.toContain(stored.id);
         // Once its own guard fails, it stops shadowing and the recommendation wins.
         expect(await selectedOnEdge()).toEqual([proposal.review.assessmentId]);
+        // Discovery retains the stale field peer so atomic publication can
+        // release its old winner even though current evidence rejects it.
+        expect(new Set(await peerIds())).toEqual(
+          new Set([proposal.review.assessmentId, stored.id]),
+        );
         await expect(
           withTransactionDatabase(db, (transactionDb) =>
             assertConnectionFieldFresh(transactionDb, stored.id),

@@ -135,7 +135,7 @@ function validatedStoredOperations(stored: SuggestionReviewRow[]) {
     list: vi.fn(
       async (input: Parameters<StoredSuggestionOperations["list"]>[0]) => {
         fieldListInput(input);
-        return suggestionReviewRowSchema.array().parse(stored);
+        return { items: suggestionReviewRowSchema.array().parse(stored) };
       },
     ),
     review: vi.fn(
@@ -193,7 +193,7 @@ function setup(
     : record;
   const harness = createBrowserTestHarness();
   const operations: StoredSuggestionOperations = {
-    list: vi.fn(async () => stored),
+    list: vi.fn(async () => ({ items: stored })),
     settled: async ({ questions }) => ({
       results: questions.map(() => ({
         ok: true as const,
@@ -266,6 +266,12 @@ describe("stored suggestions in generic list cells", () => {
     }).queryKey;
     harness.queryClient.setQueryData(key, {
       records: [{ id: record.id, pending: 1 }],
+      coverage: {
+        missing: false,
+        stale: false,
+        unresolved: false,
+        failed: false,
+      },
     });
     const commits = vi.fn();
     const view = render(
@@ -292,12 +298,84 @@ describe("stored suggestions in generic list cells", () => {
       await act(async () => {
         harness.queryClient.setQueryData(key, {
           records: [{ id: record.id, pending: 2 }],
+          coverage: {
+            missing: false,
+            stale: false,
+            unresolved: false,
+            failed: false,
+          },
         });
       });
       await screen.findAllByRole("button", { name: "2 pending suggestions" });
       expect(commits).toHaveBeenCalledTimes(before);
       expect(identityReads).toHaveBeenCalledTimes(readsBefore);
       expect(screen.getByText("12 expenses")).toBeVisible();
+      await act(async () => {
+        harness.queryClient.setQueryData(key, {
+          records: [{ id: record.id, pending: 2 }],
+          coverage: {
+            missing: false,
+            stale: true,
+            unresolved: true,
+            failed: false,
+          },
+        });
+      });
+      await screen.findAllByRole("button", {
+        name: "2 known pending suggestions. Suggestions may be out of date.",
+      });
+      expect(screen.getAllByText("2+")).toHaveLength(2);
+      await act(async () => {
+        harness.queryClient.setQueryData(key, {
+          records: [{ id: record.id, pending: 0 }],
+          coverage: {
+            missing: true,
+            stale: false,
+            unresolved: true,
+            failed: false,
+          },
+        });
+      });
+      await screen.findAllByRole("button", {
+        name: "0 known pending suggestions. Some suggestions have not been assessed yet.",
+      });
+      expect(screen.getAllByText("?")).toHaveLength(2);
+      const retained = {
+        records: [{ id: record.id, pending: 2 }],
+        coverage: {
+          missing: false,
+          stale: false,
+          unresolved: false,
+          failed: true,
+        },
+      };
+      await act(async () => {
+        harness.queryClient.setQueryData(key, retained);
+      });
+      await screen.findAllByRole("button", {
+        name: "2 known pending suggestions. Suggestion refresh failed. Showing known results.",
+      });
+      const query = harness.queryClient.getQueryCache().find({ queryKey: key });
+      if (!query) throw new Error("Count query missing");
+      const retry = vi.spyOn(query, "fetch").mockResolvedValue(retained);
+      await act(async () => {
+        query.setState({
+          status: "error",
+          error: new Error("Synthetic count read failure"),
+        });
+      });
+      await screen.findAllByRole("button", {
+        name: "2 known pending suggestions. Couldn't refresh suggestion counts. Showing known results.",
+      });
+      expect(screen.getAllByText("Synthetic count read failure")).toHaveLength(
+        2,
+      );
+      const retryButton = screen
+        .getAllByRole("button", { name: "Retry" })
+        .at(0);
+      if (!retryButton) throw new Error("Count retry button missing");
+      fireEvent.click(retryButton);
+      expect(retry).toHaveBeenCalledOnce();
     } finally {
       view.unmount();
       harness.dispose();
@@ -305,7 +383,7 @@ describe("stored suggestions in generic list cells", () => {
   });
   it("does not update an unsuggestible field when another field's stored suggestion arrives", async () => {
     const harness = createBrowserTestHarness();
-    const pending = Promise.withResolvers<SuggestionReviewRow[]>();
+    const pending = Promise.withResolvers<{ items: SuggestionReviewRow[] }>();
     const operations: StoredSuggestionOperations = {
       ...validatedStoredOperations([]),
       list: vi.fn(() => pending.promise),
@@ -342,7 +420,7 @@ describe("stored suggestions in generic list cells", () => {
     try {
       await waitFor(() => expect(operations.list).toHaveBeenCalled());
       const before = commits.mock.calls.length;
-      pending.resolve([suggestion()]);
+      pending.resolve({ items: [suggestion()] });
       await screen.findByText("Suggested category");
       expect(commits).toHaveBeenCalledTimes(before);
       expect(screen.getByText("12 expenses")).toBeVisible();
@@ -872,7 +950,7 @@ describe("stored suggestions in generic list cells", () => {
       recordIds,
       fields: ["categoryId"],
     });
-    expect(rows.map((row) => row.recordId)).toEqual(recordIds);
+    expect(rows.items.map((row) => row.recordId)).toEqual(recordIds);
   });
 
   // Seven suggestible Expense fields on a 250-row page exceed one read's
@@ -892,6 +970,12 @@ describe("stored suggestions in generic list cells", () => {
       return {
         items: all.slice(offset, end),
         next: end < all.length ? String(end) : null,
+        coverage: {
+          missing: offset === 0,
+          stale: false,
+          unresolved: false,
+          failed: offset > 0,
+        },
       };
     });
     const rows = await everyPendingSuggestion(read)({
@@ -899,7 +983,13 @@ describe("stored suggestions in generic list cells", () => {
       recordIds,
       fields: [],
     });
-    expect(rows).toHaveLength(1_750);
+    expect(rows.items).toHaveLength(1_750);
+    expect(rows.coverage).toEqual({
+      missing: true,
+      stale: false,
+      unresolved: false,
+      failed: true,
+    });
     expect(
       read.mock.calls.every(
         ([input]) => input.limit === SUGGESTION_LIST_PAGE_MAX,

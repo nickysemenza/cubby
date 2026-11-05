@@ -208,7 +208,7 @@ afterEach(() => {
 });
 const id = testShortcode("product", "first");
 const emptyStoredSuggestionOperations: StoredSuggestionOperations = {
-  list: async () => [],
+  list: async () => ({ items: [] }),
   review: async ({ assessmentId, intent }) => ({
     assessmentId,
     feedbackId: crypto.randomUUID(),
@@ -407,12 +407,12 @@ describe("record suggestions", () => {
   ])(
     "waits for deferred $field and preserves its explicit empty projection",
     async ({ field, readKey, proposal }) => {
-      let finishStored!: (rows: []) => void;
+      let finishStored!: (packet: { items: [] }) => void;
       const stored = {
         ...emptyStoredSuggestionOperations,
         list: vi.fn(
           () =>
-            new Promise<[]>((resolve) => {
+            new Promise<{ items: [] }>((resolve) => {
               finishStored = resolve;
             }),
         ),
@@ -459,7 +459,7 @@ describe("record suggestions", () => {
         wrapper: harness.wrapper,
       });
       await waitFor(() => expect(stored.list).toHaveBeenCalled());
-      await act(async () => finishStored([]));
+      await act(async () => finishStored({ items: [] }));
       // Query notifications cross a task boundary before starting live reads.
       await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
       await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
@@ -580,7 +580,7 @@ describe("record suggestions", () => {
     );
     await waitFor(() => expect(stored.list).toHaveBeenCalled());
     expect(suggestFields).not.toHaveBeenCalled();
-    finishStored([storedRow]);
+    finishStored({ items: [storedRow] });
     expect(await screen.findByRole("button", { name: "Accept" })).toBeVisible();
     const review = screen.getByRole("button", { name: "Review" });
     expect(

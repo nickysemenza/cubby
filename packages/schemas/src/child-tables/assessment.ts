@@ -401,6 +401,8 @@ export const assessmentChildren = [
       { key: "groupKey", kind: "text", notNull: true },
       { key: "admitted", kind: "boolean", notNull: true },
       { key: "computedAt", kind: "timestamp", notNull: true },
+      /** Household day verified for a clock-sensitive component; independent of publication age. */
+      { key: "clockDay", kind: "date" },
       { key: "key", kind: "jsonb", type: "AssessmentReadKey" },
       { key: "filters", kind: "jsonb", type: "AssessmentReadFilterFacts" },
       { key: "row", kind: "jsonb", type: "SuggestionListRow" },
@@ -563,6 +565,7 @@ export const assessmentChildren = [
       { key: "revision", kind: "uuid", notNull: true },
       { key: "nextIndex", kind: "integer", notNull: true, default: 0 },
       { key: "rulesVersion", kind: "integer", notNull: true },
+      { key: "clockDay", kind: "date" },
       {
         key: "createdAt",
         kind: "timestamp",

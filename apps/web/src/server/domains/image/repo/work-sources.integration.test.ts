@@ -19,6 +19,7 @@ import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { insertEntityAttachments } from "~/server/testing/repo.fixtures";
 
 // Work must expose pending descriptions without inventing application authority,
@@ -99,6 +100,7 @@ describe("image Suggestions in Work", () => {
       })
       .where(eq(assessmentState.id, suppressed.id));
     await propose(second.id, "second");
+    await drainStoredDerived(ctx.db);
     const before = {
       jobs: await readJobs(ctx.db, {}),
       feedback: await getDb(ctx.db).select().from(feedback),
@@ -184,6 +186,7 @@ describe("image Suggestions in Work", () => {
       imageId: source.id,
     });
     await propose(source.id, "private");
+    await drainStoredDerived(ctx.db);
     const household = await readWorkQueue(ctx.db, {
       input: input(),
       memberPartyId: other.id,

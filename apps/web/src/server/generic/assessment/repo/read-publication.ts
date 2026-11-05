@@ -4,9 +4,10 @@ import {
   ASSESSMENT_READ_TARGET,
   ASSESSMENT_READ_RULES_VERSION,
   assessmentReadResult,
+  assessmentReadScopedSourceKind,
   type AssessmentReadResult,
 } from "@cubby/schemas/assessment-read-publication";
-import type { Entity } from "@cubby/schemas/entity";
+import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import {
   suggestionListFamily,
   type SuggestionListFamily,
@@ -24,7 +25,7 @@ import {
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
-import { uuidArrayParam } from "~/server/db/helpers/query";
+import { uuidArrayParam, householdDaySql } from "~/server/db/helpers/query";
 import { outer, related } from "~/server/db/helpers/related";
 import {
   repositoryQueries,
@@ -40,9 +41,18 @@ import {
   assessmentState,
   entityIdentity,
 } from "~/server/db/retained-tables";
+import { emailPurchaseSourceIdsSql } from "~/server/domains/email/repo/email-purchase-links";
+import {
+  transferPairSourceAssessmentIdsSql,
+  recordedTransferSourceIdsSql,
+} from "~/server/domains/financial-transaction/repo/transfer-pair-input";
+import { settlementCandidatePurchaseIdsSql } from "~/server/domains/purchase/repo/settlement-predicates";
+import { statementSourceAssessmentIdsSql } from "~/server/domains/transaction-import/repo/statement-charge";
 import { automaticApplicationRule } from "~/server/generic/assessment/repo/assessment";
+import { fieldInputAssessmentIdsSql } from "~/server/generic/assessment/repo/field-input-fence";
 import {
   publishedSuggestionLiveEligibility,
+  assessmentSourceRecordIdsSql,
   type AssessmentRecordSelection,
 } from "~/server/generic/assessment/repo/pending-admission";
 import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
@@ -89,7 +99,7 @@ export function publishedAssessmentAdmissionSql(
         OFFSET 0
       ) m`
       : sql`${assessmentReadMembership} m`;
-  const discovery = sql`SELECT DISTINCT m."assessmentId", m."stateFamily"
+  const discovery = sql`SELECT DISTINCT m."assessmentId", m."stateFamily", discovery_assessment.family AS "immutableFamily"
     FROM ${membershipFrom}
     JOIN ${assessmentReadPublication} membership_publication
       ON membership_publication."assessmentId" = m."assessmentId"
@@ -111,7 +121,7 @@ export function publishedAssessmentAdmissionSql(
       ${
         scoped
           ? sql`AND p."assessmentId" IN (SELECT "assessmentId" FROM discovered)
-        AND p.family IN (SELECT "stateFamily" FROM discovered)`
+        AND p.family IN (SELECT "stateFamily" FROM discovered UNION SELECT "immutableFamily" FROM discovered)`
           : sql``
       }`;
 }
@@ -160,7 +170,8 @@ export function publishedAssessmentCoverageSql(): SQL {
     (EXISTS (SELECT 1 FROM (${population}) open
       JOIN ${assessmentReadPublication} p ON p."assessmentId" = open.id AND p.active
       WHERE p."rulesVersion" <> ${ASSESSMENT_READ_RULES_VERSION})
-      OR (work.count > 0 AND EXISTS (SELECT 1 FROM ${assessmentReadPublication} p WHERE p.active))) AS stale,
+      OR (work.count > 0 AND EXISTS (SELECT 1 FROM ${assessmentReadPublication} p WHERE p.active))
+      OR EXISTS (${expiredAssessmentPublicationClockSql()})) AS stale,
     work.count > 0 AS unresolved, work.failed > 0 AS failed
     FROM ${pendingWorkStatusSql((target) =>
       or(
@@ -168,6 +179,153 @@ export function publishedAssessmentCoverageSql(): SQL {
         fanoutTargetMatches(target, sql`${ASSESSMENT_READ_TARGET}::text`),
       )!,
     )} work`;
+}
+
+const currentAssessmentClockDay = householdDaySql(
+  sql`clock_timestamp() AT TIME ZONE 'UTC'`,
+);
+
+/** Empty successful results also expire: immutable scope owns clock sensitivity. */
+export function expiredAssessmentPublicationClockSql(
+  day: SQL = currentAssessmentClockDay,
+): SQL {
+  return sql`SELECT DISTINCT a.id FROM ${assessment} a
+    JOIN ${assessmentState} s ON s.id = a.id
+    JOIN ${assessmentReadPublication} p ON p."assessmentId" = a.id AND p.active
+    WHERE a.served AND a.family = ${assessmentFamily.enum.recommendation}
+      AND a.subject->>'scope' = ${"connection.project-tool"}
+      AND s.active AND s.status = ${suggestionStatus.enum.pending}
+      AND p."clockDay" IS DISTINCT FROM ${day}`;
+}
+
+/** Retained inputs and current field references share one indexed expansion owner. */
+export function assessmentReadSourceSelection(
+  sourceKind: string,
+  refs: SQL,
+): SQL {
+  if (sourceKind === "projectRoster" || sourceKind === "projectTools")
+    return sql`SELECT a.id FROM ${assessment} a JOIN ${assessmentState} s ON s.id = a.id
+      WHERE a.served AND s.active AND s.status = ${suggestionStatus.enum.pending}
+        AND a.family = ${assessmentFamily.enum.recommendation}
+        AND a.subject->>'scope' IN (${
+          sourceKind === "projectRoster"
+            ? sql`${"connection.expense-project"}, ${"connection.project-tool"}`
+            : sql`${"connection.project-tool"}`
+        })`;
+  if (sourceKind === "transferPolicy")
+    return transferPairSourceAssessmentIdsSql("policy", refs);
+  if (sourceKind === "emailPurchase")
+    return sql`(${assessmentReadSourceSelection(entitySchema.enum.purchase, refs)})
+      UNION (${assessmentReadSourceSelection(entitySchema.enum.email, emailPurchaseSourceIdsSql(refs))})`;
+  if (sourceKind === "settlementPolicy")
+    return sql`SELECT s.id FROM ${assessmentState} s JOIN ${assessment} a ON a.id = s.id
+      WHERE s.active AND s.status = ${suggestionStatus.enum.pending} AND a.served
+        AND a.family = ${assessmentFamily.enum.recommendation}
+        AND a.subject->>'scope' IN (${"connection.transaction-purchase"}, ${"connection.transaction-refund"})`;
+  const families = sql.join(
+    suggestionListFamily.options.map((family) => sql`${family}`),
+    sql`, `,
+  );
+  if (sourceKind === "assessment")
+    return sql`WITH assessment_source_refs AS MATERIALIZED (${refs})
+      SELECT a.id FROM ${assessment} a LEFT JOIN ${assessmentState} s ON s.id = a.id
+      WHERE a.id IN (SELECT id FROM assessment_source_refs)
+        AND ((a.served AND (a.family IN (${families}) OR s.family IN (${families})))
+          OR s.family IN (${assessmentFamily.enum.statement_transaction}, ${assessmentFamily.enum.transfer_pair})
+          OR EXISTS (SELECT 1 FROM ${assessmentReadPublication} p WHERE p."assessmentId" = a.id))`;
+  if (sourceKind === "productQuality")
+    return sql`WITH assessment_source_refs AS MATERIALIZED (${refs})
+      SELECT s.id FROM ${assessmentState} s JOIN ${assessment} a ON a.id = s.id
+      WHERE a.served AND s.active AND s.status = ${suggestionStatus.enum.pending}
+        AND (a.family = ${assessmentFamily.enum.product_pair} OR s.family = ${assessmentFamily.enum.product_pair})
+        AND (s."recordId" IN (SELECT id FROM assessment_source_refs)
+          OR CASE WHEN pg_input_is_valid(s.data->>'otherId', ${"uuid"}) THEN (s.data->>'otherId')::uuid END IN (SELECT id FROM assessment_source_refs)
+          OR a.subject->>'otherId' IN (SELECT id::text FROM assessment_source_refs)
+          OR EXISTS (SELECT 1 FROM ${assessmentReadDependency} d WHERE d."assessmentId" = s.id
+            AND d."sourceKind" = ${entitySchema.enum.product} AND d."sourceId" IN (SELECT id FROM assessment_source_refs)))`;
+  if (sourceKind === "pairPolicy")
+    // Identifier issuers are resolved by the whole registry, including URL hosts
+    // that have no prior FK or reverse dependency on this Product pair.
+    return sql`SELECT a.id FROM ${assessment} a JOIN ${assessmentState} s ON s.id = a.id
+      WHERE a.served AND s.active AND s.status = ${suggestionStatus.enum.pending}
+        AND (a.family = ${assessmentFamily.enum.product_pair} OR s.family = ${assessmentFamily.enum.product_pair})`;
+  if (sourceKind === "classificationRoster")
+    return sql`SELECT d."assessmentId" AS id FROM ${assessmentReadDependency} d
+      WHERE d."sourceKind" = ${assessmentReadScopedSourceKind.enum.productClassification}
+      UNION SELECT a.id FROM ${assessment} a JOIN ${assessmentState} s ON s.id = a.id
+        WHERE a.served AND s.active AND s.status = ${suggestionStatus.enum.pending}
+          AND (a.family = ${assessmentFamily.enum.product_pair} OR s.family = ${assessmentFamily.enum.product_pair})
+      UNION (${fieldInputAssessmentIdsSql(
+        assessmentReadScopedSourceKind.enum.productClassification,
+        sql`SELECT id FROM ${entityIdentity} WHERE kind = ${entitySchema.enum.product}`,
+      )})`;
+  const entityInput = entitySchema.safeParse(sourceKind);
+  if (
+    !entityInput.success &&
+    !assessmentReadScopedSourceKind.safeParse(sourceKind).success
+  )
+    throw new Error(`Unknown Assessment source selection: ${sourceKind}`);
+  const retained = sql`SELECT d."assessmentId" AS id FROM ${assessmentReadDependency} d
+    WHERE d."sourceKind" = ${sourceKind} AND d."sourceId" IN (SELECT id FROM assessment_source_refs)`;
+  const forward =
+    entityInput.success ||
+    sourceKind === assessmentReadScopedSourceKind.enum.fieldWrite ||
+    sourceKind === assessmentReadScopedSourceKind.enum.productClassification
+      ? fieldInputAssessmentIdsSql(
+          sourceKind,
+          sql`SELECT id FROM assessment_source_refs`,
+        )
+      : sql`SELECT NULL::uuid AS id WHERE false`;
+  const pairEndpoints =
+    sourceKind === entitySchema.enum.product
+      ? assessmentReadSourceSelection("productQuality", refs)
+      : sql`SELECT NULL::uuid AS id WHERE false`;
+  const statementInputs =
+    sourceKind === entitySchema.enum.sourceTransactionRecord ||
+    sourceKind === entitySchema.enum.financialTransaction ||
+    sourceKind === entitySchema.enum.financialAccount ||
+    sourceKind === entitySchema.enum.ledgerParty
+      ? statementSourceAssessmentIdsSql(sourceKind, refs)
+      : sql`SELECT NULL::uuid AS id WHERE false`;
+  const transferInputs =
+    sourceKind === entitySchema.enum.financialTransaction ||
+    sourceKind === entitySchema.enum.sourceTransactionRecord
+      ? transferPairSourceAssessmentIdsSql(sourceKind, refs)
+      : sql`SELECT NULL::uuid AS id WHERE false`;
+  const currentRecords = entityInput.success
+    ? assessmentSourceRecordIdsSql(entityInput.data, refs)
+    : sql`SELECT NULL::uuid AS id WHERE false`;
+  const settlementInputs =
+    sourceKind === entitySchema.enum.financialTransaction
+      ? assessmentSourceRecordIdsSql(
+          entitySchema.enum.purchase,
+          settlementCandidatePurchaseIdsSql(refs),
+        )
+      : sql`SELECT NULL::uuid AS id WHERE false`;
+  const recordedTransferInputs =
+    sourceKind === entitySchema.enum.financialTransaction
+      ? sql`SELECT affected.id FROM (${assessmentSourceRecordIdsSql(entitySchema.enum.financialTransaction, recordedTransferSourceIdsSql(refs))}) affected
+        JOIN ${assessment} a ON a.id = affected.id
+        WHERE a.subject->>'scope' = ${"connection.transaction-transfer"}`
+      : sql`SELECT NULL::uuid AS id WHERE false`;
+  // The full Expense-project roster has separate column-scoped captures.
+  // Generic edits may change shared tool availability or presentation; new
+  // candidates need this small roster even before reverse dependencies exist.
+  const projectToolInputs = [
+    entitySchema.enum.expense,
+    entitySchema.enum.purchase,
+    entitySchema.enum.project,
+    entitySchema.enum.task,
+    entitySchema.enum.product,
+    entitySchema.enum.productCategory,
+    entitySchema.enum.inventory,
+    entitySchema.enum.vendor,
+    entitySchema.enum.spendingCategory,
+  ].some((kind) => kind === sourceKind)
+    ? assessmentReadSourceSelection("projectTools", refs)
+    : sql`SELECT NULL::uuid AS id WHERE false`;
+  return sql`WITH assessment_source_refs AS MATERIALIZED (${refs})
+    ${retained} UNION (${forward}) UNION (${pairEndpoints}) UNION (${statementInputs}) UNION (${transferInputs}) UNION (${currentRecords}) UNION (${settlementInputs}) UNION (${recordedTransferInputs}) UNION (${projectToolInputs})`;
 }
 
 export type AssessmentReadStagePlan = Omit<
@@ -322,22 +480,27 @@ async function removeInactiveRevisions(
 }
 
 /** Exact peer and source generations, observed before canonical preparation. */
-function assessmentReadStageBlocked(
+export function assessmentReadStageBlocked(
   stage: AssessmentReadStagePlan,
   sourceScope: AssessmentReadStageWrite["sourceScope"],
 ): SQL {
-  return unobservedWork(
-    (target, ref) =>
-      or(
-        eq(target, ASSESSMENT_READ_TARGET),
-        and(
-          fanoutTargetMatches(target, sql`${ASSESSMENT_READ_TARGET}::text`),
-          sourceScope?.({ target, ref }),
-        ),
-      )!,
-    stage.tickets.map((item) => item.ticket),
-    { target: ASSESSMENT_READ_TARGET, refs: stage.assessmentIds },
-  );
+  return or(
+    stage.clockDay === null
+      ? undefined
+      : sql`${stage.clockDay}::date IS DISTINCT FROM ${currentAssessmentClockDay}`,
+    unobservedWork(
+      (target, ref) =>
+        or(
+          eq(target, ASSESSMENT_READ_TARGET),
+          and(
+            fanoutTargetMatches(target, sql`${ASSESSMENT_READ_TARGET}::text`),
+            sourceScope?.({ target, ref }),
+          ),
+        )!,
+      stage.tickets.map((item) => item.ticket),
+      { target: ASSESSMENT_READ_TARGET, refs: stage.assessmentIds },
+    ),
+  )!;
 }
 
 async function stageInvalidated(
@@ -390,6 +553,7 @@ export async function writeAssessmentReadStage(
     existing &&
     (existing.revision !== stage.revision ||
       existing.rulesVersion !== stage.rulesVersion ||
+      existing.clockDay !== stage.clockDay ||
       JSON.stringify(existing.assessmentIds) !==
         JSON.stringify(stage.assessmentIds) ||
       existing.tickets.length !== stage.tickets.length ||
@@ -470,6 +634,7 @@ export async function writeAssessmentReadStage(
         groupKey: result.groupKey,
         contentHash: await sha256CanonicalJson(result),
         computedAt: sql<Date>`now()`,
+        clockDay: stage.clockDay,
         dependencies: result.dependencies,
       };
       // An explicit empty result is a successful revision; absent rows remain missing.
@@ -516,8 +681,17 @@ export async function writeAssessmentReadStage(
     .where(eq(assessmentReadStage.id, stage.id));
   if (nextIndex !== stage.assessmentIds.length)
     return { kind: "retained", changed: [] };
-  if (await stageInvalidated(db, stage, prepared.sourceScope))
+  if (await stageInvalidated(db, stage, prepared.sourceScope)) {
+    // A completed cursor acknowledges activation, not just prepared rows. Keep
+    // the recovery roster but discard every stale prefix, even if the source
+    // ticket is cancelled before this component is retried.
+    await removeInactiveRevisions(db, stage.assessmentIds, [stage.revision]);
+    await tx
+      .update(assessmentReadStage)
+      .set({ nextIndex: 0 })
+      .where(eq(assessmentReadStage.id, stage.id));
     return { kind: "retained", changed: [] };
+  }
   const completed = await tx
     .selectDistinct({ id: assessmentReadPublication.assessmentId })
     .from(assessmentReadPublication)
@@ -593,6 +767,19 @@ export async function writeAssessmentReadStage(
         ),
       );
   }
+  // Verification day advances on successful no-op completion, while content
+  // identity and publication-age telemetry retain their original meaning.
+  if (stage.clockDay !== null)
+    await tx
+      .update(assessmentReadPublication)
+      .set({ clockDay: stage.clockDay })
+      .where(
+        and(
+          assessmentReadPublication.active,
+          sql`${assessmentReadPublication.assessmentId} = ANY(${uuidArrayParam(stage.assessmentIds)})`,
+          sql`${assessmentReadPublication.clockDay} IS DISTINCT FROM ${stage.clockDay}::date`,
+        ),
+      );
   const dependencyRecords = () =>
     tx
       .selectDistinct({ entity: entityIdentity.kind, id: entityIdentity.id })
@@ -605,11 +792,9 @@ export async function writeAssessmentReadStage(
         ),
       )
       .where(
-        sql`${assessmentReadDependency.assessmentId} = ANY(${uuidArrayParam(changedIds)})`,
+        sql`${assessmentReadDependency.assessmentId} = ANY(${uuidArrayParam(stage.assessmentIds)})`,
       );
-  const oldDependencyRecords = changedIds.length
-    ? await dependencyRecords()
-    : [];
+  const oldDependencyRecords = await dependencyRecords();
   // Keep old/provisional refs until the complete replacement is ready. Prune
   // only obsolete edges; unchanged dependencies need no rewrite, including when
   // a restarted stage leaves the active content hash unchanged.
@@ -631,49 +816,45 @@ export async function writeAssessmentReadStage(
       ),
     ),
   );
-  if (changedIds.length) {
-    // The current and prior revisions coexist until notifications are captured.
-    const inChangedRevision = and(
-      sql`${assessmentReadMembership.assessmentId} = ANY(${uuidArrayParam(changedIds)})`,
-      sql`${assessmentReadMembership.revision} = ANY(${uuidArrayParam(previousRevisions)})`,
-    );
-    const uuidType = "uuid";
-    const records = await tx
-      .selectDistinct({ entity: entityIdentity.kind, id: entityIdentity.id })
-      .from(assessmentReadMembership)
-      .innerJoin(
-        entityIdentity,
-        eq(entityIdentity.shortcode, assessmentReadMembership.value),
-      )
-      .where(and(inChangedRevision, eq(assessmentReadMembership.kind, "ref")))
-      .union(
-        tx
-          .selectDistinct({
-            entity: entityIdentity.kind,
-            id: entityIdentity.id,
-          })
-          .from(assessmentReadMembership)
-          .innerJoin(
-            entityIdentity,
-            and(
-              eq(
-                entityIdentity.id,
-                sql`CASE WHEN pg_input_is_valid(${assessmentReadMembership.value}, ${uuidType}) THEN ${assessmentReadMembership.value}::uuid END`,
-              ),
-              eq(
-                sql`${entityIdentity.id}::text`,
-                assessmentReadMembership.value,
-              ),
+  // Completion changes coverage even when the retained content is identical.
+  // The current and prior revisions coexist until notifications are captured.
+  const inCompletedRevision = and(
+    sql`${assessmentReadMembership.assessmentId} = ANY(${uuidArrayParam(stage.assessmentIds)})`,
+    sql`${assessmentReadMembership.revision} = ANY(${uuidArrayParam(previousRevisions)})`,
+  );
+  const uuidType = "uuid";
+  const records = await tx
+    .selectDistinct({ entity: entityIdentity.kind, id: entityIdentity.id })
+    .from(assessmentReadMembership)
+    .innerJoin(
+      entityIdentity,
+      eq(entityIdentity.shortcode, assessmentReadMembership.value),
+    )
+    .where(and(inCompletedRevision, eq(assessmentReadMembership.kind, "ref")))
+    .union(
+      tx
+        .selectDistinct({
+          entity: entityIdentity.kind,
+          id: entityIdentity.id,
+        })
+        .from(assessmentReadMembership)
+        .innerJoin(
+          entityIdentity,
+          and(
+            eq(
+              entityIdentity.id,
+              sql`CASE WHEN pg_input_is_valid(${assessmentReadMembership.value}, ${uuidType}) THEN ${assessmentReadMembership.value}::uuid END`,
             ),
-          )
-          .where(
-            and(inChangedRevision, eq(assessmentReadMembership.kind, "scope")),
+            eq(sql`${entityIdentity.id}::text`, assessmentReadMembership.value),
           ),
-      )
-      .union(dependencyRecords());
-    for (const record of [...oldDependencyRecords, ...records])
-      publication.notify(record.entity, [record.id]);
-  }
+        )
+        .where(
+          and(inCompletedRevision, eq(assessmentReadMembership.kind, "scope")),
+        ),
+    )
+    .union(dependencyRecords());
+  for (const record of [...oldDependencyRecords, ...records])
+    publication.notify(record.entity, [record.id]);
   await removeInactiveRevisions(db, stage.assessmentIds, previousRevisions);
   return { kind: "activated", changed: changedIds };
 }

@@ -16,6 +16,7 @@ import {
   settlementConflictKinds,
   settlementConflictSql,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import { SETTLEMENT_CANDIDATE_WINDOW_DAYS } from "~/server/domains/purchase/repo/settlement-predicates";
 import { createAppError } from "~/server/errors/app-error";
 
 /** Eligibility and rank apply to the full live set before the advisory limit.
@@ -160,7 +161,7 @@ export async function listPurchasesSettlementCandidates(
           AND "FinancialTransaction".status <> 'void'
           AND "FinancialTransaction"."ledgerTransferId" IS NULL
           AND "FinancialTransaction".kind IN ('purchase', 'refund')
-          AND ${days} <= 45
+          AND ${days} <= ${SETTLEMENT_CANDIDATE_WINDOW_DAYS}
           AND ((${residual} <> 0 AND sign(${residual}) = sign("FinancialTransaction".amount)) OR ${targetAllocation})
       ) scored
       ORDER BY rank

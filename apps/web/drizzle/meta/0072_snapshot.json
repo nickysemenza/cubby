@@ -1,5 +1,5 @@
 {
-  "id": "d1de923e-a09d-4f94-aab3-d0dbc498a9ae",
+  "id": "62053797-88e8-436a-a84c-1f833527728d",
   "prevId": "622b8ad5-1546-461e-a0f7-8c50cb6bba6e",
   "version": "7",
   "dialect": "postgresql",
@@ -6320,6 +6320,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "clockDay": {
+          "name": "clockDay",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
         "key": {
           "name": "key",
           "type": "jsonb",
@@ -6535,6 +6541,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "clockDay": {
+          "name": "clockDay",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
