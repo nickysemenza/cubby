@@ -440,6 +440,7 @@ const filler = (column: PgColumn): string | number | boolean | null => {
     case "PgInteger":
     case "PgSmallInt":
     case "PgBigInt53":
+    case "PgBigInt64":
     case "PgNumeric":
     case "PgReal":
     case "PgDoublePrecision":

@@ -318,7 +318,7 @@ describe("canonical source claim families", () => {
       {
         sourceClaimId: f.firstAlias.id,
         description: "Updated retained payment",
-        amount: 20,
+        amountMinor: 2000n,
       },
     ]);
     expect(payments).toHaveLength(1);
