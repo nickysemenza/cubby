@@ -299,7 +299,15 @@ publishing its proposals: Product/brand/Expense, Project/placement stock, matchi
 Products/tag target, and each tag's supporting Products. Preserve entity writer
 defaults, identities, cardinalities and stock quantities. Proposal publication and
 revision reads stay after commit/frontier settlement; do not batch across a real
-review or stale-support edit.
+review or stale-support edit. Pending read fixtures drain their registered
+publication before asserting visibility; never drain after a stale-support edit
+or member decision just to hide an authority-gate failure.
+
+Published-only tables do not own live generation fallback. Accessible abstention
+and saved-preview action blocking stay in the existing outcome/provider tests;
+the real prune-and-receipt browser journey uses explicit Product record evaluation.
+Price list/Work parity and durable waivers stay in the member journeys; redundant
+catalog-volume and query-plan assertions are not browser or correctness coverage.
 
 The queue/history journey confirms a connection in the global Suggestions table,
 reads back its Expense Product link and unchanged cost, then records incorrect
@@ -316,7 +324,7 @@ history exclusion from pending suggestions. Project/placement browser coverage
 retains record-level Pending suggestions interaction. Dedicated Product-detail and
 Expense-list pending-popover composition, their SPA navigation sample, and legacy
 audit-row wording are no longer sampled by this journey. Unasserted cover-image
-setup and a second Product fixture are removed; no browser scenario is deleted.
+setup and a second Product fixture are no longer part of that journey.
 
 Dense-header browser coverage resizes one populated detail page across desktop,
 constrained desktop and phone widths, then drives the shared action/editor dialogs

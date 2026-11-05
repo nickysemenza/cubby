@@ -776,6 +776,7 @@ describe("connection preparation and publication authority", () => {
         integration: { kind: "field-review", field: "subjectProductId" },
       }),
     );
+    await drainDerivedRefreshFrontier(ctx.db);
     const before = await readWorkQueue(ctx.db, {
       input: workQueueInput.parse({ pageSize: 100 }),
       memberPartyId: null,

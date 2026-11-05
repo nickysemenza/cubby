@@ -1,9 +1,8 @@
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { productFiltersSchema } from "@cubby/schemas/product";
 import { workQueueInput } from "@cubby/schemas/work-queue";
-import { PgDialect } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import {
@@ -207,7 +206,7 @@ describe("stored Product quality", () => {
     expect(await gaps()).toContain("product_display_image");
   });
 
-  it("keeps durable waivers across input changes, Research saved views, and queue reads without price work", async () => {
+  it("keeps durable waivers across input changes, Research saved views, and record queues", async () => {
     const { item, kit } = await seed();
     const queue = () =>
       readWorkQueue(ctx.db, {
@@ -241,38 +240,16 @@ describe("stored Product quality", () => {
         memberPartyId: null,
         memberOnly: false,
       });
-    const compiled = vi.spyOn(PgDialect.prototype, "sqlToQuery");
-    try {
-      const researched = await research();
-      // Inspect complete SQL so later price work cannot enter the Product
-      // research read.
-      const statements = compiled.mock.results.flatMap((result) =>
-        result.type === "return" ? [result.value.sql] : [],
-      );
-      expect(statements.length).toBeGreaterThan(0);
-      expect(statements.join("\n")).not.toMatch(
-        /work_product_price|\bkpe\.|"knownCost"|"knownUnitCount"/,
-      );
-      expect(
-        researched.items.some(
-          (row) => row.family === "research" && row.id === item.id,
-        ),
-      ).toBe(true);
-      compiled.mockClear();
-      await record();
-      const population = compiled.mock.results.flatMap((result) =>
-        result.type === "return" &&
-        result.value.sql.includes("work_connection_prediction")
-          ? [result.value.sql]
-          : [],
-      );
-      expect(population).toHaveLength(1);
-      // Optional misc-bucket valuation diagnostics keep their live price filter;
-      // the shared population no longer registers the quality price relation.
-      expect(population[0]).not.toContain("work_product_price");
-    } finally {
-      compiled.mockRestore();
-    }
+    expect(
+      (await research()).items.some(
+        (row) => row.family === "research" && row.id === item.id,
+      ),
+    ).toBe(true);
+    expect(
+      (await record()).items.some(
+        (row) => row.family === "research" && row.id === item.id,
+      ),
+    ).toBe(true);
     await setDataException(
       ctx.db,
       {

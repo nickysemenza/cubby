@@ -5594,8 +5594,9 @@ describe("statement Transaction suggestions", () => {
     ]);
     await generate(ctx);
     await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
-    while ((await refreshAndReadSuggestions(ctx)).length) {
-      const suggestion = (await refreshAndReadSuggestions(ctx))[0]!;
+    for (;;) {
+      const [suggestion] = await refreshAndReadSuggestions(ctx);
+      if (!suggestion) break;
       expect(suggestion.clean).toBe(true);
       await accept(ctx, suggestion);
       await generate(ctx);

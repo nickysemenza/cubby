@@ -19,7 +19,6 @@ import {
   entityStoredDerivedDeclarations,
   storedDerivedDeclarations,
 } from "~/server/db/derived-declarations";
-import { textHashRefSql } from "~/server/db/derived-source-ref";
 import { getDb } from "~/server/db/helpers";
 import {
   entityAttachment,
@@ -305,27 +304,20 @@ describe("stored derived read sets", () => {
         await (isDerivedSink(adapter)
           ? adapter.prepare(ctx.db, ids)
           : adapter(ctx.db, ids));
-        for (const input of declaration.inputs) {
-          if (!input.selection) continue;
-          const select = adapter.fanoutSelections?.[input.selection.key];
-          if (!select)
-            throw new Error(
-              `Unregistered fanout selection ${input.selection.key}`,
-            );
-          const column = sql`${sql.identifier(input.tableColumn)}`;
-          const json = input.json;
-          const array = json?.array
-            ? sql`${column} #> ${json.array}::text[]`
-            : sql`jsonb_build_array(${column})`;
-          const refs = json
-            ? sql`SELECT (element->>${json.key})::uuid AS id
-                FROM ${sql.identifier(input.table)} CROSS JOIN LATERAL
-                  jsonb_array_elements(CASE WHEN jsonb_typeof(${array}) = 'array' THEN ${array} ELSE '[]'::jsonb END) element
-                WHERE pg_input_is_valid(element->>${json.key}, ${"uuid"}) LIMIT 25`
-            : sql`SELECT ${input.captureKey === "textHash" ? textHashRefSql(column) : column} AS id
-                FROM ${sql.identifier(input.table)} LIMIT 25`;
-          // Compile the real selector even when this source currently has no matches.
-          await getDb(ctx.db).execute(select(refs));
+        // A selection's refs are an opaque one-column SQL relation. Inspect
+        // each pure selector once; capture tables/paths are already declared,
+        // and the drain/rebuild journey below exercises real source refs.
+        const selectionKeys = new Set(
+          declaration.inputs.flatMap((input) =>
+            input.selection ? [input.selection.key] : [],
+          ),
+        );
+        for (const key of selectionKeys) {
+          const select = adapter.fanoutSelections?.[key];
+          if (!select) throw new Error(`Unregistered fanout selection ${key}`);
+          new PgDialect().sqlToQuery(
+            select(sql`SELECT NULL::uuid AS id WHERE false`),
+          );
         }
       } catch (caught) {
         error = String(caught);

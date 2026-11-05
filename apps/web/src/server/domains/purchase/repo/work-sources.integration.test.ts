@@ -12,6 +12,7 @@ import {
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 
 // Keep financial facts and posting grace exercised through real domain sources;
@@ -103,6 +104,7 @@ describe("financial Work sources", () => {
         },
         true,
       );
+    await drainStoredDerived(ctx.db);
     const suggestions = await read("suggestions:field");
     expect(suggestions.items).toHaveLength(2);
     expect(
