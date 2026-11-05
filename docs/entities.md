@@ -2975,11 +2975,9 @@ authority.
 
 A value's refresh status is a read of its explanation, not a second status
 store. `fieldRefreshLocator` names the owed slot by subject, field, surface and
-scope, so a re-mark or replacement stays the same link. It excludes tickets,
-leases, displayed results and diagnostics; only an explicit `diagnostic` input
+scope; an old Work link carrying one redirects to the value's record. Only an explicit `diagnostic` input
 recomputes a value. Per-value progress is phase and observed start time. Drain
-processed and total counts stay in spans, and `derived.backlog` counts are
-aggregates that include fanout items.
+processed and total counts stay in spans.
 
 Stored-value page reads declare requested keys with a typed `VALUES` relation.
 Its actual cardinality lets PostgreSQL choose indexed publication and work

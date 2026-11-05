@@ -4,12 +4,8 @@ import {
   fieldEmptyLabel,
   fieldNoneLabel,
 } from "@cubby/schemas/field-envelope-presentation";
-import type {
-  FieldExplanationOutput,
-  FieldRefreshLocator,
-} from "@cubby/schemas/field-explanation";
+import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -71,7 +67,7 @@ function EntityDecisionValue({
   );
 }
 
-export function DecisionResult({
+function DecisionResult({
   result,
   work,
   entity,
@@ -262,16 +258,12 @@ function WorkDeadline({
   );
 }
 
-/** The popup and Activity share these states; only `locator` differs. */
 export function DerivedFreshness({
   envelope: { result, work },
   context,
-  locator,
 }: {
   envelope: FieldExplanationOutput["envelope"];
   context: Pick<FieldExplanationOutput, "subject" | "field">;
-  /** The popup's Work link. Without it, the focused view reports a current value. */
-  locator?: FieldRefreshLocator;
 }) {
   const metadata = useEntityMetadata(context.subject.entityKind);
   const field = metadata.fields.fields.find(
@@ -341,12 +333,6 @@ export function DerivedFreshness({
       {work.kind === "idle" && (stale || result.kind === "missing") ? (
         <p>No refresh is currently queued.</p>
       ) : null}
-      {!locator &&
-      work.kind === "idle" &&
-      !stale &&
-      result.kind !== "missing" ? (
-        <p>Up to date</p>
-      ) : null}
       {refreshOwed ? (
         <Facts
           layout="inline"
@@ -359,15 +345,6 @@ export function DerivedFreshness({
             },
           ]}
         />
-      ) : null}
-      {refreshOwed && locator ? (
-        <Link
-          to="/activity"
-          search={{ tab: "now", refresh: locator }}
-          className="underline underline-offset-2"
-        >
-          Open Work
-        </Link>
       ) : null}
     </div>
   );

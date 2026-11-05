@@ -281,8 +281,10 @@ const DRAIN: JobKindPolicy = { ...MAINTENANCE, internal: false };
  */
 export type JobKindDeclaration = JobKindPolicy & {
   label: string;
-  /** Summary wording used by the current-work feed. */
+  /** Member wording for this kind of work on the Work page. */
   activityLabel?: string;
+  /** What a member sees when this kind stops; undeclared kinds fall back to their label. */
+  stuck?: { title?: string; failingTitle?: string; consequence: string };
   purpose: string;
   trigger: string;
   targets: string;
@@ -372,6 +374,12 @@ export const JOB_KIND_POLICY = {
     internal: true,
   },
   "derived.drain": {
+    stuck: {
+      title: "Totals and search results stopped updating",
+      failingTitle: "Some totals can't be calculated",
+      consequence:
+        "Records you entered are fine; calculated values may be out of date.",
+    },
     ...MAINTENANCE,
     // Each failed mark backs off on its own row; the Job itself never stops.
     backoff: { baseMs: 30_000, maxMs: 15 * 60_000 },
@@ -399,6 +407,7 @@ export const JOB_KIND_POLICY = {
   },
   // One drain per feature; two pages at once leave the other lanes free.
   "ai.evaluation": {
+    stuck: { consequence: "Suggestions won't update until this works." },
     activityLabel: "AI evaluations",
     label: "AI evaluation",
     purpose: "Executes admitted AI evaluations.",
@@ -416,6 +425,7 @@ export const JOB_KIND_POLICY = {
     maxInFlight: 2,
   },
   "embedding.refresh": {
+    stuck: { consequence: "Search may miss recently changed records." },
     activityLabel: "Search embeddings",
     ...DRAIN,
     label: "Refresh search embeddings",
@@ -441,6 +451,7 @@ export const JOB_KIND_POLICY = {
     exclusions: "Live search vectors are outside retired-vector cleanup.",
   },
   "purchase.dispatch": {
+    stuck: { consequence: "New purchases won't import until this works." },
     activityLabel: "Purchase import",
     label: "Dispatch purchase research",
     purpose: "Delivers admitted purchase work to its configured agent host.",
@@ -496,6 +507,9 @@ export const JOB_KIND_POLICY = {
       "Unrelated assessments and explicit decisions remain governed by their owners.",
   },
   "discovery.connections": {
+    stuck: {
+      consequence: "New connections won't be suggested until this works.",
+    },
     activityLabel: "Connection discovery",
     ...SERVER,
     label: "Discover connections",

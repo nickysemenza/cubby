@@ -12,10 +12,6 @@ import { useState } from "react";
 import type { RunEvaluationsOut } from "~/contracts/run-detail.contract";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-import {
-  formatMinutesLeft,
-  formatPace,
-} from "~/features/activity/work-streams";
 import { runDetail } from "~/integrations/tanstack-query/generated/domains/runDetail.gen";
 import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
@@ -30,6 +26,21 @@ import {
   ProgressValue,
 } from "~/ui/primitives/progress";
 import { StaticTable } from "~/ui/primitives/static-table";
+
+/** "about 12 min", "about 3 h", "under a minute". */
+function formatMinutesLeft(minutes: number) {
+  if (minutes < 1) return "under a minute";
+  if (minutes < 90) return `about ${Math.round(minutes)} min`;
+  if (minutes < 48 * 60) return `about ${Math.round(minutes / 60)} h`;
+  return `about ${Math.round(minutes / (24 * 60))} days`;
+}
+
+/** "950/min", "4.5/min", "0.2/min". */
+function formatPace(perMinute: number) {
+  return perMinute >= 10
+    ? `${Math.round(perMinute).toLocaleString()}/min`
+    : `${Math.round(perMinute * 10) / 10}/min`;
+}
 
 const LIVE_POLL_MS = 5_000;
 

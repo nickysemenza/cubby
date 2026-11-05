@@ -50,7 +50,7 @@ export function RecentActivityFeed({
     <Section
       title="What changed"
       headingAs="h2"
-      actions={<Link to="/activity">View all</Link>}
+      actions={<Link to="/history">View all</Link>}
     >
       <QuerySection
         title="recent activity"

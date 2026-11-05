@@ -230,9 +230,7 @@ test("Suggestions lists every family with named records and category pills, and 
     ),
   ]);
   await expect(
-    page.getByText(
-      "No pending suggestions here. Find suggestions to look again.",
-    ),
+    page.getByText("No pending suggestions.", { exact: true }),
   ).toBeVisible();
   await expect(
     suggestionsTable(page).getByRole("link", { name: productName }),

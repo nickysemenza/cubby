@@ -16,6 +16,7 @@ import {
 } from "~/ui/primitives/tooltip";
 
 import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
+import { WorkNavDot } from "../../ui/navigation/work-nav-status";
 import {
   type NavGroup,
   type NavItem,
@@ -104,7 +105,7 @@ export function SidebarRailLeaf({
           <Link
             {...navItemLinkProps(item, active)}
             className={cn(
-              "mb-0.5 flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground",
+              "relative mb-0.5 flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground",
               active && ["text-foreground", navActiveClass(item)],
             )}
             aria-label={item.label}
@@ -115,6 +116,7 @@ export function SidebarRailLeaf({
           className={cn("size-3.5", navIconClass(item))}
           weight={active ? "bold" : "regular"}
         />
+        {item.to === "/activity" && <WorkNavDot />}
       </TooltipTrigger>
       <TooltipContent side="right" role="tooltip">
         {item.label}

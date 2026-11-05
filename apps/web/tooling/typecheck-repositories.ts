@@ -53,7 +53,6 @@ export const repositoryOwners = [
   "src/server/db/computed/source-transaction-settlement-sql.ts",
   "src/server/domains/purchase/repo/purchase-purchaser.ts",
   "src/server/domains/financial-transaction/repo/settlement-conflicts.ts",
-  "src/server/generic/derived/repo/backlog.ts",
   "src/server/generic/derived/repo/assignment-read.ts",
   "src/server/generic/derived/repo/read-context.ts",
   "src/server/lib/purchase-spending.ts",

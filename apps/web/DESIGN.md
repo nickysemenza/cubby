@@ -581,10 +581,7 @@ remain the source of project amounts. Quality checks and their exception control
 explanation. Quality cards keep the explanation trigger available beside missing or failed results. Interpretations retain their readable result, caveats and next steps.
 The footer compares stored and live values and shows the last computation,
 observed execution start and known retry deadline: Next retry while it is ahead,
-Retry was due once it has passed, and no claim when it is unknown. An owed
-refresh offers Open Work, which opens the same value in Automatic work. The link
-names the value's subject, field, surface and scope, never an attempt, so
-re-marked work stays the same link. Unknown invalidation causes or finish times
+Retry was due once it has passed, and no claim when it is unknown. Unknown invalidation causes or finish times
 remain unknown. Progress here is the phase and observed start time; no value has
 a percentage, remaining count, ETA or queue position.
 `ui/derived` is the app-aware generic composition boundary:
@@ -595,13 +592,6 @@ source header and the chosen cover outlined. Header and table thumbnails open
 the chain; the Images section also renders it. Both read the record-level
 `fieldExplanation.imageChain` query and preserve its precedence order. Editing
 remains #3310.
-Work shows outstanding entity-field work as a record type x derived value cross-tab:
-fields shared by the most types lead, `·` marks a value the type does not
-declare, idle declared cells read a muted 0, and counts take the shared heat
-scale with row and column totals. Queued work matching no declaration is
-counted below the matrix rather than dropped.
-When the backend supplies internal refresh sources, the UI retains their labels,
-observed execution states, triggers and retry deadlines beside the field matrix.
 Remaining counts do not establish completed outcomes, a workload total or an ETA.
 Current publications are shown by source and age window, without interpreting
 their age distribution as an execution-event rate.
@@ -611,29 +601,12 @@ publication cutover; the additive DTO alone does not enable them.
 Progress uses `ui/primitives/progress.tsx`, following ReUI's Base UI pattern with
 `ProgressLabel`, `ProgressValue`, and a 6px token-colored track. Labels and
 values stack on phone widths so long Job kinds retain their own line. Run detail and
-Activity Work cells show the current phase's known processed/total counts;
+Run Work cells show the current phase's known processed/total counts;
 unknown totals remain text. The derived backlog uses counts and observed states;
 it has no completion bar based on queue depletion. The collapsed rail retains
 its status dot. Client synchronization remains separate from execution progress.
 
 ### Activity and evaluation progress
-
-Activity’s Now view leads with one flat feed: plain work names, explicit states,
-measured pace and waiting context. Working streams light a small info dot beside
-Now; reduced motion keeps it still. With no outstanding work the caption reads
-All quiet only when all feed reads are known, fresh and successful. Derived
-loading and read failures retain their row and Retry independently of the
-one-minute threshold for showing the detailed backlog breakdown. Streams with
-only recent failures read Failed with a destructive glyph, their failure count
-over 60 minutes, and the Jobs action; they sort with problems.
-Internal drain, retention and device-wake Jobs never become separate
-feed rows. Derived drain alerts belong to Derived values. Watchdog conditions
-make the affected stream Not moving and explain why below its name; raw codes
-and evidence stay in the quiet Watchdog details disclosure. Queue snapshots do
-not establish finite totals, so Activity has no separate per-kind depletion bars.
-Run links have visible gaps, show at most three codes and a +N remainder.
-Phone rows put pace below identity and keep commands together below the facts;
-pace never reserves the label's width.
 
 Run Evaluation progress uses shared Progress labels and values for Records
 checked and Evaluations settled. Paused and stopped Runs retain their counts
@@ -649,32 +622,34 @@ Project attention uses one quiet shared completeness notice in its dashboard, Pr
 
 ### Work diagnosis and definitions
 
-Work is the operational entry point at the compatible `/activity` URL. Its
-URL-addressable Needs you, Automatic work, Improvements, History and Advanced
-maintenance views use the shared Tabs primitives. Needs you separates Decisions,
-Financial proposals and Problems and exposes existing Run/Job attention views.
-Improvements retains optional field, connection and image-description proposals,
-agent research and declared missing-fact work without presenting them as errors.
-Automatic work retains quiet retries, dependencies, measured progress and a
-separately labelled external-waits section. `tab=now` remains compatible.
-The sidebar has one Work entry; All work and filters opens the retained
-`/work-queue` workbench. Suggestions, automatic decisions and rules remain linked
-from Improvements; list counts and detail/inspector review stay available.
-No view persists another lane or ledger; distinct actions on one record remain
-visible across their applicable views.
+Work is one screen at the compatible `/activity` URL: an always-present health
+line, a Stuck section only when something is stuck, and one Needs you queue,
+then footer links to Suggestions, Missing facts, All work and History. No tabs,
+no stat tiles and no intro. It answers two questions, whether background work is
+healthy and what needs a member, and carries no scheduler or queue vocabulary:
+no wakes, leases, tickets, deadlines, pace or refresh counts. Telemetry belongs
+to `/jobs`, the Run and Job pages (direct link and command menu) and MCP.
 
-An Open Work link leads Automatic work with one Value refresh row, independently of
-the one-minute backlog threshold. It keeps the retained value and repeats the
-explanation's status lines, adding Up to date when nothing is owed and Not
-published yet for a missing value. The only counts are the kind's aggregate,
-labelled as all work including related refreshes. It reads on open and on
-Refresh status, without polling or recomputing. A failed read keeps the last
-observation beside the raw error and Retry; Clear removes the row.
-Inactive panels unmount so hidden operational views cannot keep polling. Maintenance
-retains inspected previews between tabs with its queries and status polling disabled
-while hidden. URL
-filters survive view switching. Tab triggers stay disabled until their route handlers are ready.
-Existing Work queue views and direct Run/Job links stay available.
+The health line states one of Healthy, Catching up, Stuck or Unknown in a
+sentence of secondary ink. It never shows a count of internal work, a percentage
+or an ETA. A failed read says the page cannot tell, with raw diagnostics and Try
+again, and never claims all clear. Stuck rows are flat with hairlines: a static
+`warning-ink` glyph, an outcome title, one sentence on consequence or remedy, at
+most one action, and a closed Technical details disclosure holding the raw failure
+with Copy. Eight rows show, then a link to failed Jobs. A retry reads every 10
+seconds for two minutes, then the page goes quiet.
+
+Needs you is the embedded `WorkQueue` grouped by Reason, over `NEEDS_YOU_FILTERS`
+(mine plus shared, optional proposals excluded): one population with the sidebar
+and Home's preview. With nothing to show the page reads `Nothing needs you.` at
+its largest size. While inputs are incomplete it keeps the queue's known-work
+notice instead, because an unknown source cannot be claimed empty.
+
+The sidebar's Work row shows the needs-you count and, only when something is
+stuck, a static warning glyph; the collapsed rail shows one dot with the same
+label. Citron is never a warning. Healthy work shows nothing at any backlog size,
+and a failed read stays silent because the page itself reports it. The read never
+polls. History is a thin `/history` route of Run history and recorded Changes.
 
 Run types is the permanent “What does each Run do?” reference. Definitions
 lead with targets, exclusions, possible effects, dependencies, cost and recovery.
@@ -686,21 +661,18 @@ Execution drivers and ownership details stay behind a technical disclosure.
 Job definitions share the canonical kind-policy declaration, and Job/Run headers
 link to their definitions. Historical types remain distinct.
 
-Advanced maintenance explains the standard daily 7 a.m. household pass before its Run now
-action; internal daily queue upkeep has its own Job definition. Backlog
+Settings → Maintenance holds the daily pass and repair tools behind a closed
+disclosure, so opening Settings reads no maintenance status. It explains the
+standard daily 7 a.m. household pass before its Run now action; internal daily
+queue upkeep has its own Job definition. Backlog
 and image classification counts sit behind disclosure. Image classification
 rows can overlap and uncertain cutout eligibility is not a review queue.
 Recipe re-parsing and alias pruning require an explicit successful preview
 before Apply; each bounded Current/Proposed sample states its coverage and that
 the server rechecks current eligibility rather than locking the preview population.
 
-Activity tabs keep their intrinsic label widths and wrap as whole controls on
-narrow screens. Expanded repair comparisons span the available width below
+Expanded repair comparisons span the available width below
 the description and action controls; comparison content never competes with
 the description for a narrow right-hand column.
 
-Activity Now leads with a flat scheduling summary: Running, Next wake, Waiting
-and Last recovery. Known deadlines link to Jobs; wake and recovery history sits
-behind disclosure. Observations carry timestamps, normal waits stay neutral and
-observed unexplained overdue wakes receive attention. An empty schedule never
-claims the database is asleep. Idle operational views do not poll the database.
+Idle operational views do not poll the database.

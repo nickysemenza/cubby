@@ -50,48 +50,28 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
 
   await page.setViewportSize({ width: 1440, height: 1100 });
   await gotoAuthenticatedPage(page, "/activity");
-  await expect(
-    page.getByRole("tab", { name: "Needs you", exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
-  await expect(
-    page.getByRole("heading", { name: "Decisions", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Problems", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("tabpanel").locator('[aria-busy="true"]'),
-  ).toHaveCount(0);
-  for (const tab of await page.getByRole("tab").all())
-    expect(
-      await tab.evaluate(
-        (element) => element.scrollWidth <= element.clientWidth,
-      ),
-    ).toBe(true);
+  await expect(page.getByTestId("work-health")).toContainText(/background/i);
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  const more = page.getByRole("navigation", { name: "More work" });
+  await expect(more.getByRole("link", { name: "Suggestions" })).toBeVisible();
+  await expect(more.getByRole("link", { name: "Missing facts" })).toBeVisible();
+  await expect(more.getByRole("link", { name: "All work" })).toBeVisible();
   await page.screenshot({
-    path: testInfo.outputPath("activity-needs-you-desktop.png"),
-    fullPage: true,
-  });
-  await page.getByRole("tab", { name: "Improvements", exact: true }).click();
-  await expect(page).toHaveURL(/tab=improvements/);
-  await expect(
-    page.getByRole("heading", { name: "Proposals", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", {
-      name: "Research and missing facts",
-      exact: true,
-    }),
-  ).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("work-improvements-desktop.png"),
+    path: testInfo.outputPath("work-desktop.png"),
     fullPage: true,
   });
 
-  await page
-    .getByRole("tab", { name: "Advanced maintenance", exact: true })
-    .click();
-  await expect(page).toHaveURL(/tab=maintenance/);
+  // Links into the retired views still land on their new owners.
+  await page.goto("/activity?tab=history");
+  await expect(page).toHaveURL(/\/history/);
+  await expect(
+    page.getByRole("heading", { name: "Run history", exact: true }),
+  ).toBeVisible();
+  await page.goto("/activity?tab=now");
+  await expect(page).toHaveURL(/\/jobs/);
+  await page.goto("/activity?tab=maintenance");
+  await expect(page).toHaveURL(/\/settings#maintenance/);
+
   await expect(
     page.getByRole("heading", { name: "Daily maintenance", exact: true }),
   ).toBeVisible();
@@ -121,26 +101,17 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
     sections: [{ ingredients: [{ amounts: [{ value: 999, unit: "g" }] }] }],
   });
   await page.screenshot({
-    path: testInfo.outputPath("activity-maintenance-desktop.png"),
+    path: testInfo.outputPath("settings-maintenance-desktop.png"),
     fullPage: true,
   });
 
-  // Moving between views must preserve an inspected preview and its action state.
-  await page.getByRole("tab", { name: "Automatic work", exact: true }).click();
-  await expect(page).toHaveURL(/tab=now/);
-  await page
-    .getByRole("tab", { name: "Advanced maintenance", exact: true })
-    .click();
-  await expect(apply).toBeEnabled();
   await apply.click();
   await expect.poll(storedRecipe).toMatchObject({
     sections: [{ ingredients: [{ amounts: [{ value: 2, unit: "cup" }] }] }],
   });
   await expect(apply).toBeDisabled();
 
-  await page
-    .getByRole("link", { name: "What does each Run do?", exact: true })
-    .click();
+  await page.goto("/runs/types");
   await expect(
     page.getByRole("heading", { name: "What does each Run do?", exact: true }),
   ).toBeVisible();
@@ -163,54 +134,35 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
   ).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await gotoAuthenticatedPage(page, "/activity?tab=maintenance");
+  await gotoAuthenticatedPage(page, "/activity");
+  await expect(page.getByTestId("work-health")).toContainText(/background/i);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: testInfo.outputPath("work-phone.png"),
+    fullPage: true,
+  });
+  await gotoAuthenticatedPage(page, "/settings#maintenance");
   await expect(
     page.getByRole("heading", { name: "Daily maintenance", exact: true }),
   ).toBeVisible();
-  for (const tab of await page.getByRole("tab").all())
-    expect(
-      await tab.evaluate(
-        (element) => element.scrollWidth <= element.clientWidth,
-      ),
-    ).toBe(true);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await expect(
-    page.getByRole("tab", { name: "History", exact: true }),
-  ).toBeEnabled();
-  await page.screenshot({
-    path: testInfo.outputPath("activity-maintenance-phone.png"),
-    fullPage: true,
-  });
-  await page.getByRole("tab", { name: "History", exact: true }).click();
-  await expect(page).toHaveURL(/tab=history/);
-  await page.getByRole("tab", { name: "Improvements", exact: true }).click();
-  await expect(
-    page.getByRole("heading", {
-      name: "Research and missing facts",
-      exact: true,
-    }),
-  ).toBeVisible();
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-  await page.screenshot({
-    path: testInfo.outputPath("work-improvements-phone.png"),
-    fullPage: true,
-  });
-  await page.goBack();
+  await gotoAuthenticatedPage(page, "/history");
   await expect(
     page.getByRole("heading", { name: "Run history", exact: true }),
   ).toBeVisible();
-  await page.goBack();
-  await expect(
-    page.getByRole("tab", { name: "Advanced maintenance", exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
   await page.goto("/runs/types#maintenance");
   await expect(
     page.getByRole("heading", { name: "Maintenance", exact: true }),

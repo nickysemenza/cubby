@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 
 import { incompleteWorkDiagnosticSource } from "./work-diagnostic-facts";
 
@@ -265,6 +266,20 @@ export const workQueueList = defineRelationList({
 });
 
 export const workQueueInput = workQueueList.input;
+/**
+ * Work that needs a member, mine plus shared: the sidebar count, the Work page
+ * and Home's preview all read this one population. Optional proposals are
+ * improvements a member may take up whenever they like, so they stay out.
+ */
+export const NEEDS_YOU_FILTERS = {
+  view: "human" as const,
+  owner: CURRENT_MEMBER_FILTER,
+  reasonExclude: [
+    "suggestions:field",
+    "suggestions:recommendation",
+    "suggestions:image_description",
+  ],
+};
 export type WorkQueueInput = z.input<typeof workQueueInput>;
 export type WorkQueueView = NonNullable<
   z.output<typeof workQueueInput>["view"]
