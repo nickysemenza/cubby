@@ -2790,173 +2790,24 @@ progress and timings without triggering work. A manual request never resets an
 active cursor. AI responses and vectors are retained; the pass does not wait for
 AI or embedding regeneration.
 
-The input and internal-record declarations below remain transitional schema
-contracts until their triggers and the retired assessment target are removed.
+The hourly runtime reads only entity declarations. The empty internal-record
+registry, source-capture compiler, indexed fan-out targets and trigger generator
+are removed with the source-trigger retirement. Declared dependencies order
+phases; they no longer expand affected identities.
 
-A publication about non-entity records registers in `internalRecordSpecs` in
-`server/db/derived-declarations.ts`, not in the manifest. A spec names a human-readable
-`label` for the existing backlog owner and a stable
-`<owner>.<key>` target whose owner is not an entity, a source table with a UUID
-`id`, a compute id and manifest-shaped `inputs` and `dependsOn`. It shares the
-existing registry, triggers, drain, source locking, fanout fences, retries and
-reconciliation, so `markAllStoredDerived` can seed its source IDs with a target
-filter. Append entries and keep input positions, because pending fanouts name an
-input by position. It has no `key`, `clock`, `recordSource` or `DerivedValue`
-envelope; its adapter must be a `derivedSink`, and any other adapter fails its
-items visibly. A later rules change converges through the sink's own table and
-reconciliation. Its dependencies may read entity values; no stored value can
-depend on it, so it never propagates.
-An internal input's `selection: { key, path? }` names one of its sink's
-`fanoutSelections`. That callback is the whole selector: it reads a one-column
-`id` relation of source refs and returns current and retained target ids as `id`,
-because no `DerivedValue` holds prior output. Internal-record expansion enrolls
-at most 500 dependent marks per publication chunk. It advances a UUID cursor on
-the held source ticket in the same transaction as those marks, retaining the
-ticket and attempts until enrollment finishes. A new invalidation resets that
-cursor; a failed or superseded transaction cannot advance it. Continued sources
-return to the end of their priority's ready frontier. Existing entity fanouts
-keep their current expansion contract. The spec parser
-rejects `selection` with `path`, `paths`, `targetWhere` or a `retained` block, and
-one whose `match` target column is not `id`, because expansion would ignore them.
-An entity `selection` still requires `targetWhere` and `retained`.
-A plain input's trigger casts its matched column to UUID, so a matched column
-holding other text declares `captureKey: "textHash"`. Its OLD and NEW values
-capture as `textHashRefSqlText` in `db/derived-source-ref.ts` builds them, and a selector
-or dependency writer compares with `textHashRefSql`, the same SQL expression. It
-needs no parent lookup in the trigger. NULL marks nothing, stored text is hashed
-unnormalized, and a collision only adds a recompute. A hash is not a target id, so
-`captureKey` requires `selection`, `path` or `paths`, and it refuses `json` and
-`targetWhere`. Manifest inputs cannot declare it.
-`reconcile: { table, where }` narrows explicit repair enrollment to rows that can still be
-owed, for a source whose history is closed. `table` shares the source's UUID `id`,
-`where` holds literal column values bound as parameters, and the existing id
-slice still applies. A row outside the population converges only through its own
-marks, so its closing transition must mark it. Absent, every source row is marked.
-`entityStoredDerivedDeclarations()` and `storedDerived()` are the entity-only
-roster for reads, explanations, clock expiry and backlog `kinds`. Internal
-tickets count in the same backlog `total`, oldest wait and state buckets. Its
-`internal` rows carry the stable target and label without pretending the work
-is an Entity field; unknown retained targets remain visible as Other refresh
-work. The existing `recent` history combines committed publication sources and
-exposes their separate labelled series. Assessment activity counts distinct
-active Assessment/revision pairs, including successful empty results; staged
-rows and extra family rows cannot inflate it or be attributed to DerivedValue.
-This history describes current successful results by publication age, not an
-execution event log. Replacements move their bucket and no-op completions retain
-publication age; committed page outcomes remain in the existing Job result.
-An internal record's refs are source IDs, not entity IDs, so
-`notifications: "sinkOwned"` skips the default ring for fanout expansion and
-publication. The sink calls
-`publication.notify(entity, ids)` for each old and new entity its publication
-changed. Those refs join the chunk's bounded ring and commit with its transaction.
-A sink's `preparationFailures(prepared)` names refs that `prepare` could not
-prepare, with their errors. They join the page's failed items and settle with
-the ordinary retries, while unaffected refs publish; a stop-page error in that
-map still stops the page. A ref the page did not claim is a sink defect, so it
-fails the whole target visibly. The sink must report a failed read as a failure,
-not as an empty or ineligible output. It adds no second failure queue.
-A sink can return `{ changed, retain }` to commit staged output while leaving
-the named held sources owed. Retention preserves their tickets and attempts;
-it does not create another queue. `publication.tickets` identifies the exact
-held invalidation generations for staging. It grants no authority beyond the
-existing source, ticket, fanout and Job-lease fences. Staged rows must remain
-invisible until their complete publication can activate atomically.
-For an identical grouped effect committed by that sink, the result may also
-name exact `covered` peer WorkItems on its own target. The generic settlement
-owner independently locks those generations; re-marked peers and items already
-claimed by a later chunk remain owed. A completed component keeps its exact
-observation acknowledgement so those later peers settle without re-running the
-canonical preparation. Coverage grants no authority to delete work in a sink.
-A sink with its own snapshot may supply `publicationBlocked(prepared, ids)` as
-SQL through the existing work-observation helpers. Its preparation, drain gate
-and staged writer must use the same exact observations and relevance rule;
-the earlier page-wide observations cannot stand in for its later snapshot.
-The rule must cover retained inputs
-and newly reachable dependencies and competitors, including captured OLD refs;
-matching only previously published reverse dependencies is insufficient.
-Without this port, the existing conservative target-wide fence applies.
-
-Product reads use the stored `readFacts` publication for pricing, quantity ledger,
-placement and ownership evidence, and `food` for food summaries. Their field
-metadata carries the publication's stale/work status. Reads never refresh these
-facts. The existing USDA release activation action invalidates food publications
-even when linked IDs do not change. Recipe totals prepare a bounded batch of
-recipes through one shared costing context; the drain preserves tickets written
-during that preparation. WorkItem fanout lookup uses an indexed `COLLATE "C"`
-prefix range, including correlated target lookups.
-Location placement changes refresh Products reached through descendant Locations,
-recorded inventory and Location-as-Product instances, rather than the whole catalog.
-Declared parallel paths union their dependent IDs; recursive steps include their
-starting IDs and follow the declared tree depth with a cycle guard. These walks
-run only in background fanout expansion, preserving source-only save capture.
-Walks retain tombstoned nodes so deletion still reaches placement dependents;
-the canonical computation decides which placements remain live.
-Product placement uses the canonical ancestor reader's ten-edge bound, even
-when a stored tree is deeper than the display cap.
-The drain's pre-compute fanout observation exposes each page target's prefix
-bounds directly in an OR predicate so the same index serves that read; a JSON
-target-list subquery must not turn each page into a whole-drain scan.
-Value targets in one publication chunk check unobserved fanouts in one statement
-before their shared value write. Each target retains its own indexed prefix
-bounds and blocked targets retain their publications and tickets. Sink checks
-remain immediately before each sink's writer; source-before-work lock order is unchanged.
-Production derived pages expand admitted source fanouts before preparing direct
-values, allowing newly owed values to publish in the same invocation when the
-direct preparation budget has room. The observed frontier admits an ordered
-prefix with at most twenty fanout marks and two hundred direct preparation
-units, stopping at the first overflow in either dimension. Expansion does not
-spend the direct-only preparation allowance; a mixed invocation may perform
-both bounded phases and therefore more total database work than one shared
-budget allowed. Both passes use the existing fenced drain;
-direct preparation observes pending fanout tickets afresh after expansion.
-There is no repeated expansion loop. Busy fanouts stay owed without consuming
-another expansion slot. After an initial overflow, fresh direct work
-with strictly higher priority than the item that did not fit may use remaining
-direct capacity. At that priority or lower, cumulative direct cost must fit
-the original direct reservation. Admission stops at the first unaffordable
-direct item. Pages without fanouts keep their single pass.
-Explicit fixture page limits retain the single-pass diagnostic behavior.
-For a fixed `targetWhere` input, one expansion also covers up to 200 ready
-source marks for that exact input: they all select the same dependent population.
-The expansion retains ordinary direct-target reticketing and the most urgent
-observed source priority. The generic drain settles covered source tickets only
-after the expansion, without waiting on writers; newer tickets, claims elsewhere
-in the page and path-dependent fanouts retain their existing handling.
-A value adapter may opt an input into canonical target selection. Background
-expansion unions its current candidates with raw references in that target's
-retained publication, including stale references hidden by current ownership
-gates. Source keys and input positions stay stable, so pending fanouts keep their
-meaning. These selected inputs never settle extra covered source tickets: a
-ticket captured after preparation must remain a fence for later chunks of the
-same page. Unselected pending direct work retains its ticket, priority and
-backoff. The single drain lease, pre-read fanout observation and unchanged-ticket
-publication fences protect missing outputs; missing is never treated as empty.
-Generation checks the retained array and UUID leaf against the declared result
-schema, refusing a typo that would silently miss an old candidate.
-Email Purchase and VendorAccount changes use canonical Purchase evidence plus
-retained `facts` references. Source-claim changes reach accepted Purchases through
-the canonical family's root and direct aliases, with raw retained Purchase facts
-covering former candidates after identity or ownership changes.
-An input with `capture: false` emits no new source-trigger marks while keeping its
-position, reference meaning, read enrollment and pending fanout interpretation.
-Accepted source-order input 8 retains its broad SourceOrder-ID expansion for owed
-tickets; new input 9 captures the old and new Purchase IDs directly from the source
-row. Its current candidates and retained Purchase facts cover reassignment,
-detach, checksum and source-family moves without dependent discovery in saves.
-Source-claim input 7 retains broad Claim-ID expansion for owed tickets with capture
-disabled. Inputs 10 and 11 capture the changed Claim and its old/new canonical
-parents. Their seed-inclusive, cycle-guarded one-edge up/down paths retain both
-families after a move or detach, without filtering source ownership or liveness;
-canonical computation decides eligibility. Other source-claim consumers retain
-their declared conservative fanout.
+Product reads use typed `readFacts` for pricing, quantities, placement and
+ownership evidence, and `food` for food summaries. Reads never refresh these
+facts. Recipe totals prepare bounded batches through a shared costing context.
+The hourly pass visits the full declared population, including relationships
+whose source rows changed or disappeared during an earlier page.
 
 Service Cost captures the positive actual charge total beside its average, count
 and latest dated charge. The explanation reads those operands from the same
-publication, including while refresh is pending or failed. Retained publications
+publication, from its declared view. Retained publications
 without the total remain visible with unavailable additional evidence until the
-existing drain backfills them; opening the explanation never computes that total.
+hourly pass backfills them; opening the explanation never computes that total.
 
-Home and Work queue diagnostic sources read one household-day publication on the
+Home and Work queue diagnostic sources read one hourly publication on the
 reserved household Project. Canonical detectors, including private financial
 findings, run only in background preparation. Display reads fetch compact counts
 and status; private finding arrays stay in SQL through current ownership fences,
@@ -2964,7 +2815,7 @@ search, exact totals and pagination. Missing counts remain unavailable rather th
 zero, and stale/error publications retain their last successful findings. Current
 actions still validate authoritative evidence. The declaration names the physical
 graph and canonical source tables and its quality/rollup dependencies; new source
-tables require enrollment and read-set coverage. Project attention still combines
+tables must be read by the owning detector. Project attention still combines
 stored rollups with current Task/Expense checks; this diagnostic publication does
 not replace that separate owner.
 
@@ -2975,8 +2826,8 @@ provenance, computation time and work status; a null member is a successful empt
 value, while an absent member is unavailable. The generic list reader loads their
 payloads in one page batch and the query compiler projects the same paths for
 sorting, filtering and totals. Generation emits the declared result schemas for
-the common preparation and live-comparison validator; a malformed target backs
-off without poisoning another target's publication. Shipment event summaries retain timeline
+the common preparation and live-comparison validator; a malformed page records a
+failure without poisoning another target's publication. Shipment event summaries retain timeline
 reconciliation and publish count, dates, span and label together; normal list
 reads do not reconcile observations or prepare the live Shipment population.
 
@@ -3001,31 +2852,16 @@ same base row and combines them with existing pending/error metadata. An optiona
 browsing keeps the last totals, while strict nutrition consumers still require
 the freshness marker. Nested cost/calorie projections inherit that publication
 identity and status without inheriting edit controls. Legacy totals without a
-trustworthy publication time remain unavailable until the existing drain replaces
+trustworthy publication time remain unavailable until the hourly pass replaces
 them; the migration preserves their stored payload.
-Search invalidation ignores the publication and freshness timestamp columns
-declared by `recordSource`. Advancing bookkeeping alone cannot change searchable
-content; payload and authored-content changes retain their normal enrollment.
-
 Direct nullable stored fields use the generic `storedPath` reader. An explicit
 raw binding replaces that default only when it must supply a required raw shape
 or contextual presentation; two explicit writers still fail admission. Raw
 placeholders never establish publication availability in the public envelope.
 
-Deferred source fanout is real queued work even before its dependent record
-endpoints have been expanded. Page metadata conservatively marks snapshots for
-that declared target stale/pending while such fanout exists. The target lookup
-is materialized once per requested key in the page batch; saves still do not
-expand dependents. After expansion, per-record marks determine status. Clock
-expiry alone remains stale without fabricating pending work.
-
 An Inventory owner's current decisive assignment wins immediately. Product's
-owner collection is a dependent fold: its display and membership use the same
-published collection until the drain republishes it. An Inventory edit can
-therefore precede the Product collection update; keep its stale/work disclosure
-instead of mixing live explicit members with a cached collection and mismatched
-provenance. Ordinary-edit latency against the five-second target and bulk catch-up
-are measured separately in #3420.
+owner collection is a dependent fold: display and membership use the same typed
+publication until the hourly pass republishes it, preserving matching provenance.
 
 Project dashboard cards read the same stored rollups as the canonical Project
 list. The portfolio totals retain live financial scope selection and allocation;
@@ -3052,31 +2888,12 @@ requested singular scope remain separate gates. Pair folding still precedes
 scope selection so replacement actions retain out-of-scope links. Sender-proof
 Vendor inclusion remains independent. Import progress reads the current Run over
 the selected accepted flags; Run reporting does not invalidate relationship facts.
-Purchase candidate edits and source-identity changes conservatively expand to
-live Emails in the background so new matches need no existing cached pair.
+The hourly pass revisits live Emails so candidate and source-identity changes
+need no existing cached pair.
 Negative boolean filters require an available publication; missing facts cannot
 match Unlinked. Ordinary page reads do not run source matching or accepted-family
 resolution. Retention guards and review commands continue reading authoritative
 live evidence.
-
-Stored results whose canonical policy depends on today's household date declare
-`clock: "householdDay"`. A publication from an earlier household day reads as
-stale even before work is queued. App-open, daily recovery and production derived
-preparation admit expired publications at reconciliation priority through the
-same invalidation owner. Discovery preserves existing tickets, retry
-errors and member-edit priority; it adds no per-record timer or separate Job.
-Freshness and pending work remain independent. Inventory and Product acquisition
-ownership use this clock because future acquisitions become eligible with time.
-
-Own-table sinks expose `clockExpiredRefs(day)` to the same expiry owner. Assessment
-project-tool components retain `clockDay` on staged and active results, including
-successful empty results. A day mismatch reads as stale before enrollment and
-blocks an old-day stage from activation. Successful no-op verification advances
-the day without changing content identity, `computedAt` or publication-age history.
-Production derived preparation enrolls expiry before claiming work, so a busy
-queue cannot starve it. An idle derived Job retains the next household-midnight
-deadline, preserving any earlier retry; source invalidations still pull that same
-Job forward. This uses the existing Job and scheduler, with no per-record timer.
 
 On-demand field explanations expose a stored root as `storedResult` in the
 source-dependency projection. A manifest can bind evidence paths there while
@@ -3107,7 +2924,7 @@ available aggregate evidence readable, but reports the explanation unavailable.
 It must not throw, reconstruct the missing inputs live, or certify partial
 capture as complete. Product stock publications retain inventory amounts,
 resolved tracking policy and the service predicate; ancestor-category policy
-edits conservatively refresh Product read facts through deferred fanout.
+edits converge through the next hourly Product read-facts pass.
 
 Inventory ownership publications capture their already-resolved precedence steps,
 using public party references. Older publications remain readable without those
@@ -3115,133 +2932,18 @@ steps until targeted recomputation; explanations never rebuild historical steps
 from current acquisition inputs. Shared evidence schemas are declaration-safe;
 interactive explanation output composes them with reports and controls.
 
-A declaration names its compute adapter and its `inputs`. An input pairs one
-column of a table with the entity column it equals: `{ id: "id" }` is the
-record's own row, `{ productId: "id" }` a child row pointing at it, and
-`{ id: "productId" }` a referenced row whose dependents the drain finds. An
-input may limit the columns that matter (`columns`), skip its own output
-columns (`except`), admit only rows holding `where` values, walk a join `path`,
-select fixed target rows with `targetWhere` during deferred fanout, or read record ids from a JSON object (`json: { key }`) or array
-(`json: { array, key }`). A path step may select a UUID from its `to` JSON
-object with `jsonKey`, or compare its `from` object’s UUID with
-`fromJsonKey`; malformed JSON references contribute no records. `dependsOn` names other stored
-values it reads, by column match, link table, join path or fixed `targetWhere`.
-A fixed dependency marks only those target rows when any upstream publication
-changes; it does not subscribe to every `DerivedValue` write.
-Global dependents wait at claim admission while an upstream direct or fanout
-ticket remains owed, including backed-off work. Preparation cannot observe a
-partially rebuilt upstream population or spend retries waiting for its own page
-to publish. Missing upstream publications without queued work still fail explicitly.
-The schema guard checks
-every declared table and column against the Drizzle schema: PL/pgSQL resolves
-trigger columns only when a row fires, so a misspelled column would fail saves.
-Fixed-target inputs preserve non-null source references so independent writers
-do not contend on one work ticket. A null source UUID uses a constant fallback:
-it must not silently suppress invalidation. Only the drain selects target rows.
+A declaration names its compute adapter, typed result storage and upstream
+`dependsOn` values. Dependencies order the pass; source inputs no longer schedule
+per-value work. A sink prepares outside publication and commits its own typed
+storage with the coarse cursor. Search publication uses a sorted upsert and
+retires missing documents in the same transaction; it admits embeddings only
+for changed embeddable documents. Missing records create no placeholders.
 
-Image description search inputs admit only rows the selected-description reader
-can use: Feedback holding the automatic correction-receipt literals, and
-`image_description` State. Member and projection Feedback reach search through
-their State transition. A change to the reader's receipt literals changes the
-declaration with it. The drain expands retained marks through `path`, not `where`.
-
-Inputs follow the precision and relationships of the compute. Exact valuations
-watch raw pricing inputs rather than a rounded stored price. Kit-link and
-acquisition changes mark every sibling component even when the kit's published
-price stays unchanged. Subtask date inputs follow their old and new parent Task
-endpoints to the parents' projects.
-
-Generated row triggers (`server/db/derived-trigger-ddl.ts`) mark work in the
-writer's transaction. A trigger upserts a `derived:drain` work item (`WorkItem`) for the saved row
-and its own old and new matched values, with a fresh `WorkTicket` value; it
-never queries dependents. A save that changes no watched column marks nothing.
-A mark whose dependents are other rows is a fanout mark (`<target>@<input>`)
-the drain expands all fanout groups in a page in one set-based statement;
-overlapping dependents receive the highest priority, and only the observed
-fanout tickets clear. Busy fanout tickets stay pending instead of waiting on a
-writer during clearing; dependent writes finish before source tickets clear.
-The dependents keep the fanout mark's priority, and the expansion notifies their
-readers, so they show Updating until published. The mark function captures the `derived:drain`
-Job once per transaction, so the Job is due whenever marks exist. A writer
-whose input no column path reaches (a member's Email review, a selected image
-description, explicit recipe staleness) calls the same `derived_mark` SQL
-function in its transaction.
-
-Source writes in root Job transactions, including shared evaluation batches,
-use propagation priority (1); ordinary member transactions default to priority 0. The transaction helper sets this with transaction-local
-`cubby.derived_priority`, so savepoints inherit their caller's priority and
-pooled connections cannot carry it into later member saves. A member edit
-promotes existing background marks, and later background writes cannot demote
-them. Existing marks retain their priority through deployment; no queued work
-is discarded or guessed to be background work.
-
-The `derived.drain` Job claims ready marks, member edits first, then
-propagation, then reconciliation. It computes each directly marked target's
-batch outside the publication transaction through its adapter
-(`workflows/derived-computes.ts`). Each Worker page observes at most 200 marks
-and admits an ordered prefix within one preparation budget. An adapter defaults
-to a 20-record preparation batch, including sink results; compact quality
-adapters declare 200. Mixed pages charge each item its share of that adapter's
-batch, so large recipe preparations keep their previous bound. Items outside
-the admitted prefix retain their tickets and retry state unless existing
-covered-mark settlement applies their identical effect. Publication still
-uses the existing 25-item fenced chunks before preparing another page.
-The existing invocation time budget is checked between pages. Fanout expansion
-stays set-based in Postgres, returning only its count and a bounded reader-notification
-sample per target. Large affected categories use the existing whole-category
-notification without loading every dependent id or shortcode into the Worker.
-Calculation lookups load their requested repository directly rather than importing
-the universal kernel registry and every entity repository into the drain.
-Preparation and publication spans report targets and processed/expanded counts.
-Preparation validates each outcome and its
-provenance against the value; invalid metadata backs off its target alongside
-other computation failures, before the publication batch is assembled. The Job's transaction expands fanout marks
-and publishes prepared values; newly expanded targets compute on a later page.
-Publication writes only marks whose ticket is unchanged since the claim, so an
-edit that lands during compute keeps its record dirty, and a deleted-and-reset
-mark cannot be cleared by an older page. Publication also retains a target's
-previous result and direct marks while source fanout tickets not observed before
-preparation remain pending: the dependent ticket alone cannot detect a source
-edit that has not expanded yet. This guard applies to value and sink adapters,
-including deferred fanout retries. Only changed values propagate to declared
-dependents, so cascades stop at the first unchanged hop. Sink adapters
-return only records whose output or readiness changed; a recipe recalculation
-that only advances its computation timestamp does not propagate. A failing
-item backs off by the `derived.drain` kind policy (30 seconds doubling to 15
-minutes) and other items publish. The drain runs on `defineDrain`
-([Durable Jobs](jobs.md#coarse-jobs-and-work-items)): each fenced chunk first
-expands its fanout marks, then locks sink sources without waiting, then locks
-its items' unchanged tickets, skipping busy ones. Value targets in a chunk
-publish in one statement; busy or replaced marks keep their previous values
-and remain pending. A chunk the database rejects for its data (SQLSTATE
-classes 22, 23, 54) splits in halves until the rejected item backs off alone,
-with the database's message; healthy items publish. Transaction-level
-failures retry the page. Stored retry diagnostics keep each cause, capped so a
-long query wrapper cannot hide the underlying database or adapter error.
-Sink adapters retain their source-row
-locking and repository writers for their own tables (search documents with
-embedding admission, recipe totals, conversion coverage). Search publication uses one sorted upsert across live documents and
-existing documents marked missing, preserving the latter's content. It then
-retires the observed missing documents in one update within the same transaction.
-This retains stable lock order without splitting mixed backfill pages into
-one write per record. Missing records without documents create no placeholders.
-Publication rings the existing reader notifications for every kind it touched.
-The daily whole-population reconcile is retired under ADR 0025. Existing tickets
-still complete through the ordinary drain; they are not deleted. A retained
-`derived.reconcile` Job completes without enrolling work. New-target migrations
-enroll only rows missing that target's publication, using its declared owner;
-rule changes do not enqueue the whole population. Explicit search repair and
-synthetic rebuild coverage retain their existing scoped enrollment path.
-The read-set tracer (`derived/repo/read-set.integration.test.ts`) still checks
-that computes declare their source tables.
-
-That same synthetic corpus verifies reconciliation and empty-cache rebuilds
-for every stored-value target, every searchable entity, Product conversion
-coverage and Recipe totals. It compares semantic values and sort keys while
-excluding computation clocks and disposable physical cache IDs. The test uses
-the real sink publishers with an offline USDA lookup port and fails on any
-remaining mark, including a deferred failure. This is fixture-level evidence,
-not a production rebuild or exhaustive coverage of every input branch.
+The existing synthetic corpus rebuilds every typed result, searchable entity,
+Product conversion coverage and Recipe totals from retained inputs. It compares
+semantic values and sort keys, excluding computation clocks and physical cache
+IDs, through real publishers with an offline USDA port. This is fixture evidence,
+not a production timing or exhaustive coverage of every source branch.
 
 Reads never compute or repair: lists compile a stored field to one primary-key
 lookup (`storedDerivedSql`) for rows, sort, filter and footer totals, and a
@@ -3304,28 +3006,18 @@ publication time when known. Values use the field's formatter, with structured
 evidence retained for non-scalar results; an unavailable live computation stays
 explicit.
 
-`DerivedValue.decidedBy` stores typed outcome metadata and provenance beside the
-value in the same publication. It does not duplicate the value payload. A live
-compute may return a successful empty outcome; omitting a record from the compute
-batch means no result exists. Publication rejects a value/outcome mismatch.
-Manual price and Project start-date provenance are selected with their values in
-one SQL statement. Current receipts are never used to relabel an older snapshot.
-The field-envelope cutover retains non-null legacy values and their original
-metadata, leaves unsupported historical provenance unknown, and queues refresh.
-Legacy nulls without an outcome reason remain stored but unavailable until typed
-publication; reads do not guess a reason or repair the cache.
+Typed decision columns store outcome metadata and provenance beside the value
+in the same publication, without duplicating its payload. A compute may return
+a successful empty outcome; omitting a record means no result exists. Publication
+rejects a value/outcome mismatch. Manual price and Project start-date provenance
+are selected with their values in one SQL statement. Current receipts never
+relabel an older snapshot. Legacy output remains only until its separate drop.
 
-The derived cache is disposable: truncating `DerivedValue` and marking every
-declaration rebuilds the same values. Overrides, explicit None, waivers and
-accepted Suggestions are inputs, never derived rows. Tombstoning a record
-removes its derived values.
-
-Integration tests settle `drainStoredDerived(db)` after source writes before
-asserting stored list values, filters, totals or quality. Invalidation tests
-assert `derivedMarkTickets(db, "<entity>.<key>", ref)` before draining (omit
-`ref` to include fanout marks), then read the published value. Use
-`reconcileDerivedRefreshInputs(db)` only for explicit cache repair coverage;
-reconciliation would conceal a missing declared input in a mutation test.
+The typed caches are disposable. Overrides, explicit None, waivers and accepted
+Suggestions are inputs and survive a cache rebuild. Identity tombstones clear
+the declared snapshots. Integration journeys settle `drainStoredDerived(db)`
+after edits before asserting stored lists, filters, totals or quality; this
+runs the deterministic pass without fabricating source tickets.
 
 Lists that need a value live instead (a one-hop lookup or an indexed rollup that stays
 cheap) compile it inline; the Location list's direct

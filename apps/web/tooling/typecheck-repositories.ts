@@ -71,8 +71,6 @@ export const repositoryOwners = [
   "src/server/db/derived-source-sql.ts",
   "src/server/domains/project/repo/start-date-sql.ts",
   "src/server/domains/product/repo/cost-sql.ts",
-  "src/server/db/derived-trigger-ddl.ts",
-  "src/server/db/derived-source-ref.ts",
   "src/server/db/shipment-identity-ddl.ts",
   "src/server/lib/canonical-json.ts",
   "src/server/db/computed/product-classification-evidence.ts",

@@ -17,7 +17,7 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { DERIVED_REBUILD_KEY } from "~/server/db/derived-rebuild-schema";
-import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
+import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-rebuild-schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import {

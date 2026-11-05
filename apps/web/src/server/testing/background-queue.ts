@@ -11,7 +11,7 @@ import { setCfEnv } from "~/server/cf-env";
 import { getUsdaReleaseEnv } from "~/server/cf-env";
 import { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
-import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
+import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
 import { productFoodCompute } from "~/server/domains/product/repo/read-facts";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
@@ -142,7 +142,7 @@ export async function drainDerivedPage(
 ): Promise<void> {
   let pending = during;
   const selected = target
-    ? storedDerivedDeclarations().find((entry) => entry.target === target)
+    ? entityStoredDerivedDeclarations().find((entry) => entry.target === target)
         ?.compute
     : undefined;
   const after = async <T>(key: string, read: Promise<T>) => {
