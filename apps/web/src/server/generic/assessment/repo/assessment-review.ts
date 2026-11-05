@@ -507,7 +507,7 @@ async function settleReview(
     const { rows: sourceState } = await getDb(db).execute<{ held: boolean }>(
       sql`SELECT ${statementSuggestionSourceHeld("s")} AS held FROM "Suggestion" s WHERE s.id=${prediction.id}::uuid`,
     );
-    if (sourceState[0]?.held) input = { ...input, suppression: undefined };
+    if (sourceState[0]?.held) input = { ...input, suppression: null };
   }
 
   if (input.suppression) {
