@@ -1,5 +1,10 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily } from "@cubby/schemas/assessment";
+import {
+  assessmentReadScopedSourceKind,
+  ASSESSMENT_READ_TARGET,
+  type AssessmentReadDependency,
+} from "@cubby/schemas/assessment-read-publication";
 import type { FinancialAccountIdentity } from "@cubby/schemas/financial-account-fields";
 import {
   parseShortcodeFor,
@@ -23,6 +28,7 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import type { DecisionQuestionsInput } from "~/server/ai/decision-request-batch";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
+import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   assessmentState,
@@ -32,7 +38,12 @@ import {
   ledgerParty,
   ledgerTransfer,
   sourceTransactionRecord,
+  expense,
 } from "~/server/db/schema";
+import {
+  transferPairSeedKeys,
+  transferPairSeedPage,
+} from "~/server/domains/financial-transaction/repo/transfer-pair-input";
 import { labelTransferPairSuggestions } from "~/server/domains/financial-transaction/service/transfer-pair-labels";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -41,17 +52,21 @@ import { previewStatementSuggestion } from "~/server/domains/transaction-import/
 import { readStatementSuggestions } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { assessmentReadSourceSelection } from "~/server/generic/assessment/repo/read-publication";
+import { readAssessmentReadMemberships } from "~/server/generic/assessment/repo/review-families";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
+import { isDerivedSink } from "~/server/generic/derived/repo/compute";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { currentJobExecution } from "~/server/generic/jobs/context";
+import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
-import { withJobFixtureExecution } from "~/server/testing/background-queue";
+import {
+  drainStoredDerived,
+  withJobFixtureExecution,
+} from "~/server/testing/background-queue";
+import { derivedComputes } from "~/server/workflows/derived-computes";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 
-import {
-  transferPairSeedKeys,
-  transferPairSeedPage,
-} from "./transfer-pair-input";
 import {
   applyTransferPair,
   countTransferPairSeeds,
@@ -251,15 +266,17 @@ describe("transfer-pair suggestions", () => {
   /** Pending, active publications with their labelled judgments. */
   const pending = async () => {
     const { rows } = await unwrapDb(ctx.db).execute<{
+      assessmentId: string;
       judgment: unknown;
       fingerprint: string;
     }>(sql`
-      SELECT a.judgment, s.fingerprint FROM "AssessmentState" s
+      SELECT s.id AS "assessmentId", a.judgment, s.fingerprint FROM "AssessmentState" s
       JOIN "Assessment" a ON a.id = s.id
       WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.active
         AND s.status = ${suggestionStatus.enum.pending}
     `);
     return rows.map((row) => ({
+      assessmentId: row.assessmentId,
       judgment: transferPairJudgment.parse(row.judgment),
       fingerprint: String(row.fingerprint),
     }));
@@ -310,6 +327,92 @@ describe("transfer-pair suggestions", () => {
         fingerprint,
       );
     }
+    // A new competitor has no retained dependency yet. Expansion follows the
+    // same money pool as discovery and leaves other amounts alone.
+    const competitor = await transaction(checking, 501, "2026-05-05");
+    const [competitorRow] = await unwrapDb(ctx.db)
+      .select({ id: financialTransaction.id })
+      .from(financialTransaction)
+      .where(eq(financialTransaction.shortcode, competitor.id));
+    const [observation] = await unwrapDb(ctx.db)
+      .select({ id: sourceTransactionRecord.id })
+      .from(sourceTransactionRecord)
+      .where(
+        eq(sourceTransactionRecord.rawDescription, "SYNTHETIC TRANSFER OUT 1"),
+      );
+    if (!competitorRow || !observation)
+      throw new Error("Synthetic Transfer input missing");
+    for (const [kind, sourceId, amount] of [
+      ["financialTransaction", competitorRow.id, 501],
+      ["sourceTransactionRecord", observation.id, 101],
+    ] as const) {
+      const affected = await unwrapDb(ctx.db).execute(
+        assessmentReadSourceSelection(
+          kind,
+          sql`SELECT ${sourceId}::uuid AS id`,
+        ),
+      );
+      expect(affected.rows.map((row) => row.id).sort()).toEqual(
+        published
+          .filter(({ judgment }) => judgment.amount === amount)
+          .map((row) => row.assessmentId)
+          .sort(),
+      );
+    }
+    const policy = await unwrapDb(ctx.db).execute(
+      assessmentReadSourceSelection(
+        "transferPolicy",
+        sql`SELECT ${competitorRow.id}::uuid AS id`,
+      ),
+    );
+    expect(policy.rows.map((row) => row.id).sort()).toEqual(
+      published.map((row) => row.assessmentId).sort(),
+    );
+    const claim = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic booking claim",
+      costType: "materials",
+      trade: "building",
+    });
+    await unwrapDb(ctx.db)
+      .update(expense)
+      .set({ bookingTransactionCode: competitor.id })
+      .where(eq(expense.shortcode, claim.output.id));
+    const [line] = await unwrapDb(ctx.db)
+      .select({ id: expense.id })
+      .from(expense)
+      .where(eq(expense.shortcode, claim.output.id));
+    const declaration = storedDerivedDeclarations().find(
+      (entry) => entry.target === ASSESSMENT_READ_TARGET,
+    );
+    const adapter = derivedComputes[ASSESSMENT_READ_TARGET];
+    if (!line || !declaration || !adapter || !isDerivedSink(adapter))
+      throw new Error("Synthetic Transfer capture missing");
+    const index = declaration.inputs.findIndex(
+      (input) =>
+        input.table === "Expense" && input.selection?.key === "transferPolicy",
+    );
+    expect(index).toBeGreaterThanOrEqual(0);
+    const target = `${ASSESSMENT_READ_TARGET}@${index}`;
+    const before = (
+      await readWorkItems(ctx.db, { target, refs: [line.id] })
+    )[0];
+    if (!before) throw new Error("Synthetic booking observation missing");
+    // The OLD booking text is gone after this SQL-only edit. Its captured
+    // source still enrolls advice that can gain the newly unclaimed leg.
+    await unwrapDb(ctx.db)
+      .update(expense)
+      .set({ bookingTransactionCode: null })
+      .where(eq(expense.id, line.id));
+    const after = (await readWorkItems(ctx.db, { target, refs: [line.id] }))[0];
+    expect(after?.ticket).not.toBe(before.ticket);
+    const select = adapter.fanoutSelections?.transferPolicy;
+    if (!select) throw new Error("Synthetic Transfer selector missing");
+    const unclaimed = await unwrapDb(ctx.db).execute(
+      select(sql`SELECT ${line.id}::uuid AS id`),
+    );
+    expect(unclaimed.rows.map((row) => row.id).sort()).toEqual(
+      published.map((row) => row.assessmentId).sort(),
+    );
   });
 
   it("pages the complete frozen seed roster across origins and repeated observations", async () => {
@@ -834,6 +937,7 @@ describe("transfer-pair suggestions", () => {
       next: null,
     });
     expect(await countTransferPairsNeedingLabels(ctx.db)).toBe(0);
+    await drainStoredDerived(ctx.db);
     const statements = await listSuggestionPage(ctx.db, {
       family: "statement_transaction",
     });
@@ -1170,6 +1274,47 @@ describe("transfer-pair suggestions", () => {
       inflow: { movement: "weak" },
     });
     expect(check!.judgment.blockers).toContain("weak_movement");
+    const transferIds = await unwrapDb(ctx.db)
+      .select({ id: assessmentState.id })
+      .from(assessmentState)
+      .where(eq(assessmentState.family, assessmentFamily.enum.transfer_pair));
+    const observed: AssessmentReadDependency[] = [];
+    await readAssessmentReadMemberships(
+      ctx.db,
+      transferIds.map(({ id }) => id),
+      (_id, inputs) => observed.push(...inputs),
+    );
+    const expectedAccounts = await unwrapDb(ctx.db)
+      .select({
+        id: financialAccount.id,
+        owner: financialAccount.ledgerPartyId,
+      })
+      .from(financialAccount);
+    for (const account of expectedAccounts) {
+      expect(observed).toContainEqual({
+        sourceKind: "financialAccount",
+        sourceId: account.id,
+      });
+      expect(observed).toContainEqual({
+        sourceKind: "ledgerParty",
+        sourceId: account.owner,
+      });
+    }
+    expect(
+      observed.some(({ sourceKind }) => sourceKind === "financialTransaction"),
+    ).toBe(true);
+    expect(
+      observed.some(
+        ({ sourceKind }) =>
+          sourceKind === assessmentReadScopedSourceKind.enum.statementCharge,
+      ),
+    ).toBe(true);
+    expect(
+      observed.some(
+        ({ sourceKind }) =>
+          sourceKind === assessmentReadScopedSourceKind.enum.referenceCode,
+      ),
+    ).toBe(true);
     await expect(apply(check!)).rejects.toThrow(/review/i);
     expect(await transfers()).toEqual([]);
     expect(await liveTransactions()).toHaveLength(1);
@@ -1576,6 +1721,7 @@ describe("transfer-pair suggestions", () => {
       { transactionId: recorded.id, reason: expect.any(String) },
     ]);
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await drainStoredDerived(ctx.db);
     const review = await listSuggestionPage(ctx.db, {
       family: "statement_transaction",
       limit: 50,
@@ -1791,6 +1937,7 @@ describe("transfer-pair suggestions", () => {
     await refresh();
     const pairs = await pendingOn(bank);
     expect(pairs).toHaveLength(2);
+    await drainStoredDerived(ctx.db);
     const rows = (await listSuggestionPage(ctx.db, { family: "transfer_pair" }))
       .items;
     const results = await Promise.allSettled(

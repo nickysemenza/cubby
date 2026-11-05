@@ -6,7 +6,10 @@ import {
 import { transferPairJudgment } from "./transfer-pair-suggestion";
 
 import { suggestionReviewRowSchema, suggestionStatus } from "./ai";
-import { assessmentChildHandle } from "./assessment-reference";
+import {
+  assessmentChildHandle,
+  assessmentReadCoverage,
+} from "./assessment-reference";
 import {
   assessmentReviewBatchOut,
   assessmentReviewInput,
@@ -250,6 +253,7 @@ export const suggestionListOut = z.object({
     totalCount: z.number().int(),
     cleanCount: z.number().int().nonnegative(),
     groups: z.array(suggestionGroup).optional(),
+    coverage: assessmentReadCoverage.optional(),
   }),
   /** Keyset cursor for the next page; null on the last. */
   next: z.string().nullable(),
@@ -293,6 +297,7 @@ export const suggestionFamilyCount = z.object({
 export type SuggestionFamilyCount = z.infer<typeof suggestionFamilyCount>;
 export const suggestionCountsOut = z.object({
   families: z.array(suggestionFamilyCount),
+  coverage: assessmentReadCoverage.optional(),
 });
 export type SuggestionCountsOut = z.infer<typeof suggestionCountsOut>;
 

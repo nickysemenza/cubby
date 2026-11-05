@@ -1662,6 +1662,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     >
       <RecordSuggestionsProvider
         viewportOnly
+        publishedOnly
         statusTarget={statusTarget}
         entity={entity}
         records={

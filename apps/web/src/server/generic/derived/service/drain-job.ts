@@ -9,6 +9,11 @@ import { createLogger } from "@cubby/worker-tracing";
 import { and, notLike } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  householdDateTime,
+  householdLocalDate,
+  shiftPlainDate,
+} from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import type { DerivedComputes } from "~/server/generic/derived/repo/compute";
@@ -24,6 +29,7 @@ import {
   lockDerivedChunk,
   markAllStoredDerived,
   markExpiredClockDerived,
+  hasClockDerived,
   prepareDerivedPage,
   publishDerivedChunk,
 } from "~/server/generic/derived/repo/drain";
@@ -116,7 +122,9 @@ const derivedDrain = (
       return { retain: publication.retain, covered: publication.covered };
     },
     async idle(tx) {
-      await markExpiredClockDerived(tx);
+      // Production enrolls before claim; bounded fixture drains retain their
+      // single-phase idle enrollment without paying for the same scan twice.
+      if (limit !== undefined) await markExpiredClockDerived(tx, computes);
     },
   });
 
@@ -135,8 +143,23 @@ export const derivedDrainHandler = (
   { limit, chunk }: { limit?: number; chunk?: number } = {},
 ): JobHandler => {
   if (limit !== undefined) return derivedDrain(computes, { limit, chunk });
+  const hasClock = hasClockDerived(computes);
+  const clockDeadline = (prepared: PreparedJobPage): PreparedJobPage => {
+    if (!hasClock || (!prepared.page.done && !prepared.page.availableAt))
+      return prepared;
+    const midnight = householdDateTime(shiftPlainDate(householdLocalDate(), 1));
+    if (prepared.page.availableAt && prepared.page.availableAt < midnight)
+      return prepared;
+    // Source invalidation still pulls this same Job forward. A retained clock
+    // deadline never delays a ready page or an earlier per-item retry.
+    return {
+      ...prepared,
+      page: { ...prepared.page, done: false, availableAt: midnight },
+    };
+  };
   return {
     async prepare(db, claim, context) {
+      await context.fenced((tx) => markExpiredClockDerived(tx, computes));
       // A superseded invocation can still unwind while its replacement runs.
       // Never share admission state between invocations of this handler.
       let expandedFirst = false;
@@ -169,7 +192,7 @@ export const derivedDrainHandler = (
           return fanouts;
         },
       }).prepare(db, claim, context);
-      if (!expandedFirst) return first;
+      if (!expandedFirst) return clockDeadline(first);
       await context.check();
       const direct = await derivedDrain(computes, {
         chunk,

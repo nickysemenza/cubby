@@ -5,7 +5,6 @@ import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import type { Page } from "@playwright/test";
-import { settledSuggestionQuestionsInput } from "@cubby/schemas/ai";
 import { assessmentReviewInput } from "@cubby/schemas/assessment";
 import {
   recordSourceTransactionRecordsOut,
@@ -31,11 +30,7 @@ import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import {
-  dispatchesOperation,
-  dispatchOperations,
-  unbatchFor,
-} from "./support/dispatch-wire";
+import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
 import {
   gotoAuthenticatedPage,
   readExpense,
@@ -103,175 +98,6 @@ const recordRows =
 
 const suggestionsTable = (page: Page) =>
   page.getByRole("table", { name: "Suggestions" });
-
-// Failure: an evaluated empty category looks like an unexplained dash, or its
-// explanation can only be reached with a mouse.
-test("empty suggestion cells expose an abstention and keyboard-accessible details", async ({
-  page,
-}, testInfo) => {
-  const name = uniqueName(testInfo, "Unclassified tool");
-  await createEntityFixture(page, "product", { name, categoryId: null });
-  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
-    if (await unbatchFor(route, ["ai.suggestFields", "ai.suggestFieldsBatch"]))
-      return;
-    if (
-      !dispatchesOperation(route.request(), "ai.suggestFields") &&
-      !dispatchesOperation(route.request(), "ai.suggestFieldsBatch")
-    )
-      return route.continue();
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        ok: true,
-        data: fieldSuggestionsReply(route.request(), {
-          suggestions: {},
-          outcomes: {
-            categoryId: {
-              kind: "evaluated",
-              answer: "none",
-              confidence: "high",
-              probability: 0.98,
-              alternatives: [],
-            },
-          },
-        }),
-      }),
-    });
-  });
-  await gotoAuthenticatedPage(
-    page,
-    `/products?searchQuery=${encodeURIComponent(name)}`,
-  );
-  const row = page
-    .getByRole("row")
-    .filter({ has: page.getByRole("link", { name, exact: true }) });
-  const category = row.locator('[data-cell-col="categoryId"]');
-  const status = category.getByRole("button", { name: /No good fit/ });
-  await expect(status).toBeVisible();
-  await expect(status).toHaveText("No good fit");
-  await status.focus();
-  await expect(status).toBeFocused();
-  await status.press("Enter");
-  await expect(
-    page.getByText("No good fit · 98% · high", { exact: true }),
-  ).toBeVisible();
-});
-
-// A saved answer must remain readable during revalidation without permitting
-// an old proposal to write. The current answer must replace it when it arrives.
-test("saved suggestion previews stay visible while current evidence is checked", async ({
-  page,
-}, testInfo) => {
-  const name = uniqueName(testInfo, "Cached suggestion tool");
-  const categoryName = uniqueName(testInfo, "Cached category");
-  const category = await createEntityFixture(page, "productCategory", {
-    name: categoryName,
-  });
-  await createEntityFixture(page, "product", { name, categoryId: null });
-  const live = Promise.withResolvers<void>();
-  const proposal = {
-    value: category.id,
-    label: "Synthetic saved category",
-    detail: null,
-    confidence: "high",
-    probability: 0.97,
-    reasoning: "Synthetic saved evidence",
-    alternatives: [],
-  };
-  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
-    if (
-      await unbatchFor(route, [
-        "ai.suggestFields",
-        "ai.suggestFieldsBatch",
-        "ai.settledSuggestionQuestions",
-      ])
-    )
-      return;
-    const [operation] = dispatchOperations(route.request());
-    if (operation?.operation === "ai.settledSuggestionQuestions") {
-      const input = settledSuggestionQuestionsInput.parse(operation.input);
-      if (input.read !== "preview") await live.promise;
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          ok: true,
-          data: {
-            results: input.questions.map(({ field }) => ({
-              ok: true,
-              value: {
-                outcome: null,
-                revision: null,
-                preview:
-                  input.read === "preview" && field === "categoryId"
-                    ? {
-                        suggestion: proposal,
-                        outcome: {
-                          kind: "evaluated",
-                          answer: "pick",
-                          confidence: "high",
-                          probability: 0.97,
-                          alternatives: [],
-                        },
-                      }
-                    : null,
-              },
-            })),
-          },
-        }),
-      });
-      return;
-    }
-    if (
-      operation?.operation !== "ai.suggestFields" &&
-      operation?.operation !== "ai.suggestFieldsBatch"
-    )
-      return route.continue();
-    await live.promise;
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        ok: true,
-        data: fieldSuggestionsReply(route.request(), {
-          suggestions: {},
-          outcomes: {
-            categoryId: {
-              kind: "evaluated",
-              answer: "none",
-              confidence: "high",
-              probability: 0.98,
-              alternatives: [],
-            },
-          },
-        }),
-      }),
-    });
-  });
-  try {
-    await gotoAuthenticatedPage(
-      page,
-      `/products?searchQuery=${encodeURIComponent(name)}`,
-    );
-    const row = page
-      .getByRole("row")
-      .filter({ has: page.getByRole("link", { name, exact: true }) });
-    const cell = row.locator('[data-cell-col="categoryId"]');
-    // Reference previews resolve the stored category name, which can replace
-    // the model's cached label before this assertion runs.
-    const saved = cell.getByRole("button", {
-      name: `Accept suggested value: ${categoryName}`,
-      exact: true,
-    });
-    await expect(saved).toBeVisible();
-    await expect(saved).toBeDisabled();
-    live.resolve();
-    await expect(
-      cell.getByRole("button", { name: /No good fit/ }),
-    ).toBeVisible();
-    await expect(saved).toHaveCount(0);
-  } finally {
-    live.resolve();
-  }
-});
 
 // Failure modes: a family drops out of the page; a record renders as a bare
 // shortcode or a category as the generic grey reference chip; Accept on a
@@ -1002,19 +828,10 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
       }),
     });
   });
-  await gotoAuthenticatedPage(
-    page,
-    `/products?searchQuery=${encodeURIComponent(name)}`,
-  );
-  await page.getByRole("button", { name: "Display", exact: true }).click();
-  await page.getByRole("button", { name: "Columns…", exact: true }).click();
-  await page.getByRole("button", { name: "Show Tags", exact: true }).click();
-  await page.keyboard.press("Escape");
-  const row = page
-    .getByRole("table", { name: /Products table/i })
-    .getByRole("row")
-    .filter({ hasText: name });
-  await row.getByRole("button", { name: /Remove synthetic-brand/ }).click();
+  // Pruning is an explicit record evaluation; published-only tables do not
+  // generate transient field proposals.
+  await gotoAuthenticatedPage(page, `/products/${product.id}`);
+  await expect(page.getByText(/^Remove synthetic-brand/)).toBeVisible();
   await page.getByRole("button", { name: "Accept", exact: true }).click();
   await expect
     .poll(

@@ -78,6 +78,7 @@ import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { deleteJobs, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 
 describe("confirmed correction propagation", () => {
   const ctx = withTestDb();
@@ -812,6 +813,7 @@ describe("confirmed correction propagation", () => {
       provenance: question.provenance,
       runId: null,
     });
+    await drainStoredDerived(ctx.db);
     const queue = await listSuggestionPage(ctx.db, {
       family: "field",
       recordIds: [target.id],
@@ -1348,6 +1350,7 @@ describe("confirmed correction propagation", () => {
         status: "held",
         reason: "Complete decision inputs are not equivalent",
       });
+      await drainStoredDerived(ctx.db);
       const pending = await listSuggestionPage(ctx.db, {
         recordIds: [source.product.id],
       });
@@ -1632,6 +1635,7 @@ describe("confirmed correction propagation", () => {
       status: "held",
       reason: "Equivalent evidence has conflicting member corrections",
     });
+    await drainStoredDerived(ctx.db);
     const queue = await listSuggestionPage(ctx.db, {
       family: "field",
       recordIds: [target.product.id],

@@ -34,6 +34,7 @@ import {
   replaceJobGeneration,
 } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 
 import { recordSourceTransactionRecords } from "./source-transaction-record";
 import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";
@@ -128,7 +129,7 @@ describe("statement spending review and re-import", () => {
         )
       ).rows[0]!.total,
     );
-  const label = async (
+  const labelAndRefreshReads = async (
     advice: ReturnType<typeof financialSpendingAdvice.parse>,
     importId?: string,
   ) => {
@@ -143,6 +144,7 @@ describe("statement spending review and re-import", () => {
       scope: { importId },
     });
     expect(result.failed).toEqual([]);
+    await drainStoredDerived(ctx.db);
   };
   const pendingPreview = async () => {
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
@@ -157,7 +159,7 @@ describe("statement spending review and re-import", () => {
     "preserves shared-card application and replay after %s contention",
     async (mode) => {
       const { advice, account } = await fixture(null, "household");
-      await label(advice);
+      await labelAndRefreshReads(advice);
       const page = await listSuggestionPage(ctx.db, {
         family: "statement_transaction",
         limit: 20,
@@ -476,7 +478,7 @@ describe("statement spending review and re-import", () => {
           ],
         });
       }
-      await label(advice);
+      await labelAndRefreshReads(advice);
       const suggestions = await readStatementSuggestions(
         ctx.db,
         (await getDb(ctx.db).query.assessmentState.findMany()).map(
@@ -617,7 +619,7 @@ describe("statement spending review and re-import", () => {
     expect(
       proposals.every((proposal) => proposal.judgment.reviewReason === null),
     ).toBe(true);
-    await label(advice);
+    await labelAndRefreshReads(advice);
     const suggestions = await readStatementSuggestions(
       ctx.db,
       (await getDb(ctx.db).query.assessmentState.findMany()).map(
@@ -661,7 +663,7 @@ describe("statement spending review and re-import", () => {
   it("replays the exact successful canonical receipt before a later provider collision", async () => {
     const { input, advice } = await fixture();
     await providerHistory(input);
-    await label(advice);
+    await labelAndRefreshReads(advice);
     const [suggestion] = await readStatementSuggestions(
       ctx.db,
       (await getDb(ctx.db).query.assessmentState.findMany()).map(
@@ -756,7 +758,7 @@ describe("statement spending review and re-import", () => {
       ],
     });
     await providerCollision();
-    await label(advice);
+    await labelAndRefreshReads(advice);
     const legacy = (
       await getDb(ctx.db).query.sourceTransactionRecord.findMany()
     ).find((row) => row.providerAccountId === null)!;
@@ -1189,7 +1191,7 @@ describe("statement spending review and re-import", () => {
   });
   it("refuses a clean spending suggestion when older unsettled spending appears", async () => {
     const { advice } = await fixture();
-    await label(advice);
+    await labelAndRefreshReads(advice);
     const page = await listSuggestionPage(ctx.db, {
       family: "statement_transaction",
       limit: 20,
@@ -1254,9 +1256,9 @@ describe("statement spending review and re-import", () => {
       .update(sourceTransactionRecord)
       .set({ rowPosition: null })
       .where(eq(sourceTransactionRecord.shortcode, observed.id));
-    await label(advice, recorded.batchId!);
+    await labelAndRefreshReads(advice, recorded.batchId!);
     expect(await total()).toBe(42.5);
-    await label(advice, recorded.batchId!);
+    await labelAndRefreshReads(advice, recorded.batchId!);
     expect(await total()).toBe(42.5);
     const audit = await listAutomaticDecisions(ctx.db, {
       family: "statement_transaction",
@@ -1288,7 +1290,7 @@ describe("statement spending review and re-import", () => {
         data: { name: "Synthetic member-corrected expense title" },
       }),
     );
-    await label(advice, recorded.batchId!);
+    await labelAndRefreshReads(advice, recorded.batchId!);
     expect(
       (
         await listSuggestionPage(ctx.db, {
@@ -1301,7 +1303,7 @@ describe("statement spending review and re-import", () => {
   });
   it("retains published category advice when a non-web correction only chooses a Vendor", async () => {
     const { advice } = await fixture();
-    await label(advice);
+    await labelAndRefreshReads(advice);
     const suggestion = (
       await listSuggestionPage(ctx.db, {
         family: "statement_transaction",
@@ -1338,7 +1340,7 @@ describe("statement spending review and re-import", () => {
       merchant: "Synthetic Orchard",
       sourceRefs: [{ source: "monarch", externalId: row.externalId }],
     });
-    await label(advice);
+    await labelAndRefreshReads(advice);
     expect(
       (
         await listSuggestionPage(ctx.db, {
@@ -1360,6 +1362,7 @@ describe("statement spending review and re-import", () => {
       ctx.actor,
     );
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await drainStoredDerived(ctx.db);
     expect(
       (
         await listSuggestionPage(ctx.db, {

@@ -8,6 +8,7 @@
 import { jobState, type WorkWaitCause } from "@cubby/schemas/job";
 import { and, asc, eq, inArray, lte, sql, type SQL } from "drizzle-orm";
 
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
   repositoryQueries,
   type RepositoryQueryInput,
@@ -24,6 +25,7 @@ export type WorkItem = {
   priority: number;
   attempts: number;
   reason?: string | null;
+  fanoutAfter?: string | null;
 };
 
 /** The drain Job a family of items belongs to. */
@@ -36,6 +38,7 @@ const itemColumns = {
   priority: workItem.priority,
   attempts: workItem.attempts,
   reason: workItem.reason,
+  fanoutAfter: workItem.fanoutAfter,
 };
 
 /** Bounded ready-work observations; no locks or scheduling changes. */
@@ -69,6 +72,34 @@ export async function observeReadyWork(
     .limit(limit);
 }
 
+/** Exact pending generations, including retry deadlines; this does not claim or reschedule them. */
+export async function observePendingWork(
+  db: RepositoryQueryInput,
+  {
+    drain,
+    eligible,
+    scope,
+  }: {
+    drain: string;
+    eligible: (target: SQL, ref: SQL) => SQL;
+    scope?: { target: string; refs: readonly string[] };
+  },
+): Promise<WorkItem[]> {
+  return repositoryQueries(db)
+    .select(itemColumns)
+    .from(workItem)
+    .where(
+      and(
+        eq(workItem.drain, drain),
+        eligible(sql`${workItem.target}`, sql`${workItem.ref}`),
+        scope
+          ? sql`(${workItem.target} <> ${scope.target} OR ${workItem.ref} = ANY(${uuidArrayParam(scope.refs)}))`
+          : undefined,
+      ),
+    )
+    .orderBy(workItem.target, workItem.ref);
+}
+
 /** Pending items include future retries; callers may narrow to their owned targets. */
 export async function hasPendingWork(
   db: RepositoryQueryInput,
@@ -91,6 +122,34 @@ export const workTickets = (items: readonly WorkItem[]) => sql`(
     items.map(({ target, ref, ticket }) => ({ target, ref, ticket })),
   )}::jsonb) AS m(target text, ref uuid, ticket bigint))`;
 
+/** Advance only held source tickets after their dependent marks commit with this transaction. */
+export async function advanceWorkFanouts(
+  db: RepositoryQueryInput,
+  progress: readonly { item: WorkItem; after: string }[],
+) {
+  if (!progress.length) return;
+  const rows = progress.map(({ item, after }) => ({
+    target: item.target,
+    ref: item.ref,
+    ticket: item.ticket,
+    after,
+  }));
+  await repositoryQueries(db)
+    .update(workItem)
+    .set({ fanoutAfter: sql`p.after`, readyAt: sql`now()` })
+    .from(
+      sql`jsonb_to_recordset(${JSON.stringify(rows)}::jsonb)
+        AS p(target text, ref uuid, ticket bigint, after uuid)`,
+    )
+    .where(
+      and(
+        eq(workItem.target, sql`p.target`),
+        eq(workItem.ref, sql`p.ref`),
+        eq(workItem.ticket, sql`p.ticket`),
+      ),
+    );
+}
+
 /**
  * A re-mark takes a fresh ticket, the more urgent priority and a fresh
  * attempt budget, so a page already holding the item cannot clear the newer
@@ -108,6 +167,7 @@ const remark = {
     lastError: null,
     waitCause: null,
     waitStartedAt: null,
+    fanoutAfter: null,
   },
 };
 
@@ -205,7 +265,7 @@ export async function markWorkFrom(
     sql`SELECT ${drain.key}, s.target, s.ref, nextval('"WorkTicket"'),
           min(s.priority), now(), now(), 0, NULL, NULL, NULL, NULL,
           (array_agg(s.reason ORDER BY s.priority, s.reason) FILTER (WHERE s.reason IS NOT NULL))[1],
-          NULL, NULL
+          NULL, NULL, NULL
           FROM (${source}) AS s(target, ref, priority, reason)
          WHERE s.ref IS NOT NULL
          GROUP BY s.target, s.ref ORDER BY s.target, s.ref`,
@@ -413,6 +473,22 @@ const currentWorkExecution = sql`j.state = ${jobState.enum.running}
   AND w."executionTicket" = w.ticket
   AND w."executionStartedAt" >= w."readyAt" AND w."readyAt" <= now()`;
 
+const workNotRunning = sql`(${currentWorkExecution}) IS NOT TRUE`;
+const workNotFailed = sql`(w."lastError" IS NULL OR w."waitCause" IS NOT NULL)`;
+
+/** Read-only state of a producer's exact targets, using the backlog's lease and wait rules. */
+export const pendingWorkStatusSql = (
+  eligible: (target: SQL, ref: SQL) => SQL,
+): SQL =>
+  sql`(SELECT count(*)::int AS count,
+    count(*) FILTER (WHERE ${workNotRunning} AND ${workNotFailed} AND w."readyAt" <= now())::int AS queued,
+    count(*) FILTER (WHERE ${currentWorkExecution})::int AS running,
+    count(*) FILTER (WHERE ${workNotRunning} AND ${workNotFailed} AND w."readyAt" > now())::int AS waiting,
+    count(*) FILTER (WHERE ${workNotRunning} AND NOT ${workNotFailed})::int AS failed,
+    min(w."readyAt") FILTER (WHERE w."readyAt" > now()) AS "nextAttemptAt"
+    FROM ${workItem} w LEFT JOIN ${job} j ON j.key = w.drain
+    WHERE ${eligible(sql`w.target`, sql`w.ref`)})`;
+
 /**
  * Owed work is an input to derived computations; Job execution is not. An
  * explicit wait outranks a retained `lastError`, which is history, not its state.
@@ -479,20 +555,23 @@ export async function workTicketsWhere(
 
 /** Whether an item matching `target` exists whose ticket is not among `observed`. */
 export const unobservedWork = (
-  target: (column: SQL) => SQL,
+  target: (column: SQL, ref: SQL) => SQL,
   observed: readonly number[],
+  /** Narrow one exact target's refs while retaining the other matched targets. */
+  scope?: { target: string; refs: readonly string[] },
 ) =>
   // One jsonb parameter: a busy fanout can observe thousands of tickets.
-  sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${target(sql`${workItem.target}`)}
+  sql`EXISTS (SELECT 1 FROM ${workItem} WHERE ${target(sql`${workItem.target}`, sql`${workItem.ref}`)}
+    ${scope ? sql`AND (${workItem.target} <> ${scope.target} OR ${workItem.ref} = ANY(${uuidArrayParam(scope.refs)}))` : sql``}
     AND ${workItem.ticket} NOT IN (
       SELECT jsonb_array_elements_text(${JSON.stringify(observed)}::jsonb)::bigint))`;
 
 /** Pending items per target-prefix (before any `@`) and the oldest mark's age, for a drain. */
 export async function drainBacklog(db: RepositoryQueryInput, drain: string) {
   const family = sql<string>`split_part(w.target, '@', 1)`;
-  const notRunning = sql`(${currentWorkExecution}) IS NOT TRUE`;
+  const notRunning = workNotRunning;
   // An explicit wait outranks the retained error; the four states still partition `count`.
-  const notFailed = sql`(w."lastError" IS NULL OR w."waitCause" IS NOT NULL)`;
+  const notFailed = workNotFailed;
   const queries = repositoryQueries(db);
   const buckets = await queries
     .select({

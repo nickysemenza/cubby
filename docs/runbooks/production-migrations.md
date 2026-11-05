@@ -90,6 +90,41 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Assessment read publication storage (0072)
+
+`0072_assessment_read_publications` adds four tables: revisioned publication
+results, exact memberships, reverse dependencies and a small recovery stage.
+Active and staged results share the publication relation; an explicit empty
+result differs from an Assessment with no active publication. The stage retains
+unfinished old scopes independently of WorkItem cancellation, using the existing
+drain's ticket and lease for execution authority. It adds no scheduler or queue.
+The migration also adds a nullable `WorkItem.fanoutAfter` cursor.
+Existing unfinished work starts without a cursor; tickets, attempts, deadlines,
+waits and retained errors are unchanged. The updated `derived_mark` clears the
+cursor when a new source ticket is captured. No existing rows are rewritten or
+removed. The migration installs the Assessment source captures and enrolls the
+served/open publication population at reconciliation priority. Initial enrollment
+keeps any existing target ticket, attempts, deadline, wait and error intact.
+It never fabricates a successful empty result. Missing publications remain an
+explicit coverage gap until the existing drain publishes them.
+
+Use the normal Actions migration-before-deploy sequence for this direct cutover.
+Downtime and failed predecessor requests are acceptable; no environment boundary,
+writer hold or timed waiting period is required. After the matching Worker is
+serving, re-enroll the open Assessment population through the existing target
+reconciliation with `existing: "keep"`. This recovers initial marks a predecessor
+drain may have consumed without resetting surviving tickets, attempts or waits.
+Verify source-data and unfinished-work preservation and initial coverage
+convergence through committed publications, including explicit empty results,
+rather than merely observing an empty queue.
+
+The same transaction builds `AssessmentState_active_suppression_idx` over
+`(entity, recordId)` for active rows with non-null suppression. It may wait for
+writers and blocks State writes until commit. Keep serialized migration ownership,
+and verify the index is ready and valid after release. The seeded predecessor
+journey checks retained Assessments, Feedback, State, Jobs and WorkItems, long
+membership tokens, and cursor reset through the actual mark function.
+
 ## Assessment endpoint indexes (0065)
 
 `0065_assessment_connection_reference_indexes` adds two partial expression

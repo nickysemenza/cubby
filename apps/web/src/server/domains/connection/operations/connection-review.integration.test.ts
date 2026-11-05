@@ -16,6 +16,7 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -247,6 +248,7 @@ describe("connection application through generic Feedback", () => {
         unknowns: [],
       },
     });
+    await drainStoredDerived(ctx.db);
     const work = () =>
       readRecordWorkQueue(ctx.db, {
         id: item.id,

@@ -27,8 +27,10 @@ import { z } from "zod";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { MobileCardView } from "~/entity/table/mobile-card-view";
+import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -133,7 +135,7 @@ function validatedStoredOperations(stored: SuggestionReviewRow[]) {
     list: vi.fn(
       async (input: Parameters<StoredSuggestionOperations["list"]>[0]) => {
         fieldListInput(input);
-        return suggestionReviewRowSchema.array().parse(stored);
+        return { items: suggestionReviewRowSchema.array().parse(stored) };
       },
     ),
     review: vi.fn(
@@ -191,7 +193,7 @@ function setup(
     : record;
   const harness = createBrowserTestHarness();
   const operations: StoredSuggestionOperations = {
-    list: vi.fn(async () => stored),
+    list: vi.fn(async () => ({ items: stored })),
     settled: async ({ questions }) => ({
       results: questions.map(() => ({
         ok: true as const,
@@ -264,6 +266,12 @@ describe("stored suggestions in generic list cells", () => {
     }).queryKey;
     harness.queryClient.setQueryData(key, {
       records: [{ id: record.id, pending: 1 }],
+      coverage: {
+        missing: false,
+        stale: false,
+        unresolved: false,
+        failed: false,
+      },
     });
     const commits = vi.fn();
     const view = render(
@@ -290,12 +298,84 @@ describe("stored suggestions in generic list cells", () => {
       await act(async () => {
         harness.queryClient.setQueryData(key, {
           records: [{ id: record.id, pending: 2 }],
+          coverage: {
+            missing: false,
+            stale: false,
+            unresolved: false,
+            failed: false,
+          },
         });
       });
       await screen.findAllByRole("button", { name: "2 pending suggestions" });
       expect(commits).toHaveBeenCalledTimes(before);
       expect(identityReads).toHaveBeenCalledTimes(readsBefore);
       expect(screen.getByText("12 expenses")).toBeVisible();
+      await act(async () => {
+        harness.queryClient.setQueryData(key, {
+          records: [{ id: record.id, pending: 2 }],
+          coverage: {
+            missing: false,
+            stale: true,
+            unresolved: true,
+            failed: false,
+          },
+        });
+      });
+      await screen.findAllByRole("button", {
+        name: "2 known pending suggestions. Suggestions may be out of date.",
+      });
+      expect(screen.getAllByText("2+")).toHaveLength(2);
+      await act(async () => {
+        harness.queryClient.setQueryData(key, {
+          records: [{ id: record.id, pending: 0 }],
+          coverage: {
+            missing: true,
+            stale: false,
+            unresolved: true,
+            failed: false,
+          },
+        });
+      });
+      await screen.findAllByRole("button", {
+        name: "0 known pending suggestions. Some suggestions have not been assessed yet.",
+      });
+      expect(screen.getAllByText("?")).toHaveLength(2);
+      const retained = {
+        records: [{ id: record.id, pending: 2 }],
+        coverage: {
+          missing: false,
+          stale: false,
+          unresolved: false,
+          failed: true,
+        },
+      };
+      await act(async () => {
+        harness.queryClient.setQueryData(key, retained);
+      });
+      await screen.findAllByRole("button", {
+        name: "2 known pending suggestions. Suggestion refresh failed. Showing known results.",
+      });
+      const query = harness.queryClient.getQueryCache().find({ queryKey: key });
+      if (!query) throw new Error("Count query missing");
+      const retry = vi.spyOn(query, "fetch").mockResolvedValue(retained);
+      await act(async () => {
+        query.setState({
+          status: "error",
+          error: new Error("Synthetic count read failure"),
+        });
+      });
+      await screen.findAllByRole("button", {
+        name: "2 known pending suggestions. Couldn't refresh suggestion counts. Showing known results.",
+      });
+      expect(screen.getAllByText("Synthetic count read failure")).toHaveLength(
+        2,
+      );
+      const retryButton = screen
+        .getAllByRole("button", { name: "Retry" })
+        .at(0);
+      if (!retryButton) throw new Error("Count retry button missing");
+      fireEvent.click(retryButton);
+      expect(retry).toHaveBeenCalledOnce();
     } finally {
       view.unmount();
       harness.dispose();
@@ -303,7 +383,7 @@ describe("stored suggestions in generic list cells", () => {
   });
   it("does not update an unsuggestible field when another field's stored suggestion arrives", async () => {
     const harness = createBrowserTestHarness();
-    const pending = Promise.withResolvers<SuggestionReviewRow[]>();
+    const pending = Promise.withResolvers<{ items: SuggestionReviewRow[] }>();
     const operations: StoredSuggestionOperations = {
       ...validatedStoredOperations([]),
       list: vi.fn(() => pending.promise),
@@ -340,7 +420,7 @@ describe("stored suggestions in generic list cells", () => {
     try {
       await waitFor(() => expect(operations.list).toHaveBeenCalled());
       const before = commits.mock.calls.length;
-      pending.resolve([suggestion()]);
+      pending.resolve({ items: [suggestion()] });
       await screen.findByText("Suggested category");
       expect(commits).toHaveBeenCalledTimes(before);
       expect(screen.getByText("12 expenses")).toBeVisible();
@@ -638,20 +718,25 @@ describe("stored suggestions in generic list cells", () => {
 
   it("loads a shortcode-only list row, renders its stored ghost, and bulk accepts it", async () => {
     const publicId = record.id;
+    const missing = { ...record, id: testShortcode("product", "unpublished") };
     const harness = createBrowserTestHarness();
     const operations = validatedStoredOperations([
       shortcodeSuggestion(publicId),
     ]);
+    const evaluate = vi.fn(async () => ({ suggestions: {}, outcomes: {} }));
+    const evaluateBatch = vi.fn(async () => ({ results: [] }));
+    const settled = vi.fn(operations.settled);
+    operations.settled = settled;
     render(
       <RecordSuggestionsProvider
+        publishedOnly
         entity="product"
-        records={[record]}
+        records={[record, missing]}
         fieldKeys={["categoryId"]}
         operations={{
-          suggestFields: ai.suggestFields.withTransport(async () => ({
-            suggestions: {},
-            outcomes: {},
-          })),
+          suggestFields: ai.suggestFields.withTransport(evaluate),
+          suggestFieldsBatch:
+            ai.suggestFieldsBatch.withTransport(evaluateBatch),
         }}
         storedSuggestionOperations={operations}
       >
@@ -665,6 +750,13 @@ describe("stored suggestions in generic list cells", () => {
         >
           <span>Current category</span>
         </RecordFieldSuggestion>
+        <RecordFieldSuggestion
+          record={missing}
+          field="categoryId"
+          surface="cell"
+        >
+          <span>Unpublished category</span>
+        </RecordFieldSuggestion>
         <RecordSuggestionsBulkAction records={[record]} />
       </RecordSuggestionsProvider>,
       { wrapper: harness.wrapper },
@@ -674,11 +766,28 @@ describe("stored suggestions in generic list cells", () => {
     expect(operations.list).toHaveBeenCalledWith(
       {
         entity: "product",
-        recordIds: [publicId],
+        recordIds: [publicId, missing.id],
         fields: expect.any(Array),
       },
       { consistency: undefined, signal: expect.any(AbortSignal) },
     );
+    operations.list.mockRejectedValueOnce(
+      new Error("Synthetic publication read failure"),
+    );
+    await act(async () =>
+      invalidateOperationTags(
+        harness.queryClient,
+        exactRippleTags([["product"]]),
+      ),
+    );
+    expect(
+      await screen.findByText("Synthetic publication read failure"),
+    ).toBeVisible();
+    expect(screen.getByText("Food")).toBeVisible();
+    expect(screen.getByText("Unpublished category")).toBeVisible();
+    expect(evaluate).not.toHaveBeenCalled();
+    expect(evaluateBatch).not.toHaveBeenCalled();
+    expect(settled).not.toHaveBeenCalled();
     fireEvent.click(
       await screen.findByRole("button", { name: "Accept suggestions (1)" }),
     );
@@ -694,6 +803,8 @@ describe("stored suggestions in generic list cells", () => {
         ],
       }),
     );
+    expect(evaluate).not.toHaveBeenCalled();
+    expect(evaluateBatch).not.toHaveBeenCalled();
     harness.dispose();
   });
 
@@ -839,7 +950,7 @@ describe("stored suggestions in generic list cells", () => {
       recordIds,
       fields: ["categoryId"],
     });
-    expect(rows.map((row) => row.recordId)).toEqual(recordIds);
+    expect(rows.items.map((row) => row.recordId)).toEqual(recordIds);
   });
 
   // Seven suggestible Expense fields on a 250-row page exceed one read's
@@ -859,6 +970,12 @@ describe("stored suggestions in generic list cells", () => {
       return {
         items: all.slice(offset, end),
         next: end < all.length ? String(end) : null,
+        coverage: {
+          missing: offset === 0,
+          stale: false,
+          unresolved: false,
+          failed: offset > 0,
+        },
       };
     });
     const rows = await everyPendingSuggestion(read)({
@@ -866,7 +983,13 @@ describe("stored suggestions in generic list cells", () => {
       recordIds,
       fields: [],
     });
-    expect(rows).toHaveLength(1_750);
+    expect(rows.items).toHaveLength(1_750);
+    expect(rows.coverage).toEqual({
+      missing: true,
+      stale: false,
+      unresolved: false,
+      failed: true,
+    });
     expect(
       read.mock.calls.every(
         ([input]) => input.limit === SUGGESTION_LIST_PAGE_MAX,

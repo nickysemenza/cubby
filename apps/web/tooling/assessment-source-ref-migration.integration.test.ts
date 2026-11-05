@@ -48,7 +48,7 @@ it("indexes long retained source references without changing evidence or unfinis
       ).rows,
       work: (
         await client.query(
-          `SELECT to_jsonb(w) - 'waitCause' - 'waitStartedAt' AS value FROM "WorkItem" w ORDER BY target,ref`,
+          `SELECT to_jsonb(w) - 'waitCause' - 'waitStartedAt' - 'fanoutAfter' AS value FROM "WorkItem" w ORDER BY target,ref`,
         )
       ).rows,
     });
@@ -123,7 +123,7 @@ it("indexes long retained source references without changing evidence or unfinis
     const durableWork = async () => ({
       work: (
         await client.query(
-          `SELECT to_jsonb(w) value FROM "WorkItem" w ORDER BY target,ref`,
+          `SELECT to_jsonb(w) - 'fanoutAfter' value FROM "WorkItem" w ORDER BY target,ref`,
         )
       ).rows,
       jobs: (
@@ -183,5 +183,103 @@ it("indexes long retained source references without changing evidence or unfinis
       `UPDATE "AssessmentState" SET "suggestedValue"=$2::jsonb WHERE id=$1`,
       [id, JSON.stringify(`${longText} after index`)],
     );
+    const {
+      rows: [unseeded],
+    } = await client.query<{ id: string }>(
+      `SELECT id FROM "Assessment" WHERE "publicationKey"='synthetic-long-source-after'`,
+    );
+    if (!unseeded) throw new Error("Synthetic initial coverage row missing");
+    await client.query(
+      `INSERT INTO "AssessmentState" (id,entity,"recordId") VALUES ($1,'product',$1)`,
+      [unseeded.id],
+    );
+    await client.query(
+      `INSERT INTO "WorkItem" (target,ref,attempts,"lastError","readyAt","waitCause","waitStartedAt")
+       VALUES ('assessment.reviewFacts',$1,2,'Synthetic retained publication failure',now()+interval '1 hour','search_coverage',now())`,
+      [id],
+    );
+    const beforePublications = await retained();
+    const beforePublicationWork = await durableWork();
+    const beforePublicationStates = await states();
+    await migrateDatabase(db, { through: "0072_assessment_read_publications" });
+    const afterPublications = await retained();
+    expect(afterPublications.assessments).toEqual(
+      beforePublications.assessments,
+    );
+    expect(afterPublications.feedback).toEqual(beforePublications.feedback);
+    expect(afterPublications.work).toEqual(
+      expect.arrayContaining(beforePublications.work),
+    );
+    expect(afterPublications.work).toHaveLength(
+      beforePublications.work.length + 1,
+    );
+    const afterPublicationWork = await durableWork();
+    expect(afterPublicationWork.jobs).toEqual(beforePublicationWork.jobs);
+    expect(afterPublicationWork.work).toEqual(
+      expect.arrayContaining(beforePublicationWork.work),
+    );
+    expect(afterPublicationWork.work).toHaveLength(
+      beforePublicationWork.work.length + 1,
+    );
+    expect(await states()).toEqual(beforePublicationStates);
+    expect(
+      (
+        await client.query(
+          `SELECT ref,priority,attempts,"lastError","waitCause" FROM "WorkItem"
+       WHERE target='assessment.reviewFacts' AND ref=$1`,
+          [unseeded.id],
+        )
+      ).rows,
+    ).toEqual([
+      {
+        ref: unseeded.id,
+        priority: 2,
+        attempts: 0,
+        lastError: null,
+        waitCause: null,
+      },
+    ]);
+    expect(
+      (
+        await client.query(
+          `SELECT count(*)::int AS count FROM "WorkItem" WHERE "fanoutAfter" IS NOT NULL`,
+        )
+      ).rows,
+    ).toEqual([{ count: 0 }]);
+    expect(
+      (
+        await client.query(
+          `SELECT i.indisready,i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relname='AssessmentState_active_suppression_idx'`,
+        )
+      ).rows,
+    ).toEqual([{ indisready: true, indisvalid: true }]);
+    await client.query(
+      `INSERT INTO "AssessmentReadMembership" ("assessmentId",revision,entity,kind,value,"stateFamily",retained,ordinal) VALUES ($1,$1,'product','scope',$2,'field',false,0)`,
+      [id, longText],
+    );
+    expect(
+      (
+        await client.query(
+          `SELECT value=$2 AS preserved FROM "AssessmentReadMembership" WHERE kind='scope' AND md5(value)=md5($2::text) AND value=$2 AND "assessmentId"=$1`,
+          [id, longText],
+        )
+      ).rows,
+    ).toEqual([{ preserved: true }]);
+    await client.query(
+      `UPDATE "WorkItem" SET "fanoutAfter"=$1 WHERE target='synthetic.retained' AND ref=$1`,
+      [id],
+    );
+    await client.query(
+      `SELECT derived_mark('synthetic.retained', ARRAY[$1::uuid], 'Synthetic changed source')`,
+      [id],
+    );
+    expect(
+      (
+        await client.query(
+          `SELECT "fanoutAfter", attempts, "lastError" FROM "WorkItem" WHERE target='synthetic.retained' AND ref=$1`,
+          [id],
+        )
+      ).rows,
+    ).toEqual([{ fanoutAfter: null, attempts: 0, lastError: null }]);
   });
 }, 90000);

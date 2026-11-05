@@ -25,8 +25,11 @@ describe("FinancialAccount evidence candidate boundaries", () => {
       "authorizedUsers",
       "fundingPeriods",
       "cardNumbers",
+      "emoji",
     ])
       expect(fieldSuggestSpecFor("financialAccount", field)).toBeUndefined();
+    for (const entity of ["job", "run", "imageJob"])
+      expect(fieldSuggestSpecFor(entity, "emoji")).toBeUndefined();
   });
 
   it("offers every network for model judgment even without literal network keywords", async () => {

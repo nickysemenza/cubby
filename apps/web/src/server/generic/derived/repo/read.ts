@@ -7,16 +7,20 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
  * primary-key lookup, so sorting, filtering and the footer read the same
  * figure the row shows; freshness is one EXISTS on the dirty marks.
  */
-import { fieldDecision, fieldProvenance } from "@cubby/schemas/field-envelope";
+import {
+  fieldDecision,
+  fieldProvenance,
+  fieldWorkAttribution,
+} from "@cubby/schemas/field-envelope";
 import { workWaitCause } from "@cubby/schemas/job";
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
 import {
+  entityStoredDerivedDeclarations,
+  type EntityStoredDerivedDeclaration,
   storedDerived,
-  storedDerivedDeclarations,
-  type StoredDerivedDeclaration,
 } from "~/server/db/derived-declarations";
 import { householdDaySql, uuidArrayParam } from "~/server/db/helpers/query";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
@@ -37,7 +41,7 @@ export type {
 const requireStored = (
   entity: Entity,
   key: string,
-): StoredDerivedDeclaration => {
+): EntityStoredDerivedDeclaration => {
   const declaration = storedDerived(entity, key);
   if (!declaration)
     throw new Error(`${entity}.model.derived.${key} is not stored`);
@@ -205,6 +209,7 @@ const valueRow = z.object({
   error: z.string().nullable(),
   retryAt: dateTime.nullable(),
   refreshReason: z.string().nullable(),
+  attribution: fieldWorkAttribution.nullable(),
 });
 
 /** Page readers start this with their ids beside hydration, never once per row. */
@@ -222,7 +227,7 @@ export function loadPageStoredMeta(
       ...(field.storedKey ? [field.storedKey] : []),
     ]),
   );
-  const keys = storedDerivedDeclarations()
+  const keys = entityStoredDerivedDeclarations()
     .filter(
       (declaration) =>
         declaration.entity === entity &&
@@ -272,6 +277,7 @@ export async function loadStoredDerived(
              ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date)) IS TRUE AS stale,
            CASE WHEN d.ref IS NOT NULL THEN d.reason WHEN k."fanoutPending" THEN 'Related refresh pending'
              WHEN k.clock = 'householdDay' AND ${householdDaySql(sql`v."computedAt"`)} < ${householdLocalDate(new Date())}::date THEN 'Daily refresh due' END AS "refreshReason",
+           CASE WHEN d.ref IS NULL AND k."fanoutPending" THEN ${fieldWorkAttribution.value} END AS attribution,
            d."lastError" AS error, d."readyAt" AS "retryAt",
            coalesce(d.waiting, false) AS waiting, d."waitCause",
            d."runningSince", d."leaseExpiresAt"
@@ -306,6 +312,7 @@ export async function loadStoredDerived(
       stale: row.stale,
       pending: row.pending,
       refreshReason: row.refreshReason,
+      ...(row.attribution ? { attribution: row.attribution } : {}),
       waiting: row.waiting,
       waitCause: row.waitCause,
       ...(row.runningSince && row.leaseExpiresAt

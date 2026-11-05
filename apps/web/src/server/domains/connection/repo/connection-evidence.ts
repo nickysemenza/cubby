@@ -3,8 +3,10 @@ import {
   connectionCandidate,
   connectionAssessmentEvidence,
   type ConnectionCandidate,
+  CONNECTION_TRANSFER_WINDOW_DAYS,
 } from "@cubby/schemas/entity-connections";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { financialTransferPairSuggestionsOut } from "@cubby/schemas/household-contribution";
 import {
   parseEntityId,
   parseShortcodeFor,
@@ -206,7 +208,16 @@ export async function connectionBasisIsCurrent(
   return Boolean(match);
 }
 
-/** A source roster can fan out to many proposals; bound the prepared bases themselves. */
+const expenseProjectSourceId = ({ relation, source }: ConnectionCandidate) =>
+  relation === "expense-project"
+    ? parseShortcodeFor("expense", source.entityId)
+    : null;
+
+/**
+ * A source roster can fan out to many proposals; bound the prepared bases
+ * themselves. `skip` is rechecked before every capture, so one visit can settle
+ * entries that follow it. A skipped entry is never captured or visited.
+ */
 export async function forEachConnectionBasis<
   T extends { candidate: ConnectionCandidate },
 >(
@@ -219,12 +230,12 @@ export async function forEachConnectionBasis<
   expenseProjects?: Awaited<
     ReturnType<typeof prepareExpenseProjectRecommendationContexts>
   >,
+  skip?: (entry: T) => boolean,
 ) {
-  const expenseIds = entries.flatMap(({ candidate }) =>
-    candidate.relation === "expense-project"
-      ? [parseShortcodeFor("expense", candidate.source.entityId)]
-      : [],
-  );
+  const expenseIds = entries.flatMap(({ candidate }) => {
+    const id = expenseProjectSourceId(candidate);
+    return id ? [id] : [];
+  });
   const preparedExpenseProjects =
     expenseProjects ??
     (expenseIds.length
@@ -248,9 +259,24 @@ export async function forEachConnectionBasis<
   const visitsLeft = new Map<string, number>();
   for (const id of expenseIds)
     visitsLeft.set(id, (visitsLeft.get(id) ?? 0) + 1);
+  // Every entry settles exactly once, visited or skipped, so a source's snapshot
+  // survives to its last real visit and no longer.
+  const settle = (id: ExpenseShortcode | null) => {
+    if (!id) return;
+    const left = visitsLeft.get(id)! - 1;
+    visitsLeft.set(id, left);
+    if (left === 0) expenseProjectEvidence.delete(id);
+  };
   const batchSize = 16;
-  for (let offset = 0; offset < entries.length; offset += batchSize) {
-    const batch = entries.slice(offset, offset + batchSize);
+  let next = 0;
+  while (next < entries.length) {
+    const batch: T[] = [];
+    while (next < entries.length && batch.length < batchSize) {
+      const entry = entries[next++]!;
+      if (skip?.(entry)) settle(expenseProjectSourceId(entry.candidate));
+      else batch.push(entry);
+    }
+    if (!batch.length) break;
     const prepared = await readConnectionBases(
       db,
       batch.map((entry) => entry.candidate),
@@ -259,10 +285,11 @@ export async function forEachConnectionBasis<
     );
     prepared.expenseProjectEvidence = expenseProjectEvidence;
     for (const entry of batch) {
-      const id =
-        entry.candidate.relation === "expense-project"
-          ? parseShortcodeFor("expense", entry.candidate.source.entityId)
-          : null;
+      const id = expenseProjectSourceId(entry.candidate);
+      if (skip?.(entry)) {
+        settle(id);
+        continue;
+      }
       if (id && !expenseProjectEvidence.has(id)) {
         const context = preparedExpenseProjects?.([id], sharedHistoryRow).get(
           id,
@@ -292,10 +319,7 @@ export async function forEachConnectionBasis<
         prepared,
       );
       await visit(entry, basis);
-      if (!id) continue;
-      const left = visitsLeft.get(id)! - 1;
-      visitsLeft.set(id, left);
-      if (left === 0) expenseProjectEvidence.delete(id);
+      settle(id);
     }
   }
 }
@@ -566,6 +590,139 @@ export async function captureConnectionBasis(
   return (await captureConnectionEvidence(db, raw, lock, prepared)).basis;
 }
 
+const settlementRecordBasis = z.object({
+  source: z.object({ accountId: z.string().nullable().optional() }),
+  target: z.object({
+    vendorId: z.string().nullable().optional(),
+    vendorAccountId: z.string().nullable().optional(),
+  }),
+  dependencies: z.object({
+    candidates: z.array(z.object({ transactionId: z.string() })),
+    allocations: z.array(
+      z.object({
+        transactionId: z.string(),
+        purchaseId: z.string().nullable(),
+      }),
+    ),
+  }),
+});
+const stockRecordBasis = z.object({
+  source: z.object({ productId: z.string().nullable().optional() }),
+  dependencies: z.array(
+    z.object({
+      entityId: z.string(),
+      location: z.object({ entityId: z.string() }),
+    }),
+  ),
+});
+const purchaseRecordBasis = z.object({
+  dependencies: z.object({ expenses: z.array(z.object({ id: z.string() })) }),
+});
+const recordedTransferRecordBasis = z.object({
+  source: z.object({ accountId: z.string().nullable().optional() }),
+  dependencies: financialTransferPairSuggestionsOut,
+});
+const expenseProjectRecordBasis = z.object({
+  dependencies: z.object({
+    source: z.object({
+      purchaseId: z.string().nullable(),
+      productId: z.string().nullable(),
+    }),
+    history: z.array(
+      z.object({
+        id: z.string(),
+        projectId: z.string(),
+        productId: z.string().nullable(),
+      }),
+    ),
+  }),
+});
+
+/** Record identities from the current basis, including inputs of stale proposals. */
+export function connectionBasisRecordRefs(
+  candidate: ConnectionCandidate,
+  basis: ConnectionJson,
+): { entity: string; id: string }[] {
+  const refs = [candidate.source, candidate.target].map((record) => ({
+    entity: record.entityKind,
+    id: record.entityId,
+  }));
+  const add = (
+    entity: EntityRef["entityKind"],
+    id: string | null | undefined,
+  ) => {
+    if (id) refs.push({ entity, id });
+  };
+  if (candidate.relation === "expense-project") {
+    const parsed = expenseProjectRecordBasis.safeParse(basis);
+    if (parsed.success) {
+      add("purchase", parsed.data.dependencies.source.purchaseId);
+      add("product", parsed.data.dependencies.source.productId);
+      // Observe current history even when the proposal is stale: removing a
+      // newly included row can restore the retained proposal's fingerprint.
+      for (const row of parsed.data.dependencies.history) {
+        add("expense", row.id);
+        add("project", row.projectId);
+        add("product", row.productId);
+      }
+    }
+  }
+  if (
+    candidate.relation === "transaction-purchase" ||
+    candidate.relation === "transaction-refund"
+  ) {
+    const parsed = settlementRecordBasis.safeParse(basis);
+    if (parsed.success) {
+      add("financialAccount", parsed.data.source.accountId);
+      add("vendor", parsed.data.target.vendorId);
+      add("vendorAccount", parsed.data.target.vendorAccountId);
+      for (const row of parsed.data.dependencies.candidates)
+        add("financialTransaction", row.transactionId);
+      for (const row of parsed.data.dependencies.allocations) {
+        add("financialTransaction", row.transactionId);
+        add("purchase", row.purchaseId);
+      }
+    }
+  }
+  if (candidate.relation === "inventory-location") {
+    const parsed = stockRecordBasis.safeParse(basis);
+    if (parsed.success) {
+      add("product", parsed.data.source.productId);
+      for (const row of parsed.data.dependencies) {
+        add("inventory", row.entityId);
+        add("location", row.location.entityId);
+      }
+    }
+  }
+  if (candidate.relation === "product-purchase") {
+    const parsed = purchaseRecordBasis.safeParse(basis);
+    if (parsed.success)
+      for (const row of parsed.data.dependencies.expenses)
+        add("expense", row.id);
+  }
+  if (candidate.relation === "transaction-transfer") {
+    const parsed = recordedTransferRecordBasis.safeParse(basis);
+    if (parsed.success) {
+      add("financialAccount", parsed.data.source.accountId);
+      for (const row of parsed.data.dependencies.suggestions) {
+        add("financialTransaction", row.transactionId);
+        for (const peer of row.candidates) {
+          add("financialTransaction", peer.transactionId);
+          add("financialAccount", peer.fromAccountId);
+          add("financialAccount", peer.toAccountId);
+          add("ledgerParty", peer.from?.id);
+          add("ledgerParty", peer.to?.id);
+        }
+      }
+    }
+  }
+  return [
+    ...new Map(
+      refs.map((ref) => [JSON.stringify([ref.entity, ref.id]), ref]),
+    ).values(),
+  ];
+}
+
 /**
  * The basis plus the source record id it read (null for Email evidence,
  * whose source is not a payload row), so a locked publication need not
@@ -678,7 +835,7 @@ export async function captureConnectionEvidence(
               candidate.source.entityId,
             ),
           ],
-          maxDateDistanceDays: 5,
+          maxDateDistanceDays: CONNECTION_TRANSFER_WINDOW_DAYS,
           maxCandidatesPerTransaction: 3,
         }),
       );

@@ -1,9 +1,18 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
+import { assessmentFamily } from "@cubby/schemas/assessment";
+import {
+  assessmentReadScopedSourceKind,
+  type AssessmentReadDependency,
+} from "@cubby/schemas/assessment-read-publication";
 import { entitySchema } from "@cubby/schemas/entity";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import {
+  entityFieldModels,
+  suggestFieldKeys,
+} from "@cubby/schemas/entity-fields";
 import { fieldSuggestionContextKeys } from "@cubby/schemas/field-suggestion";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { sql } from "drizzle-orm";
+import { getTableColumns, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -17,6 +26,7 @@ import {
   repositoryBeforeCommit,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
+import { assessmentState } from "~/server/db/retained-tables";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import {
   fieldWriteRevision,
@@ -25,7 +35,11 @@ import {
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 type FieldSubject = { entity: string; recordId: string; field: string };
+type SourceRef = Pick<FieldSubject, "entity" | "recordId">;
 const sourceRow = z.record(z.string(), z.json());
+const suggestionSourceKinds = new Set<string>(
+  suggestFieldKeys.map((key) => key.slice(0, key.indexOf("."))),
+);
 type SourceRow = z.infer<typeof sourceRow>;
 const sourceKey = (entity: string, id: string) =>
   JSON.stringify([entity, id.toLowerCase()]);
@@ -43,22 +57,19 @@ const sourceTable = (entity: string) => {
   return table;
 };
 
-function inputSpec(subject: FieldSubject) {
-  const kind = entitySchema.parse(subject.entity);
+function fieldInputPolicy(entity: string, field: string) {
+  const kind = entitySchema.parse(entity);
   const model = entityFieldModels[kind].fields.find(
-    (candidate) => candidate.key === subject.field,
+    (candidate) => candidate.key === field,
   );
-  if (!model)
-    throw new Error(
-      `Unknown assessment field: ${subject.entity}.${subject.field}`,
-    );
+  if (!model) throw new Error(`Unknown assessment field: ${entity}.${field}`);
   const policy = model.control?.suggest;
   const backings =
     policy && "backedBy" in policy ? (policy.backedBy ?? []) : [];
   const keys = [
     ...new Set(
       fieldSuggestionContextKeys(kind, [
-        subject.field,
+        field,
         ...(policy?.basis ?? []),
         ...backings.map((backing) =>
           "via" in backing ? backing.via : backing.column,
@@ -67,13 +78,21 @@ function inputSpec(subject: FieldSubject) {
     ),
   ].sort();
   return {
-    ...subject,
     kind,
-    table: sourceTable(subject.entity),
+    table: sourceTable(entity),
     backings,
     keys,
   };
 }
+
+function inputSpec(subject: FieldSubject) {
+  return { ...subject, ...fieldInputPolicy(subject.entity, subject.field) };
+}
+
+type InputSpec = ReturnType<typeof inputSpec>;
+
+const readsClassification = (spec: InputSpec) =>
+  spec.kind === "product" && spec.keys.includes("classificationEvidence");
 
 const referenceValue = (row: SourceRow | undefined): SourceRow | null => {
   if (!row) return null;
@@ -98,7 +117,7 @@ type PreparedInputs = {
 
 async function readSources(
   db: RepositoryQueryInput,
-  subjects: readonly Pick<FieldSubject, "entity" | "recordId">[],
+  subjects: readonly SourceRef[],
 ) {
   const groups = new Map<string, Set<string>>();
   for (const subject of subjects) {
@@ -117,27 +136,21 @@ async function readSources(
   return rows;
 }
 
-/** Request-local source preparation; no retained cache or relaxed freshness gate. */
-export async function fieldInputFingerprintsIfLive(
-  db: RepositoryQueryInput,
-  subjects: readonly FieldSubject[],
-): Promise<(string | null)[]> {
-  if (!subjects.length) return [];
-  const specs = subjects.map(inputSpec);
-  const sources = await readSources(db, subjects);
-  const liveSources = new Set(sources.keys());
-  const references: Pick<FieldSubject, "entity" | "recordId">[] = [];
-  const products = new Set<string>();
-  for (const spec of specs) {
-    const row = sources.get(sourceKey(spec.entity, spec.recordId));
-    if (!row) continue;
-    for (const backing of spec.backings) {
-      if (!("entity" in backing)) continue;
-      const id = row[backing.via];
-      if (typeof id === "string")
-        references.push({ entity: backing.entity, recordId: id });
-    }
-    for (const key of spec.keys) {
+/** The direct reference and backing rows one live source row reads, live or not. */
+function referenceInputs(spec: ReturnType<typeof fieldInputPolicy>) {
+  return [
+    ...spec.backings.flatMap((backing) =>
+      "entity" in backing
+        ? [
+            {
+              kind: "backing" as const,
+              entity: backing.entity,
+              column: backing.via,
+            },
+          ]
+        : [],
+    ),
+    ...spec.keys.flatMap((key) => {
       const reference = entityFieldModels[spec.kind].fields.find(
         (candidate) => candidate.key === key,
       )?.reference;
@@ -145,22 +158,178 @@ export async function fieldInputFingerprintsIfLive(
         !reference ||
         !Object.keys(SHORTCODE_TABLE).includes(reference.entity)
       )
-        continue;
-      const raw = row[key];
-      const ids = z
-        .array(z.uuid())
-        .parse(raw == null ? [] : Array.isArray(raw) ? raw : [raw]);
-      for (const id of ids)
-        references.push({ entity: reference.entity, recordId: id });
+        return [];
+      return [
+        { kind: "reference" as const, entity: reference.entity, column: key },
+      ];
+    }),
+  ];
+}
+
+/** The direct reference and backing rows one live source row reads, live or not. */
+function directReferences(spec: InputSpec, row: SourceRow) {
+  const references: SourceRef[] = [];
+  for (const input of referenceInputs(spec)) {
+    const raw = row[input.column];
+    if (input.kind === "backing") {
+      if (typeof raw === "string")
+        references.push({ entity: input.entity, recordId: raw });
+      continue;
     }
-    if (spec.kind === "product" && spec.keys.includes("classificationEvidence"))
-      products.add(spec.recordId.toLowerCase());
+    const ids = z
+      .array(z.uuid())
+      .parse(raw == null ? [] : Array.isArray(raw) ? raw : [raw]);
+    for (const id of ids)
+      references.push({ entity: input.entity, recordId: id });
   }
+  return references;
+}
+
+/**
+ * Current forward references cover an input edited before its first dependency
+ * publication commits. Retained reverse dependencies cover the old association.
+ * Source refs are a one-column UUID relation; this selector never fingerprints.
+ */
+export function fieldInputAssessmentIdsSql(sourceKind: string, refs: SQL): SQL {
+  const state = sql`${assessmentState} s`;
+  const pending = sql`s.family = ${assessmentFamily.enum.field} AND s.active AND s.status = ${suggestionStatus.enum.pending}`;
+  const primary = sql`SELECT s.id FROM ${state} WHERE ${pending}
+    AND s."recordId" IN (SELECT id FROM field_input_refs)`;
+  if (sourceKind === assessmentReadScopedSourceKind.enum.fieldWrite)
+    return sql`WITH field_input_refs AS MATERIALIZED (${refs}) ${primary}`;
+  if (
+    sourceKind === assessmentReadScopedSourceKind.enum.productClassification
+  ) {
+    const fields = entityFieldModels.product.fields
+      .filter((field) =>
+        fieldInputPolicy("product", field.key).keys.includes(
+          "classificationEvidence",
+        ),
+      )
+      .map((field) => field.key);
+    return sql`WITH field_input_refs AS MATERIALIZED (${refs}) ${primary}
+      AND s.entity = ${entitySchema.enum.product}
+      AND ${
+        fields.length
+          ? sql`s.field IN (${sql.join(
+              fields.map((field) => sql`${field}`),
+              sql`, `,
+            )})`
+          : sql`false`
+      }`;
+  }
+  const related = Object.entries(SHORTCODE_TABLE).flatMap(([entity, table]) => {
+    // New suggestions belong to declaration-owned producers. Do not turn Job
+    // or Run execution references into self-invalidating drain dependencies.
+    // Historical reads and retained dependency lookups stay unchanged.
+    if (!suggestionSourceKinds.has(entity)) return [];
+    const kind = entitySchema.parse(entity);
+    const columns = new Set(
+      Object.values(getTableColumns(table)).map((column) => column.name),
+    );
+    const matches = entityFieldModels[kind].fields.flatMap((field) => {
+      const inputs = referenceInputs(
+        fieldInputPolicy(entity, field.key),
+      ).filter(
+        (input) => input.entity === sourceKind && columns.has(input.column),
+      );
+      if (!inputs.length) return [];
+      const clauses = inputs.map((input) => {
+        const value = sql`to_jsonb(field_source.${sql.identifier(input.column)})`;
+        return input.kind === "backing"
+          ? sql`${value} #>> '{}' IN (SELECT id::text FROM field_input_refs)`
+          : sql`EXISTS (SELECT 1 FROM jsonb_array_elements_text(
+              CASE WHEN jsonb_typeof(${value}) = 'array' THEN ${value} ELSE jsonb_build_array(${value}) END
+            ) field_reference(value) WHERE field_reference.value IN (SELECT id::text FROM field_input_refs))`;
+      });
+      return [
+        sql`(s.field = ${field.key} AND (${sql.join(clauses, sql` OR `)}))`,
+      ];
+    });
+    return matches.length
+      ? [
+          sql`SELECT s.id FROM ${state}
+      JOIN ${table} field_source ON field_source.id = s."recordId" AND ${notDeleted("field_source")}
+      WHERE ${pending} AND s.entity = ${entity} AND (${sql.join(matches, sql` OR `)})`,
+        ]
+      : [];
+  });
+  return sql`WITH field_input_refs AS MATERIALIZED (${refs})
+    SELECT DISTINCT affected.id FROM (
+      ${primary} AND s.entity = ${sourceKind}
+      ${related.length ? sql`UNION ALL ${sql.join(related, sql` UNION ALL `)}` : sql``}
+    ) affected`;
+}
+
+/**
+ * This subject's read set, independent of its batch. Scoped markers come from
+ * the spec, so a deleted subject keeps the set it needs to revive on restoration.
+ * Sorted: reordering a stored reference array must not change the dependencies.
+ */
+function inputDependencies(
+  spec: InputSpec,
+  references: readonly SourceRef[],
+): AssessmentReadDependency[] {
+  const { fieldWrite, productClassification } =
+    assessmentReadScopedSourceKind.enum;
+  const sources: SourceRef[] = [
+    { entity: spec.kind, recordId: spec.recordId },
+    ...references,
+    { entity: fieldWrite, recordId: spec.recordId },
+    ...(readsClassification(spec)
+      ? [{ entity: productClassification, recordId: spec.recordId }]
+      : []),
+  ];
+  return [
+    ...new Map(
+      sources.map(({ entity, recordId }) => [
+        sourceKey(entity, recordId),
+        { sourceKind: entity, sourceId: recordId.toLowerCase() },
+      ]),
+    ),
+  ]
+    .sort(([left], [right]) => (left < right ? -1 : 1))
+    .map(([, dependency]) => dependency);
+}
+
+/** One subject's fingerprint and the read set a background publication retains. */
+export type FieldInputRead = {
+  fingerprint: string | null;
+  dependencies: AssessmentReadDependency[];
+};
+
+/**
+ * Request-local source preparation; no retained cache or relaxed freshness gate.
+ * The dependencies are the canonical read set, not proof that a capture covers it.
+ */
+export async function readFieldInputs(
+  db: RepositoryQueryInput,
+  subjects: readonly FieldSubject[],
+): Promise<FieldInputRead[]> {
+  if (!subjects.length) return [];
+  const specs = subjects.map(inputSpec);
+  const sources = await readSources(db, subjects);
+  const liveSources = new Set(sources.keys());
+  const inputs = specs.map((spec) => {
+    const row = sources.get(sourceKey(spec.entity, spec.recordId));
+    return { spec, references: row ? directReferences(spec, row) : [] };
+  });
+  const products = new Set(
+    specs
+      .filter(
+        (spec) =>
+          readsClassification(spec) &&
+          liveSources.has(sourceKey(spec.entity, spec.recordId)),
+      )
+      .map((spec) => spec.recordId.toLowerCase()),
+  );
   const related = await readSources(
     db,
-    references.filter(
-      (subject) => !sources.has(sourceKey(subject.entity, subject.recordId)),
-    ),
+    inputs
+      .flatMap(({ references }) => references)
+      .filter(
+        (subject) => !sources.has(sourceKey(subject.entity, subject.recordId)),
+      ),
   );
   for (const [key, row] of related) sources.set(key, row);
   const classifications = new Map<string, string>();
@@ -189,7 +358,20 @@ export async function fieldInputFingerprintsIfLive(
     ),
   };
   return Promise.all(
-    specs.map((spec) => fingerprintFromInputs(db, spec, {}, prepared)),
+    inputs.map(async ({ spec, references }) => ({
+      fingerprint: await fingerprintFromInputs(db, spec, {}, prepared),
+      dependencies: inputDependencies(spec, references),
+    })),
+  );
+}
+
+/** {@link readFieldInputs} for callers that only compare fingerprints. */
+export async function fieldInputFingerprintsIfLive(
+  db: RepositoryQueryInput,
+  subjects: readonly FieldSubject[],
+): Promise<(string | null)[]> {
+  return (await readFieldInputs(db, subjects)).map(
+    ({ fingerprint }) => fingerprint,
   );
 }
 
@@ -232,7 +414,7 @@ export async function fieldInputFingerprintIfLive(
 
 async function fingerprintFromInputs(
   db: RepositoryQueryInput,
-  spec: ReturnType<typeof inputSpec>,
+  spec: InputSpec,
   options: { lock?: boolean },
   prepared?: PreparedInputs,
 ) {
@@ -281,7 +463,7 @@ async function fingerprintFromInputs(
       .json()
       .parse(related?.value ?? null);
   }
-  if (kind === "product" && keys.includes("classificationEvidence"))
+  if (readsClassification(spec))
     basis.classificationEvidence = z
       .json()
       .parse(

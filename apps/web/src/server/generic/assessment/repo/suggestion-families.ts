@@ -3,6 +3,10 @@ import {
   assessmentFamily,
   type assessmentReviewInput,
 } from "@cubby/schemas/assessment";
+import type {
+  AssessmentReadKey,
+  AssessmentReadDependency,
+} from "@cubby/schemas/assessment-read-publication";
 import {
   type DataCheck,
   dataCheckKind,
@@ -28,7 +32,6 @@ import {
   statementSuggestionRow,
   transferPairSuggestionRow,
   type SuggestionCountsOut,
-  type SuggestionColumnValue,
   type SuggestionImpact,
   type SuggestionListFamily,
   type SuggestionListFilters,
@@ -44,6 +47,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { connectionBasisRecordRefs } from "~/server/domains/connection/repo/connection-evidence";
 import { readEntityConnectionsBatch } from "~/server/domains/connection/repo/entity-connections";
 import {
   currentTransferPairs,
@@ -53,7 +57,6 @@ import {
 import {
   readStatementSuggestions,
   statementSuggestionKeys,
-  statementSuggestionCountFacts,
   type StatementSuggestionScope,
   statementSuggestionStatusCounts,
 } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
@@ -62,6 +65,7 @@ import { readCorrectionOutcomes } from "~/server/generic/assessment/repo/correct
 import {
   reviewFamilyDeclarations,
   pendingRecommendationEligibility,
+  resolveAssessmentReadInputRefs,
 } from "~/server/generic/assessment/repo/review-families";
 import {
   fieldSuggestionKeys,
@@ -76,26 +80,13 @@ import {
 import { tagSuggestionKeys, tagSuggestionRows } from "./tag-suggestions";
 
 type ShortcodeEntity = SuggestionRecordRef["entity"];
-type Columns = Record<string, SuggestionColumnValue | SuggestionColumnValue[]>;
 
 /**
  * One Suggestion's list facts, read for every row in scope before any row is
  * hydrated: Strength, clean, Impact and its family's declared relation columns.
  */
-export type SuggestionKey = {
-  family: SuggestionListFamily;
-  assessmentId: string;
-  status: SuggestionListFilters["status"];
-  fingerprint: string | null;
-  clean: boolean;
-  strength: SuggestionStrength;
-  impact: SuggestionImpact[];
+export type SuggestionKey = Omit<AssessmentReadKey, "createdAt"> & {
   createdAt: Date;
-  columns: Columns;
-  /** Rule stamps matched at publication. */
-  matchedRules: string[];
-  /** `<ruleKey>@<revision>` when an Automatic rule applied it. */
-  automaticRule: string | null;
 };
 
 const stamps = z.array(z.string()).catch([]);
@@ -133,6 +124,12 @@ type RowOf<F extends SuggestionListFamily> = Extract<
   { family: F }
 >;
 
+/** Canonical input observations for background publication; absence is not a complete read set. */
+export type SuggestionReadObserver = (
+  id: string,
+  sources: readonly AssessmentReadDependency[],
+) => void;
+
 type SuggestionOutcomes = {
   applied: number;
   rejected: number;
@@ -150,16 +147,13 @@ export type SuggestionFamilyPresentation<F extends SuggestionListFamily> = {
   keys: (
     db: Database,
     query: SuggestionFamilyQuery,
+    observeInputs?: SuggestionReadObserver,
   ) => Promise<SuggestionKey[]>;
-  /** Optional count projection for scopes without column filters. */
-  pendingCounts?: (
-    db: Database,
-    query: SuggestionFamilyQuery,
-  ) => Promise<SuggestionPendingCounts>;
   /** Current rows by Assessment id; a key whose evidence went stale is absent. */
   rows: (
     db: Database,
     keys: readonly SuggestionKey[],
+    observeInputs?: SuggestionReadObserver,
   ) => Promise<Map<string, RowOf<F>>>;
   outcomes: (
     db: Database,
@@ -234,17 +228,21 @@ const shortcodeEntity = z.enum(shortcodeEntities);
 const fieldKind = z.enum(["correction", "addition"]);
 
 const field: SuggestionFamilyPresentation<"field"> = {
-  keys: async (db, query) => {
+  keys: async (db, query, observeInputs) => {
     const { filters, records } = query;
     // Pushed into SQL: the record roster, entity and Run. Column filters
     // apply to every family's keys in the generic list.
-    const rows = await fieldSuggestionKeys(db, {
-      status: filters.status,
-      entities: filters.recordEntity ? [filters.recordEntity] : undefined,
-      recordUuids: records?.map((record) => record.id),
-      runId: runCode(query),
-      assessmentIds: query.assessmentIds,
-    });
+    const rows = await fieldSuggestionKeys(
+      db,
+      {
+        status: filters.status,
+        entities: filters.recordEntity ? [filters.recordEntity] : undefined,
+        recordUuids: records?.map((record) => record.id),
+        runId: runCode(query),
+        assessmentIds: query.assessmentIds,
+      },
+      observeInputs && ((id, read) => observeInputs(id, read.dependencies)),
+    );
     return rows.map((row) => {
       const entity = shortcodeEntity.parse(row.entity);
       const kind = fieldKind.parse(row.kind);
@@ -281,10 +279,11 @@ const field: SuggestionFamilyPresentation<"field"> = {
       };
     });
   },
-  rows: async (db, keys) => {
+  rows: async (db, keys, observeInputs) => {
     const rows = await readFieldSuggestions(
       db,
       keys.map((key) => key.assessmentId),
+      observeInputs && ((id, read) => observeInputs(id, read.dependencies)),
     );
     const byId = new Map(keys.map((key) => [key.assessmentId, key]));
     const corrections = await readCorrectionOutcomes(
@@ -496,17 +495,6 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
         },
       }));
     },
-    pendingCounts: async (db, query) => {
-      const scope = statementScope(query);
-      const counts = emptyPendingCounts();
-      if (!scope) return counts;
-      for (const row of await statementSuggestionCountFacts(db, scope)) {
-        counts.pending += row.count;
-        if (row.clean) counts.clean += row.count;
-        counts[statementStrength(row)] += row.count;
-      }
-      return counts;
-    },
     rows: async (db, keys) => {
       const rows = await readStatementSuggestions(
         db,
@@ -647,7 +635,7 @@ const connectionActions = (proposal: ConnectionProposal): Action[] => {
 const READ_BATCH = 250;
 
 const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
-  keys: async (db, query) => {
+  keys: async (db, query, observeInputs) => {
     const { filters, records } = query;
     if (filters.status !== "pending") return [];
     if (records?.length === 0) return [];
@@ -712,9 +700,12 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         },
       ];
     });
-    return [...connectionKeys, ...(await tagSuggestionKeys(db, query))];
+    return [
+      ...connectionKeys,
+      ...(await tagSuggestionKeys(db, query, observeInputs)),
+    ];
   },
-  rows: async (db, keys) => {
+  rows: async (db, keys, observeInputs) => {
     if (!keys.length) return new Map();
     const byId = new Map(keys.map((key) => [key.assessmentId, key]));
     const { rows: sources } = await unwrapDb(db).execute<{
@@ -730,6 +721,10 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
       )})
     `);
     const found = await tagSuggestionRows(db, keys);
+    const currentInputs = new Map<
+      string,
+      ReturnType<typeof connectionBasisRecordRefs>
+    >();
     // Stored only: readEntityConnectionsBatch rechecks evidence, never discovers.
     for (let start = 0; start < sources.length; start += READ_BATCH) {
       const groups = await readEntityConnectionsBatch(
@@ -738,6 +733,10 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
           .array()
           .parse(sources.slice(start, start + READ_BATCH)),
         keys.map((key) => key.assessmentId),
+        observeInputs &&
+          ((id, candidate, basis) => {
+            currentInputs.set(id, connectionBasisRecordRefs(candidate, basis));
+          }),
       );
       for (const proposal of groups.flat()) {
         const key = byId.get(proposal.review.assessmentId);
@@ -769,6 +768,12 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         );
       }
     }
+    if (observeInputs)
+      for (const [id, sources] of await resolveAssessmentReadInputRefs(
+        db,
+        [...currentInputs].map(([id, refs]) => ({ id, refs })),
+      ))
+        observeInputs(id, sources);
     return found;
   },
   outcomes: async (db, filters) => {

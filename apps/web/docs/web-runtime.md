@@ -463,10 +463,11 @@ and seeded contexts remain local; the scope ends with the count operation.
 Proposal-count badges subscribe to shared counts only for eligible title cells
 and fieldless mobile titles. Other cells return their existing content before
 joining that context.
-For automatic suggestion recomputation, prioritize visible rows plus a bounded
-prefetch buffer, reuse current saved answers, and batch only missing or
-invalidated decisions after checking their individual caches. Virtualized
-rendering alone does not bound the records passed to a data provider. Verify
+Passive lists consume published suggestions and indicators, prioritizing visible
+rows plus a bounded prefetch buffer and retaining successful reads during refresh.
+A missing publication or failed read never calls `ai.suggestFields` or its batch
+operation. Explicit evaluation and editor flows keep their existing decision
+path. Virtualized rendering alone does not bound the records passed to a data provider. Verify
 server operation and SQL counts as well as HTTP request counts when changing
 list loading; increasing concurrency is not a substitute for shared work.
 
@@ -483,11 +484,25 @@ pricing, use and evidence summaries; standalone summary reads still resolve thei
 own subject.
 
 `RecordSuggestionsProvider` keeps stored review/bulk-action scope over loaded
-records while mounted `RecordSuggestionBoundary` rows admit automatic work
-from desktop and mobile virtualizers, including their overscan. Its AI
-enrichment stage uses `ai.suggestFieldsBatch`: shared policy, Run and roster
+records. Tables select its `publishedOnly` policy: mounted rows cannot enter
+settled-answer, saved-preview or live-evaluation fallbacks, and missing rows do
+not invent a local decision outcome. The stored read retains proposals and raw
+retryable diagnostics on failure. Other evaluation surfaces retain their AI
+stage using `ai.suggestFieldsBatch`: shared policy, Run and roster
 preparation, then individually cached decision waves and existing assessment
 publication. Ordinary `entity.listEnrichment` reads remain provider-free.
+Proposal badges count indexed published memberships for the entire requested
+batch, with current decision gates and coverage read in the same SQL operation.
+They never prepare canonical evidence while browsing. Missing, stale, unresolved
+or failed coverage preserves known counts and remains visible; a known zero is
+not a claim that unpublished suggestions do not exist. Viewport-plus-buffer
+admission and retained batch results still own fetching.
+Pending Suggestions lists and bulk selection use the same published admission
+and declared filter/order compiler. List totals, page payloads and coverage share
+one SQL snapshot; payloads are loaded after page selection. Missing or incomplete
+coverage stays visible even with no known rows. Failed reads retain useful rows
+and expose raw diagnostics with the existing read retry. Bulk execution still
+passes every selected item through its current-evidence action handler.
 Queued batches discard cancelled members after shared admission; started work
 retains normal publication and freshness checks.
 Field renderers subscribe to mutable page review state only for fields in

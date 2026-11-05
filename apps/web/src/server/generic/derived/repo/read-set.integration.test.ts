@@ -15,7 +15,10 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { USDAClient } from "~/server/clients/usda";
-import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
+import {
+  entityStoredDerivedDeclarations,
+  storedDerivedDeclarations,
+} from "~/server/db/derived-declarations";
 import { getDb } from "~/server/db/helpers";
 import {
   entityAttachment,
@@ -32,6 +35,7 @@ import {
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
+import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import {
   type DerivedAdapter,
   derivedSink,
@@ -57,6 +61,16 @@ const UNDECLARED_READS = new Set(["Entity", "DerivedValue"]);
 
 /** Full read models also load presentation fields these sinks never publish. */
 const INCIDENTAL_READS = {
+  // The sink's retained revisions, continuation and execution observations are
+  // publication bookkeeping; capturing their writes would refresh itself.
+  "assessment.reviewFacts": new Set([
+    "WorkItem",
+    "Job",
+    "AssessmentReadStage",
+    "AssessmentReadPublication",
+    "AssessmentReadMembership",
+    "AssessmentReadDependency",
+  ]),
   // Input availability reads queue status and envelope execution observations.
   // The calculation discards execution metadata; Job lifecycle is not an input.
   "project.workDiagnosticFacts": new Set(["WorkItem", "Job"]),
@@ -195,6 +209,21 @@ describe("stored derived read sets", () => {
       .from(product)
       .limit(1);
     if (!subject) throw new Error("Synthetic Product was not created");
+    await publishFieldAssessment(
+      ctx.db,
+      {
+        entity: "product",
+        recordId: subject.id,
+        field: "model",
+        currentValue: null,
+        suggestedValue: "Synthetic read-set model",
+        confidence: 0.9,
+        model: "typesafe/jev",
+        kind: "addition",
+        status: "pending",
+      },
+      true,
+    );
     // Attached descriptions must be traced for the owner as well as the Image.
     await getDb(ctx.db).insert(entityAttachment).values({
       entityKind: "product",
@@ -275,19 +304,19 @@ describe("stored derived read sets", () => {
         await (isDerivedSink(adapter)
           ? adapter.prepare(ctx.db, ids)
           : adapter(ctx.db, ids));
-        for (const input of declaration.inputs) {
-          if (!input.selection) continue;
-          const select = !isDerivedSink(adapter)
-            ? adapter.fanoutSelections?.[input.selection.key]
-            : undefined;
-          if (!select)
-            throw new Error(
-              `Unregistered fanout selection ${input.selection.key}`,
-            );
-          // Compile the real selector even when this source currently has no matches.
-          await getDb(ctx.db).execute(
-            select(sql`SELECT ${sql.identifier(input.tableColumn)} AS id
-            FROM ${sql.identifier(input.table)} LIMIT 25`),
+        // A selection's refs are an opaque one-column SQL relation. Inspect
+        // each pure selector once; capture tables/paths are already declared,
+        // and the drain/rebuild journey below exercises real source refs.
+        const selectionKeys = new Set(
+          declaration.inputs.flatMap((input) =>
+            input.selection ? [input.selection.key] : [],
+          ),
+        );
+        for (const key of selectionKeys) {
+          const select = adapter.fanoutSelections?.[key];
+          if (!select) throw new Error(`Unregistered fanout selection ${key}`);
+          new PgDialect().sqlToQuery(
+            select(sql`SELECT NULL::uuid AS id WHERE false`),
           );
         }
       } catch (caught) {
@@ -402,7 +431,7 @@ describe("stored derived read sets", () => {
         .map((row) => row.entityKind),
     );
     expect(
-      storedDerivedDeclarations()
+      entityStoredDerivedDeclarations()
         .filter((declaration) => declaration.compute.startsWith("search."))
         .map((declaration) => declaration.entity)
         .filter((entity) => !searchKinds.has(entity)),
@@ -410,7 +439,7 @@ describe("stored derived read sets", () => {
     expect(
       [
         ...new Set(
-          storedDerivedDeclarations()
+          entityStoredDerivedDeclarations()
             .filter((declaration) => declaration.publishes === "ownTable")
             .map((declaration) => declaration.key),
         ),

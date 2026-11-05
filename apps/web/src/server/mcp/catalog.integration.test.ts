@@ -916,6 +916,7 @@ describe("MCP catalog", () => {
       },
       true,
     );
+    await drainStoredDerived(ctx.db);
     const queue = await callMcpTool(
       createMcpServer(),
       "suggestions_read",

@@ -37,6 +37,7 @@ import {
   prepareSearchDocuments,
   selectUnembeddedSearchDocumentRefs,
 } from "~/server/generic/search/repo/search-document";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductFixture as createProduct,
   makeExpenseInput,
@@ -239,6 +240,7 @@ describe("semantic search background tasks", () => {
       evidence: "Synthetic retained exact identity",
       sourceUrls: [],
     });
+    await drainStoredDerived(ctx.db);
     const [recommendation] = (
       await listSuggestionPage(ctx.db, {
         family: "product_pair",
@@ -266,6 +268,7 @@ describe("semantic search background tasks", () => {
       evidence: "Synthetic retained exact identity",
       sourceUrls: [],
     });
+    await drainStoredDerived(ctx.db);
     expect(
       (
         await listSuggestionPage(ctx.db, {

@@ -1,3 +1,4 @@
+import type { AssessmentReadDependency } from "@cubby/schemas/assessment-read-publication";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { SHORTCODE_CHARS } from "@cubby/shared";
@@ -67,9 +68,11 @@ import {
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { mergeReviewedProductPair } from "~/server/generic/assessment/repo/assessment-product";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { readAssessmentReadMemberships } from "~/server/generic/assessment/repo/review-families";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { findDuplicateProductIdentities } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 const identityPort: DecisionPort = async () => ({
@@ -481,11 +484,28 @@ describe("stored Product identity pairs", () => {
     );
     const before = await getProductMatchQueue(ctx.db, {});
     expect(before.items).toHaveLength(1);
+    const readInputs = async () => {
+      const inputs = new Map<string, readonly AssessmentReadDependency[]>();
+      await readAssessmentReadMemberships(
+        ctx.db,
+        [before.items[0]!.assessmentId],
+        (id, sources) => inputs.set(id, sources),
+      );
+      return inputs.get(before.items[0]!.assessmentId);
+    };
+    const dependencies = await readInputs();
+    expect(dependencies).toHaveLength(2);
+    expect(dependencies).toEqual(
+      expect.arrayContaining(
+        ids.map((sourceId) => ({ sourceKind: "product", sourceId })),
+      ),
+    );
     await getDb(ctx.db)
       .update(product)
       .set({ model: "SYNTH-CHANGED" })
       .where(eq(product.id, ids[1]!));
     expect((await getProductMatchQueue(ctx.db, {})).items).toEqual([]);
+    expect(await readInputs()).toEqual(dependencies);
     expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(1);
   });
   // Claim loading must share issuer reads across accepted lines, while a later
@@ -1280,10 +1300,11 @@ describe("stored Product identity pairs", () => {
     const stored = await listProductMatchRows(ctx.db);
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({ actionable: false, conflict: false });
-    expect(
-      (await listSuggestionPage(ctx.db, {})).items.map(
-        (row) => row.assessmentId,
-      ),
-    ).not.toContain(stored[0]!.id);
+    await drainStoredDerived(ctx.db);
+    const page = await listSuggestionPage(ctx.db, {});
+    expect(page.meta.coverage).toMatchObject({ missing: false, failed: false });
+    expect(page.items.map((row) => row.assessmentId)).not.toContain(
+      stored[0]!.id,
+    );
   });
 });

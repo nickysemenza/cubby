@@ -11,6 +11,7 @@ import {
   fieldExplanationSource,
   fieldExplanationInput,
   type FieldExplanationOutput,
+  type FieldRefreshLocator,
 } from "@cubby/schemas/field-explanation";
 import { resolvedListSchema } from "@cubby/schemas/field-resolution";
 import { humanize, parseShortcode } from "@cubby/shared";
@@ -637,12 +638,16 @@ export function WhyValueContents({
   const contextualScope =
     scope ??
     (surface === "list" && candidates.length === 1 ? candidates[0] : undefined);
+  const locator = {
+    entityKind: entity,
+    entityId: id,
+    field,
+    surface,
+    ...(contextualScope ? { scope: contextualScope } : {}),
+  };
   const result = useQuery({
     ...fieldExplanation.explain.queryOptions({
-      entityKind: entity,
-      entityId: id,
-      field,
-      surface,
+      ...locator,
       ...(resolution
         ? {
             displayedResult: fieldExplanationInput.shape.displayedResult
@@ -651,7 +656,6 @@ export function WhyValueContents({
           }
         : {}),
       ...(diagnostic ? { diagnostic: true } : {}),
-      ...(contextualScope ? { scope: contextualScope } : {}),
     }),
     staleTime: 0,
     refetchOnMount: "always",
@@ -830,7 +834,7 @@ export function WhyValueContents({
             </p>
           ) : null}
           <ExplanationTechnicalDetails data={result.data} />
-          <ExplanationFooter data={result.data} />
+          <ExplanationFooter data={result.data} locator={locator} />
         </>
       )}
     </div>
@@ -899,10 +903,20 @@ function ExplanationTechnicalDetails({
   );
 }
 
-function ExplanationFooter({ data }: { data: FieldExplanationOutput }) {
+function ExplanationFooter({
+  data,
+  locator,
+}: {
+  data: FieldExplanationOutput;
+  locator: FieldRefreshLocator;
+}) {
   return (
     <footer className="sticky bottom-0 z-10 -mx-3 -mb-3 border-t border-border bg-popover px-3 py-2">
-      <DerivedFreshness envelope={data.envelope} context={data} />
+      <DerivedFreshness
+        envelope={data.envelope}
+        context={data}
+        locator={locator}
+      />
     </footer>
   );
 }

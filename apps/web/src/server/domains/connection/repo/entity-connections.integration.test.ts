@@ -41,6 +41,7 @@ import {
   readEntityConnectionsBatch,
   applyEntityConnection,
 } from "./entity-connections";
+import { readConnectionEdgeAssessmentIds } from "./existing-assessments";
 import { assertConnectionFieldFresh } from "./field-connections";
 
 // Failure modes: reverse reads miss a candidate; bare Wrong suppresses future
@@ -132,7 +133,7 @@ describe("stored connection evidence", () => {
       trade: "electrical",
       costType: "tools",
     });
-    await publishEntityConnection(ctx.db, {
+    const unrelatedEdge = await publishEntityConnection(ctx.db, {
       ...candidate,
       target: { entityKind: "expense", entityId: unrelated.output.id },
     });
@@ -149,6 +150,70 @@ describe("stored connection evidence", () => {
     expect(
       await readEntityConnectionsBatch(ctx.db, [candidate.source], []),
     ).toEqual([[]]);
+    if (!last) throw new Error("Synthetic publication is missing");
+    const [current] = await getDb(ctx.db)
+      .select()
+      .from(assessment)
+      .where(eq(assessment.id, last.review.assessmentId));
+    if (!current) throw new Error("Synthetic Assessment is missing");
+    const compete = (publicationKey: string, fingerprint: string) =>
+      publishAssessment(
+        ctx.db,
+        {
+          publicationKey,
+          family: "recommendation",
+          subject: current.subject,
+          judgment: assessmentJudgments.recommendation.parse(current.judgment),
+          producer: null,
+          fingerprint,
+          evidence: { version: 1, candidate: changed, basis: {} },
+        },
+        { data: { connection: true } },
+      );
+    const staleNewer = await compete(
+      "synthetic-newer-stale-edge",
+      "synthetic-stale-edge-fingerprint",
+    );
+    const peers = await readConnectionEdgeAssessmentIds(ctx.db, [candidate]);
+    expect(peers).toEqual(
+      expect.arrayContaining([last.review.assessmentId, staleNewer.id]),
+    );
+    expect(peers).not.toContain(unrelatedEdge.review.assessmentId);
+    // A newer stale competitor cannot hide the edge's older fresh survivor.
+    const observed = new Set<string>();
+    expect(
+      (
+        await readEntityConnectionsBatch(
+          ctx.db,
+          [candidate.source],
+          [staleNewer.id],
+          (id) => {
+            observed.add(id);
+          },
+        )
+      )[0]?.map((entry) => entry.review.assessmentId),
+    ).toEqual([last.review.assessmentId]);
+    expect(observed).toEqual(
+      new Set([staleNewer.id, last.review.assessmentId]),
+    );
+    const newest = await compete(
+      "synthetic-newest-fresh-edge",
+      last.fingerprint,
+    );
+    const full = await readEntityConnections(ctx.db, candidate.source);
+    // The full reader keeps an edge where its oldest fresh candidate sorted.
+    expect(full.map((entry) => entry.review.assessmentId)).toEqual([
+      newest.id,
+      unrelatedEdge.review.assessmentId,
+    ]);
+    // Selection admits the same winners without proving that older candidate.
+    const selected = await readEntityConnectionsBatch(
+      ctx.db,
+      [candidate.source],
+      full.map((entry) => entry.review.assessmentId),
+    );
+    expect(selected[0]).toHaveLength(full.length);
+    expect(selected[0]).toEqual(expect.arrayContaining(full));
   });
 
   // Stored basis snapshots can dwarf the candidate. Transferring them before
@@ -203,7 +268,7 @@ describe("stored connection evidence", () => {
   // Existing field suggestions share the connection list. Their currentness
   // guard must compare stored JSON in PostgreSQL, not download its full basis.
   it("filters existing field connections without downloading their stored snapshots", async () => {
-    const { candidate, charge, item } = await fixture();
+    const { candidate, charge, item, proposal } = await fixture();
     const basis = await captureConnectionBasis(ctx.db, candidate);
     const stored = await publishAssessment(
       ctx.db,
@@ -232,11 +297,25 @@ describe("stored connection evidence", () => {
     const measured = await measureDatabaseTransfer(
       ctx.databaseUrl,
       async (db) => {
+        const peerIds = () => readConnectionEdgeAssessmentIds(db, [candidate]);
+        expect(new Set(await peerIds())).toEqual(
+          new Set([proposal.review.assessmentId, stored.id]),
+        );
         expect(
           (await readEntityConnections(db, candidate.source)).map(
             (row) => row.review.assessmentId,
           ),
         ).toContain(stored.id);
+        const selectedOnEdge = async () =>
+          (
+            await readEntityConnectionsBatch(
+              db,
+              [candidate.source],
+              [proposal.review.assessmentId],
+            )
+          )[0]?.map((row) => row.review.assessmentId);
+        // A current existing proposal replaces its edge's fresh recommendation.
+        expect(await selectedOnEdge()).toEqual([stored.id]);
         await withTransactionDatabase(db, (transactionDb) =>
           assertConnectionFieldFresh(transactionDb, stored.id),
         );
@@ -257,6 +336,13 @@ describe("stored connection evidence", () => {
             (row) => row.review.assessmentId,
           ),
         ).not.toContain(stored.id);
+        // Once its own guard fails, it stops shadowing and the recommendation wins.
+        expect(await selectedOnEdge()).toEqual([proposal.review.assessmentId]);
+        // Discovery retains the stale field peer so atomic publication can
+        // release its old winner even though current evidence rejects it.
+        expect(new Set(await peerIds())).toEqual(
+          new Set([proposal.review.assessmentId, stored.id]),
+        );
         await expect(
           withTransactionDatabase(db, (transactionDb) =>
             assertConnectionFieldFresh(transactionDb, stored.id),

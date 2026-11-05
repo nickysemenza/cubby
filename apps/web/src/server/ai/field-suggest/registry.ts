@@ -16,7 +16,7 @@ import {
   spendingCategoryOut,
 } from "@cubby/schemas/entities/spendingCategory";
 import {
-  entityFieldModels,
+  suggestFieldKeys,
   type GeneratedSuggestFieldKey,
 } from "@cubby/schemas/entity-fields";
 import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
@@ -617,7 +617,10 @@ export function fieldSuggestSpecFor(
   entity: string,
   field: string,
 ): FieldSuggestSpec | undefined {
-  if (field === "emoji" && Object.hasOwn(entityFieldModels, entity))
+  if (
+    field === "emoji" &&
+    suggestFieldKeys.some((key) => key === `${entity}.${field}`)
+  )
     return emojiDecision(entity);
   const key = `${entity}.${field}`;
   // SAFETY: `Object.hasOwn` just proved `key` names one of

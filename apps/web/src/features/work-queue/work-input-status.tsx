@@ -25,8 +25,11 @@ export function WorkInputStatus({ meta }: { meta: WorkInputMeta | undefined }) {
       <AttentionInputStatus count={meta?.incompleteProjectIds?.length ?? 0} />
       {meta?.incompleteSources?.map((source) => (
         <p key={source.source} className="text-sm text-muted-foreground">
-          {source.label} have not been published for{" "}
-          {countLabel(source.count, "record")}. Counts include known work only.
+          {source.message ??
+            (source.count === null
+              ? `${source.label} is incomplete; its extent is unknown.`
+              : `${source.label} have not been published for ${countLabel(source.count, "record")}.`)}{" "}
+          Counts include known work only.
         </p>
       ))}
       {!!sources?.length && (

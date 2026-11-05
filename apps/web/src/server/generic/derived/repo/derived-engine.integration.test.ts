@@ -6,7 +6,7 @@ import type {
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { productReadFacts } from "@cubby/schemas/product-read-fields";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { seedEntity, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -62,8 +62,10 @@ import {
   dropWork,
   lockWork,
   markWorkFrom,
+  observePendingWork,
   postponeWorkRefs,
   workItemStates,
+  unobservedWork,
 } from "~/server/generic/jobs/repo/work-items";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -493,7 +495,7 @@ describe("stored derived values", () => {
     }
   });
 
-  it("publishes a record-writing sink without waiting on a member's open save", async () => {
+  it("retains a record-writing sink across locked saves and staged publication", async () => {
     const dish = await seedEntity(ctx.db, "recipe", {
       name: "Synthetic locked dish",
     });
@@ -540,6 +542,202 @@ describe("stored derived values", () => {
     await memberSave;
     await drain();
     expect(await marks("recipe.totals")).toEqual([]);
+
+    await getDb(ctx.db).execute(
+      sql`SELECT derived_mark('recipe.totals', ARRAY[${recipeId}::uuid])`,
+    );
+    const [before] = await workItemStates(ctx.db, "recipe.totals", [recipeId]);
+    if (!before) throw new Error("Synthetic sink mark missing");
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target === "recipe.totals",
+      computes: {
+        ...derivedComputes,
+        "recipe.totals": derivedSink({
+          prepare: async () => null,
+          publish: async (_tx, ids, _prepared, publication) => {
+            expect(publication.tickets.get(recipeId)).toBe(before.ticket);
+            return { changed: [], retain: ids };
+          },
+        }),
+      },
+    });
+    const [retained] = await workItemStates(ctx.db, "recipe.totals", [
+      recipeId,
+    ]);
+    expect(retained).toMatchObject({
+      ticket: before.ticket,
+      attempts: before.attempts,
+      priority: before.priority,
+    });
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target === "recipe.totals",
+      computes: rowWriting,
+    });
+    expect(await marks("recipe.totals")).toEqual([]);
+
+    // One poisoned source settles alone; its sibling publishes. A failure the
+    // page never claimed is a defect in the sink, so nothing publishes.
+    const sibling = await seedEntity(ctx.db, "recipe", {
+      name: "Synthetic sibling dish",
+    });
+    const siblingId = await resolveLiveShortcode(ctx.db, sibling.id, "recipe");
+    if (!siblingId) throw new Error("Synthetic recipe missing");
+    await drain();
+    const markBoth = () =>
+      getDb(ctx.db).execute(
+        sql`SELECT derived_mark('recipe.totals', ARRAY[${recipeId}::uuid, ${siblingId}::uuid])`,
+      );
+    const failing = (failures: ReadonlyMap<string, unknown>) => {
+      const published: string[] = [];
+      return {
+        published,
+        computes: {
+          ...derivedComputes,
+          "recipe.totals": derivedSink({
+            prepare: async () => failures,
+            preparationFailures: (prepared) => prepared,
+            publish: async (_tx, ids) => {
+              published.push(...ids);
+              return [];
+            },
+          }),
+        },
+      };
+    };
+    await markBoth();
+    const poisoned = failing(
+      new Map([[recipeId, new Error("Synthetic malformed source")]]),
+    );
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target === "recipe.totals",
+      computes: poisoned.computes,
+    });
+    expect(poisoned.published).toEqual([siblingId]);
+    expect(await marks("recipe.totals")).toEqual([recipeId]);
+    expect(await failure("recipe.totals", recipeId)).toMatchObject({
+      attempts: 1,
+      lastError: expect.stringContaining("Synthetic malformed source"),
+    });
+    await markBoth();
+    const unclaimedRef = "00000000-0000-4000-8000-000000000001";
+    const defective = failing(
+      new Map([[unclaimedRef, new Error("Synthetic")]]),
+    );
+    await drainDerivedPage(ctx.db, {
+      only: (mark) => mark.target === "recipe.totals",
+      computes: defective.computes,
+    });
+    expect(defective.published).toEqual([]);
+    expect(await failure("recipe.totals", siblingId)).toMatchObject({
+      attempts: 1,
+      lastError: expect.stringContaining("unclaimed ref"),
+    });
+    // One grouped effect covers an unclaimed peer through the generic ticket
+    // owner. A re-mark during preparation must keep its newer generation owed.
+    const coverPeers = async (remark: boolean) => {
+      await markBoth();
+      const observed = await workItemStates(ctx.db, "recipe.totals", [
+        recipeId,
+        siblingId,
+      ]);
+      let peer: string | undefined;
+      await drainDerivedPage(ctx.db, {
+        limit: 1,
+        only: (mark) => mark.target === "recipe.totals",
+        computes: {
+          ...derivedComputes,
+          "recipe.totals": derivedSink({
+            prepare: async (_db, ids) => {
+              peer = observed.find((item) => !ids.includes(item.ref))?.ref;
+              return observed;
+            },
+            publish: async (tx, ids, peers) => {
+              await unwrapDb(tx)
+                .execute(sql`UPDATE "Recipe" SET "totalsComputedAt" = now()
+                WHERE id = ANY(${uuidArrayParam(peers.map((item) => item.ref))})`);
+              return { changed: ids, retain: [], covered: peers };
+            },
+          }),
+        },
+        during: async () => {
+          if (remark) {
+            if (!peer) throw new Error("Synthetic unclaimed peer missing");
+            await getDb(ctx.db).execute(
+              sql`SELECT derived_mark('recipe.totals', ARRAY[${peer}::uuid])`,
+            );
+          }
+        },
+      });
+      return { peer, observed };
+    };
+    await coverPeers(false);
+    expect(await marks("recipe.totals")).toEqual([]);
+    const newer = await coverPeers(true);
+    expect(await marks("recipe.totals")).toEqual([newer.peer]);
+    expect(
+      (await workItemStates(ctx.db, "recipe.totals", [recipeId, siblingId]))[0]
+        ?.ticket,
+    ).not.toBe(newer.observed.find((item) => item.ref === newer.peer)?.ticket);
+    const scopedPublication = async (
+      sourceRef: string,
+      beforeSnapshot = false,
+    ) => {
+      await drain();
+      await getDb(ctx.db).execute(
+        sql`SELECT derived_mark('recipe.totals', ARRAY[${recipeId}::uuid])`,
+      );
+      let published = false;
+      const relevant = (target: SQL, ref: SQL) =>
+        and(eq(target, "recipe.totals@4"), eq(ref, recipeId))!;
+      await drainDerivedPage(ctx.db, {
+        only: (mark) => mark.target === "recipe.totals",
+        computes: {
+          ...derivedComputes,
+          "recipe.totals": derivedSink({
+            prepare: async (db) => {
+              if (beforeSnapshot)
+                await getDb(db).execute(
+                  sql`SELECT derived_mark('recipe.totals@4', ARRAY[${sourceRef}::uuid])`,
+                );
+              return (
+                await observePendingWork(db, {
+                  drain: DERIVED_DRAIN.key,
+                  eligible: relevant,
+                })
+              ).map((item) => item.ticket);
+            },
+            publicationBlocked: (observed) =>
+              unobservedWork(relevant, observed),
+            publish: async () => {
+              published = true;
+              return [];
+            },
+          }),
+        },
+        // This exercises the generic source protocol, not Assessment dependency completeness.
+        during: async () => {
+          if (!beforeSnapshot)
+            await getDb(ctx.db).execute(
+              sql`SELECT derived_mark('recipe.totals@4', ARRAY[${sourceRef}::uuid])`,
+            );
+        },
+      });
+      return { published, owed: await marks("recipe.totals") };
+    };
+    expect(await scopedPublication(siblingId)).toEqual({
+      published: true,
+      owed: [],
+    });
+    expect(await scopedPublication(recipeId)).toEqual({
+      published: false,
+      owed: [recipeId],
+    });
+    // The component observed this edit after the generic page began. Its own
+    // later snapshot, not the page's earlier vector, fences this publication.
+    expect(await scopedPublication(recipeId, true)).toEqual({
+      published: true,
+      owed: [],
+    });
   });
 
   it("publishes available value marks and removals while a writer holds another mark", async () => {
@@ -745,6 +943,7 @@ describe("stored derived values", () => {
       refreshReason: null,
       pending: true,
     });
+    expect((await valuation(entry))?.attribution).toBeUndefined();
   });
 
   it("marks both endpoints when a row moves to another record", async () => {
@@ -931,6 +1130,7 @@ describe("stored derived values", () => {
     expect(await valuation(entry)).toMatchObject({
       pending: true,
       refreshReason: "Related refresh pending",
+      attribution: "related",
     });
     const held = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();

@@ -64,6 +64,15 @@ validate shortcode ownership through `entityGraphRootSchema`, including legacy
 Product and Location QR labels; the published pattern advertises canonical codes. Existing physical
 connection exports in the schema module keep their original meaning.
 
+Internal selected-review hydration retains every competitor on each selected
+edge, but checks freshness only until its winner is known. An existing proposal
+shadows that edge's recommendations; otherwise the newest fresh recommendation
+wins, including an older fresh survivor behind newer stale evidence. This path
+returns winners by identity for Suggestions hydration; it does not preserve the
+full reader's within-group insertion order. Suggestions ordering still comes
+from its declared keys, filters and pagination. Unbounded reads keep their
+original complete freshness traversal and ordering.
+
 `connectionSourceFingerprints(db, sources)` returns fingerprints in input order,
 including duplicate sources. It loads each source's connection-relevant row in
 one query per entity kind within that call and retains no cache across pages.

@@ -2967,9 +2967,19 @@ Activity's per-value trigger counts read those same observations. A missing
 description stays unknown; it never means no work or a zero result. Clock expiry
 can identify a daily refresh even before scheduling. Before fanout expansion,
 the conservative target-wide pending flag shows only a generic related refresh;
-it cannot attribute a source ticket's cause to an individual record. Reasons are diagnostic
+it cannot attribute a source ticket's cause to an individual record. Its pending
+work carries `attribution: "related"`: a read fact that this value has no ticket
+of its own, so clients branch on it and never on reason text. Reasons are diagnostic
 metadata and do not participate in calculation fingerprints or publication
 authority.
+
+A value's refresh status is a read of its explanation, not a second status
+store. `fieldRefreshLocator` names the owed slot by subject, field, surface and
+scope, so a re-mark or replacement stays the same link. It excludes tickets,
+leases, displayed results and diagnostics; only an explicit `diagnostic` input
+recomputes a value. Per-value progress is phase and observed start time. Drain
+processed and total counts stay in spans, and `derived.backlog` counts are
+aggregates that include fanout items.
 
 Stored-value page reads declare requested keys with a typed `VALUES` relation.
 Its actual cardinality lets PostgreSQL choose indexed publication and work
@@ -3000,6 +3010,89 @@ kernel binding with a lazy import. Each scored entity's evaluator lives in
 `server/generated/data-quality-entries.gen.ts`. The quality runtime is
 imported by domain repositories and reads quality synchronously, so it cannot
 depend on the repository registry, which imports every repository.
+
+A publication about non-entity records registers in `internalRecordSpecs` in
+`server/db/derived-declarations.ts`, not in the manifest. A spec names a human-readable
+`label` for the existing backlog owner and a stable
+`<owner>.<key>` target whose owner is not an entity, a source table with a UUID
+`id`, a compute id and manifest-shaped `inputs` and `dependsOn`. It shares the
+existing registry, triggers, drain, source locking, fanout fences, retries and
+reconciliation, so `markAllStoredDerived` can seed its source IDs with a target
+filter. Append entries and keep input positions, because pending fanouts name an
+input by position. It has no `key`, `clock`, `recordSource` or `DerivedValue`
+envelope; its adapter must be a `derivedSink`, and any other adapter fails its
+items visibly. A later rules change converges through the sink's own table and
+reconciliation. Its dependencies may read entity values; no stored value can
+depend on it, so it never propagates.
+An internal input's `selection: { key, path? }` names one of its sink's
+`fanoutSelections`. That callback is the whole selector: it reads a one-column
+`id` relation of source refs and returns current and retained target ids as `id`,
+because no `DerivedValue` holds prior output. Internal-record expansion enrolls
+at most 500 dependent marks per publication chunk. It advances a UUID cursor on
+the held source ticket in the same transaction as those marks, retaining the
+ticket and attempts until enrollment finishes. A new invalidation resets that
+cursor; a failed or superseded transaction cannot advance it. Continued sources
+return to the end of their priority's ready frontier. Existing entity fanouts
+keep their current expansion contract. The spec parser
+rejects `selection` with `path`, `paths`, `targetWhere` or a `retained` block, and
+one whose `match` target column is not `id`, because expansion would ignore them.
+An entity `selection` still requires `targetWhere` and `retained`.
+A plain input's trigger casts its matched column to UUID, so a matched column
+holding other text declares `captureKey: "textHash"`. Its OLD and NEW values
+capture as `textHashRefSqlText` in `db/derived-source-ref.ts` builds them, and a selector
+or dependency writer compares with `textHashRefSql`, the same SQL expression. It
+needs no parent lookup in the trigger. NULL marks nothing, stored text is hashed
+unnormalized, and a collision only adds a recompute. A hash is not a target id, so
+`captureKey` requires `selection`, `path` or `paths`, and it refuses `json` and
+`targetWhere`. Manifest inputs cannot declare it.
+`reconcile: { table, where }` narrows the daily pass to rows that can still be
+owed, for a source whose history is closed. `table` shares the source's UUID `id`,
+`where` holds literal column values bound as parameters, and the existing id
+slice still applies. A row outside the population converges only through its own
+marks, so its closing transition must mark it. Absent, every source row is marked.
+`entityStoredDerivedDeclarations()` and `storedDerived()` are the entity-only
+roster for reads, explanations, clock expiry and backlog `kinds`. Internal
+tickets count in the same backlog `total`, oldest wait and state buckets. Its
+`internal` rows carry the stable target and label without pretending the work
+is an Entity field; unknown retained targets remain visible as Other refresh
+work. The existing `recent` history combines committed publication sources and
+exposes their separate labelled series. Assessment activity counts distinct
+active Assessment/revision pairs, including successful empty results; staged
+rows and extra family rows cannot inflate it or be attributed to DerivedValue.
+This history describes current successful results by publication age, not an
+execution event log. Replacements move their bucket and no-op completions retain
+publication age; committed page outcomes remain in the existing Job result.
+An internal record's refs are source IDs, not entity IDs, so
+`notifications: "sinkOwned"` skips the default ring for fanout expansion and
+publication. The sink calls
+`publication.notify(entity, ids)` for each old and new entity its publication
+changed. Those refs join the chunk's bounded ring and commit with its transaction.
+A sink's `preparationFailures(prepared)` names refs that `prepare` could not
+prepare, with their errors. They join the page's failed items and settle with
+the ordinary retries, while unaffected refs publish; a stop-page error in that
+map still stops the page. A ref the page did not claim is a sink defect, so it
+fails the whole target visibly. The sink must report a failed read as a failure,
+not as an empty or ineligible output. It adds no second failure queue.
+A sink can return `{ changed, retain }` to commit staged output while leaving
+the named held sources owed. Retention preserves their tickets and attempts;
+it does not create another queue. `publication.tickets` identifies the exact
+held invalidation generations for staging. It grants no authority beyond the
+existing source, ticket, fanout and Job-lease fences. Staged rows must remain
+invisible until their complete publication can activate atomically.
+For an identical grouped effect committed by that sink, the result may also
+name exact `covered` peer WorkItems on its own target. The generic settlement
+owner independently locks those generations; re-marked peers and items already
+claimed by a later chunk remain owed. A completed component keeps its exact
+observation acknowledgement so those later peers settle without re-running the
+canonical preparation. Coverage grants no authority to delete work in a sink.
+A sink with its own snapshot may supply `publicationBlocked(prepared, ids)` as
+SQL through the existing work-observation helpers. Its preparation, drain gate
+and staged writer must use the same exact observations and relevance rule;
+the earlier page-wide observations cannot stand in for its later snapshot.
+The rule must cover retained inputs
+and newly reachable dependencies and competitors, including captured OLD refs;
+matching only previously published reverse dependencies is insufficient.
+Without this port, the existing conservative target-wide fence applies.
 
 Product reads use the stored `readFacts` publication for pricing, quantity ledger,
 placement and ownership evidence, and `food` for food summaries. Their field
@@ -3188,12 +3281,22 @@ live evidence.
 
 Stored results whose canonical policy depends on today's household date declare
 `clock: "householdDay"`. A publication from an earlier household day reads as
-stale even before work is queued. App-open and daily recovery admit expired
-publications when its ready queue is empty, marks them at reconciliation priority
-and captures its own invalidation. Discovery preserves existing tickets, retry
+stale even before work is queued. App-open, daily recovery and production derived
+preparation admit expired publications at reconciliation priority through the
+same invalidation owner. Discovery preserves existing tickets, retry
 errors and member-edit priority; it adds no per-record timer or separate Job.
 Freshness and pending work remain independent. Inventory and Product acquisition
 ownership use this clock because future acquisitions become eligible with time.
+
+Own-table sinks expose `clockExpiredRefs(day)` to the same expiry owner. Assessment
+project-tool components retain `clockDay` on staged and active results, including
+successful empty results. A day mismatch reads as stale before enrollment and
+blocks an old-day stage from activation. Successful no-op verification advances
+the day without changing content identity, `computedAt` or publication-age history.
+Production derived preparation enrolls expiry before claiming work, so a busy
+queue cannot starve it. An idle derived Job retains the next household-midnight
+deadline, preserving any earlier retry; source invalidations still pull that same
+Job forward. This uses the existing Job and scheduler, with no per-record timer.
 
 On-demand field explanations expose a stored root as `storedResult` in the
 source-dependency projection. A manifest can bind evidence paths there while

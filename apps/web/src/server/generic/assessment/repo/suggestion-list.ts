@@ -1,3 +1,9 @@
+import type {
+  AssessmentReadFilterFacts,
+  AssessmentReadDependency,
+  AssessmentReadMembership,
+} from "@cubby/schemas/assessment-read-publication";
+import { assessmentReadCoverage } from "@cubby/schemas/assessment-read-publication";
 import {
   suggestionRecordCountsInput,
   suggestionRecordCountsOut,
@@ -7,21 +13,22 @@ import {
   type acceptCleanSuggestionsOut,
   suggestionCountsInput,
   suggestionCountsOut,
+  suggestionFamilyCount,
+  suggestionFieldCount,
   suggestionGroup,
   suggestionListFamily,
   suggestionListFilters,
   suggestionListInput,
   suggestionListOut,
+  suggestionListRow,
+  suggestionStrength,
   type SuggestionColumnValue,
   type SuggestionGroup,
   type SuggestionListFamily,
   type SuggestionListFilters,
   type SuggestionListRow,
 } from "@cubby/schemas/suggestion-list";
-import {
-  suggestionDeclaredFilters,
-  suggestionFilterDeclaration,
-} from "@cubby/schemas/suggestion-list-declarations";
+import { suggestionFilterDeclaration } from "@cubby/schemas/suggestion-list-declarations";
 import {
   and,
   asc,
@@ -38,11 +45,18 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { assessmentReadPublication } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { reviewAssessmentBatch } from "~/server/generic/assessment/repo/assessment-review";
 import {
+  publishedAssessmentRecordRefsSql,
+  publishedAssessmentCoverageSql,
+  publishedAssessmentAdmissionSql,
+} from "~/server/generic/assessment/repo/read-publication";
+import {
   type SuggestionFamilyQuery,
   type SuggestionKey,
+  type SuggestionReadObserver,
   emptyPendingCounts,
   suggestionFamilies,
 } from "~/server/generic/assessment/repo/suggestion-families";
@@ -50,12 +64,14 @@ import { compileDeclaredFilters } from "~/server/generic/list/repo/declared-filt
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
-  readAssessmentRecordRefs,
+  readAssessmentReadMemberships,
   touchingAssessmentFamilies,
 } from "./review-families";
 
 const STRENGTH_RANK = { strong: 2, medium: 1, weak: 0 } as const;
 const ARRAY_COLUMNS = new Set(["account", "owner", "entityKind", "merchant"]);
+const recordCountFields =
+  suggestionRecordCountsOut.shape.records.element.keyof().enum;
 const NUMBER_COLUMNS = new Set([
   "amount",
   "confidence",
@@ -76,8 +92,10 @@ type SortTerm = { by: string; direction: "asc" | "desc" };
  * validated fact stream as a relation; the shared compiler is the only owner
  * of filter operators, and PostgreSQL owns ordering and paging.
  */
-function keyRelation(db: Database, keys: readonly SuggestionKey[]) {
-  const facts = keys.map((key) => ({
+export function suggestionKeyFacts(
+  key: SuggestionKey,
+): AssessmentReadFilterFacts {
+  return {
     id: key.assessmentId,
     family: key.family,
     strength: key.strength,
@@ -100,7 +118,10 @@ function keyRelation(db: Database, keys: readonly SuggestionKey[]) {
       typeof key.columns.confidence === "number"
         ? key.columns.confidence * 100
         : null,
-  }));
+  };
+}
+
+function factRelation(db: Database, source: SQL) {
   const names = new Set([
     "id",
     "family",
@@ -125,12 +146,36 @@ function keyRelation(db: Database, keys: readonly SuggestionKey[]) {
       return [name, value.as(name)];
     }),
   );
-  return getDb(db)
-    .select(fields)
-    .from(
-      sql`jsonb_array_elements(${JSON.stringify(facts)}::jsonb) AS fact(value)`,
-    )
-    .as("suggestion_facts");
+  return getDb(db).select(fields).from(source).as("suggestion_facts");
+}
+
+function keyRelation(db: Database, keys: readonly SuggestionKey[]) {
+  return factRelation(
+    db,
+    sql`jsonb_array_elements(${JSON.stringify(keys.map(suggestionKeyFacts))}::jsonb) AS fact(value)`,
+  );
+}
+
+async function publishedKeyRelation(
+  db: Database,
+  filters: SuggestionListFilters,
+) {
+  const query = await familyQuery(db, filters);
+  return factRelation(
+    db,
+    sql`(${publishedAssessmentAdmissionSql({
+      entity: filters.recordEntity,
+      records: query.records,
+      families: familiesOf(filters),
+    })}) publication CROSS JOIN LATERAL (SELECT publication.filters AS value) fact
+    ${
+      filters.runId
+        ? sql`WHERE publication."assessmentId" IN (
+      SELECT id FROM "AssessmentState" WHERE "runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})
+    )`
+        : sql``
+    }`,
+  );
 }
 
 const relationColumn = (name: string) =>
@@ -167,9 +212,9 @@ function predicates(filters: SuggestionListFilters) {
   );
 }
 
-async function selectKeys(
+function selectKeyQuery(
   db: Database,
-  keys: readonly SuggestionKey[],
+  relation: ReturnType<typeof factRelation>,
   filters: SuggestionListFilters,
   order: readonly SortTerm[] = [],
   paging?: {
@@ -177,8 +222,8 @@ async function selectKeys(
     offset: number;
     cursor?: z.infer<typeof cursorSchema>;
   },
+  gate?: SQL,
 ) {
-  const relation = keyRelation(db, keys);
   const terms = order.flatMap((term) => {
     const ready = ["clean", "strengthRank", "createdAt"];
     const names =
@@ -227,23 +272,49 @@ async function selectKeys(
     : undefined;
   const query = getDb(db)
     .select({
-      id: sql<string>`${relationColumn("id")}`,
+      id: sql<string>`${relationColumn("id")}`.as("id"),
+      family: sql<SuggestionListFamily>`${relationColumn("family")}`.as(
+        "family",
+      ),
+      position: sql<number>`row_number() OVER (ORDER BY ${sql.join(
+        terms.map(
+          (term) =>
+            sql`${term.direction === "asc" ? asc(term.value) : desc(term.value)} NULLS LAST`,
+        ),
+        sql`, `,
+      )})`.as("position"),
       vector: sql<SuggestionColumnValue[]>`jsonb_build_array(${sql.join(
         terms.slice(0, -1).map((term) => term.value),
         sql`, `,
-      )})`,
+      )})`.as("vector"),
     })
     .from(relation)
-    .where(and(...predicates(filters), after))
+    .where(and(...predicates(filters), after, gate))
     .orderBy(
       ...terms.map(
         (term) =>
           sql`${term.direction === "asc" ? asc(term.value) : desc(term.value)} NULLS LAST`,
       ),
     );
-  const selected = paging
-    ? await query.limit(paging.limit).offset(cursor ? 0 : paging.offset)
-    : await query;
+  return paging
+    ? query.limit(paging.limit).offset(cursor ? 0 : paging.offset)
+    : query;
+}
+
+async function selectKeys(
+  db: Database,
+  keys: readonly SuggestionKey[],
+  filters: SuggestionListFilters,
+  order: readonly SortTerm[] = [],
+  paging?: Parameters<typeof selectKeyQuery>[4],
+) {
+  const selected = await selectKeyQuery(
+    db,
+    keyRelation(db, keys),
+    filters,
+    order,
+    paging,
+  );
   const byId = new Map(keys.map((key) => [key.assessmentId, key]));
   return selected.flatMap((row) => {
     const key = byId.get(row.id);
@@ -302,6 +373,7 @@ async function currentCandidates(
   db: Database,
   filters: SuggestionListFilters,
   prepared?: Awaited<ReturnType<typeof scopedFamilyQuery>>,
+  observeInputs?: SuggestionReadObserver,
 ) {
   const { families, touching, matchedFamilies, familyScope } =
     prepared ?? (await scopedFamilyQuery(db, filters));
@@ -311,7 +383,9 @@ async function currentCandidates(
     await Promise.all(
       families
         .filter((family) => !matchedFamilies || matchedFamilies.has(family))
-        .map((family) => suggestionFamilies[family].keys(db, familyScope)),
+        .map((family) =>
+          suggestionFamilies[family].keys(db, familyScope, observeInputs),
+        ),
     )
   )
     .flat()
@@ -322,9 +396,66 @@ async function currentCandidates(
     );
   // Admission must precede both counting and paging. Family hydration owns
   // freshness checks that cannot be inferred from a stored pending status.
-  const rows = await hydrate(db, keys);
+  const rows = await hydrate(db, keys, observeInputs);
   const current = keys.filter((key) => rows.has(key.assessmentId));
   return { families, keys: current, rows };
+}
+
+/** Background publication and live actions use the same family admission owner. */
+export async function prepareSuggestionAdmission(
+  db: Database,
+  assessmentIds: readonly string[],
+): Promise<{
+  keys: SuggestionKey[];
+  rows: Map<string, SuggestionListRow>;
+  /** Only observed read sets are present; a missing entry must not be treated as complete. */
+  dependencies: Map<string, AssessmentReadDependency[]>;
+  memberships: Map<string, AssessmentReadMembership[]>;
+}> {
+  const filters = suggestionListFilters.parse({});
+  const identities = [...new Set(assessmentIds)];
+  const dependencies = new Map<string, AssessmentReadDependency[]>();
+  const observeInputs: SuggestionReadObserver = (id, sources) => {
+    const unique = new Map(
+      (dependencies.get(id) ?? []).map((source) => [
+        JSON.stringify([source.sourceKind, source.sourceId]),
+        source,
+      ]),
+    );
+    for (const source of sources)
+      unique.set(JSON.stringify([source.sourceKind, source.sourceId]), source);
+    dependencies.set(
+      id,
+      [...unique]
+        .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+        .map(([, source]) => source),
+    );
+  };
+  const admitted = await currentCandidates(
+    db,
+    filters,
+    {
+      families: familiesOf(filters),
+      touching: new Set(identities),
+      matchedFamilies: null,
+      familyScope: {
+        filters: { ...filters, recordEntity: undefined, recordIds: undefined },
+        assessmentIds: identities,
+      },
+    },
+    observeInputs,
+  );
+  const memberships = await readAssessmentReadMemberships(
+    db,
+    identities,
+    observeInputs,
+  );
+  return {
+    keys: admitted.keys,
+    rows: admitted.rows,
+    dependencies,
+    memberships,
+  };
 }
 
 async function scopedKeys(
@@ -351,37 +482,49 @@ export async function suggestionRecordCounts(
 ) {
   const input = suggestionRecordCountsInput.parse(raw);
   if (!input.recordIds.length)
-    return suggestionRecordCountsOut.parse({ records: [] });
-  // This input has no relation filters or ordering. Candidate preparation
-  // already enforces pending admission, member decisions and live freshness.
-  const { keys } = await currentCandidates(
+    return suggestionRecordCountsOut.parse({
+      records: [],
+      coverage: {
+        missing: false,
+        stale: false,
+        unresolved: false,
+        failed: false,
+      },
+    });
+  const query = await familyQuery(
     db,
     suggestionListFilters.parse({ recordIds: input.recordIds }),
   );
-  const refs = await readAssessmentRecordRefs(
-    db,
-    keys.map((key) => key.assessmentId),
-  );
-  const counts = new Map(input.recordIds.map((id) => [id, 0]));
-  for (const references of refs.values())
-    for (const record of references)
-      if (counts.has(record.id))
-        counts.set(record.id, (counts.get(record.id) ?? 0) + 1);
-  return suggestionRecordCountsOut.parse({
-    records: [...counts].map(([id, pending]) => ({ id, pending })),
-  });
+  // Discovery spans the whole requested batch before resolved references are
+  // counted. Duplicate membership ordinals retain the canonical count semantics.
+  const result = await getDb(db).execute(sql`
+    WITH counts AS (
+      SELECT "recordCode", count(*)::int AS pending
+      FROM (${publishedAssessmentRecordRefsSql({ records: query.records })}) refs
+      GROUP BY "recordCode"
+    )
+    SELECT coalesce(jsonb_agg(jsonb_build_object(
+      ${recordCountFields.id}::text, requested.id, ${recordCountFields.pending}::text, coalesce(counts.pending, 0)
+    ) ORDER BY requested.ordinal), '[]'::jsonb) AS records,
+      (SELECT to_jsonb(coverage) FROM (${publishedAssessmentCoverageSql()}) coverage) AS coverage
+    FROM jsonb_to_recordset(${JSON.stringify(
+      [...new Set(input.recordIds)].map((id, ordinal) => ({ id, ordinal })),
+    )}::jsonb) requested(id text, ordinal int)
+    LEFT JOIN counts ON counts."recordCode" = requested.id`);
+  return suggestionRecordCountsOut.parse(result.rows[0]);
 }
 
 async function hydrate(
   db: Database,
   keys: readonly SuggestionKey[],
+  observeInputs?: SuggestionReadObserver,
 ): Promise<Map<string, SuggestionListRow>> {
   const byFamily = new Map<SuggestionListFamily, SuggestionKey[]>();
   for (const key of keys)
     byFamily.set(key.family, [...(byFamily.get(key.family) ?? []), key]);
   const maps: Map<string, SuggestionListRow>[] = await Promise.all(
     [...byFamily].map(([family, familyKeys]) =>
-      suggestionFamilies[family].rows(db, familyKeys),
+      suggestionFamilies[family].rows(db, familyKeys, observeInputs),
     ),
   );
   return new Map(maps.flatMap((map) => [...map]));
@@ -425,6 +568,126 @@ function statementGroups(keys: readonly SuggestionKey[]): SuggestionGroup[] {
 }
 
 /** One SQL-filtered, ordered page of currently reviewable family facts. */
+async function listPublishedSuggestionPage(
+  db: Database,
+  input: z.infer<typeof suggestionListInput>,
+  filters: SuggestionListFilters,
+  order: readonly SortTerm[],
+  orderKey: string,
+  cursor: z.infer<typeof cursorSchema> | undefined,
+) {
+  const relation = await publishedKeyRelation(db, filters);
+  const selected = selectKeyQuery(db, relation, filters, order, {
+    ...input,
+    cursor,
+    limit: input.limit + 1,
+  });
+  const totals = getDb(db)
+    .select({
+      totalCount: sql<number>`count(*)::int`.as("totalCount"),
+      cleanCount:
+        sql<number>`count(*) FILTER (WHERE ${relationColumn("clean")} = ${String(true)})::int`.as(
+          "cleanCount",
+        ),
+    })
+    .from(relation)
+    .where(and(...predicates(filters)));
+  const groupFacts =
+    input.group === "account_month"
+      ? getDb(db)
+          .select({
+            key: sql<string>`(${relationColumn("account")})[1] || '|' || ${relationColumn("month")}`.as(
+              "key",
+            ),
+            label: relationColumn("month").as("label"),
+            month: relationColumn("month").as("month"),
+            accountId: sql`(${relationColumn("account")})[1]`.as("accountId"),
+            ownerId: sql`(${relationColumn("owner")})[1]`.as("ownerId"),
+            count: sql`count(*)::int`.as("count"),
+            clean:
+              sql`count(*) FILTER (WHERE ${relationColumn("clean")} = ${String(true)})::int`.as(
+                "clean",
+              ),
+            ...Object.fromEntries(
+              GROUP_ACTIONS.map((action) => [
+                action,
+                sql`count(*) FILTER (WHERE ${relationColumn("action")} = ${action})::int`.as(
+                  action,
+                ),
+              ]),
+            ),
+            amount: sql`coalesce(sum(${relationColumn("amount")}), 0)`.as(
+              "amount",
+            ),
+          })
+          .from(relation)
+          .where(and(...predicates(filters)))
+          .groupBy(
+            relationColumn("month"),
+            relationColumn("account"),
+            relationColumn("owner"),
+          )
+          .orderBy(
+            desc(relationColumn("month")),
+            asc(relationColumn("account")),
+          )
+      : sql`SELECT NULL WHERE false`;
+  // Totals, page payloads and coverage share one statement snapshot. Payloads
+  // are loaded only after indexed admission, filtering and page selection.
+  const result = await getDb(db).execute(sql`
+    WITH selected AS MATERIALIZED (${selected}),
+    page AS (
+      SELECT selected.id, selected.vector, selected.position, p.row
+      FROM selected JOIN ${assessmentReadPublication} p
+        ON p."assessmentId" = selected.id::uuid AND p.family = selected.family AND p.active
+      ORDER BY selected.position LIMIT ${input.limit}
+    )
+    SELECT coalesce((SELECT jsonb_agg(to_jsonb(page) ORDER BY position) FROM page), '[]'::jsonb) AS records,
+      totals."totalCount", totals."cleanCount",
+      (SELECT count(*) > ${input.limit} FROM selected) AS more,
+      ${input.group === "account_month" ? sql`(SELECT coalesce(jsonb_agg(to_jsonb(groups)), '[]'::jsonb) FROM (${groupFacts}) groups)` : sql`NULL::jsonb`} AS groups,
+      (SELECT to_jsonb(coverage) FROM (${publishedAssessmentCoverageSql()}) coverage) AS coverage
+    FROM (${totals}) totals`);
+  const page = z
+    .object({
+      records: z.array(
+        z.object({
+          id: z.string(),
+          vector: cursorSchema.shape.vector,
+          row: suggestionListRow,
+        }),
+      ),
+      totalCount: z.number().int(),
+      cleanCount: z.number().int(),
+      more: z.boolean(),
+      groups: z.array(suggestionGroup).nullable(),
+      coverage: assessmentReadCoverage,
+    })
+    .parse(result.rows[0]);
+  const last = page.records.at(-1);
+  return suggestionListOut.parse({
+    items: page.records.map(({ row }) => row),
+    meta: {
+      pageIndex: Math.floor(input.offset / input.limit),
+      pageSize: input.limit,
+      totalCount: page.totalCount,
+      cleanCount: page.cleanCount,
+      coverage: page.coverage,
+      ...(page.groups ? { groups: page.groups } : {}),
+    },
+    next:
+      page.more && last
+        ? Buffer.from(
+            JSON.stringify({
+              order: orderKey,
+              vector: last.vector,
+              id: last.id,
+            }),
+          ).toString("base64url")
+        : null,
+  });
+}
+
 export async function listSuggestionPage(
   db: Database,
   raw: z.input<typeof suggestionListInput>,
@@ -434,11 +697,6 @@ export async function listSuggestionPage(
   const filters = grouped
     ? { ...input, family: "statement_transaction" as const }
     : input;
-  const {
-    keys,
-    all,
-    rows = new Map<string, SuggestionListRow>(),
-  } = await scopedKeys(db, filters);
   const requested = suggestionFilterDeclaration.sortsOf(input.sort);
   const order: SortTerm[] = [
     ...(grouped
@@ -462,6 +720,20 @@ export async function listSuggestionPage(
     throw new Error(
       "Cursor was issued for another order; restart without a cursor",
     );
+  if (input.status === "pending")
+    return listPublishedSuggestionPage(
+      db,
+      input,
+      filters,
+      order,
+      orderKey,
+      cursor,
+    );
+  const {
+    keys,
+    all,
+    rows = new Map<string, SuggestionListRow>(),
+  } = await scopedKeys(db, filters);
   const entries = await selectKeys(db, all, filters, order, {
     ...input,
     cursor,
@@ -513,56 +785,94 @@ export async function suggestionCountsByFamily(
     ...suggestionCountsInput.parse(raw),
     status: "pending" as const,
   };
-  const { families, touching, matchedFamilies, familyScope } =
-    await scopedFamilyQuery(db, filters);
+  const families = familiesOf(filters);
+  const relation = await publishedKeyRelation(db, filters);
+  const pendingQuery = getDb(db)
+    .select({
+      family: relationColumn("family").as("family"),
+      pending: sql`count(*)::int`.as("pending"),
+      clean:
+        sql`count(*) FILTER (WHERE ${relationColumn("clean")} = ${String(true)})::int`.as(
+          "clean",
+        ),
+      ...Object.fromEntries(
+        suggestionStrength.options.map((strength) => [
+          strength,
+          sql`count(*) FILTER (WHERE ${relationColumn("strength")} = ${strength})::int`.as(
+            strength,
+          ),
+        ]),
+      ),
+    })
+    .from(relation)
+    .where(and(...predicates(filters)))
+    .groupBy(relationColumn("family"));
+  const fieldQuery = getDb(db)
+    .select({
+      entity: relationColumn("entity").as("entity"),
+      field: relationColumn("field").as("field"),
+      pending: sql`count(*)::int`.as("pending"),
+    })
+    .from(relation)
+    .where(and(...predicates(filters), eq(relationColumn("family"), "field")))
+    .groupBy(relationColumn("entity"), relationColumn("field"));
+  const pendingResult = await getDb(db).execute(sql`SELECT
+    coalesce((SELECT jsonb_agg(to_jsonb(own)) FROM (${pendingQuery}) own), '[]'::jsonb) AS families,
+    coalesce((SELECT jsonb_agg(to_jsonb(own)) FROM (${fieldQuery}) own), '[]'::jsonb) AS fields,
+    (SELECT to_jsonb(coverage) FROM (${publishedAssessmentCoverageSql()}) coverage) AS coverage`);
+  const pending = z
+    .object({
+      families: z.array(
+        suggestionFamilyCount.pick({
+          family: true,
+          pending: true,
+          clean: true,
+          strong: true,
+          medium: true,
+          weak: true,
+        }),
+      ),
+      coverage: assessmentReadCoverage,
+      fields: z.array(
+        suggestionFieldCount.pick({ entity: true, field: true, pending: true }),
+      ),
+    })
+    .parse(pendingResult.rows[0]);
   const counts = await Promise.all(
     families.map(async (family) => {
       const presentation = suggestionFamilies[family];
-      let pending = emptyPendingCounts();
-      if (
-        touching?.size !== 0 &&
-        (!matchedFamilies || matchedFamilies.has(family))
-      ) {
-        if (
-          "pendingCounts" in presentation &&
-          presentation.pendingCounts &&
-          !Object.entries(filters).some(
-            ([name, value]) =>
-              value !== undefined &&
-              Object.hasOwn(suggestionDeclaredFilters.shape, name),
-          )
-        ) {
-          pending = await presentation.pendingCounts(db, familyScope);
-        } else {
-          const { keys: own } = await scopedKeys(
-            db,
-            { ...filters, family },
-            {
-              families: [family],
-              touching,
-              matchedFamilies,
-              familyScope: {
-                ...familyScope,
-                filters: { ...familyScope.filters, family },
-              },
-            },
-          );
-          for (const key of own) {
-            pending.pending++;
-            if (key.clean) pending.clean++;
-            pending[key.strength]++;
-          }
-        }
-      }
       const outcomes = await presentation.outcomes(db, filters);
+      const fields = new Map(
+        outcomes.fields.map((row) => [
+          JSON.stringify([row.entity, row.field]),
+          { ...row, pending: 0 },
+        ]),
+      );
+      if (family === "field")
+        for (const row of pending.fields) {
+          const key = JSON.stringify([row.entity, row.field]);
+          fields.set(key, {
+            applied: 0,
+            rejected: 0,
+            superseded: 0,
+            resolved: 0,
+            ...fields.get(key),
+            ...row,
+          });
+        }
       return {
         family,
-        ...pending,
+        ...(pending.families.find((row) => row.family === family) ??
+          emptyPendingCounts()),
         ...outcomes,
+        fields: [...fields.values()],
       };
     }),
   );
-  return suggestionCountsOut.parse({ families: counts });
+  return suggestionCountsOut.parse({
+    families: counts,
+    coverage: pending.coverage,
+  });
 }
 
 const acceptAsIs = (row: SuggestionListRow) => {
@@ -594,25 +904,37 @@ export async function acceptCleanSuggestions(
 ) {
   const input = acceptCleanSuggestionsInput.parse(raw);
   const skip = new Set(input.skip);
-  const { keys } = await scopedKeys(db, {
+  const filters = suggestionListFilters.parse({
     ...input.filters,
     status: "pending",
   });
-  const entries = await selectKeys(
+  const relation = await publishedKeyRelation(db, filters);
+  const selected = selectKeyQuery(
     db,
-    keys.filter((key) => key.clean && !skip.has(key.assessmentId)),
-    { ...input.filters, status: "pending" },
+    relation,
+    filters,
     [{ by: "ready", direction: "desc" }],
     { limit: input.limit, offset: 0 },
+    and(
+      eq(relationColumn("clean"), String(true)),
+      skip.size
+        ? sql`${relationColumn("id")} NOT IN (${sql.join(
+            [...skip].map((id) => sql`${id}`),
+            sql`, `,
+          )})`
+        : undefined,
+    ),
   );
-  const hydrated = await hydrate(
-    db,
-    entries.map((entry) => entry.key),
-  );
-  const rows = entries.flatMap((entry) => {
-    const row = hydrated.get(entry.id);
-    return row ? [row] : [];
-  });
+  // Selection and payload share one statement snapshot. The action handlers
+  // still validate current evidence; a published clean flag grants no authority.
+  const picked = await getDb(db)
+    .execute(sql`SELECT p.row FROM (${selected}) selected
+    JOIN ${assessmentReadPublication} p ON p."assessmentId" = selected.id::uuid
+      AND p.family = selected.family AND p.active ORDER BY selected.position`);
+  const rows = z
+    .array(z.object({ row: suggestionListRow }))
+    .parse(picked.rows)
+    .map(({ row }) => row);
   const results: z.infer<typeof acceptCleanSuggestionsOut> = [];
   const settledPairs = new Set<string>();
   for (const row of rows) {

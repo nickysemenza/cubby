@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assessmentReadCoverage } from "./assessment-read-publication";
 import {
   assessmentFamily,
   assessmentChildHandle,
@@ -72,4 +73,6 @@ export const suggestionRecordCountsOut = z.object({
   records: z.array(
     z.object({ id: z.string(), pending: z.number().int().nonnegative() }),
   ),
+  /** Counts describe known publications; coverage never turns unknown extent into zero. */
+  coverage: assessmentReadCoverage,
 });

@@ -8,11 +8,15 @@ import type {
   SettledSuggestionQuestionsInput,
   SuggestionReviewRow,
 } from "@cubby/schemas/ai";
-import { SETTLED_SUGGESTION_QUESTION_MAX } from "@cubby/schemas/ai";
+import {
+  SETTLED_SUGGESTION_QUESTION_MAX,
+  suggestionReviewRowSchema,
+} from "@cubby/schemas/ai";
 import type {
   AssessmentReviewBatchOut,
   AssessmentReviewOut,
 } from "@cubby/schemas/assessment";
+import { assessmentReadCoverage } from "@cubby/schemas/assessment-read-publication";
 import type { BatchOut } from "@cubby/schemas/batch";
 import {
   classificationFieldRefusal,
@@ -78,6 +82,7 @@ import { NotApplicableField } from "~/entity/fields/field-applicability";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { CorrectionAuthorityEvidence } from "~/entity/suggestions/correction-authority-evidence";
+import { publicationCoverageMessage } from "~/entity/suggestions/publication-coverage";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { assessment } from "~/integrations/tanstack-query/generated/domains/assessment.gen";
@@ -226,6 +231,7 @@ function mergeSuggestionRow(
 
 const RecordSuggestionsContext = createContext<{
   entity: StandardEntity;
+  publishedOnly: boolean;
   runKey: string;
   rows: ReadonlyMap<string, SuggestionRow>;
   save: (
@@ -252,6 +258,12 @@ const RecordSuggestionsContext = createContext<{
   storedCountFor: (records: readonly unknown[]) => number;
 } | null>(null);
 
+const storedSuggestionPacket = z.object({
+  items: suggestionReviewRowSchema.array(),
+  coverage: assessmentReadCoverage.optional(),
+});
+type StoredSuggestionPacket = z.infer<typeof storedSuggestionPacket>;
+
 export interface StoredSuggestionOperations {
   list: (
     input: {
@@ -260,7 +272,7 @@ export interface StoredSuggestionOperations {
       fields: string[];
     },
     options?: OperationCallOptions,
-  ) => Promise<SuggestionReviewRow[]>;
+  ) => Promise<StoredSuggestionPacket>;
   review: (input: {
     assessmentId: string;
     operationId: string;
@@ -289,7 +301,21 @@ export interface StoredSuggestionOperations {
 type PendingPageInput = Parameters<StoredSuggestionOperations["list"]>[0];
 
 /** One cursor page of pending field rows; `next` is null on the last page. */
-type PendingPage = { items: SuggestionReviewRow[]; next: string | null };
+type PendingPage = StoredSuggestionPacket & { next: string | null };
+
+function mergeCoverage(
+  left: StoredSuggestionPacket["coverage"],
+  right: StoredSuggestionPacket["coverage"],
+): StoredSuggestionPacket["coverage"] {
+  if (!left) return right;
+  if (!right) return left;
+  return {
+    missing: left.missing || right.missing,
+    stale: left.stale || right.stale,
+    unresolved: left.unresolved || right.unresolved,
+    failed: left.failed || right.failed,
+  };
+}
 
 /**
  * Every pending row for a list page's records, with no confidence floor.
@@ -307,7 +333,7 @@ export const everyPendingSuggestion =
   async (
     input: PendingPageInput,
     options?: OperationCallOptions,
-  ): Promise<SuggestionReviewRow[]> => {
+  ): Promise<StoredSuggestionPacket> => {
     const rosters: string[][] = [];
     for (
       let start = 0;
@@ -320,6 +346,7 @@ export const everyPendingSuggestion =
     const pages = await Promise.all(
       rosters.map(async (recordIds) => {
         const rows: SuggestionReviewRow[] = [];
+        let coverage: StoredSuggestionPacket["coverage"];
         let cursor: string | undefined;
         do {
           const page = await read(
@@ -332,12 +359,19 @@ export const everyPendingSuggestion =
             options,
           );
           rows.push(...page.items);
+          coverage = mergeCoverage(coverage, page.coverage);
           cursor = page.next ?? undefined;
         } while (cursor);
-        return rows;
+        return { items: rows, coverage };
       }),
     );
-    return pages.flat();
+    return {
+      items: pages.flatMap((page) => page.items),
+      coverage: pages.reduce<StoredSuggestionPacket["coverage"]>(
+        (coverage, page) => mergeCoverage(coverage, page.coverage),
+        undefined,
+      ),
+    };
   };
 
 const productionStoredSuggestionOperations: StoredSuggestionOperations = {
@@ -359,6 +393,7 @@ const productionStoredSuggestionOperations: StoredSuggestionOperations = {
           row.family === "field" ? [row.evidence] : [],
         ),
         next: page.next,
+        coverage: page.meta.coverage,
       };
     },
   ),
@@ -733,6 +768,7 @@ export function RecordSuggestionsProvider({
   entity,
   records,
   viewportOnly,
+  publishedOnly = false,
   fieldKeys,
   children,
   statusTarget,
@@ -744,6 +780,8 @@ export function RecordSuggestionsProvider({
   entity: Entity | undefined;
   records: readonly unknown[];
   viewportOnly?: boolean;
+  /** Passive lists read publications; missing or failed reads never request evaluation. */
+  publishedOnly?: boolean;
   fieldKeys: readonly string[];
   children: ReactNode;
   statusTarget?: HTMLElement | null;
@@ -766,6 +804,7 @@ export function RecordSuggestionsProvider({
         entity={crud}
         records={records}
         viewportOnly={viewportOnly}
+        publishedOnly={publishedOnly}
         fieldKeys={fieldKeys}
         operations={operations}
         mutationPort={mutationPort}
@@ -785,7 +824,9 @@ function firstBasisFieldLabel(
   queryClient: QueryClient,
   entity: StandardEntity,
   targets: SuggestTargets,
+  evaluationEnabled: boolean,
 ): string | null {
+  if (!evaluationEnabled) return null;
   for (const key of targets.basisKeys) {
     if (key.startsWith("__")) continue;
     const field = entityMetadata(queryClient, entity).fields.fields.find(
@@ -802,8 +843,9 @@ function requestsForRecords(
   records: readonly unknown[],
   targets: SuggestTargets,
   runKey: string,
+  evaluationEnabled: boolean,
 ) {
-  if (targets.targets.length === 0) return [];
+  if (!evaluationEnabled || targets.targets.length === 0) return [];
   const plans = suggestionTargetPlans(queryClient, entity, targets);
   return records.flatMap((raw) => {
     const parsed = recordSchema.safeParse(raw);
@@ -942,8 +984,17 @@ function statusFieldsForRows(
 
 type StoredPageRead = {
   recordIds: readonly string[];
-  rows: Awaited<ReturnType<StoredSuggestionOperations["list"]>>;
+  rows: StoredSuggestionPacket["items"];
+  coverage: StoredSuggestionPacket["coverage"];
 };
+function StoredReadCoverage({ read }: { read: StoredPageRead | undefined }) {
+  const message = publicationCoverageMessage(read?.coverage);
+  return message ? (
+    <p data-needs-row className="text-sm text-muted-foreground">
+      {message}
+    </p>
+  ) : null;
+}
 const firstStoredPageQuery = (results: UseQueryResult<StoredPageRead>[]) =>
   results[0];
 /** A single-field question the server can answer from remembered declines;
@@ -1264,6 +1315,7 @@ function BoundRecordSuggestions({
   entity,
   records: allRecords,
   viewportOnly,
+  publishedOnly,
   fieldKeys,
   children,
   statusTarget,
@@ -1276,6 +1328,7 @@ function BoundRecordSuggestions({
   entity: StandardEntity;
   records: readonly unknown[];
   viewportOnly?: boolean;
+  publishedOnly: boolean;
   fieldKeys: readonly string[];
   children: ReactNode;
   statusTarget?: HTMLElement | null;
@@ -1375,9 +1428,8 @@ function BoundRecordSuggestions({
               signal,
               client,
               queryKey,
-            }): Promise<StoredPageRead> => ({
-              recordIds: pageRecordIds,
-              rows: await storedSuggestionOperations.list(
+            }): Promise<StoredPageRead> => {
+              const packet = await storedSuggestionOperations.list(
                 {
                   entity,
                   recordIds: pageRecordIds,
@@ -1389,8 +1441,13 @@ function BoundRecordSuggestions({
                     ? "strong"
                     : undefined,
                 },
-              ),
-            }),
+              );
+              return {
+                recordIds: pageRecordIds,
+                rows: packet.items,
+                coverage: packet.coverage,
+              };
+            },
             retry: false,
             meta: { cacheTags: [[entity]] },
           },
@@ -1479,6 +1536,7 @@ function BoundRecordSuggestions({
     records,
     targets,
     runKey,
+    !publishedOnly,
   );
   const recordReady = (id: string) =>
     pageFields.length === 0 || knownRecordIds.has(id);
@@ -1604,6 +1662,7 @@ function BoundRecordSuggestions({
   );
   const context = {
     entity,
+    publishedOnly,
     runKey,
     rows,
     stored,
@@ -1861,7 +1920,7 @@ function BoundRecordSuggestions({
     stored.size === 0 &&
     accepted.size === 0 &&
     !storedQuery?.isFetching
-      ? firstBasisFieldLabel(queryClient, entity, targets)
+      ? firstBasisFieldLabel(queryClient, entity, targets, !publishedOnly)
       : null;
   const status = (
     <>
@@ -1872,6 +1931,7 @@ function BoundRecordSuggestions({
         fields={statusFieldsForRows(queryClient, entity, rows)}
         unasked={unasked}
       />
+      <StoredReadCoverage read={storedData} />
       {storedQuery?.error ? (
         <div data-needs-row>
           <ErrorDisplay
@@ -2297,6 +2357,8 @@ function BoundRecordFieldSuggestion({
     );
   const source = row?.sourceByField.get(field);
   if (!row || !source) {
+    // Missing publication coverage cannot establish a model outcome or start work.
+    if (context.publishedOnly) return children;
     if (
       !fieldModel?.control?.suggest ||
       !parsed.success ||

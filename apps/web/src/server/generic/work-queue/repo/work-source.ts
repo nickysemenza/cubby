@@ -47,6 +47,8 @@ export interface WorkCandidates {
   readonly query: SQLWrapper;
   /** Potential records whose published inputs are absent; never actionable rows. */
   readonly missingInputs?: SQLWrapper;
+  /** Global non-count coverage warnings; the relation returns a message column. */
+  readonly inputCoverage?: SQLWrapper;
   readonly ctes?: readonly WorkCte[];
 }
 

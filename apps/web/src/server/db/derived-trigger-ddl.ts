@@ -12,6 +12,7 @@ import {
   isFanoutInput,
   storedDerivedDeclarations,
 } from "~/server/db/derived-declarations";
+import { textHashRefSqlText } from "~/server/db/derived-source-ref";
 
 export const DERIVED_DRAIN_JOB_KEY = "derived:drain";
 
@@ -25,6 +26,7 @@ type TriggerInput = {
   target: string;
   fixedTarget: boolean;
   tableColumn: string;
+  captureKey: "textHash" | null;
   columns: readonly string[] | null;
   where: Readonly<Record<string, string>> | null;
   except: readonly string[];
@@ -43,6 +45,9 @@ const whereSql = (row: "OLD" | "NEW", where: TriggerInput["where"]) =>
 // A malformed JSON value contributes nothing rather than failing the save:
 // a non-array at an array path is empty and non-UUID references are skipped.
 const refsSql = (row: "OLD" | "NEW", input: TriggerInput) => {
+  // A NULL hash marks nothing, as a NULL UUID does. Declarations exclude `json` and fixed targets.
+  if (input.captureKey === "textHash")
+    return `ARRAY[${textHashRefSqlText(`${row}.${ident(input.tableColumn)}`)}]`;
   // Preserve independent writers' refs; only NULL needs a synthetic fanout signal.
   if (input.fixedTarget && !input.json)
     return `ARRAY[coalesce(${row}.${ident(input.tableColumn)}::uuid, '00000000-0000-4000-8000-000000000000'::uuid)]`;
@@ -111,6 +116,7 @@ function derivedTriggerInputs(): Map<string, TriggerInput[]> {
             entry.target === target &&
             entry.fixedTarget === (input.targetWhere !== null) &&
             entry.tableColumn === input.tableColumn &&
+            entry.captureKey === (input.captureKey ?? null) &&
             JSON.stringify(entry.columns) === JSON.stringify(input.columns) &&
             JSON.stringify(entry.where) === JSON.stringify(input.where) &&
             JSON.stringify(entry.except) === JSON.stringify(input.except) &&
@@ -121,6 +127,7 @@ function derivedTriggerInputs(): Map<string, TriggerInput[]> {
           target,
           fixedTarget: input.targetWhere !== null,
           tableColumn: input.tableColumn,
+          captureKey: input.captureKey ?? null,
           columns: input.columns,
           where: input.where,
           except: input.except,
@@ -148,7 +155,8 @@ BEGIN
     attempts = 0,
     "lastError" = NULL,
     "waitCause" = NULL,
-    "waitStartedAt" = NULL;
+    "waitStartedAt" = NULL,
+    "fanoutAfter" = NULL;
   IF current_setting('cubby.derived_capture', true) IS DISTINCT FROM txid_current()::text THEN
     INSERT INTO "JobInvalidationCapture" (key, "capturedAt")
       VALUES (${literal(DERIVED_DRAIN_JOB_KEY)}, now() AT TIME ZONE 'UTC');

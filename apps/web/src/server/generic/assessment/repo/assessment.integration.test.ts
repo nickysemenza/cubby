@@ -1,3 +1,4 @@
+import type { AssessmentReadDependency } from "@cubby/schemas/assessment-read-publication";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -26,6 +27,7 @@ import { readConfirmedDescription } from "~/server/generic/assessment/repo/asses
 import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
+import { readAssessmentReadMemberships } from "~/server/generic/assessment/repo/review-families";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // Failure modes: retry publication mutates historical evidence; corrected null
@@ -244,6 +246,13 @@ describe("shared Assessment history", () => {
       producer: null,
       evidence: null,
     });
+    const observed = new Map<string, readonly AssessmentReadDependency[]>();
+    await readAssessmentReadMemberships(ctx.db, [prediction.id], (id, inputs) =>
+      observed.set(id, inputs),
+    );
+    expect(observed.get(prediction.id)).toEqual([
+      { sourceKind: "image", sourceId: picture.id },
+    ]);
     await getDb(ctx.db)
       .update(assessmentState)
       .set({ createdAt: new Date("2000-01-01T00:00:00Z") })

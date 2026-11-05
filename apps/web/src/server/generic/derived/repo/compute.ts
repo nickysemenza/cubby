@@ -2,6 +2,7 @@ import {
   storedFieldDecision,
   type StoredFieldDecision,
 } from "@cubby/schemas/derived-value";
+import type { Entity } from "@cubby/schemas/entity";
 import { storedResultSchemas } from "@cubby/schemas/entity-stored-derived";
 import type { SQL } from "drizzle-orm";
 
@@ -13,6 +14,7 @@ import type { SQL } from "drizzle-orm";
  * derived value unless the declaration lists it in `dependsOn`.
  */
 import type { Database, DrizzleTransaction } from "~/server/db";
+import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 
 /** Current target IDs reached from an input's source-reference relation. */
 export type DerivedFanoutSelection = (refs: SQL) => SQL;
@@ -112,6 +114,26 @@ export const sharedDerivedPreparation =
       },
     );
 
+/** One sink publication's reader notification, committed with its transaction. */
+export interface DerivedSinkPublication {
+  /** Exact held tickets; staged output must belong to this invalidation generation. */
+  readonly tickets: ReadonlyMap<string, number>;
+  /**
+   * Ring these entity records through the drain's bounded publication. An
+   * internal record's refs are not entity ids, so its sink names the old and
+   * new entities each change affected.
+   */
+  notify(entity: Entity, ids: readonly string[]): void;
+}
+
+/** Staging may commit while its original source work stays owed without an attempt. */
+export interface DerivedSinkContinuation {
+  readonly changed: readonly string[];
+  readonly retain: readonly string[];
+  /** Exact peer generations whose identical effect committed with this publication. */
+  readonly covered?: readonly WorkItem[];
+}
+
 /**
  * An adapter whose output lives in its own table (search documents, recipe
  * totals, conversion coverage) rather than `DerivedValue`. `prepare` runs
@@ -121,13 +143,32 @@ export const sharedDerivedPreparation =
 export interface DerivedSink<Prepared = unknown> {
   readonly kind: "sink";
   readonly preparationBatchSize?: number;
+  /** Read surfaces invalidated by every completed publication, including no-ops. */
+  readonly notificationCategories?: readonly string[];
+  /** Own-table clock expiry, enrolled through the existing derived Job. */
+  readonly clockExpiredRefs?: (householdDay: SQL) => SQL;
+  /**
+   * An internal record's whole fanout selector: given source refs as one `id`
+   * column, its query returns current and retained target ids as `id`.
+   */
+  readonly fanoutSelections?: Readonly<Record<string, DerivedFanoutSelection>>;
   prepare(db: Database, ids: readonly string[]): Promise<Prepared>;
+  /**
+   * Refs `prepare` could not prepare, with their errors. Each settles like a
+   * failed target's item while its siblings publish. A ref outside the claimed
+   * page fails the whole target. A missing input is an error here, never an
+   * empty output.
+   */
+  preparationFailures?(prepared: Prepared): ReadonlyMap<string, unknown>;
+  /** Reuse the sink's snapshot observations and complete source/peer relevance rule. */
+  publicationBlocked?(prepared: Prepared, ids: readonly string[]): SQL;
   /** `tx` is the publication transaction's repository handle. */
   publish(
     tx: Database,
     ids: readonly string[],
     prepared: Prepared,
-  ): Promise<readonly string[]>;
+    publication: DerivedSinkPublication,
+  ): Promise<readonly string[] | DerivedSinkContinuation>;
 }
 
 export type DerivedAdapter = DerivedCompute | DerivedSink;
@@ -135,13 +176,29 @@ export type DerivedAdapter = DerivedCompute | DerivedSink;
 /** A sink adapter with its prepared type erased for the registry. */
 export const derivedSink = <Prepared>(
   sink: Omit<DerivedSink<Prepared>, "kind">,
-): DerivedSink => ({
-  kind: "sink",
-  prepare: sink.prepare,
-  // SAFETY: the drain hands `publish` exactly the value this sink's own
-  // `prepare` returned for the same page.
-  publish: (tx, ids, prepared) => sink.publish(tx, ids, prepared as Prepared),
-});
+): DerivedSink => {
+  const blocked = sink.publicationBlocked;
+  return {
+    kind: "sink",
+    preparationBatchSize: sink.preparationBatchSize,
+    fanoutSelections: sink.fanoutSelections,
+    notificationCategories: sink.notificationCategories,
+    clockExpiredRefs: sink.clockExpiredRefs,
+    prepare: sink.prepare,
+    // SAFETY: the drain hands `preparationFailures` and `publish` exactly the
+    // value this sink's own `prepare` returned for the same page.
+    preparationFailures: (prepared) =>
+      sink.preparationFailures?.(prepared as Prepared) ?? new Map(),
+    publicationBlocked: blocked
+      ? (prepared, ids) =>
+          // SAFETY: the drain supplies this sink's own preparation result.
+          blocked(prepared as Prepared, ids)
+      : undefined,
+    // SAFETY: publish receives this sink's own preparation result for the same page.
+    publish: (tx, ids, prepared, publication) =>
+      sink.publish(tx, ids, prepared as Prepared, publication),
+  };
+};
 
 export const isDerivedSink = (
   adapter: DerivedAdapter,

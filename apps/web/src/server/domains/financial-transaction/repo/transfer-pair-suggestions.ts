@@ -100,7 +100,8 @@ import {
   transferPairMoneyMoveKinds,
   transferPairSeedKeys,
   transferPairSeedPage,
-} from "./transfer-pair-input";
+  transferPoolAmountSql,
+} from "~/server/domains/financial-transaction/repo/transfer-pair-input";
 
 const PREVIEW_CHUNK = 500;
 // Amortize Job dispatch between pages; the byte bound still limits publications.
@@ -263,7 +264,7 @@ type LegFilter = {
 };
 
 const amountIn = (column: SQL, amounts: readonly number[]) =>
-  sql`round(abs(${column}) * 100)::bigint IN (${sql.join(
+  sql`${transferPoolAmountSql(column)} IN (${sql.join(
     amounts.map((amount) => sql`${amount}`),
     sql`, `,
   )})`;

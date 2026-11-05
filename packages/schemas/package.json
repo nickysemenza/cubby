@@ -264,6 +264,7 @@
     "./email-actions": "./src/email-actions.ts",
     "./ai-evaluation": "./src/ai-evaluation.ts",
     "./assessment": "./src/assessment.ts",
+    "./assessment-read-publication": "./src/assessment-read-publication.ts",
     "./decision-step": "./src/decision-step.ts",
     "./entity-mutation": "./src/entity-mutation.ts",
     "./entity-projection-types": "./src/entity-projection-types.ts",

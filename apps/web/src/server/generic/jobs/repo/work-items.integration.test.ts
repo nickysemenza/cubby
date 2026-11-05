@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -11,7 +11,13 @@ import { advanceJob } from "../service/jobs";
 import { jobDeadlines } from "./deadlines";
 import { enqueueJob } from "./producer";
 import { claimWork } from "./work-claims";
-import { markWork, type WorkItem } from "./work-items";
+import {
+  advanceWorkFanouts,
+  markWork,
+  observePendingWork,
+  unobservedWork,
+  type WorkItem,
+} from "./work-items";
 
 describe("generic WorkItems", () => {
   const ctx = withTestDb();
@@ -55,6 +61,27 @@ describe("generic WorkItems", () => {
     expect(
       (await claimWork(ctx.db, drain.key, 3)).map((item) => item.ref),
     ).toEqual([oldest, newer, lowerPriority]);
+    const relevant = (target: SQL, ref: SQL) =>
+      and(eq(target, "synthetic"), eq(ref, newer))!;
+    const observed = await observePendingWork(ctx.db, {
+      drain: drain.key,
+      eligible: relevant,
+    });
+    expect(observed.map((item) => item.ref)).toEqual([newer]);
+    const blocked = async () =>
+      (
+        await getDb(ctx.db).execute<{ blocked: boolean }>(
+          sql`SELECT ${unobservedWork(
+            relevant,
+            observed.map((item) => item.ticket),
+          )} AS blocked`,
+        )
+      ).rows[0]?.blocked;
+    expect(await blocked()).toBe(false);
+    await markWork(ctx.db, drain, [{ target: "synthetic", ref: oldest }]);
+    expect(await blocked()).toBe(false);
+    await markWork(ctx.db, drain, [{ target: "synthetic", ref: newer }]);
+    expect(await blocked()).toBe(true);
   });
 
   it("keeps a re-marked item when its older ticket is published", async () => {
@@ -67,6 +94,13 @@ describe("generic WorkItems", () => {
     ]);
     const [before] = await claimWork(ctx.db, drain.key, 1);
     if (!before) throw new Error("Expected WorkItem");
+    const cursor = crypto.randomUUID();
+    await advanceWorkFanouts(ctx.db, [{ item: before, after: cursor }]);
+    expect((await claimWork(ctx.db, drain.key, 1))[0]).toMatchObject({
+      ticket: before.ticket,
+      attempts: before.attempts,
+      fanoutAfter: cursor,
+    });
     const [notAdmitted] = await getDb(ctx.db)
       .select()
       .from(workItem)
@@ -79,6 +113,8 @@ describe("generic WorkItems", () => {
         if (!remarked) {
           remarked = true;
           await markWork(db, drain, [{ target: "synthetic", ref }]);
+          // A stale page cannot restore its cursor after the new ticket resets it.
+          await advanceWorkFanouts(db, [{ item: before, after: cursor }]);
         }
         return { prepared: null };
       },
@@ -95,6 +131,7 @@ describe("generic WorkItems", () => {
       .where(eq(workItem.ref, ref));
     expect(current?.ticket).toBeGreaterThan(before.ticket);
     expect(current?.attempts).toBe(0);
+    expect(current?.fanoutAfter).toBeNull();
     expect(
       await getDb(ctx.db)
         .select()

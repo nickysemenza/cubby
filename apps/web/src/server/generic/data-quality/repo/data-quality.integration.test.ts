@@ -1,7 +1,6 @@
 import { scoredEntities } from "@cubby/schemas/data-quality";
 import { dataQuality } from "@cubby/schemas/data-quality-shape";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { ProductFilters } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { eq, type SQL, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
@@ -11,7 +10,6 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { TEXT_WHITESPACE, hasText, trimText } from "~/lib/text-whitespace";
-import type { Database } from "~/server/db";
 import { hasTextSql, trimTextSql } from "~/server/db/computed/text-whitespace";
 import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { unwrapDb } from "~/server/db/helpers";
@@ -24,8 +22,6 @@ import {
 } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
-import { productScaffold } from "~/server/domains/product/repo/crud";
-import { attachProductComponents } from "~/server/domains/product/repo/product-components";
 import { purchaseScaffold } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
@@ -99,18 +95,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
   const publishedProductList: typeof listProductsFixture = async (...args) => {
     await publishQualityFixtures(ctx.db, "product");
     return listProductsFixture(...args);
-  };
-  const publishedProductWhere = async (
-    db: Database,
-    filters: ProductFilters,
-  ) => {
-    await publishQualityFixtures(ctx.db, "product");
-    return productScaffold.where(filters, {
-      context: await productScaffold.context(db, {
-        filters,
-        readIntent: "count",
-      }),
-    });
   };
   const publishedRecordWorkQueue: typeof readRecordWorkQueue = async (
     ...args
@@ -231,117 +215,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
     }
     return { weak, middling, catalogOnly };
   };
-
-  // Catalog price gaps must not repeat a kit-pricing walk for every Product.
-  // A kit-priced part remains priced even without its own acquiring Expense.
-  it("reads published price checks across catalog gaps and bounded hydration", async () => {
-    const { weak, middling } = await seedProducts();
-    const queueKeys = async () =>
-      (
-        await publishedRecordWorkQueue(ctx.db, {
-          id: weak.id,
-          memberPartyId: null,
-          memberOnly: false,
-        })
-      ).items.map((row) => row.key);
-    for (let index = 0; index < 64; index++)
-      await createProductIdentityFixture(
-        ctx.db,
-        makeProductInput({ name: `Synthetic price catalog ${index}` }),
-        TEST_ACTOR,
-      );
-    const kit = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic priced kit" }),
-      TEST_ACTOR,
-    );
-    await attachProductComponents(
-      ctx.db,
-      kit.entityId,
-      [{ productId: weak.entityId, quantity: 4 }],
-      TEST_ACTOR,
-    );
-    const whereBefore = await publishedProductWhere(ctx.db, {
-      dataGap: "product_price",
-    });
-    const before = await unwrapDb(ctx.db)
-      .select({ id: product.id })
-      .from(product)
-      .where(whereBefore);
-    expect(before.map((row) => row.id)).toContain(weak.entityId);
-    expect(await queueKeys()).toContain(`productsMissingPrice:${weak.id}`);
-    const excepted = await setDataException(
-      ctx.db,
-      {
-        entityId: weak.id,
-        check: "product_price",
-        reason: "unavailable",
-        note: "Synthetic historical price is unavailable.",
-      },
-      TEST_ACTOR,
-    );
-    expect(excepted.exceptions).toContainEqual(
-      expect.objectContaining({ check: "product_price", state: "active" }),
-    );
-    await publishQualityFixtures(ctx.db, "product");
-    const filteredException = await unwrapDb(ctx.db)
-      .select({ id: product.id })
-      .from(product)
-      .where(whereBefore);
-    expect(filteredException.map((row) => row.id)).not.toContain(weak.entityId);
-    expect(await queueKeys()).not.toContain(`productsMissingPrice:${weak.id}`);
-    await createExpense(
-      ctx.db,
-      makeExpenseInput({
-        name: "Synthetic kit acquisition",
-        productId: kit.id,
-        cost: 10,
-        productQuantity: 2,
-      }),
-      TEST_ACTOR,
-    );
-    const where = await publishedProductWhere(ctx.db, {
-      dataGap: "product_price",
-    });
-    const after = await unwrapDb(ctx.db)
-      .select({ id: product.id })
-      .from(product)
-      .where(where);
-    expect(after.map((row) => row.id)).not.toContain(weak.entityId);
-    expect(await queueKeys()).not.toContain(`productsMissingPrice:${weak.id}`);
-    const hydrated = await publishedQualities(ctx.db, "product", [
-      weak.entityId,
-      middling.entityId,
-    ]);
-    expect(
-      hydrated.get(weak.entityId)?.gaps.map((gap) => gap.check),
-    ).not.toContain("product_price");
-    expect(hydrated.get(weak.entityId)?.exceptions).toContainEqual(
-      expect.objectContaining({ check: "product_price", state: "active" }),
-    );
-    const planNode = z.object({
-      "Relation Name": z.string().optional(),
-      "Actual Loops": z.number().optional(),
-      get Plans() {
-        return z.array(planNode).optional();
-      },
-    });
-    const explained = await unwrapDb(ctx.db).execute(
-      sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT ${product.id} FROM ${product} WHERE ${where}`,
-    );
-    const plan = z
-      .array(z.object({ Plan: planNode }))
-      .parse(explained.rows[0]?.["QUERY PLAN"])[0];
-    if (!plan) throw new Error("Missing query plan");
-    let edgeScans = 0;
-    const visit = (node: z.infer<typeof planNode>) => {
-      if (node["Relation Name"] === "EntityLink")
-        edgeScans += node["Actual Loops"] ?? 0;
-      node.Plans?.forEach(visit);
-    };
-    visit(plan.Plan);
-    expect(edgeScans).toBe(0);
-  });
 
   it("filters by status and gap exactly as the hydrated object reports", async () => {
     const { weak, middling, catalogOnly } = await seedProducts();

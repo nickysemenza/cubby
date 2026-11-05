@@ -5,6 +5,7 @@
  * changed values. A mark clears only while its ticket is unchanged since the
  * claim, so a save that lands during compute keeps the record dirty.
  */
+import type { Entity } from "@cubby/schemas/entity";
 import { humanize } from "@cubby/shared";
 import { inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -12,9 +13,13 @@ import { z } from "zod";
 import type { DatabaseChanges } from "~/lib/doorbell";
 import type { Database } from "~/server/db";
 import {
+  isFanoutInput,
+  type InternalStoredDerivedDeclaration,
   type DerivedInput,
   type DerivedPathStep,
   dependentsOf,
+  entityStoredDerivedDeclarations,
+  type EntityStoredDerivedDeclaration,
   parseTarget,
   storedDerivedDeclarations,
   type StoredDerivedDeclaration,
@@ -39,6 +44,7 @@ import {
 import { fanoutTargetMatches } from "~/server/generic/derived/repo/fanout";
 import {
   type Drain,
+  advanceWorkFanouts,
   markWorkFrom,
   observeReadyWork,
   unobservedWork,
@@ -77,13 +83,20 @@ export function derivedWorkEligible(target: SQL): SQL {
 const ident = (name: string) => sql.raw(`"${name.replaceAll('"', '""')}"`);
 const fixedTargetRows = (
   table: string,
-  where: Readonly<Record<string, string | null>>,
+  where: Readonly<Record<string, string | null | readonly string[]>>,
 ) =>
   sql`SELECT id FROM ${ident(table)} WHERE ${sql.join(
     Object.entries(where).map(([column, value]) =>
       value === null
         ? sql`${ident(column)} IS NULL`
-        : sql`${ident(column)} = ${value}`,
+        : typeof value === "string"
+          ? sql`${ident(column)} = ${value}`
+          : value.length === 0
+            ? sql`false`
+            : sql`${ident(column)} IN (${sql.join(
+                value.map((item) => sql`${item}`),
+                sql`, `,
+              )})`,
     ),
     sql` AND `,
   )}`;
@@ -136,6 +149,8 @@ export function admitDerivedPage({
 const RING_RECORD_LIMIT = 200;
 /** Extra scheduling marks covered by one fixed-target expansion, not extra computes. */
 const FIXED_FANOUT_COVERAGE_LIMIT = 200;
+/** Dependent writes across an internal-record fanout chunk, not a source-mark count. */
+const INTERNAL_FANOUT_WRITE_LIMIT = 500;
 /** Reconcile priority: a changed value here is drift, an undeclared input. */
 const RECONCILE_PRIORITY = 2;
 
@@ -177,9 +192,25 @@ const declaredTargetsMatch = (targets: readonly string[]) => (column: SQL) =>
     ),
   ) ?? sql`false`;
 
+/** A sink's own failures, resolved before any of them settles. */
+const claimedSinkFailures = (
+  target: string,
+  items: readonly WorkItem[],
+  failures: ReadonlyMap<string, unknown>,
+) => {
+  const claimed = new Map(items.map((item) => [item.ref, item]));
+  return [...failures].map(([ref, error]) => {
+    const item = claimed.get(ref);
+    if (!item)
+      throw new Error(`${target} reported a failure for unclaimed ref ${ref}`);
+    return [item, error] as const;
+  });
+};
+
 /**
  * Compute every direct mark's value outside the publication transaction. A
- * target whose compute fails fails each of its items; the rest publish.
+ * target whose compute fails fails each of its items; a sink can instead fail
+ * individual refs. The rest publish.
  */
 export async function prepareDerivedPage(
   db: Database,
@@ -212,13 +243,18 @@ export async function prepareDerivedPage(
     const selection = parsed?.fanoutInput?.selection;
     if (!parsed || !selection) continue;
     const adapter = computes[parsed.declaration.compute];
-    const select =
-      adapter && !isDerivedSink(adapter)
-        ? adapter.fanoutSelections?.[selection.key]
-        : undefined;
-    if (!select || parsed.declaration.publishes !== "derivedValue")
+    const select = adapter?.fanoutSelections?.[selection.key];
+    // A value selection also reads its retained `DerivedValue`, so a value
+    // adapter must own it. An internal record's refs reach only its sink.
+    const owned =
+      adapter &&
+      (parsed.declaration.kind === "internalRecord"
+        ? isDerivedSink(adapter)
+        : !isDerivedSink(adapter) &&
+          parsed.declaration.publishes === "derivedValue");
+    if (!select || !owned)
       throw new Error(
-        `No value fanout selection ${parsed.declaration.target}.${selection.key}`,
+        `No fanout selection ${parsed.declaration.target}.${selection.key}`,
       );
     fanoutSelections.set(target, select);
   }
@@ -260,12 +296,18 @@ export async function prepareDerivedPage(
         throw new Error(`No compute adapter ${parsed.declaration.compute}`);
       const ids = group.map((item) => item.ref);
       if (isDerivedSink(compute)) {
-        sinks.set(target, {
-          sink: compute,
-          prepared: await compute.prepare(db, ids),
-        });
+        const prepared = await compute.prepare(db, ids);
+        const failures = claimedSinkFailures(
+          target,
+          group,
+          compute.preparationFailures?.(prepared) ?? new Map(),
+        );
+        sinks.set(target, { sink: compute, prepared });
+        for (const [item, error] of failures) failed.set(item, error);
         continue;
       }
+      if (parsed.declaration.kind !== "entity")
+        throw new Error(`${target} publishes through a derived sink`);
       const values = new Map<string, DerivedComputed>();
       for (let start = 0; start < ids.length; start += DERIVED_COMPUTE_BATCH)
         for (const [id, value] of compute.sharedPreparation &&
@@ -328,9 +370,14 @@ function selectedTargetRows(
   select: DerivedFanoutSelection,
 ): SQL {
   const selection = input.selection;
-  if (!selection || !input.targetWhere)
+  if (!selection)
     throw new Error(`Invalid fanout selection for ${declaration.target}`);
   const sourceRefs = selection.path ? pathSql(selection.path, refs) : refs;
+  if (declaration.kind === "internalRecord")
+    return sql`WITH derived_fanout_refs(id) AS MATERIALIZED (${sourceRefs})
+      SELECT current_targets.id FROM (${select(sql`SELECT id FROM derived_fanout_refs`)}) current_targets`;
+  if (!input.targetWhere || !selection.retained)
+    throw new Error(`Invalid fanout selection for ${declaration.target}`);
   const retainedArray = sql`v.value #> ARRAY[${sql.join(
     selection.retained.array.map((key) => sql`${key}`),
     sql`, `,
@@ -351,7 +398,11 @@ function selectedTargetRows(
 /** Records whose stored inputs reach a changed record, per kind, bounded for the doorbell ring. */
 class Touched {
   private readonly affected = new Map<string, Set<string>>();
-  add(entity: string, ids: readonly string[]) {
+  private readonly categories = new Set<string>();
+  addCategories(categories: readonly string[]) {
+    for (const category of categories) this.categories.add(category);
+  }
+  add(entity: Entity, ids: readonly string[]) {
     const set = this.affected.get(entity) ?? new Set<string>();
     this.affected.set(entity, set);
     if (set.size > RING_RECORD_LIMIT) return;
@@ -381,21 +432,38 @@ class Touched {
             .map((row) => [row.id, row.shortcode]),
     );
     return {
-      categories: [...this.affected.keys()].sort(),
-      changes: Object.fromEntries(
-        [...this.affected].map(([entity, set]) => [
-          entity,
-          set.size > RING_RECORD_LIMIT
-            ? null
-            : [...set].flatMap((id) => {
-                const code = codes.get(id);
-                return code ? [code] : [];
-              }),
-        ]),
-      ),
+      categories: [
+        ...new Set([...this.affected.keys(), ...this.categories]),
+      ].sort(),
+      changes: {
+        ...Object.fromEntries(
+          [...this.categories].map((category) => [category, null]),
+        ),
+        ...Object.fromEntries(
+          [...this.affected].map(([entity, set]) => [
+            entity,
+            set.size > RING_RECORD_LIMIT
+              ? null
+              : [...set].flatMap((id) => {
+                  const code = codes.get(id);
+                  return code ? [code] : [];
+                }),
+          ]),
+        ),
+      },
     };
   }
 }
+
+/** A `sinkOwned` declaration's refs are not entity ids: its sink notifies instead. */
+const touchDeclaredRefs = (
+  touched: Touched,
+  declaration: StoredDerivedDeclaration,
+  ids: readonly string[],
+) => {
+  if (declaration.notifications === "entityRefs")
+    touched.add(declaration.entity, ids);
+};
 
 /**
  * Expand the chunk's fanout marks into their dependents' marks. Runs before
@@ -408,13 +476,54 @@ async function expandFanouts(
   items: readonly WorkItem[],
   touched: Touched,
   plan: DerivedPagePlan,
-): Promise<Pick<DerivedChunk, "expanded" | "covered">> {
+): Promise<Pick<DerivedChunk, "expanded" | "covered" | "fanoutProgress">> {
+  const paged = items.filter((item) => {
+    const parsed = parseTarget(item.target);
+    return parsed?.fanoutInput && parsed.declaration.kind === "internalRecord";
+  });
+  const fanoutProgress = new Map<string, string>();
+  let expanded = 0;
+  const pageSize = Math.max(
+    1,
+    Math.floor(INTERNAL_FANOUT_WRITE_LIMIT / Math.max(1, paged.length)),
+  );
+  for (const item of paged) {
+    const parsed = parseTarget(item.target);
+    if (!parsed?.fanoutInput) continue;
+    const { declaration, fanoutInput: input } = parsed;
+    const refs = sql`SELECT ${item.ref}::uuid AS id`;
+    const select = plan.fanoutSelections.get(item.target);
+    const dependents = fanoutRows(declaration, input, refs, select);
+    const rows = z.array(z.object({ id: z.string() })).parse(
+      (
+        await unwrapDb(tx).execute(sql`SELECT DISTINCT d.id::text AS id
+        FROM (${dependents}) d(id)
+        WHERE d.id IS NOT NULL ${item.fanoutAfter ? sql`AND d.id > ${item.fanoutAfter}::uuid` : sql``}
+        ORDER BY id LIMIT ${pageSize + 1}`)
+      ).rows,
+    );
+    const enrolled = rows.slice(0, pageSize).map((row) => row.id);
+    for (const result of await markWorkFrom(
+      tx,
+      DERIVED_DRAIN,
+      sql`SELECT ${declaration.target}::text, unnest(${uuidArrayParam(enrolled)}), ${item.priority}::int, ${item.reason ?? null}::text`,
+      { wake: false },
+    ))
+      expanded += result.count;
+    const last = enrolled.at(-1);
+    if (rows.length > pageSize && last)
+      fanoutProgress.set(fanoutProgressKey(item), last);
+  }
   const fixedTargets = [
     ...new Set(
       items.flatMap(({ target }) => {
         const input = parseTarget(target)?.fanoutInput;
         // A later covered ticket could remove a later chunk's publication fence.
-        return input?.targetWhere && !input.selection ? [target] : [];
+        return input?.targetWhere &&
+          !input.selection &&
+          parseTarget(target)?.declaration.kind === "entity"
+          ? [target]
+          : [];
       }),
     ),
   ];
@@ -431,22 +540,12 @@ async function expandFanouts(
     ([target, group]) => {
       const parsed = parseTarget(target);
       const input = parsed?.fanoutInput;
-      if (!parsed || !input) return [];
+      if (!parsed || !input || parsed.declaration.kind === "internalRecord")
+        return [];
       const { declaration } = parsed;
       const refs = sql`SELECT unnest(${uuidArrayParam(group.map((item) => item.ref))})`;
       const select = plan.fanoutSelections.get(target);
-      const dependents = select
-        ? selectedTargetRows(declaration, input, refs, select)
-        : input.targetWhere
-          ? fixedTargetRows(declaration.table, input.targetWhere)
-          : input.paths
-            ? sql.join(
-                input.paths.map((path) => sql`(${pathSql(path, refs)})`),
-                sql` UNION `,
-              )
-            : input.path
-              ? pathSql(input.path, refs)
-              : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
+      const dependents = fanoutRows(declaration, input, refs, select);
       const reasons = new Set(group.map((item) => item.reason ?? null));
       // Different source refs can reach disjoint dependents. Do not attribute
       // one ref's exact operation to every dependent in the combined expansion.
@@ -463,8 +562,7 @@ async function expandFanouts(
       ];
     },
   );
-  if (!selections.length) return { expanded: 0, covered: [] };
-  let expanded = 0;
+  if (!selections.length) return { expanded, covered: [], fanoutProgress };
   for (const { target, count, refs } of await markWorkFrom(
     tx,
     DERIVED_DRAIN,
@@ -473,9 +571,86 @@ async function expandFanouts(
   )) {
     expanded += count;
     const parsed = parseTarget(target);
-    if (parsed) touched.add(parsed.declaration.entity, refs);
+    if (parsed) touchDeclaredRefs(touched, parsed.declaration, refs);
   }
-  return { expanded, covered };
+  return { expanded, covered, fanoutProgress };
+}
+
+const fanoutProgressKey = (item: WorkItem) =>
+  `${item.target}:${item.ref}:${item.ticket}`;
+
+function fanoutRows(
+  declaration: StoredDerivedDeclaration,
+  input: DerivedInput,
+  refs: SQL,
+  select: DerivedFanoutSelection | undefined,
+): SQL {
+  if (input.selection && !select)
+    throw new Error(
+      `No fanout selection ${declaration.target}.${input.selection.key}`,
+    );
+  return select
+    ? selectedTargetRows(declaration, input, refs, select)
+    : input.targetWhere
+      ? fixedTargetRows(declaration.table, input.targetWhere)
+      : input.paths
+        ? sql.join(
+            input.paths.map((path) => sql`(${pathSql(path, refs)})`),
+            sql` UNION `,
+          )
+        : input.path
+          ? pathSql(input.path, refs)
+          : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
+}
+
+/** A sink's expansion and source fence share current-and-retained selectors. */
+export function derivedFanoutSourceScope({
+  declaration,
+  selections,
+  dependentIds,
+  sourceRefs,
+  sourceTargets,
+}: {
+  declaration: InternalStoredDerivedDeclaration;
+  selections: Readonly<Record<string, DerivedFanoutSelection>>;
+  dependentIds: readonly string[];
+  /** Snapshot input identities survive a move that changes the live selector. */
+  sourceRefs: ReadonlyMap<string, readonly string[]>;
+  /** Excluded or unknown inputs keep the conservative target-wide fence. */
+  sourceTargets?: ReadonlySet<string>;
+}): (source: { target: SQL; ref: SQL }) => SQL {
+  const inputs = declaration.inputs.flatMap((input, index) => {
+    if (!isFanoutInput(input)) return [];
+    const target = `${declaration.target}@${index}`;
+    if (sourceTargets && !sourceTargets.has(target)) return [];
+    const select = input.selection
+      ? selections[input.selection.key]
+      : undefined;
+    return [
+      { target, input, select, refs: [...(sourceRefs.get(target) ?? [])] },
+    ];
+  });
+  const members = [...dependentIds];
+  return ({ target, ref }) =>
+    inputs.length === 0
+      ? sql`true`
+      : sql`CASE ${target}
+    ${sql.join(
+      inputs.map(
+        (source) => sql`WHEN ${source.target} THEN (
+      ${ref} = ANY(${uuidArrayParam(source.refs)}) OR EXISTS (
+      SELECT 1 FROM (${fanoutRows(
+        declaration,
+        source.input,
+        sql`SELECT ${ref}::uuid AS id`,
+        source.select,
+      )}) affected(id)
+      WHERE affected.id = ANY(${uuidArrayParam(members)})
+    ))`,
+      ),
+      sql` `,
+    )}
+    ELSE true END`;
 }
 
 /**
@@ -507,11 +682,13 @@ export type DerivedChunk = {
   expanded: number;
   touched: Touched;
   covered: readonly WorkItem[];
+  fanoutProgress: ReadonlyMap<string, string>;
 };
 export const derivedChunk = (): DerivedChunk => ({
   expanded: 0,
   touched: new Touched(),
   covered: [],
+  fanoutProgress: new Map(),
 });
 
 /**
@@ -526,9 +703,11 @@ export async function lockDerivedChunk(
 ): Promise<WorkItem[]> {
   chunk.touched = new Touched();
   chunk.covered = [];
+  chunk.fanoutProgress = new Map();
   const expansion = await expandFanouts(db, items, chunk.touched, plan);
   chunk.expanded = expansion.expanded;
   chunk.covered = expansion.covered;
+  chunk.fanoutProgress = expansion.fanoutProgress;
   const tx = unwrapDb(db);
   const narrowed: WorkItem[] = [];
   for (const [target, group] of groupByTarget(items)) {
@@ -543,7 +722,7 @@ export async function lockDerivedChunk(
 }
 
 const sortColumns = (
-  declaration: StoredDerivedDeclaration,
+  declaration: EntityStoredDerivedDeclaration,
   sort: number | string | null,
 ) => ({
   sortNumber:
@@ -560,7 +739,7 @@ const blockedByFanout = (target: string, plan: DerivedPagePlan) =>
   );
 
 type ValueGroup = {
-  declaration: StoredDerivedDeclaration;
+  declaration: EntityStoredDerivedDeclaration;
   items: readonly WorkItem[];
   values: ReadonlyMap<string, DerivedComputed>;
 };
@@ -674,7 +853,7 @@ async function publishValues(
 /** Mark records whose value reads a changed stored value; propagation is priority 1. */
 async function propagate(
   db: Database,
-  declaration: StoredDerivedDeclaration,
+  declaration: EntityStoredDerivedDeclaration,
   changedIds: readonly string[],
 ) {
   if (changedIds.length === 0) return;
@@ -736,7 +915,12 @@ export async function publishDerivedChunk(
   const valueGroups: ValueGroup[] = [];
   for (const [target, group] of groups) {
     const parsed = parseTarget(target);
-    if (parsed && !parsed.fanoutInput && !plan.sinks.has(target))
+    if (
+      parsed &&
+      !parsed.fanoutInput &&
+      !plan.sinks.has(target) &&
+      parsed.declaration.kind === "entity"
+    )
       valueGroups.push({
         declaration: parsed.declaration,
         items: group,
@@ -747,6 +931,15 @@ export async function publishDerivedChunk(
     ? await publishValues(tx, valueGroups, plan)
     : { changed: new Map<string, string[]>(), published: new Map() };
   const retain: WorkItem[] = [];
+  const covered = [...chunk.covered];
+  const progress = items.flatMap((item) => {
+    const after = chunk.fanoutProgress.get(fanoutProgressKey(item));
+    return after ? [{ item, after }] : [];
+  });
+  // The dependent marks were written before source locking. Advance only the
+  // held tickets, in the same transaction, so a re-mark restarts enrollment.
+  await advanceWorkFanouts(db, progress);
+  retain.push(...progress.map(({ item }) => item));
   const drift: { target: string; count: number }[] = [];
   let changed = 0;
   for (const [target, group] of groups) {
@@ -757,21 +950,42 @@ export async function publishDerivedChunk(
     let changedIds: readonly string[];
     let publishedIds: ReadonlySet<string>;
     if (sink) {
+      const heldIds = group.map((item) => item.ref);
       const [row] = z
         .array(z.object({ blocked: z.boolean() }))
         .parse(
           (
             await tx.execute(
-              sql`SELECT ${blockedByFanout(target, plan)} AS blocked`,
+              sql`SELECT ${
+                sink.sink.publicationBlocked?.(sink.prepared, heldIds) ??
+                blockedByFanout(target, plan)
+              } AS blocked`,
             )
           ).rows,
         );
-      const ids = row?.blocked ? [] : group.map((item) => item.ref);
+      const ids = row?.blocked ? [] : heldIds;
       // Sinks reuse repository writers, which take the Database handle.
-      changedIds = ids.length
-        ? await sink.sink.publish(db, ids, sink.prepared)
+      const outcome = ids.length
+        ? await sink.sink.publish(db, ids, sink.prepared, {
+            tickets: new Map(group.map((item) => [item.ref, item.ticket])),
+            notify: (entity, refs) => {
+              // An empty set would still ring the entity's whole category.
+              if (refs.length) touched.add(entity, refs);
+            },
+          })
         : [];
-      publishedIds = new Set(ids);
+      const retainedIds = new Set("retain" in outcome ? outcome.retain : []);
+      const held = new Set(ids);
+      if ([...retainedIds].some((id) => !held.has(id)))
+        throw new Error("Derived sink retained an unclaimed source");
+      const peers = "retain" in outcome ? (outcome.covered ?? []) : [];
+      if (peers.some((item) => item.target !== target))
+        throw new Error("Derived sink covered another target's work");
+      // The generic settlement owner locks these exact generations; a newer
+      // ticket or a peer already claimed by a later chunk remains owed.
+      covered.push(...peers);
+      changedIds = "changed" in outcome ? outcome.changed : outcome;
+      publishedIds = new Set(ids.filter((id) => !retainedIds.has(id)));
     } else {
       changedIds = values.changed.get(target) ?? [];
       publishedIds = new Set(values.published.get(target) ?? []);
@@ -779,6 +993,7 @@ export async function publishDerivedChunk(
     retain.push(...group.filter((item) => !publishedIds.has(item.ref)));
     const published = group.filter((item) => publishedIds.has(item.ref));
     if (!published.length) continue;
+    if (sink) touched.addCategories(sink.sink.notificationCategories ?? []);
     changed += changedIds.length;
     const reconciled = new Set(
       published
@@ -788,23 +1003,30 @@ export async function publishDerivedChunk(
     const drifted = changedIds.filter((id) => reconciled.has(id)).length;
     if (drifted > 0) drift.push({ target, count: drifted });
     // Every published record's freshness changed, whether or not its value did.
-    touched.add(
-      declaration.entity,
+    touchDeclaredRefs(
+      touched,
+      declaration,
       published.map((item) => item.ref),
     );
-    await propagate(db, declaration, changedIds);
+    // Dependencies name entity values only, so no value reads an internal record.
+    if (declaration.kind === "entity")
+      await propagate(db, declaration, changedIds);
   }
   return {
     changed,
     expanded: chunk.expanded,
     drift,
     retain,
-    covered: chunk.covered,
+    covered,
     ...(await touched.publication(tx)),
   };
 }
 
-/** Mark every stored value at reconcile priority; publication reports drift. */
+/**
+ * Mark every stored value at reconcile priority; publication reports drift. A
+ * declared reconcile population replaces the source table's rows, keeping the
+ * same id slice; a record outside it converges through its own marks only.
+ */
 export async function markAllStoredDerived(
   db: RepositoryQueryInput,
   include: (declaration: StoredDerivedDeclaration) => boolean = () => true,
@@ -813,11 +1035,16 @@ export async function markAllStoredDerived(
 ): Promise<number> {
   let marked = 0;
   for (const declaration of storedDerivedDeclarations().filter(include)) {
+    const reconcile =
+      declaration.kind === "internalRecord" ? declaration.reconcile : null;
+    const population = reconcile
+      ? fixedTargetRows(reconcile.table, reconcile.where)
+      : sql`SELECT id FROM ${ident(declaration.table)}`;
     const rows = await markWorkFrom(
       db,
       DERIVED_DRAIN,
       sql`SELECT ${declaration.target}::text, t.id, ${RECONCILE_PRIORITY}::int, 'Scheduled consistency check'::text
-        FROM ${ident(declaration.table)} t
+        FROM (${population}) t
         ${slice ? sql`WHERE mod(abs(hashtext(t.id::text)), ${slice.count}) = ${slice.index}` : sql``}`,
       { existing: "keep" },
     );
@@ -826,25 +1053,50 @@ export async function markAllStoredDerived(
   return marked;
 }
 
-/** Calendar expiry reuses dirty marks and the existing minute drain, without resetting failures. */
+export function hasClockDerived(computes: DerivedComputes): boolean {
+  return (
+    entityStoredDerivedDeclarations().some(
+      (entry) => entry.clock === "householdDay",
+    ) ||
+    Object.values(computes).some(
+      (adapter) => isDerivedSink(adapter) && adapter.clockExpiredRefs,
+    )
+  );
+}
+
+/** Calendar expiry reuses dirty marks and the existing derived Job, without resetting failures. */
 export async function markExpiredClockDerived(
   db: RepositoryQueryInput,
+  computes?: DerivedComputes,
 ): Promise<number> {
-  const targets = storedDerivedDeclarations()
+  const targets = entityStoredDerivedDeclarations()
     .filter(
       (entry) =>
         entry.clock === "householdDay" && entry.publishes === "derivedValue",
     )
     .map(({ target, key, entity }) => ({ target, key, entity }));
-  if (targets.length === 0) return 0;
-  const rows = await markWorkFrom(
-    db,
-    DERIVED_DRAIN,
-    sql`SELECT k.target, v."entityId", ${RECONCILE_PRIORITY}::int, 'Daily refresh due'::text
+  const day = householdDaySql(sql`clock_timestamp() AT TIME ZONE 'UTC'`);
+  const sources: SQL[] = [];
+  if (targets.length)
+    sources.push(sql`SELECT k.target, v."entityId", ${RECONCILE_PRIORITY}::int, 'Daily refresh due'::text
         FROM jsonb_to_recordset(${JSON.stringify(targets)}::jsonb) AS k(target text, key text, entity text)
         JOIN "DerivedValue" v ON v.key = k.key
         JOIN ${entityIdentity} ON ${entityIdentity.id} = v."entityId" AND ${entityIdentity.kind} = k.entity AND ${notDeleted(entityIdentity)}
-       WHERE ${householdDaySql(sql`v."computedAt"`)} < ${householdDaySql(sql`now() AT TIME ZONE 'UTC'`)}`,
+        WHERE ${householdDaySql(sql`v."computedAt"`)} < ${day}`);
+  for (const declaration of storedDerivedDeclarations()) {
+    const adapter = computes?.[declaration.compute];
+    if (adapter && isDerivedSink(adapter) && adapter.clockExpiredRefs)
+      sources.push(sql`SELECT ${declaration.target}::text, expired.id, ${RECONCILE_PRIORITY}::int, 'Daily refresh due'::text
+        FROM (${adapter.clockExpiredRefs(day)}) expired`);
+  }
+  if (!sources.length) return 0;
+  const rows = await markWorkFrom(
+    db,
+    DERIVED_DRAIN,
+    sql.join(
+      sources.map((source) => sql`(${source})`),
+      sql` UNION ALL `,
+    ),
     { existing: "keep" },
   );
   return rows.reduce((total, row) => total + row.count, 0);

@@ -1,5 +1,7 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily } from "@cubby/schemas/assessment";
+import { assessmentReadScopedSourceKind } from "@cubby/schemas/assessment-read-publication";
+import { entitySchema } from "@cubby/schemas/entity";
 import { productShortcode } from "@cubby/schemas/identifiers";
 import { tagPropagationRecommendationOut } from "@cubby/schemas/recommendations";
 import { recommendationSuggestionRow } from "@cubby/schemas/suggestion-list";
@@ -7,6 +9,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { textHashRefSql } from "~/server/db/derived-source-ref";
 import { getDb, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { assessment, assessmentState, product } from "~/server/db/schema";
@@ -14,12 +17,16 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { executeEntity } from "~/server/entity-kernel/execute";
 import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
-import { reviewFamilyDeclarations } from "~/server/generic/assessment/repo/review-families";
+import {
+  pendingRecommendationEligibility,
+  reviewFamilyDeclarations,
+} from "~/server/generic/assessment/repo/review-families";
 
 import {
   keyBase,
   type SuggestionFamilyQuery,
   type SuggestionKey,
+  type SuggestionReadObserver,
 } from "./suggestion-families";
 
 const candidateSchema = tagPropagationRecommendationOut.shape.proposals.element;
@@ -153,9 +160,7 @@ async function tagRows(db: Database, ids?: readonly string[]) {
     FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id JOIN "Product" p ON p.id = s."recordId" AND ${notDeleted("p")}
     WHERE a.family = ${assessmentFamily.enum.recommendation} AND ${reviewFamilyDeclarations.recommendation.scopes.tagPropagation} AND a.served AND s.active AND s.status = ${suggestionStatus.enum.pending}
       AND s.suppression IS NULL AND p."updatedAt" <= a."createdAt" AND NOT (a.evidence->>'tag' = ANY(p.tags))
-      AND NOT EXISTS (SELECT 1 FROM "AssessmentState" suppressed WHERE suppressed.active AND suppressed.entity = s.entity AND suppressed."recordId" = s."recordId"
-        AND suppressed.suppression->>'scope' = a.subject->>'scope' AND suppressed.suppression->>'candidateKey' = a.subject->>'candidateKey'
-        AND (suppressed.suppression->>'fingerprint' IS NULL OR suppressed.suppression->>'fingerprint' = a.fingerprint))
+      AND ${pendingRecommendationEligibility({ memberFeedback: false })}
       ${ids ? sql`AND a.id = ANY(${uuidArrayParam(ids)})` : sql``}`);
   const parsedRows = rows.flatMap((row) => {
     const parsed = proposalSchema.safeParse(row.evidence);
@@ -177,8 +182,60 @@ async function tagRows(db: Database, ids?: readonly string[]) {
 export async function tagSuggestionKeys(
   db: Database,
   query: SuggestionFamilyQuery,
+  observeInputs?: SuggestionReadObserver,
 ): Promise<SuggestionKey[]> {
   if (query.filters.status !== "pending") return [];
+  // Retain donor keys even when a changed revision currently hides the advice.
+  // Hashing the shortcode also covers a donor whose payload is not present yet.
+  if (observeInputs && query.assessmentIds?.length) {
+    const inputs = await unwrapDb(db)
+      .execute(sql`SELECT a.id, a.evidence, subject.shortcode AS code
+      FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
+      LEFT JOIN "Entity" subject ON subject.id = s."recordId" AND subject.kind = ${entitySchema.enum.product}
+      WHERE a.id = ANY(${uuidArrayParam(query.assessmentIds)})
+        AND a.family = ${assessmentFamily.enum.recommendation}
+        AND ${reviewFamilyDeclarations.recommendation.scopes.tagPropagation}
+        AND s.active AND s.status = ${suggestionStatus.enum.pending}`);
+    const observed = z
+      .array(
+        z.object({
+          id: z.guid(),
+          evidence: z.unknown(),
+          code: z.string().nullable(),
+        }),
+      )
+      .parse(inputs.rows);
+    const codes = observed.flatMap((row) => {
+      const proposal = proposalSchema.safeParse(row.evidence);
+      return [
+        ...new Set([
+          ...(row.code ? [row.code] : []),
+          ...(proposal.success
+            ? proposal.data.basis.supportingProducts.map((donor) => donor.id)
+            : []),
+        ]),
+      ].map((code) => ({ id: row.id, code }));
+    });
+    const hashes = codes.length
+      ? z.array(z.object({ id: z.guid(), refs: z.array(z.guid()) })).parse(
+          (
+            await unwrapDb(db).execute(sql`
+      SELECT input.id, array_agg(DISTINCT ${textHashRefSql(sql`input.code`)}::text) AS refs
+      FROM jsonb_to_recordset(${JSON.stringify(codes)}::jsonb) input(id uuid, code text)
+      GROUP BY input.id`)
+          ).rows,
+        )
+      : [];
+    const byId = new Map(hashes.map((row) => [row.id, row.refs]));
+    for (const row of observed)
+      observeInputs(
+        row.id,
+        (byId.get(row.id) ?? []).map((sourceId) => ({
+          sourceKind: assessmentReadScopedSourceKind.enum.tagProduct,
+          sourceId,
+        })),
+      );
+  }
   return (await tagRows(db, query.assessmentIds)).map((row) => ({
     family: "recommendation",
     assessmentId: row.id,

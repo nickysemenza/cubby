@@ -36,6 +36,14 @@ age is not an execution-event rate. Missing execution observations stay unknown.
 Assessment source observations remain pending the separately owned producer
 cutover; this UI contract does not imply that registration has shipped.
 
+Suggestion candidates consume the shared indexed
+Assessment publication references and current authority gates. Their coverage
+flags are conservative and global: incomplete coverage has no record count.
+References and coverage share the queue statement's snapshot. Work does not
+capture suggestion evidence, enroll refreshes or reconstruct eligibility on read.
+This consumer switch requires the matching producer registration and publication
+cutover; it must not deploy independently of that integration.
+
 The Work queue derives work from records, gaps, findings, execution, review
 state and Problems detectors. Each domain declares its Work sources (reasons,
 Work family, Executor, link, actions and a candidate query); the queue composes
@@ -43,12 +51,6 @@ them explicitly and owns filtering, search, sorting, Group by, saved views,
 counts and paging. Its All, Automatic, Agent, Review, Waiting and Problems views
 share that one server read with record work sections, including Runs. GitHub
 Issues owns delivery and remaining domain coverage.
-
-Statement review work probes current eligibility only for the admitted financial
-accounts, stopping after the first eligible proposal per account. Record work
-for another entity never prepares statement suggestions. These reads retain
-source withdrawals, ignores, supersessions and settlement references as the
-eligibility authority; a stored pending proposal alone does not establish work.
 
 The Runs header links to **Run types** (`/runs/types`), a catalog of every
 declared Run kind. Its indexed sections expose purpose keys, execution owners,

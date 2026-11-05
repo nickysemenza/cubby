@@ -11,9 +11,12 @@ import { sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import {
+  CHARGE_STATE,
+  chargeKeyOf,
+  chargeStateOf,
+} from "~/server/domains/transaction-import/repo/statement-charge";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
-
-import { CHARGE_STATE, chargeKeyOf, chargeStateOf } from "./statement-charge";
 
 /** Which charge identities a generation or label pass covers; empty covers the ledger. */
 export type StatementSuggestionScope = {

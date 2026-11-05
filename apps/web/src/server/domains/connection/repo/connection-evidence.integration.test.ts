@@ -1,24 +1,37 @@
+import { ASSESSMENT_READ_TARGET } from "@cubby/schemas/assessment-read-publication";
 import {
   type ConnectionCandidate,
   connectionCandidate,
 } from "@cubby/schemas/entity-connections";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { householdDaySql } from "~/server/db/helpers/query";
 import {
   entityLink,
   expense as expenseTable,
   financialTransactionAllocation,
+  financialTransaction,
   product as productTable,
   project as projectTable,
+  assessmentReadPublication,
+  assessmentReadStage,
 } from "~/server/db/schema";
 import { prepareEntityConnectionSources } from "~/server/domains/connection/service/entity-connections";
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import {
+  assessmentReadSourceSelection,
+  writeAssessmentReadStage,
+} from "~/server/generic/assessment/repo/read-publication";
+import { prepareSuggestionAdmission } from "~/server/generic/assessment/repo/suggestion-list";
+import { prepareCanonicalAssessmentReadPublication } from "~/server/generic/assessment/service/read-publication";
+import { isDerivedSink } from "~/server/generic/derived/repo/compute";
+import { readWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { measureDatabaseTransfer } from "~/server/testing/database-transfer.fixtures";
@@ -26,6 +39,7 @@ import {
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { derivedComputes } from "~/server/workflows/derived-computes";
 
 import {
   captureConnectionBasis,
@@ -37,6 +51,7 @@ import {
   prepareEntityConnectionEvidence,
   publishPreparedEntityConnections,
   readEntityConnections,
+  publishEntityConnection,
 } from "./entity-connections";
 
 // Freshness checks capture many bases from prepared, batched reads. Each must
@@ -81,6 +96,24 @@ describe("prepared connection bases", () => {
         postedDate: "2026-09-14",
       }),
     ]);
+    const transferAccount = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic basis reserve",
+      identity: { kind: "cash" },
+    });
+    const transferOut = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      amount: 73,
+      kind: "account_transfer",
+      status: "posted",
+      postedDate: "2026-09-12",
+    });
+    const transferIn = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: transferAccount.output.id,
+      amount: -73,
+      kind: "account_transfer",
+      status: "posted",
+      postedDate: "2026-09-13",
+    });
     const project = await createRepoEntity(ctx, "project", {
       name: "Synthetic basis project",
     });
@@ -163,6 +196,11 @@ describe("prepared connection bases", () => {
         ref("purchase", order.output.id),
       ),
       candidate(
+        "transaction-transfer",
+        ref("financialTransaction", transferOut.output.id),
+        ref("financialTransaction", transferIn.output.id),
+      ),
+      candidate(
         "project-tool",
         ref("project", project.output.id),
         ref("product", product.shortcode),
@@ -193,6 +231,206 @@ describe("prepared connection bases", () => {
       expect(
         canonicalJson(await captureConnectionBasis(ctx.db, raw, false, ready)),
       ).toBe(canonicalJson(await captureConnectionBasis(ctx.db, raw)));
+    const settlement = candidates.find(
+      (row) => row.relation === "transaction-purchase",
+    );
+    if (!settlement) throw new Error("Synthetic settlement candidate missing");
+    const proposal = await publishEntityConnection(ctx.db, settlement);
+    const late = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      amount: 40,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-09-12",
+      merchant: "Synthetic later candidate",
+    });
+    const oldId = proposal.review.assessmentId;
+    const affected = await getDb(ctx.db).execute(
+      assessmentReadSourceSelection(
+        "financialTransaction",
+        sql`SELECT ${late.entityId}::uuid AS id`,
+      ),
+    );
+    expect(affected.rows.map((row) => row.id)).toContain(oldId);
+    const stale = await prepareSuggestionAdmission(ctx.db, [oldId]);
+    expect(stale.keys).toEqual([]);
+    expect(stale.dependencies.get(oldId)).toEqual(
+      expect.arrayContaining([
+        { sourceKind: "financialTransaction", sourceId: late.entityId },
+      ]),
+    );
+    const adapter = derivedComputes[ASSESSMENT_READ_TARGET];
+    if (!adapter || !isDerivedSink(adapter))
+      throw new Error("Synthetic Assessment producer missing");
+    const preparedStale = await adapter.prepare(ctx.db, [oldId]);
+    expect(adapter.preparationFailures?.(preparedStale).size).toBe(0);
+    const tickets = new Map(
+      (await readWorkItems(ctx.db, { target: ASSESSMENT_READ_TARGET })).map(
+        (row) => [row.ref, row.ticket],
+      ),
+    );
+    const publishedStale = await withTransactionDatabase(ctx.db, (tx) =>
+      adapter.publish(tx, [oldId], preparedStale, {
+        tickets,
+        notify: () => {},
+      }),
+    );
+    expect(publishedStale).toMatchObject({ retain: [], changed: [oldId] });
+    // It leaves the current date window, but its observed dependency survives
+    // the empty publication and must still refresh advice it can revive.
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ postedDate: "2027-09-12" })
+      .where(eq(financialTransaction.id, late.entityId));
+    const moved = await getDb(ctx.db).execute(
+      assessmentReadSourceSelection(
+        "financialTransaction",
+        sql`SELECT ${late.entityId}::uuid AS id`,
+      ),
+    );
+    expect(moved.rows.map((row) => row.id)).toContain(oldId);
+    const recordedTransfer = candidates.find(
+      (row) => row.relation === "transaction-transfer",
+    );
+    if (!recordedTransfer)
+      throw new Error("Synthetic recorded-transfer candidate missing");
+    const transferProposal = await publishEntityConnection(
+      ctx.db,
+      recordedTransfer,
+    );
+    const transferPeer = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: transferAccount.output.id,
+      amount: -73,
+      kind: "account_transfer",
+      status: "posted",
+      postedDate: "2026-09-14",
+    });
+    const peers = await getDb(ctx.db).execute(
+      assessmentReadSourceSelection(
+        "financialTransaction",
+        sql`SELECT ${transferPeer.entityId}::uuid AS id`,
+      ),
+    );
+    expect(peers.rows.map((row) => row.id)).toContain(
+      transferProposal.review.assessmentId,
+    );
+    const staleTransfer = await prepareSuggestionAdmission(ctx.db, [
+      transferProposal.review.assessmentId,
+    ]);
+    expect(staleTransfer.keys).toEqual([]);
+    expect(
+      staleTransfer.dependencies.get(transferProposal.review.assessmentId),
+    ).toEqual(
+      expect.arrayContaining([
+        { sourceKind: "financialTransaction", sourceId: transferPeer.entityId },
+        { sourceKind: "financialAccount", sourceId: transferAccount.entityId },
+      ]),
+    );
+    const expenseProject = candidates.find(
+      (row) => row.relation === "expense-project",
+    );
+    if (!expenseProject)
+      throw new Error("Synthetic expense-project candidate missing");
+    const expenseProposal = await publishEntityConnection(
+      ctx.db,
+      expenseProject,
+    );
+    const expenseAdmission = await prepareSuggestionAdmission(ctx.db, [
+      expenseProposal.review.assessmentId,
+    ]);
+    expect(
+      expenseAdmission.dependencies.get(expenseProposal.review.assessmentId),
+    ).toEqual(
+      expect.arrayContaining([
+        { sourceKind: "expense", sourceId: history.entityId },
+        { sourceKind: "project", sourceId: project.entityId },
+        { sourceKind: "purchase", sourceId: order.entityId },
+      ]),
+    );
+    const toolCandidate = candidates.find(
+      (row) => row.relation === "project-tool",
+    );
+    if (!toolCandidate || !adapter.clockExpiredRefs)
+      throw new Error("Synthetic clock-sensitive sink missing");
+    const toolProposal = await publishEntityConnection(ctx.db, toolCandidate);
+    const toolId = toolProposal.review.assessmentId;
+    const productInputs = await getDb(ctx.db).execute(
+      assessmentReadSourceSelection(
+        "product",
+        sql`SELECT ${product.id}::uuid AS id`,
+      ),
+    );
+    expect(productInputs.rows.map((row) => row.id)).toContain(toolId);
+    expect(productInputs.rows.map((row) => row.id)).not.toContain(
+      expenseProposal.review.assessmentId,
+    );
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ name: "Synthetic changed clock tool" })
+      .where(eq(productTable.id, product.id));
+    const prepareClock = async () => {
+      const prepared = await prepareCanonicalAssessmentReadPublication(
+        ctx.db,
+        [toolId],
+        async () => () => sql`true`,
+      );
+      expect([...prepared.failures]).toEqual([]);
+      const component = prepared.components.at(0)?.prepared;
+      if (!component) throw new Error("Synthetic clock component missing");
+      return component;
+    };
+    const clock = await prepareClock();
+    expect(clock.results[0]?.facts).toEqual([]);
+    await withTransactionDatabase(ctx.db, (tx) =>
+      writeAssessmentReadStage(tx, clock, { notify: () => {} }),
+    );
+    const clockHeader = async () => {
+      const [header] = await getDb(ctx.db)
+        .select()
+        .from(assessmentReadPublication)
+        .where(
+          sql`${assessmentReadPublication.assessmentId} = ${toolId}::uuid AND ${assessmentReadPublication.active}`,
+        );
+      if (!header) throw new Error("Synthetic clock publication missing");
+      return header;
+    };
+    const beforeClock = await clockHeader();
+    expect(beforeClock.family).toBeNull();
+    const day = householdDaySql(sql`clock_timestamp() AT TIME ZONE 'UTC'`);
+    await getDb(ctx.db)
+      .update(assessmentReadPublication)
+      .set({ clockDay: sql`${day} - 1` })
+      .where(eq(assessmentReadPublication.assessmentId, toolId));
+    await getDb(ctx.db)
+      .update(assessmentReadStage)
+      .set({ clockDay: sql`${day} - 1` })
+      .where(eq(assessmentReadStage.componentKey, clock.stage.componentKey));
+    const expired = await getDb(ctx.db).execute(adapter.clockExpiredRefs(day));
+    expect(expired.rows.map((row) => row.id)).toContain(toolId);
+    const retryClock = await prepareClock();
+    const expiredHeader = await clockHeader();
+    expect(
+      await withTransactionDatabase(ctx.db, (tx) =>
+        writeAssessmentReadStage(
+          tx,
+          {
+            ...retryClock,
+            stage: { ...retryClock.stage, clockDay: expiredHeader.clockDay },
+          },
+          { notify: () => {} },
+        ),
+      ),
+    ).toMatchObject({ kind: "retained" });
+    expect(
+      await withTransactionDatabase(ctx.db, (tx) =>
+        writeAssessmentReadStage(tx, retryClock, { notify: () => {} }),
+      ),
+    ).toMatchObject({ kind: "activated", changed: [] });
+    expect(await clockHeader()).toMatchObject({
+      revision: beforeClock.revision,
+      computedAt: beforeClock.computedAt,
+      clockDay: retryClock.stage.clockDay,
+    });
     // One source's proposals can span capture batches and interleave with another's.
     // Sources share included history rows but keep their own exclusions.
     const sharedProduct = await insertWithShortcode(ctx.db, "product", {
@@ -250,6 +488,32 @@ describe("prepared connection bases", () => {
       },
     );
     expect(visited.map(({ entry }) => entry)).toEqual(interleaved);
+    // A skipped visit still counts toward its source's last visit: the one frozen
+    // snapshot survives to a real visit in a later capture batch.
+    const retained = new Map<string, unknown>();
+    const capturedIndexes: number[] = [];
+    await forEachConnectionBasis(
+      ctx.db,
+      interleaved.map((entry, index) => ({ candidate: entry, index })),
+      async ({ candidate: entry, index }, batched) => {
+        capturedIndexes.push(index);
+        expect(JSON.stringify(batched)).toBe(
+          JSON.stringify(await captureConnectionBasis(ctx.db, entry)),
+        );
+        const { dependencies } = z
+          .object({ dependencies: z.unknown() })
+          .parse(batched);
+        expect(dependencies).toBe(
+          retained.get(entry.source.entityId) ?? dependencies,
+        );
+        retained.set(entry.source.entityId, dependencies);
+      },
+      undefined,
+      ({ index }) => index % 2 === 0,
+    );
+    expect(capturedIndexes).toEqual(
+      interleaved.flatMap((_, index) => (index % 2 === 0 ? [] : [index])),
+    );
     await withTransactionDatabase(ctx.db, async (tx) => {
       const locked = await prepareConnectionBases(
         tx,

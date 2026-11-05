@@ -15,6 +15,7 @@ import {
   financialTransaction,
   ledgerParty,
 } from "~/server/db/schema";
+import { transferPoolAmountSql } from "~/server/domains/financial-transaction/repo/transfer-pair-input";
 import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -253,7 +254,7 @@ export async function suggestFinancialTransferPairs(
         or(
           ...requestedAmounts.map(
             (amount) =>
-              sql`round(abs(${financialTransaction.amount})::numeric * 100)::bigint = ${amount}`,
+              sql`${transferPoolAmountSql(sql`${financialTransaction.amount}::numeric`)} = ${amount}`,
           ),
         ),
       ),
