@@ -7,7 +7,7 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 const id = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const PREDECESSOR = "0074_mail_decision_owners";
+const PREDECESSOR = "0075_drop_redundant_indexes";
 const MEMBER = "synthetic-member";
 
 type Db = Client | PoolClient;

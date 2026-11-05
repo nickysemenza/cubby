@@ -94,9 +94,9 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
-## Suggestion table (0075)
+## Suggestion table (0076)
 
-`0075_suggestion_table` creates `Suggestion` from `Assessment`, `AssessmentState` and
+`0076_suggestion_table` creates `Suggestion` from `Assessment`, `AssessmentState` and
 `Feedback`, then moves those three tables to the `archive` schema with their foreign
 keys, triggers and secondary indexes removed. It never drops them. It runs in one
 transaction under `lock_timeout` 10s: `AuditLog` and `DerivedValue` trigger drops
