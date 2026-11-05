@@ -50,7 +50,7 @@ const workerQueueNames = {
   telemetry: identityName(workerIdentity.queues.telemetry),
 };
 const workerCronSchedules = {
-  dailyMaintenance: identityName(workerIdentity.crons.dailyMaintenance),
+  hourly: identityName(workerIdentity.crons.hourly),
 };
 
 // Existing names and lifecycle tombstones preserve stored Durable Object namespaces.
@@ -95,10 +95,10 @@ export const productionWorker = defineWorker({
   },
   domains: ["cubby.nickysemenza.com"],
   // Background delivery wakes durable Jobs; other queues own their payloads.
-  // Daily recovery repairs exceptional missed delivery.
+  // The hourly cron is the timer and the backstop for a lost wake.
   triggers: [
     triggers.scheduled({
-      schedule: workerCronSchedules.dailyMaintenance,
+      schedule: workerCronSchedules.hourly,
     }),
 
     triggers.queue({

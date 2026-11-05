@@ -14,6 +14,32 @@ import { withInvocationTrace, withTrace } from "~/server/observability/tracing";
 import { CRON_SCHEDULES } from "~/server/worker-identity";
 const cronLog = createLogger("cron");
 
+/**
+ * The timer and backstop for every wake: one drain of whatever is due, run here
+ * rather than sent through the queue, so a dropped or failed wake recovers within
+ * the hour even while delivery itself is broken. A failure still lets the daily
+ * pass run, then rejects the event.
+ */
+async function runHourlyBackstop(
+  env: Env,
+): Promise<{ failed: false } | { failed: true; error: unknown }> {
+  try {
+    await withInvocationDb(
+      env.HYPERDRIVE_BACKGROUND.connectionString,
+      async () => {
+        const { drainProductionJobs } = await import("~/server/workflows/jobs");
+        await withTrace("cf.scheduled.job", () => drainProductionJobs(db), {
+          "cubby.scheduled.job": "hourly-backstop",
+        });
+      },
+    );
+    return { failed: false };
+  } catch (error) {
+    Sentry.captureException(error);
+    return { failed: true, error };
+  }
+}
+
 export async function handleScheduledInvocation(
   controller: { scheduledTime: number; cron: string },
   env: Env,
@@ -26,20 +52,26 @@ export async function handleScheduledInvocation(
           cronLog.warn("skipped: maintenance mode");
           return;
         }
-        if (controller.cron !== CRON_SCHEDULES.dailyMaintenance)
+        if (controller.cron !== CRON_SCHEDULES.hourly)
           throw new Error(`Unexpected cron trigger: ${controller.cron}`);
-        // UTC triggers cover both offsets; skip the other hour before any DB access.
+        const backstop = await runHourlyBackstop(env);
         const instant = new Date(controller.scheduledTime);
         const hour = new Intl.DateTimeFormat("en-US", {
           timeZone: "America/Los_Angeles",
           hour: "numeric",
           hourCycle: "h23",
         }).format(instant);
-        if (hour !== "07" && hour !== "7") return;
+        if (hour !== "07" && hour !== "7") {
+          if (backstop.failed) throw backstop.error;
+          return;
+        }
         const date = householdLocalDate(instant);
         const scheduler = env.JOB_SCHEDULER?.getByName("household");
         const token = await scheduler?.admitDaily(date);
-        if (scheduler && !token) return;
+        if (scheduler && !token) {
+          if (backstop.failed) throw backstop.error;
+          return;
+        }
         try {
           await Sentry.withMonitor(
             "daily-maintenance",
@@ -114,6 +146,7 @@ export async function handleScheduledInvocation(
             );
           throw error;
         }
+        if (backstop.failed) throw backstop.error;
       },
       {
         "cubby.workload": "scheduled",

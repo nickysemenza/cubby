@@ -956,9 +956,10 @@ on minute enrollment. Daily reconciliation pages through all 24 buckets. Queue
 maintenance finishes after bounded repair/retention pages instead of repeating every
 five minutes. Existing Job identities, cursors, tickets, errors and stops survive.
 
-Daily recovery runs at 7 a.m. America/Los_Angeles. UTC triggers at 14:00 and 15:00
-check the scheduled instant's household hour before database access; only the 7 a.m.
-invocation admits work, with a leased household-date claim preventing duplicate admission. Failed enrollment releases the claim for retry; only successful durable enrollment completes the date.
+The cron fires hourly and drains whatever is due, so it is the timer for work due
+later and the backstop for a lost wake. Daily recovery runs at 7 a.m.
+America/Los_Angeles: the invocation at that household hour also admits the daily
+pass, with a leased household-date claim preventing duplicate admission. Failed enrollment releases the claim for retry; only successful durable enrollment completes the date.
 Deployment's first request bootstraps existing work and AI activation once per Worker
 version; deployment probes initiate this explicitly. App-open coalesces recovery
 and mail discovery. Gmail provider push is not implemented here.
