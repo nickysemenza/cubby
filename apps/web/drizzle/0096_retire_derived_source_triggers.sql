@@ -1,5 +1,6 @@
 -- cubby:transaction-per-statement
--- HOLD until the no-op marker and reader/writer-removal Worker are deployed and verified.
+-- HOLD until the reader/writer-removal Worker is deployed and verified.
+-- The preceding migration installs the no-op marker in this same deployment.
 -- Each table commits independently and can replay after a partial deployment.
 SET lock_timeout = '2s';
 --> statement-breakpoint
@@ -10,7 +11,7 @@ BEGIN
     WHERE n.nspname = 'public' AND p.proname = 'derived_mark'
       AND (p.prosrc LIKE '%WorkItem%' OR p.prosrc LIKE '%JobInvalidationCapture%')
   ) THEN
-    RAISE EXCEPTION 'Deploy and verify no-op derived_mark before retiring source triggers';
+    RAISE EXCEPTION 'Install no-op derived_mark before retiring source triggers';
   END IF;
 END $$;
 --> statement-breakpoint

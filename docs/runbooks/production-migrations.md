@@ -267,21 +267,21 @@ callers removed first. Require the full-pass gate in issue #3662 and per-kind
 replacement coverage before this step. Retained tickets are not a completion
 counter and are not deleted by either DDL migration.
 
-First replace only the shared `derived_mark(text, uuid[], text)` function with a
-no-op. Keep its signature/default and all source triggers for this deployment.
-Use transaction-per-statement with a 2-second lock timeout. Read back its
-`pg_get_functiondef` and confirm it references neither WorkItem nor
-JobInvalidationCapture. Verify source edits still commit and replacement reads
-remain available. B1 still owns the retained work tables.
+In one retirement PR and deployment, first replace the shared
+`derived_mark(text, uuid[], text)` function with a no-op preserving its signature
+and default. The following migration retires source triggers table by table and
+finally removes the shared marker. There is no intervening deployment or timed
+wait. Both migrations use transaction-per-statement and a 2-second lock timeout;
+the trigger migration refuses a marker that still writes retained work.
 
-Then take a named manual snapshot immediately before the separate source-trigger
-retirement, record its id, and retain it through the final report. Retire source
-triggers table by table in that migration. Every drop
-is idempotent and uses `-- cubby:transaction-per-statement` with the 2-second
-lock timeout, including after partial commits/retry. Verify `pg_trigger` has no
+Take a named manual snapshot immediately before this combined retirement, record
+its id, and retain it through the final report. Every drop is idempotent,
+including after partial commits/retry. After deployment, verify source edits
+still commit and replacement reads remain available. Verify `pg_trigger` has no
 remaining derived-mark trigger and `pg_proc` has no body referring to retained
-work tables before B1 drops them. Keep ProductConversionCoverage; only its ticket
-trigger retires. The separate DerivedValue drop still requires its full consumer
+work tables before B1 drops them. B1 still owns those work tables. Keep
+ProductConversionCoverage; only its ticket trigger retires.
+The separate DerivedValue drop still requires its full consumer
 trace, legacy count by key, production preservation proof and immediately named
 manual snapshot under the table-drop procedure.
 
