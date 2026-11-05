@@ -45,8 +45,6 @@ export const job = pgTable(
     runId: uuid("runId")
       .$type<RunId>()
       .references((): AnyPgColumn => run.id, { onDelete: "set null" }),
-    subjectKind: text("subjectKind"),
-    subjectId: text("subjectId"),
     waitReason: text("waitReason").$type<JobWaitReason>(),
     waitUntil: timestamp("waitUntil", { mode: "date" }),
     input: jsonb("input").$type<JobPayload>().notNull(),
@@ -61,7 +59,6 @@ export const job = pgTable(
       .default(sql`now()`),
     leaseToken: uuid("leaseToken"),
     leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),
-    leaseHolder: jsonb("leaseHolder"),
     lastClaimedAt: timestamp("lastClaimedAt", { mode: "date" }),
     error: text("error"),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
@@ -74,7 +71,6 @@ export const job = pgTable(
     uniqueIndex("Job_key_unique").on(table.key),
     index("Job_due_idx").on(table.state, table.availableAt, table.priority),
     index("Job_run_idx").on(table.runId),
-    index("Job_subject_idx").on(table.subjectKind, table.subjectId),
     index("Job_kind_claimed_idx").on(table.kind, table.lastClaimedAt),
     index("Job_kind_state_idx").on(table.kind, table.state, table.availableAt),
     check(
@@ -95,10 +91,6 @@ export const job = pgTable(
         ),
         sql`, `,
       )})`,
-    ),
-    check(
-      "Job_subject_check",
-      sql`(${table.subjectKind} IS NULL) = (${table.subjectId} IS NULL)`,
     ),
     check(
       "Job_attempts_check",

@@ -611,3 +611,24 @@ it("retires two Job kinds and leaves paused work", async () => {
     ).rejects.toThrow("Job_kind_retired_check");
   });
 });
+
+it("drops Job's unread columns and keeps paused work and its attempts", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle(client);
+    await migrateDatabase(db, { through: "0093_retire_two_job_kinds" });
+    await client.query(
+      `INSERT INTO "Job" (key, kind, state, input, attempts, "subjectKind", "subjectId")
+       VALUES ('synthetic:paused', 'run.execute', 'paused', '{}', 2, 'image', 'synthetic')`,
+    );
+
+    await migrateDatabase(db, { through: "0094_drop_unread_job_columns" });
+
+    expect(
+      (
+        await client.query(
+          `SELECT state, attempts FROM "Job" WHERE key = 'synthetic:paused'`,
+        )
+      ).rows,
+    ).toEqual([{ state: "paused", attempts: 2 }]);
+  });
+});
