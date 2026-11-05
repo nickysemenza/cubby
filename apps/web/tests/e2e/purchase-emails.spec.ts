@@ -26,7 +26,7 @@ test("reviews an Email's Purchase link from the Purchase's Emails section", asyn
     .filter({ has: page.getByText("Synthetic order receipt") });
   await expect(row.getByText("Suggested", { exact: true })).toBeVisible();
   const choose = async (action: string) => {
-    await row.getByRole("button", { name: "Open menu" }).click();
+    await row.getByRole("button", { name: "Row actions" }).click();
     await page.getByRole("menuitem", { name: action }).click();
   };
 

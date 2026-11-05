@@ -845,6 +845,7 @@ export function createActionsColumnBase<T extends RowData>(
       return (
         <DropdownMenu>
           <MoreMenuTrigger
+            aria-label="Row actions"
             size="icon-sm"
             onClick={(e) => e.stopPropagation()}
           />
