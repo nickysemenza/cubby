@@ -642,3 +642,18 @@ relationship conservation, inert archives, and every retired alias/folding calle
 After deploy, read back counts and full-row preservation aggregates and verify
 representative member reads/writes before historical booking or a Monarch pull.
 Do not run the SQL manually. Native installation remains unverified.
+
+## Contracting the old Project start-date snapshot
+
+ProjectStartDateView reads the live Project override or the retained
+rollups.dateWindow.derivedStart. Its four predecessor startDate columns in
+ProjectReadSnapshot have no remaining read or writer. Keep the typed table,
+rollups, completion year, diagnostics and the authored Project.startDate.
+
+Follow the schema-declaration-first boundary: set PRODUCTION_MIGRATION_THROUGH
+to the exact preceding tag before merging this contraction, freeze other merges,
+deploy its declaration removal and verify the view, then take a named manual
+snapshot and apply the contraction alone through Actions. Record the boundary,
+snapshot id, zero legacy-decision/catalog-dependency counts, view coverage and
+preservation read-back. Remove the boundary after verification. This is a separate
+column contraction; it does not authorize a table or retained-work drop.
