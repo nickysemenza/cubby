@@ -1,21 +1,14 @@
-import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
-import { runEntityId } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import { getDb } from "~/server/db/helpers";
-import { run, user } from "~/server/db/schema";
+import { user } from "~/server/db/schema";
 import {
   readMailImportSettings,
   setMailImport,
 } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
-import { readJob, readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { cancelJob } from "~/server/generic/jobs/repo/operator";
-import { dispatchAiRefreshDiscovery } from "~/server/workflows/ai-refresh-startup";
-import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 import {
   activateAiRefresh,
@@ -124,44 +117,20 @@ describe("application-owned AI feature observation", () => {
       ),
     ).toMatchObject({ id: rollback.id });
     expect(restored?.manifest).toEqual(first?.manifest);
-    expect(restored?.discoveryRunId).toBe(first?.discoveryRunId);
   });
 
-  it("creates one durable discovery Run across concurrent observations", async () => {
-    const manifest = await compiledRefreshManifest();
-    await Promise.all(
-      Array.from({ length: 12 }, () =>
-        activateAiRefresh(ctx.db, "synthetic-release-a", {
-          enabled: true,
-          manifest,
-          startDiscovery: true,
-        }),
-      ),
-    );
-    const rows = await getDb(ctx.db)
-      .select()
-      .from(run)
-      .where(eq(run.purpose, "ai_refresh"));
-    expect(rows).toHaveLength(1);
-    expect(aiRefreshRunInput.parse(rows[0]!.input).discovery).toBe(true);
-    expect((await readAiRefreshActivation(ctx.db))?.discoveryRunId).toBe(
-      rows[0]!.id,
-    );
-  });
-
-  it("skips code-only redeploys, creates one new job for changed features and follows rollback versions", async () => {
+  it("skips code-only redeploys, restarts discovery for changed features and follows rollback versions", async () => {
     const manifest = await compiledRefreshManifest();
     const first = await activateAiRefresh(ctx.db, "synthetic-release-a", {
       enabled: true,
       manifest,
       startDiscovery: true,
     });
-    const codeOnly = await activateAiRefresh(ctx.db, "synthetic-release-b", {
+    await activateAiRefresh(ctx.db, "synthetic-release-b", {
       enabled: true,
       manifest,
       startDiscovery: true,
     });
-    expect(codeOnly.discoveryRunId).toBe(first.discoveryRunId);
     const changed = {
       ...manifest,
       "field-suggestion": {
@@ -178,7 +147,6 @@ describe("application-owned AI feature observation", () => {
       manifest: changed,
       startDiscovery: true,
     });
-    expect(next.discoveryRunId).not.toBe(first.discoveryRunId);
     expect(await readAiDiscoveryCursor(ctx.db)).toMatchObject({
       field: null,
       email: null,
@@ -191,19 +159,12 @@ describe("application-owned AI feature observation", () => {
       manifest,
       startDiscovery: true,
     });
-    expect(rollback.discoveryRunId).not.toBe(first.discoveryRunId);
     expect(rollback.manifest["field-suggestion"]!.generation).toBe(
       first.manifest["field-suggestion"]!.generation + 2,
     );
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(run)
-        .where(eq(run.purpose, "ai_refresh")),
-    ).toHaveLength(3);
   });
 
-  it("records disabling without dispatching and gives re-enable its own discovery job", async () => {
+  it("records disabling without dispatching and restarts discovery on re-enable", async () => {
     const manifest = await compiledRefreshManifest();
     const first = await activateAiRefresh(ctx.db, "synthetic-enabled", {
       enabled: true,
@@ -216,18 +177,11 @@ describe("application-owned AI feature observation", () => {
       startDiscovery: true,
     });
     expect(disabled.enabled).toBe(false);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(run)
-        .where(eq(run.purpose, "ai_refresh")),
-    ).toHaveLength(1);
     const resumed = await activateAiRefresh(ctx.db, "synthetic-resumed", {
       enabled: true,
       manifest,
       startDiscovery: true,
     });
-    expect(resumed.discoveryRunId).not.toBe(first.discoveryRunId);
     expect(resumed.manifest).toEqual(first.manifest);
   });
   it("fences a delayed old coordinator after a new owner and permits rollback at a newer epoch", async () => {
@@ -269,27 +223,6 @@ describe("application-owned AI feature observation", () => {
     );
   });
 
-  it("retains one queued discovery Job across repeated startup dispatch", async () => {
-    const activation = await activateAiRefresh(ctx.db, "synthetic-dispatch", {
-      enabled: true,
-      startDiscovery: true,
-    });
-    await dispatchAiRefreshDiscovery(ctx.db, activation);
-    const rows = await readJobs(ctx.db, {
-      key: `run:${activation.discoveryRunId}`,
-    });
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      kind: "run.execute",
-      state: "queued",
-      runId: activation.discoveryRunId,
-      input: { runId: activation.discoveryRunId, purpose: "ai_refresh" },
-    });
-    await dispatchAiRefreshDiscovery(ctx.db, activation);
-    expect(
-      await readJobs(ctx.db, { key: `run:${activation.discoveryRunId}` }),
-    ).toEqual(rows);
-  });
   it("rejects cursor writes from a page that outlived its activation revision", async () => {
     const prior = await activateAiRefresh(ctx.db, "synthetic-cursor-a", {
       enabled: true,
@@ -316,34 +249,5 @@ describe("application-owned AI feature observation", () => {
       field: null,
       email: null,
     });
-  });
-  it("automatic dispatch preserves a cancelled discovery Job", async () => {
-    const activation = await activateAiRefresh(ctx.db, "synthetic-cancel", {
-      enabled: true,
-      startDiscovery: true,
-    });
-    const id = runEntityId.parse(activation.discoveryRunId);
-    await dispatchAiRefreshDiscovery(ctx.db, activation);
-    const execution = await readJob(ctx.db, { key: `run:${id}` });
-    if (!execution) throw new Error("Expected discovery Job");
-    await cancelJob(ctx.db, execution.id);
-    await getDb(ctx.db)
-      .update(run)
-      .set({ status: "failed", failureCode: "user_cancelled" })
-      .where(eq(run.id, id));
-    await expect(
-      launchWorkflowRun(ctx.db, {
-        runId: id,
-        purpose: "ai_refresh",
-        automatic: true,
-      }),
-    ).resolves.toBeNull();
-    expect(
-      (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0]
-        ?.failureCode,
-    ).toBe("user_cancelled");
-    expect((await readJob(ctx.db, { id: execution.id }))?.state).toBe(
-      "cancelled",
-    );
   });
 });

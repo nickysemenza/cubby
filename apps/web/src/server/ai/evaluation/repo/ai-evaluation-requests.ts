@@ -169,16 +169,23 @@ export async function enqueueAiEvaluations(
       ? await getDb(tx).insert(aiEvaluation).values(fresh).returning()
       : [];
     for (const row of created) result.set(row.slotKey, row);
-    await getDb(tx)
-      .insert(aiEvaluationRequest)
-      .values(
-        inputs.map(({ input, sequence }, index) => ({
-          runId: input.runId,
-          evaluationId: result.get(evaluationSlotKey(input))!.id,
-          sequence: sequence ?? index,
-        })),
-      )
-      .onConflictDoNothing();
+    // A request is a session's demand; automatic work has no session to wake.
+    const requests = inputs.flatMap(({ input, sequence }, index) =>
+      input.runId
+        ? [
+            {
+              runId: input.runId,
+              evaluationId: result.get(evaluationSlotKey(input))!.id,
+              sequence: sequence ?? index,
+            },
+          ]
+        : [],
+    );
+    if (requests.length)
+      await getDb(tx)
+        .insert(aiEvaluationRequest)
+        .values(requests)
+        .onConflictDoNothing();
     // New or re-input work takes a fresh ticket; joining demand re-marks only
     // a parked item or a more urgent one.
     const { markAiEvaluationWork } = await import("./ai-evaluation-work");
@@ -317,9 +324,9 @@ export async function aiExecutionOwner(
   preferred?: string,
 ) {
   if (item.executionKind === "ai_refresh")
-    return (
-      await getDb(db).select().from(run).where(eq(run.id, item.runId))
-    )[0];
+    return item.runId
+      ? (await getDb(db).select().from(run).where(eq(run.id, item.runId)))[0]
+      : undefined;
   const owners = await getDb(db)
     .select()
     .from(run)

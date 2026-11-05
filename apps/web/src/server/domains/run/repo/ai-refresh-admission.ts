@@ -19,6 +19,13 @@ export async function tryLockAiRefreshScheduling(db: Database) {
   return rows.rows[0]?.locked === true;
 }
 
+/** A member's Stop must wait for a page already admitting, so nothing lands after it. */
+export async function lockAiRefreshScheduling(db: Database) {
+  await getDb(db).execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${AI_REFRESH_SCHEDULING_LOCK}))`,
+  );
+}
+
 /** Discovery has an activation owner; Sweeps own their evaluations and take no slot. */
 export async function hasAiRefreshRunCapacity(db: Database, excludeId?: RunId) {
   const [row] = await getDb(db)

@@ -599,15 +599,9 @@ record (~55k), which starved every other kind for days.
   its cursor while `CONNECTION_DISCOVERY_PENDING_CAP` (1,000)
   connection evaluations wait (`rate_limit`). Evaluation settlements make the
   existing discovery Job due; a one-hour deadline repairs a missed release.
-  There is no 30-second idle polling. It walks the newest records first, and never appends to a stopped Run. A changed
-  record updates its queued slot in place, retaining its Job. Cancelled work whose Run
-  failed with `failureCode = "superseded"` (a cleared backlog, not a member's
-  decision) is re-admitted at that pace; a member's cancel stays final. A
-  member's cancel of the pass's Run also stops the pass: it resets its cursor
-  and waits a day rather than continuing under a new Run. The roster admission
-  transaction locks the cursor's owning/replaced Runs before reading status or
-  opening a continuation. A member-stopped result resets the cursor and persists
-  the one-day wait; superseded Runs can still continue.
+  There is no 30-second idle polling. It walks the newest records first. Its work has no Run, so a
+  member's Stop for automatic AI work holds its cursor. A changed record updates its queued slot in
+  place, retaining its Job.
 - Publication correction work is one `assessment.correction` Job per
   publication commit (`targetAssessmentIds`), not one per assessment; sources are
   still resolved after commit under serializable isolation.
@@ -688,7 +682,13 @@ funding caps.
 (live Run checks, pausing, funding resumption, the workflow fence around one
 evaluation) comes in through the `AiEvaluationExecution` port that
 `domains/run/service/ai-evaluation-execution.ts` provides; the drain itself
-knows no Run tables. Nothing queues an evaluation: `AiEvaluation.runAt` is set while
+knows no Run tables. Automatic refresh work has no Run: its `runId` is null and its activation is the
+authority. A member stops it from the Work page or `ai.stopAutomaticWork`: discovery
+admits nothing, owed rows are parked, and `leaseStale` fails any attempt in flight.
+It holds until a member resumes. Email refresh, Sweeps and
+member-started discovery keep their Run. `ai-refresh.discovery` is a drain whose
+state is its cursor; a finished pass starts again after an hour. Nothing queues an
+evaluation: `AiEvaluation.runAt` is set while
 the drain owes it (`priority` 0 when the owner or an uncancelled requester is a
 running, member-visible Run nobody scheduled; otherwise 1) and null once it settled
 or parked. Each round pages up to two features, most urgent first. A page claims

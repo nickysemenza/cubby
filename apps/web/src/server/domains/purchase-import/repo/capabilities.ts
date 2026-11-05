@@ -98,6 +98,8 @@ const actionCapability = {
   "inventory.confirm_ownership": "member_decision",
   "ai.approve_detected_inventory_item": "member_decision",
   "ai.pause_suggestion_sweep": "member_decision",
+  "ai.stop_automatic_work": "member_decision",
+  "ai.resume_automatic_work": "member_decision",
   "ai.resume_suggestion_sweep": "member_decision",
   "ai.start_suggestion_sweep": "member_decision",
   "suggestions.review": "member_decision",

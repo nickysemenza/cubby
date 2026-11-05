@@ -39,11 +39,12 @@ import {
 } from "~/server/domains/connection/repo/discovery-fingerprint";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
 
+import { tryLockAiRefreshScheduling } from "./ai-refresh-admission";
 import {
-  hasAdmissibleTarget,
   insertEvaluationTargets,
   scheduleEvaluationRun,
 } from "./ai-refresh-state";
+import { readAutomaticAiStop } from "./automatic-ai-stop";
 import { systemActor } from "./ensure-run";
 
 const discoveryEntities = [
@@ -211,80 +212,26 @@ export async function prepareConnectionSweepPage(
 }
 
 /**
- * A routine discovery page: its Run is created only by the first page with
- * admissible work, in the same transaction as that work.
+ * One page of the routine pass, whose work has no Run. It takes the lock a member's Stop
+ * holds, so a page is either admitted before the Stop or held after it.
  */
-export async function prepareConnectionDiscoveryRoster(
+export const admitConnectionDiscoveryPage = (
   db: Database,
-  input: RosterInput & {
-    runId: RunId | null;
-    /** A stopped Run this pass continues from, until a continuation opens. */
-    replacing?: RunId | null;
-    /**
-     * Opens the pass's Run. `replacing` names a stopped Run the cursor carried,
-     * so the continuation gets its own idempotency key instead of resolving
-     * back to the stopped Run.
-     */
-    createRun: (tx: Database, replacing: RunId | null) => Promise<RunId>;
-  },
-) {
-  return withTransactionDatabase(db, async (db) => {
-    const ownerIds = [
-      ...new Set([input.runId, input.replacing].filter((id) => id != null)),
-    ];
-    const owners = ownerIds.length
-      ? await getDb(db)
-          .select({ id: run.id, failureCode: run.failureCode })
-          .from(run)
-          .where(inArray(run.id, ownerIds))
-          .orderBy(run.id)
-          .for("update")
-      : [];
-    const stoppedByMember = () => ({
-      outcome: "member-stopped" as const,
-      scanned: 0,
-      inserted: 0,
-      next: input.after,
-      runId: null,
-      replacing: input.runId ?? input.replacing ?? null,
-    });
-    if (owners.some((owner) => owner.failureCode === "user_cancelled"))
-      return stoppedByMember();
-    const page = await connectionRosterTargets(db, input);
-    // A cancelled or failed Run in the cursor never receives more work.
-    const current = input.runId && (await runIsActive(db, input.runId));
-    // Keep the stopped owner's identity across pages that admit nothing, or a
-    // later page would reopen the original key and resolve the stopped Run.
-    let stopped = current ? null : (input.runId ?? input.replacing ?? null);
-    let runId = current ? input.runId : null;
-    if (!runId && (await hasAdmissibleTarget(db, page.targets)))
-      // An idempotent open can return a Run stopped since it was created, also
-      // one the cursor never saved; continue after it under its next key.
-      for (let open = 0; open < 3 && !runId; open++) {
-        const opened = await input.createRun(db, stopped);
-        const [owner] = await getDb(db)
-          .select({ failureCode: run.failureCode })
-          .from(run)
-          .where(eq(run.id, opened))
-          .for("update");
-        if (owner?.failureCode === "user_cancelled") return stoppedByMember();
-        if (await runIsActive(db, opened)) runId = opened;
-        else if (opened === stopped) break;
-        else stopped = opened;
-      }
-    const inserted = runId
-      ? await insertEvaluationTargets(db, runId, page.targets)
-      : 0;
+  input: RosterInput,
+) =>
+  withTransactionDatabase(db, async (tx) => {
+    if (
+      !(await tryLockAiRefreshScheduling(tx)) ||
+      (await readAutomaticAiStop(tx))
+    )
+      return { held: true as const };
+    const page = await connectionRosterTargets(tx, input);
     return {
-      outcome: "admitted" as const,
-      scanned: page.scanned,
-      inserted,
+      held: false as const,
       next: page.next,
-      runId,
-      replacing: runId ? null : stopped,
+      inserted: await insertEvaluationTargets(tx, null, page.targets),
     };
   });
-}
 
 /** Records one connection roster page queues, for Sweeps and routine discovery alike; one evaluation page. */
 export const CONNECTION_ROSTER_PAGE = 100;
@@ -309,14 +256,6 @@ export async function pendingConnectionEvaluations(db: Database) {
       ),
     );
   return row?.count ?? 0;
-}
-
-async function runIsActive(db: Database, runId: RunId) {
-  const [row] = await getDb(db)
-    .select({ status: run.status })
-    .from(run)
-    .where(and(eq(run.id, runId), notDeleted(run)));
-  return row?.status === "running" || row?.status === "paused";
 }
 
 /** How many sources a connection Sweep's scope covers; the roster pages the same predicate. */

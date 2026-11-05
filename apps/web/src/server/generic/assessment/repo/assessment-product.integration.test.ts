@@ -57,7 +57,7 @@ import { getProductMatchQueue } from "~/server/domains/product/repo/match/produc
 import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { discoverAiRefresh } from "~/server/domains/run/service/ai-refresh";
+import { discoverAiRefreshNow } from "~/server/domains/run/service/ai-refresh.fixtures";
 import {
   kernelCtx,
   productFixture,
@@ -809,7 +809,7 @@ describe("stored Product identity pairs", () => {
         },
       },
     };
-    expect((await discoverAiRefresh(ctx.db, ports)).runs).toEqual([]);
+    await discoverAiRefreshNow(ctx.db, ports);
     const active = await activateAiRefresh(
       ctx.db,
       "synthetic:activated-rule-pass",
@@ -824,7 +824,7 @@ describe("stored Product identity pairs", () => {
       product: null,
       productDone: false,
     });
-    await discoverAiRefresh(ctx.db, ports);
+    await discoverAiRefreshNow(ctx.db, ports);
     const targets = (await getDb(ctx.db).select().from(aiEvaluation)).filter(
       (row) => row.target.kind === "product",
     );

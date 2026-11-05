@@ -18,7 +18,7 @@ import {
   emailClassificationObservation,
 } from "~/server/db/schema";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
-import { discoverAiRefresh } from "~/server/domains/run/service/ai-refresh";
+import { discoverAiRefreshNow } from "~/server/domains/run/service/ai-refresh.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
@@ -61,7 +61,7 @@ describe("Email prompt refresh publication", () => {
       executionPolicy: "classification_only",
     });
     await activateAiRefresh(ctx.db, "synthetic-aba-enabled", { enabled: true });
-    await discoverAiRefresh(ctx.db);
+    await discoverAiRefreshNow(ctx.db);
     const [evaluation] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
@@ -350,7 +350,7 @@ describe("Email prompt refresh publication", () => {
         },
       },
     };
-    await discoverAiRefresh(ctx.db);
+    await discoverAiRefreshNow(ctx.db);
     const emailRefreshTarget = sql`${aiEvaluation.target}->>${emailTarget.keyof().enum.kind} = ${emailTarget.shape.kind.value}`;
     const [evaluation] = await getDb(ctx.db)
       .select()
@@ -377,9 +377,7 @@ describe("Email prompt refresh publication", () => {
         (row) => row.evaluationId === evaluation!.id,
       ),
     ).toBe(true);
-    expect((await discoverAiRefresh(ctx.db)).runs).not.toContain(
-      evaluation!.runId,
-    );
+    await discoverAiRefreshNow(ctx.db);
     expect(
       await getDb(ctx.db)
         .select({ id: aiEvaluation.id })

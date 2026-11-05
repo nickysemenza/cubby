@@ -189,7 +189,7 @@ async function mapFailure(
   if (evidenceObsolete(execution, error))
     return { entry: { kind: "obsolete", reason: message } };
   const { evaluation } = target;
-  if (evaluation.executionKind !== "ai_refresh") {
+  if (evaluation.executionKind !== "ai_refresh" && evaluation.runId) {
     if (/mailbox.*connected/i.test(message)) {
       await execution.pauseRun(db, evaluation.runId, message);
       return { entry: { kind: "park" } };
@@ -316,7 +316,7 @@ function aiEvaluationPage(
       // The drain deferred until the funding window, so running again is the
       // window opening for the Runs a budget stop paused.
       await execution.resumeFundingStopped(db, [
-        ...new Set(current.map((entry) => entry.evaluation.runId)),
+        ...new Set(current.flatMap((entry) => entry.evaluation.runId ?? [])),
       ]);
       const authorization = await aiEvaluationAuthorizations(
         db,

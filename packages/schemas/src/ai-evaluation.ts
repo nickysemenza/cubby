@@ -130,7 +130,6 @@ export type AiRefreshManifest = z.infer<typeof aiRefreshManifest>;
 export const aiRefreshActivation = z.object({
   observationEpoch: z.number().int().nonnegative().default(0),
   revision: z.number().int().nonnegative().default(0),
-  discoveryRunId: z.uuid().nullable().default(null),
   release: z.string(),
   manifest: aiRefreshManifest,
   activatedAt: z.iso.datetime(),

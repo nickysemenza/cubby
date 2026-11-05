@@ -1,7 +1,7 @@
 import { NEEDS_YOU_FILTERS } from "@cubby/schemas/work-queue";
 import type { WorkStatus, WorkStuckItem } from "@cubby/schemas/work-status";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
@@ -11,10 +11,12 @@ import {
   WorkQueue,
   type WorkQueueMeta,
 } from "~/features/work-queue/work-queue-page";
+import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { copyTextWithToast } from "~/lib/clipboard";
 import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
+import { showErrorToast } from "~/ui/feedback/error-details";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
@@ -242,6 +244,52 @@ function NeedsYouQueue({
   );
 }
 
+/** Automatic AI work has no Run to stop, so its Stop lives here. */
+function useAutomaticWork() {
+  const state = useQuery(ai.automaticWork.queryOptions({}));
+  const options = {
+    onSuccess: () => void state.refetch(),
+    onError: (error: Error) =>
+      showErrorToast(error, "Automatic AI work didn't change"),
+  };
+  return {
+    stoppedAt: state.data?.stoppedAt,
+    stop: useMutation(ai.stopAutomaticWork.mutationOptions(options)),
+    resume: useMutation(ai.resumeAutomaticWork.mutationOptions(options)),
+  };
+}
+
+/** Nothing else on the page would show that this work is stopped, so it says so plainly. */
+function AutomaticWorkStopped({
+  stoppedAt,
+  now,
+  resume,
+}: {
+  stoppedAt: string;
+  now: number;
+  resume: ReturnType<typeof useAutomaticWork>["resume"];
+}) {
+  return (
+    <div
+      className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1"
+      data-testid="automatic-work-stopped"
+    >
+      <p className="max-w-prose text-foreground-strong">
+        Automatic AI work stopped {formatRelative(stoppedAt, now)}. Refresh and
+        connection discovery wait until you resume.
+      </p>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={resume.isPending}
+        onClick={() => resume.mutate({})}
+      >
+        {resume.isPending ? "Resuming…" : "Resume"}
+      </Button>
+    </div>
+  );
+}
+
 /** One verdict and one queue. Diagnostics live in `/jobs` and in MCP. */
 export function WorkPage() {
   const [watchUntil, setWatchUntil] = useState(0);
@@ -252,6 +300,7 @@ export function WorkPage() {
   const now = useDisplayNow() ?? Date.now();
   const onRetried = () => setWatchUntil(Date.now() + RETRY_WATCH_MS);
   const data = status.data;
+  const automatic = useAutomaticWork();
   return (
     <Stack gap="lg">
       <p className="min-h-5.5 text-muted-foreground" data-testid="work-health">
@@ -270,6 +319,13 @@ export function WorkPage() {
       {data?.stuck.length ? (
         <StuckSection items={data.stuck} onRetried={onRetried} />
       ) : null}
+      {automatic.stoppedAt ? (
+        <AutomaticWorkStopped
+          stoppedAt={automatic.stoppedAt}
+          now={now}
+          resume={automatic.resume}
+        />
+      ) : null}
       <NeedsYouQueue status={data?.needsYou} />
       <nav
         aria-label="More work"
@@ -281,6 +337,17 @@ export function WorkPage() {
         </Link>
         <Link to="/work-queue">All work</Link>
         <Link to="/history">History</Link>
+        {automatic.stoppedAt === null ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto"
+            disabled={automatic.stop.isPending}
+            onClick={() => automatic.stop.mutate({})}
+          >
+            {automatic.stop.isPending ? "Stopping…" : "Stop automatic AI work"}
+          </Button>
+        ) : null}
       </nav>
     </Stack>
   );

@@ -83,6 +83,8 @@ import {
 import type { PreparedProductPairPublication } from "~/server/domains/product/repo/match/product-match-candidate";
 import { publishProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
 import { aiRunOwner } from "~/server/domains/run/repo/ai-call-owner";
+import { scheduleAutomaticEvaluations } from "~/server/domains/run/repo/ai-refresh-state";
+import { readAutomaticAiStop } from "~/server/domains/run/repo/automatic-ai-stop";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
@@ -93,6 +95,7 @@ import {
   fieldInputFingerprintIfLive,
 } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import type { BackgroundDrain } from "~/server/generic/background/drains";
 import {
   SemanticCoverageIncomplete,
   semanticCoveragePending,
@@ -164,7 +167,7 @@ const fieldResult = z.object({
 function kernel(
   db: Database,
   ports: AiRefreshPorts,
-  runId?: string,
+  runId?: string | null,
 ): EntityKernelContext {
   const context = ports.context ?? {
     ...buildCrudServices(db),
@@ -288,6 +291,9 @@ async function prepareField(
 }
 
 /** An old Worker must not enqueue or recover work for another executable policy. */
+const DISCOVERY_PASS_MS = 60 * 60_000;
+const DISCOVERY_DEFERRED_MS = 30_000;
+
 async function currentAiRefreshActivation(db: Database) {
   const current = await readAiRefreshActivation(db);
   if (!current?.enabled) return null;
@@ -322,28 +328,9 @@ export async function scheduleSavedFieldQuestion(
       prepared.snapshot.currentValue !== "")
   )
     return;
-  const key = await sha256Hex(
-    JSON.stringify({
-      target: {
-        entity: target.entity,
-        recordId: target.recordId,
-        field: target.field,
-      },
-      provenance: prepared.provenance,
-    }),
-  );
-  const result = await scheduleEvaluationRun(
-    db,
-    systemActor(),
-    {
-      purpose: "ai_refresh",
-      trigger: "scheduled",
-      status: "running",
-      clientKey: `ai-refresh:field:${key}`,
-      input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
-    },
-    [{ target, provenance: prepared.provenance, snapshot: prepared.snapshot }],
-  );
+  const result = await scheduleAutomaticEvaluations(db, [
+    { target, provenance: prepared.provenance, snapshot: prepared.snapshot },
+  ]);
   if (result.kind === "deferred")
     log.info("Saved field evaluation scheduling deferred", {
       reason: result.reason,
@@ -357,9 +344,7 @@ async function scheduleProductIdentityDiscovery(
   db: Database,
   activation: z.infer<typeof aiRefreshActivation>,
   cursor: Awaited<ReturnType<typeof readAiDiscoveryCursor>>,
-  ports: AiRefreshPorts,
 ) {
-  const scheduledRuns = new Set<string>();
   let deferred = false;
   const products = cursor.productDone
     ? []
@@ -393,28 +378,10 @@ async function scheduleProductIdentityDiscovery(
     ];
   });
   if (targets.length) {
-    const key = await sha256Hex(
-      JSON.stringify(
-        targets.map((entry) => [entry.target.recordId, entry.provenance]),
-      ),
-    );
-    const productRun = await scheduleEvaluationRun(
-      db,
-      ports.context?.actorContext ?? systemActor(),
-      {
-        purpose: "ai_refresh",
-        trigger: "scheduled",
-        status: "running",
-        clientKey: `ai-refresh:product-page:${key}`,
-        input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
-      },
-      targets,
-    );
-    if (productRun.kind === "scheduled") scheduledRuns.add(productRun.runId);
-    deferred = productRun.kind === "deferred";
+    const products = await scheduleAutomaticEvaluations(db, targets);
+    deferred = products.kind === "deferred";
   }
   return {
-    runs: [...scheduledRuns],
     deferred,
     productDone:
       !deferred &&
@@ -463,18 +430,24 @@ export async function discoverAiRefresh(
   ports: AiRefreshPorts = {},
 ) {
   const activation = await readAiRefreshActivation(db);
-  if (!activation?.enabled)
-    return { runs: [], deferred: false, complete: true };
-  const runs = new Set<string>();
+  if (!activation?.enabled || (await readAutomaticAiStop(db)))
+    return { deferred: false, complete: true, nextAt: null };
   let cursor = await readAiDiscoveryCursor(db);
-  if (
-    cursor.revision !== activation.revision ||
-    (cursor.fieldDone &&
-      cursor.emailDone &&
-      cursor.productDone &&
-      cursor.connectionDone)
-  )
+  const finished =
+    cursor.revision === activation.revision &&
+    cursor.fieldDone &&
+    cursor.emailDone &&
+    cursor.productDone &&
+    cursor.connectionDone;
+  // Rediscovery is routine: a finished pass waits for the hour it starts again.
+  const nextPassAt = cursor.completedAt
+    ? new Date(cursor.completedAt).getTime() + DISCOVERY_PASS_MS
+    : 0;
+  if (finished && nextPassAt > Date.now())
+    return { deferred: false, complete: true, nextAt: new Date(nextPassAt) };
+  if (cursor.revision !== activation.revision || finished)
     cursor = {
+      completedAt: null,
       revision: activation.revision,
       field: null,
       email: null,
@@ -565,36 +538,14 @@ export async function discoverAiRefresh(
           canonicalJson(prepared.snapshot.currentValue)
       )
         continue;
-      const key = await sha256Hex(
-        JSON.stringify({
-          target: {
-            entity: target.entity,
-            recordId: target.recordId,
-            field: target.field,
-          },
-          provenance: prepared.provenance,
-        }),
-      );
-      const runId = await scheduleEvaluationRun(
-        db,
-        ports.context?.actorContext ?? systemActor(),
+      const scheduled = await scheduleAutomaticEvaluations(db, [
         {
-          purpose: "ai_refresh",
-          trigger: "scheduled",
-          status: "running",
-          clientKey: `ai-refresh:field:${key}`,
-          input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
+          target,
+          provenance: prepared.provenance,
+          snapshot: prepared.snapshot,
         },
-        [
-          {
-            target,
-            provenance: prepared.provenance,
-            snapshot: prepared.snapshot,
-          },
-        ],
-      );
-      if (runId.kind === "scheduled") runs.add(runId.runId);
-      if (runId.kind === "deferred") {
+      ]);
+      if (scheduled.kind === "deferred") {
         fieldDeferred = true;
         break;
       }
@@ -722,7 +673,6 @@ export async function discoverAiRefresh(
           },
           targets,
         );
-        if (runId.kind === "scheduled") runs.add(runId.runId);
         if (runId.kind === "deferred") {
           emailDeferred = true;
           break emailGroups;
@@ -737,9 +687,7 @@ export async function discoverAiRefresh(
     db,
     activation,
     cursor,
-    ports,
   );
-  for (const productRun of productDiscovery.runs) runs.add(productRun);
   const connectionDiscovery = await scheduleConnectionDiscovery(db, cursor);
   const nextCursor = {
     revision: activation.revision,
@@ -756,17 +704,39 @@ export async function discoverAiRefresh(
     connectionDone: connectionDiscovery.done,
     connection: connectionDiscovery.cursor,
   };
-  await saveAiDiscoveryCursor(db, nextCursor);
+  const complete =
+    nextCursor.fieldDone &&
+    nextCursor.emailDone &&
+    nextCursor.productDone &&
+    nextCursor.connectionDone;
+  await saveAiDiscoveryCursor(db, {
+    ...nextCursor,
+    completedAt: complete ? new Date().toISOString() : null,
+  });
   return {
-    runs: [...runs],
     deferred: fieldDeferred || emailDeferred || productDiscovery.deferred,
-    complete:
-      nextCursor.fieldDone &&
-      nextCursor.emailDone &&
-      nextCursor.productDone &&
-      nextCursor.connectionDone,
+    complete,
+    nextAt: null,
   };
 }
+
+/**
+ * Pages automatic refresh discovery, whose state is its cursor. A sibling invocation
+ * can run beside this one, which is harmless: a page calls no model and every slot it
+ * admits is idempotent.
+ */
+export const aiRefreshDiscoveryDrain: BackgroundDrain = {
+  name: "ai-refresh.discovery",
+  async page(db) {
+    const page = await discoverAiRefresh(db);
+    return {
+      more: !page.complete && !page.deferred,
+      nextAt: page.deferred
+        ? new Date(Date.now() + DISCOVERY_DEFERRED_MS)
+        : page.nextAt,
+    };
+  },
+};
 
 /** Field and Email refresh evaluate one claimed item; the drain owns retries and failures. */
 export async function executeAiRefreshTarget(
@@ -814,7 +784,7 @@ export async function executeAiRefreshTarget(
     const evaluated = await withAiInputs(false, () =>
       suggestFields(
         db,
-        { runId: claimed.runId },
+        aiRunOwner(claimed.runId),
         {
           entity: snapshot.entity,
           entityId: snapshot.publicId,
@@ -1100,18 +1070,13 @@ function productEvaluationPageAdapter(
       const item = entry.target.evaluation;
       const prepared = entry.prepared;
       const evaluate = (pair: z.infer<typeof preparedProductIdentityPair>) =>
-        evaluatePreparedProductIdentityPair(
-          db,
-          pair,
-          { runId: item.runId },
-          {
-            ...ports.productIdentityPorts,
-            usage,
-            evaluationId: item.id,
-            provenance: item.provenance,
-            preparedPage: true,
-          },
-        );
+        evaluatePreparedProductIdentityPair(db, pair, aiRunOwner(item.runId), {
+          ...ports.productIdentityPorts,
+          usage,
+          evaluationId: item.id,
+          provenance: item.provenance,
+          preparedPage: true,
+        });
       if (entry.target.target.kind === "product_pair") {
         const pair = prepared.pairs[0]!;
         const result = await evaluate(pair);
@@ -1237,7 +1202,7 @@ async function evaluateAiRefreshPage<P, O>(
     if (!usage) {
       usage = {
         db,
-        runId: target.evaluation.runId,
+        ...aiRunOwner(target.evaluation.runId),
         operation: adapter.operation,
       };
       groups.set(key, usage);
@@ -1353,7 +1318,7 @@ async function stageProductEnrollment(
           const input = await evaluatePreparedProductIdentityPair(
             database,
             pair,
-            { runId: item.runId },
+            aiRunOwner(item.runId),
             {
               ...ports.productIdentityPorts,
               evaluationId: item.id,
