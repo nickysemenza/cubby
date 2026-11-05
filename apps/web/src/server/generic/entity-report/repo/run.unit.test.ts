@@ -780,7 +780,7 @@ describe("liveProgressBlocks", () => {
     workflow: {
       purpose: "mail_discovery" as const,
       attempt: 2,
-      instanceId: parseEntityId("job", "00000000-0000-4000-8000-000000000002"),
+      instanceId: "00000000-0000-4000-8000-000000000002",
       instance: { state: "running" as const, error: null },
     },
   };

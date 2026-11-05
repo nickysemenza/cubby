@@ -30,7 +30,6 @@ export const localRelationshipEntities = [
   "imageJob",
   "sourceTransactionRecord",
   "transactionImport",
-  "job",
   "shipment",
 ] as const;
 
@@ -48,9 +47,6 @@ const definition = <
 ) => ({ key, source, target, kind, history });
 
 const relationshipQueryDefinitions = [
-  ...localRelationshipEntities.map((target) =>
-    definition(`jobSubject${target}`, "job", target, "jobSubject"),
-  ),
   definition("imageLeaseDevice", "imageJob", "device", "imageLeaseDevice"),
   definition("purchaseEmails", "purchase", "email", "purchaseEmails"),
   definition("vendorEmails", "vendor", "email", "vendorEmails"),
@@ -86,15 +82,14 @@ const relationshipQueryDefinitions = [
 /** Endpoints derive from the executable query roster, including the Job subject family. */
 type QueryDefinition = (typeof relationshipQueryDefinitions)[number];
 export type RelationshipQueryKey = QueryDefinition["key"];
-type JobSubject = (typeof localRelationshipEntities)[number];
-export type RelationshipQuerySource<K extends RelationshipQueryKey> =
-  K extends `jobSubject${JobSubject}`
-    ? "job"
-    : Extract<QueryDefinition, { key: K }>["source"];
-export type RelationshipQueryTarget<K extends RelationshipQueryKey> =
-  K extends `jobSubject${infer Target extends JobSubject}`
-    ? Target
-    : Extract<QueryDefinition, { key: K }>["target"];
+export type RelationshipQuerySource<K extends RelationshipQueryKey> = Extract<
+  QueryDefinition,
+  { key: K }
+>["source"];
+export type RelationshipQueryTarget<K extends RelationshipQueryKey> = Extract<
+  QueryDefinition,
+  { key: K }
+>["target"];
 
 export const relationshipQueryDefinition = (key: string) => {
   const found = relationshipQueryDefinitions.find((item) => item.key === key);

@@ -56,9 +56,9 @@ struct NavigationTests {
 
     @Test func nonBrowsableEntityHasNoNativeSidebarOrLibraryList() throws {
         let destination = try #require(
-            SidebarManifest.sections.flatMap(\.destinations).first { $0.entity == .job })
-        #expect(EntityKey.job.nativeActions.contains(.list))
-        #expect(!EntityCatalog.browsable.contains { $0.key == .job })
+            SidebarManifest.sections.flatMap(\.destinations).first { $0.entity == .imageJob })
+        #expect(EntityKey.imageJob.nativeActions.contains(.list))
+        #expect(!EntityCatalog.browsable.contains { $0.key == .imageJob })
         #expect(destination.nativeDestination == nil)
         #expect(destination.webTarget == .route(path: destination.route))
     }

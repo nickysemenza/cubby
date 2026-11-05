@@ -296,11 +296,10 @@ async function readJobKinds(
     failedAt: string | null;
     failedError: string | null;
     failedAttempts: number | null;
-    failedCode: string | null;
     failedLive: boolean | null;
   }>(sql`
     WITH candidates AS MATERIALIZED (
-      SELECT kind, state, "availableAt", "leaseExpiresAt", "updatedAt", attempts, error, shortcode
+      SELECT kind, state, "availableAt", "leaseExpiresAt", "updatedAt", attempts, error
       FROM "Job"
       WHERE state IN (${sql.join(
         live.map((state) => sql`${state}`),
@@ -313,7 +312,7 @@ async function readJobKinds(
           FILTER (WHERE (state = ${jobState.enum.running} AND "leaseExpiresAt" <= ${at})
             OR (state <> ${jobState.enum.running} AND state <> ${jobState.enum.failed} AND "availableAt" <= ${at})) AS "dueSince",
         (array_agg(jsonb_build_object(
-            'at', "updatedAt", 'message', error, 'attempts', attempts, 'code', shortcode,
+            'at', "updatedAt", 'message', error, 'attempts', attempts,
             'live', state <> ${jobState.enum.failed})
           ORDER BY "updatedAt" DESC)
           FILTER (WHERE state = ${jobState.enum.failed} OR attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}))[1] AS failure
@@ -321,7 +320,7 @@ async function readJobKinds(
     )
     SELECT k.kind, k."dueSince", done."updatedAt" AS "lastCompletedAt",
       k.failure->>'at' AS "failedAt", k.failure->>'message' AS "failedError",
-      (k.failure->>'attempts')::int AS "failedAttempts", k.failure->>'code' AS "failedCode",
+      (k.failure->>'attempts')::int AS "failedAttempts",
       (k.failure->>'live')::boolean AS "failedLive"
     FROM kinds k
     LEFT JOIN LATERAL (
@@ -372,7 +371,7 @@ async function readJobKinds(
           row.kind,
           failedAt,
           row.failedAttempts ?? 1,
-          [row.failedError, row.failedCode].filter(Boolean).join("\n"),
+          row.failedError ?? "",
           true,
         ),
       );

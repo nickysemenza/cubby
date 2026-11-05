@@ -672,7 +672,6 @@ describe("MCP catalog schemas", () => {
       "entity_read.filters.submissionId",
       // Jobs have no shortcode: a Job set filter names execution rows by id.
       "maintenance.retry_now.filter.ids",
-      "maintenance_read.queue.filter.ids",
       // A tree list's children scope names a parent of the listed entity's own
       // kind, so no single prefix pattern fits.
       "entity_read.nesting.parentId",

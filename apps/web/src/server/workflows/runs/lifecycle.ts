@@ -1,9 +1,5 @@
 import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
-import {
-  runEntityId,
-  type RunId,
-  type JobId,
-} from "@cubby/schemas/identifiers";
+import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { runStepState } from "@cubby/schemas/run-step";
 import { and, or, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 
@@ -247,7 +243,7 @@ export async function failWorkflowRun(
 /** Lost wakes and interrupted workers are recovered by dueJobs, never new Run attempts. */
 export async function reconcileWorkflowRuns(
   db: Database,
-  after: JobId | null = null,
+  after: string | null = null,
 ) {
   const reconcilable = () =>
     or(

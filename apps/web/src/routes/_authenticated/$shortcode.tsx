@@ -32,6 +32,13 @@ import { Button } from "~/ui/primitives/button";
 
 export const Route = createFileRoute("/_authenticated/$shortcode")({
   loader: ({ params }) => {
+    // A retired Job code on an old link or bookmark: Jobs have no public record now.
+    if (/^JOB-/iu.test(params.shortcode))
+      throw redirect({
+        to: "/activity",
+        search: { from: "jobs" },
+        replace: true,
+      });
     const parsed = parseShortcode(params.shortcode);
     if (!parsed || !isBrowserRoutedEntity(parsed.type)) throw notFound();
 

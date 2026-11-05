@@ -29,8 +29,6 @@ export function relationshipQueryCondition(
   const t = (column: string) =>
     sql`${sql.identifier(target)}.${sql.identifier(column)}`;
   switch (query.kind) {
-    case "jobSubject":
-      return sql`${s("subjectKind")} = ${query.target} AND ${s("subjectId")} = ${t("id")}::text`;
     case "imageLeaseDevice":
       // Expired leases still identify their holder until reclaimed or released.
       return sql`${s("state")} = ${imageProcessingJobState.enum.pending} AND ${s("leaseUntil")} IS NOT NULL AND EXISTS (

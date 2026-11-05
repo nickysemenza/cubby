@@ -34,6 +34,7 @@ const contextualRoutes = new Set([
   "/account/connected-apps",
   "/activities",
   "/history",
+  "/jobs",
   "/records",
   "/work-queue",
 ]);

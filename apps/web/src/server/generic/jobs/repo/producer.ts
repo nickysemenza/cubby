@@ -8,25 +8,17 @@ import {
   jobState,
   type EnqueueJobInput,
 } from "@cubby/schemas/job";
-import { generateShortcode } from "@cubby/shared";
 import { and, eq, inArray, not, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import {
   repositoryQueries,
-  repositorySavepoint,
   repositoryTransactionDatabase,
   repositoryTransactionOn,
   type RepositoryQueryInput,
   type RepositoryQueryTransaction,
 } from "~/server/db/repository-access.boundary";
 import { job, jobInvalidationCapture } from "~/server/db/retained-tables";
-import {
-  insertPayloadsWithIdentities,
-  isEntityShortcodeCollision,
-} from "~/server/entity-kernel/repo/entity-identity-writer";
-import { findPgError } from "~/server/errors/db-errors";
-import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { jobKindPolicy } from "../kind-policy";
 import { unobservedJobInvalidation, type JobRow } from "./queue";
@@ -58,13 +50,20 @@ export async function enqueueJob(
   const input = enqueueJobInput.parse(submitted);
   const values = rowValues(input);
   return repositoryTransactionOn(db, async (tx) => {
-    const found = await findOrCreateWithShortcode(tx, "job", {
-      where: eq(job.key, input.key),
-      lock: true,
-      values: () => values,
-    });
-    let row: JobRow = found.row;
-    if (!found.created && input.invalidate) {
+    const held = () =>
+      tx.select().from(job).where(eq(job.key, input.key)).for("update");
+    const [existing] = await held();
+    const [inserted] = existing
+      ? []
+      : await tx
+          .insert(job)
+          .values(values)
+          .onConflictDoNothing({ target: job.key })
+          .returning();
+    const current = existing ?? inserted ?? (await held())[0];
+    if (!current) throw new Error(`Job key ${input.key} could not be enrolled`);
+    let row: JobRow = current;
+    if (!inserted && input.invalidate) {
       const [updated] = await tx
         .update(job)
         .set({
@@ -121,54 +120,34 @@ export async function enqueueJobs(
   if (inputs.some((input) => input.invalidate))
     throw new Error("Batch Job enrollment does not invalidate existing Jobs");
   return repositoryTransactionDatabase(db, async (tx) => {
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const existing = await repositoryQueries(tx)
-        .select()
-        .from(job)
-        .where(
-          inArray(
-            job.key,
-            inputs.map((input) => input.key),
-          ),
-        )
-        .orderBy(job.id)
-        .for("update");
-      if (
-        existing.some((row) =>
-          inputs.some(
-            (input) => input.key === row.key && input.kind !== row.kind,
-          ),
-        )
+    await repositoryQueries(tx)
+      .insert(job)
+      .values(
+        [...inputs]
+          .sort((a, b) => a.key.localeCompare(b.key))
+          .map((input) => rowValues(input)),
       )
-        throw new Error("Job key belongs to a different kind");
-      const held = new Set(existing.map((row) => row.key));
-      const fresh = inputs.filter((input) => !held.has(input.key));
-      if (!fresh.length) return existing;
-      try {
-        const created = await repositorySavepoint(tx, (client) =>
-          insertPayloadsWithIdentities(
-            client,
-            job,
-            "job",
-            fresh.map((input) => ({
-              ...rowValues(input),
-              shortcode: generateShortcode("job"),
-            })),
-          ),
-        );
-        return [...existing, ...created];
-      } catch (error) {
-        if (
-          !isEntityShortcodeCollision(error, "Job") &&
-          !(
-            findPgError(error)?.code === "23505" &&
-            findPgError(error)?.constraint === "Job_key_unique"
-          )
-        )
-          throw error;
-      }
-    }
-    throw new Error("Could not enroll Jobs after repeated key/code collisions");
+      .onConflictDoNothing({ target: job.key });
+    const rows = await repositoryQueries(tx)
+      .select()
+      .from(job)
+      .where(
+        inArray(
+          job.key,
+          inputs.map((input) => input.key),
+        ),
+      )
+      .orderBy(job.id)
+      .for("update");
+    if (
+      rows.some((row) =>
+        inputs.some(
+          (input) => input.key === row.key && input.kind !== row.kind,
+        ),
+      )
+    )
+      throw new Error("Job key belongs to a different kind");
+    return rows;
   });
 }
 

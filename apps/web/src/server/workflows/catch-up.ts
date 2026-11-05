@@ -1,4 +1,3 @@
-import type { JobId } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 
 import {
@@ -65,7 +64,7 @@ export async function recoverMissedWork(
       const { reconcileWorkflowRuns } =
         await import("~/server/workflows/runs/lifecycle");
       // Every bounded page is owed; don't stop after the first hundred Runs.
-      let after: JobId | null = null;
+      let after: string | null = null;
       do {
         after = (await reconcileWorkflowRuns(db, after)).next;
       } while (after);

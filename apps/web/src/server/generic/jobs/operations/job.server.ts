@@ -4,7 +4,7 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 import { listRunJobs, listSubjectJobs } from "../repo/job-diagnostics";
-import { readJobQueue, readRunRollups } from "../repo/job-queue";
+import { readRunRollups } from "../repo/job-queue";
 import { readWorkActivity } from "../repo/work-activity";
 import { readJobLogs } from "../service/job-logs";
 import { retryJobSetNow } from "../service/retry-now";
@@ -14,20 +14,8 @@ export const jobHandlers = implementOperationDomain(jobContract, {
     "runId" in input
       ? listRunJobs(context.db, input.runId)
       : listSubjectJobs(context.db, input.subject),
-  queue: async (context, input) =>
-    readJobQueue(context.db, {
-      ...input,
-      runId: input.filter.runId
-        ? await resolveOrThrow(context.db, "run", input.filter.runId)
-        : null,
-    }),
   retryNow: (context, input) =>
     retryJobSetNow(context.db, context.actorContext, input.filter),
-  explain: async (context, input) =>
-    (await import("~/server/workflows/job-explain")).explainWaiting(
-      context.db,
-      input.id,
-    ),
   runRollups: async (context, input) => ({
     rollups: await readRunRollups(
       context.db,

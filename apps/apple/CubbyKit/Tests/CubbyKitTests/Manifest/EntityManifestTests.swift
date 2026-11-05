@@ -90,12 +90,12 @@ struct EntityManifestTests {
         let product = EntityCatalog[.product].emptyState
         #expect(product.title == "Nothing on the shelves yet")
         #expect(product.actionLabel == "Add Product")
-        #expect(!EntityCatalog[.job].emptyState.description.isEmpty)
-        #expect(EntityCatalog[.job].emptyState.actionLabel == nil)
+        #expect(!EntityCatalog[.imageJob].emptyState.description.isEmpty)
+        #expect(EntityCatalog[.imageJob].emptyState.actionLabel == nil)
         #expect(EntityCatalog[.product].nativeBrowse)
-        #expect(!EntityCatalog[.job].nativeBrowse)
+        #expect(!EntityCatalog[.imageJob].nativeBrowse)
         #expect(EntityCatalog.browsable.contains { $0.key == .inventory })
-        #expect(!EntityCatalog.browsable.contains { $0.key == .job })
+        #expect(!EntityCatalog.browsable.contains { $0.key == .imageJob })
         #expect(EntityCatalog[.purchase].field("notes")?.width == "xl")
     }
 

@@ -9,9 +9,11 @@ never implies failure.
 
 Footer links open Suggestions, Missing facts (the research view of `/work-queue`),
 All work (`/work-queue` with its executor, family, owner and reason facets) and
-History (`/history`: Run outcomes and recorded changes). Raw Job rows live at
-`/jobs`, and maintenance at Settings → Maintenance. Old `/activity?tab=…` links
-redirect to those owners; a `refresh=` locator opens the value's record. List
+History (`/history`: Run outcomes and recorded changes). Maintenance lives at Settings
+→ Maintenance. Stuck background work shows on Work, and a Run's Jobs show on that Run.
+Old `/activity?tab=…` links redirect to those owners; a `refresh=` locator opens the
+value's record and a `runId=` filter opens that Run. Old `/jobs` links and `JOB-` codes
+open Work, or the Run when the link named one. List
 counts, detail and inspector suggestion review stay in place.
 These views do not persist lanes, assignments or another work ledger. A record
 can appear in more than one view when it has different actionable work.

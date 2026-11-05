@@ -61,6 +61,22 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
     fullPage: true,
   });
 
+  // Automatic AI work has no Run to stop, so a member stops and resumes it here.
+  await more.getByRole("button", { name: "Stop automatic AI work" }).click();
+  const stopped = page.getByTestId("automatic-work-stopped");
+  await expect(stopped).toContainText("wait until you resume");
+  await page.screenshot({
+    path: testInfo.outputPath("work-automatic-stopped.png"),
+    fullPage: true,
+  });
+  await page.reload();
+  await expect(stopped).toBeVisible();
+  await stopped.getByRole("button", { name: "Resume" }).click();
+  await expect(stopped).toBeHidden();
+  await expect(
+    more.getByRole("button", { name: "Stop automatic AI work" }),
+  ).toBeVisible();
+
   // Links into the retired views still land on their new owners.
   await page.goto("/activity?tab=history");
   await expect(page).toHaveURL(/\/history/);
@@ -68,7 +84,13 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
     page.getByRole("heading", { name: "Run history", exact: true }),
   ).toBeVisible();
   await page.goto("/activity?tab=now");
-  await expect(page).toHaveURL(/\/jobs/);
+  await expect(page.getByTestId("work-health")).toBeVisible();
+  // So do links to the retired Jobs pages and codes.
+  for (const retired of ["/jobs", "/jobs/JOB-SYNTH12345", "/JOB-SYNTH12345"]) {
+    await page.goto(retired);
+    await expect(page).toHaveURL(/\/activity\?from=jobs/);
+    await expect(page.getByText("The Jobs page is gone.")).toBeVisible();
+  }
   await page.goto("/activity?tab=maintenance");
   await expect(page).toHaveURL(/\/settings#maintenance/);
 

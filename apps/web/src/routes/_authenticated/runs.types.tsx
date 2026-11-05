@@ -242,24 +242,6 @@ function RunTypesPage() {
       title: definition.label,
       description: definition.purpose,
       icon: RobotIcon,
-      headerAction: (
-        <Button
-          variant="outline"
-          size="sm"
-          render={
-            <Link
-              to="/jobs"
-              search={{
-                kind: key,
-                includeInternal: definition.internal ? "true" : undefined,
-              }}
-            />
-          }
-          nativeButton={false}
-        >
-          View Jobs
-        </Button>
-      ),
       content: <JobDefinition kind={key} defaultOpen />,
     })),
   });
