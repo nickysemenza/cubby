@@ -11,13 +11,15 @@ import {
   readAiRefreshActivation,
 } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { aiEvaluation, run, task } from "~/server/db/schema";
 import { claimDerivedDiscovery } from "~/server/domains/run/repo/derived-discovery";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { claimContext } from "~/server/generic/jobs/service/jobs";
+import { wakeAiEvaluationRequesters } from "~/server/workflows/runs/wake";
 
 import { SUPERSEDED_RUN_FAILURE } from "./ai-refresh-state";
 import * as discoveryRepo from "./connection-refresh";
@@ -457,6 +459,29 @@ describe("connection discovery pacing", () => {
         ),
       );
     expect(admitted).toHaveLength(CONNECTION_DISCOVERY_PENDING_CAP);
+    const deadline = prepared.page.waitUntil;
+    expect(deadline?.getTime()).toBeGreaterThan(Date.now() + 55 * 60_000);
+    await updateJobs(
+      ctx.db,
+      { id: saved.id },
+      {
+        state: "queued",
+        availableAt: deadline,
+        waitReason: "rate_limit",
+        leaseToken: null,
+        leaseExpiresAt: null,
+      },
+    );
+    const settled = admitted[0]!;
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ state: "completed" })
+      .where(eq(aiEvaluation.id, settled.id));
+    await withTransactionDatabase(ctx.db, (tx) =>
+      wakeAiEvaluationRequesters(tx, [settled.id]),
+    );
+    const released = (await readJobs(ctx.db, { id: saved.id }))[0];
+    expect(released?.availableAt.getTime()).toBeLessThanOrEqual(Date.now());
   });
   it("stops the pass for a day when a member cancels its Run", async () => {
     await tasks(["Synthetic member-stopped task"]);
