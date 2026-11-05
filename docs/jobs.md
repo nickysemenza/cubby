@@ -15,9 +15,6 @@ supplies the lane and internal-kind flag. Work shows on the Work page and throug
 `job.activity`, and a Run's Jobs show on its detail page. Retry now uses
 `job.retryNow` over a kind, lane, reason, state, Run or id filter.
 
-Rows from when Job was an entity keep their `shortcode` and `Entity` identity until a
-destructive follow-up removes them.
-
 ## Coarse Jobs and work items
 
 A Job is a unit of execution, not a unit of household work. Work that fans out
@@ -368,7 +365,7 @@ row: see [image processing](#image-processing). Producers use
 by identity, a Run's live lease, stopped Run executions). The queue core,
 selection and item claiming (`repo/queue.ts`, `repo/work-claims.ts`),
 `db/job-schema.ts` and the `Job`, `JobInvalidationCapture`,
-`JobLaneAdmission`, `WorkItem` and `WorkTicket` table objects are private to
+`WorkItem` and `WorkTicket` table objects are private to
 `generic/jobs`, tests included: oxlint's `no-restricted-imports` and
 `no-restricted-properties` exempt only `generic/jobs` and the files that
 declare or aggregate the tables. Tests seed, age, lock, claim and inspect that
@@ -546,7 +543,7 @@ recovery and completes after draining its pages. Each pass repairs image executi
 batches (retires moot work, gives open rows without a live execution one;
 failed image executions count as live) and keeps the device wake armed. Every
 six hours it also prunes completed and cancelled Jobs older than
-`JOB_RETENTION_MS`, with any old `Entity` identity, and observed captures, in
+`JOB_RETENTION_MS`, and observed captures, in
 bounded batches, continuing at once while a batch fills. Failed Jobs prune after
 30 days under the same pending-work, wake and identity safeguards. Domain evidence
 (image attempts, AI evaluations, Run history, audit) stays.

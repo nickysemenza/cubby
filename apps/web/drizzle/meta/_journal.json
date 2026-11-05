@@ -645,6 +645,13 @@
       "when": 1793893291378,
       "tag": "0091_drop_columns_that_hold_nothing",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1793893808982,
+      "tag": "0092_drop_job_identities",
+      "breakpoints": true
     }
   ]
 }

@@ -55,13 +55,7 @@ const CATALOG_QUERIES: CatalogQueries = {
       AND ${notExtensionMember("c.oid")}`,
   constraints: `
     SELECT format('%I.%I', c.relname, con.conname) AS key,
-      con.contype::text || ' ' || CASE
-        -- Old Job identity rows hold these NOT VALID until their drop validates them.
-        WHEN c.relname = 'Entity'
-          AND con.conname IN ('Entity_kind_check', 'Entity_shortcode_prefix_check')
-        THEN regexp_replace(pg_get_constraintdef(con.oid), ' NOT VALID$', '')
-        ELSE pg_get_constraintdef(con.oid)
-      END AS value
+      con.contype::text || ' ' || pg_get_constraintdef(con.oid) AS value
     FROM pg_constraint con
     JOIN pg_class c ON c.oid = con.conrelid
     JOIN pg_namespace n ON n.oid = c.relnamespace

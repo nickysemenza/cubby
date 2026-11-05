@@ -5,7 +5,6 @@ export { assessmentCorrectionLock } from "./assessment-correction-lock-schema";
 export {
   job,
   jobInvalidationCapture,
-  jobLaneAdmission,
   workItem,
   workTicket,
 } from "./job-schema";
