@@ -138,31 +138,13 @@ function derivedTriggerInputs(): Map<string, TriggerInput[]> {
   return new Map([...byTable].sort(([a], [b]) => a.localeCompare(b)));
 }
 
-/** The shared mark function: upsert a fresh ticket and capture the drain Job once per transaction. */
+/** Deployed before source-trigger retirement; retained callers cannot admit work. */
 const derivedMarkFunctionSql =
   () => `DROP FUNCTION IF EXISTS derived_mark(text, uuid[]);
 CREATE OR REPLACE FUNCTION derived_mark(p_target text, p_refs uuid[], p_reason text DEFAULT 'Refresh requested') RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN
-  INSERT INTO "WorkItem" (target, ref, priority, reason)
-    SELECT DISTINCT p_target, r,
-      CASE current_setting('cubby.derived_priority', true) WHEN '1' THEN 1 ELSE 0 END, p_reason
-    FROM unnest(p_refs) AS r WHERE r IS NOT NULL
-  ON CONFLICT (target, ref) DO UPDATE SET
-    reason = EXCLUDED.reason,
-    ticket = nextval('"WorkTicket"'),
-    priority = LEAST("WorkItem".priority, EXCLUDED.priority),
-    "readyAt" = now(),
-    attempts = 0,
-    "lastError" = NULL,
-    "waitCause" = NULL,
-    "waitStartedAt" = NULL,
-    "fanoutAfter" = NULL;
-  IF current_setting('cubby.derived_capture', true) IS DISTINCT FROM txid_current()::text THEN
-    INSERT INTO "JobInvalidationCapture" (key, "capturedAt")
-      VALUES (${literal(DERIVED_DRAIN_JOB_KEY)}, now() AT TIME ZONE 'UTC');
-    PERFORM set_config('cubby.derived_capture', txid_current()::text, true);
-  END IF;
+  RETURN;
 END $$;`;
 
 /** Desired-state DDL: the mark function plus one function and trigger per source table. */
