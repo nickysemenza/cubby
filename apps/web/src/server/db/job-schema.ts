@@ -1,4 +1,13 @@
-import { workWaitCause, workWaitCauses } from "@cubby/schemas/job";
+import type { RunId } from "@cubby/schemas/identifiers";
+import {
+  jobState,
+  jobWaitReason,
+  workWaitCause,
+  workWaitCauses,
+  type JobPayload,
+  type JobState,
+  type JobWaitReason,
+} from "@cubby/schemas/job";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -6,17 +15,99 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgSequence,
   pgTable,
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
+import { run } from "./generated/entity-table-definitions.gen";
 import { sqlEnumConstant } from "./sql-enum";
 
-export { job } from "./generated/entity-table-definitions.gen";
+/**
+ * Durable background work with no natural owner row. It is not an entity: it has no
+ * public code or identity, and nothing links to it. `shortcode` stays only until the
+ * destructive follow-up drops it with the old identity rows.
+ */
+export const job = pgTable(
+  "Job",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    shortcode: text("shortcode"),
+    key: text("key").notNull(),
+    kind: text("kind").notNull(),
+    state: text("state").$type<JobState>().notNull().default("queued"),
+    runId: uuid("runId")
+      .$type<RunId>()
+      .references((): AnyPgColumn => run.id, { onDelete: "set null" }),
+    subjectKind: text("subjectKind"),
+    subjectId: text("subjectId"),
+    waitReason: text("waitReason").$type<JobWaitReason>(),
+    waitUntil: timestamp("waitUntil", { mode: "date" }),
+    input: jsonb("input").$type<JobPayload>().notNull(),
+    cursor: jsonb("cursor").$type<JobPayload>(),
+    result: jsonb("result").$type<JobPayload>(),
+    generation: integer("generation").notNull().default(1),
+    priority: integer("priority").notNull().default(0),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("maxAttempts").default(3),
+    availableAt: timestamp("availableAt", { mode: "date" })
+      .notNull()
+      .default(sql`now()`),
+    leaseToken: uuid("leaseToken"),
+    leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),
+    leaseHolder: jsonb("leaseHolder"),
+    lastClaimedAt: timestamp("lastClaimedAt", { mode: "date" }),
+    error: text("error"),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("Job_key_unique").on(table.key),
+    index("Job_due_idx").on(table.state, table.availableAt, table.priority),
+    index("Job_run_idx").on(table.runId),
+    index("Job_subject_idx").on(table.subjectKind, table.subjectId),
+    index("Job_kind_claimed_idx").on(table.kind, table.lastClaimedAt),
+    index("Job_kind_state_idx").on(table.kind, table.state, table.availableAt),
+    check(
+      "Job_state_check",
+      sql.raw(
+        `"state" IN (${jobState.options.map((value) => `'${value}'`).join(", ")})`,
+      ),
+    ),
+    check(
+      "Job_kind_retired_check",
+      sql`${table.kind} NOT IN ('image.cloud', 'image.device', 'image.device.wake', 'embedding.refresh', 'embedding.cleanup', 'ai.evaluation')`,
+    ),
+    check(
+      "Job_waitReason_check",
+      sql`${table.waitReason} IN (${sql.join(
+        jobWaitReason.options.map((value) =>
+          sqlEnumConstant(jobWaitReason, value),
+        ),
+        sql`, `,
+      )})`,
+    ),
+    check(
+      "Job_subject_check",
+      sql`(${table.subjectKind} IS NULL) = (${table.subjectId} IS NULL)`,
+    ),
+    check(
+      "Job_attempts_check",
+      sql`${table.attempts} >= 0 AND coalesce(${table.maxAttempts}, 1) > 0`,
+    ),
+  ],
+);
 
 /**
  * A source transaction appends its own wake, without a shared mutable revision.

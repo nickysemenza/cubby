@@ -4,7 +4,6 @@
  * through `producer.ts` and `operator.ts`; the drain executor
  * (`service/jobs.ts`) is its one internal caller.
  */
-import { parseEntityId } from "@cubby/schemas/identifiers";
 import { jobPage, type JobPage, type JobWaitReason } from "@cubby/schemas/job";
 import { runStatus, VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
@@ -127,7 +126,7 @@ export async function dueJobs(
       ${
         excludeIds.length
           ? sql`WHERE due.id NOT IN (${sql.join(
-              excludeIds.map((id) => sql`${parseEntityId("job", id)}::uuid`),
+              excludeIds.map((id) => sql`${id}::uuid`),
               sql`, `,
             )})`
           : sql``
@@ -148,7 +147,7 @@ export async function dueJobs(
     ORDER BY ranked.run_owned DESC, ranked.position, served.last_served NULLS FIRST, ranked.kind
     LIMIT ${limit}`);
   return result.rows.map((row) => ({
-    id: parseEntityId("job", row.id),
+    id: row.id,
     kind: row.kind,
     runOwned: row.run_owned,
   }));
@@ -187,7 +186,7 @@ export async function claimJob(
   id: string,
   leaseMs = JOB_LEASE_MS,
 ): Promise<JobClaim | null> {
-  const recordId = parseEntityId("job", id);
+  const recordId = id;
   if (!Number.isFinite(leaseMs) || leaseMs <= 0)
     throw new Error("Job lease must be a positive finite duration");
   const now = new Date();

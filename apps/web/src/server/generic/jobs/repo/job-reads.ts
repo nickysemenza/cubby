@@ -31,7 +31,6 @@ export type JobFilter = {
   id?: string;
   ids?: readonly string[];
   /** The Job's shortcode. */
-  code?: string;
   key?: string;
   keys?: readonly string[];
   kind?: string;
@@ -42,16 +41,8 @@ export type JobFilter = {
 
 export const jobWhere = (filter: JobFilter): SQL | undefined =>
   and(
-    filter.id === undefined
-      ? undefined
-      : eq(job.id, parseEntityId("job", filter.id)),
-    filter.ids
-      ? inArray(
-          job.id,
-          filter.ids.map((id) => parseEntityId("job", id)),
-        )
-      : undefined,
-    filter.code === undefined ? undefined : eq(job.shortcode, filter.code),
+    filter.id === undefined ? undefined : eq(job.id, filter.id),
+    filter.ids ? inArray(job.id, [...filter.ids]) : undefined,
     filter.key === undefined ? undefined : eq(job.key, filter.key),
     filter.keys ? inArray(job.key, [...filter.keys]) : undefined,
     filter.kind === undefined ? undefined : eq(job.kind, filter.kind),

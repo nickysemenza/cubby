@@ -1,8 +1,4 @@
-import {
-  parseEntityId,
-  type RunId,
-  type JobId,
-} from "@cubby/schemas/identifiers";
+import { type RunId } from "@cubby/schemas/identifiers";
 import { jobState, type JobWaitReason } from "@cubby/schemas/job";
 import { and, asc, count, desc, eq, ne, type SQL } from "drizzle-orm";
 
@@ -28,7 +24,7 @@ const RUN_EXECUTE = "run.execute";
 async function groupsOf(
   db: Database,
   owner: SQL,
-  exclude: JobId | null,
+  exclude: string | null,
   now: Date,
 ): Promise<JobGroup[]> {
   const where = exclude ? and(owner, ne(job.id, exclude)) : owner;
@@ -135,10 +131,6 @@ export async function readJobWindow(db: Database, id: string) {
       state: job.state,
     })
     .from(job)
-    .where(
-      id.toUpperCase().startsWith("JOB-")
-        ? eq(job.shortcode, id.toUpperCase())
-        : eq(job.id, parseEntityId("job", id)),
-    );
+    .where(eq(job.id, id));
   return row ?? null;
 }

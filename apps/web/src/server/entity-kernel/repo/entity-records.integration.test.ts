@@ -12,7 +12,6 @@ import {
   listEntityRecords as listCurrentEntityRecords,
 } from "~/server/entity-kernel/repo/entity-records";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
@@ -36,21 +35,6 @@ describe("combined entity records", () => {
     return listCurrentEntityRecords(...args);
   };
 
-  it("includes retained entities without payload deletion columns", async () => {
-    const saved = await enqueueJob(ctx.db, {
-      key: "synthetic:combined-job",
-      kind: "synthetic.records",
-      input: {},
-    });
-    const page = await listCurrentEntityRecords(
-      ctx.db,
-      entityRecordsInputSchema.parse({ kind: "job", orderBy: "name" }),
-    );
-    expect(page.totalCount).toBe(1);
-    expect(page.items).toMatchObject([
-      { id: saved.shortcode, kind: "job", name: "synthetic.records" },
-    ]);
-  });
   it("evaluates default-list quality and image subplans only for the requested page", async () => {
     for (let i = 0; i < 30; i++) {
       await createProductIdentityFixture(

@@ -2,9 +2,8 @@
  * Shortcode minting — the write half of the public-id layer.
  *
  * A shortcode is non-null and immutable. Entity identities reserve codes,
- * including tombstones; Job retention alone releases pruned identities and codes
- * (docs/jobs.md#job-entity-and-identity-retention). Payload indexes and the
- * Entity identity index reject collisions while those identities exist.
+ * including tombstones. Payload indexes and the Entity identity index reject
+ * collisions while those identities exist.
  * Inserts mint a candidate directly and retry a rejected collision inside a
  * savepoint. An advisory preflight SELECT costs a round trip without closing
  * the race; only callers that need a free code before inserting use it.

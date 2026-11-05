@@ -588,9 +588,6 @@ const headerAction = <E extends GenericDetailEntity>(
 
 /** `HeaderActionTable`: each entity's own header controls. */
 const headerActions: HeaderActionTable = {
-  job: headerAction<"job">(() =>
-    named(import("~/features/job/detail-actions"), "JobDetailActions"),
-  ),
   purchase: headerAction<"purchase">(() =>
     named(
       import("~/entity/entity-detail/report-slot"),

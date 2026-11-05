@@ -1,8 +1,4 @@
-import {
-  runShortcode,
-  jobShortcode,
-  anyShortcodeSchema,
-} from "@cubby/schemas/identifiers";
+import { runShortcode } from "@cubby/schemas/identifiers";
 import {
   jobLane,
   jobState,
@@ -10,22 +6,9 @@ import {
   jobWaitingOnReason,
   jobWaitReason,
 } from "@cubby/schemas/job";
-import { jobFilters } from "@cubby/schemas/job-entity";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
-
-/** One self-describing pattern retains legacy Job UUIDs alongside public codes. */
-const explainPatterns = [
-  anyShortcodeSchema(["run", "imageJob", "email", "job"]),
-  z.uuid(),
-].map((schema) => z.string().parse(z.toJSONSchema(schema).pattern));
-const explainTarget = z
-  .string()
-  .regex(new RegExp(explainPatterns.join("|")))
-  .describe(
-    "A Run (RUN-), image job (IPR-), Email (EML-), Job (JOB-), or legacy Job UUID.",
-  );
 
 /** One Job as diagnostics read it: execution facts only, never domain state. */
 const jobFacts = z.object({
@@ -77,8 +60,6 @@ export type RunRollup = z.infer<typeof runRollup>;
 
 /** A filtered Job set: every key narrows; an empty filter is every live Job. */
 const jobSetFilter = z.strictObject({
-  codes: z.array(jobShortcode).min(1).optional(),
-  entityFilters: jobFilters.optional(),
   lanes: z.array(jobLane).min(1).optional(),
   kinds: z.array(z.string().min(1)).min(1).max(50).optional(),
   reasons: z.array(jobWaitingOnReason).min(1).optional(),
@@ -90,43 +71,7 @@ const jobSetFilter = z.strictObject({
 });
 export type JobSetFilter = z.infer<typeof jobSetFilter>;
 
-const jobQueueOut = z.object({
-  /** Live Jobs per lane and waiting-on reason, for the whole filtered set. */
-  counts: z.array(
-    z.object({
-      lane: jobLane,
-      reason: jobWaitingOnReason,
-      count: z.number().int().nonnegative(),
-    }),
-  ),
-  total: z.number().int().nonnegative(),
-  /** The set's leased image work per executor; expired leases await reclaim. */
-  leases: z.array(
-    z.object({
-      executor: z.string().nullable(),
-      live: z.number().int().nonnegative(),
-      expired: z.number().int().nonnegative(),
-    }),
-  ),
-  jobs: z.array(jobFacts),
-});
-
-export type JobQueueOut = z.infer<typeof jobQueueOut>;
-
 /** One link of an explain chain: a record, its state and what it waits on. */
-const explainStep = z.object({
-  ref: z.string(),
-  kind: z.enum(["run", "imageJob", "email", "job"]),
-  label: z.string(),
-  state: z.string(),
-  waitingOn: jobWaitingOn.nullable(),
-  detail: z.string().nullable(),
-});
-const explainOut = z.object({
-  steps: z.array(explainStep),
-  rollup: runRollup.nullable(),
-});
-
 /** Fan-out Jobs of one kind (a step's per-item evaluations) as counts. */
 const jobGroup = z.object({
   kind: z.string(),
@@ -252,30 +197,12 @@ export const jobContract = defineContract(
       // Job state moves while a Run executes; Run writes refresh it.
       cache: { tags: [["run"]], profile: "live-status" },
     }),
-    queue: query({
-      description:
-        "Live Jobs grouped by lane (apple_device, frontier_ai, server, external) and what they wait on (due, waiting_device, waiting_funding, leased, backing_off, blocked, paused, update_required), with one page of matching Jobs. Filter by lane, kind, reason, state, Run or attention.",
-      input: z.strictObject({
-        filter: jobSetFilter.default({}),
-        pageIndex: z.int().nonnegative().default(0),
-        pageSize: z.int().min(1).max(100).default(25),
-      }),
-      output: jobQueueOut,
-      cache: { tags: [["run"]], profile: "live-status" },
-    }),
     retryNow: mutation({
       description:
         "Retry now: make every Job in the filtered set due immediately, clearing backoff and provider waits. Failed and cancelled Jobs reopen with a fresh attempt budget; running and member-paused Jobs are left alone. Prior errors are kept.",
       input: z.strictObject({ filter: jobSetFilter }),
       output: z.object({ retried: z.number().int().nonnegative() }),
       invalidates: ["runOnly", "image"],
-    }),
-    explain: query({
-      description:
-        "Explain what a Run (RUN-), image job (IPR-), Email (EML-) or Job (JOB- or legacy uuid) is waiting on, as a chain from the record to the Jobs that block it.",
-      input: z.strictObject({ id: explainTarget }),
-      output: explainOut,
-      cache: { tags: [["run"], ["image"]], profile: "live-status" },
     }),
     runRollups: query({
       exposure: "view",
@@ -303,7 +230,7 @@ export const jobContract = defineContract(
       note: "Raw Worker log lines for one Job; agents read Run state instead",
       description:
         "Read raw Worker log lines for one Job and a bounded time range. Use Run status for workflow progress; logs are lower-level diagnostics.",
-      input: z.strictObject({ jobId: z.union([z.uuid(), jobShortcode]) }),
+      input: z.strictObject({ jobId: z.uuid() }),
       output: jobLogsOut,
       cache: { tags: [] },
     }),

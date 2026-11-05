@@ -1,11 +1,10 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { JobId } from "@cubby/schemas/identifiers";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { entityIdentity, image, imageProcessingJob } from "~/server/db/schema";
+import { image, imageProcessingJob } from "~/server/db/schema";
 import { createTransparentDerivativeAndJob } from "~/server/domains/image-processing/repo/image-processing";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
@@ -117,9 +116,9 @@ describe("Job maintenance", () => {
     ).toEqual([{ id: saved.id }]);
   });
 
-  it("prunes terminal Jobs and identities only after their retention window", async () => {
+  it("prunes terminal Jobs only after their retention window", async () => {
     const old = new Date(Date.now() - JOB_RETENTION_MS - 60_000);
-    const retained: JobId[] = [];
+    const retained: string[] = [];
     for (const [key, state] of [
       ["synthetic.retention.completed", "completed"],
       ["synthetic.retention.failed", "failed"],
@@ -144,19 +143,7 @@ describe("Job maintenance", () => {
     );
     await expect(runMaintenance()).resolves.toBe("succeeded");
     expect(await readJobs(ctx.db, { id: expired.id })).toEqual([]);
-    expect(
-      await getDb(ctx.db)
-        .select({ id: entityIdentity.id })
-        .from(entityIdentity)
-        .where(eq(entityIdentity.id, parseEntityId("job", expired.id))),
-    ).toEqual([]);
     expect(await readJobs(ctx.db, { id: retained[0]! })).toEqual([]);
-    expect(
-      await getDb(ctx.db)
-        .select({ id: entityIdentity.id })
-        .from(entityIdentity)
-        .where(inArray(entityIdentity.id, retained)),
-    ).toEqual([{ id: retained[1] }]);
     expect(
       await readJobs(ctx.db, { id: retained[1]! }).then((rows) =>
         rows.map(({ id }) => ({ id })),

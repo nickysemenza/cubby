@@ -157,18 +157,6 @@ describe("shortcodeSchema", () => {
   );
 });
 
-describe("Job shortcodes", () => {
-  it("keeps JOB bodies at ten characters without widening other entities", () => {
-    const code = generateShortcode("job");
-    expect(code).toMatch(/^JOB-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{10}$/);
-    expect(shortcodeSchema("job").safeParse("JOB-4K7MN").success).toBe(false);
-    expect(shortcodeSchema("run").safeParse("RUN-4K7MN4K7MN").success).toBe(
-      false,
-    );
-    expect(parseShortcode(code)?.type).toBe("job");
-  });
-});
-
 describe("generateShortcode", () => {
   it("returns the entity's exact branded shortcode", () => {
     expectTypeOf(

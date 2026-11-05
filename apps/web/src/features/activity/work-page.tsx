@@ -22,7 +22,7 @@ import { Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 
-/** Past this the list points at `/jobs`; a page of warnings stops being read. */
+/** Past this the list only counts the rest; a page of warnings stops being read. */
 const STUCK_ROW_CAP = 8;
 /** Retry shows its outcome without a reload, then the page goes quiet again. */
 const RETRY_READ_MS = 10_000;
@@ -145,13 +145,9 @@ function StuckSection({
         ))}
       </ul>
       {items.length > STUCK_ROW_CAP ? (
-        <Link
-          to="/jobs"
-          search={{ needsAttention: "true" }}
-          className="mt-2 inline-flex text-link hover:underline max-md:min-h-11 max-md:items-center"
-        >
-          See all failed Jobs
-        </Link>
+        <p className="mt-2 text-muted-foreground">
+          {items.length - STUCK_ROW_CAP} more not shown
+        </p>
       ) : null}
     </Section>
   );
@@ -290,8 +286,8 @@ function AutomaticWorkStopped({
   );
 }
 
-/** One verdict and one queue. Diagnostics live in `/jobs` and in MCP. */
-export function WorkPage() {
+/** One verdict and one queue. Diagnostics live in MCP. */
+export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
   const [watchUntil, setWatchUntil] = useState(0);
   const status = useQuery({
     ...workQueue.status.queryOptions(STATUS_INPUT),
@@ -310,6 +306,12 @@ export function WorkPage() {
             ? "Couldn't read background status, so this page can't say whether anything is stuck."
             : "Checking…"}
       </p>
+      {fromRetiredJobs ? (
+        <p className="max-w-prose text-muted-foreground">
+          The Jobs page is gone. Stuck background work shows here, and a Run's
+          Jobs show on that Run.
+        </p>
+      ) : null}
       {status.isError && !data ? (
         <UnknownStatus
           error={status.error}
@@ -329,7 +331,7 @@ export function WorkPage() {
       <NeedsYouQueue status={data?.needsYou} />
       <nav
         aria-label="More work"
-        className="flex flex-wrap gap-x-3.5 gap-y-1 border-t border-border pt-2 [&>a]:text-link [&>a]:hover:underline [&>a]:max-md:inline-flex [&>a]:max-md:min-h-11 [&>a]:max-md:items-center"
+        className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border pt-2 [&>a]:text-link [&>a]:hover:underline [&>a]:max-md:inline-flex [&>a]:max-md:min-h-11 [&>a]:max-md:items-center"
       >
         <Link to="/suggestions">Suggestions</Link>
         <Link to="/work-queue" search={{ family: "research" }}>

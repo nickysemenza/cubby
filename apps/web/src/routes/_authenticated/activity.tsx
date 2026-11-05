@@ -28,12 +28,21 @@ const retiredSearch = z.object({
   runId: runShortcode.optional().catch(undefined),
   attention: z.boolean().optional().catch(undefined),
   refresh: fieldRefreshLocator.optional().catch(undefined),
+  /** Arrived from a retired Jobs link, which the page explains once. */
+  from: z.literal("jobs").optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/_authenticated/activity")({
   validateSearch: retiredSearch,
   beforeLoad: ({ search }) => {
     // An exact Work locator named one value: its record's page explains it.
+    // An old filter on one Run: its page shows that Run's Jobs.
+    if (search.runId)
+      throw redirect({
+        to: "/runs/$shortcode",
+        params: { shortcode: search.runId },
+        replace: true,
+      });
     if (search.refresh)
       throw redirect({
         to: "/$shortcode",
@@ -50,32 +59,16 @@ export const Route = createFileRoute("/_authenticated/activity")({
         search: { entityKind: search.entityKind, channel: search.channel },
         replace: true,
       });
-    if (
-      search.tab === "now" ||
-      search.lane ||
-      search.reason ||
-      search.state ||
-      search.kind ||
-      search.runId ||
-      search.attention
-    )
-      throw redirect({
-        to: "/jobs",
-        search: {
-          lane: search.lane,
-          reason: search.reason,
-          state: search.state,
-          kind: search.kind,
-          runId: search.runId,
-          ...(search.attention ? { needsAttention: "true" } : {}),
-        },
-        replace: true,
-      });
   },
   head: () => ({ meta: [{ title: pageTitle("Work") }] }),
-  component: () => (
-    <Page variant="list" title="Work" layout="full" bodyGutter="standard">
-      <WorkPage />
-    </Page>
-  ),
+  component: WorkRoute,
 });
+
+function WorkRoute() {
+  const { from } = Route.useSearch();
+  return (
+    <Page variant="list" title="Work" layout="full" bodyGutter="standard">
+      <WorkPage fromRetiredJobs={from === "jobs"} />
+    </Page>
+  );
+}

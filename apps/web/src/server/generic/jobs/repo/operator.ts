@@ -37,7 +37,7 @@ export async function retryJob(db: RepositoryQueryInput, id: string) {
     })
     .where(
       and(
-        eq(job.id, parseEntityId("job", id)),
+        eq(job.id, id),
         inArray(job.state, ["failed", "paused", "cancelled"]),
       ),
     )
@@ -85,7 +85,7 @@ export async function prioritizeJob(
   const [row] = await repositoryQueries(db)
     .update(job)
     .set({ priority })
-    .where(eq(job.id, parseEntityId("job", id)))
+    .where(eq(job.id, id))
     .returning();
   return row ?? null;
 }
@@ -119,9 +119,7 @@ async function controlJob(
       generation: sql`${job.generation} + 1`,
       updatedAt: new Date(),
     })
-    .where(
-      and(eq(job.id, parseEntityId("job", id)), inArray(job.state, ACTIVE)),
-    )
+    .where(and(eq(job.id, id), inArray(job.state, ACTIVE)))
     .returning();
   return row ?? null;
 }

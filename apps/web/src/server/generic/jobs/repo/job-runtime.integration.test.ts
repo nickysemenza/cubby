@@ -1,4 +1,3 @@
-import type { JobId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -14,9 +13,9 @@ import { nextJobDue } from "./queue";
 
 describe("Job retry policy", () => {
   const ctx = withTestDb();
-  const read = async (id: JobId) =>
+  const read = async (id: string) =>
     (await getDb(ctx.db).select().from(job).where(eq(job.id, id)))[0]!;
-  const makeDue = (id: JobId) =>
+  const makeDue = (id: string) =>
     getDb(ctx.db)
       .update(job)
       .set({ availableAt: new Date(0) })

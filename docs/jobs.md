@@ -7,34 +7,16 @@ the decision; this page owns the runtime contract. Derived-data families are
 in [entities](entities.md#background-derived-data); Worker and database
 capacity in [infrastructure](infrastructure.md#postgresql-and-hyperdrive).
 
-## Job entity and identity retention
+## Jobs are not entities
 
-Job is a read-only generic entity over the durable `Job` table. Web, Apple and
-MCP use the entity kernel for list/detail reads. Its `JOB-` shortcode has a
-ten-character body from the shared shortcode alphabet. Enqueue creates its
-`Entity` identity and execution row atomically through the shared identity
-writer; a repeat enqueue by key preserves both identities. Kind policy supplies
-the lane and internal-kind flag. Subject Images supply thumbnails, and Run
-references arrive with their labels in the row read.
+A Job has no public code, no `Entity` identity, no page and no relationships. It is
+one row of owed background work in the `Job` table, keyed by `key`. Kind policy
+supplies the lane and internal-kind flag. Work shows on the Work page and through
+`job.activity`, and a Run's Jobs show on its detail page. Retry now uses
+`job.retryNow` over a kind, lane, reason, state, Run or id filter.
 
-The entity exposes execution state, lane, waiting-on text, subject, Run,
-attempts, raw error, lease end and timestamps. Filters cover lane, waiting-on
-reason, state, kind, Run, attention and internal kinds. Internal work
-(`jobs.maintenance`, `derived.drain`, `derived.reconcile`,
-`ai-refresh.activate`, anything policy marks internal) is hidden by default.
-Retry now uses `job.retryNow` over checked codes or the exact current entity
-filter.
-
-Owning Run is the optional execution owner. Connected records and graph
-traversal also expose typed entity subjects; a calendar origin is not an entity
-subject.
-
-Job is the sole exception to permanent `Entity` identities: retention deletes
-its identity in the same transaction as its pruned execution row. Enqueue
-locks an existing Job through invalidation; retention skips locked
-candidates, so it cannot prune a Job being invalidated or return a stale
-identity. A pruned `JOB-` code may be recycled and no longer resolves; every
-other entity retains its identity and code forever.
+Rows from when Job was an entity keep their `shortcode` and `Entity` identity until a
+destructive follow-up removes them.
 
 ## Coarse Jobs and work items
 
@@ -214,14 +196,12 @@ Declared entity fields carry the same facts to web, Apple and MCP:
 - Image job: `waitingOn` for open rows.
 - Device: `updateRequired`, `inactive` (not seen for 7 days or never) and
   `appleIntelligenceAvailable` (the hello's actual-image description
-  availability, null until a hello reports it). Leases per device come from
-  `job.queue` (`leases`), keeping the device list's core read to its page
-  queries.
+  availability, null until a hello reports it).
 
 Retention skips Jobs with pending WorkItems or unobserved wakes. A producer
 holds the existing Job's key-share lock through the wake transaction, so
 retention either skips it or deletes it before the producer reads and recreates
-its identity. A resumed Run's evaluation item is rechecked under Run locks
+it. A resumed Run's evaluation item is rechecked under Run locks
 before a prepared parked item can be cleared. Embedding publication takes
 source locks before WorkItem locks, matching source producers.
 
@@ -540,17 +520,12 @@ A Worker memory termination can prevent item failures or a checkpoint from
 being recorded. Read invocation outcomes alongside Run counters; a zero item
 failure count alone does not establish uninterrupted execution.
 
-- `job.queue`: live Jobs counted by lane and waiting-on reason and a page of
-  matching Jobs with their `waitingOn`. Image rows are not Jobs: read them through
-  the `imageJob` entity and `job.deviceBacklog`.
 - `job.runRollups` and `job.list` (`rollup`): a Run's live Jobs by reason
   (`leased` counts live leases; lapsed ones are `expiredLeases`, summarized as
   "N expired leases awaiting reclaim"), its own funding wait, and `stalled`
   when nothing was claimed or finished for `RUN_STALL_MS` and no live lease is
   in flight. A Run's demand is the Jobs and image rows it owns by `runId`; shared
   drain Jobs belong to no Run.
-- `job.explain {id}`: the waiting-on chain for a `RUN-`, `IPR-` or `EML-` code
-  or a Job id, on MCP (`maintenance`) and `cubby call`.
 - `job.deviceBacklog`: due Apple-device work, the Runs it holds up, devices
   that started an attempt in the last ten minutes (`Device.lastSeenAt` moves
   only on hello), device attempt starts per minute (reclaims included), and an
@@ -558,9 +533,7 @@ failure count alone does not establish uninterrupted execution.
   minutes. The completion sample excludes normalization, failed attempts and stale
   image sources. Without a successful completion sample the ETA is unknown.
 
-The Jobs list presents lane/reason filters over the Job entity. Navigable counts use the Job entity
-population, hiding internal work with the table. Every supplied retry
-restriction intersects, including mixed entity filters, row IDs and Run scope.
+Every supplied retry restriction intersects, including row IDs and Run scope.
 Runs use the generic `attention` saved view: member-visible stopped Runs that
 have no successor, plus stalled Runs, ordered stalled first then newest.
 AI cost is the Run's
@@ -573,7 +546,7 @@ recovery and completes after draining its pages. Each pass repairs image executi
 batches (retires moot work, gives open rows without a live execution one;
 failed image executions count as live) and keeps the device wake armed. Every
 six hours it also prunes completed and cancelled Jobs older than
-`JOB_RETENTION_MS` with their `Entity` identities, and observed captures, in
+`JOB_RETENTION_MS`, with any old `Entity` identity, and observed captures, in
 bounded batches, continuing at once while a batch fills. Failed Jobs prune after
 30 days under the same pending-work, wake and identity safeguards. Domain evidence
 (image attempts, AI evaluations, Run history, audit) stays.
@@ -876,8 +849,8 @@ the minimum only for unsafe writes; see
 Work is the web entry point at `/activity`: one health line, Stuck when something
 is, and one Needs you queue. `workQueue.status` is the single read behind the page
 and the sidebar, and agents can read it too. It adds no alert engine, stored lanes
-or retry policy; old `tab=` links redirect to `/jobs`, `/history`, `/suggestions`
-and Settings, and a `refresh=` locator to the value's record.
+or retry policy; old `tab=` links redirect to `/history`, `/suggestions` and
+Settings, and a `refresh=` locator to the value's record.
 
 Stuck is decided on the server from completions over a window, never from a
 snapshot of what is running, which reads as stopped between a drain's bursts:

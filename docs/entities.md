@@ -108,9 +108,7 @@ Job uses it for its internal-kinds toggle.
 `identifiers.shortcodeLength` optionally overrides the minted and accepted body
 length for an entity. The bootstrap registry carries that declaration to shared
 schema validation and `generateShortcode`; omitted lengths keep the existing
-four/five-character validation and five-character generation. Job declares ten.
-Job retention alone may delete `Entity` identities and recycle pruned codes;
-[Jobs](jobs.md#job-entity-and-identity-retention) owns that bounded lifecycle.
+four/five-character validation and five-character generation.
 
 ## Generic by default
 
@@ -4274,8 +4272,7 @@ to it with a composite `(id, shortcode)` FK. Shared transactional writers create
 identity before payload insertion and retain tombstones on soft and hard deletes. `finalizeMerge` records one-hop,
 path-compressed `mergedIntoId` links. Reads and writes through a merged-away
 code refuse with the survivor's code ([ADR 0024](adr/0024-repository-read-declaration.md));
-a deleted code refuses with the deletion date. Except for [pruned Job identities](jobs.md#job-entity-and-identity-retention),
-codes are never reused, even a
+a deleted code refuses with the deletion date. Codes are never reused, even a
 hard-deleted payload's.
 
 Direct files are `EntityAttachment` rows: gallery photos and purchase documents

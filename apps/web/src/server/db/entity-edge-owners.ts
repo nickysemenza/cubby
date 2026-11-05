@@ -153,6 +153,7 @@ export const ENTITY_EDGE_OWNERS = {
   },
   RunOperation: { excluded: WORKFLOW },
   ImportSourceClaim: { excluded: WORKFLOW },
+  Job: { excluded: WORKFLOW },
   ImportSourceOrder: { excluded: WORKFLOW },
   ImportSourceProduct: { excluded: WORKFLOW },
   LedgerSourceClaim: { excluded: WORKFLOW },

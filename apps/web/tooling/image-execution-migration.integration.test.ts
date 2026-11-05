@@ -467,3 +467,44 @@ it("moves owed AI evaluations onto their rows and keeps paid results and parked 
     ).toEqual([{ left: 0 }]);
   });
 });
+
+it("retires the Job entity without deleting a row, and new Jobs need no identity", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle(client);
+    await migrateDatabase(db, {
+      through: "0085_automatic_ai_evaluations_have_no_run",
+    });
+    const id = "00000000-0000-4000-8000-000000000001";
+    await identity(client, "job", id, "JOB-SYNTH1");
+    await client.query(
+      `INSERT INTO "Job" (id, shortcode, key, kind, state, input, attempts)
+       VALUES ($1, 'JOB-SYNTH1', 'synthetic:paused', 'run.execute', 'paused', '{}', 2)`,
+      [id],
+    );
+
+    await migrateDatabase(db, { through: "0088_job_is_no_longer_an_entity" });
+
+    expect(
+      (
+        await client.query(`SELECT state, attempts FROM "Job" WHERE id = $1`, [
+          id,
+        ])
+      ).rows,
+    ).toEqual([{ state: "paused", attempts: 2 }]);
+    expect(
+      (await client.query(`SELECT kind FROM "Entity" WHERE id = $1`, [id]))
+        .rows,
+    ).toEqual([{ kind: "job" }]);
+    await client.query(
+      `INSERT INTO "Job" (key, kind, input) VALUES ('synthetic:fresh', 'synthetic', '{}')`,
+    );
+    await expect(
+      identity(
+        client,
+        "job",
+        "00000000-0000-4000-8000-000000000002",
+        "JOB-SYNTH2",
+      ),
+    ).rejects.toThrow("Entity_kind_check");
+  });
+});

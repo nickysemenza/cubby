@@ -54,7 +54,8 @@ export async function pruneFinishedJobs(
     if (deleted.length)
       await tx.delete(entityIdentity).where(
         and(
-          eq(entityIdentity.kind, "job"),
+          // Old identity rows until the destructive follow-up removes them all.
+          sql`${entityIdentity.kind} = 'job'`,
           inArray(
             entityIdentity.id,
             deleted.map((row) => row.id),

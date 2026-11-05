@@ -55,6 +55,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/ingredients/equivalences",
   "/ingredients/workbench",
   "/inventory/triage",
+  "/jobs",
   "/labels",
   "/locations/arrange",
   "/meals/shopping-list",
@@ -109,6 +110,7 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
     pattern: /^\/runs\/[^/]+$/u,
     template: "/runs/:shortcode",
   },
+  { pattern: /^\/jobs\/[^/]+$/u, template: "/jobs/:shortcode" },
   {
     pattern: /^\/api\/import\/runs\/[^/]+\/agent$/u,
     template: "/api/import/runs/:publicId/agent",

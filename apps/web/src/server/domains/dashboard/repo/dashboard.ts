@@ -17,7 +17,6 @@ import {
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
-import { jobEntityWhere } from "~/server/generic/jobs/repo/entity-list";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 type LocalCountEntity = keyof DashboardLocalCounts;
@@ -27,10 +26,9 @@ type LocalCountEntity = keyof DashboardLocalCounts;
  * entity's own list scaffold over its declared opening filter
  * (`presentation.list.initialFilter`), so a total counts exactly what the
  * list opens on. Opening filters use column IDs; the shared compiler maps
- * those to request filter keys before validation. Job keeps its own read.
+ * those to request filter keys before validation.
  */
 const countWhere = (entity: LocalCountEntity): SQL | undefined => {
-  if (entity === "job") return jobEntityWhere({});
   const listEntity = listEntities.find((candidate) => candidate === entity);
   const scaffold = kernelScaffold(entity);
   if (!listEntity || !scaffold)

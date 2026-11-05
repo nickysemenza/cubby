@@ -1,12 +1,7 @@
-import {
-  runShortcode,
-  parseEntityId,
-  type RunId,
-} from "@cubby/schemas/identifiers";
+import { runShortcode, type RunId } from "@cubby/schemas/identifiers";
 import { imageProcessingJobState } from "@cubby/schemas/image-processing";
 import {
   JOB_NEEDS_ATTENTION_ATTEMPTS,
-  jobLane,
   jobState,
   jobWaitingOnReason,
   type JobLane,
@@ -14,26 +9,15 @@ import {
 } from "@cubby/schemas/job";
 import { runStatus } from "@cubby/schemas/run-fields";
 import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
-import {
-  and,
-  desc,
-  eq,
-  inArray,
-  isNotNull,
-  notInArray,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, inArray, notInArray, or, type SQL, sql } from "drizzle-orm";
 
 import type {
-  JobQueueOut,
   JobFacts,
   JobSetFilter,
   RunRollup,
 } from "~/contracts/job.contract";
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase, eqAny } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
 import { job } from "~/server/db/retained-tables";
 import { run } from "~/server/db/schema";
@@ -43,8 +27,6 @@ import {
   JOB_KIND_POLICY,
   jobKindPolicy,
 } from "~/server/generic/jobs/kind-policy";
-import { jobEntityWhere } from "~/server/generic/jobs/repo/entity-list";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { retryJobsNow } from "~/server/generic/jobs/repo/operator";
 import { type JobRow } from "~/server/generic/jobs/repo/queue";
 import {
@@ -130,41 +112,12 @@ export function runNeedsAttentionSql(): SQL<boolean> {
 export const runDemandWhere = (runId: RunId) =>
   sql`"Job".id IN (SELECT d.job_id FROM ${runDemandPairs([runId])} d)`;
 
-/**
- * A Run's executing Job, then the oldest `perReason` live Jobs of each
- * waiting-on reason, by availability.
- */
-export async function readRunJobSamples(
-  db: Database,
-  runId: RunId,
-  perReason: number,
-): Promise<JobRow[]> {
-  const reason = jobWaitingOnReasonSql();
-  const samples = await getDb(db).execute<{ id: string }>(sql`
-    SELECT id FROM (
-      SELECT "Job".id, row_number() OVER (
-        PARTITION BY ${reason} ORDER BY "Job"."availableAt", "Job".id
-      ) AS position, "Job".kind
-      FROM "Job" WHERE ${runDemandWhere(runId)}
-        AND "Job".state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}, ${jobState.enum.paused})
-    ) ranked WHERE position <= ${perReason} OR kind = 'run.execute'`);
-  return samples.rows.length
-    ? readJobs(
-        db,
-        { ids: samples.rows.map((row) => row.id) },
-        { order: ["availableAt"] },
-      )
-    : [];
-}
-
 /** The SQL predicate of a filtered Job set, shared by the list, counts and Retry now. */
 function jobSetWhere(
   filter: JobSetFilter,
   runId: RunId | null,
 ): SQL | undefined {
   return and(
-    filter.entityFilters ? jobEntityWhere(filter.entityFilters) : undefined,
-    filter.codes ? eqAny(job.shortcode, filter.codes) : undefined,
     filter.states
       ? inArray(job.state, filter.states)
       : inArray(job.state, [...LIVE_STATES]),
@@ -177,12 +130,7 @@ function jobSetWhere(
         )})`
       : undefined,
     runId ? runDemandWhere(runId) : undefined,
-    filter.ids
-      ? inArray(
-          job.id,
-          filter.ids.map((id) => parseEntityId("job", id)),
-        )
-      : undefined,
+    filter.ids ? inArray(job.id, filter.ids) : undefined,
     filter.needsAttention === undefined
       ? undefined
       : sql`(${job.state} = ${jobState.enum.failed} OR ${job.attempts} >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}) = ${filter.needsAttention}`,
@@ -239,81 +187,7 @@ export async function jobFactsOf(
   });
 }
 
-/**
- * The set's leased work per lease holder, live and expired apart, so the
- * Apple queue can show what each device holds and flag lost leases. Only
- * externally handed-off leases name a holder.
- */
-async function leasesByHolder(db: Database, where: SQL | undefined) {
-  const now = sql`${new Date().toISOString()}::timestamp`;
-  const holder = sql<string | null>`${job.leaseHolder}->>${"name"}::text`;
-  return getDb(db)
-    .select({
-      executor: holder,
-      live: sql<number>`count(*) FILTER (WHERE ${job.leaseExpiresAt} > ${now})::int`,
-      expired: sql<number>`count(*) FILTER (WHERE ${job.leaseExpiresAt} IS NULL OR ${job.leaseExpiresAt} <= ${now})::int`,
-    })
-    .from(job)
-    .where(and(eq(job.state, "running"), isNotNull(job.leaseHolder), where))
-    .groupBy(sql`1`)
-    .orderBy(sql`1`);
-}
-
 /** Counts by lane and reason for the whole set, and one page of its Jobs. */
-export async function readJobQueue(
-  db: Database,
-  input: {
-    filter: JobSetFilter;
-    runId: RunId | null;
-    pageIndex: number;
-    pageSize: number;
-  },
-): Promise<JobQueueOut> {
-  const where = jobSetWhere(input.filter, input.runId);
-  const reason = jobWaitingOnReasonSql();
-  const [tallies, rows, leases] = await Promise.all([
-    getDb(db)
-      .select({
-        kind: job.kind,
-        reason: sql<JobWaitingOnReason | null>`${reason}`,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(job)
-      .where(where)
-      .groupBy(sql`1`, sql`2`),
-    getDb(db)
-      .select()
-      .from(job)
-      .where(where)
-      .orderBy(desc(job.updatedAt), desc(job.id))
-      .limit(input.pageSize)
-      .offset(input.pageIndex * input.pageSize),
-    leasesByHolder(db, where),
-  ]);
-  const counts = new Map<string, number>();
-  let total = 0;
-  for (const tally of tallies) {
-    total += tally.count;
-    const parsed = jobWaitingOnReason.safeParse(tally.reason);
-    if (!parsed.success) continue;
-    const key = `${jobKindPolicy(tally.kind).lane}:${parsed.data}`;
-    counts.set(key, (counts.get(key) ?? 0) + tally.count);
-  }
-  return {
-    counts: [...counts].map(([key, count]) => {
-      const [lane, reason] = key.split(":");
-      return {
-        lane: jobLane.parse(lane),
-        reason: jobWaitingOnReason.parse(reason),
-        count,
-      };
-    }),
-    total,
-    leases,
-    jobs: await jobFactsOf(db, rows),
-  };
-}
-
 /** Retry now over a filtered set in one transaction; returns the Jobs it made due. */
 export async function retryJobSet(
   db: Database,
