@@ -588,6 +588,18 @@ describe("project repository — date windows (derivation)", () => {
       date: "2024-01-15",
     });
 
+    expect(
+      (
+        await loadStoredDerived(
+          ctx.db,
+          "project",
+          [projectEntityId],
+          ["startDate"],
+        )
+      )
+        .get(projectEntityId)
+        ?.get("startDate")?.resultExists,
+    ).toBe(false);
     await drainStoredDerived(ctx.db);
     const after = await readProjectById(ctx.db, projectEntityId);
     expect(after.dateWindow).toEqual({
@@ -598,6 +610,28 @@ describe("project repository — date windows (derivation)", () => {
       startSource: "derived",
       endSource: "derived",
     });
+    const effectiveStart = async () =>
+      (
+        await loadStoredDerived(
+          ctx.db,
+          "project",
+          [projectEntityId],
+          ["startDate"],
+        )
+      )
+        .get(projectEntityId)
+        ?.get("startDate")?.value;
+    await getDb(ctx.db)
+      .update(projectTable)
+      .set({ startDate: "2025-01-01" })
+      .where(eq(projectTable.id, projectEntityId));
+    expect(await effectiveStart()).toBe("2025-01-01");
+    await drainStoredDerived(ctx.db);
+    await getDb(ctx.db)
+      .update(projectTable)
+      .set({ startDate: null })
+      .where(eq(projectTable.id, projectEntityId));
+    expect(await effectiveStart()).toBe("2024-01-15");
   });
 
   // The create/update cycle guard (crud.ts's `wouldCreateProjectCycle`) means

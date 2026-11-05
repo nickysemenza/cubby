@@ -106,6 +106,22 @@ export async function readSchemaCatalog(
   await client.connect();
   try {
     await client.query("SET default_transaction_read_only = on");
+    const archived = await client.query<{ view: string; relation: string }>(`
+      SELECT DISTINCT view.relname AS view, source.relname AS relation
+      FROM pg_rewrite rewrite
+      JOIN pg_class view ON view.oid = rewrite.ev_class
+      JOIN pg_namespace view_ns ON view_ns.oid = view.relnamespace
+      JOIN pg_depend dependency ON dependency.classid = 'pg_rewrite'::regclass
+        AND dependency.objid = rewrite.oid AND dependency.refclassid = 'pg_class'::regclass
+      JOIN pg_class source ON source.oid = dependency.refobjid
+      JOIN pg_namespace source_ns ON source_ns.oid = source.relnamespace
+      WHERE view_ns.nspname = 'public' AND view.relkind IN ('v', 'm')
+        AND source_ns.nspname = 'archive'
+      ORDER BY view.relname, source.relname`);
+    if (archived.rows.length)
+      throw new Error(
+        `Public views depend on archive: ${archived.rows.map((row) => `${row.view} -> archive.${row.relation}`).join(", ")}. Recreate them against the public tables in the reshape migration.`,
+      );
     const read = async (text: string) => {
       const { rows } = await client.query<{ key: string; value: string }>(text);
       const record: Record<string, string> = {};

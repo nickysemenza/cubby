@@ -11,12 +11,13 @@ it("detects changed view bodies even when their columns are unchanged", async ()
   await client.connect();
   try {
     await client.query(`
-      CREATE VIEW "SyntheticCatalogView" AS SELECT 1::integer AS value;
+      CREATE TABLE "SyntheticViewSource" (value integer);
+      CREATE VIEW "SyntheticCatalogView" AS SELECT value FROM "SyntheticViewSource";
       CREATE MATERIALIZED VIEW "SyntheticCatalogMaterializedView" AS SELECT 1::integer AS value;
     `);
     const expected = await readSchemaCatalog(ctx.databaseUrl);
     await client.query(`
-      CREATE OR REPLACE VIEW "SyntheticCatalogView" AS SELECT 2::integer AS value;
+      CREATE OR REPLACE VIEW "SyntheticCatalogView" AS SELECT value * 2 AS value FROM "SyntheticViewSource";
       DROP MATERIALIZED VIEW "SyntheticCatalogMaterializedView";
       CREATE MATERIALIZED VIEW "SyntheticCatalogMaterializedView" AS SELECT 2::integer AS value;
     `);
@@ -28,6 +29,20 @@ it("detects changed view bodies even when their columns are unchanged", async ()
         expect.stringContaining("relations SyntheticCatalogMaterializedView:"),
       ]),
     );
+    await client.query(`
+      CREATE SCHEMA IF NOT EXISTS archive;
+      ALTER TABLE "SyntheticViewSource" SET SCHEMA archive;
+      CREATE TABLE "SyntheticViewSource" (value integer);
+    `);
+    await expect(readSchemaCatalog(ctx.databaseUrl)).rejects.toThrow(
+      "Public views depend on archive: SyntheticCatalogView -> archive.SyntheticViewSource",
+    );
+    await client.query(
+      `CREATE OR REPLACE VIEW "SyntheticCatalogView" AS SELECT value * 2 AS value FROM "SyntheticViewSource"`,
+    );
+    expect(
+      (await readSchemaCatalog(ctx.databaseUrl)).relations.SyntheticCatalogView,
+    ).toBeDefined();
   } finally {
     await client.end();
   }

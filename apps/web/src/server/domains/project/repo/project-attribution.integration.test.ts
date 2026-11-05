@@ -60,17 +60,15 @@ describe("project dashboard attribution", () => {
         lineKind: "principal",
       });
     }
-    // Sorting must work before any start-date publication exists.
+    // Sorting must work before any rollup publication exists: an explicit start
+    // reads immediately, and derived starts stay empty until the hourly fold.
     const beforePublication = await projectScaffold.read(ctx.db, {
       filters: { search: "Sort " },
       sorts: [{ orderBy: "startDate", direction: "asc" }],
       pagination: { pageIndex: 0, pageSize: 20 },
     });
-    expect(beforePublication.data.map((row) => row.id)).toEqual([
-      early.shortcode,
-      middle.shortcode,
-      late.shortcode,
-    ]);
+    expect(beforePublication.data[0]?.id).toBe(middle.shortcode);
+    expect(beforePublication.data.map((row) => row.id)).toHaveLength(3);
     await drainStoredDerived(ctx.db);
     const rows = await projectScaffold.read(ctx.db, {
       filters: { search: "Sort " },

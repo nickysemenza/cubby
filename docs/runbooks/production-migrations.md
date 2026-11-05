@@ -427,3 +427,13 @@ the next SQL diff; it does not apply snapshots to the database. After generation
 delete older `*_snapshot.json` files while retaining SQL, `_journal.json`, and
 `_baseline.json`. `db:check` enforces this, and snapshot line diffs are suppressed
 by `.gitattributes`; review the SQL and journal for executable changes.
+
+### Declared views during a table reshape
+
+A view follows its source table's OID when `ALTER TABLE ... SET SCHEMA archive`
+moves it. Creating a replacement public table does not rebind that view. Any
+reshape of a declared view's source must recreate the view against the new public
+table in the same migration. Regenerate it from `renderDeclaredDerivedViews` and
+verify its values before retiring the old source. `db:check`, including
+`--against-production`, rejects public views and materialized views with catalog
+dependencies on `archive`; the populated catalog journey covers this exact move.
