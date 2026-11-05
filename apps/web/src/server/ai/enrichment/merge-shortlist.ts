@@ -1,6 +1,12 @@
-import type { RunId, IngredientId } from "@cubby/schemas/identifiers";
+import type { IngredientId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 
+import { INGREDIENT_MERGE_FEATURE } from "~/server/ai/policy/features";
+import type { Database } from "~/server/db";
+import {
+  getIngredientMergeCandidatesByIds,
+  searchIngredientsForMerge,
+} from "~/server/domains/ingredient/repo/search";
 /**
  * Ingredient-merge shortlist assembly for the AI merge suggester.
  *
@@ -10,12 +16,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
  * semantic nearest-neighbour search (when embeddings are configured) into one
  * shortlist for the model to pick from.
  */
-import { INGREDIENT_MERGE_FEATURE } from "~/server/ai/policy/features";
-import type { Database } from "~/server/db";
-import {
-  getIngredientMergeCandidatesByIds,
-  searchIngredientsForMerge,
-} from "~/server/domains/ingredient/repo/search";
+import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { findSemanticEntityCandidates } from "~/server/generic/embedding/repo/entity-embedding-search";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
@@ -38,7 +39,7 @@ export interface MergeShortlistPort {
     name: string,
     excludeId: IngredientId,
     limit: number,
-    runId: RunId,
+    owner: AiCallOwner,
   ) => Promise<MergeShortlistEntry[]>;
 }
 
@@ -49,10 +50,10 @@ async function productionSemanticLeg(
   name: string,
   excludeId: IngredientId,
   limit: number,
-  runId: RunId,
+  owner: AiCallOwner,
 ): Promise<MergeShortlistEntry[]> {
   if (!semanticEmbeddingsConfigured()) return [];
-  const embedding = await embedQuery(name, { db, runId });
+  const embedding = await embedQuery(name, { db, ...owner });
   if (!embedding) return [];
 
   const scan = await findSemanticEntityCandidates(
@@ -85,13 +86,13 @@ const productionMergeShortlistPort: MergeShortlistPort = {
 export async function buildMergeShortlist(
   db: Database,
   source: { id: IngredientId; name: string },
-  runId: RunId,
+  owner: AiCallOwner,
   limit = 20,
   port: MergeShortlistPort = productionMergeShortlistPort,
 ): Promise<MergeShortlistEntry[]> {
   const [lexical, semantic] = await Promise.all([
     port.lexical(db, source.name, source.id, 12),
-    port.semantic(db, source.name, source.id, 12, runId),
+    port.semantic(db, source.name, source.id, 12, owner),
   ]);
 
   const byId = new Map<string, MergeShortlistEntry>();

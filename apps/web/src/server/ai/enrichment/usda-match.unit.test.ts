@@ -44,7 +44,7 @@ describe("suggestUsdaFoodBatch", () => {
         lookup,
         database,
         [{ id: ingredientId, name: "AP flour" }],
-        runId,
+        { runId },
       ),
     ).resolves.toEqual([
       {
@@ -72,7 +72,7 @@ describe("suggestUsdaFoodBatch", () => {
         lookup,
         database,
         [{ id: ingredientId, name: "unobtainium" }],
-        runId,
+        { runId },
       ),
     ).resolves.toEqual([
       {
@@ -99,10 +99,10 @@ describe("suggestUsdaFoodBatch", () => {
       lookup,
       database,
       [{ id: ingredientId, name: "unobtainium" }],
-      runId,
+      { runId },
     );
     expect(suggest).toHaveBeenCalledWith(lookup, database, "unobtainium", {
-      runId,
+      owner: { runId },
       ingredientId,
     });
   });
@@ -160,7 +160,7 @@ describe("suggestUsdaFood", () => {
       shortlistLookup,
       db,
       "AP flour",
-      { runId },
+      { owner: { runId } },
       ai,
     );
 
@@ -182,7 +182,13 @@ describe("suggestUsdaFood", () => {
     };
 
     await expect(
-      suggestUsdaFood(shortlistLookup, db, "AP flour", { runId }, ai),
+      suggestUsdaFood(
+        shortlistLookup,
+        db,
+        "AP flour",
+        { owner: { runId } },
+        ai,
+      ),
     ).resolves.toEqual({
       food: null,
       confidence: "low",
@@ -209,7 +215,13 @@ describe("suggestUsdaFood", () => {
       },
     };
 
-    await suggestUsdaFood(shortlistLookup, db, "AP flour", { runId }, ai);
+    await suggestUsdaFood(
+      shortlistLookup,
+      db,
+      "AP flour",
+      { owner: { runId } },
+      ai,
+    );
 
     expect(renderedLines.some((line) => line.includes("FDC 501"))).toBe(true);
     expect(renderedLines.some((line) => line.includes("FDC 502"))).toBe(true);
@@ -236,7 +248,7 @@ describe("suggestUsdaFood", () => {
     };
 
     await expect(
-      suggestUsdaFood(emptyLookup, db, "unobtainium", { runId }, ai),
+      suggestUsdaFood(emptyLookup, db, "unobtainium", { owner: { runId } }, ai),
     ).resolves.toEqual({
       food: null,
       confidence: "low",

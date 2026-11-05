@@ -5,6 +5,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import type { EntityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
 import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import type { RunId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor, type ProductId } from "@cubby/schemas/identifiers";
 
 import { fieldEnvelopeAtPath, readPathValue } from "~/entity/read-path";
@@ -40,6 +41,7 @@ import {
   getEntityRecommendations,
   getExpenseRecommendationPage,
 } from "~/server/domains/recommendation/service/entity-recommendations.service";
+import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { jsonValue } from "~/server/domains/run/repo/suggestion-sweep-state";
 import { makeSweepSuggestion } from "~/server/domains/run/service/suggestion-sweep";
@@ -164,13 +166,15 @@ export async function prepareEntityConnections(
         await publish(transactionDb);
       }),
     );
-    const runId = await ensureRun(db, context.actorContext, {
-      purpose: "ai_suggest",
-    });
     const recordId = await resolveOrThrow(db, "product", source.entityId);
     productRecordId = recordId;
     const identity = await stage("productIdentity", async () =>
-      evaluateProductIdentity(db, recordId, runId, ports.productIdentityPorts),
+      evaluateProductIdentity(
+        db,
+        recordId,
+        aiCallOwner(context.actorContext),
+        ports.productIdentityPorts,
+      ),
     );
     if (identity.failure) throw new Error(identity.failure);
     for (let offset = 0; offset < identity.pairs.length; offset += 16) {
@@ -308,9 +312,8 @@ async function prepareFieldConnections(
       throw new Error(`Connection input ${entity}.${key} is unavailable`);
     return readPathValue(row, path);
   };
-  const runId = await ensureRun(db, context.actorContext, {
-    purpose: "ai_suggest",
-  });
+  const owner = aiCallOwner(context.actorContext);
+  let suggestionRun: RunId | undefined;
   for (const { field, policy } of policies) {
     const basis = Object.fromEntries(
       [...new Set([...policy.basis, field])].map((key) => [
@@ -327,7 +330,7 @@ async function prepareFieldConnections(
     const captured = await withAiInputs(false, () =>
       suggestFields(
         db,
-        runId,
+        owner,
         {
           entity,
           entityId: source.entityId,
@@ -389,9 +392,15 @@ async function prepareFieldConnections(
     });
     entry.reviewKey = guard.reviewKey;
     lockRefs.push(...guard.lockRefs);
+    // A published suggestion still names a Run (the Suggestion owner decides that
+    // column). The AI calls above needed none, so one is opened only to publish.
+    suggestionRun ??= await ensureRun(db, context.actorContext, {
+      purpose: "ai_suggest",
+    });
+    const publishRun = suggestionRun;
     publishers.push((transactionDb) =>
       guard.publish(
-        runId,
+        publishRun,
         {
           entity,
           field,

@@ -82,6 +82,7 @@ import {
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import type { PreparedProductPairPublication } from "~/server/domains/product/repo/match/product-match-candidate";
 import { publishProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
+import { aiRunOwner } from "~/server/domains/run/repo/ai-call-owner";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
@@ -249,8 +250,7 @@ async function prepareField(
   const prepared = await withAiInputs(true, () =>
     suggestFields(
       db,
-      context.actorContext.runId ??
-        runEntityId.parse("00000000-0000-4000-8000-000000000000"),
+      aiRunOwner(context.actorContext.runId),
       {
         entity,
         entityId: publicId,
@@ -814,7 +814,7 @@ export async function executeAiRefreshTarget(
     const evaluated = await withAiInputs(false, () =>
       suggestFields(
         db,
-        claimed.runId,
+        { runId: claimed.runId },
         {
           entity: snapshot.entity,
           entityId: snapshot.publicId,
@@ -1100,13 +1100,18 @@ function productEvaluationPageAdapter(
       const item = entry.target.evaluation;
       const prepared = entry.prepared;
       const evaluate = (pair: z.infer<typeof preparedProductIdentityPair>) =>
-        evaluatePreparedProductIdentityPair(db, pair, item.runId, {
-          ...ports.productIdentityPorts,
-          usage,
-          evaluationId: item.id,
-          provenance: item.provenance,
-          preparedPage: true,
-        });
+        evaluatePreparedProductIdentityPair(
+          db,
+          pair,
+          { runId: item.runId },
+          {
+            ...ports.productIdentityPorts,
+            usage,
+            evaluationId: item.id,
+            provenance: item.provenance,
+            preparedPage: true,
+          },
+        );
       if (entry.target.target.kind === "product_pair") {
         const pair = prepared.pairs[0]!;
         const result = await evaluate(pair);
@@ -1348,7 +1353,7 @@ async function stageProductEnrollment(
           const input = await evaluatePreparedProductIdentityPair(
             database,
             pair,
-            item.runId,
+            { runId: item.runId },
             {
               ...ports.productIdentityPorts,
               evaluationId: item.id,

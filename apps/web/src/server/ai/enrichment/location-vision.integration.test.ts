@@ -84,7 +84,7 @@ describe("describeLocation previous description", () => {
           describeLocation(
             ctx.db,
             location.entityId,
-            runId,
+            { runId },
             ai,
             claimContext(ctx.db, claim).fenced,
           ),
@@ -144,7 +144,7 @@ describe("describeLocation previous description", () => {
       describeLocation(
         ctx.db,
         location.entityId,
-        runId,
+        { runId },
         portSaying("Synthetic removed-photo answer"),
         claimContext(ctx.db, claim).fenced,
       ),
@@ -206,7 +206,7 @@ describe("describeLocation previous description", () => {
     const first = await describeLocation(
       ctx.db,
       location.entityId,
-      runId,
+      { runId },
       portSaying("Two paint cans"),
     );
     expect(first.previousDescription).toBeNull();
@@ -222,7 +222,7 @@ describe("describeLocation previous description", () => {
     const second = await describeLocation(
       ctx.db,
       location.entityId,
-      runId,
+      { runId },
       portSaying("Paint cans and a tarp"),
     );
     expect(second.previousDescription).toBe("Two paint cans");

@@ -2,6 +2,7 @@ import type { BackgroundTask } from "@cubby/schemas/background-tasks";
 import { runEntityId, type ImageId } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
+import { aiRunOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { outsideJob } from "~/server/generic/jobs/outside-job";
 import type { Fenced } from "~/server/generic/jobs/types";
 export type BackgroundTaskOutcome = "succeeded" | "skipped";
@@ -80,8 +81,10 @@ export async function handleBackgroundTask(
       try {
         // Attribute to the mutation's actor run when the publisher recorded
         // one; older queue messages (and backfills) carry no `runId`.
-        const runId = task.runId ? runEntityId.parse(task.runId) : undefined;
-        await describeLocation(db, task.locationId, runId, undefined, fenced);
+        const owner = aiRunOwner(
+          task.runId ? runEntityId.parse(task.runId) : null,
+        );
+        await describeLocation(db, task.locationId, owner, undefined, fenced);
       } catch (error) {
         if (isLocationHasNoImagesToAnalyzeError(error)) return "skipped";
         throw error;
@@ -92,11 +95,13 @@ export async function handleBackgroundTask(
       const { detectInventoryItems, isLocationHasNoImagesToAnalyzeError } =
         await import("~/server/ai/enrichment/location-vision");
       try {
-        const runId = task.runId ? runEntityId.parse(task.runId) : undefined;
+        const owner = aiRunOwner(
+          task.runId ? runEntityId.parse(task.runId) : null,
+        );
         await detectInventoryItems(
           db,
           task.locationId,
-          runId,
+          owner,
           undefined,
           undefined,
           fenced,

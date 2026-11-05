@@ -5,13 +5,14 @@
 // `usda-shortlist.ts` assembles a shortlist from a handful of WASM-derived
 // query variants; this asks the decision tier to pick exactly one candidate
 // in a single call via `runAiSelection` (no agentic search loop).
-import type { RunId, IngredientId } from "@cubby/schemas/identifiers";
+import type { IngredientId } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 
 import { settleDecisionWorkItems } from "~/server/ai/decision-model";
 import { USDA_FOOD_SUGGEST_FEATURE } from "~/server/ai/policy/features";
 import { runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
+import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 
 import {
   buildUsdaShortlist,
@@ -43,7 +44,7 @@ export async function suggestUsdaFood(
   usdaService: UsdaLookupPort,
   db: Database,
   ingredientName: string,
-  opts: { runId: RunId; ingredientId?: IngredientId },
+  opts: { owner: AiCallOwner; ingredientId?: IngredientId },
   ai: UsdaMatchAiPort = productionUsdaMatchAiPort,
 ): Promise<UsdaFoodSuggestion> {
   const shortlist = await buildUsdaShortlist(usdaService, ingredientName);
@@ -60,7 +61,7 @@ export async function suggestUsdaFood(
     candidates: shortlist,
     usage: {
       db,
-      runId: opts.runId,
+      ...opts.owner,
       operation: "suggestUsdaFood",
       cacheStatus: "none",
       entity: opts.ingredientId
@@ -89,7 +90,7 @@ export interface UsdaMatchPorts<TDatabase> {
     service: UsdaLookupPort,
     database: TDatabase,
     name: string,
-    options: { runId: RunId; ingredientId?: IngredientId },
+    options: { owner: AiCallOwner; ingredientId?: IngredientId },
   ) => Promise<UsdaFoodSuggestion>;
 }
 
@@ -114,14 +115,14 @@ async function suggestUsdaFoodBatchWithPorts<TDatabase>(
   usdaService: UsdaLookupPort,
   db: TDatabase,
   ingredients: { id: IngredientId; name: string }[],
-  runId: RunId,
+  owner: AiCallOwner,
   ports: UsdaMatchPorts<TDatabase>,
 ): Promise<UsdaFoodBatchSuggestion[]> {
   const capped = ingredients.slice(0, 20);
   const out: UsdaFoodBatchSuggestion[] = [];
   const results = await settleDecisionWorkItems(capped, (item) =>
     ports.suggest(usdaService, db, item.name, {
-      runId,
+      owner,
       ingredientId: item.id,
     }),
   );
@@ -150,13 +151,13 @@ export function createUsdaMatchService<TDatabase>(
       service: UsdaLookupPort,
       database: TDatabase,
       ingredients: { id: IngredientId; name: string }[],
-      runId: RunId,
+      owner: AiCallOwner,
     ) =>
       suggestUsdaFoodBatchWithPorts(
         service,
         database,
         ingredients,
-        runId,
+        owner,
         ports,
       ),
   };

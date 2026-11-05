@@ -14,7 +14,7 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { orderMailAttachment } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
-import { aiCallOwner } from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { wasm } from "~/server/wasm";
 
 type AttachmentEvidence = Pick<

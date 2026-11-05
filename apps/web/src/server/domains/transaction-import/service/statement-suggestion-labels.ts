@@ -43,6 +43,7 @@ import {
   needsSpendingAdvice,
   type SpendingAdvicePort,
 } from "~/server/domains/financial-transaction/service/spending-advice";
+import { aiRunOwner } from "~/server/domains/run/repo/ai-call-owner";
 import {
   statementLabelSubject,
   statementCandidateSubject,
@@ -362,7 +363,7 @@ function prepareLabelledJudgment(
           const spending = await withAiInputs(false, () =>
             adviseSpending(db, {
               judgment,
-              runId: input.usage!.runId,
+              owner: aiRunOwner(input.usage!.runId),
               port: input.port,
               spendingAdvice: input.spendingAdvice,
               preparation: page,

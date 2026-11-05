@@ -8,10 +8,7 @@ import { z } from "zod";
 
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
-import {
-  aiCallRunInput,
-  ensureRun,
-} from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { resolveDraftTaskFields } from "~/server/domains/task/repo/task-project-inheritance";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { generatedMcpEntityActionEntities } from "~/server/generated/entity-kernel-entities.gen";
@@ -84,14 +81,12 @@ export interface PreviewEntityPorts {
   resolveTask: typeof resolveDraftTaskFields;
   /** Ported so a unit test's fake `EntityKernelContext` (no real db/actor)
    * never exercises the real run-lookup query. */
-  ensureRun: typeof ensureRun;
 }
 
 const productionPreviewPorts: PreviewEntityPorts = {
   suggest: suggestFields,
   resolveExpense: resolveDraftExpenseFields,
   resolveTask: resolveDraftTaskFields,
-  ensureRun,
 };
 
 async function applyPreviewSuggestions(args: {
@@ -171,18 +166,13 @@ async function applyPreviewSuggestions(args: {
     (field) => !suggestedSet.has(field),
   );
 
-  // One run per actor and hour, however many previews (or a whole batch) ask.
-  const runId = await args.ports.ensureRun(
-    args.context.db,
-    args.context.actorContext,
-    aiCallRunInput(args.context.actorContext),
-  );
+  const owner = aiCallOwner(args.context.actorContext);
   const runBatch = async (
     basisMode: "suggested" | "provided",
     targets: readonly string[],
   ) => {
     if (targets.length === 0) return;
-    const result = await args.ports.suggest(args.context.db, runId, {
+    const result = await args.ports.suggest(args.context.db, owner, {
       basisMode,
       entity: args.entity,
       targets: [...targets],

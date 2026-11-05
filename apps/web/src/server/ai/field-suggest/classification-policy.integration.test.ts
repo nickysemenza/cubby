@@ -62,7 +62,7 @@ describe("decision targets follow classification field policies", () => {
       targets: ["ingredientId"],
       basis: { name: "Example jasmine rice 2 lb", categoryId },
     };
-    const result = await suggestFields(ctx.db, runId, input, {
+    const result = await suggestFields(ctx.db, { runId }, input, {
       decisionPort,
       registry: { "product.ingredientId": ingredientSpec },
     });

@@ -291,7 +291,7 @@ describe("Account scalar suggestion acceptance", () => {
     });
     const result = await suggestFields(
       ctx.db,
-      runId,
+      { runId },
       {
         entity: "financialAccount",
         targets: ["primaryCardholderId", "providerVendorId"],

@@ -1,4 +1,3 @@
-import type { RunId } from "@cubby/schemas/identifiers";
 import type {
   SearchableEntity,
   SearchHit,
@@ -8,6 +7,7 @@ import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
+import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import {
   findSemanticEntityCandidates,
   type SemanticCandidateScan,
@@ -59,7 +59,7 @@ async function scanSemanticRefs(
   query: string,
   limit: number,
   entityKind: SearchableEntity,
-  runId?: RunId,
+  owner?: AiCallOwner,
 ): Promise<SemanticRefScan> {
   if (query.trim().length < SEMANTIC_MIN_QUERY_LENGTH)
     return { candidates: [], complete: true };
@@ -73,7 +73,7 @@ async function scanSemanticRefs(
   const config = getSemanticEmbeddingConfig();
   const embedding = await withTrace(
     TraceNames.service("semanticSearch", "embedQuery"),
-    () => embedQuery(query, { db, runId }),
+    () => embedQuery(query, { db, ...owner }),
   );
   if (!embedding)
     return {
@@ -122,10 +122,10 @@ export async function semanticEntityCandidateScan(
   query: string,
   limit: number,
   entityKind: SearchableEntity,
-  runId?: RunId,
+  owner?: AiCallOwner,
 ): Promise<SemanticIdentityScan> {
   try {
-    const scan = await scanSemanticRefs(db, query, limit, entityKind, runId);
+    const scan = await scanSemanticRefs(db, query, limit, entityKind, owner);
     const rows = await readSearchHitRefs(db, scan.candidates);
     return {
       ...scan,
@@ -144,7 +144,7 @@ export async function semanticEntityCandidates(
   query: string,
   limit: number,
   entityKind: SearchableEntity,
-  runId?: RunId,
+  owner?: AiCallOwner,
 ): Promise<SemanticProductCandidate[]> {
   try {
     const { candidates: refs } = await scanSemanticRefs(
@@ -152,7 +152,7 @@ export async function semanticEntityCandidates(
       query,
       limit,
       entityKind,
-      runId,
+      owner,
     );
     const hits = await hydrateSearchHitRefs(db, refs);
     const { provider, model } = getSemanticEmbeddingConfig();
@@ -174,6 +174,6 @@ export const semanticProductCandidates = (
   db: Database,
   query: string,
   limit: number,
-  runId?: RunId,
+  owner?: AiCallOwner,
 ): Promise<SemanticProductCandidate[]> =>
-  semanticEntityCandidates(db, query, limit, "product", runId);
+  semanticEntityCandidates(db, query, limit, "product", owner);

@@ -10,7 +10,6 @@ import {
   type SettledSuggestionQuestionsInput,
 } from "@cubby/schemas/ai";
 import type { AiRefreshManifest } from "@cubby/schemas/ai-evaluation";
-import { runEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -33,6 +32,7 @@ import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { aiAnalysis, suggestionTable } from "~/server/db/schema";
+import { AUTOMATIC_AI_CALL } from "~/server/domains/run/repo/ai-call-owner";
 import { memberRejectedSql } from "~/server/generic/assessment/repo/suggestion-decisions";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { settleBatch } from "~/server/workflows/settle-batch";
@@ -63,11 +63,6 @@ const SETTLED_QUESTION = {
   model: "any",
   promptVersion: "2",
 } as const;
-
-/** Preparation records no usage, so it needs no real Run. */
-const PREPARATION_RUN = runEntityId.parse(
-  "00000000-0000-4000-8000-000000000000",
-);
 
 const rememberedSchema = z.object({
   outcome: fieldSuggestionOutcomeSchema,
@@ -234,7 +229,7 @@ async function recheck(
     () =>
       suggestFields(
         db,
-        PREPARATION_RUN,
+        AUTOMATIC_AI_CALL,
         {
           entity,
           basisMode: question.basisMode,
@@ -335,7 +330,7 @@ export async function readSettledQuestions(
             () =>
               suggestFields(
                 db,
-                PREPARATION_RUN,
+                AUTOMATIC_AI_CALL,
                 {
                   entity: input.entity,
                   basisMode: question.basisMode,

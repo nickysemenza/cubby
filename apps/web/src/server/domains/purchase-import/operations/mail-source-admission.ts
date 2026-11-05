@@ -23,7 +23,7 @@ import {
   admitSupportingMailSource,
   readMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
-import { aiCallOwner } from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { createAppError } from "~/server/errors/app-error";
 
 import { readMailOwnerEvidence } from "../repo/mail-owner";

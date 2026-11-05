@@ -31,7 +31,8 @@ import {
   UpcBatchDeferredError,
   UpcLookupUnavailableError,
 } from "~/server/domains/product/repo/upc-lookup-cache";
-import { aiCallOwner, systemActor } from "~/server/domains/run/repo/ensure-run";
+import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import type { DecideOfferComparability } from "./price";

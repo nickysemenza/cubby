@@ -1,6 +1,5 @@
 import type { FieldSuggestionsOut } from "@cubby/schemas/ai";
 import { buildActorContext } from "@cubby/schemas/context";
-import { runEntityId } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,30 +7,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EntityKernelContext } from "./adapter";
 import { previewEntity, type PreviewEntityPorts } from "./preview";
 
-// `ensureRun` is ported, but the run's grouping key still reads the actor.
 const kernelContext = fromPartial<EntityKernelContext>({
   db: {},
   actorContext: buildActorContext(testUserId("test-user-id"), "mcp"),
 });
-const fixtureRunId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 const mocks = {
   suggestFields: vi.fn<PreviewEntityPorts["suggest"]>(),
   resolveExpense: vi.fn<PreviewEntityPorts["resolveExpense"]>(),
   resolveTask: vi.fn<PreviewEntityPorts["resolveTask"]>(),
-  ensureRun: vi.fn<PreviewEntityPorts["ensureRun"]>(),
 };
 const ports: PreviewEntityPorts = {
   suggest: mocks.suggestFields,
   resolveExpense: mocks.resolveExpense,
   resolveTask: mocks.resolveTask,
-  ensureRun: mocks.ensureRun,
 };
 
 describe("previewEntity field suggestions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.ensureRun.mockResolvedValue(fixtureRunId);
   });
 
   // Preview and persisted automatic fill must agree with the public high-confidence boundary.

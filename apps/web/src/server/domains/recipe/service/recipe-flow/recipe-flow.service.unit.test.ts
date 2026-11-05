@@ -264,7 +264,7 @@ describe("recipe-flow service", () => {
       generateRecipeFlow(
         db,
         { id: RECIPE_ID, force: false },
-        RUN_ID,
+        { runId: RUN_ID },
         memory.ports,
       ),
     ).resolves.toMatchObject({ model: RECIPE_FLOW_PRIMARY_FEATURE.model });
@@ -286,7 +286,7 @@ describe("recipe-flow service", () => {
       generateRecipeFlow(
         db,
         { id: RECIPE_ID, force: true },
-        RUN_ID,
+        { runId: RUN_ID },
         memory.ports,
       ),
     ).resolves.toMatchObject({ model: RECIPE_FLOW_PRIMARY_FEATURE.model });
@@ -303,7 +303,7 @@ describe("recipe-flow service", () => {
       generateRecipeFlow(
         db,
         { id: RECIPE_ID, force: true },
-        RUN_ID,
+        { runId: RUN_ID },
         memory.ports,
       ),
     ).rejects.toThrow(/invalid/i);
@@ -322,7 +322,7 @@ describe("recipe-flow service", () => {
       generateRecipeFlow(
         db,
         { id: RECIPE_ID, force: true },
-        RUN_ID,
+        { runId: RUN_ID },
         memory.ports,
       ),
     ).rejects.toThrow(/walkthrough/i);
@@ -336,7 +336,7 @@ describe("recipe-flow service", () => {
     await generateRecipeFlow(
       db,
       { id: RECIPE_ID, force: true },
-      RUN_ID,
+      { runId: RUN_ID },
       memory.ports,
     );
     expect(memory.runContexts).toEqual([{ force: true }]);
@@ -347,7 +347,7 @@ describe("recipe-flow service", () => {
     await generateRecipeFlow(
       db,
       { id: RECIPE_ID, force: false },
-      RUN_ID,
+      { runId: RUN_ID },
       memory.ports,
     );
     expect(memory.runContexts).toEqual([{ force: false }]);
@@ -368,7 +368,7 @@ describe("recipe-flow service", () => {
       generateRecipeFlow(
         db,
         { id: RECIPE_ID, force: false },
-        RUN_ID,
+        { runId: RUN_ID },
         memory.ports,
       ),
     ).resolves.toEqual(cached);

@@ -193,7 +193,7 @@ async function runCase(
   switch (scenario) {
     case "fieldSuggestions": {
       const input = aiSmokeInputs.fieldSuggestions.parse(raw);
-      const result = await suggestFields(db, runId, input);
+      const result = await suggestFields(db, { runId }, input);
       return {
         result,
         noModelCall: Object.values(result.outcomes ?? {}).every(
@@ -236,7 +236,7 @@ async function runCase(
         context.usdaService,
         db,
         source.name,
-        { runId, ingredientId: source.id },
+        { owner: { runId }, ingredientId: source.id },
       );
       return {
         result,
@@ -250,7 +250,7 @@ async function runCase(
         context.usdaService,
         db,
         sources,
-        runId,
+        { runId },
       );
       return {
         result,
@@ -264,7 +264,7 @@ async function runCase(
       const result = await suggestIngredientMergeBatch(
         db,
         await ingredientSources(db, ingredientIds),
-        runId,
+        { runId },
       );
       return { result };
     }

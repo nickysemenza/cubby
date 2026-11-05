@@ -474,7 +474,12 @@ describe("stored Product identity pairs", () => {
     ]);
     await publishProductIdentity(
       ctx.db,
-      await evaluateProductIdentity(ctx.db, ids[0]!, runId, { decisionPort }),
+      await evaluateProductIdentity(
+        ctx.db,
+        ids[0]!,
+        { runId },
+        { decisionPort },
+      ),
     );
     const before = await getProductMatchQueue(ctx.db, {});
     expect(before.items).toHaveLength(1);
@@ -592,9 +597,14 @@ describe("stored Product identity pairs", () => {
       .update(product)
       .set({ model: "SYNTH-OTHER", notes: "Same item according to research" })
       .where(eq(product.id, ids[1]!));
-    const result = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort: identityPort,
-    });
+    const result = await evaluateProductIdentity(
+      ctx.db,
+      ids[0]!,
+      { runId },
+      {
+        decisionPort: identityPort,
+      },
+    );
     expect(result.pairs[0]).toMatchObject({
       actionable: true,
       conflict: true,
@@ -677,9 +687,14 @@ describe("stored Product identity pairs", () => {
       .update(product)
       .set({ model: "SYNTH-OTHER" })
       .where(eq(product.id, ids[1]!));
-    const current = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort,
-    });
+    const current = await evaluateProductIdentity(
+      ctx.db,
+      ids[0]!,
+      { runId },
+      {
+        decisionPort,
+      },
+    );
     expect(current.pairs[0]).toMatchObject({
       actionable: false,
       conflict: true,
@@ -708,9 +723,14 @@ describe("stored Product identity pairs", () => {
       ],
       "SYNTH-VARIANT-2",
     );
-    const result = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort,
-    });
+    const result = await evaluateProductIdentity(
+      ctx.db,
+      ids[0]!,
+      { runId },
+      {
+        decisionPort,
+      },
+    );
     expect(result.pairs).toHaveLength(1);
     expect(result.pairs[0]).toMatchObject({
       actionable: false,
@@ -892,7 +912,8 @@ describe("stored Product identity pairs", () => {
       },
     };
     expect(
-      (await evaluateProductIdentity(ctx.db, aId, runId, unavailable)).pairs,
+      (await evaluateProductIdentity(ctx.db, aId, { runId }, unavailable))
+        .pairs,
     ).toEqual([]);
     const original = acceptedSourceOrder.parse({
       checksum: "a".repeat(64),
@@ -961,12 +982,17 @@ describe("stored Product identity pairs", () => {
       { key: "synthetic-shared-catalog", kind: "product", recordId: aId },
     ]);
     if (!preparedCatalog) throw new Error("Synthetic catalog is missing");
-    const result = await evaluateProductIdentity(ctx.db, aId, runId, {
-      preparedCatalog,
-      decisionPort: async () => {
-        throw new Error("Synthetic unavailable model");
+    const result = await evaluateProductIdentity(
+      ctx.db,
+      aId,
+      { runId },
+      {
+        preparedCatalog,
+        decisionPort: async () => {
+          throw new Error("Synthetic unavailable model");
+        },
       },
-    });
+    );
     expect(result.failure).toContain("Synthetic unavailable model");
     await publishProductIdentity(ctx.db, result);
     const [pair] = await getDb(ctx.db)
@@ -989,11 +1015,16 @@ describe("stored Product identity pairs", () => {
       status: "running",
       clientKey: "synthetic-opposite-review-scan",
     });
-    const opposite = await evaluateProductIdentity(ctx.db, bId, secondRunId, {
-      decisionPort: async () => {
-        throw new Error("Synthetic unavailable model");
+    const opposite = await evaluateProductIdentity(
+      ctx.db,
+      bId,
+      { runId: secondRunId },
+      {
+        decisionPort: async () => {
+          throw new Error("Synthetic unavailable model");
+        },
       },
-    });
+    );
     await publishProductIdentity(ctx.db, opposite);
     expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(1);
     const [reviewed] = await getDb(ctx.db)
@@ -1032,10 +1063,15 @@ describe("stored Product identity pairs", () => {
       .where(eq(product.id, bId));
     expect(
       (
-        await evaluateProductIdentity(ctx.db, aId, runId, {
-          ...unavailable,
-          preparedCatalog,
-        })
+        await evaluateProductIdentity(
+          ctx.db,
+          aId,
+          { runId },
+          {
+            ...unavailable,
+            preparedCatalog,
+          },
+        )
       ).pairs,
     ).toEqual([]);
     await expect(publishProductIdentity(ctx.db, result)).rejects.toThrow(
@@ -1043,7 +1079,12 @@ describe("stored Product identity pairs", () => {
     );
     await publishProductIdentity(
       ctx.db,
-      await evaluateProductIdentity(ctx.db, bId, secondRunId, unavailable),
+      await evaluateProductIdentity(
+        ctx.db,
+        bId,
+        { runId: secondRunId },
+        unavailable,
+      ),
     );
     expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(3);
     await expect(
@@ -1186,18 +1227,23 @@ describe("stored Product identity pairs", () => {
       ],
       "SYNTH-SHARED-STYLE",
     );
-    const result = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort: async () => ({
-        answers: {
-          selection: {
-            type: "choice",
-            choice: "c1",
-            confidence: 0.99,
-            probabilities: { c0: 0.003, c1: 0.99, c2: 0.003, c3: 0.004 },
+    const result = await evaluateProductIdentity(
+      ctx.db,
+      ids[0]!,
+      { runId },
+      {
+        decisionPort: async () => ({
+          answers: {
+            selection: {
+              type: "choice",
+              choice: "c1",
+              confidence: 0.99,
+              probabilities: { c0: 0.003, c1: 0.99, c2: 0.003, c3: 0.004 },
+            },
           },
-        },
-      }),
-    });
+        }),
+      },
+    );
     await publishProductIdentity(ctx.db, result);
     expect(
       (
@@ -1223,18 +1269,23 @@ describe("stored Product identity pairs", () => {
       .update(product)
       .set({ name: "Synthetic revised blue medium shirt" })
       .where(eq(product.id, ids[0]!));
-    const revised = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort: async () => ({
-        answers: {
-          selection: {
-            type: "choice",
-            choice: "c0",
-            confidence: 0.99,
-            probabilities: { c0: 0.99, c1: 0.003, c2: 0.003, c3: 0.004 },
+    const revised = await evaluateProductIdentity(
+      ctx.db,
+      ids[0]!,
+      { runId },
+      {
+        decisionPort: async () => ({
+          answers: {
+            selection: {
+              type: "choice",
+              choice: "c0",
+              confidence: 0.99,
+              probabilities: { c0: 0.99, c1: 0.003, c2: 0.003, c3: 0.004 },
+            },
           },
-        },
-      }),
-    });
+        }),
+      },
+    );
     await publishProductIdentity(ctx.db, revised);
     expect(await listProductMatchRows(ctx.db)).toHaveLength(1);
   });
@@ -1259,18 +1310,23 @@ describe("stored Product identity pairs", () => {
       trigger: "manual",
       status: "running",
     });
-    const result = await evaluateProductIdentity(ctx.db, ids[0]!, runId, {
-      decisionPort: async () => ({
-        answers: {
-          selection: {
-            type: "choice",
-            choice: "c0",
-            confidence: 0.99,
-            probabilities: { c0: 0.99, c1: 0.003, c2: 0.003, c3: 0.004 },
+    const result = await evaluateProductIdentity(
+      ctx.db,
+      ids[0]!,
+      { runId },
+      {
+        decisionPort: async () => ({
+          answers: {
+            selection: {
+              type: "choice",
+              choice: "c0",
+              confidence: 0.99,
+              probabilities: { c0: 0.99, c1: 0.003, c2: 0.003, c3: 0.004 },
+            },
           },
-        },
-      }),
-    });
+        }),
+      },
+    );
     expect(result.pairs).toHaveLength(1);
     expect(result.pairs[0]).toMatchObject({
       actionable: false,

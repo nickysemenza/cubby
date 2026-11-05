@@ -63,7 +63,7 @@ describe("suggestIngredientMerge", () => {
     const result = await suggestIngredientMerge(
       db,
       source,
-      runId,
+      { runId },
       ai,
       shortlistPort,
     );
@@ -90,7 +90,7 @@ describe("suggestIngredientMerge", () => {
     };
 
     await expect(
-      suggestIngredientMerge(db, source, runId, ai, shortlistPort),
+      suggestIngredientMerge(db, source, { runId }, ai, shortlistPort),
     ).resolves.toEqual({
       target: null,
       confidence: "low",
@@ -115,7 +115,7 @@ describe("suggestIngredientMerge", () => {
       },
     };
 
-    await suggestIngredientMerge(db, source, runId, ai, shortlistPort);
+    await suggestIngredientMerge(db, source, { runId }, ai, shortlistPort);
 
     expect(renderedLines.some((line) => line.includes(green.id))).toBe(true);
     expect(renderedLines.some((line) => line.includes(cilantro.id))).toBe(true);
@@ -139,7 +139,7 @@ describe("suggestIngredientMerge", () => {
     };
 
     await expect(
-      suggestIngredientMerge(db, source, runId, ai, shortlistPortOf([])),
+      suggestIngredientMerge(db, source, { runId }, ai, shortlistPortOf([])),
     ).resolves.toEqual({
       target: null,
       confidence: "low",
@@ -160,7 +160,7 @@ describe("suggestIngredientMergeBatch", () => {
       };
     });
 
-    const results = await suggestIngredientMergeBatch(db, sources, runId);
+    const results = await suggestIngredientMergeBatch(db, sources, { runId });
 
     expect(results).toHaveLength(20);
   });
@@ -177,7 +177,9 @@ describe("suggestIngredientMergeBatch", () => {
       name: "coriander",
     };
 
-    const results = await suggestIngredientMergeBatch(db, [badSource], runId);
+    const results = await suggestIngredientMergeBatch(db, [badSource], {
+      runId,
+    });
 
     expect(results).toEqual([
       {

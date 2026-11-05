@@ -87,11 +87,10 @@ import {
   upsertImportRecipe,
   upsertNotionRecipeFromImport,
 } from "~/server/domains/recipe/repo/import-recipe-convert";
+import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import {
   actorWithRun,
-  aiCallRunInput,
   cookbookRunInput,
-  ensureRun,
 } from "~/server/domains/run/repo/ensure-run";
 import { appErrorFromUnknown, createAppError } from "~/server/errors/app-error";
 import { readPublicEntityRow } from "~/server/generic/derived/service/public-read";
@@ -870,14 +869,9 @@ export async function forwardGatewayRequestWorkflow(
   context: AuthenticatedOperationContext,
   input: GatewayForwardInput,
 ) {
-  const runId = await ensureRun(
-    context.db,
-    context.actorContext,
-    aiCallRunInput(context.actorContext),
-  );
   return forwardGatewayRequest(input, {
     db: context.db,
-    runId,
+    ...aiCallOwner(context.actorContext),
     feature: "cookbook-epub-parsing",
   });
 }
