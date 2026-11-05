@@ -36,13 +36,16 @@ const parsePositive = (raw: string): number | null => {
  * Returns both null when no price was entered.
  */
 export const buildPackagePrice = (
-  dollarsStr: string,
-  qtyStr: string,
+  dollarsStr: string | number | null,
+  qtyStr: string | number | null,
   unitStr: string,
 ): PackagePrice => {
-  const dollars = parsePositive(dollarsStr);
-  if (dollars == null) return { eachPrice: null, mapping: null };
-  const qty = parsePositive(qtyStr) ?? 1;
+  const dollars =
+    typeof dollarsStr === "string" ? parsePositive(dollarsStr) : dollarsStr;
+  if (dollars == null || dollars <= 0)
+    return { eachPrice: null, mapping: null };
+  const parsedQty = typeof qtyStr === "string" ? parsePositive(qtyStr) : qtyStr;
+  const qty = parsedQty != null && parsedQty > 0 ? parsedQty : 1;
   const unit = unitStr.trim() || "each";
   if (unit.toLowerCase() === "each") {
     return { eachPrice: dollars / qty, mapping: null };
@@ -87,8 +90,8 @@ export const buildPreviewMappings = (
     convRows = [],
   }: {
     food: UsdaFoodListRow | null;
-    dollars: string;
-    qty: string;
+    dollars: number | null;
+    qty: number | null;
     unit: string;
     convRows?: PreviewConvRow[];
   },
@@ -115,11 +118,14 @@ export const buildPreviewMappings = (
     // to the preview rather than blocking the rest of the editor.
     catch {}
   }
-  const d = parsePositive(dollars);
-  if (d != null) {
+  const d = dollars;
+  if (d != null && d > 0) {
     base.push(
       manualUnitMapping(
-        { value: parsePositive(qty) ?? 1, unit: unit.trim() || "each" },
+        {
+          value: qty != null && qty > 0 ? qty : 1,
+          unit: unit.trim() || "each",
+        },
         { value: d, unit: "dollar" },
         "preview",
       ),
@@ -277,8 +283,8 @@ export const buildPriceAndMappings = ({
   priceUnit,
   convRows,
 }: {
-  price: string;
-  priceQty: string;
+  price: number | null;
+  priceQty: number | null;
   priceUnit: string;
   convRows: ConvRow[];
 }):

@@ -73,10 +73,10 @@ import {
   SideBySideFields,
   UnifiedTextField,
 } from "~/ui/forms/form-utils";
+import { NumberInput } from "~/ui/forms/number-input";
 import { Section } from "~/ui/layout";
 import { Row } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
-import { Input } from "~/ui/primitives/input";
 import { Textarea } from "~/ui/primitives/textarea";
 
 import {
@@ -518,28 +518,24 @@ function renderPrimitiveField({
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
-          <div className={prefix ? "relative" : undefined}>
+          <div className={prefix ? "relative [&_input]:pl-7" : undefined}>
             {prefix && (
               <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
                 {prefix}
               </span>
             )}
-            <Input
+            <NumberInput
               id={controlId}
-              type="number"
-              {...rhfField}
-              value={rhfField.value ?? ""}
-              step={step}
+              name={rhfField.name}
+              ref={rhfField.ref}
+              onBlur={rhfField.onBlur}
+              value={rhfField.value ?? null}
+              step={
+                step === "any" ? "any" : step == null ? undefined : Number(step)
+              }
               placeholder={placeholder ?? undefined}
-              className={prefix ? "pl-7" : undefined}
-              onChange={(event) =>
-                rhfField.onChange(
-                  event.target.value === ""
-                    ? field.nullable
-                      ? null
-                      : undefined
-                    : Number(event.target.value),
-                )
+              onValueChange={(value) =>
+                rhfField.onChange(value ?? (field.nullable ? null : undefined))
               }
               aria-invalid={fieldState.invalid}
               aria-describedby={

@@ -16,6 +16,7 @@ import { useId, useMemo, useState } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { wasm } from "~/lib/wasm";
+import { NumberInput } from "~/ui/forms/number-input";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
@@ -54,7 +55,7 @@ export function ServingAliasField({
   previewMappings,
 }: ServingAliasFieldProps) {
   const [unit, setUnit] = useState("serving");
-  const [gramsInput, setGramsInput] = useState("");
+  const [grams, setGrams] = useState<number | null>(null);
   const unitFieldId = useId();
   const gramsFieldId = useId();
 
@@ -63,15 +64,14 @@ export function ServingAliasField({
     entity: "product",
   });
 
-  const grams = Number(gramsInput);
-  const isValid = unit.trim().length > 0 && Number.isFinite(grams) && grams > 0;
+  const isValid = unit.trim().length > 0 && grams != null && grams > 0;
 
   // Live preview: what `grams` grams of this product resolve to for calories +
   // the key nutrients, via the product's already-saved conversion graph. Each
   // target is tried independently — a missing edge (no calorie/nutrient data
   // yet) is normal and just skips that chip, not an error.
   const previewNutrients = useMemo(() => {
-    if (!Number.isFinite(grams) || grams <= 0) return null;
+    if (grams == null || grams <= 0) return null;
     const values: Partial<Record<NutrientKey, number>> = {};
     for (const key of KEY_NUTRIENT_KEYS) {
       const target: AmountKind =
@@ -92,7 +92,7 @@ export function ServingAliasField({
   }, [grams, previewMappings]);
 
   const handleAdd = () => {
-    if (!isValid) return;
+    if (!isValid || grams == null) return;
     const singularized = wasm.singularize_unit(unit.trim());
     const newMapping = manualUnitMapping(
       { value: 1, unit: singularized },
@@ -107,7 +107,7 @@ export function ServingAliasField({
       {
         onSuccess: () => {
           setUnit("serving");
-          setGramsInput("");
+          setGrams(null);
         },
       },
     );
@@ -132,14 +132,12 @@ export function ServingAliasField({
       <span className="pb-2 text-muted-foreground">=</span>
       <div className="w-24">
         <Label htmlFor={gramsFieldId}>Grams</Label>
-        <Input
+        <NumberInput
           id={gramsFieldId}
-          type="number"
           min={0}
           step="any"
-          inputMode="decimal"
-          value={gramsInput}
-          onChange={(e) => setGramsInput(e.target.value)}
+          value={grams}
+          onValueChange={setGrams}
           placeholder="g"
         />
       </div>

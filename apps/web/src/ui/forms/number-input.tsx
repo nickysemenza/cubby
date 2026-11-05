@@ -12,6 +12,7 @@ type Props = Omit<
 > & {
   value: number | null;
   onValueChange: (value: number | null) => void;
+  onValueCommitted?: (value: number | null) => void;
   min?: number;
   max?: number;
   step?: number | "any";
@@ -22,6 +23,7 @@ type Props = Omit<
 export function NumberInput({
   value,
   onValueChange,
+  onValueCommitted,
   min,
   max,
   step,
@@ -43,6 +45,7 @@ export function NumberInput({
       className={className}
       value={value}
       onValueChange={onValueChange}
+      onValueCommitted={onValueCommitted}
       min={min}
       max={max}
       step={step}

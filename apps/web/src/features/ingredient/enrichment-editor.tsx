@@ -26,6 +26,7 @@ import { UnitMappingGraph } from "~/features/units/unit-mapping-graph";
 import { UnitMappingsTable } from "~/features/units/unitmappingstable";
 import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { NumberInput } from "~/ui/forms/number-input";
 import { RemoveButton } from "~/ui/forms/remove-button";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
@@ -66,36 +67,32 @@ function PriceField({
   onUnit,
   onDollars,
 }: {
-  qty: string;
+  qty: number | null;
   unit: string;
-  dollars: string;
-  onQty: (v: string) => void;
+  dollars: number | null;
+  onQty: (v: number | null) => void;
   onUnit: (v: string) => void;
-  onDollars: (v: string) => void;
+  onDollars: (v: number | null) => void;
 }) {
   return (
     <Stack gap="xs">
       <p className="text-xs font-medium">Set a price</p>
       <Row align="center" gap="sm" className="text-sm">
-        <Input
-          type="number"
-          inputMode="decimal"
-          min="0"
+        <NumberInput
+          min={0}
           value={qty}
-          onChange={(e) => onQty(e.target.value)}
+          onValueChange={onQty}
           className="w-12"
           aria-label="Price quantity"
         />
         <UnitInput value={unit} onChange={onUnit} ariaLabel="Price unit" />
         <span>= $</span>
-        <Input
-          type="number"
-          inputMode="decimal"
-          min="0"
-          step="0.01"
+        <NumberInput
+          min={0}
+          step={0.01}
           placeholder="0.00"
           value={dollars}
-          onChange={(e) => onDollars(e.target.value)}
+          onValueChange={onDollars}
           className="w-20"
           aria-label="Price"
         />
@@ -448,11 +445,11 @@ export function EnrichmentEditor({
   );
 
   const [food, setFood] = useState<UsdaFoodListRow | null>(initialFood);
-  const [priceQty, setPriceQty] = useState("1");
+  const [priceQty, setPriceQty] = useState<number | null>(1);
   const [priceUnit, setPriceUnitState] = useState(
     initialPriceUnit ?? defaultPriceUnit(row),
   );
-  const [price, setPrice] = useState("");
+  const [price, setPrice] = useState<number | null>(null);
   const [convRows, setConvRows] = useState<ConvRow[]>([
     initialConversion
       ? blankConvRow(initialConversion.fromUnit, {
