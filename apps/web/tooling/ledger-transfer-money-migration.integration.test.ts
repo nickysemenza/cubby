@@ -9,7 +9,7 @@ import { withMigrationDatabase } from "./test-database-lease";
 it("preserves transfer parties, claims and original evidence through minor-unit storage", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
-    await migrateDatabase(db, { through: "0093_source_claim_minor_units" });
+    await migrateDatabase(db, { through: "0094_source_claim_minor_units" });
     const ids = [
       "00000000-0000-4000-8000-000000000101",
       "00000000-0000-4000-8000-000000000102",
@@ -47,9 +47,41 @@ it("preserves transfer parties, claims and original evidence through minor-unit 
     const claims = await client.query(
       `SELECT to_jsonb(c) AS value FROM "LedgerSourceClaim" c`,
     );
+    const cancelledRun = "00000000-0000-4000-8000-000000000301";
+    await client.query(
+      `INSERT INTO "user" (id,name,email) VALUES ('transfer-migration','Synthetic member','transfer@example.test')`,
+    );
+    await client.query(
+      `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'run','RUN-SYNTRANSFER')`,
+      [cancelledRun],
+    );
+    await client.query(
+      `INSERT INTO "Run" (id,shortcode,"actorName",trigger,purpose,"actorUserId","actorEmail",status,"failureCode","endedAt") VALUES ($1,'RUN-SYNTRANSFER','Synthetic member','manual','sweep','transfer-migration','transfer@example.test','failed','user_cancelled',now())`,
+      [cancelledRun],
+    );
+    await client.query(
+      `INSERT INTO "RunStep" ("runId",key,label,position,state) VALUES ($1,'statement_generate','Synthetic retained scan',0,'running')`,
+      [cancelledRun],
+    );
+    await client.query(
+      `INSERT INTO "Job" (key,kind,state,"runId",input) VALUES ('synthetic-transfer-cancel','run.execute','queued',$1,'{}')`,
+      [cancelledRun],
+    );
+    await expect(
+      migrateDatabase(db, { through: "0095_ledger_transfer_minor_units" }),
+    ).rejects.toMatchObject({
+      cause: {
+        code: "P0001",
+        message:
+          "Financial refresh has unfinished steps; complete or explicitly cancel its retained work before the money cutover",
+      },
+    });
+    await client.query(
+      `UPDATE "Job" SET state='cancelled' WHERE key='synthetic-transfer-cancel'`,
+    );
     await client.query(`UPDATE "LedgerTransfer" SET amount=10.010000000000002`);
     await expect(
-      migrateDatabase(db, { through: "0094_ledger_transfer_minor_units" }),
+      migrateDatabase(db, { through: "0095_ledger_transfer_minor_units" }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",
@@ -65,7 +97,7 @@ it("preserves transfer parties, claims and original evidence through minor-unit 
       ).rows,
     ).toEqual([{ archived: null }]);
     await client.query(`UPDATE "LedgerTransfer" SET amount=10.01`);
-    await migrateDatabase(db, { through: "0094_ledger_transfer_minor_units" });
+    await migrateDatabase(db, { through: "0095_ledger_transfer_minor_units" });
     expect(
       (
         await client.query(

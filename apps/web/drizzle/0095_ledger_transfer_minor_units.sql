@@ -9,15 +9,19 @@ DECLARE
   locks text;
 BEGIN
   -- Block new step admission/checkpoints while checking active work and the latest retained financial continuation.
-  LOCK TABLE public."RunStep" IN SHARE MODE;
+  LOCK TABLE public."Run", public."Job", public."RunStep" IN SHARE MODE;
   IF EXISTS (
     SELECT 1 FROM public."RunStep" step JOIN public."Run" run ON run.id = step."runId"
     WHERE (step.key LIKE 'statement\_%' ESCAPE '\' OR step.key LIKE 'transfer\_pair\_%' ESCAPE '\')
-      AND step.state NOT IN ('done', 'skipped', 'cancelled')
+      AND step.state <> 'done'
       AND (run.status = 'running' OR step."runId" = (
         SELECT latest."runId" FROM public."RunStep" latest
         WHERE latest.key = 'statement_generate' ORDER BY latest."createdAt" DESC, latest.id DESC LIMIT 1
       ))
+      -- A cancelled Job cannot execute the retained cursor. Other failed parents remain fenced.
+      AND NOT (run.status = 'failed' AND run."failureCode" IS NOT DISTINCT FROM 'user_cancelled' AND run."endedAt" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM public."Job" execution WHERE execution."runId" = run.id
+          AND execution.state NOT IN ('completed', 'failed', 'cancelled')))
   ) THEN
     RAISE EXCEPTION 'Financial refresh has unfinished steps; complete or explicitly cancel its retained work before the money cutover';
   END IF;
