@@ -110,7 +110,7 @@ Resting page and detail sections are open and flat, separated by 1px hairlines a
 
 ## Shapes
 
-Web controls use 6px radii (26px buttons and inputs on desktop, 32px and 30px on the base scale, 22px navigation items), chips 4px (18px tall on desktop, 20px on the base scale), floating panels 8px. These web tokens are independent of native geometry. Inputs use a white surface and hairline border; nested surfaces keep concentric corners. Images use a faint neutral outline. `cubby/no-large-radius` rejects `rounded-xl`, `rounded-2xl`, `rounded-3xl` and their directional variants; use `rounded-md` or `rounded-lg`. `cubby/no-hand-rolled-panel` requires `Panel` for any rounded, bordered box; its `.oxlintrc.json` exemptions cover primitives, pickers, overlays, ReUI, the date-picker input, text and code blocks, `EmptyState`, and the two Home files awaiting the Home rewrite.
+Web controls use 6px radii (26px buttons and inputs on desktop, 32px and 30px on the base scale, 22px navigation items), chips 4px (18px tall on desktop, 20px on the base scale), floating panels 8px. These web tokens are independent of native geometry. Inputs use a white surface and hairline border; nested surfaces keep concentric corners. Images use a faint neutral outline. `cubby/no-large-radius` rejects `rounded-xl`, `rounded-2xl`, `rounded-3xl` and their directional variants; use `rounded-md` or `rounded-lg`. `cubby/no-hand-rolled-panel` requires `Panel` for any rounded, bordered box; its `.oxlintrc.json` exemptions cover shadcn copies, `Pill`, pickers, overlays, ReUI, the date-picker input, text and code blocks, `EmptyState`, and the two Home files awaiting the Home rewrite.
 
 ## Components
 
@@ -149,11 +149,18 @@ and field renderers, retaining rich pickers, enum glyphs, inheritance, suggestio
 validation and date behavior; native dropdowns and hand-built imitations do not
 establish whether an existing Cubby workflow improves.
 
-`components.json` configures the shadcn Base UI/Mira family; local primitives
-are maintained in `src/ui/shadcn`. Base UI owns accessible interaction,
-while Cubby owns their styling and composition. The remaining copied ReUI
-surface is the event calendar; its exact source and license live in
-[`src/ui/reui/SOURCE.md`](src/ui/reui/SOURCE.md). Filters and file upload are
+`components.json` configures the shadcn Base UI/Mira family. Folders under
+`src/ui` are named by owner: `src/ui/shadcn` holds whole shadcn registry copies
+that `shadcn add <item> --overwrite` refreshes, `src/ui/reui` holds copied ReUI
+items (source and license in [`src/ui/reui/SOURCE.md`](src/ui/reui/SOURCE.md)),
+and every other folder is Cubby-owned. Base UI owns accessible interaction,
+while Cubby owns styling and composition. Registry copies keep their unused
+parts so refreshes diff cleanly; Cubby's deltas on them (brand tokens and
+motion, Phosphor deep imports, popover elevation, hydration gates, mobile
+sizing) stay small and are re-applied after each refresh, and density or color
+belongs in theme tokens rather than class strings. Classes merge through the
+`cn` package with stock tailwind-merge, so custom font sizes use t-shirt names
+(`text-md`) that it classifies as sizes. Filters and file upload are
 Cubby-owned. Prefer existing shared components before importing registry items.
 
 Different jobs justify different public components, not duplicate engines or
