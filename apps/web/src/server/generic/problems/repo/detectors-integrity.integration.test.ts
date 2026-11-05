@@ -286,7 +286,7 @@ const mkLedgerTransfer = async (db: Database) => {
   return insertWithShortcode(db, "ledgerTransfer", {
     fromPartyId: from.id,
     toPartyId: to.id,
-    amount: 1,
+    amount: 100n,
     date: "2024-01-15",
   });
 };
@@ -1057,7 +1057,7 @@ const SOURCE_FACTORIES = {
     return insertWithShortcode(db, "ledgerTransfer", {
       fromPartyId: parseEntityId("ledgerParty", targetId),
       toPartyId: to.id,
-      amount: 1,
+      amount: 100n,
       date: "2024-01-15",
     });
   },
@@ -1067,7 +1067,7 @@ const SOURCE_FACTORIES = {
     return insertWithShortcode(db, "ledgerTransfer", {
       fromPartyId: from.id,
       toPartyId: parseEntityId("ledgerParty", targetId),
-      amount: 1,
+      amount: 100n,
       date: "2024-01-15",
     });
   },

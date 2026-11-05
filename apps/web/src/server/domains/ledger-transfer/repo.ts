@@ -14,7 +14,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { LedgerSourceClaimOut } from "@cubby/schemas/ledger-transfer";
-import { cents } from "@cubby/shared";
+import { moneyToMinor } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -320,7 +320,7 @@ async function assertEvidenceSet(
     rows.some(
       (row) =>
         transferEvidenceLegProblem(row) !== null ||
-        cents(Math.abs(row.amount)) !== cents(transfer.amount),
+        moneyToMinor(Math.abs(row.amount)) !== moneyToMinor(transfer.amount),
     )
   )
     throw createAppError(
@@ -414,6 +414,7 @@ export const createLedgerTransfer = defineMutationWriter({
       const { sourceClaims, evidenceTransactionIds, ...columns } = data;
       const created = await insertWithShortcode(tx, "ledgerTransfer", {
         ...columns,
+        amount: moneyToMinor(columns.amount),
         ...parties,
       });
       const evidence = evidenceTransactionIds
@@ -507,6 +508,7 @@ export const updateLedgerTransfer = defineMutationWriter({
         evidenceTransactionIds,
         fromPartyId: _fromParty,
         toPartyId: _toParty,
+        amount: _amount,
         ...columnData
       } = data;
       const evidence =
@@ -529,7 +531,18 @@ export const updateLedgerTransfer = defineMutationWriter({
       await crud.update(
         tx,
         id,
-        { columns: columnData, parties, amount, evidence, sourceClaims },
+        {
+          columns: {
+            ...columnData,
+            ...(data.amount === undefined
+              ? {}
+              : { amount: moneyToMinor(data.amount) }),
+          },
+          parties,
+          amount,
+          evidence,
+          sourceClaims,
+        },
         actor,
         async () => undefined,
       );

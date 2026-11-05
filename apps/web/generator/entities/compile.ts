@@ -862,6 +862,10 @@ const compileFieldModel = (
       throw new EntityDeclarationError(
         `${fieldContext}.enum requires an enum field.`,
       );
+    if (field.specialized === "minor-unit-money" && declared.kind !== "number")
+      throw new EntityDeclarationError(
+        `${fieldContext}: minor-unit-money requires a number field.`,
+      );
     const defaultKind =
       field.default ??
       (key === "id"
@@ -878,7 +882,7 @@ const compileFieldModel = (
       );
     return {
       key,
-      column: key,
+      column: field.specialized === "minor-unit-money" ? `${key}Minor` : key,
       kind: declared.kind,
       nullable: field.nullable ?? declared.nullable,
       default: defaultKind,

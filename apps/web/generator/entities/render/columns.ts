@@ -95,11 +95,13 @@ export const renderStorageColumn = (
     expression = `text(${column})`;
   } else if (field.kind === "number") {
     expression =
-      field.specialized === "real"
-        ? `real(${column})`
-        : field.specialized === "double-precision"
-          ? `doublePrecision(${column})`
-          : `integer(${column})`;
+      field.specialized === "minor-unit-money"
+        ? `bigint(${column},{mode:"bigint"})`
+        : field.specialized === "real"
+          ? `real(${column})`
+          : field.specialized === "double-precision"
+            ? `doublePrecision(${column})`
+            : `integer(${column})`;
   } else if (field.kind === "boolean") {
     expression = `boolean(${column})`;
   } else if (field.kind === "date") {

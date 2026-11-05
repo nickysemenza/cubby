@@ -540,11 +540,23 @@ const viaParts = (entity: Entity, field: ViaField) => {
  * A terminal column of a related record: its effective value when the field
  * it stores is inherited (`resolution.inherit`), else the column.
  */
-const terminalSql = (target: Entity, leaf: string, column: string): SQL => {
+export const storedFieldValueSql = (
+  target: Entity,
+  leaf: string,
+  column: string,
+  units: "display" | "stored" = "display",
+): SQL => {
+  const storage = entityFieldModels[target].storage.find(
+    (field) => field.column === column,
+  );
   const inherited = inheritedFieldOfColumn(target, column);
-  return inherited === null
-    ? sql`${sql.raw(leaf)}.${sql.identifier(column)}`
-    : effectiveFieldSql(target, inherited, leaf);
+  const value =
+    inherited === null
+      ? sql`${sql.raw(leaf)}.${sql.identifier(column)}`
+      : effectiveFieldSql(target, inherited, leaf);
+  return storage?.specialized === "minor-unit-money" && units === "display"
+    ? sql`(${value}::numeric / 100)`
+    : value;
 };
 
 /**
@@ -566,7 +578,7 @@ const relatedColumnSql = (
   if (first === undefined)
     throw new Error(`${entity} → ${path.target} has no relation step`);
   const firstAlias = sql.raw(first.alias);
-  return sql`(SELECT ${terminalSql(path.target, traversal.leafAlias, column)} FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE (${first.condition})${
+  return sql`(SELECT ${storedFieldValueSql(path.target, traversal.leafAlias, column)} FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE (${first.condition})${
     first.softDelete
       ? sql` AND ${isNull(sql`${firstAlias}."deletedAt"`)}`
       : sql``
@@ -699,7 +711,7 @@ export const relatedExistsSql = (
   matches: (leaf: SQL, column: SQL) => SQL | undefined,
 ): SQL | undefined => {
   const { from, root, leaf, leafAlias } = viaParts(entity, field);
-  const column = terminalSql(
+  const column = storedFieldValueSql(
     field.target,
     leafAlias,
     field.terminal.kind === "field"
@@ -848,7 +860,7 @@ export const rowSetSql = (
       const raw = leaf(column);
       // A relation's entity field that inherits filters by its effective value.
       return storage.kind === "relation"
-        ? terminalSql(storage.target, traversal.leafAlias, column)
+        ? storedFieldValueSql(storage.target, traversal.leafAlias, column)
         : raw;
     },
   };
@@ -1052,7 +1064,7 @@ export const groupSql = (
         const [first, ...rest] = traversal.hops;
         if (first === undefined)
           throw new Error(`${entity}.${key} has no relation step`);
-        const raw = terminalSql(
+        const raw = storedFieldValueSql(
           value.target,
           traversal.leafAlias,
           value.column,
@@ -1081,7 +1093,11 @@ export const groupSql = (
       }
       const raw =
         value.kind === "column"
-          ? terminalSql(entity, `"${getTableName(table)}"`, value.column)
+          ? storedFieldValueSql(
+              entity,
+              `"${getTableName(table)}"`,
+              value.column,
+            )
           : value.kind === "field"
             ? relatedColumnSql(entity, value, table, value.column)
             : derivedValueSql(entity, derived, key, context);
@@ -1139,5 +1155,5 @@ export const listMetricSql = (
   const stored = model.storage.find((column) => column.key === key);
   if (field?.kind !== "number" || stored === undefined)
     throw new Error(`${entity}.${key} has no additive scalar SQL expression`);
-  return terminalSql(entity, `"${getTableName(table)}"`, stored.column);
+  return storedFieldValueSql(entity, `"${getTableName(table)}"`, stored.column);
 };

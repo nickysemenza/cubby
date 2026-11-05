@@ -85,7 +85,7 @@ describe("acceptFinancialTransferPair", () => {
     const existing = await insertWithShortcode(ctx.db, "ledgerTransfer", {
       fromPartyId: memberA.id,
       toPartyId: memberB.id,
-      amount: 5,
+      amount: 500n,
       date: "2026-01-01",
     });
     const out = await transaction(accountA.id, 40, "2026-03-02");
@@ -269,6 +269,7 @@ describe("acceptFinancialTransferPair", () => {
       .from(ledgerTransfer)
       .where(eq(ledgerTransfer.shortcode, result.transferId));
     expect(transfer).toBeDefined();
+    expect(transfer?.amount).toBe(7550n);
     const legs = await unwrapDb(ctx.db)
       .select({
         shortcode: financialTransaction.shortcode,

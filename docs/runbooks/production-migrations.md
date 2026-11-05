@@ -499,3 +499,21 @@ wrong-unit writes. Keep client dollar-number fields at the checked output
 boundary. Verify a predecessor write refuses after the cutover.
 
 Financial cutover gates recognize only done steps or an ended failed Run with failureCode user_cancelled and no nonterminal Job. Run, Job and RunStep share locks close admission races. A cancelled parent with queued, running, retry_wait or paused execution remains blocked; every other failure still blocks the existing active/latest-refresh scope. Old running step cursors and counters remain unchanged by the gate exception. No nonexistent RunStep cancelled state is assumed.
+
+## Ledger-transfer minor units
+
+`0083_ledger_transfer_minor_units` follows the source-claim migration in this
+unmerged stack; the release owner renumbers the stack against the actual main
+prefix. Hold it for the terminal financial refresh and independent money review.
+It preserves original transfer rows under `archive.LedgerTransfer_dollar_preimage`
+and compares full-row hash multisets against exactly `amount` → `amountMinor`
+and dollars × 100, including parties, notes, dates and tombstones. Incoming
+FinancialTransaction/source-claim references and outgoing party/identity FKs
+are rebound to the replacement; archived rows retain no live FKs or triggers.
+
+Run the populated-predecessor transfer migration regression, ledger/transfer
+journeys and household contribution report coverage, then check catalog parity.
+After deployment, independently verify retained transfers and claims, party
+positions, attached evidence, exact archived-dollar/current-cent equality, number
+outputs and refusal of predecessor `amount` writes. Migration completion is not
+historical financial acceptance. No transfer is reclassified as Expense spend.

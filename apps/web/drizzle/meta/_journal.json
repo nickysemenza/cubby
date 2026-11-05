@@ -680,6 +680,13 @@
       "when": 1793898237152,
       "tag": "0096_source_claim_minor_units",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1793877224448,
+      "tag": "0083_ledger_transfer_minor_units",
+      "breakpoints": true
     }
   ]
 }

@@ -39,6 +39,7 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import { searchableEntities } from "@cubby/schemas/search";
+import { minorToMoney } from "@cubby/shared";
 import { parseShortcode } from "@cubby/shared";
 import {
   type AnyColumn,
@@ -148,6 +149,7 @@ import {
   groupSql,
   type ListGroupSql,
   listMetricSql,
+  storedFieldValueSql,
   listFilterValues,
   type ListFilterValues,
   ListContext,
@@ -203,9 +205,11 @@ const storedColumn = (
   return {
     column,
     value:
-      inherited === null
-        ? column
-        : effectiveFieldSql(entity, inherited, getTableName(table)),
+      stored.specialized === "minor-unit-money"
+        ? storedFieldValueSql(entity, `"${getTableName(table)}"`, stored.column)
+        : inherited === null
+          ? column
+          : effectiveFieldSql(entity, inherited, getTableName(table)),
     kind: stored.kind,
     nullable: stored.nullable,
     reference: stored.reference,
@@ -1521,6 +1525,17 @@ export function listScaffold<
     const selected = new Map<string, SQL | PgColumn>(
       Object.entries(getTableColumns(table)),
     );
+    for (const stored of fieldModel?.storage ?? []) {
+      if (stored.specialized !== "minor-unit-money") continue;
+      const column = selected.get(stored.key);
+      if (column !== undefined)
+        selected.set(
+          stored.key,
+          sql<string>`${column}::text`.mapWith((value) =>
+            minorToMoney(BigInt(value)),
+          ),
+        );
+    }
     for (const key of Object.keys(derivedFields)) {
       if (!wanted.has(key) || Object.hasOwn(readDeclaration.columns ?? {}, key))
         continue;
@@ -2372,9 +2387,15 @@ export function listScaffold<
         ? scaffold.unresolvedWhere(filters, prepared)
         : undefined;
       const selections: Record<string, SQL<number | boolean>> = {};
-      for (const [index, key] of keys.entries())
+      for (const [index, key] of keys.entries()) {
+        const stored = fieldModel?.storage.find((field) => field.key === key);
         selections[`sum_${index}`] =
-          sql<number>`COALESCE(sum((${listMetricSql(entity, key, derivedSql, table, prepared)})::numeric) FILTER (WHERE ${where ?? sql`true`}), 0)::double precision`;
+          stored?.specialized === "minor-unit-money"
+            ? sql<string>`COALESCE(sum(${storedFieldValueSql(entity, `"${getTableName(table)}"`, stored.column, "stored")}) FILTER (WHERE ${where ?? sql`true`}), 0)::text`.mapWith(
+                (value) => minorToMoney(BigInt(value)),
+              )
+            : sql<number>`COALESCE(sum((${listMetricSql(entity, key, derivedSql, table, prepared)})::numeric) FILTER (WHERE ${where ?? sql`true`}), 0)::double precision`;
+      }
       if (unresolved)
         selections.unresolved = sql<boolean>`COALESCE(bool_or(${unresolved}), false)`;
       for (const [index, total] of totals.entries()) {
