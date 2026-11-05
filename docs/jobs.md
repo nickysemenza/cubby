@@ -931,6 +931,26 @@ App-open coalesces recovery and mail discovery. Gmail provider push is not imple
 
 `job.activity` and the status page report what runs, waits and last finished.
 
+### What references a Run
+
+A Run is a member or agent session plus its history. These foreign keys are why old routine
+Runs stay: no row is nulled or purged. Automatic work creates none of the rows marked
+"session", and rows marked "no Run" can now have none.
+
+| Reference                                                                                                                             | Disposition                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `AiUsage`, `AiEvaluation`                                                                                                             | Session, or no Run for automatic work; `feature` and the actor attribute cost |
+| `AiEvaluationRequest`                                                                                                                 | Session: a Run's request for an evaluation                                    |
+| `Suggestion`, `RunFinding`, `AuditLog`, `McpToolCall`, `Job`                                                                          | Nullable provenance; cleared if a Run goes                                    |
+| `RunOperation`                                                                                                                        | Exact-replay receipts, kept                                                   |
+| `RunControlEvent`, `RunApproval`                                                                                                      | Member history; `RunApproval` has no reader and keeps its rows                |
+| `PhotoGroupSourceEvidence`                                                                                                            | Empty, no reader or writer; drops with the derived triggers that declare it   |
+| `RunStep`, `RunPushRegistration`                                                                                                      | Owned by the Run, deleted with it                                             |
+| `Email`, `EmailCandidateObservation`, `EmailClassificationObservation`, `EmailRetrievalFailure`, `SourceOrderObservation`, `Purchase` | Source provenance, kept                                                       |
+| `ImportPreparedOrder`, `ImportSourceClaim` (`firstRunId`, `lastRunId`)                                                                | Import session evidence, kept                                                 |
+| `PhotoGroupProposal`, `PhotoRunImage`, `ImageProcessingJob`                                                                           | Photo session and device work, kept                                           |
+| `Run` (`parentRunId`, `predecessorRunId`)                                                                                             | Lineage, kept                                                                 |
+
 ### Routine Run history
 
 Default Run lists and counts omit `ai_suggest` and `background`, omit `ai_refresh`,
