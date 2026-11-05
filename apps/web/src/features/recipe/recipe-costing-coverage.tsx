@@ -11,7 +11,7 @@ import {
 } from "~/lib/recipe-totals-gaps";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { buttonVariants } from "~/ui/shadcn/button";
 import {
   Popover,

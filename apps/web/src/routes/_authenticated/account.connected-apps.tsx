@@ -18,6 +18,7 @@ import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useLocalTable } from "~/ui/data-table/use-local-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/reui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,7 +29,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/ui/shadcn/alert-dialog";
-import { Badge } from "~/ui/shadcn/badge";
 import { Button } from "~/ui/shadcn/button";
 
 // A static sibling of /account/$accountView: TanStack ranks literal segments

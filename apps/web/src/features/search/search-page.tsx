@@ -30,7 +30,7 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { MobileCardSkeletonList } from "~/ui/feedback/mobile-card-skeleton";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import {
   DropdownMenu,

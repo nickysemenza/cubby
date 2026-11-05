@@ -12,7 +12,7 @@ import {
 } from "react";
 
 import { Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import { Input } from "~/ui/shadcn/input";
 

@@ -17,7 +17,7 @@ import { useLocalTable } from "~/ui/data-table/use-local-table";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import { StatusText } from "~/ui/text/status-text";
 

@@ -18,7 +18,7 @@ import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useLocalTable } from "~/ui/data-table/use-local-table";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { domainWayfinding } from "~/ui/navigation/domain-wayfinding";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import {
   Table,
   TableBody,

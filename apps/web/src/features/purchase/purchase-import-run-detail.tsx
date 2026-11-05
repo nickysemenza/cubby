@@ -51,7 +51,7 @@ import {
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import { StatusText } from "~/ui/text/status-text";
 

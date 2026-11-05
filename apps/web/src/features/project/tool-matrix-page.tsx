@@ -60,7 +60,7 @@ import { FieldRecordValue } from "~/ui/derived/record-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
 import { cellMonoDense, stickyRowHeaderPage } from "~/ui/matrix/matrix-chrome";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Input } from "~/ui/shadcn/input";
 import { Skeleton } from "~/ui/shadcn/skeleton";
 

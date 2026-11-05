@@ -16,7 +16,7 @@ import { MarkdownText } from "~/entity/prose/markdown";
 import { wasm } from "~/lib/wasm";
 import { Image } from "~/ui/common/image";
 import { Panel, Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import { Checkbox } from "~/ui/shadcn/checkbox";
 import { Spinner } from "~/ui/shadcn/spinner";

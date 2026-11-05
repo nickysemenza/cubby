@@ -29,7 +29,7 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useDebug } from "~/ui/hooks/use-debug";
 import { useLocalStorage } from "~/ui/hooks/use-local-storage";
 import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import {
   CommandDialog,
   CommandGroup,

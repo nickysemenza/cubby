@@ -39,7 +39,7 @@ import {
   AlertAction,
   AlertDescription,
   AlertTitle,
-} from "~/ui/shadcn/alert";
+} from "~/ui/reui/alert";
 import { Button, buttonVariants } from "~/ui/shadcn/button";
 
 import {

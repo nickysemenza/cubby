@@ -4,7 +4,7 @@ import type { FC } from "react";
 
 import { EntityFilterLink } from "~/entity/components/entity-ref-link";
 import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 
 import {
   getTagColor,

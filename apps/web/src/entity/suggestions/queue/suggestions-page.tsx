@@ -63,7 +63,7 @@ import type {
   ListQueryResponse,
 } from "~/ui/hooks/use-paginated-table-core";
 import { Panel } from "~/ui/layout/panel";
-import { Alert, AlertAction } from "~/ui/shadcn/alert";
+import { Alert, AlertAction } from "~/ui/reui/alert";
 import { Button } from "~/ui/shadcn/button";
 import { Tabs, TabsList, TabsTrigger } from "~/ui/shadcn/tabs";
 

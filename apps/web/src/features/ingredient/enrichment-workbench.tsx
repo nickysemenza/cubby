@@ -50,7 +50,7 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import { Progress } from "~/ui/shadcn/progress";
 

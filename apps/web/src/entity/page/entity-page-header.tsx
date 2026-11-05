@@ -29,7 +29,7 @@ import {
   domainWayfinding,
   type WayfindingDomain,
 } from "~/ui/navigation/domain-wayfinding";
-import { Badge, type BadgeVariant } from "~/ui/shadcn/badge";
+import { Badge, type BadgeVariant } from "~/ui/reui/badge";
 
 /** Authored action hierarchy for a record header. */
 export interface DetailHeroActions {

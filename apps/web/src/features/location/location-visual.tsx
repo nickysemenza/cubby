@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { locationChildGroupLabel } from "~/lib/location-child-label";
 import { Image } from "~/ui/common/image";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 
 import { LocationIcon } from "../../entity/presentation/location-icons";
 import { resolveLocationVisual } from "../../entity/presentation/location-visual-resolver";

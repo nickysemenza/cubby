@@ -13,7 +13,7 @@ import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 
 import { calendarItemPresentation } from "./calendar-kind-registry";
 import { itemSpanLabel } from "./calendar-span";

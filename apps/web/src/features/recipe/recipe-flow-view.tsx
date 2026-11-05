@@ -37,8 +37,8 @@ import {
   AlertAction,
   AlertDescription,
   AlertTitle,
-} from "~/ui/shadcn/alert";
-import { Badge } from "~/ui/shadcn/badge";
+} from "~/ui/reui/alert";
+import { Badge } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import { Skeleton } from "~/ui/shadcn/skeleton";
 import { Textarea } from "~/ui/shadcn/textarea";

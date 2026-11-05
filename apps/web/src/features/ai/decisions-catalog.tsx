@@ -28,7 +28,7 @@ import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { SidePanel, SidePanelLayout } from "~/ui/overlays/side-panel";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import { Input } from "~/ui/shadcn/input";
 import { Description } from "~/ui/text/description";

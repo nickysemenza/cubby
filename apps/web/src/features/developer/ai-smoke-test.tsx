@@ -11,7 +11,7 @@ import { z } from "zod";
 
 import { formatDuration } from "~/lib/format-duration";
 import { Row, Section } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import { Spinner } from "~/ui/shadcn/spinner";
 

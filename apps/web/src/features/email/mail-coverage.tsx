@@ -32,7 +32,7 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { SidePanel } from "~/ui/overlays/side-panel";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/ui/shadcn/tabs";

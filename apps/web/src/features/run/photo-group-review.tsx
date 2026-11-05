@@ -98,7 +98,7 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
-import { Badge, type BadgeVariant } from "~/ui/shadcn/badge";
+import { Badge, type BadgeVariant } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import { Checkbox } from "~/ui/shadcn/checkbox";
 import {

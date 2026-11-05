@@ -36,7 +36,7 @@ import {
 import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Panel, Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Button, buttonVariants } from "~/ui/shadcn/button";
 import { Spinner } from "~/ui/shadcn/spinner";
 import { Description } from "~/ui/text/description";

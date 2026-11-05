@@ -43,7 +43,7 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { DashboardSectionLoading } from "~/ui/feedback/loading-skeletons";
 import { Grid, Panel, Row, Section, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Checkbox } from "~/ui/shadcn/checkbox";
 import { Skeleton } from "~/ui/shadcn/skeleton";
 

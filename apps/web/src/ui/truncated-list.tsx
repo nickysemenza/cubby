@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "~/ui/shadcn/popover";
 import { NoneValue } from "~/ui/text/none-value";
 

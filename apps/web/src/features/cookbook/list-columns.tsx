@@ -15,7 +15,7 @@ import {
 } from "~/ui/data-table/table-features";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { NoneValue } from "~/ui/text/none-value";
 
 import { defineListOverride } from "../../entity/list-columns/types";

@@ -7,7 +7,7 @@ import { AuthEntryFrame } from "~/features/auth/auth-entry-frame";
 import { AuthUIProvider } from "~/features/auth/auth-ui-provider";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
-import { Alert } from "~/ui/shadcn/alert";
+import { Alert } from "~/ui/reui/alert";
 import { buttonVariants } from "~/ui/shadcn/button";
 
 // Deliberately NOT loose. The OAuth server appends a signed authorize query

@@ -6,7 +6,7 @@ import { page } from "vitest/browser";
 
 import { householdDaysFromNow } from "~/lib/household-date";
 import { ChipCluster } from "~/ui/common/chip-cluster";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import {
   Table,
   TableBody,

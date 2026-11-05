@@ -8,7 +8,7 @@ import {
 import { ImageThumbnail } from "~/entity/table/image-thumbnail";
 import { formatCurrency } from "~/lib/number-format";
 import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 
 import type { EntityDetailFieldRenderers } from "./index";
 

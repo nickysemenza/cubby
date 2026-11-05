@@ -20,7 +20,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import { Input } from "~/ui/shadcn/input";
 import { Textarea } from "~/ui/shadcn/textarea";

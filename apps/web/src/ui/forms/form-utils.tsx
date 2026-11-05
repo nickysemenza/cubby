@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import { FLAGS } from "~/lib/flags";
 import { QuantityInput } from "~/ui/forms/quantity-input";
 import { Stack } from "~/ui/layout";
-import { Alert, AlertDescription, AlertTitle } from "~/ui/shadcn/alert";
+import { Alert, AlertDescription, AlertTitle } from "~/ui/reui/alert";
 import { Button, type buttonVariants } from "~/ui/shadcn/button";
 import { Input } from "~/ui/shadcn/input";
 import { Spinner } from "~/ui/shadcn/spinner";

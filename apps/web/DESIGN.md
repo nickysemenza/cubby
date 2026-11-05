@@ -152,7 +152,7 @@ establish whether an existing Cubby workflow improves.
 `components.json` configures the shadcn Base UI/Mira family. Folders under
 `src/ui` are named by owner: `src/ui/shadcn` holds whole shadcn registry copies
 that `shadcn add <item> --overwrite` refreshes, `src/ui/reui` holds copied ReUI
-items (source and license in [`src/ui/reui/SOURCE.md`](src/ui/reui/SOURCE.md)),
+items, including Badge and Alert (source and license in [`src/ui/reui/SOURCE.md`](src/ui/reui/SOURCE.md)),
 and every other folder is Cubby-owned. Base UI owns accessible interaction,
 while Cubby owns styling and composition. Registry copies keep their unused
 parts so refreshes diff cleanly; Cubby's deltas on them (brand tokens and

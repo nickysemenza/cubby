@@ -21,7 +21,7 @@ import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { formatCurrency } from "~/lib/number-format";
 import { ChipCluster } from "~/ui/common/chip-cluster";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { NoneValue } from "~/ui/text/none-value";
 
 /** Older saved projections retain their original provider observation. */

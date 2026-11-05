@@ -7,7 +7,7 @@ import { recipeAvailability } from "~/integrations/tanstack-query/generated/doma
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Grid, Panel, Row, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";

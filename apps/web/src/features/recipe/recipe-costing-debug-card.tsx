@@ -11,7 +11,7 @@ import {
   type StaticTableColumn,
 } from "~/ui/data-table/static-table";
 import { Row, Section } from "~/ui/layout";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { StatusText } from "~/ui/text/status-text";
 
 import { CopyJsonButton } from "./copy-debug-button";

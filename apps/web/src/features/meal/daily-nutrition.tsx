@@ -25,7 +25,7 @@ import { DatePickerInput } from "~/ui/date-picker-input";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Badge } from "~/ui/shadcn/badge";
+import { Badge } from "~/ui/reui/badge";
 import { Button } from "~/ui/shadcn/button";
 import { Input } from "~/ui/shadcn/input";
 
