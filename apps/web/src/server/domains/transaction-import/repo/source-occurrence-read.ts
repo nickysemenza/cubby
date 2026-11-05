@@ -81,7 +81,8 @@ async function loadOccurrenceClosures(
       payment_evidence AS MATERIALIZED (SELECT * FROM "PurchasePaymentEvidence" WHERE "purchaseId" IN (SELECT id FROM purchases)),
       receipts AS MATERIALIZED (
         SELECT id,"runId","operationId",kind,"inputFingerprint",state,"completedAt" FROM "RunOperation" receipt
-        WHERE EXISTS (SELECT 1 FROM transactions t WHERE jsonb_path_exists(receipt.result, '$.** ? (@ == $code)', jsonb_build_object('code',t.shortcode)))
+        WHERE jsonb_path_exists(receipt.result, '$.** ? (@ == $codes[*])',
+          jsonb_build_object('codes',(SELECT coalesce(jsonb_agg(shortcode),'[]'::jsonb) FROM transactions)))
       )`;
       const selections: ReadonlyArray<readonly [string, string, string]> = [
         ["occurrences", "owners", "to_jsonb(r)"],
@@ -93,7 +94,7 @@ async function loadOccurrenceClosures(
         ["judgments", "judgments", "to_jsonb(r)"],
         ["aliases", "aliases", "to_jsonb(r)"],
         ["memberships", "memberships", "to_jsonb(r)"],
-        ["collections", "collections", "to_jsonb(r)"],
+        ["collections", "collections", "to_jsonb(r) - 'notes'"],
         ["transactions", "transactions", "to_jsonb(r)"],
         ["allocations", "allocations", "to_jsonb(r)"],
         ["purchases", "purchases", "to_jsonb(r)"],
@@ -121,8 +122,14 @@ async function loadOccurrenceClosures(
           sql`${name}::text, (SELECT coalesce(jsonb_agg(data ORDER BY identity), '[]'::jsonb) FROM (SELECT ${sql.raw(table === "judgments" ? 'r."observationId"::text' : table === "memberships" ? 'jsonb_build_array(r."importId", r."statementRowId")::text' : "r.id::text")} AS identity, ${sql.raw(value)} AS data FROM ${sql.identifier(table)} r ORDER BY identity LIMIT 1001) captured)`,
       );
       const { rows: loaded } = await query.execute(
-        sql`${definitions} SELECT txid_current_snapshot()::text AS snapshot, jsonb_build_object(${sql.join(sets, sql`, `)}) AS sets`,
+        sql`${definitions}, bundle AS MATERIALIZED (SELECT jsonb_build_object(${sql.join(sets, sql`, `)}) AS data)
+          SELECT txid_current_snapshot()::text AS snapshot,
+            CASE WHEN octet_length(data::text) <= 1048576 THEN data END AS sets FROM bundle`,
       );
+      if (loaded[0]?.sets === null)
+        return refuse(
+          "Occurrence closure exceeds one MiB; narrow the owner scope.",
+        );
       const captured = resultSchema.parse(loaded[0]);
       if (Object.values(captured.sets).some((set) => set.length > 1000))
         return refuse(
@@ -152,12 +159,20 @@ async function loadOccurrenceClosures(
           effectiveExpenses: jsonSnapshot.parse(effectiveExpenses),
         },
       };
-      return new Map(
-        rows.map((row) => [
-          row.id,
-          sourceOccurrenceClosure.parse({ root: row.shortcode, ...shared }),
-        ]),
-      );
+      if (new TextEncoder().encode(JSON.stringify(shared)).byteLength > 1048576)
+        return refuse(
+          "Occurrence closure exceeds one MiB; narrow the owner scope.",
+        );
+      // The complete page bundle belongs to the first result only; copying it per root multiplies Worker memory.
+      const first = rows[0];
+      if (!first)
+        return new Map<string, z.infer<typeof sourceOccurrenceClosure>>();
+      return new Map([
+        [
+          first.id,
+          sourceOccurrenceClosure.parse({ root: first.shortcode, ...shared }),
+        ],
+      ]);
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );
@@ -201,11 +216,7 @@ const read = {
       closure.fields(
         sourceOccurrenceRawOut.pick({ closure: true }),
         (row, loaded) => ({
-          closure:
-            loaded.get(row.id) ??
-            refuse(
-              "Occurrence closure was not captured for this owner; refresh the evidence read.",
-            ),
+          closure: loaded.get(row.id),
         }),
         { scope: "explicit" },
       ),

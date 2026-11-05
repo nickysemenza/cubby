@@ -1115,9 +1115,33 @@ describe("shared spending booking", () => {
         ),
       ).rejects.toThrow(/Spending evidence changed/);
       await commitFinancialSpending(ctx.db, plan, ctx.actor);
-      expect(
-        await commitFinancialSpending(ctx.db, plan, ctx.actor),
-      ).toMatchObject({ replayed: true });
+      const repeated = await commitFinancialSpending(
+        ctx.db,
+        plan,
+        ctx.actor,
+      ).then(
+        (result) => (result.replayed ? "replayed" : "created"),
+        (error: unknown) =>
+          error instanceof Error ? error.message : String(error),
+      );
+      expect(repeated).toMatch(
+        beneficiaries === undefined
+          ? /^replayed$/
+          : /Spending evidence changed/,
+      );
+      const unknown = [{ partyId: null, weight: 1 }];
+      const changedChoice = await previewFinancialSpending(ctx.db, {
+        ...plan.request,
+        beneficiaries: unknown,
+      });
+      expect(changedChoice.status).toBe("review_required");
+      await expect(
+        commitFinancialSpending(
+          ctx.db,
+          { ...plan, request: { ...plan.request, beneficiaries: unknown } },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/Spending evidence changed/);
       const attribution = await getDb(ctx.db)
         .select({
           partyId: expenseAttribution.ledgerPartyId,

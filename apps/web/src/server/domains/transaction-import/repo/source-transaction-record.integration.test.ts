@@ -166,6 +166,14 @@ describe("statement row ledger", () => {
     );
     const closure = sourceOccurrenceClosure.parse(closureRead.data[0]?.closure);
     expect(closure.scope).toHaveLength(2);
+    expect(
+      closureRead.data.filter((row) => row.closure !== undefined),
+    ).toHaveLength(1);
+    expect(
+      closure.sets.collections.every(
+        (row) => !Object.hasOwn(Object(row), "notes"),
+      ),
+    ).toBe(true);
     expect(closure.sets.occurrences).toHaveLength(2);
     expect(closure.sets.observations).toHaveLength(2);
     expect(closure.sets.judgments).toHaveLength(2);
@@ -627,6 +635,29 @@ describe("statement row ledger", () => {
     );
     const root = owners[0];
     if (!root) throw new Error("Synthetic closure boundary owner missing");
+    const [oversized] = await getDb(ctx.db)
+      .insert(financialEvidenceAlias)
+      .values({
+        source: root.source,
+        kind: "transaction_ref",
+        value: "synthetic-byte-bound",
+        occurrenceId: root.id,
+        provenanceKey: "synthetic-byte-bound",
+        provenance: { kind: "retained_legacy_binding" },
+        scopeEvidence: { oversized: "x".repeat(1048577) },
+      })
+      .returning({ id: financialEvidenceAlias.id });
+    await expect(
+      sourceOccurrenceRepository.repository.read(
+        buildKernelContext(ctx.db, ctx.actor.userId),
+        [parseShortcodeFor("sourceOccurrence", root.shortcode)],
+        ["closure"],
+      ),
+    ).rejects.toThrow(/one MiB/);
+    if (!oversized) throw new Error("Synthetic byte boundary missing");
+    await getDb(ctx.db)
+      .delete(financialEvidenceAlias)
+      .where(eq(financialEvidenceAlias.id, oversized.id));
     await getDb(ctx.db)
       .insert(financialEvidenceAlias)
       .values(

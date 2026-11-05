@@ -1311,6 +1311,10 @@ async function existingSpendingOutcome(
     reason,
   });
   if (allocations.length) {
+    if (basis.request.beneficiaries !== undefined)
+      return review(
+        "Beneficiaries apply only to a new aggregate Expense; preserve existing spending attribution.",
+      );
     const complete =
       cents(
         allocations.reduce((sum, allocation) => sum + allocation.amount, 0),
