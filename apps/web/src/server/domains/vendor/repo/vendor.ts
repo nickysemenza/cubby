@@ -31,17 +31,7 @@ import {
   vendorEmailSenderPolicies,
   vendorAgentHints,
 } from "@cubby/schemas/vendor-import-fields";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  lte,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { uniqBy } from "es-toolkit";
 import { z } from "zod";
 
@@ -448,40 +438,6 @@ const requestedIds = z.object({ ids: z.array(z.string()).optional() });
 const vendorMailSearch = listPrepare((db, values) =>
   loadVendorMailSearch(db, undefined, requestedIds.parse(values).ids),
 );
-
-export async function getVendorCoverage(
-  db: Database,
-  input: { vendorId: VendorShortcode; from: string; to: string },
-) {
-  const vendorId = await resolveOrThrow(db, "vendor", input.vendorId);
-  const vendorRow = await readVendor(db, input.vendorId);
-  if (!vendorRow) {
-    throw createAppError(
-      "VENDOR_NOT_FOUND",
-      `Vendor ${input.vendorId} not found`,
-    );
-  }
-  const rows = await getDb(db)
-    .selectDistinct({ orderId: purchase.orderId })
-    .from(purchase)
-    .where(
-      and(
-        eq(purchase.vendorId, vendorId),
-        notDeleted(purchase),
-        gte(purchase.date, input.from),
-        lte(purchase.date, input.to),
-        isNotNull(purchase.orderId),
-      ),
-    )
-    .orderBy(asc(purchase.orderId));
-  return {
-    vendor: { id: vendorRow.id, name: vendorRow.name },
-    latestPurchaseDate: vendorRow.latestPurchaseDate,
-    from: input.from,
-    to: input.to,
-    orderIds: rows.flatMap((row) => (row.orderId == null ? [] : [row.orderId])),
-  };
-}
 
 const vendorHasDisplayableLogo = sql<boolean>`EXISTS (
   SELECT 1 FROM "EntityAttachment" logo_att

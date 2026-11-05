@@ -5,7 +5,6 @@ import {
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { imageUrlSummary } from "./image-summary";
-import { plainDate } from "./base-entity";
 
 import { vendorShortcode } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
@@ -58,24 +57,6 @@ export type VendorSortField = GeneratedEntitySortField<"vendor">;
 
 export const vendorListResponse = createPaginatedResponseSchema(vendorOut);
 export type VendorListResponse = z.infer<typeof vendorListResponse>;
-
-export const vendorCoverageInput = z
-  .object({
-    vendorId: vendorShortcode,
-    from: plainDate,
-    to: plainDate,
-  })
-  .refine((value) => value.from <= value.to, {
-    message: "from must be on or before to",
-    path: ["to"],
-  });
-export const vendorCoverageOut = z.object({
-  vendor: z.object({ id: vendorShortcode, name: z.string() }),
-  fields: vendorOut.shape.fields.pick({ latestPurchaseDate: true }),
-  from: plainDate,
-  to: plainDate,
-  orderIds: z.array(z.string()),
-});
 
 export const vendorOptionsOut = z.array(
   z.object({

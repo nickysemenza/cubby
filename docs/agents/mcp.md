@@ -4,7 +4,10 @@ The [README entity map](../../README.md#entities) says which entity holds what
 and how they relate; check it before choosing a tool.
 
 Read summaries and counts first. Narrow list reads with filters, page only as
-needed, and use `ids` filters for known records. Read tool input schemas first;
+needed, and use `ids` filters for known records. A Vendor's imported order ids for a
+date range come from `entity_read.list` on purchases with `vendorId`, `dateFrom`
+and `dateTo` filters, selecting `orderId`; its `latestPurchaseDate` and a
+Cookbook's `recipeCount` are in the record's `fields` envelope. Read tool input schemas first;
 consult the catalog only when they do not answer a required field or action.
 
 Use `entity.commands` for independent creates or updates after their dependencies

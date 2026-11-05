@@ -1,18 +1,14 @@
 import { vendorOut } from "@cubby/schemas/entities/vendor";
 import type { fetchVendorLogoInput } from "@cubby/schemas/vendor";
-import { mergeVendorsOut, vendorCoverageOut } from "@cubby/schemas/vendor";
+import { mergeVendorsOut } from "@cubby/schemas/vendor";
 
 import { vendorContract } from "~/contracts/vendor.contract";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { setSenderAttribution } from "~/server/domains/purchase-import/repo/sender-attribution";
-import { getVendorCoverage } from "~/server/domains/vendor/repo/vendor";
 import { fetchAndAttachVendorLogo } from "~/server/domains/vendor/service/vendor-logo.service";
 import { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import {
-  publicFieldEnvelopeRows,
-  selectedFieldEnvelopeSchema,
-} from "~/server/generic/derived/repo/public-read";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
@@ -71,17 +67,4 @@ export const vendorHandlers = implementOperationDomain(vendorContract, {
     });
   },
   fetchLogo: (context, input) => fetchVendorLogoWorkflow(context, input),
-  coverage: async (context, input) => {
-    const { latestPurchaseDate, ...coverage } = await getVendorCoverage(
-      context.db,
-      input,
-    );
-    const [row] = await publicFieldEnvelopeRows({
-      db: context.db,
-      entity: "vendor",
-      schema: selectedFieldEnvelopeSchema(vendorOut, ["latestPurchaseDate"]),
-      rows: [{ id: coverage.vendor.id, latestPurchaseDate }],
-    });
-    return vendorCoverageOut.parse({ ...coverage, fields: row?.fields });
-  },
 });
