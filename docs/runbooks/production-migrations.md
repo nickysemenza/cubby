@@ -274,7 +274,9 @@ Use transaction-per-statement with a 2-second lock timeout. Read back its
 JobInvalidationCapture. Verify source edits still commit and replacement reads
 remain available. B1 still owns the retained work tables.
 
-Then retire source triggers table by table in a separate migration. Every drop
+Then take a named manual snapshot immediately before the separate source-trigger
+retirement, record its id, and retain it through the final report. Retire source
+triggers table by table in that migration. Every drop
 is idempotent and uses `-- cubby:transaction-per-statement` with the 2-second
 lock timeout, including after partial commits/retry. Verify `pg_trigger` has no
 remaining derived-mark trigger and `pg_proc` has no body referring to retained

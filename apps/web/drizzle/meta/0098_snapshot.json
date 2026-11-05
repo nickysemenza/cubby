@@ -1,9 +1,14 @@
 {
 <<<<<<<< HEAD:apps/web/drizzle/meta/0098_snapshot.json
+<<<<<<<< HEAD:apps/web/drizzle/meta/0098_snapshot.json
 ========
   "id": "13d76690-29f2-4658-8286-b2205d963024",
   "prevId": "b9fde009-7469-45f6-9de0-eeab549dda82",
 >>>>>>>> 6c7fff796e (Make retained derived admission a no-op after engine removal):apps/web/drizzle/meta/0095_snapshot.json
+========
+  "id": "8bcbb213-81da-43f9-895c-1811a73eaa7e",
+  "prevId": "13d76690-29f2-4658-8286-b2205d963024",
+>>>>>>>> 89410f74cb (Retire derived source triggers after deployed marker no-op):apps/web/drizzle/meta/0096_snapshot.json
   "version": "7",
   "dialect": "postgresql",
   "tables": {

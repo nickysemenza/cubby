@@ -8,6 +8,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+/** Retained predecessor tickets are excluded from current Work health. */
+export const DERIVED_DRAIN_JOB_KEY = "derived:drain";
 export const DERIVED_REBUILD_KEY = "deterministic";
 export const DERIVED_REBUILD_LEASE_SECONDS = 120;
 

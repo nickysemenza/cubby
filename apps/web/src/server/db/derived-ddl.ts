@@ -1,6 +1,5 @@
 import { declaredClassificationPolicies } from "@cubby/schemas/classification-field-policy";
 
-import { derivedTriggerDdl } from "~/server/db/derived-trigger-ddl";
 import { entityIdentityDropTriggerSql } from "~/server/db/entity-identity-ddl";
 import { entityLinkDropLivenessTriggerSql } from "~/server/db/entity-link-schema";
 import { shipmentIdentityDdl } from "~/server/db/shipment-identity-ddl";
@@ -64,5 +63,5 @@ const classificationConstraintSql = (): string =>
  * this whole script.
  */
 export function renderDerivedDdl(): string {
-  return `${productBrandDdl()}\n\n${entityIdentityDropTriggerSql()}\n\n${entityLinkDropLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${assessmentHistoryDdl()}\n\n${statementSuggestionDdl()}\n\n${searchPrefixDdl()}\n\n${shipmentIdentityDdl()}\n\n${derivedTriggerDdl()}\n`;
+  return `${productBrandDdl()}\n\n${entityIdentityDropTriggerSql()}\n\n${entityLinkDropLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${assessmentHistoryDdl()}\n\n${statementSuggestionDdl()}\n\n${searchPrefixDdl()}\n\n${shipmentIdentityDdl()}\n`;
 }

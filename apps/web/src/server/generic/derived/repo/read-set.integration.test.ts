@@ -14,10 +14,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { USDAClient } from "~/server/clients/usda";
-import {
-  entityStoredDerivedDeclarations,
-  storedDerivedDeclarations,
-} from "~/server/db/derived-declarations";
+import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
 import { storedSourceSql } from "~/server/db/derived-source-sql";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -266,13 +263,11 @@ describe("deterministic cache rebuild", () => {
         .map((row) => row.target),
     );
     expect(
-      storedDerivedDeclarations()
+      entityStoredDerivedDeclarations()
         .filter(
           (declaration) =>
             declaration.publishes === "derivedValue" &&
-            !(
-              declaration.kind === "entity" && declaration.snapshotSource?.view
-            ),
+            !declaration.snapshotSource?.view,
         )
         .map((declaration) => declaration.target)
         .filter((target) => !targets.has(target)),
