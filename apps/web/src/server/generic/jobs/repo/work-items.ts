@@ -331,18 +331,6 @@ export async function postponeWorkRefs(
   return [...new Set(rows.map((row) => row.drain))].sort();
 }
 
-/** Withdraw items regardless of ticket (cancellation, deletion of the source). */
-export async function dropWork(
-  tx: RepositoryQueryInput,
-  target: string,
-  refs: readonly string[],
-) {
-  if (!refs.length) return;
-  await repositoryQueries(tx)
-    .delete(workItem)
-    .where(and(eq(workItem.target, target), inArray(workItem.ref, [...refs])));
-}
-
 /** A target's items whose ref is in `refs` (a subquery or array), as composable rows. */
 export async function workItemsFor(
   db: RepositoryQueryInput,
