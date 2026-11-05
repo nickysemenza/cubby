@@ -382,7 +382,13 @@ function renderFormattedScalar(
       const parsed = resolvedListSchema.safeParse(value.raw);
       if (!parsed.success) return renderScalarValue(value, surface);
       return parsed.data.length === 0 ? (
-        (context?.field.display.emptyLabel ?? <NoneValue />)
+        context?.field.display.emptyLabel ? (
+          <span className="text-muted-foreground">
+            {context.field.display.emptyLabel}
+          </span>
+        ) : (
+          <NoneValue />
+        )
       ) : (
         <ResolvedListValue
           items={parsed.data}

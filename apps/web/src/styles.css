@@ -607,7 +607,7 @@
   /* Amounts in table cells read in mono so columns of money align by digit. */
   [data-slot="table-cell"] .money {
     font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: var(--text-xs);
   }
 
   /* Active nav gets a crisp cobalt route line. */
