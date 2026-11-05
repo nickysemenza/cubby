@@ -1,18 +1,12 @@
 import { z } from "zod";
 import { searchableEntities } from "./generated/entity-roster.gen";
-import {
-  imageId,
-  locationId,
-  parseEntityRef,
-  entityIdSchema,
-} from "./identifiers";
+import { imageId, locationId, parseEntityRef } from "./identifiers";
 
 /** Domain admission inputs. Publishers persist Job intent; transport carries only a wake. */
 export const backgroundTaskKinds = [
   "entity-embedding.refresh",
   "location-ai.description.refresh",
   "location-ai.inventory.refresh",
-  "image-processing.wakeup",
   "image-metadata.extract",
   "maintenance.purchase-discovery",
   "calendar-feed.mark-dirty",
@@ -58,13 +52,6 @@ export const locationAiInventoryRefreshTaskSchema = z.object({
   locationId,
 });
 
-/** A job id is only a wakeup; Postgres remains the authoritative queue. */
-export const imageProcessingWakeupTaskSchema = z.object({
-  kind: z.literal("image-processing.wakeup"),
-  ...taskEnvelopeFields,
-  jobId: entityIdSchema("imageJob"),
-});
-
 /**
  * A wakeup to (re-)extract an uploaded image's embedded EXIF/GPS metadata.
  * The handler re-reads `Image.metadataRevision` against
@@ -98,7 +85,6 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   entityEmbeddingRefreshTaskSchema,
   locationAiDescriptionRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
-  imageProcessingWakeupTaskSchema,
   imageMetadataExtractTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,

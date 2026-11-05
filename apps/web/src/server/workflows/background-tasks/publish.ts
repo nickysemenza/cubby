@@ -3,18 +3,14 @@ import {
   type BackgroundTaskInput,
   type BackgroundTaskReceipt,
 } from "@cubby/schemas/background-tasks";
-import { parseEntityId } from "@cubby/schemas/identifiers";
 import { BACKGROUND_TASK_MESSAGE_VERSION } from "@cubby/schemas/queue-messages";
 import { createLogger } from "@cubby/worker-tracing";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { afterResponse, getBackgroundQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { runAfterCommit } from "~/server/db/helpers/core";
-import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
-import { imageProcessingJob } from "~/server/db/schema";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { jobScheduler } from "~/server/generic/jobs/scheduler/client";
 
@@ -76,12 +72,52 @@ export async function wakeJobs(
   await afterResponse(send());
 }
 
+/** A Queue delay at most this long; anything later waits for the hourly cron. */
+const MAX_WAKE_DELAY_SECONDS = 3_600;
+
+/**
+ * A best-effort wake when known work falls due. Delivery can't be cancelled, so a
+ * stale wake touches Postgres once and finds nothing. Work past the delay, and a
+ * lost message, are the hourly cron's. `ring` also rings companions for parked
+ * device work (`ringDueDeviceWork`).
+ */
+export async function wakeAt(
+  at: Date,
+  options: PublishOptions & { ring?: boolean },
+) {
+  const delaySeconds = Math.max(
+    0,
+    Math.ceil((at.getTime() - Date.now()) / 1000),
+  );
+  if (delaySeconds > MAX_WAKE_DELAY_SECONDS) return;
+  const queue = getBackgroundQueue();
+  if (!queue) return;
+  const send = async () => {
+    try {
+      await queue.sendBatch([
+        {
+          body: {
+            version: BACKGROUND_TASK_MESSAGE_VERSION,
+            queueType: "background",
+            ...(options.ring ? { ring: true as const } : {}),
+          },
+          delaySeconds,
+        },
+      ]);
+    } catch (error) {
+      log.error("delayed wake failed; the hourly cron will reach this work", {
+        source: options.source,
+        error,
+      });
+    }
+  };
+  await afterResponse(send());
+}
+
 function taskKey(task: BackgroundTaskInput) {
   switch (task.kind) {
     case "maintenance.purchase-discovery":
       return task.kind;
-    case "image-processing.wakeup":
-      return `image-processing:${task.jobId}`;
     case "image-metadata.extract":
       return `image-metadata:${task.imageId}`;
     case "location-ai.description.refresh":
@@ -104,29 +140,6 @@ export async function publishBackgroundTasks(
   await repositoryTransactionDatabase(db, async (tx) => {
     for (const input of tasks) {
       const task = backgroundTaskSchema.parse(input);
-      if (task.kind === "image-processing.wakeup") {
-        const [processing] = await repositoryQueries(tx)
-          .select({
-            id: imageProcessingJob.id,
-            imageId: imageProcessingJob.imageId,
-            kind: imageProcessingJob.kind,
-            processorRevision: imageProcessingJob.processorRevision,
-            runId: imageProcessingJob.runId,
-            state: imageProcessingJob.state,
-          })
-          .from(imageProcessingJob)
-          .where(eq(imageProcessingJob.id, task.jobId));
-        if (processing?.state !== "pending") continue;
-        const { enqueueImageProcessingExecution } =
-          await import("~/server/domains/image-processing/repo/image-processing");
-        await enqueueImageProcessingExecution(tx, {
-          ...processing,
-          runId:
-            processing.runId ??
-            (task.runId ? parseEntityId("run", task.runId) : null),
-        });
-        continue;
-      }
       if (task.kind === "entity-embedding.refresh") {
         const { enqueueEmbeddingRefs } = await import("./embedding");
         const { prepareSearchDocuments } =

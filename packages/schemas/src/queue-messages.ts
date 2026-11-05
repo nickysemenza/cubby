@@ -7,10 +7,14 @@ export const queueMessageEnvelope = {
 
 export const BACKGROUND_TASK_MESSAGE_VERSION = 3;
 
-/** Version 3 carries no execution payload. Pending predecessor work is migrated in Postgres. */
+/**
+ * Version 3 carries no execution payload. Pending predecessor work is migrated in
+ * Postgres. `ring` also rings companions if parked device work came due.
+ */
 export const backgroundTaskMessageSchema = z.strictObject({
   version: z.literal(BACKGROUND_TASK_MESSAGE_VERSION),
   queueType: z.literal("background"),
+  ring: z.literal(true).optional(),
 });
 export type BackgroundTaskMessage = z.infer<typeof backgroundTaskMessageSchema>;
 export type BackgroundTaskMessageInput = z.input<

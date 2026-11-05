@@ -2,7 +2,10 @@ import type { BackgroundTaskMessageInput } from "@cubby/schemas/queue-messages";
 
 export interface BackgroundQueueProducer {
   sendBatch(
-    messages: Iterable<{ body: BackgroundTaskMessageInput }>,
+    messages: Iterable<{
+      body: BackgroundTaskMessageInput;
+      delaySeconds?: number;
+    }>,
   ): Promise<void>;
 }
 

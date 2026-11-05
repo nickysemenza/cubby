@@ -13,13 +13,12 @@ import {
   imageProcessingJob,
 } from "~/server/db/schema";
 import { readDeviceBacklog } from "~/server/domains/image-processing/repo/device-backlog";
+import { updateImageExecution } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
-import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
@@ -44,6 +43,7 @@ describe("image job cost", () => {
       "imageJob",
       [
         {
+          lane: state === "pending" ? "device" : "cloud",
           shortcode: generateShortcode("imageJob"),
           imageId: parseEntityId("image", image.id),
           kind: "describe_image",
@@ -162,25 +162,9 @@ describe("image job cost", () => {
         },
       });
     const leaseExpiresAt = new Date(Date.now() + 60_000);
-    const heldExecution = await enqueueJob(ctx.db, {
-      key: `image-processing:${held.id}`,
-      kind: "image.device",
-      input: {},
-    });
-    await updateJobs(
-      ctx.db,
-      { id: heldExecution.id },
-      {
-        state: "running",
-        leaseToken: attemptId,
-        leaseExpiresAt,
-        lastClaimedAt: new Date(),
-      },
-    );
-    await enqueueJob(ctx.db, {
-      key: `image-processing:${parked.id}`,
-      kind: "image.device",
-      input: {},
+    await updateImageExecution(ctx.db, held.id, {
+      attemptId,
+      leaseUntil: leaseExpiresAt,
     });
     const read = async (shortcode: string) =>
       executeEntity(
@@ -216,34 +200,14 @@ describe("image job cost", () => {
     expect((await devices()).items.map((item) => item.target.entityId)).toEqual(
       [device.shortcode],
     );
-    const execution = await getConnectedRecords(ctx.db, {
-      source,
-      viewKey: "entity:job",
-    });
-    expect(execution.items.map((item) => item.target.entityId)).toEqual([
-      heldExecution.shortcode,
-    ]);
-    await updateJobs(
-      ctx.db,
-      { id: heldExecution.id },
-      { leaseExpiresAt: new Date(0) },
-    );
+    await updateImageExecution(ctx.db, held.id, { leaseUntil: new Date(0) });
     expect((await devices()).totalCount).toBe(1);
-    await updateJobs(
-      ctx.db,
-      { id: heldExecution.id },
-      { state: "queued", leaseToken: null, leaseExpiresAt: null },
-    );
+    await updateImageExecution(ctx.db, held.id, { leaseUntil: null });
     expect((await devices()).totalCount).toBe(0);
   });
 
   it("estimates from accepted device completions on current sources, not claims or intermediate results", async () => {
-    const waiting = await job("pending");
-    await enqueueJob(ctx.db, {
-      key: `image-processing:${waiting.id}`,
-      kind: "image.device",
-      input: {},
-    });
+    await job("pending");
     const completed = await job();
     const stale = await job("ready", "c".repeat(64));
     const pending = await job("pending");
@@ -301,8 +265,8 @@ describe("image job cost", () => {
         },
       ]);
     expect(await readDeviceBacklog(ctx.db, now)).toMatchObject({
-      waiting: 1,
-      etaSeconds: 600,
+      waiting: 2,
+      etaSeconds: 1200,
     });
   });
 });

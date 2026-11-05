@@ -11,7 +11,6 @@ import {
 } from "~/server/db/schema";
 import { backfillImageProcessing } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 describe("backfillImageProcessing", () => {
@@ -74,16 +73,13 @@ describe("backfillImageProcessing", () => {
     // description are parked for devices.
     expect(
       (
-        await readJobs(ctx.db, { kinds: ["image.cloud", "image.device"] }).then(
-          (rows) => rows.map(({ kind, state }) => ({ kind, state })),
-        )
-      ).sort((left, right) => left.kind.localeCompare(right.kind)),
-    ).toEqual([
-      { kind: "image.cloud", state: "queued" },
-      { kind: "image.cloud", state: "queued" },
-      { kind: "image.device", state: "queued" },
-      { kind: "image.device", state: "queued" },
-    ]);
+        await getDb(ctx.db)
+          .select({ lane: imageProcessingJob.lane })
+          .from(imageProcessingJob)
+      )
+        .map((row) => row.lane)
+        .sort(),
+    ).toEqual(["cloud", "cloud", "device", "device"]);
   });
 
   it("schedules jobs without an enable or resume step", async () => {

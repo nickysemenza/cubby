@@ -13,8 +13,10 @@ import type { JobFacts, RunRollup } from "~/contracts/job.contract";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { email, imageProcessingJob, run } from "~/server/db/schema";
-import { imageJobDisplayStateSql } from "~/server/domains/image-processing/repo/image-job-state";
-import { imageProcessingJobKey } from "~/server/domains/image-processing/repo/image-processing";
+import {
+  imageJobDisplayStateSql,
+  imageJobWaitingOn,
+} from "~/server/domains/image-processing/repo/image-job-state";
 import { createAppError } from "~/server/errors/app-error";
 import {
   jobFactsOf,
@@ -106,23 +108,27 @@ async function explainImageJob(db: Database, code: string) {
       state: imageJobDisplayStateSql(),
       lastError: imageProcessingJob.lastError,
       runId: imageProcessingJob.runId,
+      stored: imageProcessingJob.state,
+      lane: imageProcessingJob.lane,
+      runAt: imageProcessingJob.runAt,
+      leaseUntil: imageProcessingJob.leaseUntil,
+      failures: imageProcessingJob.failures,
+      waitReason: imageProcessingJob.waitReason,
     })
     .from(imageProcessingJob)
     .where(eq(imageProcessingJob.shortcode, code));
   if (!row)
     throw createAppError("IMAGE_JOB_NOT_FOUND", "Image job was not found");
-  const executions = await readJobs(db, { key: imageProcessingJobKey(row.id) });
-  const [facts] = await jobFactsOf(db, executions);
   const steps: Step[] = [
     {
       ref: row.shortcode,
       kind: "imageJob",
       label: `${row.kind} ${row.shortcode}`,
       state: row.state,
-      waitingOn: facts?.waitingOn ?? null,
+      waitingOn:
+        row.stored === "pending" ? imageJobWaitingOn(row, new Date()) : null,
       detail: row.lastError,
     },
-    ...(facts ? [jobStep(facts)] : []),
   ];
   if (!row.runId) return { steps, rollup: null };
   const owner = await explainRun(db, row.runId);

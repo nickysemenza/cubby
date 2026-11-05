@@ -311,7 +311,7 @@ describe("Run attention entity view", () => {
       .where(eq(runTable.id, stopped));
     await enqueueJob(ctx.db, {
       key: "synthetic:attention-stall",
-      kind: "image.device",
+      kind: "synthetic.demand",
       runId: stalled,
       input: {},
     });

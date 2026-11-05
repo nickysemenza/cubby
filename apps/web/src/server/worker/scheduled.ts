@@ -17,7 +17,8 @@ const cronLog = createLogger("cron");
 /**
  * The timer and backstop for every wake: one drain of whatever is due, run here
  * rather than sent through the queue, so a dropped or failed wake recovers within
- * the hour even while delivery itself is broken. A failure still lets the daily
+ * the hour even while delivery itself is broken, and parked device work that came
+ * due gets its ring. A failure still lets the daily
  * pass run, then rejects the event.
  */
 async function runHourlyBackstop(
@@ -27,10 +28,19 @@ async function runHourlyBackstop(
     await withInvocationDb(
       env.HYPERDRIVE_BACKGROUND.connectionString,
       async () => {
-        const { drainProductionJobs } = await import("~/server/workflows/jobs");
-        await withTrace("cf.scheduled.job", () => drainProductionJobs(db), {
-          "cubby.scheduled.job": "hourly-backstop",
-        });
+        const [{ drainProductionJobs }, { ringDueDeviceWork }] =
+          await Promise.all([
+            import("~/server/workflows/jobs"),
+            import("~/server/domains/image-processing/repo/image-processing-ring"),
+          ]);
+        await withTrace(
+          "cf.scheduled.job",
+          async () => {
+            await ringDueDeviceWork(db);
+            await drainProductionJobs(db);
+          },
+          { "cubby.scheduled.job": "hourly-backstop" },
+        );
       },
     );
     return { failed: false };

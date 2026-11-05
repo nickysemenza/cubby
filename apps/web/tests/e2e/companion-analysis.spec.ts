@@ -18,7 +18,6 @@ import {
   image,
   imageProcessingAttempt,
   imageProcessingJob,
-  job,
 } from "~/server/db/schema";
 import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/repo/description-policy";
 import { getDb } from "~/server/db/helpers";
@@ -307,9 +306,9 @@ test("companion normalization preserves originals and rejects stale or corrupt r
   };
   const expire = () =>
     database
-      .update(job)
-      .set({ leaseExpiresAt: sql`now() - interval '1 second'` })
-      .where(eq(job.key, `image-processing:${expired.command.jobId}`));
+      .update(imageProcessingJob)
+      .set({ leaseUntil: sql`now() - interval '1 second'` })
+      .where(eq(imageProcessingJob.id, expired.command.jobId));
   expect(
     renewCompanionImageProcessingOutput.parse(await post("renew", renewal)),
   ).toMatchObject({ ok: true });

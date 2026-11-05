@@ -24,7 +24,7 @@ describe("Job entity reads and scoped retry", () => {
     });
     const work = await enqueueJob(ctx.db, {
       key: "synthetic:entity-job",
-      kind: "image.device",
+      kind: "image-metadata.extract",
       input: {},
       runId,
       subjectKind: "image",
@@ -32,18 +32,18 @@ describe("Job entity reads and scoped retry", () => {
     });
     const internal = await enqueueJob(ctx.db, {
       key: "synthetic:entity-wake",
-      kind: "image.device.wake",
+      kind: "jobs.maintenance",
       input: {},
     });
     const page = await jobRepository.repository.listRead(
       kernelCtx(ctx),
-      { kind: ["image.device", "image.device.wake"] },
+      { kind: ["image-metadata.extract", "jobs.maintenance"] },
       [],
       { pageIndex: 0, pageSize: 25 },
     );
     expect(page.data.map((row) => row.id)).toEqual([work.shortcode]);
     expect(page.data[0]).toMatchObject({
-      lane: "apple_device",
+      lane: "server",
       imageId: image.shortcode,
       displayImages: [{ id: image.shortcode }],
     });
@@ -57,7 +57,10 @@ describe("Job entity reads and scoped retry", () => {
     ).toMatchObject({ id: work.shortcode, runName: page.data[0]?.runName });
     const full = await jobRepository.repository.listRead(
       kernelCtx(ctx),
-      { kind: ["image.device", "image.device.wake"], includeInternal: true },
+      {
+        kind: ["image-metadata.extract", "jobs.maintenance"],
+        includeInternal: true,
+      },
       [],
       { pageIndex: 0, pageSize: 25 },
     );
@@ -66,20 +69,20 @@ describe("Job entity reads and scoped retry", () => {
     );
     const backingOff = await enqueueJob(ctx.db, {
       key: "synthetic:entity-backoff",
-      kind: "image.device",
+      kind: "image-metadata.extract",
       input: {},
       availableAt: new Date(Date.now() + 60_000),
     });
     const other = await enqueueJob(ctx.db, {
       key: "synthetic:entity-other",
-      kind: "image.cloud",
+      kind: "purchase.dispatch",
       input: {},
       availableAt: new Date(Date.now() + 60_000),
     });
     expect(
       await retryJobSet(
         ctx.db,
-        { entityFilters: { lane: ["apple_device"], reason: ["backing_off"] } },
+        { entityFilters: { lane: ["server"], reason: ["backing_off"] } },
         null,
       ),
     ).toEqual([backingOff.id]);

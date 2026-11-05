@@ -332,6 +332,11 @@ export const { definition, readSchemas } = defineEntityModel({
     ],
     checks: [
       { name: "Job_state_check", column: "state", bare: true },
+      // Work these kinds described now lives on its owner's rows; see docs/jobs.md.
+      {
+        name: "Job_kind_retired_check",
+        sql: "{kind} NOT IN ('image.cloud', 'image.device', 'image.device.wake')",
+      },
       {
         name: "Job_waitReason_check",
         sql: "{waitReason} IN ('provider_capacity', 'ai_funding_window', 'device', 'rate_limit')",
@@ -435,9 +440,6 @@ export const { definition, readSchemas } = defineEntityModel({
 export default defineEntity(
   definition,
   (r) => [
-    r
-      .query("imageExecution", "one")
-      .named("image-execution", "Image processing"),
     ...localRelationshipEntities.map((target) =>
       r
         .query(`jobSubject${target}`, "one")

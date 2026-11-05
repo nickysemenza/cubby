@@ -66,28 +66,18 @@ describe("Job maintenance", () => {
     expect(rows[0]?.kind).toBe("jobs.maintenance");
   });
 
-  it("repairs stranded image execution", async () => {
+  it("reopens an image row a pre-cutover writer left leased", async () => {
     const jobId = await subjectLift();
     await getDb(ctx.db)
       .update(imageProcessingJob)
       .set({ state: "leased", attemptId: crypto.randomUUID() })
       .where(eq(imageProcessingJob.id, jobId));
-    await updateJobs(
-      ctx.db,
-      { key: `image-processing:${jobId}` },
-      { state: "failed", error: "Synthetic exhausted execution" },
-    );
-
     await expect(runMaintenance()).resolves.toBe("succeeded");
     const [processing] = await getDb(ctx.db)
       .select({ state: imageProcessingJob.state })
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, jobId));
-    const [execution] = await readJobs(ctx.db, {
-      key: `image-processing:${jobId}`,
-    }).then((rows) => rows.map(({ attempts, state }) => ({ state, attempts })));
     expect(processing?.state).toBe("pending");
-    expect(execution).toMatchObject({ state: "queued", attempts: 0 });
   });
 
   it("keeps a drain while a producer commits a fresh wake", async () => {

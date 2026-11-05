@@ -95,6 +95,7 @@ describe("listAiUsageForRun", () => {
       "imageJob",
       [
         {
+          lane: "cloud",
           shortcode: generateShortcode("imageJob"),
           imageId: parseEntityId("image", image.id),
           runId,

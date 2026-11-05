@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 
 import type { AiChatRequest } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
@@ -9,8 +9,6 @@ import {
   imageProcessingOrphan,
 } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
-import { currentJobExecution } from "~/server/generic/jobs/context";
-import { externalExecution } from "~/server/generic/jobs/repo/external-claim";
 
 export async function recordImageDescriptionInput(
   db: Database,
@@ -64,11 +62,6 @@ export async function reserveImageAnalysisInput(
         eq(imageProcessingJob.id, imageProcessingAttempt.jobId),
       )
       .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
-      .innerJoin(
-        ...externalExecution.join(
-          sql`'image-processing:' || ${imageProcessingJob.id}::text`,
-        ),
-      )
       .where(
         and(
           eq(imageProcessingAttempt.id, attemptId),
@@ -77,12 +70,9 @@ export async function reserveImageAnalysisInput(
             : eq(imageProcessingAttempt.inputKey, expectedInputKey),
           eq(imageProcessingJob.attemptId, attemptId),
           eq(imageProcessingJob.state, "pending"),
-          // The unchanged token is the authority: an expired lease no newer
-          // claim replaced still belongs to this attempt (late adoption).
-          externalExecution.held({
-            leaseToken: attemptId,
-            generation: currentJobExecution()?.claim.generation,
-          }),
+          // The unchanged attempt is the authority: an expired lease no newer
+          // claim replaced still belongs to it (late adoption).
+          isNotNull(imageProcessingJob.leaseUntil),
           eq(image.status, "UPLOADED"),
           eq(image.sha256, imageProcessingJob.sourceContentHash),
           notDeleted(image),
@@ -116,23 +106,15 @@ export async function retainImageAnalysisInput(
         eq(imageProcessingJob.id, imageProcessingAttempt.jobId),
       )
       .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
-      .innerJoin(
-        ...externalExecution.join(
-          sql`'image-processing:' || ${imageProcessingJob.id}::text`,
-        ),
-      )
       .where(
         and(
           eq(imageProcessingAttempt.id, attemptId),
           eq(imageProcessingAttempt.inputKey, key),
           eq(imageProcessingJob.attemptId, attemptId),
           eq(imageProcessingJob.state, "pending"),
-          // The unchanged token is the authority: an expired lease no newer
-          // claim replaced still belongs to this attempt (late adoption).
-          externalExecution.held({
-            leaseToken: attemptId,
-            generation: currentJobExecution()?.claim.generation,
-          }),
+          // The unchanged attempt is the authority: an expired lease no newer
+          // claim replaced still belongs to it (late adoption).
+          isNotNull(imageProcessingJob.leaseUntil),
           eq(image.status, "UPLOADED"),
           eq(image.sha256, imageProcessingJob.sourceContentHash),
           notDeleted(image),

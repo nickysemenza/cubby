@@ -17,7 +17,7 @@ const RETENTION_INTERVAL_MS = 6 * 60 * 60_000;
 const RETENTION_BATCH = 2_000;
 const IMAGE_REPAIR_BATCH = 500;
 
-/** Enroll the one recurring Job for image recovery, device wake and retention. */
+/** Enroll the one recurring Job for image recovery and retention. */
 export async function enrollQueueMaintenance(db: Database) {
   await repeatJob(db, {
     key: MAINTENANCE_KEY,
@@ -30,7 +30,7 @@ const maintenanceResult = z.object({
   retainedAt: z.iso.datetime().nullable().optional(),
 });
 
-/** Keep image execution, device wakes and retained Job rows recoverable. */
+/** Keep image execution and retained Job rows recoverable. */
 export const jobMaintenanceHandler = defineJobHandler(
   z.object({}),
   async (db, claim) => {

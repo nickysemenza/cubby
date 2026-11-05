@@ -27,10 +27,10 @@ import {
 import type { Database } from "~/server/db";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
 import { imageDescriptionInputFingerprint } from "~/server/domains/image-processing/repo/description-policy";
-import { lockDeviceAdmission } from "~/server/domains/image-processing/repo/device-admission";
 import {
   claimImageProcessingJob,
   finalizeCompanionImageLeases,
+  lockDevicePulls,
   releaseImageProcessingLease,
   SERVER_FAILURE_RETRYABLE,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
@@ -53,7 +53,7 @@ import {
   createImageProcessingSubmission,
 } from "~/server/domains/image-processing/repo/image-processing-history";
 import { publishImageProcessingWakeups } from "~/server/domains/image-processing/repo/image-processing-maintenance";
-import { armDeviceWake } from "~/server/domains/image-processing/repo/image-processing-ring";
+import { ringDeviceWorkAt } from "~/server/domains/image-processing/repo/image-processing-ring";
 import {
   persistImageProcessingSubmission,
   persistAppleImageDescriptionSubmission,
@@ -497,8 +497,7 @@ type CompanionImageClaimInput = {
 };
 
 /**
- * One transaction and admission lock per batch. Each accepted hand-off updates the streak before
- * selecting its successor. A failed hand-off commits its release/backoff; an already prepared
+ * One transaction per batch. A failed hand-off commits its release/backoff; an already prepared
  * prefix is returned so neither its leases nor the failed candidate become invisible. With no
  * prepared command the failure throws after commit, preserving the single-command contract.
  */
@@ -513,8 +512,8 @@ export async function claimCompanionImageCommands(
   const { prepareCompanionImageCommand, reserveCompanionAnalysisOutput } =
     await import("~/server/domains/image-processing/service/dispatch");
   const batch = await withImageProcessingTransaction(db, async (tx) => {
-    const admission: DeviceImageClaimBatch = {
-      ownedStreak: await lockDeviceAdmission(tx),
+    await lockDevicePulls(tx);
+    const claimBatch: DeviceImageClaimBatch = {
       handedOffIds: [],
       candidateLimit:
         input.maxCommands > 1 ? input.maxCommands * COMPANION_CLAIM_TRIES : 0,
@@ -532,7 +531,7 @@ export async function claimCompanionImageCommands(
         allowAvifNormalization,
         leaseMs: input.leaseMs,
         deviceId: device.deviceId,
-        deviceAdmission: admission,
+        deviceBatch: claimBatch,
       });
       if (!claimed) break;
       const release = (reason: string, delayMs?: number) =>
@@ -543,10 +542,9 @@ export async function claimCompanionImageCommands(
           delayMs,
           event: "dispatch.released",
         });
-      const previousStreak = admission.ownedStreak;
       try {
         const command = await prepareCompanionImageCommand(claimed);
-        // Keep the savepoint: failed output reservation must undo assignment and its service.
+        // Keep the savepoint: failed output reservation must undo the assignment.
         const assigned = await withImageProcessingTransaction(
           tx,
           async (step) => {
@@ -554,7 +552,7 @@ export async function claimCompanionImageCommands(
               jobId: claimed.id,
               attemptId: claimed.attemptId,
               userId: input.userId,
-              deviceAdmission: admission,
+              sharedTransaction: true,
               executor: {
                 kind: "device",
                 deviceId: device.deviceId,
@@ -575,11 +573,9 @@ export async function claimCompanionImageCommands(
           break;
         }
         commands.push(command);
-        admission.handedOffIds.push(claimed.id);
+        claimBatch.handedOffIds.push(claimed.id);
         tries = 0;
       } catch (error) {
-        // The savepoint may have rolled back a service after updating the transaction-local copy.
-        admission.ownedStreak = previousStreak;
         if (error instanceof OutputNotReserved) {
           await release(
             "Analysis output could not be reserved",
@@ -593,13 +589,13 @@ export async function claimCompanionImageCommands(
         break;
       }
     }
-    // All successful leases share one wake invalidation; per-claim attempts and URLs stay distinct.
+    // All successful leases share one ring at their expiry; per-claim attempts and URLs stay distinct.
     if (commands.length) {
-      await armDeviceWake(tx);
       const expires = await finalizeCompanionImageLeases(tx, {
         claims: commands,
         leaseMs: input.leaseMs,
       });
+      await ringDeviceWorkAt(tx, expires);
       for (const command of commands) command.deadline = expires.toISOString();
     }
     return { commands, failure };

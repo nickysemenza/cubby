@@ -46,6 +46,7 @@ export async function seedPhotoReviewProcessingFailure(
   if (!row?.sha256) throw new Error("Synthetic photo needs a content hash");
   await insertEntityFixtures(db, schema.imageProcessingJob, "imageJob", [
     {
+      lane: kind === "subject_lift" ? "device" : "cloud",
       shortcode: generateShortcode("imageJob"),
       imageId: parseEntityId("image", row.id),
       kind,
@@ -255,6 +256,7 @@ export async function seedActivityHistory(
     "imageJob",
     [
       {
+        lane: "cloud",
         shortcode: generateShortcode("imageJob"),
         imageId: parseEntityId("image", source.id),
         kind: "describe_image",
@@ -274,6 +276,7 @@ export async function seedActivityHistory(
     "imageJob",
     [
       {
+        lane: "device",
         shortcode: generateShortcode("imageJob"),
         imageId: parseEntityId("image", source.id),
         kind: "subject_lift",
@@ -355,6 +358,7 @@ export async function seedPagedActivityHistory(name: string, count: number) {
       "imageJob",
       [
         {
+          lane: "cloud",
           shortcode: generateShortcode("imageJob"),
           imageId: parseEntityId("image", image.id),
           kind: "describe_image",

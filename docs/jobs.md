@@ -20,14 +20,14 @@ references arrive with their labels in the row read.
 The entity exposes execution state, lane, waiting-on text, subject, Run,
 attempts, raw error, lease end and timestamps. Filters cover lane, waiting-on
 reason, state, kind, Run, attention and internal kinds. Internal work
-(`image.device.wake`, `jobs.maintenance`, `derived.drain`, `derived.reconcile`,
+(`jobs.maintenance`, `derived.drain`, `derived.reconcile`,
 `ai-refresh.activate`, anything policy marks internal) is hidden by default.
 Retry now uses `job.retryNow` over checked codes or the exact current entity
 filter.
 
 Owning Run is the optional execution owner. Connected records and graph
-traversal also expose typed entity subjects and the exact Image processing
-record; a calendar origin is not an entity subject.
+traversal also expose typed entity subjects; a calendar origin is not an entity
+subject.
 
 Job is the sole exception to permanent `Entity` identities: retention deletes
 its identity in the same transaction as its pruned execution row. Enqueue
@@ -137,23 +137,22 @@ per-kind policy: lane, internal flag, whether the server drain claims it,
 `maxInFlight`. A kind absent there is a server kind with three attempts and
 1 s doubling to 60 s backoff. Each lane names the executor that runs it:
 
-| Lane           | Kinds                          | Executor                         |
-| -------------- | ------------------------------ | -------------------------------- |
-| `apple_device` | `image.device`                 | an Apple device's pull           |
-| `frontier_ai`  | `image.cloud`, `ai.evaluation` | the server drain, paid providers |
-| `external`     | `purchase.dispatch`            | a coordinator outside the drain  |
-| `server`       | every other kind               | the server drain                 |
+| Lane          | Kinds               | Executor                         |
+| ------------- | ------------------- | -------------------------------- |
+| `frontier_ai` | `ai.evaluation`     | the server drain, paid providers |
+| `external`    | `purchase.dispatch` | a coordinator outside the drain  |
+| `server`      | every other kind    | the server drain                 |
 
 `drained: false` parks a kind: the drain never claims it, so device work does
 not churn through server claims. Enqueueing device work rings connected
 companions after commit, and a companion connecting to the doorbell is rung at
 once; there is no polling interval. Work that comes due later (a failure
-backoff, a deferral, a lapsed lease, a delayed release) rings through the
-`image.device.wake` Job: each of those events wakes it (`wakeJob`), and its
-page rings when parked work is claimable, then sleeps until the next parked
-availability or lease expiry. A doorbell RPC failure fails the wake page, so
-its retry rings again; reaching no open socket is not a failure. A release
-with no delay also rings at once (best effort).
+backoff, a deferral, a lapsed lease, a delayed release) rings through a
+Queue-delayed wake carrying `ring`. A delay past one hour is left to the hourly
+cron, which also covers a lost message and rings whenever parked work is
+claimable. A doorbell RPC failure fails the delivery, so it retries; reaching
+no open socket is not a failure. A release with no delay also rings at once
+(best effort).
 
 ## Waiting on
 
@@ -277,24 +276,13 @@ returning it. The 20-second budget limits starting work, not the lease: an
 in-flight provider call may cross it and still publish. A drain that stops
 with due work left publishes another wake.
 
-Device pulls apply the same two classes to each command in a batch
-(`domains/image-processing/repo/device-admission.ts`): an active, member-visible Run's
-parked work leads, and after `DEVICE_OWNED_STREAK` (`1 / DEVICE_BACKFILL_SHARE -
-1`) run-owned device services in a row, the next command serves backfill. The
-owed class is chosen first; a device's preference for work another device
-last ran only orders candidates within it. A service is a device hand-off
-that commits (an assigned attempt of `image.device` work; each reclaim
-counts), classified at assignment by selection's own `jobRunOwned`: serving
-an ended Run's work is backfill and resets the turn, and a Run ending later
-never reclassifies services already counted. The streak lives in the
-`image.device` row of `JobLaneAdmission`. A device pull
-(`claimCompanionImageCommands`) claims, prepares, assigns and reserves output
-in one transaction that locks that row before choosing a class, so
-concurrent batches take their turns one at a time. Each committed hand-off
-updates the streak before selecting the next command, so a wide batch keeps
-backfill's reserved share. A hand-off the server cannot make (participation
-turned off, output not reserved, preparation failed) is released in the same
-transaction and counts nothing.
+A device pull (`claimCompanionImageCommands`) claims, prepares, assigns and
+reserves output in one transaction under an advisory lock, so concurrent batches
+take their turns one at a time. An active, member-visible Run's parked work leads;
+backfill runs when no Run needs the device. A device's preference for work another
+device last ran only orders candidates within that. A hand-off the server cannot
+make (participation turned off, output not reserved, preparation failed) is
+released in the same transaction.
 
 ## Execution
 
@@ -398,7 +386,7 @@ everything else:
 - **Explicit fences.** A fence is passed, never looked up. Run workflow code
   receives the claim's `fence`/`check` through `withWorkflowExecution`
   (`assertWorkflowEffect`, `assertWorkflowCurrent`); a standalone provider
-  Job (`location-ai.*`, `image.cloud`) registers through `withJobFence` so the
+  Job (`location-ai.*`) or the cloud image drain registers through `withJobFence` so the
   Gateway checks its lease before every paid request. A single-record handler
   passes `ctx.fenced` to its publication, and member or maintenance callers of
   the same publication pass `outsideJob(db)`, an ordinary transaction.
@@ -407,12 +395,8 @@ everything else:
   attempt; a superseded claim ends quietly; a target error isolates one item
   inside a drain; a retryable error backs off; anything else fails an attempt.
 
-The external-claim interface (`repo/external-claim.ts`) lets an executor
-outside the server drain, an Apple device pull, hold the same lease and settle
-through the same fences: claim, hold, release, fail and settle a claim; renew
-or re-arm leases; record the lease holder; retire, restart or end the waits of
-external Jobs. Image processing is its one caller and owns device admission,
-backlog and leases (`domains/image-processing/repo/device-*.ts`). Producers use
+Image processing owns its own execution on `ImageProcessingJob`, with no Job
+row: see [image processing](#image-processing). Producers use
 `repo/producer.ts`, member and Run controls `repo/operator.ts`, drains
 `defineDrain` and `repo/work-items.ts`, and readers `repo/job-reads.ts` (rows
 by identity, a Run's live lease, stopped Run executions). The queue core,
@@ -421,9 +405,8 @@ selection and item claiming (`repo/queue.ts`, `repo/work-claims.ts`),
 `JobLaneAdmission`, `WorkItem` and `WorkTicket` table objects are private to
 `generic/jobs`, tests included: oxlint's `no-restricted-imports` and
 `no-restricted-properties` exempt only `generic/jobs` and the files that
-declare or aggregate the tables. Tests seed, age, lock and inspect that state
-through `generic/jobs/jobs.fixtures.ts` and claim through
-`repo/external-claim.ts`. Whole-model consumers (the database client,
+declare or aggregate the tables. Tests seed, age, lock, claim and inspect that
+state through `generic/jobs/jobs.fixtures.ts`. Whole-model consumers (the database client,
 migrations checks, test setup) import `db/drizzle-schema.ts`.
 
 ## Wakes
@@ -499,26 +482,23 @@ a newer Apple build's first pull makes backing-off device work due.
 
 Recurring image-execution repair also settles retained negative cutout failures in
 bounded batches. This negative-outcome pass requires the current source/revision and the matching settled
-attempt, locks the image, image job and unclaimed execution, and leaves running,
-paused and cancelled executions alone. Attempt records, result evidence and runtime
+attempt, locks the image and unleased image job, and leaves a running attempt
+alone. Attempt records, result evidence and runtime
 provenance are retained. The repair does not execute the image again or reclassify
 model, network or other processing errors as negative cutouts.
 
+`ImageProcessingJob` is the sole owner of image execution: `lane`, `runAt`,
+`leaseUntil`, `failures`, `waitReason` and the current `attemptId` live on the row,
+and nothing else queues it. Cloud rows run through `cloudImageDrain`, a registered
+drain (`generic/background/drains.ts`) with no Job row: it claims due rows under a
+16-minute lease that nothing renews, because no consumer outlives 15 minutes. A
+crashed page is reclaimed after that, and a reclaim counts as a failure.
 `imageProcessingLane` fixes each job's lane: subject lifts, Apple descriptions
 and AVIF cloud descriptions (which need device JPEG preparation) run on
 devices; other cloud calls on the server. Device pulls claim parked work
 directly and prefer work whose last attempt ran on another device.
 They skip busy source rows, so an empty pull can precede a later hand-off
 while work remains owed. Consumers retry through their ordinary pull cycle.
-
-Migration 0029 converted the pre-lane `image.processing` kind under a lock on
-`Job`, then added `Job_kind_retired_check`, which refuses that kind. A
-pre-cutover Worker's write of it waits for the migration and then fails, so
-it is never accepted as work no handler serves; a rejected scheduling is
-recreated by the image backfill. An execution an old Worker failed (claimed
-`image.cloud` without a handler) needs no repair: image kinds never exhaust,
-so a failed row is due again once available, with its attempts and backoff. The check retains no work and can be dropped once no
-pre-cutover Worker can run; nothing reads it.
 
 Device wire contract:
 
@@ -532,10 +512,9 @@ cloud execution merely to compute that identity.
   that many commands in hand-off order; the retained `command` field is its
   first item or null. Older clients keep receiving one command without an
   update or minimum-version change. A batch uses one transaction and one
-  admission lock. A bounded candidate page per class avoids rescanning the full
-  queue for every slot; each hand-off rechecks due times, leases and Run class
-  within that page, preserving per-command capabilities, device preference,
-  attempts, leases and presigned URLs. A prepared Job cannot re-enter the batch
+  advisory lock. A bounded candidate page avoids rescanning the full queue for
+  every slot; each hand-off rechecks due times and leases within that page, preserving per-command capabilities, device preference,
+  attempts, leases and presigned URLs. A prepared row cannot re-enter the batch
   even if its initial lease expires during later preparation. Immediately before
   hand-off, still-owned leases are re-armed together and every returned command
   receives the fresh deadline. An empty array/null command means no
@@ -549,7 +528,7 @@ cloud execution merely to compute that identity.
   deadline) or `{ok: false, reason: "lease_lost" | "job_obsolete"}`; the
   device stops either way. Devices renew every 15 s.
 - `imageProcessing.release` is never an attempt.
-- `imageProcessing.complete` after expiry is adopted while the token is
+- `imageProcessing.complete` after expiry is adopted while the attempt id is
   unchanged; after a newer claim it returns `{adopted: false}` and a late
   failure is kept in the old attempt's history.
 
@@ -575,15 +554,15 @@ A Worker memory termination can prevent item failures or a checkpoint from
 being recorded. Read invocation outcomes alongside Run counters; a zero item
 failure count alone does not establish uninterrupted execution.
 
-- `job.queue`: live Jobs counted by lane and waiting-on reason, the set's
-  leased image work per executor (`leases`: live and expired), and a page of
-  matching Jobs with their `waitingOn`.
+- `job.queue`: live Jobs counted by lane and waiting-on reason and a page of
+  matching Jobs with their `waitingOn`. Image rows are not Jobs: read them through
+  the `imageJob` entity and `job.deviceBacklog`.
 - `job.runRollups` and `job.list` (`rollup`): a Run's live Jobs by reason
   (`leased` counts live leases; lapsed ones are `expiredLeases`, summarized as
   "N expired leases awaiting reclaim"), its own funding wait, and `stalled`
   when nothing was claimed or finished for `RUN_STALL_MS` and no live lease is
-  in flight. A Run's demand is the Jobs it owns by `runId`; shared drain Jobs
-  belong to no Run.
+  in flight. A Run's demand is the Jobs and image rows it owns by `runId`; shared
+  drain Jobs belong to no Run.
 - `job.explain {id}`: the waiting-on chain for a `RUN-`, `IPR-` or `EML-` code
   or a Job id, on MCP (`maintenance`) and `cubby call`.
 - `job.deviceBacklog`: due Apple-device work, the Runs it holds up, devices

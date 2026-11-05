@@ -149,7 +149,7 @@ export const jobWaitingOnReasonSql = (
  * Waiting-on for listed Jobs. A lease handed off externally names its holder
  * (a device); Job ETA is intentionally not derived.
  */
-export function loadJobWaitingOn(
+function loadJobWaitingOn(
   jobs: readonly JobRow[],
   now = new Date(),
   workWaits: ReadonlyMap<string, WorkWaitCause> = new Map(),
@@ -160,7 +160,7 @@ export function loadJobWaitingOn(
       row.id,
       deriveJobWaitingOn(row, {
         now,
-        executor: leaseHolder(row)?.name ?? defaultExecutor(row.kind),
+        executor: leaseHolder(row)?.name ?? "Cubby server",
         executorDeviceId: leaseHolder(row)?.deviceId ?? null,
         workWait: workWaits.get(row.key),
       }),
@@ -195,9 +195,6 @@ export async function loadDrainJobWaitingOn(
     ),
   );
 }
-
-const defaultExecutor = (kind: string) =>
-  jobKindPolicy(kind).drained ? "Cubby server" : null;
 
 const leaseHolderSchema = z.object({
   name: z.string().nullable().catch(null),

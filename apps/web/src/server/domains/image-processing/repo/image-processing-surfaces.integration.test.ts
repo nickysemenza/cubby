@@ -12,10 +12,9 @@ import { device, image, imageProcessingJob } from "~/server/db/schema";
 import { readDeviceById } from "~/server/domains/device/repo/device";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
 import { imageJobRepository } from "~/server/domains/image-job/repo";
+import { updateImageExecution } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { readJobQueue } from "~/server/generic/jobs/repo/job-queue";
 
 import {
   claimImageProcessingJob,
@@ -88,7 +87,7 @@ describe("image work on every surface", () => {
     );
   };
 
-  it("counts live leases per device and flags them once expired", async () => {
+  it("names the leasing device and flags its lease once expired", async () => {
     await upsertDeviceFromHello(ctx.db, {
       installationId,
       name: "Fixture iPad",
@@ -109,35 +108,15 @@ describe("image work on every surface", () => {
       inactive: false,
       appleIntelligenceAvailable: true,
     });
-    const live = await readJobQueue(ctx.db, {
-      filter: { lanes: ["apple_device"], reasons: ["leased"] },
-      runId: null,
-      pageIndex: 0,
-      pageSize: 5,
-    });
-    expect(live.leases).toEqual([
-      { executor: "Fixture iPad", live: 1, expired: 0 },
-    ]);
     expect(await readImageJob(id)).toMatchObject({
       state: "leased",
       waitingOn: "In progress on Fixture iPad",
     });
 
-    await updateJobs(
-      ctx.db,
-      { key: `image-processing:${id}` },
-      { leaseExpiresAt: new Date(Date.now() - 1_000) },
-    );
-
-    const expired = await readJobQueue(ctx.db, {
-      filter: { lanes: ["apple_device"], reasons: ["leased"] },
-      runId: null,
-      pageIndex: 0,
-      pageSize: 5,
+    await updateImageExecution(ctx.db, id, {
+      leaseUntil: new Date(Date.now() - 1_000),
     });
-    expect(expired.leases).toEqual([
-      { executor: "Fixture iPad", live: 0, expired: 1 },
-    ]);
+
     const stale = await readImageJob(id);
     expect(stale?.state).not.toBe("leased");
     expect(stale?.waitingOn).toBe(

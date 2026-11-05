@@ -2347,6 +2347,7 @@ describe("photo group proposals", () => {
       "imageJob",
       [
         {
+          lane: "cloud",
           shortcode: generateShortcode("imageJob"),
           imageId: parseEntityId("image", source.id),
           kind: "describe_image",
@@ -2362,6 +2363,7 @@ describe("photo group proposals", () => {
       "imageJob",
       [
         {
+          lane: "device",
           shortcode: generateShortcode("imageJob"),
           imageId: parseEntityId("image", source.id),
           kind: "describe_image",
@@ -2373,6 +2375,7 @@ describe("photo group proposals", () => {
     );
     await insertEntityFixtures(ctx.db, imageProcessingJob, "imageJob", [
       {
+        lane: "device",
         shortcode: generateShortcode("imageJob"),
         imageId: parseEntityId("image", source.id),
         kind: "subject_lift",
@@ -2501,6 +2504,7 @@ describe("photo group proposals", () => {
       "imageJob",
       [
         {
+          lane: "cloud",
           shortcode: generateShortcode("imageJob"),
           imageId: parseEntityId("image", source.id),
           kind: "describe_image",
@@ -2514,6 +2518,7 @@ describe("photo group proposals", () => {
     );
     await insertEntityFixtures(ctx.db, imageProcessingJob, "imageJob", [
       {
+        lane: "cloud",
         shortcode: generateShortcode("imageJob"),
         imageId: parseEntityId("image", source.id),
         kind: "describe_image",

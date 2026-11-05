@@ -126,6 +126,39 @@ export async function assertMigrationBookkeeping(
   return applied.length;
 }
 
+/** A lock wait that timed out, or a deadlock Postgres broke by aborting this statement. */
+const LOCK_CONTENTION_CODES = new Set(["55P03", "40P01"]);
+/** About two minutes against live writers, then the deployment stops, fail closed. */
+const LOCK_RETRIES = 30;
+
+/**
+ * Live queue traffic can hold or cross a cutover's locks (0037 deadlocked on every
+ * attempt). A statement in this mode is idempotent and rolled back whole, so taking
+ * it again from the start is safe. Whatever was already committed stays compatible
+ * with the running Worker; a later Deploy resumes from the same statement.
+ */
+const isLockContention = (error: unknown) => {
+  // Drizzle wraps the driver's error as its cause.
+  for (let cause = error; cause instanceof Error; cause = cause.cause)
+    if ("code" in cause && LOCK_CONTENTION_CODES.has(String(cause.code)))
+      return true;
+  return false;
+};
+
+export async function retryingLockContention<T>(
+  statement: () => Promise<T>,
+  { retries = LOCK_RETRIES, delayMs = 1_000 } = {},
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await statement();
+    } catch (error) {
+      if (attempt >= retries || !isLockContention(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 /** Advance through an inclusive journal boundary; omitted means every pending migration. */
 export async function migrateDatabase(
   db: NodePgDatabase,
@@ -194,14 +227,16 @@ export async function migrateDatabase(
       }
       let remaining: boolean;
       do {
-        remaining = await db.transaction(async (tx) => {
-          await tx.execute(sql`SET LOCAL lock_timeout = '2s'`);
-          const result = await tx.execute(sql.raw(statement));
-          return statement.includes("-- cubby:repeat-batch")
-            ? z.object({ remaining: z.boolean() }).parse(result.rows[0])
-                .remaining
-            : false;
-        });
+        remaining = await retryingLockContention(() =>
+          db.transaction(async (tx) => {
+            await tx.execute(sql`SET LOCAL lock_timeout = '2s'`);
+            const result = await tx.execute(sql.raw(statement));
+            return statement.includes("-- cubby:repeat-batch")
+              ? z.object({ remaining: z.boolean() }).parse(result.rows[0])
+                  .remaining
+              : false;
+          }),
+        );
       } while (remaining);
     }
     await db.execute(sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at)

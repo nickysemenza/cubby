@@ -51,7 +51,6 @@ const relationshipQueryDefinitions = [
   ...localRelationshipEntities.map((target) =>
     definition(`jobSubject${target}`, "job", target, "jobSubject"),
   ),
-  definition("imageExecution", "job", "imageJob", "imageExecution"),
   definition("imageLeaseDevice", "imageJob", "device", "imageLeaseDevice"),
   definition("purchaseEmails", "purchase", "email", "purchaseEmails"),
   definition("vendorEmails", "vendor", "email", "vendorEmails"),

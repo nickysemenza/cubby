@@ -10,12 +10,11 @@ import {
   imageProcessingJob,
 } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
+import { readImageExecutions } from "~/server/domains/image-processing/repo/image-execution.fixtures";
+import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { loadJobWaitingOn } from "~/server/generic/jobs/repo/waiting-on";
-import { drainDueJobs } from "~/server/generic/jobs/service/jobs";
 
-import { imageJobDisplayStateSql } from "./image-job-state";
+import { imageJobDisplayStateSql, imageJobWaitingOn } from "./image-job-state";
 import {
   claimImageProcessingJob,
   createTransparentDerivativeAndJob,
@@ -69,34 +68,20 @@ describe("device work waits parked and records no attempt", () => {
   // drain every 60 s. Device work is now parked: the drain never claims it.
   it("parks device work out of the server drain without attempts or polling", async () => {
     const jobId = await subjectLiftJob();
-    const [execution] = await readJobs(ctx.db, {
-      key: `image-processing:${jobId}`,
-    });
+    const [execution] = await readImageExecutions(ctx.db, jobId);
     if (!execution) throw new Error("Missing execution");
     expect(execution).toMatchObject({
-      kind: "image.device",
+      kind: "device",
       state: "queued",
       attempts: 0,
-      subjectKind: "image",
     });
-    const outcomes = await drainDueJobs(
-      ctx.db,
-      {
-        "image.device": {
-          prepare: async () => ({ page: { done: true } }),
-        },
-      },
-      25,
-      10_000,
-      1,
-    );
-    expect(outcomes).toEqual([]);
-    const [afterDrain] = await readJobs(ctx.db, { id: execution.id });
-    expect(afterDrain).toMatchObject({ state: "queued", attempts: 0 });
+    await cloudImageDrain.page(ctx.db, { deadline: Date.now() + 10_000 });
+    expect(await readImageExecutions(ctx.db, jobId)).toMatchObject([
+      { state: "queued", attempts: 0 },
+    ]);
     expect(await attemptsOf(jobId)).toHaveLength(0);
     expect((await jobOf(jobId)).attempts).toBe(0);
-    const waiting = loadJobWaitingOn([execution]);
-    expect(waiting.get(execution.id)).toMatchObject({
+    expect(imageJobWaitingOn(await jobOf(jobId), new Date())).toMatchObject({
       reason: "waiting_device",
       lane: "apple_device",
     });

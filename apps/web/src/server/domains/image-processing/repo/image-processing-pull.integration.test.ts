@@ -14,11 +14,12 @@ import {
   imageProcessingAttempt,
   imageProcessingEvent,
   imageProcessingJob,
-  run,
 } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
-import { deviceOwnedStreak } from "~/server/domains/image-processing/repo/device-admission";
-import { DEVICE_BACKFILL_SHARE as JOB_BACKFILL_SHARE } from "~/server/domains/image-processing/repo/device-admission";
+import {
+  readImageExecutions,
+  updateImageExecution,
+} from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import * as companionDispatch from "~/server/domains/image-processing/service/dispatch";
 import {
   claimCompanionImageCommands,
@@ -26,12 +27,6 @@ import {
 } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import {
-  seedJobLaneAdmission,
-  updateJobs,
-} from "~/server/generic/jobs/jobs.fixtures";
-import { readJobQueue } from "~/server/generic/jobs/repo/job-queue";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 
 import {
   claimImageProcessingJob,
@@ -41,7 +36,6 @@ import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   releaseAssignedImageProcessingJob,
   renewAssignedImageProcessingLease,
-  withImageProcessingTransaction,
 } from "./image-processing";
 import { assignImageProcessingExecutor } from "./image-processing-history";
 
@@ -104,11 +98,9 @@ describe("background companion leases", () => {
       },
     });
   const expire = (jobId: ImageJobId) =>
-    updateJobs(
-      ctx.db,
-      { key: `image-processing:${jobId}` },
-      { leaseExpiresAt: new Date(Date.now() - 1_000) },
-    );
+    updateImageExecution(ctx.db, jobId, {
+      leaseUntil: new Date(Date.now() - 1_000),
+    });
   const failure = (lease: { id: ImageJobId; attemptId: string }) => ({
     result: {
       jobId: lease.id,
@@ -146,7 +138,7 @@ describe("background companion leases", () => {
       userId,
     );
 
-  it("fills a batch in fair hand-off order and keeps the legacy first command", async () => {
+  it("fills a batch with an active Run's work first and keeps the legacy first command", async () => {
     const owner = await ensureRun(ctx.db, ctx.actor, {
       purpose: "ai_suggest",
       trigger: "manual",
@@ -165,10 +157,9 @@ describe("background companion leases", () => {
     expect(pulled.commands).toHaveLength(8);
     expect(pulled.command).toEqual(pulled.commands[0]);
     const order = pulled.commands.map((command) => command.jobId);
-    expect(order.slice(0, 4).every((id) => owned.includes(id))).toBe(true);
-    expect(order[4]).toBe(backfill);
+    expect(order.every((id) => owned.includes(id))).toBe(true);
+    expect(order).not.toContain(backfill);
     expect(new Set(order).size).toBe(8);
-    expect(await deviceOwnedStreak(ctx.db)).toBe(3);
     const attempts = await getDb(ctx.db).select().from(imageProcessingAttempt);
     expect(attempts).toHaveLength(8);
     expect(attempts.every((attempt) => attempt.state === "running")).toBe(true);
@@ -222,12 +213,12 @@ describe("background companion leases", () => {
           (command) => Date.parse(command.deadline) >= Date.now() + 59_000,
         ),
       ).toBe(true);
-      const executions = await readJobs(ctx.db, { kind: "image.device" });
+      const executions = await getDb(ctx.db).select().from(imageProcessingJob);
       for (const command of pulled.commands) {
         expect(
           executions
-            .find((execution) => execution.leaseToken === command.attemptId)
-            ?.leaseExpiresAt?.toISOString(),
+            .find((execution) => execution.attemptId === command.attemptId)
+            ?.leaseUntil?.toISOString(),
         ).toBe(command.deadline);
       }
       const attempts = await getDb(ctx.db)
@@ -235,14 +226,13 @@ describe("background companion leases", () => {
         .from(imageProcessingAttempt);
       expect(attempts).toHaveLength(2);
       expect(new Set(attempts.map((attempt) => attempt.jobId)).size).toBe(2);
-      expect(await deviceOwnedStreak(ctx.db)).toBe(2);
     } finally {
       vi.useRealTimers();
       spy.mockRestore();
     }
   });
 
-  it("rolls back reservation and fairness after a successful prefix before taking backfill again", async () => {
+  it("rolls back a refused reservation after a successful prefix and takes the next candidate", async () => {
     const owner = await ensureRun(ctx.db, ctx.actor, {
       purpose: "ai_suggest",
       trigger: "manual",
@@ -257,8 +247,6 @@ describe("background companion leases", () => {
       "image/avif",
     );
     const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
-    await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION, "image/jpeg", owner);
-    await seedJobLaneAdmission(ctx.db, "image.device", 3);
     const reserve = companionDispatch.reserveCompanionAnalysisOutput;
     let reservationSucceeded = false;
     const spy = vi
@@ -293,16 +281,13 @@ describe("background companion leases", () => {
         prefix,
         backfill,
       ]);
-      expect(await deviceOwnedStreak(ctx.db)).toBe(0);
       const attempts = await getDb(ctx.db)
         .select()
         .from(imageProcessingAttempt);
       expect(attempts.map((attempt) => attempt.jobId).sort()).toEqual(
         [prefix, backfill].sort(),
       );
-      const [released] = await readJobs(ctx.db, {
-        key: `image-processing:${refused}`,
-      });
+      const [released] = await readImageExecutions(ctx.db, refused);
       expect(released?.leaseToken).toBeNull();
       expect(released!.availableAt.getTime()).toBeGreaterThan(Date.now());
       const [row] = await getDb(ctx.db)
@@ -351,18 +336,15 @@ describe("background companion leases", () => {
     const pulled = await batchPull(2);
     expect(pulled.commands.map((command) => command.jobId)).toEqual([ready]);
     expect(pulled.command).toEqual(pulled.commands[0]);
-    const [released] = await readJobs(ctx.db, {
-      key: `image-processing:${unsupported}`,
-    });
+    const [released] = await readImageExecutions(ctx.db, unsupported);
     expect(released?.leaseToken).toBeNull();
     expect(released!.availableAt.getTime()).toBeGreaterThan(Date.now());
     const attempts = await getDb(ctx.db).select().from(imageProcessingAttempt);
     expect(attempts).toHaveLength(1);
     expect(attempts[0]?.jobId).toBe(ready);
-    expect(await deviceOwnedStreak(ctx.db)).toBe(0);
   });
 
-  it("releases a refused batch hand-off without counting service or an attempt", async () => {
+  it("releases a refused batch hand-off without an attempt", async () => {
     const waiting = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
     const device = hello();
     await createDevice(
@@ -386,10 +368,7 @@ describe("background companion leases", () => {
         maxCommands: 8,
       }),
     ).toEqual([]);
-    expect(await deviceOwnedStreak(ctx.db)).toBe(0);
-    const [execution] = await readJobs(ctx.db, {
-      key: `image-processing:${waiting}`,
-    });
+    const [execution] = await readImageExecutions(ctx.db, waiting);
     expect(execution?.leaseToken).toBeNull();
     expect(execution?.state).toBe("queued");
     expect(
@@ -400,21 +379,17 @@ describe("background companion leases", () => {
   it("claims parked device work at once but preserves retry backoff", async () => {
     const parked = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
     const backingOff = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
-    await updateJobs(
-      ctx.db,
-      { key: `image-processing:${backingOff}` },
-      {
-        state: "retry_wait",
-        availableAt: sql`now() + interval '1 hour'`,
-      },
+    await updateImageExecution(ctx.db, backingOff, {
+      failures: 1,
+      runAt: sql`now() + interval '1 hour'`,
+    });
+    const [execution] = await readImageExecutions(ctx.db, parked).then((rows) =>
+      rows.map(({ kind }) => ({ kind })),
     );
-    const [execution] = await readJobs(ctx.db, {
-      key: `image-processing:${parked}`,
-    }).then((rows) => rows.map(({ kind }) => ({ kind })));
-    expect(execution?.kind).toBe("image.device");
+    expect(execution?.kind).toBe("device");
     const first = await claim();
     expect(first?.id).toBe(parked);
-    // Device expiry uses the requested lease owned by Job.
+    // Device expiry uses the requested lease.
     expect(first!.leaseExpiresAt.getTime() - Date.now()).toBeGreaterThan(
       50_000,
     );
@@ -424,34 +399,8 @@ describe("background companion leases", () => {
     expect(await claim()).toBeNull();
   });
 
-  // Apple matches its own leases by device id and shows lease age.
-  it("names the leasing device and when its lease was claimed in job.queue", async () => {
-    const parked = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
-    const lease = await claim();
-    if (!lease) throw new Error("Expected lease");
-    await assign(lease);
-    const [execution] = await readJobs(ctx.db, {
-      key: `image-processing:${parked}`,
-    }).then((rows) => rows.map(({ lastClaimedAt }) => ({ lastClaimedAt })));
-    const queue = await readJobQueue(ctx.db, {
-      filter: { kinds: ["image.device"] },
-      runId: null,
-      pageIndex: 0,
-      pageSize: 10,
-    });
-    expect(queue.jobs).toHaveLength(1);
-    expect(queue.jobs[0]?.waitingOn).toMatchObject({
-      reason: "leased",
-      executor: "Test phone",
-      executorDeviceId: deviceId,
-      leasedAt: execution?.lastClaimedAt?.toISOString(),
-      expired: false,
-    });
-  });
-
   // Review finding: device pulls ordered parked work only by availability,
-  // so an active Run's photos waited behind older backfill, and nothing kept
-  // backfill's reserved share once Run work led.
+  // so an active Run's photos waited behind older backfill.
   it("serves an active Run's device work before older backfill", async () => {
     const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
     const runId = await ensureRun(ctx.db, ctx.actor, {
@@ -462,368 +411,6 @@ describe("background companion leases", () => {
       IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
       "image/jpeg",
       runId,
-    );
-    expect((await claim())?.id).toBe(owned);
-    expect((await claim())?.id).toBe(backfill);
-  });
-
-  it("keeps backfill's reserved share of device pulls while Run work leads", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-    });
-    const owned: string[] = [];
-    for (let index = 0; index < 6; index++)
-      owned.push(
-        await job(
-          IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-          "image/jpeg",
-          runId,
-        ),
-      );
-    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
-    const order: string[] = [];
-    for (let pull = 0; pull < 7; pull++) {
-      const lease = await claim();
-      if (!lease) continue;
-      await assign(lease);
-      order.push(lease.id);
-    }
-    expect(order).toHaveLength(7);
-    // The drain's share: one slot in every 1 / JOB_BACKFILL_SHARE claims.
-    expect(order.indexOf(backfill)).toBeLessThan(
-      Math.ceil(1 / JOB_BACKFILL_SHARE),
-    );
-    expect(order.filter((id) => owned.includes(id))).toHaveLength(6);
-  });
-
-  // Review finding: the different-device preference filtered candidates
-  // before the owed class was chosen, so a device's own released backfill
-  // lost its turn to fresh Run work for as long as Run work kept arriving.
-  it("gives a device its own released backfill when backfill's turn comes", async () => {
-    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
-    const released = await claim();
-    if (released?.id !== backfill) throw new Error("Expected backfill lease");
-    await assign(released);
-    expect(
-      await releaseAssignedImageProcessingJob(ctx.db, {
-        jobId: released.id,
-        attemptId: released.attemptId,
-        userId,
-        deviceId,
-      }),
-    ).toBe(true);
-    const runId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-    });
-    const owned: string[] = [];
-    for (let index = 0; index < 5; index++)
-      owned.push(
-        await job(
-          IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-          "image/jpeg",
-          runId,
-        ),
-      );
-    const order: string[] = [];
-    for (let pull = 0; pull < 5; pull++) {
-      const lease = await claim();
-      if (!lease) continue;
-      await assign(lease);
-      order.push(lease.id);
-    }
-    expect(order).toEqual([...owned.slice(0, 4), backfill]);
-  });
-
-  // Review finding: the streak reclassified past services by current Run
-  // ownership, so a Run finishing turned its four services into backfill and
-  // the next Run began a fresh owned streak while backfill waited.
-  it("counts a service by the class it was admitted under", async () => {
-    const first = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-    });
-    for (let index = 0; index < 4; index++) {
-      await job(
-        IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-        "image/jpeg",
-        first,
-      );
-      const lease = await claim(parseEntityId("device", crypto.randomUUID()));
-      if (!lease) throw new Error("Expected Run lease");
-      await assign(lease);
-    }
-    await getDb(ctx.db)
-      .update(run)
-      .set({ status: "completed" })
-      .where(eq(run.id, first));
-    const next = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-    });
-    await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION, "image/jpeg", next);
-    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
-    expect(
-      (await claim(parseEntityId("device", crypto.randomUUID())))?.id,
-    ).toBe(backfill);
-  });
-
-  // Review findings: the streak was counted when a claim was admitted, so a
-  // hand-off the server then refused (participation turned off) kept its
-  // effect, and patching the counter afterwards could not settle every
-  // outcome: two refused backfills erased the owed turn in either order, a
-  // refused Run claim left a phantom Run service, a reclaimed lease counted
-  // twice, and concurrent pulls at the last Run slot both took Run work. A
-  // device pull now claims, assigns and reserves in one transaction holding
-  // the lane row, and only a committed hand-off counts.
-  describe("device hand-off fairness", () => {
-    const runJob = (owner: RunId) =>
-      job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION, "image/jpeg", owner);
-    const backfillJob = () => job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
-    const activeRun = () =>
-      ensureRun(ctx.db, ctx.actor, {
-        purpose: "ai_suggest",
-        trigger: "manual",
-      });
-    /** `count` served Run claims. */
-    async function servedRun(count: number) {
-      const owner = await activeRun();
-      for (let index = 0; index < count; index++) {
-        await runJob(owner);
-        const lease = await claim(parseEntityId("device", crypto.randomUUID()));
-        if (!lease) throw new Error("Expected Run lease");
-        await assign(lease);
-      }
-      return owner;
-    }
-    /** A device's `imageProcessing.pull`; an opted-out Device refuses it. */
-    async function device(participating = true) {
-      const installationId = crypto.randomUUID();
-      if (!participating)
-        await createDevice(
-          ctx.db,
-          {
-            installationId,
-            name: "Synthetic opted-out phone",
-            platform: "ios",
-            appVersion: null,
-            osVersion: null,
-            automaticWork: false,
-            remotePaused: false,
-          },
-          TEST_ACTOR,
-        );
-      return async () =>
-        (
-          await claimCompanionImageCommands(ctx.db, {
-            device: {
-              deviceId: parseEntityId("device", installationId),
-              platform: "ios",
-              appVersion: "1",
-              deviceName: "Synthetic phone",
-              osVersion: "26",
-              capabilities: {
-                foreground: true,
-                visionSubjectLift: { available: false },
-                actualImageDescription: { available: true, revision: 1 },
-              },
-            },
-            userId,
-            leaseMs: 60_000,
-            maxCommands: 1,
-          })
-        )[0]?.jobId ?? null;
-    }
-
-    it("keeps backfill owed when its hand-off is refused", async () => {
-      const owner = await servedRun(4);
-      const backfill = await backfillJob();
-      await runJob(owner);
-      expect(await (await device(false))()).toBeNull();
-      expect(await deviceOwnedStreak(ctx.db)).toBe(4);
-      expect(await (await device())()).toBe(backfill);
-    });
-
-    it("keeps backfill owed after two refused backfill hand-offs", async () => {
-      const owner = await servedRun(4);
-      const backfill = [await backfillJob(), await backfillJob()];
-      const refuse = [await device(false), await device(false)];
-      expect(await refuse[0]!()).toBeNull();
-      expect(await refuse[1]!()).toBeNull();
-      await runJob(owner);
-      expect(await deviceOwnedStreak(ctx.db)).toBe(4);
-      expect(backfill).toContain(await (await device())());
-    });
-
-    it("counts no Run service for a refused Run hand-off", async () => {
-      const owner = await servedRun(3);
-      const owned = [await runJob(owner), await runJob(owner)];
-      const backfill = await backfillJob();
-      expect(await (await device(false))()).toBeNull();
-      expect(await deviceOwnedStreak(ctx.db)).toBe(3);
-      const pull = await device();
-      expect(owned).toContain(await pull());
-      expect(await pull()).toBe(backfill);
-    });
-
-    it("counts a reclaimed lease once, for the hand-off that committed", async () => {
-      const owner = await activeRun();
-      const owned = await runJob(owner);
-      const stalled = await claim(parseEntityId("device", crypto.randomUUID()));
-      expect(stalled?.id).toBe(owned);
-      await expire(owned);
-      const successor = await claim(
-        parseEntityId("device", crypto.randomUUID()),
-      );
-      expect(successor?.id).toBe(owned);
-      expect(await assign(successor!)).toBe(true);
-      // The stalled claim's late assignment finds its token replaced.
-      expect(await assign(stalled!)).toBe(false);
-      expect(await deviceOwnedStreak(ctx.db)).toBe(1);
-    });
-
-    // Review finding: assignment checked the lease against now(), fixed at
-    // the hand-off transaction's start, so a lease that expired while the
-    // transaction waited was still assigned and counted.
-    it("refuses a lease that expires inside the hand-off transaction", async () => {
-      const backfill = await backfillJob();
-      const assigned = await withImageProcessingTransaction(
-        ctx.db,
-        async (tx) => {
-          const lease = await claimImageProcessingJob(tx, {
-            kinds: ["describe_image"],
-            leaseMs: 60_000,
-            processorRevisions: [IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION],
-            deviceId,
-          });
-          expect(lease?.id).toBe(backfill);
-          await updateJobs(
-            tx,
-            { key: `image-processing:${backfill}` },
-            {
-              leaseExpiresAt: sql`clock_timestamp() + interval '100 milliseconds'`,
-            },
-          );
-          await getDb(tx).execute(sql`SELECT pg_sleep(0.3)`);
-          return assignImageProcessingExecutor(tx, {
-            jobId: lease!.id,
-            attemptId: lease!.attemptId,
-            userId,
-            executor: {
-              kind: "device",
-              deviceId,
-              name: "Test phone",
-              platform: "ios",
-              appVersion: "1",
-              osVersion: "26",
-            },
-          });
-        },
-      );
-      expect(assigned).toBe(false);
-      expect(await deviceOwnedStreak(ctx.db)).toBe(0);
-    });
-
-    it("serializes concurrent pulls at backfill's turn", async () => {
-      const owner = await servedRun(3);
-      await runJob(owner);
-      await runJob(owner);
-      const backfill = await backfillJob();
-      // One Run slot remains: of two simultaneous pulls, one serves it and
-      // the other is backfill's turn.
-      const served = await Promise.all([
-        (await device())(),
-        (await device())(),
-      ]);
-      expect(served).toContain(backfill);
-    });
-  });
-
-  // Review finding: the backfill turn counted any Job with a runId as
-  // run-owned and reset only on runId-less claims, while selection owns work
-  // by an active, member-visible Run; and it counted rows by their last
-  // claim, so reclaims of one row counted once. Service is now one handed-over
-  // claim (an assigned attempt), owned by the same definition as selection.
-  it("resets the backfill turn when it serves an inactive Run's work", async () => {
-    const active = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-    });
-    const finished = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-    });
-    await getDb(ctx.db)
-      .update(run)
-      .set({ status: "completed" })
-      .where(eq(run.id, finished));
-    const owned: string[] = [];
-    for (let index = 0; index < 6; index++)
-      owned.push(
-        await job(
-          IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-          "image/jpeg",
-          active,
-        ),
-      );
-    const inactive = await job(
-      IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-      "image/jpeg",
-      finished,
-    );
-    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
-    const order: string[] = [];
-    for (let pull = 0; pull < 8; pull++) {
-      const lease = await claim(parseEntityId("device", crypto.randomUUID()));
-      if (!lease) continue;
-      await assign(lease);
-      order.push(lease.id);
-    }
-    // Four Run pulls, then backfill's turn serves the inactive Run's work,
-    // which resets the turn: the last two Run pulls precede the next backfill.
-    expect(order).toEqual([
-      ...owned.slice(0, 4),
-      inactive,
-      ...owned.slice(4),
-      backfill,
-    ]);
-  });
-
-  it("counts each handed-over reclaim of one row toward the backfill turn", async () => {
-    const active = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-    });
-    const owned = await job(
-      IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-      "image/jpeg",
-      active,
-    );
-    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
-    const order: string[] = [];
-    for (let pull = 0; pull < 5; pull++) {
-      const device = parseEntityId("device", crypto.randomUUID());
-      const lease = await claim(device);
-      if (!lease) continue;
-      await assign(lease, device);
-      order.push(lease.id);
-      // The device goes silent; its lease lapses and the next pull reclaims.
-      await expire(lease.id);
-    }
-    expect(order).toEqual([owned, owned, owned, owned, backfill]);
-  });
-
-  it("claims Run-owned device work before backfill", async () => {
-    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
-    const active = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-    });
-    const owned = await job(
-      IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-      "image/jpeg",
-      active,
     );
     expect((await claim())?.id).toBe(owned);
     expect((await claim())?.id).toBe(backfill);
@@ -896,9 +483,9 @@ describe("background companion leases", () => {
         deviceId,
       }),
     ).toBe(false);
-    const [execution] = await readJobs(ctx.db, {
-      key: `image-processing:${jobId}`,
-    }).then((rows) => rows.map(({ attempts, state }) => ({ state, attempts })));
+    const [execution] = await readImageExecutions(ctx.db, jobId).then((rows) =>
+      rows.map(({ attempts, state }) => ({ state, attempts })),
+    );
     // Due at once, and the release spent nothing.
     expect(execution).toEqual({ state: "queued", attempts: 0 });
 
@@ -974,16 +561,12 @@ describe("background companion leases", () => {
     expect(
       (await completeImageProcessingJob(ctx.db, failure(lease))).adopted,
     ).toBe(true);
-    const [execution] = await readJobs(ctx.db, {
-      key: `image-processing:${jobId}`,
-    }).then((rows) => rows.map(({ attempts, state }) => ({ state, attempts })));
+    const [execution] = await readImageExecutions(ctx.db, jobId).then((rows) =>
+      rows.map(({ attempts, state }) => ({ state, attempts })),
+    );
     expect(execution).toEqual({ state: "retry_wait", attempts: 1 });
 
-    await updateJobs(
-      ctx.db,
-      { key: `image-processing:${jobId}` },
-      { availableAt: new Date(0) },
-    );
+    await updateImageExecution(ctx.db, jobId, { runAt: new Date(0) });
     const next = await claim();
     if (!next) throw new Error("Expected retry lease");
     await assign(next);

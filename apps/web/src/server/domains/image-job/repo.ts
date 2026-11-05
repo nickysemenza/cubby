@@ -11,7 +11,7 @@ import {
   type DeviceShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
-import { describeJobWaitingOn, jobState } from "@cubby/schemas/job";
+import { describeJobWaitingOn } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -19,18 +19,18 @@ import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { imageProcessingAttempt } from "~/server/db/image-processing-schema";
 import { device, imageProcessingJob } from "~/server/db/schema";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { loadJobWaitingOn } from "~/server/generic/jobs/repo/waiting-on";
 import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { imageJobDisplayStateSql } from "../image-processing/repo/image-job-state";
+import {
+  imageJobDisplayStateSql,
+  imageJobWaitingOn,
+} from "../image-processing/repo/image-job-state";
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
-  imageProcessingJobKey,
 } from "../image-processing/repo/image-processing";
 
 type ImageJobRow = typeof imageProcessingJob.$inferSelect;
@@ -71,7 +71,7 @@ const loadFacts = async (
       ) AS executor,
       EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a
         WHERE a."jobId" = j.id AND a.executor->>${"kind"} = ${"device"}) AS "deviceRan",
-      ${imageJobDisplayStateSql({ id: sql`j.id`, state: sql`j.state` })} AS state
+      ${imageJobDisplayStateSql("j")} AS state
     FROM "ImageProcessingJob" j
     -- Each usage source probes "AiUsage_job_idx" by its own (jobKind, jobId).
     -- An OR with an attempt-id IN list cannot, and scanned every attempt's
@@ -116,20 +116,25 @@ type Execution = Pick<
 >;
 
 /**
- * The Device (`DEV-` code) behind each lease token. An image Job's lease
- * token is its current attempt's id, and the attempt's executor names the
+ * The Device (`DEV-` code) behind each held attempt. The attempt's executor names the
  * install (`executor.deviceId` is `Device.installationId`). Cloud attempts and
  * deleted installs have no Device and stay absent.
  */
 const loadLeaseDevices = async (
   db: Database | DrizzleTransaction,
-  leaseTokens: readonly string[],
-): Promise<Map<string, DeviceShortcode>> => {
-  if (leaseTokens.length === 0) return new Map();
+  attemptIds: readonly string[],
+): Promise<
+  Map<string, { name: string | null; device: DeviceShortcode | null }>
+> => {
+  if (attemptIds.length === 0) return new Map();
   const rows = await unwrapDb(db)
-    .select({ token: imageProcessingAttempt.id, shortcode: device.shortcode })
+    .select({
+      token: imageProcessingAttempt.id,
+      shortcode: device.shortcode,
+      name: sql<string | null>`${imageProcessingAttempt.executor}->>${"name"}`,
+    })
     .from(imageProcessingAttempt)
-    .innerJoin(
+    .leftJoin(
       device,
       and(
         eq(
@@ -139,9 +144,15 @@ const loadLeaseDevices = async (
         notDeleted(device),
       ),
     )
-    .where(inArray(imageProcessingAttempt.id, [...leaseTokens]));
+    .where(inArray(imageProcessingAttempt.id, [...attemptIds]));
   return new Map(
-    rows.map((row) => [row.token, deviceShortcode.parse(row.shortcode)]),
+    rows.map((row) => [
+      row.token,
+      {
+        name: row.name,
+        device: row.shortcode ? deviceShortcode.parse(row.shortcode) : null,
+      },
+    ]),
   );
 };
 
@@ -195,33 +206,30 @@ const imageJobRead = {
         (row) => row.state !== "ready" && row.state !== "skipped",
       );
       if (!open.length) return new Map<string, Execution>();
-      const keyOf = new Map(
-        open.map((row) => [imageProcessingJobKey(row.id), row.id]),
-      );
-      const jobs = await readJobs(db, { keys: [...keyOf.keys()] });
-      const [waiting, holders] = await Promise.all([
-        loadJobWaitingOn(jobs),
-        loadLeaseDevices(
-          db,
-          jobs.flatMap((entry) =>
-            entry.state === jobState.enum.running && entry.leaseToken
-              ? [entry.leaseToken]
-              : [],
-          ),
+      const now = new Date();
+      const holders = await loadLeaseDevices(
+        db,
+        open.flatMap((row) =>
+          row.leaseUntil && row.attemptId ? [row.attemptId] : [],
         ),
-      ]);
+      );
       return new Map(
-        jobs.map((entry): [string, Execution] => {
-          const running = entry.state === jobState.enum.running;
+        open.map((row): [string, Execution] => {
+          const holder =
+            row.leaseUntil && row.attemptId
+              ? (holders.get(row.attemptId) ?? null)
+              : null;
           return [
-            keyOf.get(entry.key) ?? "",
+            row.id,
             {
-              waitingOn: describeJobWaitingOn(waiting.get(entry.id) ?? null),
-              leaseDeviceId:
-                running && entry.leaseToken
-                  ? (holders.get(entry.leaseToken) ?? null)
-                  : null,
-              leaseExpiresAt: running ? entry.leaseExpiresAt : null,
+              waitingOn: describeJobWaitingOn(
+                imageJobWaitingOn(row, now, {
+                  name: holder?.name ?? null,
+                  deviceId: holder?.device ?? null,
+                }),
+              ),
+              leaseDeviceId: holder?.device ?? null,
+              leaseExpiresAt: row.leaseUntil,
             },
           ];
         }),

@@ -12,7 +12,6 @@ import {
   withTransaction,
   withTransactionOn,
   isTransaction,
-  databaseForTransaction,
 } from "~/server/db/helpers";
 import {
   imageProcessingAttempt,
@@ -22,18 +21,8 @@ import {
 } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
 import { getDeviceParticipation } from "~/server/domains/device/repo/device-participation";
-import {
-  recordDeviceService,
-  type DeviceAdmission,
-} from "~/server/domains/image-processing/repo/device-admission";
-import {
-  externalLeaseHeld,
-  heldExternalClaim,
-  recordLeaseHolder,
-  releaseExternalClaim,
-} from "~/server/generic/jobs/repo/external-claim";
 
-import { armDeviceWake } from "./image-processing-ring";
+import { ringDeviceWorkAt } from "./image-processing-ring";
 
 export async function recordImageProcessingEvent(
   db: Database | DrizzleTransaction,
@@ -113,12 +102,13 @@ export async function assignImageProcessingExecutor(
     executor: ActivityExecutor;
     userId?: string;
     diagnostics?: unknown;
-    deviceAdmission?: DeviceAdmission;
+    /** Assign inside the caller's hand-off transaction rather than a new one. */
+    sharedTransaction?: boolean;
   },
 ): Promise<boolean> {
   const client = getDb(db);
   return withTransactionOn(
-    input.deviceAdmission && isTransaction(client) ? client : db,
+    input.sharedTransaction && isTransaction(client) ? client : db,
     async (tx) => {
       const [job] = await tx
         .select({ id: imageProcessingJob.id })
@@ -130,11 +120,7 @@ export async function assignImageProcessingExecutor(
             eq(imageProcessingJob.state, "pending"),
             // Wall time, not now(): a device hand-off assigns inside the
             // transaction that claimed, and now() stays at its start.
-            externalLeaseHeld(
-              sql`'image-processing:' || ${imageProcessingJob.id}::text`,
-              sql`${input.attemptId}::uuid`,
-              { live: true },
-            ),
+            sql`${imageProcessingJob.leaseUntil} > clock_timestamp()`,
           ),
         )
         .for("update");
@@ -166,23 +152,6 @@ export async function assignImageProcessingExecutor(
         diagnostics: input.diagnostics,
       });
       if (number === null) return false;
-      await recordLeaseHolder(
-        databaseForTransaction(tx),
-        {
-          key: `image-processing:${input.jobId}`,
-          leaseToken: input.attemptId,
-        },
-        { name: executor.name ?? null, deviceId: executor.deviceId ?? null },
-      );
-      // A device's committed hand-off is one service for pull fairness.
-      if (executor.kind === "device") {
-        const ownedStreak = await recordDeviceService(
-          databaseForTransaction(tx),
-          `image-processing:${input.jobId}`,
-        );
-        if (input.deviceAdmission)
-          input.deviceAdmission.ownedStreak = ownedStreak;
-      }
       await recordImageProcessingEvent(tx, {
         jobId: input.jobId,
         eventKey: `${input.attemptId}:assigned`,
@@ -286,7 +255,7 @@ export async function lockImageProcessingSubmissionSource(
 
 /**
  * A typed wait (AI funding, provider capacity, a device preparing input)
- * never spends the failure budget: the claim is released with its stored wait
+ * never spends the failure budget: the lease is released with its stored wait
  * reason and the attempt is kept as released history.
  */
 export async function deferImageProcessingJob(
@@ -300,32 +269,27 @@ export async function deferImageProcessingJob(
   },
 ): Promise<boolean> {
   return withTransaction(db, async (tx) => {
-    const execution = await heldExternalClaim(
-      tx,
-      `image-processing:${input.jobId}`,
-      input.attemptId,
-      true,
-    );
-    if (!execution) return false;
     const rows = await tx
       .update(imageProcessingJob)
-      .set({ lastError: input.reason })
+      .set({
+        lastError: input.reason,
+        leaseUntil: null,
+        runAt: input.until,
+        waitReason: input.waitReason,
+      })
       .where(
         and(
           eq(imageProcessingJob.id, input.jobId),
           eq(imageProcessingJob.attemptId, input.attemptId),
           eq(imageProcessingJob.state, "pending"),
+          sql`${imageProcessingJob.leaseUntil} > clock_timestamp()`,
         ),
       )
-      .returning({ id: imageProcessingJob.id });
-    if (!rows.length) return false;
-    await releaseExternalClaim(databaseForTransaction(tx), execution, {
-      availableAt: input.until,
-      waitReason: input.waitReason,
-    });
-    // Parked device work waits out the deferral; the wake rings when it ends.
-    if (execution.kind === "image.device")
-      await armDeviceWake(databaseForTransaction(tx));
+      .returning({ lane: imageProcessingJob.lane });
+    const [row] = rows;
+    if (!row) return false;
+    // Parked device work waits out the deferral; the ring covers its end.
+    if (row.lane === "device") await ringDeviceWorkAt(tx, input.until);
     await tx
       .update(imageProcessingAttempt)
       .set({ state: "released", completedAt: sql`now()`, error: input.reason })

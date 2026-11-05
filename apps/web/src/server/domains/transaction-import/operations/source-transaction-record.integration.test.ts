@@ -23,7 +23,7 @@ import {
 } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import * as changes from "~/server/generic/changes/repo/change";
 import { readWorkItems, renewJob } from "~/server/generic/jobs/jobs.fixtures";
-import { claimExternal } from "~/server/generic/jobs/repo/external-claim";
+import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { derivedMarkTickets } from "~/server/testing/background-queue";
@@ -302,7 +302,7 @@ describe("finance.record source and Job lifecycle contention", () => {
             ).rows[0],
           );
       const claim =
-        change === "renew" ? await claimExternal(ctx.db, search.id) : null;
+        change === "renew" ? await claimJob(ctx.db, search.id) : null;
       if (change === "renew" && !claim)
         throw new Error("Expected synthetic search claim");
       const clients: { financePid: number; writerPid: number }[] = [];
@@ -346,7 +346,7 @@ describe("finance.record source and Job lifecycle contention", () => {
                       clients.push({ financePid, writerPid });
                       const written =
                         change === "claim"
-                          ? (await claimExternal(writerDb, search.id)) !== null
+                          ? (await claimJob(writerDb, search.id)) !== null
                           : claim !== null && (await renewJob(writerDb, claim));
                       if (!written)
                         throw new Error(`Synthetic search ${change} refused`);
