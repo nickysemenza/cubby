@@ -86,3 +86,73 @@ it("carries SQL NULL and JSON null publications through every typed storage shap
     ).toEqual([{ price: 12.5, priceSort: 12.5, jsonNull: true }]);
   });
 });
+
+it("refuses legacy derived decisions and drops only the retired cache on replay", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle(client);
+    await migrateDatabase(db, {
+      through: "0096_retire_derived_source_triggers",
+    });
+    const product = "00000000-0000-4000-8000-000000000091";
+    await client.query(
+      `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'product','PRD-SYNTHDROP')`,
+      [product],
+    );
+    await client.query(
+      `INSERT INTO "Product" (id,shortcode,name,price) VALUES ($1,'PRD-SYNTHDROP','Synthetic retained input',77)`,
+      [product],
+    );
+    await client.query(
+      `INSERT INTO "DerivedValue" ("entityId",kind,key,value,"decidedBy","computedAt") VALUES ($1,'product','price','12.5','{"legacy":true}',now())`,
+      [product],
+    );
+    await client.query(
+      `INSERT INTO "ProductReadSnapshot" ("entityId",kind,price,"priceDecision","priceComputedAt") VALUES ($1,'product',12.5,'{"outcome":{"kind":"value"},"provenance":{"kind":"computed"}}',now())`,
+      [product],
+    );
+    await client.query(
+      `INSERT INTO "WorkItem" (drain,target,ref) VALUES ('synthetic.member-demand','synthetic.request',$1)`,
+      [product],
+    );
+    const retained = async () =>
+      (
+        await client.query(
+          `SELECT jsonb_build_object(
+      'source',(SELECT to_jsonb(p) FROM "Product" p WHERE id=$1),
+      'snapshot',(SELECT to_jsonb(p) FROM "ProductReadSnapshot" p WHERE "entityId"=$1),
+      'work',(SELECT jsonb_agg(to_jsonb(w) ORDER BY drain,target,ref) FROM "WorkItem" w)
+    ) AS value`,
+          [product],
+        )
+      ).rows;
+    const before = await retained();
+    await expect(
+      migrateDatabase(db, { through: "0097_drop_legacy_derived_values" }),
+    ).rejects.toMatchObject({
+      cause: {
+        code: "P0001",
+        message:
+          "Legacy derived decisions remain; refresh per-key preservation proof",
+      },
+    });
+    expect(await retained()).toEqual(before);
+    expect(
+      (await client.query(`SELECT count(*)::int AS rows FROM "DerivedValue"`))
+        .rows,
+    ).toEqual([{ rows: 1 }]);
+    // Only this synthetic cache annotation changes; source, typed result and work stay byte-identical.
+    await client.query(
+      `UPDATE "DerivedValue" SET "decidedBy"='{"outcome":{"kind":"value"},"provenance":{"kind":"computed"}}'`,
+    );
+    await migrateDatabase(db, { through: "0097_drop_legacy_derived_values" });
+    await migrateDatabase(db, { through: "0097_drop_legacy_derived_values" });
+    expect(
+      (
+        await client.query(
+          `SELECT to_regclass('public."DerivedValue"') IS NULL AS absent`,
+        )
+      ).rows,
+    ).toEqual([{ absent: true }]);
+    expect(await retained()).toEqual(before);
+  });
+});

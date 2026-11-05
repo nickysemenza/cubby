@@ -1,6 +1,5 @@
 export { derivedRebuild } from "./derived-rebuild-schema";
 export { qualitySnapshot } from "./quality-snapshot-schema";
-export { derivedValue } from "./derived-value-schema";
 export { assessmentCorrectionLock } from "./assessment-correction-lock-schema";
 export {
   job,

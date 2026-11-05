@@ -292,6 +292,24 @@ The separate DerivedValue drop still requires its full consumer
 trace, legacy count by key, production preservation proof and immediately named
 manual snapshot under the table-drop procedure.
 
+## Retiring DerivedValue
+
+After the reader/writer-removal Worker and source-trigger retirement are deployed,
+refresh the complete consumer trace and production catalog. Report by key the
+count of `decidedBy ? 'legacy'` rows and current replacement publication coverage,
+including successful empty results. The contraction refuses any remaining legacy
+annotation, incoming foreign key, source trigger or public function reference;
+its check and table drop hold the same lock/transaction. It never uses CASCADE.
+
+Take `neon snapshots create --name drop-DerivedValue-<date>` immediately before
+the migration and record the id in the PR and final report. Follow the separate,
+unfinalized one-table recovery procedure above; never finalize/reset production.
+The table contains retired computed output only. Keep QualitySnapshot, domain
+read snapshots, ProductConversionCoverage, Recipe totals and SearchDocument, and
+preserve WorkItem/JobInvalidationCapture for B1. Read back that DerivedValue is
+absent, retained source/snapshot/work aggregates match, and generic field/list,
+quality, ownership, valuation, Email links and identity writes still work.
+
 ## Typed domain read snapshots
 
 The read snapshot cutover copies each declared result into named, typed columns
