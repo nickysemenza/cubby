@@ -2691,6 +2691,14 @@ edge and gets the toggle like any other.
 
 ### Background derived data
 
+Quality's 28 declared evaluators publish typed `QualitySnapshot` rows, containing
+only the entity kind, check states, rules version and publication time. Browse,
+`dataGap`, weakest-first ordering and Work admission read that same snapshot;
+waivers remain durable `DataException` inputs. The ticketed drain temporarily
+invokes the snapshot sink until the hourly deterministic pass replaces admission.
+Legacy quality rows in `DerivedValue` are no longer read or rewritten and are
+retained until the separate table retirement.
+
 ADR 0025 replaces ticketed derived values one kind at a time. Project
 start-date ordering and filtering now read the canonical recursive SQL directly,
 including descendant overrides and inherited expense attribution. This read needs

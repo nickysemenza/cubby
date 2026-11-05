@@ -744,7 +744,7 @@ export const renderEntityMetadataArtifacts = (
                     key: "dataQuality",
                     table: entity.descriptor.dbTable,
                     type: "number",
-                    publishes: "derivedValue",
+                    publishes: "ownTable",
                     stored: {
                       compute: `quality.${entity.key}`,
                       inputs: [

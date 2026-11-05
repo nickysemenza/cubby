@@ -156,8 +156,8 @@ describe("stored Purchase quality", () => {
     await refresh();
     const [published] = await unwrapDb(ctx.db)
       .execute(
-        sql`SELECT value->>'rulesVersion' AS "rulesVersion" FROM "DerivedValue"
-          WHERE "entityId" = ${order.entityId} AND key = 'dataQuality'`,
+        sql`SELECT "rulesVersion"::text AS "rulesVersion" FROM "QualitySnapshot"
+          WHERE "entityId" = ${order.entityId}`,
       )
       .then((result) => result.rows as { rulesVersion: string }[]);
     expect(Number(published?.rulesVersion)).toBe(

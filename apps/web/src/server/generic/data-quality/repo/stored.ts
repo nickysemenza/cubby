@@ -87,8 +87,8 @@ export async function loadPublishedQuality(
   const [result, exceptions] = await Promise.all([
     unwrapDb(db)
       .execute(sql`SELECT ${t.id}::text AS id, ${t.shortcode} AS shortcode,
-      coalesce(q.value->'checks', '{}'::jsonb) AS checks
-      FROM ${t} LEFT JOIN "DerivedValue" q ON q."entityId" = ${t.id} AND q.key = 'dataQuality'
+      coalesce(q.checks, '{}'::jsonb) AS checks
+      FROM ${t} LEFT JOIN "QualitySnapshot" q ON q."entityId" = ${t.id} AND q.kind = ${kind}
       WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}`),
     loadExceptions(db, kind, ids),
   ]);
@@ -137,4 +137,22 @@ export async function prepareQualityPublications(
       checks: row.checks,
     }))
     .sort((a, b) => a.entityId.localeCompare(b.entityId));
+}
+
+/** Publish one deterministic page without value tickets or source fences. */
+export async function publishQualitySnapshots(
+  db: ReaderDb,
+  rows: readonly QualityPublication[],
+): Promise<void> {
+  if (!rows.length) return;
+  await unwrapDb(db).execute(sql`
+    INSERT INTO "QualitySnapshot" ("entityId", kind, "rulesVersion", checks, "computedAt")
+    SELECT r."entityId", r.kind, r."rulesVersion", r.checks, now() AT TIME ZONE 'UTC'
+    FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb)
+      AS r("entityId" uuid, kind text, "rulesVersion" integer, checks jsonb)
+    ON CONFLICT ("entityId") DO UPDATE SET
+      kind = EXCLUDED.kind, "rulesVersion" = EXCLUDED."rulesVersion",
+      checks = EXCLUDED.checks, "computedAt" = EXCLUDED."computedAt"
+    WHERE ("QualitySnapshot".kind, "QualitySnapshot"."rulesVersion", "QualitySnapshot".checks)
+      IS DISTINCT FROM (EXCLUDED.kind, EXCLUDED."rulesVersion", EXCLUDED.checks)`);
 }

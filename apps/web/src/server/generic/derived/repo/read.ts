@@ -283,10 +283,19 @@ export async function loadStoredDerived(
            d."runningSince", d."leaseExpiresAt"
       FROM unnest(${uuidArrayParam(ids)}) AS i(id)
      CROSS JOIN keys k
-      LEFT JOIN "DerivedValue" v ON ${storedPublicationMatch(
-        { entityId: sql`v."entityId"`, kind: sql`v.kind`, key: sql`v.key` },
-        { entity, id: sql`i.id`, key: sql`k.key` },
-      )}
+      LEFT JOIN LATERAL (
+        SELECT v.value, v."decidedBy", v."computedAt" FROM "DerivedValue" v
+        WHERE ${storedPublicationMatch(
+          { entityId: sql`v."entityId"`, kind: sql`v.kind`, key: sql`v.key` },
+          { entity, id: sql`i.id`, key: sql`k.key` },
+        )} AND k.key <> 'dataQuality'
+        UNION ALL
+        SELECT jsonb_build_object('rulesVersion', q."rulesVersion", 'checks', q.checks),
+          ${JSON.stringify(storedFieldDecision.parse({ outcome: { kind: "value" }, provenance: { kind: "computed" } }))}::jsonb,
+          q."computedAt"
+        FROM "QualitySnapshot" q
+        WHERE q."entityId" = i.id AND q.kind = ${entity} AND k.key = 'dataQuality'
+      ) v ON true
       LEFT JOIN LATERAL ${observedWorkItem(sql`k.target`, sql`i.id`)} d ON true`);
   for (const row of z.array(valueRow).parse(result.rows)) {
     const byKey = out.get(row.entityId) ?? new Map();

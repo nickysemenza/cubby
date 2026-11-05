@@ -1,30 +1,28 @@
-/**
- * Stored quality as a derived value (ADR 0021): each scored entity's
- * `dataQuality` recomputes through its stored evaluator, waivers applied.
- */
-import { scoredEntities, type ScoredEntity } from "@cubby/schemas/data-quality";
+/** Quality check snapshots use the entity's declared evaluator and waiver policy. */
+import { scoredEntities } from "@cubby/schemas/data-quality";
 
-import type {
-  DerivedCompute,
-  DerivedComputed,
-} from "~/server/generic/derived/repo/compute";
+import { derivedSink } from "~/server/generic/derived/repo/compute";
+import type { DerivedAdapter } from "~/server/generic/derived/repo/compute";
 
-import { prepareQualityPublications } from "./stored";
+import { prepareQualityPublications, publishQualitySnapshots } from "./stored";
 
-const qualityCompute = (kind: ScoredEntity): DerivedCompute => {
-  const compute: DerivedCompute = async (db, ids) => {
-    const out = new Map<string, DerivedComputed>();
-    for (const row of await prepareQualityPublications(db, kind, ids))
-      out.set(row.entityId, {
-        value: { rulesVersion: row.rulesVersion, checks: row.checks },
-        sort: null,
-      });
-    return out;
-  };
-  return Object.assign(compute, { preparationBatchSize: 200 });
-};
-
-export const qualityDerivedComputes: Record<string, DerivedCompute> =
+export const qualityDerivedComputes: Record<string, DerivedAdapter> =
   Object.fromEntries(
-    scoredEntities.map((kind) => [`quality.${kind}`, qualityCompute(kind)]),
+    scoredEntities.map((kind) => [
+      `quality.${kind}`,
+      Object.assign(
+        derivedSink({
+          prepare: (db, ids) => prepareQualityPublications(db, kind, ids),
+          publish: async (tx, ids, rows) => {
+            const keep = new Set(ids);
+            await publishQualitySnapshots(
+              tx,
+              rows.filter((row) => keep.has(row.entityId)),
+            );
+            return ids;
+          },
+        }),
+        { preparationBatchSize: 200 },
+      ),
+    ]),
   );
