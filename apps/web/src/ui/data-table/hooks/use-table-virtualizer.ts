@@ -22,7 +22,7 @@ import type { GroupColumnTotal } from "../use-grouped-list";
  * structurally (not imported) so the index-math helpers below stay free of any
  * `~/` alias imports and can be unit-tested in the alias-free vitest project.
  */
-export type GroupedItem =
+type GroupedItem =
   | {
       kind: "header";
       key: string;
@@ -89,7 +89,7 @@ type ResolvedVirtualIndex =
  * the index space is the flat rows array (index === rowIndex). When grouped, the
  * index space is the interleaved items array, which may land on a header.
  */
-export function resolveVirtualIndex(
+function resolveVirtualIndex(
   index: number,
   groupedItems: GroupedItem[] | null,
   trailingSentinel = false,
@@ -112,7 +112,7 @@ export function resolveVirtualIndex(
  * Flat lists map 1:1; grouped lists must skip past interleaved section headers.
  * Returns -1 when the row isn't present (mirrors `Array.findIndex`).
  */
-export function flatRowToVirtualIndex(
+function flatRowToVirtualIndex(
   rowIndex: number,
   groupedItems: GroupedItem[] | null,
 ): number {
@@ -128,7 +128,7 @@ export function flatRowToVirtualIndex(
  * from the pane, not the window — a 60vh related table used to overscan by a
  * full window each side, which mounted every row of every table on a page.
  */
-export function tableOverscan(paneHeight: number, rowHeight: number): number {
+function tableOverscan(paneHeight: number, rowHeight: number): number {
   return Math.min(16, Math.max(6, Math.ceil(paneHeight / rowHeight / 3)));
 }
 
@@ -146,7 +146,7 @@ export function stickyHeaderIndex(
 }
 
 /** Stable virtualizer key for a row, group header, or infinite sentinel. */
-export function tableVirtualItemKey(
+function tableVirtualItemKey(
   index: number,
   rowKeys: string[],
   groupedItems: GroupedItem[] | null,

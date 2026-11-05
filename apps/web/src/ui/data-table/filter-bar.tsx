@@ -111,7 +111,7 @@ const labelOf = (field: FilterBarField) => field.label ?? field.key;
  * value"; picked values join with "or", or "and" under Match all; excluded
  * values read "is not …". Without a `side` the text covers both sides.
  */
-export function filterSummary(
+function filterSummary(
   field: FilterBarField,
   filter: Filter | undefined,
   side?: FilterSide,

@@ -806,7 +806,7 @@ function headerFitWidth(label: string) {
  * explanation and relation-workbench controls overlay the active row's cell
  * (`CellFrame overlay`) and reserve nothing.
  */
-export function columnRailWidth(meta: CubbyColumnMeta | undefined) {
+function columnRailWidth(meta: CubbyColumnMeta | undefined) {
   return meta?.suggest ? CELL_RAIL_SLOT_PX : 0;
 }
 
