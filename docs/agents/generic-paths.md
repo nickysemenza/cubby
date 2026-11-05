@@ -8,6 +8,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 
 ## Entity spine
 
+- Capabilities: [what each one declares and needs](../entities.md#entity-capabilities).
 - Declarations: `packages/schemas/src/entity-definitions/*.entity.ts`, source/read
   construction in `defineEntityModel`, typed relationship factories in
   `relationships.ts`, common field policy in `field-policy.ts`, compiled by
@@ -17,7 +18,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   scope/create/sort/page plan on web and Apple. A field `display` key is declared once in
   `definition.ts`: the compiled contract and web field model pass it through, and listing
   it in `fieldDisplayWire` (`manifest-wire.ts`) adds it to the Swift descriptor and catalog
-  JSON. Generation checks structure; the web/test typecheck verifies those contracts agree.
+  JSON. Entity `presentation` keys reach the compiled contract and web the same way; native
+  reshapes them, so a native-visible key adds one wire field and one `presentationJSON` line.
+  Generation checks structure; the web/test typecheck verifies those contracts agree.
 - Repository SQL titles: `scaffold.title()` reads the stored `titleField`
   column or the repository's declared computed `read.title` expression; shortcode
   labels, graph labels and filter options use it. `read.optionCount` names a
