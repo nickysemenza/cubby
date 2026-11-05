@@ -4291,6 +4291,10 @@ tab's Connections, the impact preview, the graph explorer's physical edges,
 the Problems orphan finder, and MCP `entity_graph_read.connections`. Writes never go
 through it.
 
+Agents read declared relations, including multi-hop paths the physical graph has no
+edge for, through `entity_graph_read.graph`. Declaring a relation on an entity is
+enough: web, native and MCP read it from the same compiled roster.
+
 The orphan finder restricts graph arms to edges touching its checked kinds
 before reading rows. Polymorphic source arms remain eligible because their
 source kind is stored on each identity. Both endpoints must still be live;
