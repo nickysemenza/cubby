@@ -9,7 +9,7 @@ import { withMigrationDatabase } from "./test-database-lease";
 it("preserves transfer parties, claims and original evidence through minor-unit storage", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
-    await migrateDatabase(db, { through: "0087_source_claim_minor_units" });
+    await migrateDatabase(db, { through: "0093_source_claim_minor_units" });
     const ids = [
       "00000000-0000-4000-8000-000000000101",
       "00000000-0000-4000-8000-000000000102",
@@ -49,7 +49,7 @@ it("preserves transfer parties, claims and original evidence through minor-unit 
     );
     await client.query(`UPDATE "LedgerTransfer" SET amount=10.010000000000002`);
     await expect(
-      migrateDatabase(db, { through: "0088_ledger_transfer_minor_units" }),
+      migrateDatabase(db, { through: "0094_ledger_transfer_minor_units" }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",
@@ -65,7 +65,7 @@ it("preserves transfer parties, claims and original evidence through minor-unit 
       ).rows,
     ).toEqual([{ archived: null }]);
     await client.query(`UPDATE "LedgerTransfer" SET amount=10.01`);
-    await migrateDatabase(db, { through: "0088_ledger_transfer_minor_units" });
+    await migrateDatabase(db, { through: "0094_ledger_transfer_minor_units" });
     expect(
       (
         await client.query(
