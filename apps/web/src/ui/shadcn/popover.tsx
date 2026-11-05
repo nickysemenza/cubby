@@ -81,6 +81,19 @@ type PopoverHandle<Payload> = ReturnType<
   typeof PopoverPrimitive.createHandle<Payload>
 >
 
+function PopoverDescription({
+  className,
+  ...props
+}: PopoverPrimitive.Description.Props) {
+  return (
+    <PopoverPrimitive.Description
+      data-slot="popover-description"
+      className={cn("text-muted-foreground", className)}
+      {...props}
+    />
+  )
+}
+
 export {
   Popover,
   PopoverContent,
@@ -88,5 +101,7 @@ export {
   PopoverTitle,
   PopoverTrigger,
   createPopoverHandle,
+
+  PopoverDescription,
 }
 export type { PopoverHandle }
