@@ -843,8 +843,15 @@ therefore settles at the next retry or through Run control, not at wait publicat
 which writes only the evaluation's work columns. A `budget_exceeded` gap or a provider failure spends
 attempts, clears any wait, and settles `failed` as above.
 
-The `evaluation page` log describes one attempt before the drain maps it, with
-`waiting` and `failed` apart. The Job page result owns committed outcomes.
+The `evaluation page prepared` log names a page's slots, prepared bytes and overflow before
+inference starts, so an invocation killed mid-page still identifies it. The `evaluation page`
+log describes one attempt before the drain maps it, with `waiting` and `failed` apart. The
+Job page result owns committed outcomes.
+
+Wait pages and AI work Runs read their rosters through `evaluation-tally.ts`, so a page costs
+one aggregate rather than the roster, which can reach tens of thousands of rows. Failed ids and
+the joined error text are read only when the work settles. A Mail reclassify Run still reads
+its rows, because its checkpoint records a result per Email.
 
 ## Apple version gate
 

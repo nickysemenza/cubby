@@ -1,8 +1,4 @@
-import {
-  aiRefreshProgress,
-  aiProvenance,
-  aiEvaluationTarget,
-} from "@cubby/schemas/ai-evaluation";
+import { aiProvenance, aiEvaluationTarget } from "@cubby/schemas/ai-evaluation";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -333,32 +329,6 @@ export async function storeAiEvaluationResult(
       )
       .returning({ id: aiEvaluation.id });
     return Boolean(stored);
-  });
-}
-
-export function aiEvaluationProgress(
-  rows: readonly (typeof aiEvaluation.$inferSelect)[],
-  attempt: number,
-) {
-  const current = rows.filter(
-    (row) =>
-      !z.object({ retryEvaluationId: z.uuid() }).safeParse(row.receipt).success,
-  );
-  const count = (state: (typeof aiEvaluation.$inferSelect)["state"]) =>
-    current.filter((row) => row.state === state).length;
-  return aiRefreshProgress.parse({
-    attempt,
-    selected: current.length,
-    queued: count("queued"),
-    resultReady: count("result_ready"),
-    completed: count("completed"),
-    blocked: count("blocked"),
-    failed: count("failed"),
-    obsolete: count("obsolete"),
-    cancelled: count("cancelled"),
-    errors: current
-      .flatMap((row) => (row.error ? [row.error] : []))
-      .slice(0, 10),
   });
 }
 

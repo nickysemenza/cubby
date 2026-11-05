@@ -1,12 +1,8 @@
-import {
-  aiEvaluationState,
-  aiEvaluationTarget,
-} from "@cubby/schemas/ai-evaluation";
+import { aiExecutionKind } from "@cubby/schemas/ai-evaluation";
 import { buildActorContext } from "@cubby/schemas/context";
 import { suggestFieldKeys } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
-  suggestionSweepRunProgress,
   sweepFamilyScope,
   sweepRunInput,
   type SweepFamily,
@@ -18,9 +14,12 @@ import { z } from "zod";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import {
-  PENDING_AI_STATES,
-  requestedAiEvaluations,
-} from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+  readEvaluationOutcomes,
+  readEvaluationTally,
+  readFailedEvaluations,
+  type EvaluationScope,
+  type EvaluationTally,
+} from "~/server/ai/evaluation/repo/evaluation-tally";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {
@@ -43,7 +42,6 @@ import {
 import { buildCrudServices } from "~/server/http/request-context";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
-import { aiEvaluationsForRun } from "../repo/ai-work-state";
 import {
   CONNECTION_ROSTER_PAGE,
   countConnectionSweepSources,
@@ -604,74 +602,52 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
 // ---- AI evaluations a Sweep step fans out to per-item Jobs and waits on. ----
 
 const EVALUATION_WAIT_SECONDS = 30;
-/** Terminal evaluations that produced no result and no failure. */
-const SKIPPED_AI_STATES: readonly string[] = [
-  aiEvaluationState.enum.blocked,
-  aiEvaluationState.enum.obsolete,
-  aiEvaluationState.enum.cancelled,
-];
 
-/** The Sweep's current (unretried) evaluations of one family. */
-async function sweepEvaluations(
-  db: Database,
-  run: StepRunOwner,
-  family: "connection" | "field",
-) {
-  const items =
-    family === "connection"
-      ? (await aiEvaluationsForRun(db, run.id)).filter(
-          (item) =>
-            aiEvaluationTarget.safeParse(item.target).data?.kind ===
-            "connection",
-        )
-      : (await requestedAiEvaluations(db, run.id)).filter(
-          (item) => item.executionKind === "suggestion_sweep",
-        );
-  return items.filter(
-    (item) =>
-      !z.object({ retryEvaluationId: z.uuid() }).safeParse(item.receipt)
-        .success,
-  );
-}
+const connectionEvaluations = (run: StepRunOwner): EvaluationScope => ({
+  runId: run.id,
+  source: "owned",
+  connectionsOnly: true,
+});
+const fieldEvaluations = (run: StepRunOwner): EvaluationScope => ({
+  runId: run.id,
+  source: "requested",
+  executionKind: aiExecutionKind.enum.suggestion_sweep,
+});
 
 /**
  * One wait page over the evaluations a roster queued: their states are the
  * step's absolute counts, so a re-read never adds them twice.
  */
-function evaluationPage(
+async function evaluationPage(
   context: StepContext,
-  items: Awaited<ReturnType<typeof sweepEvaluations>>,
+  scope: EvaluationScope,
+  tally: EvaluationTally,
   extra: Pick<Extract<StepPage, { kind: "progress" }>, "tallies" | "reasons">,
-): StepPage {
+): Promise<StepPage> {
   const { step } = context;
-  const pending = items.filter((item) =>
-    PENDING_AI_STATES.includes(item.state),
-  ).length;
-  const failed = items.filter((item) => item.state === "failed");
-  const counts = {
-    done: items.filter((item) => item.state === "completed").length,
-    failed: failed.length,
-    skipped: items.filter((item) => SKIPPED_AI_STATES.includes(item.state))
-      .length,
-  };
-  const errors: RunStepError[] = failed.map((item) => ({
-    at: item.updatedAt.toISOString(),
-    message: item.error ?? "AI evaluation failed",
-    ref: `evaluation:${item.id}`,
-  }));
+  const { pending, total, completed, failed } = tally;
+  const skipped = tally.blocked + tally.obsolete + tally.cancelled;
+  // Errors are the newest-first sample; only a settled step records them.
+  const errors: RunStepError[] =
+    !pending && failed
+      ? (await readFailedEvaluations(context.db, scope)).map((item) => ({
+          at: item.updatedAt.toISOString(),
+          message: item.error ?? "AI evaluation failed",
+          ref: `evaluation:${item.id}`,
+        }))
+      : [];
   return {
     kind: "progress",
     delta: {
-      done: counts.done - step.done,
-      failed: counts.failed - step.failed,
-      skipped: counts.skipped - step.skipped,
+      done: completed - step.done,
+      failed: failed - step.failed,
+      skipped: skipped - step.skipped,
     },
-    // Errors are the newest-first sample; only a settled step records them.
-    ...(!pending && errors.length && { errors }),
+    ...(errors.length && { errors }),
     ...extra,
     absolute: true,
     ...(pending && {
-      action: `Waiting for ${pending} of ${items.length} evaluations`,
+      action: `Waiting for ${pending} of ${total} evaluations`,
     }),
     ...(pending && { waitSeconds: EVALUATION_WAIT_SECONDS }),
     done: pending === 0,
@@ -746,18 +722,16 @@ const connectionRoster: StepDriversFor<"sweep">["connection_roster"] = {
 
 const connectionEvaluate: StepDriversFor<"sweep">["connection_evaluate"] = {
   count: async ({ db, run }) => ({
-    total: (await sweepEvaluations(db, run, "connection")).length,
+    total: (await readEvaluationTally(db, connectionEvaluations(run))).total,
     boundary: null,
   }),
   page: async (context) => {
     await readmitFailures(context, true);
-    const items = await sweepEvaluations(context.db, context.run, "connection");
-    return evaluationPage(context, items, {
-      reasons: {
-        blocked: items.filter((item) => item.state === "blocked").length,
-        obsolete: items.filter((item) => item.state === "obsolete").length,
-        cancelled: items.filter((item) => item.state === "cancelled").length,
-      },
+    const scope = connectionEvaluations(context.run);
+    const tally = await readEvaluationTally(context.db, scope);
+    const { blocked, obsolete, cancelled } = tally;
+    return evaluationPage(context, scope, tally, {
+      reasons: { blocked, obsolete, cancelled },
     });
   },
 };
@@ -825,33 +799,18 @@ const fieldRoster: StepDriversFor<"sweep">["field_roster"] = {
 
 const fieldEvaluate: StepDriversFor<"sweep">["field_evaluate"] = {
   count: async ({ db, run }) => ({
-    total: (await sweepEvaluations(db, run, "field")).length,
+    total: (await readEvaluationTally(db, fieldEvaluations(run))).total,
     boundary: null,
   }),
   page: async (context) => {
     await readmitFailures(context, false);
-    const items = await sweepEvaluations(context.db, context.run, "field");
-    const receipts = items.flatMap((item) => {
-      const receipt = z
-        .object({
-          outcome: z.string(),
-          diagnostics: suggestionSweepRunProgress.shape.diagnostics.optional(),
-        })
-        .safeParse(item.receipt);
-      return receipt.success ? [receipt.data] : [];
-    });
+    const scope = fieldEvaluations(context.run);
+    const outcomes = await readEvaluationOutcomes(context.db, scope);
     const reasons: Record<string, number> = {};
-    for (const diagnostic of receipts.flatMap(
-      (receipt) => receipt.diagnostics ?? [],
-    ))
+    for (const diagnostic of outcomes.diagnostics)
       reasons[diagnostic.reason] = (reasons[diagnostic.reason] ?? 0) + 1;
-    return evaluationPage(context, items, {
-      tallies: {
-        applied: receipts.filter((receipt) => receipt.outcome === "applied")
-          .length,
-        queued: receipts.filter((receipt) => receipt.outcome === "queued")
-          .length,
-      },
+    return evaluationPage(context, scope, outcomes.tally, {
+      tallies: { applied: outcomes.applied, queued: outcomes.queued },
       reasons,
     });
   },

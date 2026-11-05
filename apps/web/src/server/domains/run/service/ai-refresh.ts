@@ -1188,6 +1188,14 @@ async function evaluateAiRefreshPage<P, O>(
       else ready.push(entry);
     }
   }
+  // A killed invocation never reaches the `evaluation page` log, so this names its page.
+  log.info("evaluation page prepared", {
+    claimedSlots: targets.length,
+    prepared: ready.length,
+    failed: failures.size + oversized.size,
+    overflow: overflowed.length,
+    preparedBytes,
+  });
   // Object identity is the existing DecisionRequestBatch's attribution boundary.
   const groups = new Map<string, AiRunContext>();
   const usageFor = (target: EvaluationPageTarget) => {
