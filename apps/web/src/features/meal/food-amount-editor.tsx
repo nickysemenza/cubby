@@ -8,6 +8,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { formatCount } from "~/lib/number-format";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { wasm } from "~/lib/wasm";
+import { Picker } from "~/ui/combobox/picker";
 import { Row, Stack } from "~/ui/layout";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
@@ -212,28 +213,21 @@ export function FoodAmountEditor({
           <Label htmlFor={`${fieldId}-unit`} className="sr-only">
             Unit
           </Label>
-          <Input
-            id={`${fieldId}-unit`}
-            list={`${fieldId}-units`}
+          <Picker
+            mode="suggest"
+            inputId={`${fieldId}-unit`}
+            options={units.map((option) => ({ value: option, label: option }))}
             className="h-11 font-mono"
             value={unit}
             required={required || amount != null}
             aria-invalid={(amount != null && !unit.trim()) || undefined}
             placeholder="unit"
-            onChange={(event) => {
-              const next = event.target.value;
+            onValueChange={(next) => {
               setUnit(next);
               parse(valueText, next);
             }}
             onBlur={() => parse(valueText, unit)}
           />
-          <datalist id={`${fieldId}-units`}>
-            {units.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </datalist>
         </div>
       </Row>
       <Description size="xs">

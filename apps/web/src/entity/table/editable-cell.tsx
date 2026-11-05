@@ -31,6 +31,7 @@ import type { PickerOption } from "~/ui/combobox/picker-option";
 import { CellEditorPendingContext } from "~/ui/data-table/cell-editor-overlay";
 import { DateSpanInput } from "~/ui/dates/date-span-input";
 import { InlineEditActions } from "~/ui/forms/inline-edit-actions";
+import { NumberInput } from "~/ui/forms/number-input";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
@@ -1014,10 +1015,9 @@ export function EditableAmountCell({
           onRequestCancel={edit.cancel}
         >
           <div className="inline-flex items-center gap-2">
-            <Input
-              type="number"
+            <NumberInput
               value={editingValue}
-              onChange={(e) => setEditingValue(parseFloat(e.target.value) || 0)}
+              onValueChange={(next) => setEditingValue(next ?? 0)}
               onKeyDown={handleKeyDown}
               className="h-7 w-20"
               step="any"

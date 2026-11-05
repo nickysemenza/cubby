@@ -41,10 +41,10 @@ import { inventory as inventoryOperations } from "~/integrations/tanstack-query/
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { NumberInput } from "~/ui/forms/number-input";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
-import { Input } from "~/ui/primitives/input";
 import { DecisionSteps } from "~/ui/records/decision-steps";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/reui/alert";
 import { Description } from "~/ui/text/description";
@@ -330,19 +330,13 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
               . Receiving adds to that count.
             </Description>
             <Row gap="sm" align="center">
-              <Input
-                type="number"
+              <NumberInput
                 step="any"
-                min="0"
+                min={0}
                 className="w-24"
                 aria-label="Quantity to add"
-                value={addQuantity ?? ""}
-                onChange={(e) =>
-                  form.setValue(
-                    "addQuantity",
-                    e.target.value === "" ? null : Number(e.target.value),
-                  )
-                }
+                value={addQuantity ?? null}
+                onValueChange={(next) => form.setValue("addQuantity", next)}
               />
               <Button
                 disabled={

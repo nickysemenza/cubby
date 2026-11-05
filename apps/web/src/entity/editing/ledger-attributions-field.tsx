@@ -14,8 +14,8 @@ import { z } from "zod";
 import { Picker } from "~/entity/picker/picker";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
+import { NumberInput } from "~/ui/forms/number-input";
 import { Button } from "~/ui/primitives/button";
-import { Input } from "~/ui/primitives/input";
 import { Description } from "~/ui/text/description";
 
 type LedgerAttributionRow = ReturnType<typeof ledgerAttributions.parse>[number];
@@ -74,16 +74,14 @@ function LedgerAttributionRowFields({
           );
         }}
       />
-      <Input
+      <NumberInput
         className="w-20"
-        type="number"
-        min="1"
-        step="1"
+        min={1}
+        step={1}
         aria-label={`${label} relative weight`}
         value={row.weight}
-        onChange={(event) => {
-          const weight = Number(event.target.value);
-          if (Number.isSafeInteger(weight) && weight > 0)
+        onValueChange={(weight) => {
+          if (weight != null && Number.isSafeInteger(weight) && weight > 0)
             onChangeRows(
               rows.map((other, at) =>
                 at === index ? { ...other, weight } : other,

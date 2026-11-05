@@ -320,8 +320,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Chart, graph and tree states: `Visualization` (`ui/visualizations/visualization.tsx`).
 - Dialogs and workspace panels: `Overlay` (`ui/overlays/overlay.tsx`),
   `DeleteEntityDialog` + `useStagedDialogAction`, `LocationMoveDialog`.
+- Numeric inputs: `NumberInput` (`ui/forms/number-input.tsx`) for nullable numeric values, bounds and optional step buttons.
 - Pickers: `Picker` for every value choice (`search`, `choose`, `segmented`,
-  `multiple`), `EntityReferencePicker`, `referenceEntitySearch`; record rows come
+  `multiple`, `suggest`), `EntityReferencePicker`, `referenceEntitySearch`; record rows come
   from `combobox-builders.tsx`'s manifest projection, never hand-built icons.
   A form field binds one through `PickerField`, whose `store` is `option`,
   `id` (the shortcode, assignment forms), `item` (the whole row, recipe lines),

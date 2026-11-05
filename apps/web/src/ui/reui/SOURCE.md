@@ -14,6 +14,19 @@ Copied registry items:
   registry as of 2026-11-05; refresh with `shadcn add @reui/badge @reui/alert --overwrite`
   and re-apply Cubby's tones and `pillVariants` composition
 
+ReUI Number Field and Autocomplete were references for Cubby-owned NumberInput and Picker suggest mode.
+
+Other evaluated items remain Cubby-owned:
+
+- Cascader: about 9k lines and column navigation conflicts with grouped-list trees.
+- Sortable: Cubby needs multi-container lists and custom sensors.
+- Date Selector: stores Date objects and fires onChange on mount, breaking the plain-date contract.
+- Time Picker: no consumer.
+- Tree: adds an any-typed dependency; TreeOutline implements the WAI tree pattern.
+- Stepper: linear, while Cubby steps have independent statuses.
+- Timeline, Frame and Icon Tile: covered by RecordList, Panel and SidePanelIconTile.
+- Scrollspy: writes location.hash outside the router.
+
 Cubby-specific adaptations add strict TypeScript compatibility, event-class
 hooks, and first-party adapters for Cubby entities. The former copied filters and file
 upload hook were replaced with Cubby-owned modules and are no longer covered

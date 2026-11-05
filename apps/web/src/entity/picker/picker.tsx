@@ -6,7 +6,7 @@ import { listEntities } from "~/entity/model/list-contracts";
 import type { PickerEntity } from "~/ui/combobox/combobox-types";
 import {
   Picker as ValuePicker,
-  type PickerProps as ValuePickerProps,
+  type ChoicePickerProps as ValuePickerProps,
   type PickerRecordSource,
   type RecordPickerProps as ValueRecordPickerProps,
 } from "~/ui/combobox/picker";

@@ -25,6 +25,7 @@ import { readPathValue } from "~/entity/read-path";
 import { workflowCommandMetadata } from "~/integrations/tanstack-query/workflow-commands";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
+import { NumberInput } from "~/ui/forms/number-input";
 import { Row } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
@@ -323,19 +324,12 @@ function CommandOperand({
           onChange={(event) => onChange(event.target.value || undefined)}
         />
       ) : input.kind === "number" ? (
-        <Input
-          type="number"
+        <NumberInput
           aria-label={input.label}
           min={input.min}
-          value={value ?? ""}
+          value={typeof value === "number" ? value : null}
           disabled={disabled}
-          onChange={(event) =>
-            onChange(
-              event.target.value === ""
-                ? undefined
-                : Number(event.target.value),
-            )
-          }
+          onValueChange={(next) => onChange(next ?? undefined)}
         />
       ) : (
         <Picker
