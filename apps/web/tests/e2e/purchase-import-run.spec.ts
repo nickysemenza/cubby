@@ -248,10 +248,11 @@ test("imports saved order mail from its Email page and follows the live Run to t
       ...finished("mail"),
     ],
   });
-  // The Vendor's Emails section leads to the Email, which owns its import.
+  // The Vendor's Emails section leads to the Email, which owns its import. Its
+  // rows load once the section is in view, so arrive through its anchor.
   await gotoAuthenticatedPage(
     page,
-    `/vendors/${seed.vendor.shortcode}`,
+    `/vendors/${seed.vendor.shortcode}#emails`,
     page
       .locator("#emails")
       .getByText("Synthetic itemized confirmation", { exact: true }),
@@ -304,6 +305,8 @@ test("imports saved order mail from its Email page and follows the live Run to t
   if (!runShortcode) throw new Error("Import result has no Run");
   await runLink.click();
   await expect(page).toHaveURL(new RegExp(`/runs/${runShortcode}$`, "u"));
+  // Lower report sections load once in view, as a member scrolling here sees.
+  await page.getByRole("link", { name: "Processing", exact: true }).click();
   await expect(
     page.getByText(/^(Updating live|Last update .+ ago)$/u),
   ).toBeVisible();
@@ -353,7 +356,7 @@ test("imports saved order mail from its Email page and follows the live Run to t
   if (!purchase) throw new Error("No Purchase was committed");
   await gotoAuthenticatedPage(
     page,
-    `/purchases/${purchase.shortcode}`,
+    `/purchases/${purchase.shortcode}#emails`,
     page.getByText(seed.itemTitle).first(),
   );
   await expect(page.getByText("SYN-CONFIRM-1").first()).toBeVisible();
