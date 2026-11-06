@@ -72,7 +72,6 @@ import {
   productPairFamily,
   imageDescriptionFamily,
 } from "./stored-suggestion-families";
-import { tagSuggestionKeys, tagSuggestionRows } from "./tag-suggestions";
 
 type ShortcodeEntity = SuggestionRecordRef["entity"];
 
@@ -569,7 +568,6 @@ const connectionImpact = {
     qualityImpact("settlement_reference"),
     qualityImpact("financial_transaction_allocation"),
   ],
-  "transaction-transfer": [outcome("Transfer paired")],
   "transaction-refund": [qualityImpact("financial_transaction_allocation")],
   "expense-project": [outcome("Project assigned")],
   "project-tool": [outcome("Tool use recorded")],
@@ -728,12 +726,12 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         },
       ];
     });
-    return [...connectionKeys, ...(await tagSuggestionKeys(db, query))];
+    return connectionKeys;
   },
   rows: async (db, keys) => {
     if (!keys.length) return new Map();
     const byId = new Map(keys.map((key) => [key.suggestionId, key]));
-    const found = await tagSuggestionRows(db, keys);
+    const found = new Map<string, SuggestionListRow>();
     const addProposal = (proposal: ConnectionProposal) => {
       const key = byId.get(proposal.review.suggestionId);
       if (!key || found.has(key.suggestionId)) return;

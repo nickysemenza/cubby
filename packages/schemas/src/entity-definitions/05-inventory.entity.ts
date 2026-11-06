@@ -430,6 +430,7 @@ export const { definition, readSchemas } = defineEntityModel(
             labels: { none: "Household", unresolved: "Unknown" },
           },
           explanation: {
+            evidence: { kind: "ownership" },
             ruleId: "inventory.effective-owner",
             version: 2,
             description:
@@ -451,10 +452,6 @@ export const { definition, readSchemas } = defineEntityModel(
               {
                 path: "fields.ownerLedgerPartyId.current.assignment.value",
                 label: "Current override",
-              },
-              {
-                path: "fields.ownerLedgerPartyId.current.controls.reset.preview.result.decision.outcome.value",
-                label: "Current inherited value",
               },
             ],
           },

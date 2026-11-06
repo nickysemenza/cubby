@@ -71,10 +71,6 @@ it.each(["fresh", "stale"] as const)(
         },
         work: { kind: "idle" },
       },
-      comparison: {
-        kind: "unavailable",
-        reason: "Cached source evidence differs from current sources",
-      },
       sources: [
         {
           label: "Synthetic current source",

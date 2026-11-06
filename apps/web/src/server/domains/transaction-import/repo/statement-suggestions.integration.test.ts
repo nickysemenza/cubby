@@ -5148,7 +5148,7 @@ describe("statement Transaction suggestions", () => {
       clean: false,
       create: {
         kind: "account_transfer",
-        votes: { rule: "account_transfer", label: "account_transfer" },
+        votes: { rule: "account_transfer", label: null },
       },
       transfer: { accountId: wallet.output.id, ledgerTransfer: false },
     });

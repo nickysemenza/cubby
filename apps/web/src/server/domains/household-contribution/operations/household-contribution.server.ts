@@ -1,5 +1,4 @@
 import { householdContributionContract } from "~/contracts/household-contribution.contract";
-import { suggestFinancialTransferPairs } from "~/server/domains/financial-transaction/repo/financial-transfer-pairing";
 import {
   householdContributionLedger,
   projectContribution,
@@ -11,7 +10,5 @@ export const householdContributionHandlers = implementOperationDomain(
   {
     ledger: (context, input) => householdContributionLedger(context.db, input),
     project: (context, input) => projectContribution(context.db, input),
-    transferPairs: (context, input) =>
-      suggestFinancialTransferPairs(context.db, input),
   },
 );

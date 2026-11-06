@@ -1267,6 +1267,7 @@ Rules:
             redundancy: "eligible",
           },
           explanation: {
+            evidence: { kind: "price" },
             ruleId: "product.effective-valuation-price",
             description:
               "Valuation price uses an eligible manual item-price override or the Expense-derived item price. It is not applicable to services; their descriptive charge average is a separate Cost result.",
@@ -1847,6 +1848,7 @@ Rules:
             ],
           },
           explanation: {
+            evidence: { kind: "owners" },
             ruleId: "product.effective-owners",
             description:
               "Each live inventory entry's effective owner, Household or Unknown; a product with no inventory shows the owner its single acquisition would hand down.",

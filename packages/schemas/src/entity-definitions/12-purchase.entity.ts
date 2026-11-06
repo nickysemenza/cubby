@@ -650,6 +650,7 @@ export const { definition, readSchemas } = defineEntityModel({
           redundancy: "eligible",
         },
         explanation: {
+          evidence: { kind: "policy" },
           ruleId: "purchase.effective-evidence-expectation",
           description:
             "An explicit Purchase itemization policy wins; otherwise the live Vendor policy supplies it, followed by the Purchase spending category.",
@@ -666,10 +667,6 @@ export const { definition, readSchemas } = defineEntityModel({
             {
               path: "fields.itemizationExpectation.current.assignment.value",
               label: "Stored override",
-            },
-            {
-              path: "fields.itemizationExpectation.current.controls.reset.preview.result.decision.outcome.value",
-              label: "Inherited value",
             },
           ],
         },

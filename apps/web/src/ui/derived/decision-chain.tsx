@@ -144,33 +144,6 @@ export function DecisionChain({
           </p>
         ) : null}
       </section>
-      {data.envelope.result.kind === "cached" ? (
-        <section
-          aria-label="Current input comparison"
-          className="grid gap-1 text-xs"
-        >
-          {data.comparison.kind === "available" ? (
-            <p>
-              Stored{" "}
-              <DecisionResult
-                result={data.envelope.result}
-                work={data.envelope.work}
-                entity={data.subject.entityKind}
-                field={data.field}
-              />
-              {" → live "}
-              <DecisionResult
-                result={data.comparison.result}
-                work={data.envelope.work}
-                entity={data.subject.entityKind}
-                field={data.field}
-              />
-            </p>
-          ) : (
-            <p>Live comparison unavailable: {data.comparison.reason}</p>
-          )}
-        </section>
-      ) : null}
       {data.envelope.current.assignment !== null ||
       data.envelope.current.controls.kind === "editable" ? (
         <section aria-label="Your choice" className="grid gap-1">

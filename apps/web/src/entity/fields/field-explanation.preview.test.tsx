@@ -1,7 +1,4 @@
-import {
-  fieldExplanationInput,
-  fieldExplanationOutput,
-} from "@cubby/schemas/field-explanation";
+import { fieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
@@ -171,83 +168,4 @@ it("loads on demand, retries a failed read and expands bounded evidence without 
       surface: "summary",
     },
   ]);
-});
-
-it("compares the displayed publication with current inputs only after an explicit diagnostic", async () => {
-  harness = createBrowserTestHarness();
-  const displayedResult = {
-    kind: "cached" as const,
-    decision: {
-      outcome: { kind: "value" as const, value: 18 },
-      provenance: { kind: "computed" as const },
-    },
-    computedAt: "2026-10-25T12:00:00Z",
-  };
-  const envelope = fieldExplanationOutput.shape.envelope.parse({
-    ...explanation.envelope,
-    result: {
-      ...displayedResult,
-      freshness: "stale",
-    },
-    work: { kind: "pending", refreshReason: "Product price changed" },
-  });
-  const calls: unknown[] = [];
-  restoreTransport = overrideOperationDispatch(async (_operation, input) => {
-    const request = fieldExplanationInput.parse(input);
-    calls.push(request);
-    return {
-      ok: true,
-      data: {
-        ...explanation,
-        qualityBreakdown: undefined,
-        sources: [],
-        envelope,
-        comparison: request.diagnostic
-          ? {
-              kind: "available",
-              result: {
-                kind: "live",
-                decision: {
-                  outcome: { kind: "value", value: 24 },
-                  provenance: { kind: "computed" },
-                },
-              },
-            }
-          : {
-              kind: "unavailable",
-              reason: "Live diagnostic has not been requested",
-            },
-      },
-    };
-  });
-  render(
-    <WhyValue
-      entity="product"
-      id={productId}
-      field="price"
-      label="Price"
-      surface="list"
-      scope={{ entityKind: "vendor", entityId: vendorId }}
-      resolution={envelope}
-    />,
-    { wrapper: harness.wrapper },
-  );
-  await userEvent.click(
-    screen.getByRole("button", { name: "How price is determined" }),
-  );
-  const diagnostic = await screen.findByRole("button", {
-    name: "Compare with current inputs",
-  });
-  await waitFor(() =>
-    expect(screen.getByText("Refresh trigger")).toBeVisible(),
-  );
-  expect(screen.getByText("Product price changed")).toBeVisible();
-  expect(screen.queryByText("24")).not.toBeInTheDocument();
-  expect(calls).toEqual([expect.objectContaining({ displayedResult })]);
-  expect(fieldExplanationInput.parse(calls[0]).diagnostic).toBeUndefined();
-  await userEvent.click(diagnostic);
-  await waitFor(() => expect(screen.getByText("24")).toBeVisible());
-  expect(fieldExplanationInput.parse(calls.at(-1)).diagnostic).toBe(true);
-  expect(screen.getByRole("dialog")).toHaveTextContent("Stored 18 → live 24");
-  expect(screen.getByLabelText("Queued for refresh")).toBeVisible();
 });

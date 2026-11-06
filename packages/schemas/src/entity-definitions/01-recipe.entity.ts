@@ -245,6 +245,7 @@ export const { definition, readSchemas } = defineEntityModel(
           },
           resolution: { reset: { servings: null }, redundancy: "eligible" },
           explanation: {
+            evidence: { kind: "yield" },
             ruleId: "recipe.effective-servings",
             description:
               "An explicit serving count wins; otherwise a recipe yield measured in servings supplies the count. Clearing servings resumes the live yield fallback.",
@@ -258,10 +259,6 @@ export const { definition, readSchemas } = defineEntityModel(
               {
                 path: "fields.servings.current.assignment.value",
                 label: "Stored servings",
-              },
-              {
-                path: "fields.servings.current.controls.reset.preview.result.decision.outcome.value",
-                label: "Serving yield",
               },
               { path: "yield", label: "Recipe yield" },
             ],

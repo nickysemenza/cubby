@@ -3,7 +3,6 @@ import {
   connectionCandidate,
   connectionSuggestionEvidence,
   type ConnectionCandidate,
-  CONNECTION_TRANSFER_WINDOW_DAYS,
 } from "@cubby/schemas/entity-connections";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
@@ -32,7 +31,6 @@ import {
   type RecommendationHistoryRow,
 } from "~/server/domains/expense/repo/project-recommendations";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
-import { suggestFinancialTransferPairs } from "~/server/domains/financial-transaction/repo/financial-transfer-pairing";
 import { getProductStockRows } from "~/server/domains/inventory/repo/scan";
 import { suggestProjectTools } from "~/server/domains/project/repo/tools";
 import {
@@ -701,20 +699,6 @@ export async function captureConnectionEvidence(
       });
       break;
     }
-    case "transaction-transfer":
-      dependencies = snapshotJson(
-        await suggestFinancialTransferPairs(db, {
-          transactionIds: [
-            parseShortcodeFor(
-              "financialTransaction",
-              candidate.source.entityId,
-            ),
-          ],
-          maxDateDistanceDays: CONNECTION_TRANSFER_WINDOW_DAYS,
-          maxCandidatesPerTransaction: 3,
-        }),
-      );
-      break;
     case "product-purchase": {
       const prepared_ = prepared?.purchaseProducts.get(
         pairKey(target.id, source.id),

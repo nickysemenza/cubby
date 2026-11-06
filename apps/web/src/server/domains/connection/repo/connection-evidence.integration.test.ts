@@ -85,24 +85,6 @@ describe("prepared connection bases", () => {
         postedDate: "2026-09-14",
       }),
     ]);
-    const transferAccount = await createRepoEntity(ctx, "financialAccount", {
-      name: "Synthetic basis reserve",
-      identity: { kind: "cash" },
-    });
-    const transferOut = await createRepoEntity(ctx, "financialTransaction", {
-      accountId: account.output.id,
-      amount: 73,
-      kind: "account_transfer",
-      status: "posted",
-      postedDate: "2026-09-12",
-    });
-    const transferIn = await createRepoEntity(ctx, "financialTransaction", {
-      accountId: transferAccount.output.id,
-      amount: -73,
-      kind: "account_transfer",
-      status: "posted",
-      postedDate: "2026-09-13",
-    });
     const project = await createRepoEntity(ctx, "project", {
       name: "Synthetic basis project",
     });
@@ -187,11 +169,6 @@ describe("prepared connection bases", () => {
         ref("purchase", order.output.id),
       ),
       candidate(
-        "transaction-transfer",
-        ref("financialTransaction", transferOut.output.id),
-        ref("financialTransaction", transferIn.output.id),
-      ),
-      candidate(
         "project-tool",
         ref("project", project.output.id),
         ref("product", product.shortcode),
@@ -253,23 +230,6 @@ describe("prepared connection bases", () => {
         }),
       ).rejects.toThrow(/changed|stale/i);
     await expectAcceptRefused(proposal.review.suggestionId);
-    const recordedTransfer = candidates.find(
-      (row) => row.relation === "transaction-transfer",
-    );
-    if (!recordedTransfer)
-      throw new Error("Synthetic recorded-transfer candidate missing");
-    const transferProposal = await publishEntityConnection(
-      ctx.db,
-      recordedTransfer,
-    );
-    await createRepoEntity(ctx, "financialTransaction", {
-      accountId: transferAccount.output.id,
-      amount: -73,
-      kind: "account_transfer",
-      status: "posted",
-      postedDate: "2026-09-14",
-    });
-    await expectAcceptRefused(transferProposal.review.suggestionId);
     const toolCandidate = candidates.find(
       (row) => row.relation === "project-tool",
     );

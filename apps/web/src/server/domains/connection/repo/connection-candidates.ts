@@ -21,7 +21,6 @@ import {
   financialTransactionAllocation,
 } from "~/server/db/schema";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
-import { suggestFinancialTransferPairs } from "~/server/domains/financial-transaction/repo/financial-transfer-pairing";
 import { suggestProjectTools } from "~/server/domains/project/repo/tools";
 import { expenseAcquisitionPairPredicate } from "~/server/domains/purchase/repo/purchase-products";
 import { listPurchasesSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
@@ -294,28 +293,6 @@ export async function retrieveFinancialConnectionCandidatePage(
           (candidate) => candidate.source.entityId === edge.source,
         ),
       );
-  const transfers = await suggestFinancialTransferPairs(db, {
-    transactionIds: codes,
-    maxDateDistanceDays: 5,
-    maxCandidatesPerTransaction: 3,
-  });
-  for (const group of transfers.suggestions)
-    for (const candidate of group.candidates)
-      out.get(group.transactionId)?.push({
-        relation: "transaction-transfer",
-        source: {
-          entityKind: "financialTransaction",
-          entityId: candidate.outflowTransactionId,
-        },
-        target: {
-          entityKind: "financialTransaction",
-          entityId: candidate.inflowTransactionId,
-        },
-        label: "Review transfer pair",
-        evidence: evidence(candidate.reasons, [
-          "Equal and opposite values do not prove a transfer; existing domain ownership and evidence checks decide acceptance",
-        ]),
-      });
   return out;
 }
 
