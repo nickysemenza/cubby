@@ -51,6 +51,7 @@ type RouteUsage = {
 let usage: Record<string, RouteUsage> = {};
 let reservedUsd = 0;
 let budgetStopped = false;
+let receipts: { id: string; model: string }[] = [];
 const quoteSchema = z.array(
   z.object({
     model: z.string(),
@@ -136,7 +137,12 @@ export default {
         : fetch(request);
     if (url.pathname === "/usage") return Response.json(usage);
     if (url.pathname === "/budget")
-      return Response.json({ reservedUsd, stopped: budgetStopped, usage });
+      return Response.json({
+        reservedUsd,
+        stopped: budgetStopped,
+        usage,
+        receipts,
+      });
     if (url.pathname === "/reset") {
       if (env.EVAL_BUDGET_USD)
         return new Response("A guarded replay budget cannot reset", {
@@ -145,6 +151,7 @@ export default {
       usage = {};
       reservedUsd = 0;
       budgetStopped = false;
+      receipts = [];
       return new Response(null, { status: 204 });
     }
     // This Worker has only a Unified Billing token, never a ChatGPT session.
@@ -262,6 +269,20 @@ export default {
       entry.failed += 1;
       entry.failedStatuses.push(upstream.status);
       if (env.EVAL_BUDGET_USD) budgetStopped = true;
+    }
+    if (env.EVAL_BUDGET_USD && upstream.ok) {
+      // Synthetic peer receipts correlate physical requests with stored usage;
+      // equal model counts alone could mistake an application-cache row for a
+      // missing physical-call row. No production response is rewritten here.
+      const id = `synthetic-eval:${crypto.randomUUID()}`;
+      receipts.push({ id, model: z.string().parse(countedModel) });
+      const headers = new Headers(upstream.headers);
+      headers.set("cf-aig-log-id", id);
+      return new Response(upstream.body, {
+        status: upstream.status,
+        statusText: upstream.statusText,
+        headers,
+      });
     }
     return upstream;
   },

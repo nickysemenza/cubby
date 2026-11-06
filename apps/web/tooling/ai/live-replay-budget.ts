@@ -21,6 +21,7 @@ const ledgerSchema = z.object({
   stopped: z.boolean(),
 });
 const peerBudget = z.object({
+  receipts: z.array(z.object({ id: z.string(), model: z.string() })),
   reservedUsd: z.number().finite().nonnegative(),
   stopped: z.boolean(),
   usage: z.record(
@@ -33,6 +34,7 @@ const peerBudget = z.object({
   ),
 });
 type Usage = {
+  gatewayLogId?: string | null;
   model: string;
   status: string;
   standardCost: number | null;
@@ -143,6 +145,23 @@ export async function liveReplayBudget() {
               counts.set(model, (counts.get(model) ?? 0) + count);
           }
         const succeeded = rows.filter((row) => row.status === "succeeded");
+        const receipts = peers.flatMap((peer) => peer.receipts);
+        trustworthy &&=
+          new Set(receipts.map((receipt) => receipt.id)).size ===
+          receipts.length;
+        trustworthy &&= receipts.every(
+          (receipt) =>
+            succeeded.filter(
+              (row) =>
+                row.gatewayLogId === receipt.id && row.model === receipt.model,
+            ).length === 1,
+        );
+        trustworthy &&= succeeded.every((row) =>
+          receipts.some(
+            (receipt) =>
+              receipt.id === row.gatewayLogId && receipt.model === row.model,
+          ),
+        );
         // Release conservative capacity only when every physical transmission
         // has exactly one priced successful receipt. Retries, missing telemetry
         // and failed/unknown writes cannot disappear into a cheaper subtotal.

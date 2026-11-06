@@ -56,6 +56,9 @@ it("reserves overlapping credit calls before forwarding and refuses reset or ove
     liveGateway.fetch(request(), guarded),
   ]);
   expect(responses.map((response) => response.status)).toEqual([200, 403]);
+  expect(responses[0]?.headers.get("cf-aig-log-id")).toMatch(
+    /^synthetic-eval:/u,
+  );
   expect(upstream).toHaveBeenCalledTimes(1);
   expect(
     (await liveGateway.fetch(new Request("https://model.test/reset"), guarded))

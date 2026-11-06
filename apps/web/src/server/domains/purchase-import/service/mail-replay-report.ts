@@ -69,6 +69,8 @@ export type MailReplayCaseReport = {
   /** Known standard cost of all Run-scoped calls; null prices stay visible in usage. */
   usd: Record<string, number>;
   usage?: {
+    /** Synthetic live-peer receipt; absent in older/scripted observations. */
+    gatewayLogId?: string | null;
     feature: string;
     model: string;
     status: string;
