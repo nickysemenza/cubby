@@ -88,7 +88,7 @@ export async function seedRecordListDisplayPrerequisite(
       vendorId: vendor.id,
       orderId,
       date: "2026-09-09",
-      statedTotal: 1234n,
+      statedTotal: 12.34,
       notes: `${name} purchase notes`,
     });
     const expense = await create("expense", {
