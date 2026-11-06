@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
+import type { StatementSuggestionOut } from "@cubby/schemas/statement-suggestion";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { sql } from "drizzle-orm";
@@ -185,3 +186,9 @@ export const statementHoldAccounts = async (
       WHERE ${notDeleted("ft")} AND ft.status = ${financialTransactionStatus.enum.pending}
     `)
   ).rows.map((row) => String(row.id));
+
+export type ChargeRef = Pick<StatementSuggestionOut, "source" | "chargeKey">;
+
+/** Stable statement identity shared by individual and transfer-pair proposals. */
+export const chargeId = (charge: ChargeRef): string =>
+  `${charge.source}:${charge.chargeKey}`;

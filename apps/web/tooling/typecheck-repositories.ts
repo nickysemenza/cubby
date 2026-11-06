@@ -33,6 +33,7 @@ export const repositoryOwners = [
   "src/server/domains/purchase/repo/purchase-evidence-policy.ts",
   "src/server/generic/data-quality/repo/presentation.ts",
   "src/server/generic/suggestions/repo/automatic-fields.ts",
+
   "src/server/generic/suggestions/repo/pending-admission.ts",
   "src/server/domains/transaction-import/repo/statement-charge.ts",
   "src/server/domains/transaction-import/repo/source-observation-state.ts",
@@ -64,8 +65,6 @@ export const repositoryOwners = [
   "src/server/domains/purchase/repo/settlement-predicates.ts",
   "src/server/domains/run/repo/report-run-results.ts",
   "src/server/db/job-schema.ts",
-  "src/server/db/suggestion-correction-lock-schema.ts",
-  "src/server/generic/suggestions/repo/correction-lock.ts",
   "src/server/generic/suggestions/repo/suggestion-decisions.ts",
   "src/server/db/derived-rebuild-schema.ts",
   "src/server/db/quality-snapshot-schema.ts",

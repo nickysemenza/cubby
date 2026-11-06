@@ -38,11 +38,9 @@ import { labelStatementSuggestions } from "~/server/domains/transaction-import/s
 import { pendingSuggestionsWorkSource } from "~/server/domains/work/repo/work-suggestions";
 import { executeEntity } from "~/server/entity-kernel";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import {
-  readSuggestionRecordRefs,
-  touchingSuggestionIds,
-} from "~/server/generic/suggestions/repo/review-families";
-import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-families";
+import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
+import { readSuggestionRecordRefs } from "~/server/generic/suggestions/repo/suggestion-reference-resolution";
+import { touchingSuggestionIds } from "~/server/generic/suggestions/repo/suggestion-touching";
 import {
   readWorkQueueWith,
   readRecordWorkQueueWith,

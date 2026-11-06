@@ -21,15 +21,14 @@ import {
 } from "~/server/domains/purchase-import/repo/mail-automatic-decisions";
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { automaticApplicationRule } from "~/server/generic/suggestions/repo/suggestion";
-
+import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
+import { isReviewFamily } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import {
-  automaticSuggestionEligibility,
-  isReviewFamily,
   readSuggestionRecordRefs,
   resolveStoredRecordRefs,
-  reviewFamilyDeclarations,
-  touchingSuggestionIds,
-} from "./review-families";
+} from "~/server/generic/suggestions/repo/suggestion-reference-resolution";
+import { touchingSuggestionIds } from "~/server/generic/suggestions/repo/suggestion-touching";
+import { automaticSuggestionEligibility } from "~/server/generic/suggestions/repo/suggestion-work-tokens";
 
 /**
  * Automatic history includes old pending projections, superseded decisions, and
@@ -160,7 +159,7 @@ export async function listAutomaticDecisions(
         ? reviewFamilyDeclarations[family]
         : null;
     const summary =
-      presentation && "summarize" in presentation
+      presentation && "summarize" in presentation && presentation.summarize
         ? presentation.summarize(z.json().parse(row.judgment))
         : isReviewFamily(family)
           ? reviewFamilyDeclarations[family].label

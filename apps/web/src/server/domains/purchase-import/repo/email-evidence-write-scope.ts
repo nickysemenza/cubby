@@ -6,7 +6,6 @@ import {
   repositoryQueries,
   repositorySnapshotWriteDatabase,
 } from "~/server/db/repository-access.boundary";
-import { lockCorrectionKey } from "~/server/generic/suggestions/repo/correction-lock";
 
 class EmailEvidenceScope {
   declare private readonly scopeIdentity: void;
@@ -66,8 +65,9 @@ export async function withEmailEvidenceWrite<T>(
   const entry: ActiveScope = { scope: null };
   return current.run(entry, () =>
     repositorySnapshotWriteDatabase(db, async (transactionDb) => {
-      // This physical write is the first domain lock and invalidates stale snapshots.
-      await lockCorrectionKey(transactionDb, "email-evidence-write");
+      // Email intake and relevance correction can race with member review; their owning-row
+      // locks and this serializable retry boundary recheck the retained decisions.
+      // Unrelated Emails need no shared serialization key.
       const scope = new EmailEvidenceScope();
       registered.set(scope, transactionDb);
       entry.scope = scope;

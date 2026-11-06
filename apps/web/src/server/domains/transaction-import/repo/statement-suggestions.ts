@@ -4,15 +4,15 @@ import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import {
   FINANCIAL_STATEMENT_IMPORT_MAX_ROWS,
   type FinancialTransactionImportRow,
-} from "@cubby/schemas/financial-transaction";
-import {
   financialTransactionKind,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
-import { financialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
-import { financialTransactionProviderStatus } from "@cubby/schemas/financial-transaction-fields";
-import type { RunId } from "@cubby/schemas/identifiers";
-import type { RunStepError } from "@cubby/schemas/run-step";
+import {
+  financialTransactionSourceRef,
+  financialTransactionProviderStatus,
+} from "@cubby/schemas/financial-transaction-fields";
+import { type RunId } from "@cubby/schemas/identifiers";
+import { type RunStepError } from "@cubby/schemas/run-step";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
 import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record-fields";
@@ -28,23 +28,27 @@ import {
   statementApplicationOrder,
 } from "@cubby/schemas/statement-suggestion";
 import {
-  suggestionFamily,
   suggestionJudgments,
+  suggestionSubjects,
+  suggestionProjectionTargets,
+  suggestionFamily,
   suggestionProducer,
   type SuggestionProducer,
   feedbackEvent,
   feedbackVerdict,
 } from "@cubby/schemas/suggestion";
+import { statementSuggestionRow } from "@cubby/schemas/suggestion-list";
+import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { cents } from "@cubby/shared";
 import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { sql, and, eq, inArray, isNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { plainDateDaysBetween } from "~/lib/household-date";
-import type { Database } from "~/server/db";
+import { type Database } from "~/server/db";
 import {
   getDb,
   runAfterCommit,
@@ -60,7 +64,7 @@ import {
   previewFinancialTransactionImport,
   prepareFinancialStatementPreview,
 } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
-import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
+import { type FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   findTransferPairsForCharges,
   transferPairSourceCharges,
@@ -81,13 +85,23 @@ import {
   suggestionRefKey,
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
+  chargeId,
+  type ChargeRef,
+} from "~/server/domains/transaction-import/repo/statement-input";
+import {
   statementLabelInputs,
   statementLabelSubject,
   statementCandidateSubject,
 } from "~/server/domains/transaction-import/repo/statement-label-input";
 import {
-  decideStatementKind,
+  readStatementSuggestions,
+  statementSuggestionFacts,
+  statementSuggestionKeys,
+  statementSuggestionStatusCounts,
+} from "~/server/domains/transaction-import/repo/statement-suggestion-read";
+import {
   kindAgreed,
+  decideStatementKind,
   type OwnAccount,
   ownAccountNamed,
   statementTransactionKind,
@@ -105,6 +119,17 @@ import {
   publishSuggestions,
   matchedRulesOf,
 } from "~/server/generic/suggestions/repo/suggestion";
+import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
+import {
+  stamps,
+  verbs,
+  keyBase,
+  statementImpact,
+  statementStrength,
+  otherTransaction,
+  statementAcceptApplication,
+  statementScope,
+} from "~/server/generic/suggestions/repo/suggestion-presentation";
 import {
   countSuggestionLabelBacklog,
   inSuggestionBatches,
@@ -117,6 +142,12 @@ import {
   type SuggestionRow,
   unchangedSuggestions,
 } from "~/server/generic/suggestions/repo/suggestion-publication";
+import {
+  statementRecords,
+  statementReferenceMatch,
+  declareAffectedRecords,
+} from "~/server/generic/suggestions/repo/suggestion-record-discovery";
+import { suggestionStateData as stateData } from "~/server/generic/suggestions/repo/suggestion-state";
 import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
@@ -141,7 +172,6 @@ import {
 const STATE = "Suggestion";
 const log = createLogger("statement-suggestions");
 const pendingStatementState = sql`${suggestionTable.family} = ${suggestionFamily.enum.statement_transaction} AND ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}`;
-const stateData = z.record(z.string(), z.json());
 
 /** Matching revision and Automatic attach rule revision; clean-only changes use the policy below. */
 export const STATEMENT_SUGGESTION_REVISION = "2026-10-21.1";
@@ -166,10 +196,6 @@ const HISTORY_MIN_TRANSACTIONS = 2;
  * share are capped at 12, so a Sweep keeps most of them free.
  */
 export const STATEMENT_PUBLISH_CONCURRENCY = 4;
-
-export type ChargeRef = { source: string; chargeKey: string };
-export const chargeId = (charge: ChargeRef) =>
-  `${charge.source}:${charge.chargeKey}`;
 
 export function statementChargeFromWorkRef(ref: string): ChargeRef | null {
   const match = /^charge:([^:]+):(.+)$/.exec(ref);
@@ -1826,15 +1852,16 @@ type StatementCandidate = {
  * charge. Batch admission defers anything that needs the one-at-a-time
  * writer's repairs (settled advice, reused labels) to that writer.
  */
-const statementSuggestions: SuggestionFamily<
-  StatementCandidate,
-  ChargePublicationHistory,
-  "settled",
-  {
-    states: Map<string, ChargeState> | null;
-    history: Map<string, ChargePublicationHistory[]>;
-  }
-> = {
+export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transaction"> &
+  SuggestionFamily<
+    StatementCandidate,
+    ChargePublicationHistory,
+    "settled",
+    {
+      states: Map<string, ChargeState> | null;
+      history: Map<string, ChargePublicationHistory[]>;
+    }
+  > = {
   family: suggestionFamily.enum.statement_transaction,
   slot: ({ proposal: { charge } }) => ({
     lock: `statement-suggestion:${chargeId(charge)}`,
@@ -2087,6 +2114,178 @@ const statementSuggestions: SuggestionFamily<
   },
   labelBacklog: sql`${pendingSuggestion()} AND ${sourceSuggestionAutomaticEligible("s", true)} AND ((s.data->>'needsLabel')::boolean
     OR coalesce((s.data->>'applicationPending')::boolean, false))`,
+  facts: (query, needs) => {
+    const scope = statementScope(query);
+    return scope ? statementSuggestionFacts(scope, needs) : null;
+  },
+  keys: async (db, query) => {
+    const scope = statementScope(query);
+    if (!scope) return [];
+    const status = scope.status ?? "pending";
+    const rows = await statementSuggestionKeys(db, scope);
+    return rows.map((row) => ({
+      family: "statement_transaction" as const,
+      suggestionId: row.id,
+      status,
+      matchedRules: stamps.parse(row.matchedRules),
+      automaticRule: row.automaticRule,
+      fingerprint: row.fingerprint,
+      clean: row.clean,
+      strength: statementStrength(row),
+      impact: row.reviewReason
+        ? [{ kind: "caution", label: row.reviewReason }]
+        : statementImpact[row.recommended],
+      createdAt: row.createdAt,
+      columns: {
+        date: row.statementDate,
+        month: row.statementDate.slice(0, 7),
+        account: row.accountCode,
+        owner: row.ownerCode,
+        merchant: [row.merchant, row.rawDescription].filter(Boolean).join(" "),
+        amount: row.amount,
+        action: row.recommended,
+        kind: row.kind,
+        kindSource: row.kindSource,
+        providerCategory: row.sourceCategory,
+        providerStatus: row.providerStatus,
+        candidate: row.candidateCode,
+        modelLabel:
+          row.labelSame && row.labelConfidence
+            ? `${row.labelSame}:${row.labelConfidence}`
+            : null,
+      },
+    }));
+  },
+  rows: async (db, keys) => {
+    const rows = await readStatementSuggestions(
+      db,
+      keys.map((key) => key.suggestionId),
+      keys[0]?.status === "applied" ? "applied" : "pending",
+    );
+    const byId = new Map(keys.map((key) => [key.suggestionId, key]));
+    return new Map(
+      rows.flatMap((row) => {
+        const key = byId.get(row.suggestionId);
+        if (!key) return [];
+        const other = otherTransaction(row);
+        return [
+          [
+            row.suggestionId,
+            statementSuggestionRow.parse({
+              ...keyBase(key),
+              fingerprint: row.fingerprint,
+              family: "statement_transaction",
+              record: { entity: "financialAccount", id: row.accountId },
+              ...(other
+                ? { other: { entity: "financialTransaction", id: other } }
+                : {}),
+              summary: [
+                { kind: "amount", amount: row.amount },
+                { kind: "date", date: row.statementDate },
+                { kind: "text", text: row.merchant ?? row.rawDescription },
+              ],
+              // Dismissal suppresses the charge permanently.
+              actions: row.reviewReason
+                ? verbs("dismiss")
+                : verbs("accept", "correct", "dismiss"),
+              evidence: row,
+            }),
+          ],
+        ];
+      }),
+    );
+  },
+  outcomes: async (db, filters) => {
+    const rows = await statementSuggestionStatusCounts(db, filters.runId);
+    const of = (status: string) =>
+      rows.find((row) => row.status === status)?.count ?? 0;
+    return {
+      applied: of("applied"),
+      rejected: of("rejected"),
+      superseded: of("superseded"),
+      resolved: of("resolved"),
+      fields: [],
+    };
+  },
+  acceptAsIs: (row) => {
+    // Labels ride on top of the evidence fingerprint, so a create labelled
+    // clean under an earlier rule still passes the apply-time check.
+    // Accept clean re-reads today's rule instead of the stored flag.
+    if (row.evidence.reviewReason) return null;
+    const { recommended, create, transfer, transferPair } = row.evidence;
+    if (
+      recommended === "create" &&
+      create &&
+      !kindAgreed(create, transfer, transferPair)
+    )
+      return null;
+    const application = statementAcceptApplication(row.evidence);
+    return application
+      ? {
+          suggestionId: row.suggestionId,
+          operationId: crypto.randomUUID(),
+          verdict: "correct",
+          correction: { present: false },
+          intent: "apply",
+          expectedFingerprint: row.fingerprint,
+          reason: null,
+          evidence: null,
+          application,
+        }
+      : null;
+  },
+  ...suggestionReviewFamilies.statement_transaction,
+  ...declareAffectedRecords({
+    roles: [
+      "source",
+      "occurrence",
+      "import",
+      "account",
+      "candidate",
+      "settlement",
+    ],
+    forward: statementRecords,
+    reverse: statementReferenceMatch,
+  }),
+  actionable: sql`true`,
+  summarize: (value: unknown) => {
+    const decision = suggestionJudgments.statement_transaction.parse(value);
+    return `Statement transaction: ${decision.recommended}`;
+  },
+  isolationLevel: "serializable",
+  subject: suggestionSubjects.statement_transaction,
+  target: suggestionProjectionTargets.statement_transaction,
+  transactionBound: true,
+  lockForApply: async (db, prediction) => {
+    const judgment = suggestionJudgments.statement_transaction.parse(
+      prediction.judgment,
+    );
+    const subject = suggestionSubjects.statement_transaction.parse(
+      prediction.subject,
+    );
+    const { lockTransferPairLegs } =
+      await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+    // Even a prediction made before pair discovery shares its charge's leg
+    // lock with a later pair apply, before either can hold its projection.
+    await lockTransferPairLegs(
+      db,
+      judgment.transferPair?.key ??
+        `stmt:${subject.source}:${subject.chargeKey}`,
+    );
+  },
+  actions: ["correct", "wrong", "uncertain", "dismissed"],
+  apply: async (db, context, state, input) => {
+    if (input.application?.kind !== "statement_transaction")
+      throw new Error(
+        "Applying a Transaction suggestion requires the chosen statement action",
+      );
+    const { applyStatementTransactionSuggestion } =
+      await import("~/server/domains/transaction-import/repo/statement-suggestion-apply");
+    await applyStatementTransactionSuggestion(db, context, state, {
+      application: input.application,
+      corrected: input.correction.present,
+    });
+  },
 };
 
 type StatementPublishResult =
@@ -3555,3 +3754,8 @@ export async function countSuggestionsNeedingLabels(
     labelIdentityScope(scope),
   );
 }
+
+export {
+  chargeId,
+  type ChargeRef,
+} from "~/server/domains/transaction-import/repo/statement-input";

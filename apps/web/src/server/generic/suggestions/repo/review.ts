@@ -9,8 +9,6 @@ import {
   suggestionFamily,
   suggestionReviewBatchInput,
   suggestionSubjects,
-  suggestionJudgments,
-  suggestionProjectionTargets,
   suggestionReviewOut,
   mailDecisionFamily,
   type SuggestionFamily,
@@ -28,11 +26,7 @@ import {
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { suggestionTable, image } from "~/server/db/schema";
-import {
-  lockImageDescriptionSubject,
-  withImageCorrectionIntent,
-} from "~/server/domains/image/repo/image-correction-lock";
-import { writeImageDescriptionConfirmation } from "~/server/domains/image/repo/image-description-confirmation";
+import { withImageCorrectionIntent } from "~/server/domains/image/repo/image-correction-lock";
 import type { EmailEvidenceWriteScope } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { withEmailReviewBoundary } from "~/server/domains/purchase-import/repo/email-review-intent";
 import {
@@ -51,11 +45,12 @@ import {
   recordFeedbackWithInsertion,
 } from "~/server/generic/suggestions/repo/suggestion";
 import { decisionForOperation } from "~/server/generic/suggestions/repo/suggestion-decisions";
+import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
 import { acknowledgeSavedField } from "~/server/generic/suggestions/repo/suggestion-field-receipt";
 import {
-  acceptSuggestion,
-  applyFieldCorrection,
-} from "~/server/generic/suggestions/repo/suggestion-review";
+  isReviewFamily,
+  type ReviewFamily,
+} from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import {
   type SuggestionStateRow,
   suggestionStateColumns,
@@ -63,8 +58,6 @@ import {
   transitionSuggestionState,
   transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
-
-import { isReviewFamily, type ReviewFamily } from "./review-families";
 
 const stateDataObject = z.record(z.string(), z.json());
 
@@ -82,7 +75,7 @@ export type AutomaticReview = {
 const automaticReviewInput = suggestionReviewInput.extend({
   operationId: z.string().regex(/^automatic:/),
 });
-type Handler = {
+export type Handler = {
   subject: z.ZodType;
   target: z.ZodType;
   actions: readonly Review["verdict"][];
@@ -110,175 +103,6 @@ type Handler = {
     automatic: AutomaticReview | null,
   ) => Promise<z.infer<typeof suggestionReviewOut>["applicationResult"] | void>;
 };
-/** Each family validates its own subject and uses its transaction-bound domain mutation. */
-const suggestionFamilies = {
-  field: {
-    subject: suggestionSubjects.field,
-    target: suggestionProjectionTargets.field,
-    transactionBound: true,
-    actions: ["correct", "wrong", "uncertain", "dismissed"],
-    apply: async (db, context, state, input, automatic) => {
-      // The automatic mode keeps acceptSuggestion's requiresSuggestionReview refusal.
-      if (input.verdict === "correct" && !input.correction.present)
-        await acceptSuggestion(
-          db,
-          context,
-          { id: state.id },
-          automatic
-            ? { mode: "automatic", confidence: state.confidence }
-            : undefined,
-        );
-      else if (input.correction.present)
-        await applyFieldCorrection(db, context, {
-          id: state.id,
-          correctValue: input.correction.value,
-        });
-      else
-        throw new Error(
-          "Applying field Feedback requires acceptance or a correction",
-        );
-    },
-  },
-  image_description: {
-    subject: suggestionSubjects.image_description,
-    target: suggestionProjectionTargets.image_description,
-    transactionBound: true,
-    isolationLevel: "serializable",
-    lockForApply: async (db, prediction) => {
-      await lockImageDescriptionSubject(
-        db,
-        suggestionSubjects.image_description.parse(prediction.subject),
-      );
-    },
-    actions: ["correct", "wrong", "uncertain"],
-    apply: async (db, context, state, input) => {
-      const correction = input.correction.present
-        ? input.correction
-        : {
-            present: true as const,
-            value: z.json().parse(state.suggestedValue),
-          };
-      if (typeof correction.value !== "string")
-        throw new Error("Confirmed image description must be text");
-      await writeImageDescriptionConfirmation(db, state, correction.value, {
-        kind: "member",
-        effectId: crypto.randomUUID(),
-        commandFeedbackId: context.reviewFeedbackId,
-        actorUserId: context.actorContext.userId,
-      });
-    },
-  },
-  product_pair: {
-    subject: suggestionSubjects.product_pair,
-    target: suggestionProjectionTargets.product_pair,
-    transactionBound: false,
-    currentFingerprint: async (db, state) => {
-      const { reviewedProductPairFingerprint } =
-        await import("~/server/domains/product/repo/match/product-match-candidate");
-      return reviewedProductPairFingerprint(db, state);
-    },
-    actions: ["correct", "wrong", "uncertain", "dismissed"],
-    apply: async (db, context, state, input) => {
-      if (input.verdict !== "correct" || input.correction.present)
-        throw new Error("Product merging requires an accepted pair");
-      if (
-        input.application?.kind !== "product_merge" ||
-        !input.expectedFingerprint
-      )
-        throw new Error(
-          "Product merging requires a survivor and the current pair fingerprint",
-        );
-      const { mergeProductMatch } =
-        await import("~/server/domains/product/repo/match/product-match-review");
-      await mergeProductMatch(
-        { ...context, db },
-        {
-          keepId: input.application.keepId,
-          mergeId: input.application.mergeId,
-          suggestionId: state.id,
-          expectedFingerprint: input.expectedFingerprint,
-        },
-      );
-    },
-  },
-  statement_transaction: {
-    isolationLevel: "serializable",
-    subject: suggestionSubjects.statement_transaction,
-    target: suggestionProjectionTargets.statement_transaction,
-    // The domain write appends settlement refs, which supersede pending
-    // suggestions by trigger; the handler marks its own state applied first.
-    transactionBound: true,
-    lockForApply: async (db, prediction) => {
-      const judgment = suggestionJudgments.statement_transaction.parse(
-        prediction.judgment,
-      );
-      const subject = suggestionSubjects.statement_transaction.parse(
-        prediction.subject,
-      );
-      const { lockTransferPairLegs } =
-        await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
-      // Even a prediction made before pair discovery shares its charge's leg
-      // lock with a later pair apply, before either can hold its projection.
-      await lockTransferPairLegs(
-        db,
-        judgment.transferPair?.key ??
-          `stmt:${subject.source}:${subject.chargeKey}`,
-      );
-    },
-    actions: ["correct", "wrong", "uncertain", "dismissed"],
-    apply: async (db, context, state, input) => {
-      if (input.application?.kind !== "statement_transaction")
-        throw new Error(
-          "Applying a Transaction suggestion requires the chosen statement action",
-        );
-      const { applyStatementTransactionSuggestion } =
-        await import("~/server/domains/transaction-import/repo/statement-suggestion-apply");
-      await applyStatementTransactionSuggestion(db, context, state, {
-        application: input.application,
-        corrected: input.correction.present,
-      });
-    },
-  },
-  transfer_pair: {
-    subject: suggestionSubjects.transfer_pair,
-    target: suggestionProjectionTargets.transfer_pair,
-    transactionBound: true,
-    lockForApply: async (db, prediction) => {
-      const subject = suggestionSubjects.transfer_pair.parse(
-        prediction.subject,
-      );
-      const { lockTransferPairLegs } =
-        await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
-      await lockTransferPairLegs(db, subject.pairKey);
-    },
-    actions: ["correct", "wrong", "uncertain", "dismissed"],
-    apply: async (db, context, state, input, automatic) => {
-      if (
-        automatic ||
-        input.verdict !== "correct" ||
-        input.correction.present ||
-        input.application?.kind !== "transfer_pair"
-      )
-        throw new Error(
-          "Transfer pairing requires member acceptance of the current pair.",
-        );
-      const { applyTransferPairSuggestion } =
-        await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
-      await applyTransferPairSuggestion(db, context, state, input);
-    },
-  },
-  recommendation: {
-    subject: suggestionSubjects.recommendation,
-    target: suggestionProjectionTargets.recommendation,
-    transactionBound: false,
-    actions: ["correct", "wrong", "uncertain", "dismissed"],
-    apply: async (db, context, state, input) => {
-      const { applyEntityConnection } =
-        await import("~/server/domains/connection/repo/entity-connections");
-      return applyEntityConnection(db, context, state, input);
-    },
-  },
-} satisfies Record<ReviewFamily, Handler>;
 
 /**
  * History settles first. A stale or refused application cannot erase the
@@ -662,6 +486,7 @@ async function settleReview(
             .from(suggestionTable)
             .where(eq(suggestionTable.id, prediction.id))
             .limit(1);
+          // Two accepted reviews can race; serialize application on the Suggestion owner.
           const [state] = family.transactionBound
             ? await query.for("update")
             : await query;

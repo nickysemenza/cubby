@@ -40,18 +40,15 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { compileDeclaredFilters } from "~/server/generic/list/repo/declared-filters";
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { reviewSuggestionBatch } from "~/server/generic/suggestions/repo/review";
+import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
 import {
   type SuggestionFactQuery,
   type SuggestionFamilyQuery,
   type SuggestionKey,
   emptyPendingCounts,
-  suggestionFamilies,
-} from "~/server/generic/suggestions/repo/suggestion-families";
-
-import {
-  readSuggestionRecordRefs,
-  touchingSuggestionFamilies,
-} from "./review-families";
+} from "~/server/generic/suggestions/repo/suggestion-presentation";
+import { readSuggestionRecordRefs } from "~/server/generic/suggestions/repo/suggestion-reference-resolution";
+import { touchingSuggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-touching";
 
 const STRENGTH_RANK = { strong: 2, medium: 1, weak: 0 } as const;
 const ARRAY_COLUMNS = new Set(["account", "owner", "entityKind", "merchant"]);
@@ -687,19 +684,8 @@ export async function suggestionCountsByFamily(
 }
 
 const acceptAsIs = (row: SuggestionListRow) => {
-  switch (row.family) {
-    case "field":
-      return suggestionFamilies.field.acceptAsIs(row);
-    case "statement_transaction":
-      return suggestionFamilies.statement_transaction.acceptAsIs(row);
-    case "recommendation":
-      return suggestionFamilies.recommendation.acceptAsIs(row);
-    case "transfer_pair":
-      return suggestionFamilies.transfer_pair.acceptAsIs(row);
-    case "product_pair":
-    case "image_description":
-      return null;
-  }
+  // SAFETY: the row discriminant selects the declaration for that exact row family.
+  return suggestionFamilies[row.family].acceptAsIs(row as never);
 };
 
 /**

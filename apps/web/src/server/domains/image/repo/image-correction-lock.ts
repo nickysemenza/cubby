@@ -9,33 +9,22 @@ import {
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { image } from "~/server/db/schema";
-import { lockCorrectionKey } from "~/server/generic/suggestions/repo/correction-lock";
-
-/** Shared content fence precedes every Image and Suggestion lock. */
-async function lockImageCorrectionContent(db: Database, contentHash: string) {
-  await lockCorrectionKey(db, `image-description:${contentHash}`);
-}
 
 type ImageDescriptionSubject = Pick<
   z.infer<typeof suggestionSubjects.image_description>,
   "recordId" | "contentHash"
 >;
 
-/** Record intent also protects later content from review of an older publication. */
-async function lockImageCorrectionRecord(
-  db: Database,
-  recordId: ImageDescriptionSubject["recordId"],
-) {
-  await lockCorrectionKey(db, `image-description-record:${recordId}`);
-}
-
 async function lockImageCorrectionIntent(
   db: Database,
   subject: ImageDescriptionSubject,
 ) {
-  if (subject.contentHash !== null)
-    await lockImageCorrectionContent(db, subject.contentHash);
-  await lockImageCorrectionRecord(db, subject.recordId);
+  // Member confirmation and inference can target the same Image; its row owns intent.
+  await getDb(db)
+    .select({ id: image.id })
+    .from(image)
+    .where(eq(image.id, subject.recordId))
+    .for("update");
 }
 
 /** History/failed-apply intent remains durable independently of a later domain effect. */

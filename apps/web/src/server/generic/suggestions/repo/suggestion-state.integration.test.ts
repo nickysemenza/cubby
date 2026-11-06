@@ -271,8 +271,8 @@ describe("Suggestion publication and transitions", () => {
       suggestionId: kept.id,
       operationId: "synthetic-grade",
       verdict: "correct",
-      authority: "evaluation",
-      actorUserId: null,
+      authority: "member",
+      actorUserId: "synthetic-reviewer",
     });
     const ids = [kept.id, dismissed.id];
     const live = await liveRows(ctx, ids);
