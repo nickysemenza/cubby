@@ -37,13 +37,13 @@ import { recordSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
+import { readSuggestionRecordRefs } from "~/server/generic/suggestions/repo/suggestion-reference-resolution";
 import {
   drainStoredDerived,
   withJobFixtureExecution,
 } from "~/server/testing/background-queue";
 
 import { reviewSuggestion } from "./review";
-import { readSuggestionRecordRefs } from "./review-families";
 import { acceptCleanSuggestions, listSuggestionPage } from "./suggestion-list";
 
 describe("transfer pairs in the global queue", () => {

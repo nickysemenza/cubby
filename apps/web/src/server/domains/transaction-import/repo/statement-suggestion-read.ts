@@ -27,11 +27,11 @@ import {
   chargeStateOf,
   LIVE_REFS,
 } from "~/server/domains/transaction-import/repo/statement-charge";
-import { reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/review-families";
 import {
   automaticApplicationRule,
   matchedRulesOf,
 } from "~/server/generic/suggestions/repo/suggestion";
+import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
 
 import { isClean } from "./statement-suggestions";
 
@@ -71,7 +71,7 @@ const conditions = (filters: StatementSuggestionScope): SQL => {
       OR EXISTS (SELECT 1 FROM jsonb_array_elements(s.judgment->'candidates') candidate WHERE candidate->>'transactionId' IN (${ids}))
       OR s.judgment->${"supersede"}->>'pendingTransactionId' IN (${ids})
       OR s.judgment->${"void"}->>'transactionId' IN (${ids})
-      OR EXISTS (SELECT 1 FROM jsonb_array_elements(${reviewFamilyDeclarations.statement_transaction.records}) ref WHERE ref->>'id' IN (${ids})))`);
+      OR EXISTS (SELECT 1 FROM jsonb_array_elements(${reviewFamilyDeclarations.statement_transaction.affectedRecords.forward()}) ref WHERE ref->>'id' IN (${ids})))`);
   }
   return sql.join(where, sql` AND `);
 };

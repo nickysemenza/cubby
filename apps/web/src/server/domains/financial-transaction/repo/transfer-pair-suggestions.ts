@@ -7,21 +7,26 @@ import {
   financialTransactionSettlementViolation,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
-import { financialTransactionProviderStatus } from "@cubby/schemas/financial-transaction-fields";
-import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
-import type { RunId } from "@cubby/schemas/identifiers";
 import {
+  financialTransactionProviderStatus,
+  type FinancialTransactionSourceRef,
+} from "@cubby/schemas/financial-transaction-fields";
+import {
+  type RunId,
   parseShortcodeFor,
   type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
-import type { RunStepError } from "@cubby/schemas/run-step";
+import { type RunStepError } from "@cubby/schemas/run-step";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import {
   suggestionFamily,
-  type suggestionReviewInput,
   suggestionSubjects,
+  suggestionProjectionTargets,
+  type suggestionReviewInput,
   type SuggestionProducer,
 } from "@cubby/schemas/suggestion";
+import { transferPairSuggestionRow } from "@cubby/schemas/suggestion-list";
+import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import {
   transferPairJudgment,
   type StatementTransferPairRef,
@@ -32,17 +37,17 @@ import {
 } from "@cubby/schemas/transfer-pair-suggestion";
 import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { type SQL, and, eq, inArray, sql } from "drizzle-orm";
+import { sql, type SQL, and, eq, inArray } from "drizzle-orm";
 import { chunk, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
-import type { Database } from "~/server/db";
+import { type Database } from "~/server/db";
 import {
+  unwrapDb,
   databaseForTransaction,
   getDb,
-  unwrapDb,
   withTransaction,
   withTransactionDatabase,
 } from "~/server/db/helpers";
@@ -60,6 +65,12 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { createFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
+import {
+  transferPairMoneyMoveKinds,
+  transferPairSeedKeys,
+  transferPairSeedPage,
+  transferPoolAmountSql,
+} from "~/server/domains/financial-transaction/repo/transfer-pair-input";
 import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo";
 import {
   sourceObservations,
@@ -74,9 +85,18 @@ import {
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import { statementTransactionKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
-import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import { type EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
+import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
+import {
+  suggestionIdScope,
+  verbs,
+  outcome,
+  keyBase,
+  transferPairRows,
+  TRANSFER_WEAK_BLOCKERS,
+} from "~/server/generic/suggestions/repo/suggestion-presentation";
 import {
   countSuggestionLabelBacklog,
   publishSuggestion,
@@ -84,6 +104,12 @@ import {
   suggestionLabelBacklog,
   type SuggestionLabelCursor,
 } from "~/server/generic/suggestions/repo/suggestion-publication";
+import {
+  entities,
+  relatedRecordMatch,
+  leg,
+  declareAffectedRecords,
+} from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import {
   type SuggestionStateRow,
   transitionSuggestionState,
@@ -107,12 +133,6 @@ const CLEAN_GAP_DAYS = 3;
 const OVERLAP_WINDOW_DAYS = 3;
 /** Pool reach around the seeds: a candidate's competitors and overlaps included. */
 const POOL_WINDOW_DAYS = 2 * CANDIDATE_WINDOW_DAYS;
-import {
-  transferPairMoneyMoveKinds,
-  transferPairSeedKeys,
-  transferPairSeedPage,
-  transferPoolAmountSql,
-} from "~/server/domains/financial-transaction/repo/transfer-pair-input";
 
 const PREVIEW_CHUNK = 500;
 // Amortize Job dispatch between pages; the byte bound still limits publications.
@@ -1257,7 +1277,8 @@ export type TransferPairPublishOutcome =
  * evidence is reconfirmed under the current Run, keeping labels a rule
  * re-run would drop.
  */
-const transferPairSuggestions: SuggestionFamily<Pair> = {
+export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair"> &
+  SuggestionFamily<Pair> = {
   family: suggestionFamily.enum.transfer_pair,
   slot: ({ judgment }) => ({
     lock: `transfer-pair:${judgment.key}`,
@@ -1320,6 +1341,210 @@ const transferPairSuggestions: SuggestionFamily<Pair> = {
   // awaiting their statement refresh.
   labelBacklog: sql`((s.judgment#>>'{outflow,charge,chargeKey}' IS NULL OR s.judgment#>>'{outflow,charge,chargeKey}' LIKE 'SOC-%') AND (s.judgment#>>'{inflow,charge,chargeKey}' IS NULL OR s.judgment#>>'{inflow,charge,chargeKey}' LIKE 'SOC-%')) AND ((s.active AND s.status = ${suggestionStatus.enum.pending} AND (s.data->>'needsLabel')::boolean)
     OR coalesce((s.data->>'statementRefreshPending')::boolean, false))`,
+  facts: (query) => {
+    const { status, runId } = query.filters;
+    const legs = ["outflow", "inflow"] as const;
+    const legArray = (value: (end: (typeof legs)[number]) => SQL) =>
+      sql`array_remove(ARRAY[${sql.join(legs.map(value), sql`, `)}], NULL)`;
+    return {
+      columns: {
+        clean: sql`coalesce((s.judgment->>'clean')::boolean, false)`,
+        strength: sql`CASE WHEN s.judgment->'blockers' ?| ARRAY[${sql.join(
+          TRANSFER_WEAK_BLOCKERS.map((blocker) => sql`${blocker}`),
+          sql`, `,
+        )}]::text[] THEN ${"weak"}
+          WHEN s.judgment->'blockers' ? ${"date_gap"} THEN ${"medium"} ELSE ${"strong"} END`,
+        createdAt: sql`to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+        date: sql`s.judgment->>${"date"}`,
+        amount: sql`s.judgment->>${"amount"}`,
+        dateGapDays: sql`s.judgment->>${"dateGapDays"}`,
+        account: legArray((end) => sql`s.judgment->${end}->>${"accountId"}`),
+        owner: legArray((end) => sql`s.judgment->${end}->${"owner"}->>${"id"}`),
+        merchant: sql`ARRAY[concat_ws(' ', ${sql.join(
+          [
+            ...legs.map((end) => sql`s.judgment->${end}->>${"merchant"}`),
+            ...legs.map((end) => sql`s.judgment->${end}->>${"description"}`),
+          ],
+          sql`, `,
+        )})]`,
+      },
+      from: sql`"Suggestion" s`,
+      where: sql`s.family = ${suggestionFamily.enum.transfer_pair} AND s.status = ${status}
+        ${status === suggestionStatus.enum.pending ? sql`AND s.active` : sql``}
+        AND ${suggestionIdScope(query.suggestionIds, sql`s.id`)}
+        ${runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runId})` : sql``}`,
+    };
+  },
+  keys: async (db, query) =>
+    (await transferPairRows(db, query)).map((row) => ({
+      family: "transfer_pair",
+      suggestionId: row.id,
+      status: query.filters.status,
+      fingerprint: row.fingerprint,
+      clean: row.evidence.clean,
+      strength: row.evidence.blockers.some((reason) =>
+        TRANSFER_WEAK_BLOCKERS.includes(reason),
+      )
+        ? "weak"
+        : row.evidence.blockers.includes("date_gap")
+          ? "medium"
+          : "strong",
+      impact: [outcome("Transfer paired")],
+      createdAt: row.createdAt,
+      matchedRules: [],
+      automaticRule: null,
+      columns: {
+        date: row.evidence.date,
+        amount: row.evidence.amount,
+        dateGapDays: row.evidence.dateGapDays,
+        account: [
+          row.evidence.outflow.accountId,
+          row.evidence.inflow.accountId,
+        ],
+        owner: [
+          row.evidence.outflow.owner?.id ?? null,
+          row.evidence.inflow.owner?.id ?? null,
+        ],
+        merchant: [
+          row.evidence.outflow.merchant,
+          row.evidence.inflow.merchant,
+          row.evidence.outflow.description,
+          row.evidence.inflow.description,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      },
+    })),
+  rows: async (db, keys) => {
+    if (!keys.length) return new Map();
+    const rows = await transferPairRows(
+      db,
+      {
+        filters: { status: keys[0]?.status ?? "pending" },
+      },
+      keys.map((key) => key.suggestionId),
+    );
+    const byId = new Map(keys.map((key) => [key.suggestionId, key]));
+    return new Map(
+      rows.flatMap((row) => {
+        const key = byId.get(row.id);
+        if (!key) return [];
+        return [
+          [
+            row.id,
+            transferPairSuggestionRow.parse({
+              ...keyBase(key),
+              family: "transfer_pair",
+              record: {
+                entity: "financialAccount",
+                id: row.evidence.outflow.accountId,
+              },
+              other: {
+                entity: "financialAccount",
+                id: row.evidence.inflow.accountId,
+              },
+              summary: [
+                { kind: "amount", amount: row.evidence.outflow.amount },
+                { kind: "date", date: row.evidence.date },
+                {
+                  kind: "text",
+                  text:
+                    row.evidence.outflow.description ??
+                    row.evidence.outflow.accountName,
+                },
+              ],
+              actions: row.evidence.apply.available
+                ? verbs("accept", "reject", "dismiss")
+                : verbs("reject", "dismiss"),
+              evidence: row.evidence,
+            }),
+          ],
+        ];
+      }),
+    );
+  },
+  outcomes: async (db, filters) => {
+    const { rows } = await unwrapDb(db).execute<{
+      status: string;
+      count: number;
+    }>(sql`
+      SELECT status, count(*)::int AS count FROM "Suggestion"
+      WHERE family = ${suggestionFamily.enum.transfer_pair}
+        ${filters.runId ? sql`AND "runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}
+      GROUP BY status
+    `);
+    const count = (status: string) =>
+      rows.find((row) => row.status === status)?.count ?? 0;
+    return {
+      applied: count("applied"),
+      rejected: count("rejected"),
+      superseded: count("superseded"),
+      resolved: count("resolved"),
+      fields: [],
+    };
+  },
+  acceptAsIs: (row) =>
+    row.evidence.clean
+      ? {
+          suggestionId: row.suggestionId,
+          operationId: crypto.randomUUID(),
+          verdict: "correct",
+          correction: { present: false },
+          intent: "apply",
+          expectedFingerprint: row.fingerprint,
+          reason: null,
+          evidence: null,
+          application: { kind: "transfer_pair" },
+        }
+      : null,
+  ...suggestionReviewFamilies.transfer_pair,
+  ...declareAffectedRecords({
+    roles: ["outflow", "inflow", "account", "transaction", "owner"],
+    forward: () => sql`${leg("outflow")} || ${leg("inflow")}`,
+    reverse: (scope) =>
+      (["outflow", "inflow"] as const).flatMap((end) => [
+        relatedRecordMatch(
+          scope,
+          entities.financialAccount,
+          sql<string>`s.judgment->${end}->>'accountId'`,
+        ),
+        relatedRecordMatch(
+          scope,
+          entities.financialTransaction,
+          sql<string>`s.judgment->${end}->>'transactionId'`,
+        ),
+        relatedRecordMatch(
+          scope,
+          entities.ledgerParty,
+          sql<string>`s.judgment->${end}->'owner'->>'id'`,
+        ),
+      ]),
+  }),
+  actionable: sql`true`,
+  subject: suggestionSubjects.transfer_pair,
+  target: suggestionProjectionTargets.transfer_pair,
+  transactionBound: true,
+  lockForApply: async (db, prediction) => {
+    const subject = suggestionSubjects.transfer_pair.parse(prediction.subject);
+    const { lockTransferPairLegs } =
+      await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+    await lockTransferPairLegs(db, subject.pairKey);
+  },
+  actions: ["correct", "wrong", "uncertain", "dismissed"],
+  apply: async (db, context, state, input, automatic) => {
+    if (
+      automatic ||
+      input.verdict !== "correct" ||
+      input.correction.present ||
+      input.application?.kind !== "transfer_pair"
+    )
+      throw new Error(
+        "Transfer pairing requires member acceptance of the current pair.",
+      );
+    const { applyTransferPairSuggestion } =
+      await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+    await applyTransferPairSuggestion(db, context, state, input);
+  },
 };
 
 /** Publish one pair through the shared Suggestion publication. */

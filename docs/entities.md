@@ -4517,11 +4517,15 @@ The `/suggestions` page lists actionable proposals from fields,
 statement transactions, connections and recommendations (including tag additions
 and placement moves), Product pairs, image descriptions and transfer pairs on one server-filtered table
 (`suggestions.list` over the family registry in
-`server/generic/suggestions/repo/suggestion-families.ts`): family chips with counts, each family's own columns,
+`server/generic/suggestions/repo/suggestion-family-declarations.ts`): family chips with counts, each family's own columns,
 inline evidence, keyboard review (↑/↓, →, A, D), a confirmed "Accept N clean"
 that re-lists before each chunk, bulk Dismiss and Never suggest (no bulk
 Wrong), and Find suggestions, which estimates and starts a Sweep.
 The Automatic decisions tab retains application history and Wrong grading.
+Each family owns presentation, affected-record discovery and review commands in
+one typed declaration; generic readers compose the same static declarations.
+Reference resolution, touching-record queries and Work tokens have separate
+runtimes.
 The page's `family`, `record` (`<kind>:<CODE>`) and `runId` params scope the queue.
 Every multiselect filter, including Clean, offers **is / is not** through the
 shared filter editor. Excluded column values use the shared `__not__:` state

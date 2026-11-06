@@ -22,11 +22,11 @@ import { workRecordFactsFor } from "~/server/domains/work/repo/record-facts";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
+import { touchingSuggestionIds } from "~/server/generic/suggestions/repo/suggestion-touching";
 import {
   pendingSuggestionRecordsSql,
-  touchingSuggestionIds,
   UNAPPLIED_CORRECTION_REASON,
-} from "~/server/generic/suggestions/repo/review-families";
+} from "~/server/generic/suggestions/repo/suggestion-work-tokens";
 import { recordScope } from "~/server/generic/work-queue/repo/work-declarations";
 import {
   selectWorkCandidates,
