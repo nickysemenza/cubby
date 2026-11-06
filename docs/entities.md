@@ -1341,6 +1341,10 @@ A Suggestion stores immutable typed subjects, judgments, evidence and nullable o
 
 Statement and transfer-pair proposals share the canonical charge preview mapping.
 Stored-family outcome counts use one status query scoped by family and optional Run.
+Suggestion lists resolve record scope once through family discovery and pass matched
+Suggestion IDs to family readers. Review uses family subject and projection schemas,
+the common verdict set, and transaction-bound application by default; families
+retain explicit exceptions.
 
 Suggestion review identity and decision admission reads select only their
 required identity or served-status fields; immutable evidence is loaded only
