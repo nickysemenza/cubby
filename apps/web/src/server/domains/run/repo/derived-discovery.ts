@@ -12,7 +12,7 @@ import type { Fenced } from "~/server/generic/jobs/types";
 
 import { admitConnectionDiscoveryPage } from "./connection-refresh";
 
-const CONNECTION_DISCOVERY_CURSOR_ID = "00000000-0000-4000-8000-000000000077";
+const CONNECTION_DISCOVERY_CURSOR_ID = "00000000-0000-4000-8000-000000000076";
 const cursorSchema = z.object({
   stopped: z.boolean().default(false),
   error: z.string().nullable().default(null),
