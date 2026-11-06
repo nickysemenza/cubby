@@ -331,6 +331,17 @@ empty output). Investigate missing rows against current sources: deleted or
 inapplicable results may correctly disappear. Keep the scoped 16-minute repair
 procedure below for predecessor invocations. ProductConversionCoverage is unchanged.
 
+## WorkItem, JobInvalidationCapture and PhotoGroupSourceEvidence drop
+
+Deploy the Worker that stops reading and writing them first, and read it back. The migration
+is one transaction: it locks all three tables, checks, then drops, so a lock timeout rolls
+everything back for the runner to retry, and a rerun after a lost receipt is a no-op. Nothing
+reads the tickets, and the hourly pass or a SQL view recomputes every declared target regardless,
+so it needs no finished pass. It refuses a ticket of another drain or an undeclared target, a
+capture of another Job, and any `PhotoGroupSourceEvidence` row. A refusal changes nothing. Take
+the snapshot just before merging, under the drop sequence above. After deploy, confirm the three
+tables and the `WorkTicket` sequence are gone.
+
 ## Quality snapshot cutover
 
 The quality cutover adds `QualitySnapshot` and copies every `dataQuality` row's
