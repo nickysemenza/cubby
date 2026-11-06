@@ -15,14 +15,16 @@ import { alias } from "drizzle-orm/pg-core";
 import { unwrapDb } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import { readStoredConnectionProposals } from "~/server/domains/connection/repo/entity-connections";
-import { recommendationScopes } from "~/server/generic/suggestions/repo/pending-admission";
+import {
+  pendingRecommendationEligibility,
+  recommendationScopes,
+} from "~/server/generic/suggestions/repo/pending-admission";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
 import { outcomes } from "~/server/generic/suggestions/repo/suggestion-outcomes";
 import {
   suggestionIdScope,
   keyBase,
-  runCode,
   shortcodeEntity,
   connectionImpact,
   RETRIEVED_REASON,
@@ -31,7 +33,6 @@ import {
   connectionImpactCount,
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import {
-  pendingRecommendationEligibility,
   reviewSuggestion,
   one,
   reviewQueryBuilder,
@@ -101,7 +102,7 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
           sql`, `,
         )
       : null;
-    const run = runCode(query);
+    const run = query.filters.runId;
     // Mirrors readEntityConnectionsBatch's selection; hydration rechecks evidence.
     const { rows } = await unwrapDb(db).execute<{
       id: string;

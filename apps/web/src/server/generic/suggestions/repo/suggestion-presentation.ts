@@ -195,8 +195,6 @@ const recordIdsOf = (
     ?.filter((record) => entities.includes(record.entity))
     .map((record) => record.id);
 
-export const runCode = (query: SuggestionFamilyQuery) => query.filters.runId;
-
 // ---------------------------------------------------------------- field
 
 export const fieldChecks = new Map<string, DataCheck[]>();
@@ -308,7 +306,7 @@ export function statementScope(
   if (recordUuids?.length === 0) return null;
   return {
     recordUuids,
-    runCode: runCode(query),
+    runCode: query.filters.runId,
     status,
     suggestionIds: query.suggestionIds,
   };
@@ -406,7 +404,7 @@ export async function transferPairRows(
       AND ${suggestionIdScope(query.suggestionIds, sql`s.id`)}
       ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}
       ${query.filters.status === "pending" ? sql`AND s.active` : sql``}
-      ${runCode(query) ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runCode(query)})` : sql``}
+      ${query.filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${query.filters.runId})` : sql``}
   `);
   if (!rows.length) return [];
   // Browse pages list stored pairs; apply rechecks the evidence with its fence.

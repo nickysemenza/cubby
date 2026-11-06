@@ -13,7 +13,6 @@ import {
   qualityImpact,
   keyBase,
   cleanAcceptance,
-  runCode,
   fieldChecks,
   fieldStrength,
   shortcodeEntity,
@@ -43,7 +42,7 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
       status: filters.status,
       entities: filters.recordEntity ? [filters.recordEntity] : undefined,
       recordUuids: records?.map((record) => record.id),
-      runId: runCode(query),
+      runId: query.filters.runId,
       suggestionIds: query.suggestionIds,
     });
     return rows.map((row) => {

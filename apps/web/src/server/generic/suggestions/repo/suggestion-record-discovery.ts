@@ -21,8 +21,6 @@ import { financialSourceReferenceRows } from "~/server/domains/financial-transac
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { SuggestionRecordScope } from "~/server/generic/suggestions/repo/suggestion-touching";
 
-export { pendingRecommendationEligibility } from "~/server/generic/suggestions/repo/pending-admission";
-
 export const reviewSuggestion = alias(suggestionTable, "s");
 
 const referenceEntity = z.enum(shortcodeEntities);
