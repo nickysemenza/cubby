@@ -138,6 +138,37 @@ describe("run agent tool behavior", () => {
       },
     ]);
   });
+  it("keeps a Mail batch running unless a provider failure blocks it", async () => {
+    let stops = 0;
+    const services = fromPartial<RunServices>({
+      loadScope: async () => ({
+        purpose: "mail_import",
+        agentId: "synthetic-agent",
+        generation: "synthetic-generation",
+      }),
+      stopForReview: async () => {
+        stops++;
+        return { findingId: null };
+      },
+    });
+    const stop = tools(services).find(
+      (tool) => tool.name === "stop_import_run_for_review",
+    );
+    const call = (reason: string) =>
+      stop!.execute(
+        { operationId: `stop-${reason}`, reason },
+        fakeApi(),
+        BACKGROUND_CONTEXT,
+      );
+    const refused = await call("other");
+    expect(stops).toBe(0);
+    expect(refused).not.toHaveProperty("control");
+    expect(JSON.stringify(refused)).toContain("mail_resolve");
+    const stopped = await call("provider_failure");
+    expect(stops).toBe(1);
+    expect(stopped).toHaveProperty("control", { terminate: true });
+  });
+
   it("converts loosely typed scalars as TypeBox always has", () => {
     const tool = tools(fromPartial<RunServices>({})).find(
       (candidate) => candidate.name === "report_agent_progress",
