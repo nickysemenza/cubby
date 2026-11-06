@@ -1206,7 +1206,7 @@ export const { definition, readSchemas } = defineEntityModel({
       "orderId",
       "displayLabel",
       "date",
-      { key: "statedTotal", specialized: "double-precision" },
+      { key: "statedTotal", specialized: "minor-unit-money" },
       "notes",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
@@ -1326,8 +1326,8 @@ export const { definition, readSchemas } = defineEntityModel({
     checks: [
       { column: "spendingCategoryOrigin" },
       {
-        name: "Purchase_statedTotal_whole_cent_check",
-        sql: "{statedTotal} IS NULL OR abs({statedTotal} * 100 - round({statedTotal} * 100)) < 0.0000001",
+        name: "Purchase_statedTotal_minor_range_check",
+        sql: "{statedTotal} IS NULL OR abs({statedTotal}) <= 100000000000000",
       },
     ],
     relations: {

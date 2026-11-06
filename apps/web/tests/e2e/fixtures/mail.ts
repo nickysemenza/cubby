@@ -17,19 +17,19 @@ export async function seedVendorMailReviewPrerequisite(
     vendorId: vendor.id,
     orderId: "SYN-ORDER-1001",
     date: "2026-09-10",
-    statedTotal: 48,
+    statedTotal: 4800n,
   });
   await insertWithShortcode(db, "purchase", {
     vendorId: vendor.id,
     orderId: "SYN-OTHER-2002",
     date: "2026-09-09",
-    statedTotal: 19,
+    statedTotal: 1900n,
   });
   await insertWithShortcode(db, "purchase", {
     vendorId: vendor.id,
     orderId: "SYN-OTHER-3003",
     date: "2026-09-08",
-    statedTotal: 48,
+    statedTotal: 4800n,
   });
   const bodyText =
     "Synthetic Outfitters. Order SYN-ORDER-1001. Printed total 48 USD.";

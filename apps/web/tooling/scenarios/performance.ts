@@ -352,7 +352,7 @@ export async function seedPerformanceCorpus(
       vendorAccountId: sourceAccount?.id ?? null,
       orderId: `SYNTHETIC-PERF-${bundle + 1}`,
       date: "2026-01-15",
-      statedTotal: 120,
+      statedTotal: 12000n,
       spendingCategoryId: bundle % 3 === 0 ? spending.id : null,
     };
     purchases.push(order);

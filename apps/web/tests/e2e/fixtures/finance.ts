@@ -26,13 +26,13 @@ export async function seedSplitSettlementPrerequisite(
     vendorId: vendor.id,
     orderId: "SYN-SPLIT-1",
     date: "2026-09-10",
-    statedTotal: 42.5,
+    statedTotal: 4250n,
   });
   const second = await insertWithShortcode(db, "purchase", {
     vendorId: vendor.id,
     orderId: "SYN-SPLIT-2",
     date: "2026-09-10",
-    statedTotal: 48.5,
+    statedTotal: 4850n,
   });
   const card = await insertWithShortcode(db, "financialAccount", {
     name: `${name} card`,

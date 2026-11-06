@@ -1,5 +1,6 @@
 import { splitExpenseInput } from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
+import { moneyToMinor } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -24,7 +25,7 @@ describe("vendor paperwork and household reimbursements", () => {
     const purchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
-      statedTotal: 120,
+      statedTotal: moneyToMinor(120),
     });
     for (const [name, cost, economicRole] of [
       ["Vendor bill", 120, "vendor"],
@@ -73,7 +74,7 @@ describe("vendor paperwork and household reimbursements", () => {
     const purchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
-      statedTotal: 120,
+      statedTotal: moneyToMinor(120),
       defaultTrade: "other",
     });
     await insertWithShortcode(ctx.db, "expense", {

@@ -283,7 +283,7 @@ describe("purchaseScaffold.where", () => {
     {
       name: "statedTotalPresenceFilter",
       filters: { statedTotalPresenceFilter: "none" } as const,
-      contains: '"statedTotal" is null',
+      contains: '"statedTotalMinor"::numeric / 100) is null',
     },
     {
       name: "dateTo",

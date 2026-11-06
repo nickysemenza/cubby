@@ -11,6 +11,7 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { shipmentEvidence } from "@cubby/schemas/shipment-evidence";
 import { testShortcode } from "@cubby/schemas/testing";
+import { moneyToMinor } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
@@ -455,7 +456,7 @@ describe("caller-driven purchase import", () => {
     const existing = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: parseEntityId("vendor", vendor.id),
       date: "2026-09-20",
-      statedTotal: 18.5,
+      statedTotal: moneyToMinor(18.5),
     });
     const mail = await retainedMail(
       party.id,
@@ -1197,7 +1198,7 @@ describe("caller-driven purchase import writes", () => {
       });
       expect(await purchaseByShortcode(saved.shortcode)).toMatchObject({
         date: "2026-09-01",
-        statedTotal: 24,
+        statedTotal: 2400n,
       });
       expect(
         (await purchaseLines(saved.id)).map(({ cost, productId }) => ({
@@ -2498,7 +2499,7 @@ describe("shared purchase-import prepare and commit", () => {
       vendorId: vendor.id,
       orderId: targetOrderless ? null : "MANUAL-ORDER-1",
       date: "2026-09-18",
-      statedTotal: 45,
+      statedTotal: moneyToMinor(45),
     });
     const category = categorized
       ? await insertWithShortcode(ctx.db, "spendingCategory", {
@@ -2943,7 +2944,7 @@ describe("shared purchase-import prepare and commit", () => {
           vendorId: manualPurchase.vendorId,
           orderId: "MANUAL-ORDER-1",
           date: "2026-09-18",
-          statedTotal: 45,
+          statedTotal: moneyToMinor(45),
         });
       }
       const before = {
@@ -3077,7 +3078,7 @@ describe("shared purchase-import prepare and commit", () => {
       vendorId: vendor.id,
       orderId: "MANUAL-ORDER-2",
       date: "2026-09-19",
-      statedTotal: 18,
+      statedTotal: moneyToMinor(18),
     });
     const manualExpense = await insertWithShortcode(ctx.db, "expense", {
       purchaseId: manualPurchase.id,

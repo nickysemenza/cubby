@@ -23,6 +23,7 @@ import {
   type PreparePurchaseImportInput,
   type PurchaseImportRunExecution,
 } from "@cubby/schemas/purchase-import";
+import { minorToMoney } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
@@ -480,7 +481,14 @@ async function computeTargetFingerprint(
           }
         : null,
       target: target
-        ? { ...target, updatedAt: target.updatedAt.toISOString() }
+        ? {
+            ...target,
+            statedTotal:
+              target.statedTotal === null
+                ? null
+                : minorToMoney(target.statedTotal),
+            updatedAt: target.updatedAt.toISOString(),
+          }
         : null,
       expenses: expenses.map((row) => ({
         id: row.id,

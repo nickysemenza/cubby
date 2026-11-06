@@ -27,7 +27,9 @@ export async function loadPurchaseAuditBatch(
     .selectDistinct({
       id: purchase.id,
       orderId: purchase.orderId,
-      statedTotal: purchase.statedTotal,
+      statedTotal: sql<
+        number | null
+      >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
       displayLabel: purchase.displayLabel,
     })
     .from(auditLog)

@@ -41,7 +41,12 @@ import {
   type RawExpenseOut,
   rawExpenseOut,
 } from "@cubby/schemas/work-raw-read";
-import { parseShortcode, cents } from "@cubby/shared";
+import {
+  parseShortcode,
+  cents,
+  moneyToMinor,
+  minorToMoney,
+} from "@cubby/shared";
 import { and, asc, eq, inArray, ne, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
@@ -447,7 +452,7 @@ const reconciliationSql = (): SQL => {
       AND verdict.refund = verdict.delta THEN ${purchaseReconciliation.enum.refund_adjusted}::text
   END FROM (
     SELECT ${purchase.statedTotal} AS stated,
-      floor((agg.total * 100)::numeric + 0.5) - floor((${purchase.statedTotal} * 100)::numeric + 0.5) AS delta,
+      floor((agg.total * 100)::numeric + 0.5) - ${purchase.statedTotal} AS delta,
       agg."expenseCount", agg."unpricedCount",
       floor((${refund} * 100)::numeric + 0.5) AS refund
     FROM (${aggregate}) agg
@@ -459,7 +464,7 @@ const helperText = z.string().nullable();
 
 export const purchaseScaffold = listScaffold("purchase", purchase, {
   derived: {
-    reconciliationGap: sql`abs(${purchaseVendorExpenseTotal} - ${purchase.statedTotal})`,
+    reconciliationGap: sql`abs(${purchaseVendorExpenseTotal} - (${purchase.statedTotal}::numeric / 100))`,
     // A purchase with no live vendor leads a descending list.
     vendorId: { sql: purchaseVendorName, nulls: "high" },
     pricedExpenseTotal: sql`CASE WHEN ${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} THEN ${purchaseExpenseTotal} END`,
@@ -663,7 +668,10 @@ export const purchaseScaffold = listScaffold("purchase", purchase, {
             const financial =
               loaded.financial.get(row.id) ?? emptyPurchaseFinancialAggregate();
             const reconciliation = reconcilePurchase({
-              statedTotal: row.statedTotal,
+              // List storage projection has already decoded minor units to the dollar wire.
+              statedTotal: rawPurchaseOut.shape.statedTotal.parse(
+                row.statedTotal,
+              ),
               expenseTotal: Number(value.vendorExpenseTotal),
               expenseCount: Number(value.vendorExpenseCount),
               unpricedExpenseCount: Number(value.vendorUnpricedExpenseCount),
@@ -680,7 +688,10 @@ export const purchaseScaffold = listScaffold("purchase", purchase, {
               reconciliation,
               financialReconciliation,
               reconciliationLabel: reconciliationLabel({
-                statedTotal: row.statedTotal,
+                // List storage projection has already decoded minor units to the dollar wire.
+                statedTotal: rawPurchaseOut.shape.statedTotal.parse(
+                  row.statedTotal,
+                ),
                 expenseTotal: Number(value.expenseTotal),
                 reconciliation,
               }),
@@ -873,7 +884,10 @@ export const createPurchase = defineMutationWriter({
         orderId: data.orderId?.trim() || null,
         displayLabel: data.displayLabel?.trim() || null,
         date: data.date,
-        statedTotal: data.statedTotal,
+        statedTotal:
+          data.statedTotal == null
+            ? data.statedTotal
+            : moneyToMinor(data.statedTotal),
         notes: data.notes,
       });
       // Claim uploaded documents in the insert transaction so failure leaves no pending files.
@@ -1036,7 +1050,10 @@ export const updatePurchase = defineMutationWriter({
               ? undefined
               : data.displayLabel?.trim() || null,
           date: data.date,
-          statedTotal: data.statedTotal,
+          statedTotal:
+            data.statedTotal == null
+              ? data.statedTotal
+              : moneyToMinor(data.statedTotal),
           notes: data.notes,
         }),
         id,
@@ -1057,9 +1074,16 @@ export const updatePurchase = defineMutationWriter({
         });
       }
 
-      const changes = computeChanges(before, after, [
-        ...entityFieldModels.purchase.audit,
-      ]);
+      const dollarSnapshot = (row: typeof before) => ({
+        ...row,
+        statedTotal:
+          row.statedTotal === null ? null : minorToMoney(row.statedTotal),
+      });
+      const changes = computeChanges(
+        dollarSnapshot(before),
+        dollarSnapshot(after),
+        [...entityFieldModels.purchase.audit],
+      );
       if (changes) {
         await logAuditEntry(tx, actor, {
           entityKind: "purchase",
@@ -1732,7 +1756,9 @@ const carryChargeMetadata = async (
     spendingCategoryOrigin: purchase.spendingCategoryOrigin,
     itemizationExpectation: purchase.itemizationExpectation,
 
-    statedTotal: purchase.statedTotal,
+    statedTotal: sql<
+      number | null
+    >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
     displayLabel: purchase.displayLabel,
     notes: purchase.notes,
     date: purchase.date,
@@ -1804,7 +1830,16 @@ const carryChargeMetadata = async (
     date: carryMissing(survivor.date, dead.date),
   });
   if (Object.keys(carried).length > 0) {
-    await tx.update(purchase).set(carried).where(eq(purchase.id, survivorId));
+    await tx
+      .update(purchase)
+      .set({
+        ...carried,
+        statedTotal:
+          carried.statedTotal == null
+            ? carried.statedTotal
+            : moneyToMinor(carried.statedTotal),
+      })
+      .where(eq(purchase.id, survivorId));
   }
   return {
     carried,

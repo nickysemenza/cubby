@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -55,7 +56,7 @@ describe("fresh retained Email connection recommendations", () => {
       vendorId: vendor.id,
       orderId: "SYNTHETIC-CONNECTION",
       date: "2026-10-01",
-      statedTotal: 24,
+      statedTotal: moneyToMinor(24),
     });
     const original = await syntheticRetainedMail(ctx.db, {
       ledgerPartyId: party.id,
@@ -171,7 +172,7 @@ describe("fresh retained Email connection recommendations", () => {
       vendorId: vendor.id,
       orderId: "SYNTHETIC-UNRELATED",
       date: "2026-10-01",
-      statedTotal: 24,
+      statedTotal: moneyToMinor(24),
     });
     const original = await syntheticRetainedMail(ctx.db, {
       ledgerPartyId: f.message.ledgerPartyId,

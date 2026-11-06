@@ -145,7 +145,9 @@ async function loadPurchaseQualityRecords(
       vendorAccountId: purchase.vendorAccountId,
       date: purchase.date,
       orderId: purchase.orderId,
-      statedTotal: purchase.statedTotal,
+      statedTotal: sql<
+        number | null
+      >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
       spendingCategoryId: purchase.spendingCategoryId,
       spendingCategoryOrigin: purchase.spendingCategoryOrigin,
       orderEvidence: vendor.orderEvidence,

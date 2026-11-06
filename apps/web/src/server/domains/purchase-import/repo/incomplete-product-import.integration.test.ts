@@ -582,7 +582,7 @@ describe("incomplete itemized purchase identity", () => {
           (claim) => claim.productId,
         ),
       ).toEqual([(await getDb(ctx.db).select().from(product))[0]!.id]);
-      expect(saved).toMatchObject({ date: expectedDate, statedTotal: 24 });
+      expect(saved).toMatchObject({ date: expectedDate, statedTotal: 2400n });
       const items = await getDb(ctx.db).select().from(product);
       expect(items).toHaveLength(1);
       const lines = await getDb(ctx.db)

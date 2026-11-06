@@ -136,7 +136,9 @@ export async function loadAggregateReplacementSnapshot(
       defaultTrade: purchase.defaultTrade,
       spendingCategoryId: purchase.spendingCategoryId,
       itemizationExpectation: purchase.itemizationExpectation,
-      statedTotal: purchase.statedTotal,
+      statedTotal: sql<
+        number | null
+      >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
     })
     .from(purchase)
     .where(

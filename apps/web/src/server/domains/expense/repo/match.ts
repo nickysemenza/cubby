@@ -165,7 +165,7 @@ export const matchExpenses = async (
         p."orderId"     AS "orderId",
         p."id"          AS "purchaseId",
         p."shortcode"   AS "purchaseShortcode",
-        p."statedTotal"::double precision AS "purchaseStatedTotal",
+        (p."statedTotalMinor"::numeric / 100)::double precision AS "purchaseStatedTotal",
         -- ⚠️ The partition key p."id" is NULLABLE here — the Purchase join is a
         -- LEFT JOIN and most of the interesting population is unlinked
         -- expenses. SQL puts every NULL key in ONE partition, so on an unlinked
