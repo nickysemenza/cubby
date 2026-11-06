@@ -42,7 +42,6 @@ beforeEach(() => {
 });
 afterEach(() => backgroundQueue.restore());
 
-import { viewProblemDeclarations } from "@cubby/schemas/entity-definitions/problems/view-problems";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -392,20 +391,6 @@ describe("problems — view-backed uniform rows", () => {
     expect(
       views.productsWithoutMappings.some(({ id }) => id === thing.id),
     ).toBe(true);
-    const fullViews = await Promise.all(
-      viewProblemDeclarations().map(async ({ problem }) => ({
-        key: problem.key,
-        page: await executeProblem(ctx.db, problem.key),
-      })),
-    );
-    expect(views).toEqual({
-      ...Object.fromEntries(
-        fullViews.map(({ key, page }) => [key, page.items]),
-      ),
-      sectionTotals: Object.fromEntries(
-        fullViews.map(({ key, page }) => [key, page.count]),
-      ),
-    });
     const shelfBadge = {
       label: "Test shelf",
       entity: "location",

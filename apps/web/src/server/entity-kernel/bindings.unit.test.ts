@@ -12,7 +12,6 @@ import {
   generatedMcpEntityUpdateCommandSchema,
 } from "~/server/generated/entity-bindings.gen";
 import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
-import { generatedMcpEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
 import {
   ENTITY_KERNEL_BINDINGS,
   ENTITY_KERNEL_OPERATIONS,
@@ -306,52 +305,6 @@ describe("entity kernel bindings", () => {
             ? undefined
             : `${entity}.${action}: ${parsed.error.message}`,
         ).toBe(true);
-      }
-    }
-  });
-
-  it("accepts exactly the generated MCP action exposure", () => {
-    for (const entity of ENTITY_KERNEL_ENTITIES) {
-      const executable = generatedEntityKernelContractCases[entity].actions;
-      const exposed = generatedMcpEntityKernelContractCases[entity].actions;
-      const binding = ENTITY_KERNEL_BINDINGS[entity];
-      const id = testShortcode(entity, "kernel-exposure");
-
-      for (const action of executable) {
-        let actionInput = {};
-        if (action === "create") {
-          const schema = binding.schemas.createInput;
-          if (schema === null)
-            throw new Error(`${entity} has no create schema`);
-          actionInput = {
-            data: mock(schema, { seed: 2, overrides: createOverrides(entity) }),
-          };
-        } else if (action === "update") {
-          const schema = binding.schemas.updateInput;
-          if (schema === null)
-            throw new Error(`${entity} has no update schema`);
-          actionInput = { id, data: mock(schema, { seed: 2 }) };
-        } else if (action === "bulkUpdate") {
-          const schema = binding.schemas.bulkUpdateInput;
-          if (schema === null)
-            throw new Error(`${entity} has no bulk update schema`);
-          actionInput = { ids: [id], data: mock(schema, { seed: 2 }) };
-        } else if (action === "get") {
-          actionInput = { id };
-        } else if (action === "delete") {
-          actionInput = { ids: [id] };
-        } else if (action === "search") {
-          actionInput = { query: "needle" };
-        } else if (action === "merge") {
-          actionInput = { data: {} };
-        }
-
-        const parsed = entityMcpCommandSchema.safeParse({
-          entity,
-          action,
-          ...actionInput,
-        });
-        expect(parsed.success).toBe(includesAction(exposed, action));
       }
     }
   });

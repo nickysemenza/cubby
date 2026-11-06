@@ -38,7 +38,7 @@ const privateRowSchema = entityRecordSchema
   });
 
 /** Compute costly display fields before paging only when query semantics need them. */
-function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
+export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
   const kinds = shortcodeEntities.filter(
     (kind) => !input.kind || kind === input.kind,
   );

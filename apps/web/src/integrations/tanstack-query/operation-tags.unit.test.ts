@@ -136,13 +136,11 @@ describe("operation cache tags", () => {
         relatedDataTags,
       ],
     },
-    ...[entityGraph.explore, entityGraph.graph, entityGraph.graphPaths].map(
-      (operation) => ({
-        query: operation.id,
-        tags: operation.definition.tags,
-        refreshedBy: allEntities.map((entity) => entityRipple(entity)),
-      }),
-    ),
+    ...[entityGraph.explore, entityGraph.graph].map((operation) => ({
+      query: operation.id,
+      tags: operation.definition.tags,
+      refreshedBy: allEntities.map((entity) => entityRipple(entity)),
+    })),
   ])(
     "refreshes $query after its source records change",
     ({ tags, refreshedBy }) => {

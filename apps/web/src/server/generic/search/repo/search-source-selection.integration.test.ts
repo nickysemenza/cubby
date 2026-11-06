@@ -9,10 +9,8 @@ import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
 import { isDerivedSink } from "~/server/generic/derived/repo/compute";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
-import {
-  buildPrefixTsQuery,
-  findLexicalSearchCandidates,
-} from "~/server/generic/search/service/search.service";
+import { buildPrefixTsQuery } from "~/server/generic/search/repo/search-lexical";
+import { findLexicalSearchCandidates } from "~/server/generic/search/service/search.service";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
