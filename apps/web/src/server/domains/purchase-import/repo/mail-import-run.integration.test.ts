@@ -43,21 +43,29 @@ import {
   callMcpTool,
   kernelRequestContext,
 } from "~/server/testing/mcp-test-utils";
+import {
+  createProductIdentityFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { discoverPurchases } from "~/server/workflows/catch-up";
 
 import { startControlledMailImport } from "../operations/gmail/controlled-import";
 import {
+  preparePurchaseImport,
+  commitPurchaseImport,
+} from "../operations/import-orders";
+import {
   readMailImportOutcomes,
   searchMail,
   settleMail,
 } from "../operations/mail-tool";
-import {
-  retainedMailFixture,
-  importOrderHistory,
-} from "../operations/order-import.fixtures";
+import { retainedMailFixture } from "../operations/order-import.fixtures";
 import { reconcileSettledRun } from "../operations/run-review";
-import { startAgentRunFixture } from "../service/import-run.fixtures";
+import {
+  startAgentRunFixture,
+  startImportRunFixture,
+} from "../service/import-run.fixtures";
 import { writeOutcomeReceipts } from "../service/run-outcome.fixtures";
 import {
   retainedControlledMailIds,
@@ -175,6 +183,92 @@ describe("mail research admission", () => {
         .set({ status: "needs_review", endedAt: new Date() })
         .where(eq(run.id, parseEntityId("run", ownerId)));
     };
+    const good = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic recovery mug" }),
+      ctx.actor,
+    );
+    const purchases = new Map<string, string>();
+    const history = async (orderId: string, revision: string) => {
+      const capture = await startImportRunFixture(ctx.db, {
+        ledgerPartyId: party.id,
+        vendorAccountId: vendorAccountRow.id,
+        trigger: "manual",
+      });
+      const stableOrderId = `synthetic-recovery-${orderId}-${revision}`;
+      const prepared = await preparePurchaseImport(
+        ctx.db,
+        {
+          _runExecution: {
+            runId: capture.id,
+            operationId: `prepare:${stableOrderId}`,
+          },
+          orders: [
+            {
+              stableOrderId,
+              itemOperationId: `item:${stableOrderId}`,
+              vendorId: seller.output.id,
+              targetPurchaseId: purchases.get(orderId),
+              source: {
+                kind: "vendor_export",
+                externalKey: `synthetic-recovery:${orderId}:${revision}`,
+                checksum: revision.repeat(64),
+              },
+              evidenceChecksum: revision.repeat(64),
+              extractionRevision: "synthetic-recovery@1",
+              extraction: {
+                status: "ready",
+                candidate: {
+                  orderId,
+                  orderedAt: "2026-09-01",
+                  merchant: "Synthetic recovery shop",
+                  currency: "USD",
+                  printedGrandTotal: 12,
+                  lines: [
+                    {
+                      title: "Synthetic recovery mug",
+                      amount: 12,
+                      quantity: 1,
+                      lineKind: "principal",
+                    },
+                  ],
+                  payments: [],
+                },
+              },
+              lineIds: ["synthetic-mug"],
+              primaryDocumentImageId: null,
+              screenshotImageId: null,
+            },
+          ],
+        },
+        ctx.actor,
+      );
+      const imported = await commitPurchaseImport(
+        ctx.db,
+        {
+          _runExecution: {
+            runId: capture.id,
+            operationId: `commit:${stableOrderId}`,
+          },
+          prepareOperationId: prepared.operationId,
+          defaultTrade: "other",
+          resolutions: [
+            {
+              stableOrderId,
+              stableLineId: "synthetic-mug",
+              resolution: { kind: "existing", productId: good.id },
+            },
+          ],
+        },
+        ctx.actor,
+      );
+      const result = imported.items[0];
+      expect(result?.outcome).not.toBe("conflict");
+      if (!result?.purchaseId)
+        throw new Error("Synthetic accepted receipt missing");
+      purchases.set(orderId, result.purchaseId);
+    };
+    await history("SYN-RECOVERY-42", "a");
     await block(original.row.id);
     const owner = async () =>
       (
@@ -183,22 +277,13 @@ describe("mail research admission", () => {
           .from(emailTable)
           .where(eq(emailTable.orderMailId, mail.id))
       )[0]?.runId;
-    await importPendingEmails(ctx.db);
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
     expect(await owner()).toBe(original.row.id);
-    const history = (orderId: string, revision: string) =>
-      importOrderHistory(ctx.db, ctx.actor, {
-        ledgerPartyId: party.id,
-        vendorAccountId: vendorAccountRow.id,
-        orderId,
-        orderedAt: "2026-09-01",
-        lines: [{ title: "Synthetic recovery mug", amount: 12 }],
-        revision,
-      });
     await history("SYN-OTHER-ORDER", "b");
-    await importPendingEmails(ctx.db);
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
     expect(await owner()).toBe(original.row.id);
     await history("SYN-RECOVERY-42", "c");
-    await importPendingEmails(ctx.db);
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
     const successor = await owner();
     expect(successor).not.toBe(original.row.id);
     if (!successor)
@@ -207,14 +292,14 @@ describe("mail research admission", () => {
       { orderMailId: mail.id, checksum: mail.rawChecksum },
     ]);
     await block(successor);
-    await importPendingEmails(ctx.db);
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
     expect(await owner()).toBe(successor);
     // A Purchase edit is not new source evidence and cannot reset reasoning.
     await getDb(ctx.db)
       .update(purchase)
       .set({ statedTotal: 1300n })
       .where(eq(purchase.orderId, "SYN-RECOVERY-42"));
-    await importPendingEmails(ctx.db);
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
     expect(await owner()).toBe(successor);
     const refreshedChecksum = "d".repeat(64);
     await getDb(ctx.db)
@@ -237,7 +322,7 @@ describe("mail research admission", () => {
         updatedAt: new Date(),
       })
       .where(eq(emailTable.orderMailId, mail.id));
-    await importPendingEmails(ctx.db);
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
     const refreshedOwner = await owner();
     expect(refreshedOwner).not.toBe(successor);
     if (!refreshedOwner)

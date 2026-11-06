@@ -34,6 +34,7 @@ import {
   and,
   asc,
   desc,
+  gt,
   eq,
   inArray,
   isNotNull,
@@ -63,6 +64,8 @@ import {
   email as emailTable,
   orderMail,
   run,
+  runOperation,
+  sourceOrderObservation,
 } from "~/server/db/schema";
 import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
 import {
@@ -136,7 +139,18 @@ type PurchaseRecheck = {
 };
 
 /** Accepted source revisions, rather than Purchase edits or clock time, reopen a gap. */
-async function importedPurchaseRechecks(db: Database, partyId: LedgerPartyId) {
+async function importedPurchaseRechecks(
+  db: Database,
+  partyId: LedgerPartyId,
+  requested:
+    | { purchaseId: string }
+    | { orderIds: readonly string[]; vendorIds: readonly string[] },
+) {
+  if (
+    "orderIds" in requested &&
+    (!requested.orderIds.length || !requested.vendorIds.length)
+  )
+    return [];
   const rows = await getDb(db)
     .select({
       purchaseId: purchase.shortcode,
@@ -145,10 +159,18 @@ async function importedPurchaseRechecks(db: Database, partyId: LedgerPartyId) {
       sourceId: importSourceOrder.id,
       checksum: importSourceOrder.checksum,
       outputFingerprint: importSourceOrder.outputFingerprint,
+      evidenceAt:
+        sql<Date>`least(coalesce(${sourceOrderObservation.createdAt}, ${importSourceOrder.createdAt}), ${importSourceOrder.updatedAt})`.mapWith(
+          importSourceOrder.createdAt,
+        ),
     })
     .from(importSourceOrder)
     .innerJoin(purchase, eq(purchase.id, importSourceOrder.purchaseId))
     .innerJoin(vendor, eq(vendor.id, purchase.vendorId))
+    .leftJoin(
+      sourceOrderObservation,
+      eq(sourceOrderObservation.id, importSourceOrder.acceptedObservationId),
+    )
     .innerJoin(
       vendorAccount,
       and(
@@ -163,6 +185,16 @@ async function importedPurchaseRechecks(db: Database, partyId: LedgerPartyId) {
         notDeleted(purchase),
         notDeleted(vendor),
         notDeleted(vendorAccount),
+        "purchaseId" in requested
+          ? eq(purchase.shortcode, requested.purchaseId)
+          : and(
+              inArray(purchase.orderId, [
+                ...new Set(
+                  requested.orderIds.flatMap((id) => [id, id.toUpperCase()]),
+                ),
+              ]),
+              inArray(vendor.shortcode, [...requested.vendorIds]),
+            ),
       ),
     )
     .orderBy(asc(importSourceOrder.id));
@@ -177,6 +209,9 @@ async function importedPurchaseRechecks(db: Database, partyId: LedgerPartyId) {
         purchaseId: first.purchaseId,
         orderId: first.orderId,
         vendorId: first.vendorId,
+        evidenceAt: new Date(
+          Math.max(...sources.map((source) => source.evidenceAt.getTime())),
+        ).toISOString(),
         evidenceFingerprint: await sha256Hex(
           JSON.stringify(
             sources.map(({ sourceId, checksum, outputFingerprint }) => ({
@@ -232,8 +267,14 @@ const senderRecheckRevision = (identity: {
     ),
   );
 
-/** A later member edit/review, changed bytes, or newer outcome prevents unattended reopening. */
-const untouchedAutomaticUnresolved = (sourceChanged = false) => sql`EXISTS (
+/**
+ * A later member edit/review, changed bytes, or newer outcome prevents reopening.
+ * Raw SQL instants use UTC ISO text, never pg's host-local Date encoding.
+ */
+const untouchedAutomaticUnresolved = (
+  sourceChanged = false,
+  newEvidenceAt?: Date,
+) => sql`EXISTS (
   SELECT 1 FROM "RunOperation" outcome
   WHERE outcome."runId" = ${run.id}
     AND outcome.kind = ${"target_outcome"} AND outcome.state = ${runStatus.enum.completed}
@@ -253,6 +294,7 @@ const untouchedAutomaticUnresolved = (sourceChanged = false) => sql`EXISTS (
       WHERE newer."runId" = outcome."runId" AND newer.kind = outcome.kind
         AND newer.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'entityId' = ${emailTable.id}::text
         AND newer."completedAt" > outcome."completedAt")
+    AND ${newEvidenceAt ? sql`outcome."completedAt" < ${newEvidenceAt.toISOString()}::timestamp` : sql`true`}
 ) AND NOT EXISTS (
   SELECT 1 FROM "EmailReview" reviewed
   WHERE reviewed.family = ${suggestionFamily.enum.mail_import_outcome}
@@ -280,6 +322,7 @@ async function partitionOwnership(
   controlledParentRunId?: RunId,
   senderRevision?: string,
   sourceChanged = false,
+  newEvidenceAt?: Date,
 ) {
   const messages = await tx
     .select()
@@ -359,7 +402,7 @@ async function partitionOwnership(
           .where(
             and(
               eq(emailTable.id, message.id),
-              untouchedAutomaticUnresolved(sourceChanged),
+              untouchedAutomaticUnresolved(sourceChanged, newEvidenceAt),
               unattemptedSenderMapping(sql`${senderRevision}`),
             ),
           );
@@ -509,6 +552,7 @@ export async function admitMailImport(
               ]),
             )
           : undefined;
+      let newEvidenceAt: Date | undefined;
       if (input.senderRecheck) {
         const [identity] = await readSenderAttributions(tx, [
           input.senderRecheck.sender,
@@ -525,7 +569,11 @@ export async function admitMailImport(
         if (input.senderRecheck.purchase) {
           const expected = input.senderRecheck.purchase;
           const current = (
-            await importedPurchaseRechecks(databaseForTransaction(tx), partyId)
+            await importedPurchaseRechecks(
+              databaseForTransaction(tx),
+              partyId,
+              { purchaseId: expected.purchaseId },
+            )
           ).find((candidate) => candidate.purchaseId === expected.purchaseId);
           if (
             !current ||
@@ -534,6 +582,7 @@ export async function admitMailImport(
             current.vendorId !== input.senderRecheck.vendorId
           )
             return [];
+          newEvidenceAt = new Date(current.evidenceAt);
           for (const source of sources) {
             const content = mailReadContent(source.content, {});
             if (content.truncated || content.nextOffset !== null) return [];
@@ -568,6 +617,7 @@ export async function admitMailImport(
         controlled ? input.parentRunId : undefined,
         senderRevision,
         input.sourceRecheck,
+        newEvidenceAt,
       );
       const existing = [...owners.values()].map((row) => ({
         created: false,
@@ -912,44 +962,26 @@ export async function importPendingEmails(db: Database) {
       } catch (error) {
         errors.push(error);
       }
-    const imported = await importedPurchaseRechecks(db, target.ledgerPartyId);
-    const purchaseRechecks = await Promise.all(
-      identities.flatMap((identity) =>
-        imported
-          .filter((candidate) => candidate.vendorId === identity.vendorId)
-          .map(async (candidate) => {
-            const purchase = {
-              purchaseId: candidate.purchaseId,
-              orderId: candidate.orderId,
-              evidenceFingerprint: candidate.evidenceFingerprint,
-            };
-            return {
-              sender: identity.sender,
-              vendorId: identity.vendorId,
-              ...purchase,
-              revision: await senderRecheckRevision({
-                sender: identity.sender,
-                vendorId: candidate.vendorId,
-                purchase,
-              }),
-            };
-          }),
-      ),
-    );
-    const recheckEvidence = [...recheckIdentities, ...purchaseRechecks];
-    if (recheckEvidence.length > 0) {
-      const candidates = await getDb(db)
+    if (!recheckIdentities.length) continue;
+    let cursor: typeof emailTable.$inferSelect.id | undefined;
+    for (;;) {
+      // Narrow to a bounded page of untouched gaps before loading originals or
+      // accepted Purchase evidence. Unrelated imported orders are never read.
+      const page = await getDb(db)
         .select({
+          emailId: emailTable.id,
           id: orderMail.id,
-          ownerId: run.id,
           sender: sql<string>`sender_identity.sender`,
           vendorId: sql<string>`sender_identity."vendorId"`,
           revision: sql<string>`sender_identity.revision`,
-          purchaseId: sql<string | null>`sender_identity."purchaseId"`,
-          orderId: sql<string | null>`sender_identity."orderId"`,
-          evidenceFingerprint: sql<
-            string | null
-          >`sender_identity."evidenceFingerprint"`,
+          senderEligible: sql<boolean>`${unattemptedSenderMapping(sql`sender_identity.revision`)} AND coalesce(${run.clientKey}, '') NOT LIKE ('%sender-proof:' || sender_identity.revision || ':%')`,
+          outcomeAt:
+            sql<Date | null>`(SELECT max(prior."completedAt") FROM "RunOperation" prior
+          WHERE prior."runId" = ${run.id} AND prior.kind = ${"target_outcome"} AND prior.state = ${runStatus.enum.completed}
+          AND prior.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'entityId' = ${emailTable.id}::text
+          AND prior.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'state' = ${"unresolved"})`.mapWith(
+              runOperation.completedAt,
+            ),
         })
         .from(emailTable)
         .innerJoin(
@@ -961,7 +993,7 @@ export async function importPendingEmails(db: Database) {
         )
         .innerJoin(run, eq(run.id, emailTable.runId))
         .innerJoin(
-          sql`jsonb_to_recordset(${JSON.stringify(recheckEvidence)}::jsonb) AS sender_identity(sender text, "vendorId" text, revision text, "purchaseId" text, "orderId" text, "evidenceFingerprint" text)`,
+          sql`jsonb_to_recordset(${JSON.stringify(recheckIdentities)}::jsonb) AS sender_identity(sender text, "vendorId" text, revision text)`,
           sql`lower(trim(coalesce(substring(${emailTable.sender} from '<([^>]+)>'), ${emailTable.sender}))) = sender_identity.sender`,
         )
         .where(
@@ -990,66 +1022,111 @@ export async function importPendingEmails(db: Database) {
             notDeleted(run),
             notDeleted(emailTable),
             retainedEmailImportContentCondition(),
-            sql`coalesce(${run.clientKey}, '') NOT LIKE ('%sender-proof:' || sender_identity.revision || ':%')`,
             untouchedAutomaticUnresolved(),
-            unattemptedSenderMapping(sql`sender_identity.revision`),
-            // Text containment only narrows candidates. Admission rechecks the
-            // compact original's exact order IDs and the owner's VendorAccount.
-            sql`(sender_identity."orderId" IS NULL OR strpos(lower(coalesce(${emailTable.subject}, '') || ' ' || coalesce(${orderMail.content}->>'bodyText', '') || ' ' || coalesce(${orderMail.content}->>'bodyHtml', '')), lower(sender_identity."orderId")) > 0)`,
+            cursor ? gt(emailTable.id, cursor) : undefined,
             sql`NOT EXISTS (SELECT 1 FROM (${emailPurchaseEvidenceSql()}) evidence WHERE evidence.kind IN (${emailLinkEvidenceKind.enum.accepted}, ${emailLinkEvidenceKind.enum.linked}))`,
           ),
         )
-        .orderBy(asc(emailTable.createdAt), asc(emailTable.id))
+        .orderBy(asc(emailTable.id))
         .limit(50);
+      const last = page.at(-1);
+      if (!last) break;
+      cursor = last.emailId;
+      const originals = await readRetainedMail(db, {
+        ledgerPartyIds: [parseEntityId("ledgerParty", target.ledgerPartyId)],
+        orderMailIds: page.map((row) => row.id),
+      });
+      const identifiers = new Map<string, string[]>();
+      for (const original of originals) {
+        const content = mailReadContent(original.content, {});
+        if (!content.truncated && content.nextOffset === null)
+          identifiers.set(
+            original.id,
+            orderIdentifiers(
+              original.subject,
+              [content.preheader, content.bodyText].filter(Boolean).join("\n"),
+            ),
+          );
+      }
+      const imported = await importedPurchaseRechecks(
+        db,
+        target.ledgerPartyId,
+        {
+          orderIds: [...new Set([...identifiers.values()].flat())],
+          vendorIds: [...new Set(page.map((row) => row.vendorId))],
+        },
+      );
+      const candidates: {
+        id: string;
+        sender: string;
+        vendorId: string;
+        revision: string;
+        purchase?: PurchaseRecheck;
+      }[] = [];
+      for (const row of page) {
+        const printed = new Set(
+          (identifiers.get(row.id) ?? []).flatMap((id) => [
+            id,
+            id.toUpperCase(),
+          ]),
+        );
+        const relevant = imported.filter(
+          (candidate) =>
+            candidate.vendorId === row.vendorId &&
+            printed.has(candidate.orderId) &&
+            row.outcomeAt &&
+            new Date(candidate.evidenceAt) > row.outcomeAt,
+        );
+        for (const candidate of relevant) {
+          const purchase = {
+            purchaseId: candidate.purchaseId,
+            orderId: candidate.orderId,
+            evidenceFingerprint: candidate.evidenceFingerprint,
+          };
+          candidates.push({
+            id: row.id,
+            sender: row.sender,
+            vendorId: row.vendorId,
+            purchase,
+            revision: await senderRecheckRevision({
+              sender: row.sender,
+              vendorId: row.vendorId,
+              purchase,
+            }),
+          });
+        }
+        if (!relevant.length && row.senderEligible)
+          candidates.push({
+            id: row.id,
+            sender: row.sender,
+            vendorId: row.vendorId,
+            revision: row.revision,
+          });
+      }
       const groups = new Map<string, typeof candidates>();
       for (const row of candidates)
         groups.set(row.revision, [...(groups.get(row.revision) ?? []), row]);
-      let admitted = 0;
       for (const group of groups.values()) {
         const identity = group[0];
         if (!identity) continue;
         try {
-          admitted += (
-            await admitMailImport(db, {
-              ledgerPartyId: target.ledgerPartyId,
-              userId: actorId,
-              mailboxId: target.mailboxId,
-              automatic: true,
-              messageIds: group.map((row) => row.id),
-              senderRecheck: {
-                sender: identity.sender,
-                vendorId: identity.vendorId,
-                ...(identity.purchaseId &&
-                identity.orderId &&
-                identity.evidenceFingerprint
-                  ? {
-                      purchase: {
-                        purchaseId: identity.purchaseId,
-                        orderId: identity.orderId,
-                        evidenceFingerprint: identity.evidenceFingerprint,
-                      },
-                    }
-                  : {}),
-              },
-            })
-          ).filter((started) => started.created).length;
+          await admitMailImport(db, {
+            ledgerPartyId: target.ledgerPartyId,
+            userId: actorId,
+            mailboxId: target.mailboxId,
+            automatic: true,
+            messageIds: group.map((row) => row.id),
+            senderRecheck: {
+              sender: identity.sender,
+              vendorId: identity.vendorId,
+              ...(identity.purchase ? { purchase: identity.purchase } : {}),
+            },
+          });
         } catch (error) {
           errors.push(error);
         }
       }
-      if (candidates.length === 50 && admitted > 0)
-        await (
-          await import("~/server/workflows/background-tasks/publish")
-        ).publishBackgroundTasks(
-          db,
-          [
-            {
-              kind: "maintenance.purchase-discovery",
-              requestedAt: new Date().toISOString(),
-            },
-          ],
-          { source: "sender-attribution-backlog" },
-        );
+      if (page.length < 50) break;
     }
   }
   return { errors };

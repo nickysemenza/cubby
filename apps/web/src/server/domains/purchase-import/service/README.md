@@ -91,7 +91,12 @@ pending: nothing here starts Product research.
    when its retained original changes, its sender becomes verified, or accepted
    source evidence now establishes its exact order on the member's own Vendor
    account. Source and accepted-evidence fingerprints deduplicate attempts;
-   Purchase edits and unchanged evidence do not reopen work. Admission rechecks
+   Purchase edits and unchanged evidence do not reopen work. Accepted source
+   publication must be newer than the latest unresolved outcome;
+   older evidence does not trigger a cutover retry. Recovery first pages bounded
+   untouched gaps, then reads only Purchases for their printed identifiers and
+   verified Vendors. It does not build a sender-by-Purchase cross product or
+   search every imported original's full body. Admission rechecks
    literal identifiers, current source bytes, source ownership, live dispatch
    leases and retained member intent under the existing evidence-write scope.
    A successor retains the predecessor's frozen roster/outcomes and records the
