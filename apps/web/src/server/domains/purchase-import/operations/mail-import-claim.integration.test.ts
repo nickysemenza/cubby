@@ -38,6 +38,7 @@ import {
   vendor,
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
@@ -431,11 +432,33 @@ describe("Mail import claim", () => {
           checksum: work.read!.checksum,
           disposition: {
             kind: "unresolved",
+            category: "missing_evidence",
             reason: "Synthetic package or refund needs evidence review.",
           },
         },
         pi,
       );
+      const receipts = await getDb(ctx.db)
+        .select({ result: runOperation.result })
+        .from(runOperation)
+        .where(
+          and(
+            eq(runOperation.runId, owner.id),
+            eq(runOperation.kind, "target_outcome"),
+          ),
+        );
+      const retained = receipts.flatMap(({ result }) => {
+        const parsed = storedMailOutcome.safeParse(result);
+        return parsed.success &&
+          parsed.data.mailOutcome.checksum === work.read!.checksum
+          ? [parsed.data.mailOutcome.judgment]
+          : [];
+      });
+      expect(retained).toContainEqual({
+        kind: "unresolved",
+        category: "missing_evidence",
+        reason: "Synthetic package or refund needs evidence review.",
+      });
     }
     expect(claimed).toEqual([ruleShipped.messageId, refund.messageId]);
     expect(await linkRows(ruleShipped)).toMatchObject({
@@ -620,6 +643,7 @@ describe("Mail import claim", () => {
           checksum: source.rawChecksum,
           disposition: {
             kind: "unresolved",
+            category: "unknown" as const,
             reason: "Synthetic attempt exhaustion",
           },
         },

@@ -1243,6 +1243,7 @@ export async function resolveMail(
           importRunId,
           status: "blocked",
           detail: disposition.reason,
+          judgment: disposition,
         },
         actor,
       );

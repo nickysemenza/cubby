@@ -147,6 +147,7 @@ async function settleCarrierNotice(
           }
         : {
             kind: "unresolved",
+            category: "missing_evidence",
             reason: `Package retained as ${shipmentCode}; this ${notice.carrierName} notice names no order or Purchase.`,
           },
     },

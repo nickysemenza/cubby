@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+/** Persisted import gaps distinguish missing facts from execution and member choices. */
+export const mailImportGapCategory = z.enum([
+  "missing_evidence",
+  "invalid_extraction",
+  "identity_ambiguity",
+  "member_decision",
+  "source_held",
+  "transient_failure",
+  "attempt_limit",
+  "unknown",
+]);
+
 import { purchaseShortcode } from "./identifier-fields.js";
 
 export { EMAIL_RELATIONSHIP_INPUTS } from "./entity-definitions/email-relationship-inputs";

@@ -1,3 +1,4 @@
+import { mailImportGapCategory } from "./email-fields";
 import { shipmentEvidence } from "./shipment-evidence";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
@@ -619,6 +620,7 @@ export const mailResolveDisposition = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("unresolved"),
+      category: mailImportGapCategory.default("unknown"),
       reason: z.string().trim().min(1).max(1_000),
     })
     .describe(

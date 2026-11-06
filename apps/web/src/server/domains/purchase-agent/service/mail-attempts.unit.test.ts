@@ -28,6 +28,7 @@ describe("Mail extraction attempts", () => {
         boundToRun: true,
         attachments: [],
         content: {
+          bodyText: "Synthetic retained original",
           truncated: false,
           nextOffset: null,
           bodyShortened: false,

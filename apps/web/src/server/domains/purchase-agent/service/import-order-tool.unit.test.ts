@@ -17,6 +17,9 @@ const mail = {
   messageId: "synthetic-order",
   checksum: "a".repeat(64),
 };
+const sourceText =
+  "Order SYN-100 on 2026-09-20. Synthetic mug 1 x $12.00. Total $12.00.";
+const ordinaryMail = { ...mail, text: sourceText };
 const extraction = {
   mail,
   vendor: { name: "Synthetic Shop" },
@@ -24,6 +27,13 @@ const extraction = {
     status: "ready",
     candidate: {
       orderId: "SYN-100",
+      sourceReferences: {
+        orderId: "Order SYN-100",
+        orderedAt: "2026-09-20",
+        printedGrandTotal: "Total $12.00",
+        lines: ["Synthetic mug 1 x $12.00"],
+        payments: [],
+      },
       orderedAt: "2026-09-20",
       merchant: "Synthetic Shop",
       currency: "USD",
@@ -47,6 +57,7 @@ function writerPeer(
     candidate?: boolean;
     conflict?: boolean;
     unknownCommit?: boolean;
+    refusal?: string;
   } = {},
 ) {
   const effects: { action: string; operation: string }[] = [];
@@ -73,6 +84,17 @@ function writerPeer(
           action: "prepare",
           operation: parsed._runExecution.operationId,
         });
+        if (options.refusal)
+          return fromPartial({
+            isError: true,
+            diagnostics: [
+              {
+                severity: "error",
+                code: options.refusal,
+                message: "Synthetic input refusal",
+              },
+            ],
+          });
         const order = parsed.orders[0];
         if (!order) throw new Error("Synthetic preparation has no order");
         return fromPartial({
@@ -159,7 +181,7 @@ describe("ordinary Email extraction", () => {
     "uses the canonical preparation receipt and preserves commit conflict=%s on replay",
     async (conflict) => {
       const peer = writerPeer({ conflict });
-      const tool = importExtractedOrderTool(runId, () => mail);
+      const tool = importExtractedOrderTool(runId, () => ordinaryMail);
       const first = await tool.execute(
         extraction,
         peer.api,
@@ -184,13 +206,12 @@ describe("ordinary Email extraction", () => {
     },
   );
 
-  it("recovers an unknown commit by exact writer replay before advancing", async () => {
+  it("recovers only uncertain writer outcomes before advancing", async () => {
     const peer = writerPeer({ unknownCommit: true });
-    const result = await importExtractedOrderTool(runId, () => mail).execute(
-      extraction,
-      peer.api,
-      BACKGROUND_CONTEXT,
-    );
+    const result = await importExtractedOrderTool(
+      runId,
+      () => ordinaryMail,
+    ).execute(extraction, peer.api, BACKGROUND_CONTEXT);
     expect(result.structuredOutput).toMatchObject({
       kind: "commit_result",
       result: { items: [{ outcome: "created" }] },
@@ -201,15 +222,22 @@ describe("ordinary Email extraction", () => {
         .map((effect) => effect.operation),
     ).toEqual([peer.effects[1]?.operation, peer.effects[1]?.operation]);
     expect(peer.claims).toHaveLength(1);
+    const refused = writerPeer({ refusal: "INVALID_INPUT" });
+    const refusal = await importExtractedOrderTool(
+      runId,
+      () => ordinaryMail,
+    ).execute(extraction, refused.api, BACKGROUND_CONTEXT);
+    expect(refusal.diagnostics).toMatchObject([{ code: "INVALID_INPUT" }]);
+    expect(refused.effects.map((effect) => effect.action)).toEqual(["prepare"]);
+    expect(refused.claims).toEqual([]);
   });
 
   it("does not create a new Product before reviewing preparation candidates", async () => {
     const peer = writerPeer({ candidate: true });
-    const result = await importExtractedOrderTool(runId, () => mail).execute(
-      extraction,
-      peer.api,
-      BACKGROUND_CONTEXT,
-    );
+    const result = await importExtractedOrderTool(
+      runId,
+      () => ordinaryMail,
+    ).execute(extraction, peer.api, BACKGROUND_CONTEXT);
     expect(result.structuredOutput).toMatchObject({
       kind: "needs_resolution",
       preparation: { operationId: "canonical-prepared-receipt" },
@@ -224,6 +252,47 @@ describe("ordinary Email extraction", () => {
       () => undefined,
     ).execute(extraction, peer.api, BACKGROUND_CONTEXT);
     expect(result.structuredOutput).toMatchObject({ kind: "incomplete" });
+    expect(peer.effects).toEqual([]);
+    const { sourceReferences: _missing, ...withoutReferences } =
+      extraction.extraction.candidate;
+    const missingReference = await importExtractedOrderTool(
+      runId,
+      () => ordinaryMail,
+    ).execute(
+      {
+        ...extraction,
+        extraction: { ...extraction.extraction, candidate: withoutReferences },
+      },
+      peer.api,
+      BACKGROUND_CONTEXT,
+    );
+    expect(missingReference.structuredOutput).toMatchObject({
+      kind: "incomplete",
+    });
+    expect(peer.effects).toEqual([]);
+    const inventedReference = await importExtractedOrderTool(
+      runId,
+      () => ordinaryMail,
+    ).execute(
+      {
+        ...extraction,
+        extraction: {
+          ...extraction.extraction,
+          candidate: {
+            ...extraction.extraction.candidate,
+            sourceReferences: {
+              ...extraction.extraction.candidate.sourceReferences,
+              printedGrandTotal: "Invented total $12.00",
+            },
+          },
+        },
+      },
+      peer.api,
+      BACKGROUND_CONTEXT,
+    );
+    expect(inventedReference.structuredOutput).toMatchObject({
+      kind: "incomplete",
+    });
     expect(peer.effects).toEqual([]);
   });
 });

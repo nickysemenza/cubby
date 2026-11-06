@@ -23,9 +23,9 @@ Claude or Codex session researches it later through the Research queue.
    read again with `offset` set to it until it is null before extracting
    lines or a total. If `content.truncated` is still true after the last page,
    evidence is missing: import only when every item line and the total are
-   present; otherwise `purchase_import` `mail_resolve` it `unresolved` naming what is missing.
+   present; otherwise `purchase_import` `mail_resolve` it `unresolved` naming what is missing. Set its category to `missing_evidence`, `invalid_extraction`, `identity_ambiguity`, `member_decision`, `source_held`, `transient_failure` or `unknown` as appropriate; a category never grants extra authority.
    `disposition` is always an object, never a bare word:
-   `{"kind":"unresolved","reason":"what is missing"}`, and likewise `kind: "unrelated"`.
+   `{"kind":"unresolved","category":"missing_evidence","reason":"what is missing"}`, and likewise `kind: "unrelated"`.
    The claim's `known` holds the lookups an Email usually starts with:
    `senderVendor`, the Vendor its sender proves (null when none), and
    `purchases`, the live Purchases (at most 5) whose order id is one of
@@ -46,7 +46,10 @@ Claude or Codex session researches it later through the Research queue.
      For an ordinary complete Email body without attachments or omitted content,
      call `import_extracted_order` once with `mail` (the claim's mailboxId,
      messageId and read checksum), the Vendor, optional known target Purchase,
-     `extraction` and `products`. Supply one Product decision per extracted line,
+     `extraction` and `products`. Include `candidate.sourceReferences`: literal
+     excerpts for the order ID, order date, printed total, and one per line and
+     payment in order. Use null when the corresponding optional fact is absent.
+     Supply one Product decision per extracted line,
      in order; use null for a non-principal line and preserve unknown Product
      identity explicitly. The host generates stable IDs and runs the normal
      prepare/commit writers without another model turn. Inspect every

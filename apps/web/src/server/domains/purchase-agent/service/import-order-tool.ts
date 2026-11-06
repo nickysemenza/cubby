@@ -39,7 +39,8 @@ export const extractedOrderInput = z
       ),
   })
   .superRefine((value, context) => {
-    const lines = value.extraction.candidate?.lines ?? [];
+    const candidate = value.extraction.candidate;
+    const lines = candidate?.lines ?? [];
     if (value.products.length !== lines.length)
       context.addIssue({
         code: "custom",
@@ -86,14 +87,14 @@ function knownWriterRefusal(result: NestedToolExecutionResult) {
       item.code === "MAIL_SOURCE_HELD_BY_RUN" ||
       item.code === "MAIL_SOURCE_ADMISSION_REFUSED" ||
       item.code === "MAIL_REQUEST_REFUSED" ||
-      item.code === "VALIDATION_ERROR",
+      item.code === "INVALID_INPUT",
   );
 }
 
 /** Pi supplies source facts once; code owns IDs, preparation and publication. */
 export function importExtractedOrderTool(
   runId: string,
-  ordinaryEvidence: () => MailAttemptEvidence | undefined,
+  ordinaryEvidence: () => (MailAttemptEvidence & { text: string }) | undefined,
 ) {
   const { $schema: _inputDialect, ...parameters } = z.toJSONSchema(
     extractedOrderInput,
@@ -108,7 +109,7 @@ export function importExtractedOrderTool(
   return defineTool({
     name: EXTRACT_ORDER_TOOL,
     description:
-      "Import one ordinary itemized Email in one call: provide the exact extraction and Product decisions. Cubby generates stable operation/line IDs and uses its normal prepare/commit writers. Incomplete evidence stays incomplete. A needs_resolution result returns the prepared receipt for targeted Product resolution; never re-prepare it. On operation_error, the write outcome may be unknown: replay identical input to recover its durable result before changing it.",
+      "Import one ordinary itemized Email in one call: provide the exact extraction, candidate.sourceReferences with literal Email excerpts, and Product decisions. Cubby generates stable operation/line IDs and uses its normal prepare/commit writers. Incomplete evidence stays incomplete. A needs_resolution result returns the prepared receipt for targeted Product resolution; never re-prepare it. On operation_error, the write outcome may be unknown: replay identical input to recover its durable result before changing it.",
     parameters: Type.Unsafe<JsonObject>(parameters),
     structuredOutputSchema: Type.Unsafe<JsonObject>(resultSchema),
     replay: "safe",
@@ -144,6 +145,32 @@ export function importExtractedOrderTool(
           kind: "incomplete",
           reason:
             "Resolve the Email with its precise evidence gap; incomplete extraction does not establish priced itemization.",
+        });
+      const candidate = args.extraction.candidate;
+      const refs = candidate.sourceReferences;
+      const quotes = refs
+        ? [
+            refs.orderId,
+            refs.orderedAt,
+            refs.printedGrandTotal,
+            ...refs.lines,
+            ...refs.payments,
+          ].filter((quote) => quote !== null)
+        : [];
+      if (
+        !refs ||
+        (candidate.orderId !== null && refs.orderId === null) ||
+        (candidate.orderedAt !== null && refs.orderedAt === null) ||
+        (candidate.printedGrandTotal !== null &&
+          refs.printedGrandTotal === null) ||
+        refs.lines.length !== candidate.lines.length ||
+        refs.payments.length !== candidate.payments.length ||
+        quotes.some((quote) => !claimed.text.includes(quote))
+      )
+        return finish({
+          kind: "incomplete",
+          reason:
+            "Source references must quote the current retained Email and cover every submitted identifier, date, total, line and payment. Repair the references before publication.",
         });
       const identity = await sha256Hex(
         JSON.stringify({

@@ -191,8 +191,22 @@ export const extractedOrderDate = z
     "Order date as YYYY-MM-DD or an ISO timestamp with timezone. Prefer a printed order date; when none is printed, leave null: the writer uses verified retained confirmation/receipt Email receivedAt as the fallback and records provenance on Purchase.date. Preserve an explicit member date override. Shipping, delivery, cancellation and refund event timestamps are not order-date fallbacks. Null when no eligible date exists.",
   );
 
+const extractionQuote = z.string().min(1).max(2_000);
+const orderSourceReferences = z.object({
+  orderId: extractionQuote.nullable(),
+  orderedAt: extractionQuote.nullable(),
+  printedGrandTotal: extractionQuote.nullable(),
+  lines: z.array(extractionQuote).max(500),
+  payments: z.array(extractionQuote).max(100),
+});
+
 export const extractedOrderCandidate = z.object({
   orderId: z.string().trim().min(1).max(300).nullable(),
+  sourceReferences: orderSourceReferences
+    .optional()
+    .describe(
+      "Literal source excerpts for identifiers, dates, totals and each line/payment in order. Required by ordinary Email extraction; older retained extractions may omit them. Each line excerpt includes the printed item, quantity and amount where present.",
+    ),
   orderedAt: extractedOrderDate,
   merchant: z.string().trim().min(1).max(300).nullable(),
   currency: z.string().trim().length(3).nullable(),

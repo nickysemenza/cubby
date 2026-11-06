@@ -1,3 +1,4 @@
+import { mailImportGapCategory } from "./email-fields";
 import {
   suggestionChildHandle,
   suggestionSuppression,
@@ -210,7 +211,12 @@ export const mailImportOutcome = z.discriminatedUnion("kind", [
     ),
   }),
   z.object({ kind: z.literal("unrelated"), reason: z.string().min(1) }),
-  z.object({ kind: z.literal("unresolved"), reason: z.string().min(1) }),
+  z.object({
+    kind: z.literal("unresolved"),
+    reason: z.string().min(1),
+    // Existing stored outcomes predate categorized gaps; retain their meaning.
+    category: mailImportGapCategory.default("unknown"),
+  }),
 ]);
 export const suggestionJudgments = {
   field: z.object({

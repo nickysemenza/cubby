@@ -109,6 +109,7 @@ export async function settleMailAttemptLimit(input: {
             checksum: input.source.checksum,
             disposition: {
               kind: "unresolved",
+              category: "attempt_limit",
               reason:
                 "The bounded extraction and repair attempts could not establish a safe import. Retained evidence needs review.",
             },

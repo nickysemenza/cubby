@@ -133,6 +133,10 @@ const syntheticOwnOrder = {
 const syntheticAttemptLimit = {
   ...syntheticInquiry,
   subject: "Synthetic malformed extraction limit",
+  baseline: {
+    ...syntheticInquiry.baseline,
+    category: "attempt_limit",
+  },
 };
 const synthetic = [
   syntheticInquiry,
@@ -462,6 +466,17 @@ describe("isolated Mail coordinator replay", () => {
                               status: "ready",
                               candidate: {
                                 orderId: "SYN-1001",
+                                sourceReferences: {
+                                  orderId: "Order SYN-1001",
+                                  orderedAt: "placed September 20, 2026",
+                                  printedGrandTotal: "Order total: $22.89",
+                                  lines: [
+                                    "1 x Synthetic ceramic mug: $12.00",
+                                    "2 x Synthetic tea towel at $4.50: $9.00",
+                                    "Sales tax: $1.89",
+                                  ],
+                                  payments: [],
+                                },
                                 orderedAt: "2026-09-20",
                                 merchant: "Synthetic Shop",
                                 currency: "USD",
@@ -516,6 +531,35 @@ describe("isolated Mail coordinator replay", () => {
               "purchase-agent",
               { coordinatorModels: { primary } },
             );
+            diagnose = async () => {
+              const attempts = await getDb(ctx.db)
+                .select({
+                  state: runOperation.state,
+                  error: runOperation.error,
+                  result: runOperation.result,
+                })
+                .from(runOperation)
+                .where(
+                  and(
+                    eq(runOperation.runId, runId),
+                    eq(runOperation.kind, "mail_extraction_attempt"),
+                  ),
+                )
+                .limit(4);
+              return [
+                ...scenario.harness
+                  .getLogs()
+                  .filter((entry) => entry.level === "error")
+                  .slice(-DIAGNOSTIC_LOGS)
+                  .map((entry) => entry.message.slice(0, DIAGNOSTIC_CHARS)),
+                `script emitted: ${JSON.stringify(await scenario.emitted())}`,
+                `script violations: ${JSON.stringify(await scenario.violations())}`,
+                `attempt receipts: ${JSON.stringify(attempts)}`.slice(
+                  0,
+                  DIAGNOSTIC_CHARS,
+                ),
+              ];
+            };
             try {
               observedOutcome = await observe(async () => {
                 await scenario.wake();

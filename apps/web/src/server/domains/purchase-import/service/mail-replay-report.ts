@@ -48,6 +48,11 @@ export function mailReplayDisagreement(
       ? fields
       : [...fields, "purchases"];
   }
+  if (baseline.kind === "unresolved" && replay.kind === "unresolved")
+    return [
+      ...(baseline.category === replay.category ? [] : ["category"]),
+      ...(baseline.reason === replay.reason ? [] : ["reason"]),
+    ];
   if ("reason" in baseline && "reason" in replay)
     return baseline.reason === replay.reason ? [] : ["reason"];
   return [];

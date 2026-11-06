@@ -481,7 +481,7 @@ export class PurchaseImportRunAgent
                                 (code) =>
                                   code === "MAIL_SOURCE_ADMISSION_REFUSED" ||
                                   code === "MAIL_REQUEST_REFUSED" ||
-                                  code === "VALIDATION_ERROR",
+                                  code === "INVALID_INPUT",
                               )
                               ? "invalid"
                               : "pending"
@@ -926,14 +926,18 @@ const eventStream = (body: ReadableStream<Uint8Array>) =>
     },
   });
 
+// The writer owns envelope and cross-order validation. Identity only needs the
+// extraction facts; Zod cannot omit fields from the refined writer schema.
+const preparationFacts = z.object({
+  orders: preparePurchaseImportInput.shape.orders,
+});
+
 function validExtraction(
   call: Pick<import("@earendil-works/pi-ai").ToolCall, "name" | "arguments">,
 ) {
   return call.name === EXTRACT_ORDER_TOOL
     ? extractedOrderInput.safeParse(call.arguments).success
-    : preparePurchaseImportInput
-        .omit({ _runExecution: true })
-        .safeParse(call.arguments.input).success;
+    : preparationFacts.safeParse(call.arguments.input).success;
 }
 
 async function extractionIdentity(
@@ -944,9 +948,7 @@ async function extractionIdentity(
 ) {
   const parsed = extractedOrderInput.safeParse(call.arguments);
   if (parsed.success) return sha256Hex(JSON.stringify(parsed.data));
-  const prepared = preparePurchaseImportInput
-    .omit({ _runExecution: true })
-    .safeParse(call.arguments.input);
+  const prepared = preparationFacts.safeParse(call.arguments.input);
   if (prepared.success)
     return sha256Hex(
       JSON.stringify(

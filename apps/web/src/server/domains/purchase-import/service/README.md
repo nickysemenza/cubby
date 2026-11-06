@@ -128,9 +128,15 @@ pending: nothing here starts Product research.
    return without automatic replay; unknown writes retain their reservation until
    exact writer recovery. Generation response hooks only
    account for submissions; they never publish dispositions.
+   Unresolved judgments retain a typed gap category alongside the explanation;
+   older uncategorized judgments read as unknown. Exhaustion uses `attempt_limit`.
    Exhaustion records an unresolved gap through the delegated mail-resolve writer,
    using a stable operation ID and the issuing generation fence.
    `import_extracted_order` handles complete, admitted, attachment-free Email.
+   Ordinary candidates retain literal source excerpts for identifiers, dates,
+   totals, lines and payments. The tool checks their coverage and occurrence in
+   the current complete compact original before preparation. Excerpts establish
+   traceability; existing writers still own money and identity validation.
    It generates stable IDs and runs the existing prepare/commit tools as durable
    nested calls. Newly discovered Product candidates return the preparation for
    review instead of creating a possible duplicate. Incomplete source views and
