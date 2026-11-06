@@ -1,11 +1,10 @@
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/schema";
 
-import { JOB_HEARTBEAT_MS } from "../limits";
 import { advanceJob } from "../service/jobs";
 import { enqueueJob } from "./producer";
 
@@ -18,6 +17,7 @@ describe("generic Job execution", () => {
       kind: "synthetic.serializable",
       input: {},
     });
+    let isolation: string | undefined;
     await expect(
       advanceJob(ctx.db, saved.id, {
         "synthetic.serializable": {
@@ -28,48 +28,33 @@ describe("generic Job execution", () => {
               const result = await getDb(tx).execute<{ isolation: string }>(
                 sql`SELECT current_setting('transaction_isolation') AS isolation`,
               );
-              return { isolation: result.rows[0]?.isolation ?? "missing" };
+              isolation = result.rows[0]?.isolation;
             },
           }),
         },
       }),
     ).resolves.toBe("succeeded");
-    const [stored] = await getDb(ctx.db)
-      .select({ result: job.result })
-      .from(job)
-      .where(eq(job.id, saved.id));
-    expect(stored?.result).toEqual({ isolation: "serializable" });
+    expect(isolation).toBe("serializable");
   });
 
-  it("aborts the execution signal and fences publication after lease loss", async () => {
-    vi.useFakeTimers();
-    try {
-      const saved = await enqueueJob(ctx.db, {
-        key: "synthetic.lease-loss",
-        kind: "synthetic.lease-loss",
-        input: {},
-      });
-      const waitingForAbort = Promise.withResolvers<void>();
-      let aborted = false;
-      let published = false;
-      const pass = advanceJob(ctx.db, saved.id, {
+  it("fences publication after lease loss", async () => {
+    const saved = await enqueueJob(ctx.db, {
+      key: "synthetic.lease-loss",
+      kind: "synthetic.lease-loss",
+      input: {},
+    });
+    let published = false;
+    await expect(
+      advanceJob(ctx.db, saved.id, {
         "synthetic.lease-loss": {
           prepare: async (db, claim, context) => {
             await getDb(db)
               .update(job)
               .set({ leaseToken: crypto.randomUUID() })
               .where(eq(job.id, claim.id));
-            await new Promise<void>((resolve) => {
-              context.signal.addEventListener(
-                "abort",
-                () => {
-                  aborted = true;
-                  resolve();
-                },
-                { once: true },
-              );
-              waitingForAbort.resolve();
-            });
+            await expect(context.check()).rejects.toThrow(
+              "Job generation or lease is obsolete",
+            );
             return {
               page: { done: true },
               publish: async () => {
@@ -78,19 +63,8 @@ describe("generic Job execution", () => {
             };
           },
         },
-      });
-      await waitingForAbort.promise;
-      await vi.advanceTimersByTimeAsync(JOB_HEARTBEAT_MS);
-
-      await expect(pass).resolves.toBe("superseded");
-      expect(aborted).toBe(true);
-      expect(published).toBe(false);
-      expect(
-        (await getDb(ctx.db).select().from(job).where(eq(job.id, saved.id)))[0]
-          ?.result,
-      ).toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
+      }),
+    ).resolves.toBe("superseded");
+    expect(published).toBe(false);
   });
 });

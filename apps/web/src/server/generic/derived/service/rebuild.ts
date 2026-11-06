@@ -16,7 +16,6 @@ import {
   publishRebuiltValues,
   rebuildDeclarations,
   rebuildActive,
-  rebuildIds,
   releaseRebuild,
 } from "~/server/generic/derived/repo/rebuild";
 
@@ -50,11 +49,6 @@ export async function rebuildDerived(
 
   try {
     for (let page = 0; page < pageLimit; page++) {
-      const attempts =
-        page === 0
-          ? claim.cursorAttempts
-          : await beginRebuildPage(db, claim.token);
-      if (attempts === null) return false;
       const index = declarations.findIndex(
         (entry) => entry.target === current.target,
       );
@@ -75,6 +69,7 @@ export async function rebuildDerived(
         : null;
       let next: { target: string; afterId: string | null } | null =
         followingTarget;
+      let processedRecords = 0;
       try {
         const compute = computes[declaration.compute];
         if (!compute)
@@ -83,12 +78,28 @@ export async function rebuildDerived(
           200,
           Math.max(1, compute.preparationBatchSize ?? 20),
         );
-        // Counts are committed before compute, so CPU/memory termination also shrinks the retry.
-        const limit = Math.max(
-          1,
-          Math.floor(configured / 2 ** Math.floor((attempts - 1) / 3)),
-        );
-        const ids = await rebuildIds(db, declaration, current.afterId, limit);
+        let observed: Awaited<ReturnType<typeof beginRebuildPage>>;
+        try {
+          observed = await beginRebuildPage(
+            db,
+            claim.token,
+            declaration,
+            current.afterId,
+            configured,
+            page === 0,
+          );
+        } catch (error) {
+          // Enumeration observed no population: retry the unchanged cursor.
+          await releaseRebuild(
+            db,
+            claim.token,
+            scrubErrorMessage(JSON.stringify(describeErrorCauses(error))),
+          );
+          return true;
+        }
+        if (!observed) return false;
+        const { ids, attempts, limit } = observed;
+        processedRecords = ids.length;
         const lastId = ids.at(-1);
         next =
           ids.length === limit && lastId
@@ -105,6 +116,7 @@ export async function rebuildDerived(
               next,
               async () => {},
               `Rebuild skipped one record after repeated isolate termination: ${declaration.target}`,
+              processedRecords,
             ))
           )
             return false;
@@ -112,37 +124,30 @@ export async function rebuildDerived(
           const prepared = ids.length
             ? await compute.prepare(db, ids)
             : undefined;
-          const failures =
-            prepared === undefined
-              ? undefined
-              : compute.preparationFailures?.(prepared);
-          if (failures?.size)
-            throw new AggregateError(
-              [...failures.values()],
-              `Rebuild preparation failed: ${declaration.target}`,
-            );
           if (
-            !(await commitRebuildPage(db, claim, next, async (tx) => {
-              if (prepared === undefined) return;
-              const outcome = await compute.publish(tx, ids, prepared, {
-                notify: () => {},
-              });
-              if (
-                !Array.isArray(outcome) &&
-                "retain" in outcome &&
-                outcome.retain.length
-              )
-                throw new Error(
-                  `Rebuild sink retained output: ${declaration.target}`,
-                );
-            }))
+            !(await commitRebuildPage(
+              db,
+              claim,
+              next,
+              async (tx) => {
+                if (prepared === undefined) return;
+                await compute.publish(tx, ids, prepared);
+              },
+              undefined,
+              processedRecords,
+            ))
           )
             return false;
         } else {
           const values = ids.length ? await compute(db, ids) : new Map();
           if (
-            !(await commitRebuildPage(db, claim, next, (tx) =>
-              publishRebuiltValues(tx, declaration, ids, values),
+            !(await commitRebuildPage(
+              db,
+              claim,
+              next,
+              (tx) => publishRebuiltValues(tx, declaration, ids, values),
+              undefined,
+              processedRecords,
             ))
           )
             return false;
@@ -157,6 +162,7 @@ export async function rebuildDerived(
             next,
             async () => {},
             scrubErrorMessage(JSON.stringify(describeErrorCauses(error))),
+            processedRecords,
           ))
         )
           return false;

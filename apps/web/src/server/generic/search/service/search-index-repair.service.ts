@@ -1,7 +1,4 @@
-import {
-  type SearchIndexRepairCounters,
-  type SearchIndexRepairEvent,
-} from "@cubby/schemas/maintenance";
+import { type SearchIndexRepairEvent } from "@cubby/schemas/maintenance";
 import { sleep } from "@cubby/shared/retry";
 
 import type { Database } from "~/server/db";
@@ -11,16 +8,6 @@ import {
   scheduleSearchRepair,
   readSearchRepairProgress,
 } from "../repo/search-index-repair";
-
-const createSearchIndexRepairCounters = (): SearchIndexRepairCounters => ({
-  scanned: 0,
-  orphaned: 0,
-  missing: 0,
-  stale: 0,
-  retired: 0,
-  rebuilt: 0,
-  published: 0,
-});
 
 /** Explicit repair requests the hourly pass; disconnecting the stream leaves its cursor intact. */
 export async function* repairSearchIndex(
@@ -34,21 +21,19 @@ export async function* repairSearchIndex(
         committed: true,
         effectsPending: true,
       });
-    const { pending, error } = await readSearchRepairProgress(db);
-    if (error) throw new Error(error);
-    const counters = createSearchIndexRepairCounters();
-    const done = !pending;
-    if (done) {
-      yield { type: "done", result: counters };
+    const pass = await readSearchRepairProgress(db);
+    if (pass.error) throw new Error(pass.error);
+    const result = {
+      processedRecords: pass.processedRecords,
+      failedPages: pass.failedPages,
+      finishedAt: pass.finishedAt,
+      cleanAt: pass.cleanAt,
+    };
+    if (!pass.running) {
+      yield { type: "done", result };
       return;
     }
-    yield {
-      type: "progress",
-      phase: "sources",
-      done: counters.scanned,
-      total: counters.scanned + 1,
-      counters,
-    };
+    yield { type: "status", target: pass.target, result };
     await sleep(500);
   }
 }

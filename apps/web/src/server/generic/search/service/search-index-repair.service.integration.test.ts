@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 import { USDAClient } from "~/server/clients/usda";
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
 import { derivedSink } from "~/server/generic/derived/repo/compute";
-import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
 import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
+import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";
 import { derivedComputes } from "~/server/workflows/derived-computes";
@@ -27,7 +27,9 @@ const computes = {
         ids.map((id) => parseEntityId("product", id)),
         offlineUsda,
       ),
-    publish: (tx, ids, prepared) => prepared.publish(tx, ids),
+    publish: async (tx, ids, prepared) => {
+      await prepared.publish(tx, ids);
+    },
   }),
 };
 import {
@@ -49,7 +51,7 @@ describe("search repair admission", () => {
     const stream = repairSearchIndex(ctx.db);
     const first = await stream.next();
     if (first.done) throw new Error("Expected repair progress");
-    expect(first.value).toMatchObject({ type: "progress", phase: "sources" });
+    expect(first.value).toMatchObject({ type: "status" });
     for (let page = 0; page < 1_000; page++) {
       if (!(await rebuildDerived(ctx.db, computes))) break;
       if (page === 999)

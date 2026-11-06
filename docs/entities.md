@@ -2777,7 +2777,12 @@ round deadline. Product read facts, ownership, food and conversion coverage
 prepare at most 100 identities per page through their existing batched loaders.
 The recipe ingredient graph remains chunked at 20. Cursor-attempt shrinking still
 bounds a retry independently of these configured maxima. SQL-backed Product quantity adapters prepare 200 identities per
-page to amortize corpus-wide round trips. Publication and cursor advancement commit together. Claims record
+page to amortize corpus-wide round trips. Publication, cursor advancement, page counters and movement time commit together.
+The last three pass summaries retain processed-record and failed-page counts and
+whole-pass duration. `finishedAt` records completion even with errors; `cleanAt`
+advances only for a pass with no failures. Reading IDs and recording the page's
+attempt share one CTE that commits before compute. An enumeration error retries
+the unchanged cursor rather than skipping the target. Claims record
 attempts before compute, so isolate termination counts too: after three attempts
 the page halves, down to one record. Three failed attempts at one record skip it,
 retain its prior output and record a failure. A thrown compute or publication
@@ -2811,8 +2816,7 @@ read. In particular, a published empty Product price remains empty rather than
 falling back to an authored price; a missing publication still uses the declared
 field-resolution fallback.
 
-Per-value queued/running/failure observations are retired. Activity checks the
-coarse pass for two missed hourly periods or three consecutive failures; a 75-minute lag marks it behind without flapping at an hour. It
+Per-value queued/running/failure observations are retired. Activity checks committed cursor movement for two missed hourly periods or three failures; a 75-minute lag marks it behind without flapping at an hour. It
 never treats retained tickets as unfinished work. The maintenance rebuild command
 starts or resumes the same Worker pass, and its status query exposes aggregate
 progress and timings without triggering work. A manual request never resets an

@@ -170,14 +170,14 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   Semantic artifact validation belongs to `findSimilarEntitiesPage` in
   `generic/embedding/repo/entity-embedding-search.ts`; similarity and identity
   consumers share its bounded seed/hit hydration and current-artifact checks.
-- Background execution: `server/generic/jobs/` owns durable scheduling, retries
-  and claims; `server/workflows/jobs.ts` composes production handlers. Runs retain
-  domain progress and history. Derived refresh records broad family Job intent
-  through `server/generic/changes/repo/change.ts` in the save transaction;
-  `derived-refresh/repo/process.ts` prepares bounded pages through injected ports.
-  Provider work happens before the transaction that checks current inputs and
-  saves the output. [Background derived data](../entities.md#background-derived-data)
-  owns freshness, recovery and discovery semantics.
+- Background execution: `server/generic/jobs/` owns one-off Job claims and retries;
+  `server/generic/background/drains.ts` owns row-drain paging. The hourly derived
+  pass owns one resumable cursor, with publication and progress committed together.
+  `server/workflows/jobs.ts` composes the round and coalesces continuation wakes.
+  Runs retain member/agent sessions and history. Provider work precedes the
+  transaction that checks current inputs and publishes. The read-only
+  `generic/jobs/repo/observation.ts` reports those owners without scheduling work.
+  [Background derived data](../entities.md#background-derived-data) owns freshness.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
 - Money: `cents`, `dollars`, `round2` (`@cubby/shared`); expense
   rollups select `expenseAggregateFields` (`server/db/computed/expense-aggregate-sql.ts`);

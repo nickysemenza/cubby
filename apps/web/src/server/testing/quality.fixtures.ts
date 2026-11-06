@@ -27,9 +27,7 @@ export async function publishQualityFixtures(db: Database, kind: ScoredEntity) {
   for (let start = 0; start < ids.length; start += 200) {
     const page = ids.slice(start, start + 200);
     const prepared = await adapter.prepare(db, page);
-    await adapter.publish(db, page, prepared, {
-      notify: () => {},
-    });
+    await adapter.publish(db, page, prepared);
   }
 }
 

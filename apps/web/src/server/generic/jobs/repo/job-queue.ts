@@ -7,7 +7,14 @@ import {
   type JobLane,
   type JobWaitingOnReason,
 } from "@cubby/schemas/job";
-import { runStatus } from "@cubby/schemas/run-fields";
+import {
+  runStatus,
+  ATTENTION_RUN_PURPOSES,
+  RUN_PURPOSE_LABEL,
+  isMemberStartedRun,
+} from "@cubby/schemas/run-fields";
+import type { WorkStuckItem } from "@cubby/schemas/work-status";
+import { countLabel } from "@cubby/shared/pluralize";
 import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { and, inArray, notInArray, or, type SQL, sql } from "drizzle-orm";
 
@@ -17,7 +24,11 @@ import type {
   RunRollup,
 } from "~/contracts/job.contract";
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import {
+  getDb,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
 import { job } from "~/server/db/retained-tables";
 import { run } from "~/server/db/schema";
@@ -169,7 +180,7 @@ export async function jobFactsOf(
       maxAttempts: row.maxAttempts,
       priority: row.priority,
       waitReason: row.waitReason,
-      waitUntil: iso(row.waitUntil),
+      waitUntil: row.waitReason ? iso(row.availableAt) : null,
       availableAt: row.availableAt.toISOString(),
       leaseExpiresAt: iso(row.leaseExpiresAt),
       error: row.error === null ? null : scrubErrorMessage(row.error),
@@ -302,4 +313,133 @@ export async function readRunRollups(
       stallMinutes: RUN_STALL_MS / 60_000,
     };
   });
+}
+
+const FAILURE_LOOKBACK_DAYS = 7;
+const REPEATED_RUN_FAILURES = 3;
+const MINUTE_MS = 60_000;
+const stamp = (value: Date) => sql`${value.toISOString()}::timestamp`;
+const utc = (value: string | null) =>
+  value === null ? null : new Date(`${value}Z`);
+const runLink = (code: string): WorkStuckItem["action"] => ({
+  type: "link",
+  label: "Open Run",
+  href: `/runs/${code}`,
+});
+const formatStuckAge = (ms: number) => {
+  const minutes = Math.max(1, Math.round(ms / MINUTE_MS));
+  if (minutes < 90) return countLabel(minutes, "minute");
+  if (minutes < 48 * 60) return countLabel(Math.round(minutes / 60), "hour");
+  return countLabel(Math.round(minutes / (24 * 60)), "day");
+};
+/**
+ * Runs a member started or reviews that stopped. Stalled Runs are listed one by
+ * one. Failures collapse to each purpose's latest and clear when a later Run of
+ * that purpose completes. A member's own failed Run shows at once; a scheduled
+ * or discovered Run retries on its own, so it counts only once it keeps failing.
+ * Paused Runs are a member's choice.
+ */
+export async function readStoppedRuns(db: Database, now: Date) {
+  const purposes = sql.join(
+    ATTENTION_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
+    sql`, `,
+  );
+  const columns = {
+    id: run.id,
+    shortcode: run.shortcode,
+    purpose: run.purpose,
+    trigger: run.trigger,
+    status: run.status,
+    startedAt: run.startedAt,
+    endedAt: run.endedAt,
+    failureCode: run.failureCode,
+    dispatchError: run.dispatchError,
+  };
+  const stalled = await getDb(db)
+    .select(columns)
+    .from(run)
+    .where(
+      sql`${notDeleted(run)} AND ${run.purpose} IN (${purposes})
+        AND ${run.status} = ${runStatus.enum.running} AND ${runStalledSql(now)}`,
+    )
+    .orderBy(sql`${run.startedAt} DESC`)
+    .limit(8);
+  const failed = await getDb(db)
+    .select(columns)
+    .from(run)
+    .where(
+      sql`${notDeleted(run)} AND ${run.purpose} IN (${purposes})
+        AND ${run.status} IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed})
+        AND ${run.endedAt} > ${stamp(new Date(now.getTime() - FAILURE_LOOKBACK_DAYS * 24 * 60 * MINUTE_MS))}
+        AND NOT EXISTS (SELECT 1 FROM "Run" next
+          WHERE next."predecessorRunId" = ${run.id} AND ${notDeleted("next")})`,
+    )
+    .orderBy(sql`${run.endedAt} DESC`);
+  const failedPurposes = [...new Set(failed.map((row) => row.purpose))];
+  const completed = failedPurposes.length
+    ? await getDb(db)
+        .select({
+          purpose: run.purpose,
+          endedAt: sql<string>`max(${run.endedAt})`,
+        })
+        .from(run)
+        .where(
+          sql`${run.status} = ${runStatus.enum.completed} AND ${run.purpose} IN (${sql.join(
+            failedPurposes.map((purpose) => sql`${purpose}`),
+            sql`, `,
+          )})`,
+        )
+        .groupBy(run.purpose)
+    : [];
+  const lastCompleted = new Map(
+    completed.map((row) => [row.purpose, utc(row.endedAt)]),
+  );
+  const open = failedPurposes.flatMap((purpose) => {
+    const later = lastCompleted.get(purpose);
+    const failures = failed.filter(
+      (row) =>
+        row.purpose === purpose &&
+        row.endedAt &&
+        (!later || row.endedAt > later),
+    );
+    const newest = failures[0];
+    if (!newest) return [];
+    return isMemberStartedRun(newest) ||
+      failures.length >= REPEATED_RUN_FAILURES
+      ? [{ row: newest, failures: failures.length }]
+      : [];
+  });
+  const rollups = stalled.length ? await readRunRollups(db, stalled, now) : [];
+  const progress = new Map<string, string | null>(
+    rollups.map((rollup) => [rollup.runId, rollup.lastProgressAt]),
+  );
+  return [
+    ...stalled.map((row): WorkStuckItem => {
+      const lastProgress = progress.get(row.shortcode);
+      const since = lastProgress ? new Date(lastProgress) : row.startedAt;
+      return {
+        key: `run:${row.shortcode}`,
+        title: `${RUN_PURPOSE_LABEL[row.purpose] ?? row.purpose} Run stopped`,
+        body: `${row.shortcode} has made no progress for ${formatStuckAge(now.getTime() - since.getTime())}.`,
+        since: since.toISOString(),
+        action: runLink(row.shortcode),
+        diagnostic: row.dispatchError ?? row.failureCode,
+      };
+    }),
+    ...open.map(({ row, failures }): WorkStuckItem => {
+      const since = row.endedAt ?? row.startedAt;
+      const label = RUN_PURPOSE_LABEL[row.purpose] ?? row.purpose;
+      return {
+        key: `run:${row.shortcode}`,
+        title: failures > 1 ? `${label} keeps failing` : `${label} Run failed`,
+        body:
+          failures > 1
+            ? `The last ${failures} Runs failed, most recently ${row.shortcode} ${formatStuckAge(now.getTime() - since.getTime())} ago.`
+            : `${row.shortcode} failed ${formatStuckAge(now.getTime() - since.getTime())} ago.`,
+        since: since.toISOString(),
+        action: runLink(row.shortcode),
+        diagnostic: row.dispatchError ?? row.failureCode,
+      };
+    }),
+  ];
 }

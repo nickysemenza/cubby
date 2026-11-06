@@ -1,20 +1,53 @@
+import { runEntityId } from "@cubby/schemas/identifiers";
+import { eq } from "drizzle-orm";
+import { z } from "zod";
+
 import type { Database } from "~/server/db";
-import { repeatJob } from "~/server/generic/jobs/repo/producer";
+import {
+  repositoryQueries as getDb,
+  repositoryTransactionDatabase,
+} from "~/server/db/repository-access.boundary";
+import { appSettings } from "~/server/db/retained-tables";
 import type { Fenced } from "~/server/generic/jobs/types";
 
 import { admitConnectionDiscoveryPage } from "./connection-refresh";
 
-/** A completed bounded pass repeats; failures stay terminal. */
-export const claimDerivedDiscovery = (db: Database) =>
-  repeatJob(
-    db,
-    {
-      key: "discovery:connections",
-      kind: "discovery.connections",
-      input: {},
-    },
-    2 * 60_000,
-  );
+const CONNECTION_DISCOVERY_CURSOR_ID = "00000000-0000-4000-8000-000000000077";
+const cursorSchema = z.object({
+  stopped: z.boolean().default(false),
+  error: z.string().nullable().default(null),
+  after: z.string().nullable().default(null),
+  runId: runEntityId.nullable().default(null),
+  nextAt: z.iso.datetime().nullable().default(null),
+});
+
+/** Serialize only the admission page, including its cursor and retained Run continuation. */
+export async function connectionDiscoveryPage<T>(
+  db: Database,
+  work: (
+    tx: Database,
+    cursor: z.infer<typeof cursorSchema>,
+    save: (cursor: z.infer<typeof cursorSchema>) => Promise<void>,
+  ) => Promise<T>,
+) {
+  return repositoryTransactionDatabase(db, async (tx) => {
+    await getDb(tx)
+      .insert(appSettings)
+      .values({ id: CONNECTION_DISCOVERY_CURSOR_ID, metadata: {} })
+      .onConflictDoNothing();
+    const [row] = await getDb(tx)
+      .select({ metadata: appSettings.metadata })
+      .from(appSettings)
+      .where(eq(appSettings.id, CONNECTION_DISCOVERY_CURSOR_ID))
+      .for("update");
+    return work(tx, cursorSchema.parse(row?.metadata ?? {}), async (cursor) => {
+      await getDb(tx)
+        .update(appSettings)
+        .set({ metadata: cursor, updatedAt: new Date() })
+        .where(eq(appSettings.id, CONNECTION_DISCOVERY_CURSOR_ID));
+    });
+  });
+}
 
 export const prepareConnectionDiscoveryPage = (
   fenced: Fenced,

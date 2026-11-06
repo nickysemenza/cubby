@@ -9,7 +9,6 @@ import {
 } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import {
   aiEvaluationPageKey,
-  aiEvaluationAttemptToken,
   aiEvaluationAttemptLive,
 } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
@@ -23,9 +22,9 @@ import {
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { repositoryBeforeCommit } from "~/server/db/repository-access.boundary";
 import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";
+import type { DrainContext } from "~/server/generic/background/drains";
 import type { DrainItem } from "~/server/generic/jobs/drain-store";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
-import type { DrainContext } from "~/server/generic/jobs/service/drain";
 
 import type {
   EvaluationPageTarget,
@@ -61,7 +60,7 @@ export type ClaimedAiEvaluation = typeof aiEvaluation.$inferSelect & {
 
 /** Bind one item to its live owner; its lease fences every later write. */
 export async function claimAiEvaluation(
-  context: Pick<DrainContext, "claim" | "fenced">,
+  context: Pick<DrainContext, "name" | "attemptToken" | "fenced">,
   item: DrainItem,
   requestingRunId?: string,
 ): Promise<ClaimedAiEvaluation | null> {
@@ -71,7 +70,7 @@ export async function claimAiEvaluation(
       .from(aiEvaluation)
       .where(eq(aiEvaluation.id, item.ref));
     if (!existing || !PENDING_AI_STATES.includes(existing.state)) return null;
-    if (context.claim.key !== aiEvaluationPageKey(existing.feature))
+    if (context.name !== aiEvaluationPageKey(existing.feature))
       throw new Error("AI evaluation item belongs to another feature's page");
     if (
       existing.executionKind === "ai_refresh" &&
@@ -107,7 +106,7 @@ export async function claimAiEvaluation(
     return row
       ? {
           ...row,
-          attemptToken: aiEvaluationAttemptToken(context.claim),
+          attemptToken: context.attemptToken,
           attempts: item.attempts,
         }
       : null;
@@ -509,23 +508,6 @@ export async function fenceAiEvaluationPage(
       () => fenceAiEvaluationActivation(tx, refresh),
       { phase: "fence" },
     );
-}
-
-/** Retire a set whose generation, manifest or evidence is gone; a domain outcome, never a retry. */
-export async function obsoleteAiEvaluations(
-  tx: Database,
-  ids: readonly string[],
-  reason: string,
-) {
-  if (!ids.length) return;
-  await settleAiEvaluations(
-    tx,
-    ids.map((evaluationId) => ({
-      evaluationId,
-      state: "obsolete" as const,
-      receipt: { reason },
-    })),
-  );
 }
 
 /** Page publication in a savepoint, so a rejected publication rolls back alone. */

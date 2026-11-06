@@ -1,7 +1,9 @@
+import type { WorkActivity } from "@cubby/schemas/job";
 import {
   boolean,
   doublePrecision,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -19,6 +21,15 @@ export const derivedRebuild = pgTable("DerivedRebuild", {
   afterId: uuid("afterId"),
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   startedAt: timestamp("startedAt", { mode: "date" }),
+  lastMovementAt: timestamp("lastMovementAt", { mode: "date" }),
+  cleanAt: timestamp("cleanAt", { mode: "date" }),
+  pages: integer("pages").notNull().default(0),
+  processedRecords: integer("processedRecords").notNull().default(0),
+  failedPages: integer("failedPages").notNull().default(0),
+  history: jsonb("history")
+    .$type<WorkActivity["rebuild"]["history"]>()
+    .notNull()
+    .default([]),
   finishedAt: timestamp("finishedAt", { mode: "date" }),
   token: uuid("token"),
   leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),

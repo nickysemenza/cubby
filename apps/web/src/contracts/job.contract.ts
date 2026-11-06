@@ -1,5 +1,6 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
 import {
+  workActivity,
   jobLane,
   jobState,
   jobWaitingOn,
@@ -95,37 +96,6 @@ const deviceBacklog = z.object({
   etaSeconds: z.number().int().nonnegative().nullable(),
 });
 export type DeviceBacklog = z.infer<typeof deviceBacklog>;
-
-/**
- * One kind of work (a Job kind): what runs and
- * waits now, recent completions and failures, and the active Runs it serves.
- * `completedPerMinute` averages the pace window; it is a measurement, not a
- * forecast, so a stream without recent completions reports 0.
- */
-const workStream = z.object({
-  kind: z.string(),
-  running: z.number().int().nonnegative(),
-  due: z.number().int().nonnegative(),
-  backingOff: z.number().int().nonnegative(),
-  scheduled: z.number().int().nonnegative(),
-  paused: z.number().int().nonnegative(),
-  completedPerMinute: z.number().nonnegative(),
-  completed: z.number().int().nonnegative(),
-  failed: z.number().int().nonnegative(),
-  lastCompletedAt: z.iso.datetime().nullable(),
-  oldestDueAt: z.iso.datetime().nullable(),
-  runIds: z.array(runShortcode),
-});
-const workActivity = z.object({
-  measuredAt: z.iso.datetime(),
-  windows: z.object({
-    paceMinutes: z.number().int().positive(),
-    completedMinutes: z.number().int().positive(),
-    failedMinutes: z.number().int().positive(),
-  }),
-  streams: z.array(workStream),
-});
-export type WorkActivity = z.infer<typeof workActivity>;
 
 /** Records whose single-item Jobs are found by their key. */
 const jobSubjectEntity = z.enum(["image", "location"]);

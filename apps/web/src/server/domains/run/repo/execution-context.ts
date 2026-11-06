@@ -132,7 +132,7 @@ export async function pauseForFunding(
       availableAt: until,
     });
     await unwrapDb(tx)
-      .execute(sql`UPDATE "Job" SET "waitReason"=${jobWaitReason.enum.ai_funding_window}, "waitUntil"=${until.toISOString()}::timestamp
+      .execute(sql`UPDATE "Job" SET "waitReason"=${jobWaitReason.enum.ai_funding_window}, "availableAt"=${until.toISOString()}::timestamp
       WHERE key=${key} AND state=${jobState.enum.queued}`);
   });
 }

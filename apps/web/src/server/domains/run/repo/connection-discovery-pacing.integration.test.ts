@@ -1,20 +1,14 @@
-import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { aiEvaluation, task } from "~/server/db/schema";
-import { claimDerivedDiscovery } from "~/server/domains/run/repo/derived-discovery";
-import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
-import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
-import { outsideJob } from "~/server/generic/jobs/outside-job";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { wakeAiEvaluationRequesters } from "~/server/workflows/runs/wake";
+import { connectionDiscoveryPage } from "~/server/domains/run/repo/derived-discovery";
+import { connectionDiscoveryDrain } from "~/server/domains/run/service/derived-discovery";
 
 import { stopAutomaticAi } from "./automatic-ai-stop";
 import {
@@ -43,7 +37,6 @@ async function connectionEvaluations(db: Database, recordId: string) {
 
 describe("connection discovery pacing", () => {
   const ctx = withTestDb();
-  afterEach(() => vi.restoreAllMocks());
 
   async function tasks(names: string[]) {
     await activateAiRefresh(ctx.db, "synthetic-discovery-pacing", {
@@ -147,21 +140,18 @@ describe("connection discovery pacing", () => {
   it("holds its cursor while a member's Stop stands", async () => {
     await tasks(["Synthetic stopped task"]);
     await stopAutomaticAi(ctx.db, ctx.actor);
-    const saved = await claimDerivedDiscovery(ctx.db);
-    const claim = await claimJob(ctx.db, saved.id);
-    if (!claim) throw new Error("Synthetic discovery Job was not claimable");
-    const prepared = await connectionDiscoveryJobHandler.prepare(
-      ctx.db,
-      { ...claim, cursor: { after: "synthetic-cursor", runId: null } },
-      fromPartial({
-        signal: new AbortController().signal,
-        fenced: outsideJob(ctx.db),
-      }),
+    await connectionDiscoveryPage(ctx.db, async (_tx, cursor, save) =>
+      save({ ...cursor, after: "synthetic-cursor" }),
     );
-    expect(prepared.page).toMatchObject({
-      done: false,
-      cursor: { after: "synthetic-cursor", runId: null },
+    const page = await connectionDiscoveryDrain.page(ctx.db, {
+      deadline: Date.now() + 20_000,
     });
+    expect(page.more).toBe(false);
+    const cursor = await connectionDiscoveryPage(
+      ctx.db,
+      async (_tx, cursor) => cursor,
+    );
+    expect(cursor.after).toBe("synthetic-cursor");
     expect(await pendingConnectionEvaluations(ctx.db)).toBe(0);
   });
 
@@ -197,22 +187,19 @@ describe("connection discovery pacing", () => {
     expect(await pendingConnectionEvaluations(ctx.db)).toBe(
       CONNECTION_DISCOVERY_PENDING_CAP,
     );
-    const saved = await claimDerivedDiscovery(ctx.db);
-    const claim = await claimJob(ctx.db, saved.id);
-    if (!claim) throw new Error("Synthetic discovery Job was not claimable");
-    const prepared = await connectionDiscoveryJobHandler.prepare(
-      ctx.db,
-      {
-        ...claim,
-        cursor: { after: "synthetic-cursor", runId: null },
-      },
-      fromPartial({ signal: new AbortController().signal }),
+    await connectionDiscoveryPage(ctx.db, async (_tx, cursor, save) =>
+      save({ ...cursor, after: "synthetic-cursor" }),
     );
-    expect(prepared.page).toMatchObject({
-      done: false,
-      cursor: { after: "synthetic-cursor", runId: null },
-      waitReason: "rate_limit",
+    const page = await connectionDiscoveryDrain.page(ctx.db, {
+      deadline: Date.now() + 20_000,
     });
+    expect(page.more).toBe(false);
+    const cursor = await connectionDiscoveryPage(
+      ctx.db,
+      async (_tx, cursor) => cursor,
+    );
+    expect(cursor.after).toBe("synthetic-cursor");
+    expect(cursor.nextAt).toBe(page.nextAt?.toISOString());
     const admitted = await getDb(ctx.db)
       .select({ id: aiEvaluation.id })
       .from(aiEvaluation)
@@ -223,28 +210,7 @@ describe("connection discovery pacing", () => {
         ),
       );
     expect(admitted).toHaveLength(CONNECTION_DISCOVERY_PENDING_CAP);
-    const deadline = prepared.page.waitUntil;
-    expect(deadline?.getTime()).toBeGreaterThan(Date.now() + 55 * 60_000);
-    await updateJobs(
-      ctx.db,
-      { id: saved.id },
-      {
-        state: "queued",
-        availableAt: deadline,
-        waitReason: "rate_limit",
-        leaseToken: null,
-        leaseExpiresAt: null,
-      },
-    );
-    const settled = admitted[0]!;
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ state: "completed" })
-      .where(eq(aiEvaluation.id, settled.id));
-    await withTransactionDatabase(ctx.db, (tx) =>
-      wakeAiEvaluationRequesters(tx, [settled.id]),
-    );
-    const released = (await readJobs(ctx.db, { id: saved.id }))[0];
-    expect(released?.availableAt.getTime()).toBeLessThanOrEqual(Date.now());
+    expect(page.nextAt?.getTime()).toBeGreaterThan(Date.now() + 110_000);
+    expect(page.nextAt?.getTime()).toBeLessThanOrEqual(Date.now() + 120_000);
   });
 });

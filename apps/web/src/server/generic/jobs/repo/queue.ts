@@ -27,7 +27,7 @@ import { jobKindPolicy, jobRetryDelayMs } from "../kind-policy";
 import { JOB_DRAIN } from "../limits";
 
 /** How long a claim holds a Job before another worker may take it over. */
-export const JOB_LEASE_MS = 5 * 60_000;
+export const JOB_LEASE_MS = 16 * 60_000;
 export type JobRow = typeof job.$inferSelect;
 export type JobClaim = JobRow & {
   leaseToken: string;
@@ -170,7 +170,6 @@ export async function claimJob(
           state: "failed",
           attempts,
           waitReason: null,
-          waitUntil: null,
           leaseToken: null,
           leaseExpiresAt: null,
           error: "Job exhausted attempts after interrupted execution",
@@ -185,7 +184,6 @@ export async function claimJob(
       .set({
         state: "running",
         waitReason: null,
-        waitUntil: null,
         leaseToken: token,
         leaseExpiresAt: expires,
         attempts,
@@ -243,7 +241,6 @@ export async function releaseJobClaim(
     .set({
       state: "queued",
       waitReason,
-      waitUntil: waitReason ? availableAt : null,
       leaseToken: null,
       leaseExpiresAt: null,
       availableAt,
@@ -341,8 +338,7 @@ export async function publishJobPage(
       .from(job)
       .where(eq(job.id, claim.id));
     if (!current || !ownsLease(current, claim)) return false;
-    const publication = await publish?.(tx);
-    const output = publication === undefined ? page.result : publication;
+    await publish?.(tx);
     await repositoryBeforeCommit(
       tx,
       async (commit) => {
@@ -358,18 +354,8 @@ export async function publishJobPage(
           .set({
             state: page.done ? "completed" : "queued",
             cursor: page.cursor ?? null,
-            result:
-              output &&
-              typeof output === "object" &&
-              !Array.isArray(output) &&
-              latest.result &&
-              typeof latest.result === "object" &&
-              !Array.isArray(latest.result)
-                ? { ...latest.result, ...output }
-                : (output ?? latest.result),
             availableAt: page.waitUntil ?? page.availableAt ?? new Date(),
             waitReason: page.done ? null : (page.waitReason ?? null),
-            waitUntil: page.done ? null : (page.waitUntil ?? null),
             leaseToken: null,
             leaseExpiresAt: null,
             attempts: 0,
@@ -413,7 +399,6 @@ export async function failJob(
         : {}),
       availableAt: new Date(Date.now() + jobRetryDelayMs(backoff, failures)),
       waitReason: null,
-      waitUntil: null,
       leaseToken: null,
       leaseExpiresAt: null,
       error: JSON.stringify(describeErrorCauses(error)),
@@ -432,7 +417,6 @@ export async function pauseClaimedJob(
     .set({
       state: "paused",
       waitReason: null,
-      waitUntil: null,
       leaseToken: null,
       leaseExpiresAt: null,
       error: JSON.stringify(describeErrorCauses(error)),

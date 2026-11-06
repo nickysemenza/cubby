@@ -12,6 +12,3 @@ export const JOB_DRAIN = {
   // This bounds pages, not each page's internal query fanout.
   concurrency: 3,
 } satisfies Record<string, number>;
-
-/** A running page renews its lease this often. */
-export const JOB_HEARTBEAT_MS = 30_000;

@@ -78,7 +78,6 @@ const searchSink = (entity: SearchableEntity) =>
           missing: [],
         });
       }
-      return ids;
     },
   });
 
@@ -106,7 +105,7 @@ const recipeTotalsSink = derivedSink({
       const value = totals.get(id);
       return value ? [{ id: parseEntityId("recipe", id), totals: value }] : [];
     });
-    return commitRecipeTotals(tx, { updates, freshOnlyIds: [] });
+    await commitRecipeTotals(tx, { updates, freshOnlyIds: [] });
   },
 });
 
@@ -119,7 +118,9 @@ const conversionCoverageSink = derivedSink({
       ids as ProductId[],
       new USDAClient(requestUsdaRelease()),
     ),
-  publish: (tx, ids, prepared) => prepared.publish(tx, ids),
+  publish: async (tx, ids, prepared) => {
+    await prepared.publish(tx, ids);
+  },
 });
 
 const searchComputes: Record<string, DerivedAdapter> = Object.fromEntries(

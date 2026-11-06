@@ -347,53 +347,6 @@ export async function activeSweepFor(db: Database, family: string) {
   return row?.id ?? null;
 }
 
-/**
- * A restarted routine pass abandons the Run its earlier generation opened;
- * that Run ends with the counts it reached instead of staying open.
- */
-export async function endSupersededRoutineRuns(
-  db: Database,
-  pass: {
-    purpose: typeof run.$inferSelect.purpose;
-    input: unknown;
-    keep: RunId | null;
-  },
-) {
-  const ended = await getDb(db)
-    .update(run)
-    .set({
-      status: "completed",
-      endedAt: new Date(),
-      notes: "Superseded by a newer pass",
-    })
-    .where(
-      and(
-        eq(run.purpose, pass.purpose),
-        eq(run.status, "running"),
-        sql`${run.input} = ${JSON.stringify(pass.input)}::jsonb`,
-        pass.keep ? sql`${run.id} <> ${pass.keep}` : undefined,
-      ),
-    )
-    .returning({ id: run.id });
-  if (!ended.length) return;
-  await getDb(db)
-    .update(runStep)
-    .set({
-      state: "done",
-      endedAt: new Date(),
-      meta: sql`coalesce(${runStep.meta}, '{}'::jsonb) || '{"action":null}'::jsonb`,
-    })
-    .where(
-      and(
-        inArray(
-          runStep.runId,
-          ended.map((row) => row.id),
-        ),
-        inArray(runStep.state, ["queued", "running", "waiting", "paused"]),
-      ),
-    );
-}
-
 /** Another unfinished Run of a purpose that allows only one at a time. */
 export async function otherActiveRun(
   db: Database,

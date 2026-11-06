@@ -98,11 +98,8 @@ export async function withClaimedAiEvaluation<T>(
   try {
     const claimed = await claimAiEvaluation(
       {
-        claim: {
-          key: aiEvaluationPageKey(owed.feature),
-          generation: 1,
-          leaseToken: token,
-        },
+        name: aiEvaluationPageKey(owed.feature),
+        attemptToken: token,
         fenced: outsideJob(db),
       },
       item,

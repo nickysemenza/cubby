@@ -37,8 +37,8 @@ import {
   type DerivedAdapter,
   derivedSink,
 } from "~/server/generic/derived/repo/compute";
-import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
 import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
+import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -63,7 +63,9 @@ const computes = new Map<string, DerivedAdapter>([
       prepare: (db, ids) =>
         // SAFETY: the tracer samples Product ids for this declaration.
         prepareProductConversionCoverage(db, ids as ProductId[], offlineUsda),
-      publish: (tx, ids, prepared) => prepared.publish(tx, ids),
+      publish: async (tx, ids, prepared) => {
+        await prepared.publish(tx, ids);
+      },
     }),
   ],
 ]);

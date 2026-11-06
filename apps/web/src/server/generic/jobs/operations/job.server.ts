@@ -1,11 +1,11 @@
 import { jobContract } from "~/contracts/job.contract";
 import { readDeviceBacklog } from "~/server/domains/image-processing/repo/device-backlog";
+import { readWorkActivity } from "~/server/generic/jobs/repo/observation";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 import { listRunJobs, listSubjectJobs } from "../repo/job-diagnostics";
 import { readRunRollups } from "../repo/job-queue";
-import { readWorkActivity } from "../repo/work-activity";
 import { readJobLogs } from "../service/job-logs";
 import { retryJobSetNow } from "../service/retry-now";
 

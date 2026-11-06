@@ -6,9 +6,8 @@ import {
   withJobExecution,
   type JobExecutionDetails,
 } from "~/server/generic/jobs/context";
-import { JobSupersededError } from "~/server/generic/jobs/errors";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
-import { JOB_DRAIN, JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
+import { JOB_DRAIN } from "~/server/generic/jobs/limits";
 import {
   assertJobClaim,
   claimJob,
@@ -20,7 +19,6 @@ import {
   nextJobDue,
   pauseClaimedJob,
   publishJobPage,
-  renewJob,
   type JobClaim,
 } from "~/server/generic/jobs/repo/queue";
 
@@ -99,7 +97,7 @@ export async function advanceJob(
   });
 }
 
-/** Heartbeat, fences, publication and the one failure classification for every page. */
+/** Fixed lease, fences, publication and the one failure classification for every page. */
 async function executeClaim(
   db: Database,
   claimed: JobClaim,
@@ -128,21 +126,6 @@ async function executeClaim(
     });
   entry().info("claim");
   const lease = new AbortController();
-  let renewing: Promise<unknown> | undefined;
-  const heartbeat = setInterval(() => {
-    renewing ??= renewJob(db, claimed)
-      .then((renewed) => {
-        if (renewed) return entry().info("lease renewed");
-        entry().warn("lease lost");
-        lease.abort(new JobSupersededError());
-      })
-      .catch((error: unknown) =>
-        entry().error("lease renewal failed", { error }),
-      )
-      .finally(() => {
-        renewing = undefined;
-      });
-  }, JOB_HEARTBEAT_MS);
   const context = claimContext(db, claimed, lease.signal);
   try {
     const prepared = await withJobExecution(
@@ -214,9 +197,6 @@ async function executeClaim(
         entry().error("fail", { error });
         return "failed";
     }
-  } finally {
-    clearInterval(heartbeat);
-    await renewing;
   }
 }
 
@@ -286,7 +266,7 @@ export async function drainDueJobs(
       if (!armed) {
         armed = true;
         // A killed invocation leaves its leases behind and settles nothing, so
-        // arm the wake for them before the first page. Heartbeats may outlive it.
+        // arm the wake for them before the first page.
         const { wakeAt } =
           await import("~/server/workflows/background-tasks/publish");
         await wakeAt(new Date(Date.now() + JOB_LEASE_MS + 5_000), {
@@ -320,13 +300,6 @@ export async function drainDueJobs(
     ),
   );
   if (failure) throw failure.reason;
-  const { wakeAt, wakeJobs } =
-    await import("~/server/workflows/background-tasks/publish");
-  if ((await dueJobs(db, 1, { excludeIds: [...busy] })).length)
-    await wakeJobs({ source: "job.drain-budget" });
-  else {
-    const next = await nextJobDue(db);
-    if (next) await wakeAt(next, { source: "job.next-due" });
-  }
-  return outcomes;
+  const more = (await dueJobs(db, 1, { excludeIds: [...busy] })).length > 0;
+  return { outcomes, more, nextAt: more ? null : await nextJobDue(db) };
 }

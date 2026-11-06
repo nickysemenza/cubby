@@ -140,7 +140,7 @@ describe("hourly deterministic rebuild", () => {
             ? adapter
             : derivedSink({
                 prepare: async () => null,
-                publish: async () => [],
+                publish: async () => {},
               }),
         ]),
       ),
