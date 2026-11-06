@@ -32,7 +32,7 @@ import { getFixtureDb, fixtureUserId } from "./fixtures/core";
 import { seedImagePrerequisite } from "./fixtures/photos";
 import { seedProductPrerequisite } from "./fixtures/catalog";
 
-// New device prose must not displace preferred cloud prose; identity observations never attach automatically.
+// Device prose cannot displace preferred cloud prose or confirmed text; identity observations never attach automatically.
 test("image results compare descriptions and require explicit attachment confirmation", async ({
   page,
   e2eRuntime,
@@ -119,6 +119,34 @@ test("image results compare descriptions and require explicit attachment confirm
     .click();
   await expect(
     description.getByText("Short Apple observation.", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "Corrected image description" })
+    .fill("Confirmed synthetic blue utility jacket.");
+  await page
+    .getByRole("button", { name: "Save correction", exact: true })
+    .click();
+  await expect
+    .poll(async () => {
+      const [saved] = await getDb(db)
+        .select({
+          description: image.confirmedDescription,
+          contentHash: image.descriptionContentHash,
+          owner: image.descriptionConfirmationOwner,
+        })
+        .from(image)
+        .where(eq(image.id, imageId));
+      return saved;
+    })
+    .toMatchObject({
+      description: "Confirmed synthetic blue utility jacket.",
+      contentHash: row.sha256,
+      owner: { kind: "member", actorUserId: await fixtureUserId(page) },
+    });
+  await expect(
+    description.getByText("Confirmed synthetic blue utility jacket.", {
+      exact: true,
+    }),
   ).toBeVisible();
   const identification = page.getByRole("region", {
     name: "Product identification",

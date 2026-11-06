@@ -79,6 +79,5 @@ export function pendingSuggestionRecordsSql(ids?: readonly string[]) {
         suggestionFamily.enum.field,
         suggestionFamily.enum.transfer_pair,
         suggestionFamily.enum.product_pair,
-        suggestionFamily.enum.image_description,
-      ])} AND (s.family NOT IN (${suggestionFamily.enum.product_pair}, ${suggestionFamily.enum.image_description}) OR s.suppression IS NULL)`;
+      ])} AND (s.family <> ${suggestionFamily.enum.product_pair} OR s.suppression IS NULL)`;
 }

@@ -73,7 +73,6 @@ const source: WorkSource = {
   link: { kind: "suggestions" },
   reasons: Object.entries({
     field: "Pending field suggestions",
-    image_description: "Pending image descriptions",
     recommendation: "Pending connection suggestions",
     statement_transaction: "Pending statement transactions",
     transfer_pair: "Pending transfer pairs",

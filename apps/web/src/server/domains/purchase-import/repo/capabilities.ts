@@ -98,6 +98,7 @@ const actionCapability = {
   "ai.approve_detected_inventory_item": "member_decision",
   "ai.stop_automatic_work": "member_decision",
   "ai.resume_automatic_work": "member_decision",
+  "image.confirm_description": "member_decision",
   "suggestions.review": "member_decision",
   "suggestions.review_batch": "member_decision",
   "finance.commit_booking": "member_decision",

@@ -637,6 +637,30 @@ export const { definition, readSchemas } = defineEntityModel(
         },
         { output: false, key: "shortcode", kind: "text" },
         { output: false, key: "deletedAt", kind: "timestamp", nullable: true },
+        {
+          output: false,
+          key: "confirmedDescription",
+          kind: "text",
+          nullable: true,
+        },
+        {
+          output: false,
+          key: "descriptionContentHash",
+          kind: "text",
+          nullable: true,
+        },
+        {
+          output: false,
+          key: "descriptionConfirmedAt",
+          kind: "timestamp",
+          nullable: true,
+        },
+        {
+          output: false,
+          key: "descriptionConfirmationOwner",
+          kind: "json",
+          nullable: true,
+        },
         // Server-composed text for the evidence above (`display.detailLabelPath`).
         labelField("provenanceEvidenceLabel", "Image provenance evidence"),
       ],
@@ -667,6 +691,16 @@ export const { definition, readSchemas } = defineEntityModel(
         },
         "detectedContentType",
         "sha256",
+        "confirmedDescription",
+        "descriptionContentHash",
+        "descriptionConfirmedAt",
+        {
+          key: "descriptionConfirmationOwner",
+          type: {
+            module: "@cubby/schemas/image-processing",
+            export: "ImageDescriptionConfirmationOwner",
+          },
+        },
         { key: "renderStatus", specialized: "enum:ImageRenderStatus" },
         { key: "storageStatus", specialized: "enum:ImageStorageStatus" },
         {
@@ -946,28 +980,9 @@ export const { definition, readSchemas } = defineEntityModel(
           match: { entityId: "id" },
           where: { entityKind: "image", feature: "image-description" },
         },
-        {
-          table: "Suggestion",
-          match: { subject: "id" },
-          json: { key: "recordId" },
-          where: { family: "image_description" },
-        },
-        {
-          table: "Suggestion",
-          match: { recordId: "id" },
-          where: { family: "image_description" },
-        },
-        {
-          // Decisions live on the Suggestion, whose own input above captures them.
-          table: "Suggestion",
-          capture: false,
-          match: { id: "id" },
-          path: [{ table: "Suggestion", from: "id", to: "recordId" }],
-        },
       ],
     },
     capabilities: {
-      suggestions: ["image_description"],
       auditable: false,
       images: { storage: false },
       delete: { mode: "hard", bulk: true },

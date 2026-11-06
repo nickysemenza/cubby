@@ -736,3 +736,23 @@ unfinished pre-roster progress without durable targets refuse atomically; they
 need evidence reconciliation rather than replaying already completed paid work.
 After deployment verify the converted Run's field scope, steps, original status
 and Job checkpoint, then resume through `run.control` when appropriate.
+
+## Image description ownership (ADR 0025 L2f)
+
+`adr25-l2f-image` is one breaking migration with matching clients. It locks
+Suggestion and Image against writes through commit, archives every image-description
+Suggestion exactly in `archive.Suggestion_image_description`, and checks archive
+JSON against every source row. Each confirmed text, source hash, confirmation time
+(the latest application decision time, otherwise the retained update time) and
+owner provenance is copied into Image and read back with null-safe comparisons.
+A missing Image, non-text confirmation, subject/target mismatch or unequal copy
+raises an exception. Historical rows remain in archive; the latest live confirmation
+owns the Image columns. Only after verification are live family rows deleted.
+There is no database family enum or CHECK to contract; the schema union removes
+the family. No history is reconstructed.
+
+Before integration, run the migration in a transaction on synthetic predecessor
+data, verify text/hash/time/provenance and full archived JSON, exercise refusal,
+and roll back. After the matching deployment, verify the four Image columns,
+archive parity, absence of live family rows, selected description reads and
+`image.confirm_description`. Old Suggestion review requests for images are unsupported.

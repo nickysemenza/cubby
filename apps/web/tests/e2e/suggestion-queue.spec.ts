@@ -11,13 +11,11 @@ import {
   suggestionTable,
   expense as expenseTable,
   inventoryEntry,
-  image as imageTable,
 } from "~/server/db/schema";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { updateProduct } from "~/server/domains/product/repo/crud";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
@@ -28,7 +26,6 @@ import {
   createEvidenceHarnessContext,
 } from "./fixtures/core";
 import { seedUnimportedOrderMail } from "./fixtures/mail";
-import { seedImagePrerequisite } from "./fixtures/photos";
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
@@ -347,11 +344,9 @@ test("project assignments and placement moves use the shared queue", async ({
 
 // Failure modes retained from the retired Workbench: mounting applies a tag;
 // an identity conflict offers merge; a pair loses its exact review identity;
-// merge skips survivor/impact confirmation. Image acceptance must confirm the
-// same stored description rather than regenerate a model result.
+// merge skips survivor/impact confirmation.
 test("new proposal families require explicit review and preserve merge confirmation", async ({
   page,
-  e2eRuntime,
 }, testInfo) => {
   test.slow();
   const { db } = await createEvidenceHarnessContext(page);
@@ -406,34 +401,6 @@ test("new proposal families require explicit review and preserve merge confirmat
     tagged.id,
     "synthetic-addition",
   );
-  const picture = await seedImagePrerequisite(
-    "synthetic-review-description",
-    e2eRuntime.objectStorageUrl,
-  );
-  const [image] = await getDb(db)
-    .select({ id: imageTable.id, sha256: imageTable.sha256 })
-    .from(imageTable)
-    .where(eq(imageTable.shortcode, picture.id));
-  if (!image) throw new Error("Synthetic Image missing");
-  const description = await publishSuggestion(
-    db,
-    {
-      publicationKey: `synthetic-description:${image.id}`,
-      family: "image_description",
-      subject: {
-        kind: "image_description",
-        entity: "image",
-        recordId: image.id,
-        contentHash: image.sha256,
-      },
-      judgment: "A synthetic drill on a plain workbench.",
-      producer: null,
-      fingerprint: image.sha256,
-      evidence: null,
-    },
-    { suggestedValue: "A synthetic drill on a plain workbench." },
-  );
-
   await gotoAuthenticatedPage(page, "/suggestions");
   const table = page.getByRole("table", { name: "Suggestions", exact: true });
   const tagRow = table
@@ -471,25 +438,6 @@ test("new proposal families require explicit review and preserve merge confirmat
         )[0]?.status,
     )
     .toBe("applied");
-
-  const imageRow = table
-    .getByRole("row")
-    .filter({ hasText: "A synthetic drill on a plain workbench." });
-  await imageRow.getByRole("button", { name: "Accept", exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (
-          await getDb(db)
-            .select({ confirmedValue: suggestionTable.confirmedValue })
-            .from(suggestionTable)
-            .where(eq(suggestionTable.id, description.id))
-        )[0]?.confirmedValue,
-    )
-    .toEqual({
-      present: true,
-      value: "A synthetic drill on a plain workbench.",
-    });
 
   const conflictRow = table
     .getByRole("row")

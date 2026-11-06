@@ -1,6 +1,6 @@
 {
-  "id": "bc645c25-3a1e-4028-9e53-4172898af08f",
-  "prevId": "60d84a4e-1ab3-4011-a1ac-866ca94e88dc",
+  "id": "1a2d3096-1d16-42e7-a354-b01bc59a9a38",
+  "prevId": "bc645c25-3a1e-4028-9e53-4172898af08f",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -9393,6 +9393,30 @@
         "sha256": {
           "name": "sha256",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confirmedDescription": {
+          "name": "confirmedDescription",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "descriptionContentHash": {
+          "name": "descriptionContentHash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "descriptionConfirmedAt": {
+          "name": "descriptionConfirmedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "descriptionConfirmationOwner": {
+          "name": "descriptionConfirmationOwner",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

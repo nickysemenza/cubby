@@ -136,7 +136,7 @@ it("selected clean decisions override filtered-ready scope and retain review fin
       fromPartial<SuggestionListRow>({
         id: row.id,
         suggestionId: row.id,
-        family: "image_description",
+        family: "product_pair",
         clean: index < 2,
         fingerprint: `synthetic-fingerprint-${index}`,
         actions: [{ verb: "accept", ownerOnly: false }],

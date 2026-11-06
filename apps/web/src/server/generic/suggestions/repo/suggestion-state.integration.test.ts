@@ -68,24 +68,11 @@ describe("Suggestion publication and transitions", () => {
     };
     const singleton = await publishSuggestion(ctx.db, input, projection);
     const fresh = { ...input, publicationKey: `${input.publicationKey}:batch` };
-    const image = {
-      publicationKey: "synthetic:batch:null-image-judgment",
-      family: "image_description" as const,
-      subject: {
-        kind: "image_description" as const,
-        entity: "image" as const,
-        recordId: crypto.randomUUID(),
-        contentHash: null,
-      },
-      judgment: null,
-      fingerprint: null,
-      producer: null,
-      evidence: null,
-    };
+    const nullProjection = recommendation(productId, "null-projection");
     const entries = [
       { input: fresh, projection },
       { input, projection: { suggestedValue: "ignored replay projection" } },
-      { input: image },
+      { input: nullProjection, projection: { suggestedValue: null } },
       {
         input: fresh,
         projection: { suggestedValue: "ignored duplicate projection" },
@@ -95,11 +82,13 @@ describe("Suggestion publication and transitions", () => {
     expect(rows.map((row) => row.publicationKey)).toEqual(
       entries.map((entry) => entry.input.publicationKey),
     );
-    const [batched, replayed, nullImage, duplicate] = rows;
+    const [batched, replayed, projectionRow, duplicate] = rows;
     expect(replayed).toEqual(singleton);
     expect(duplicate).toEqual(batched);
-    expect(nullImage?.judgment).toBeNull();
-    expect(nullImage?.suggestedValue).toBeNull();
+    expect(projectionRow?.judgment).toEqual({
+      candidateKey: "null-projection",
+    });
+    expect(projectionRow?.suggestedValue).toBeNull();
     const ids = rows.map((row) => row.id);
     const states = await liveRows(ctx, ids);
     expect(states).toHaveLength(3);

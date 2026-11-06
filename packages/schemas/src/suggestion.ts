@@ -10,7 +10,6 @@ export {
 import {
   productShortcode,
   entityIdSchema,
-  imageShortcode,
   anyShortcodeSchema,
   nonEmptyTuple,
 } from "./identifiers";
@@ -33,7 +32,6 @@ export const suggestionFamily = z.enum([
   "email_relevance",
   "email_link",
   "mail_import_outcome",
-  "image_description",
   "product_pair",
   "recommendation",
   "statement_transaction",
@@ -85,12 +83,6 @@ export const suggestionSubjects = {
     purchaseId: z.uuid(),
     checksum: z.string(),
   }),
-  image_description: z.object({
-    kind: z.literal("image_description"),
-    entity: z.literal("image"),
-    recordId: entityIdSchema("image"),
-    contentHash: z.string().nullable(),
-  }),
   product_pair: z
     .object({
       kind: z.literal("product_pair"),
@@ -128,7 +120,6 @@ export const suggestionSubject = z.discriminatedUnion("kind", [
   suggestionSubjects.email_relevance,
   suggestionSubjects.email_link,
   suggestionSubjects.mail_import_outcome,
-  suggestionSubjects.image_description,
   suggestionSubjects.product_pair,
   suggestionSubjects.recommendation,
   suggestionSubjects.statement_transaction,
@@ -186,10 +177,6 @@ export const suggestionProjectionTargets = {
         target.recordId === target.data.eventId,
       "Internal Email link target must name its retained event",
     ),
-  image_description: z.object({
-    entity: z.literal("image"),
-    recordId: entityIdSchema("image"),
-  }),
   product_pair: z.object({ entity: z.literal("product"), recordId: z.uuid() }),
   recommendation: publicSuggestionTarget,
   /** A Suggestion retains the canonical observation UUID behind its public code. */
@@ -242,7 +229,6 @@ export const suggestionJudgments = {
   }),
   mail_import_outcome: mailImportOutcome,
   email_link: z.object({ decision: z.enum(["linked", "dismissed"]) }),
-  image_description: z.string().nullable(),
   product_pair: z.object({ actionable: z.boolean(), conflict: z.boolean() }),
   recommendation: z.object({ candidateKey: z.string() }),
   statement_transaction: statementTransactionJudgment,
@@ -321,10 +307,7 @@ export const suggestionReviewInput = feedbackEvent
           ),
         "Operation ID uses a reserved internal receipt namespace",
       ),
-    suggestionId: suggestionChildHandle.optional(),
-    standalone: z
-      .object({ kind: z.literal("image_description"), id: imageShortcode })
-      .optional(),
+    suggestionId: suggestionChildHandle,
     expectedFingerprint: z.string().nullable().optional(),
     application: z
       .discriminatedUnion("kind", [

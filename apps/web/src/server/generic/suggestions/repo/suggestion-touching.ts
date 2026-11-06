@@ -9,7 +9,6 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
-import { notDeleted } from "~/server/db/helpers/predicates";
 import { outer, type RelatedColumns } from "~/server/db/helpers/related";
 import { suggestionTable, run } from "~/server/db/schema";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
@@ -247,14 +246,4 @@ export async function touchingSuggestionIds(
 ): Promise<Set<string> | null> {
   const touching = await touchingSuggestionFamilies(db, scope);
   return touching ? new Set(touching.keys()) : null;
-}
-
-/** Pending image admission shared by Suggestions and record-scoped Work summaries.
- * Callers select from Suggestion s.
- */
-export function pendingImageDescriptionEligibility() {
-  return sql`s.family = ${suggestionFamily.enum.image_description}
-    AND s.active AND s.status = ${suggestionStatus.enum.pending}
-    AND s.suppression IS NULL AND ${reviewFamilyDeclarations.image_description.actionable}
-    AND EXISTS (SELECT 1 FROM "Image" i WHERE i.id = s."recordId" AND ${notDeleted("i")})`;
 }

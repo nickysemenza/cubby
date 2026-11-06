@@ -30,7 +30,6 @@ export const suggestionListFamily = z.enum([
   "recommendation",
   "transfer_pair",
   "product_pair",
-  "image_description",
 ]);
 export type SuggestionListFamily = z.infer<typeof suggestionListFamily>;
 
@@ -173,11 +172,6 @@ export const productPairSuggestionRow = z.object({
   family: z.literal("product_pair"),
   evidence: declaredSuggestionEvidence,
 });
-export const imageDescriptionSuggestionRow = z.object({
-  ...rowBase,
-  family: z.literal("image_description"),
-  evidence: declaredSuggestionEvidence,
-});
 /** One Suggestion of any family; `evidence` is the family's own payload. */
 export const suggestionListRow = z.discriminatedUnion("family", [
   fieldSuggestionRow,
@@ -185,7 +179,6 @@ export const suggestionListRow = z.discriminatedUnion("family", [
   recommendationSuggestionRow,
   transferPairSuggestionRow,
   productPairSuggestionRow,
-  imageDescriptionSuggestionRow,
 ]);
 export type SuggestionListRow = z.infer<typeof suggestionListRow>;
 

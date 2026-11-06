@@ -8,7 +8,6 @@ export const suggestionReviewFamilies = {
     kind: "automatic_decision",
     label: "Mail import outcomes",
   },
-  image_description: { kind: "proposal", label: "Image descriptions" },
   product_pair: { kind: "proposal", label: "Product pairs" },
   recommendation: {
     kind: "proposal",

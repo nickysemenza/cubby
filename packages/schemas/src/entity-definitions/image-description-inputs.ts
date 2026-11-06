@@ -1,17 +1,4 @@
-import { SYSTEM_USER_ID } from "../identifier-fields";
 import type { DerivedStoredInput } from "./definition";
-
-/**
- * Only an automatic correction receipt can change selected description text.
- * `currentImageDescriptionConfirmation` and `indexCorrectionReceipts` require
- * these literals; change them together. Member and projection Feedback reach
- * search through their Suggestion transition.
- */
-export const imageDescriptionReceiptWhere = {
-  authority: "automatic",
-  intent: "history",
-  actorUserId: SYSTEM_USER_ID,
-};
 
 /** Search indexes selected descriptions on direct attachments, including corrections. */
 export const imageDescriptionInputs = (
@@ -33,29 +20,16 @@ export const imageDescriptionInputs = (
       path: owners,
     },
     {
-      table: "Suggestion",
-      match: { recordId: "id" },
-      where: { family: "image_description" },
-      path: owners,
-    },
-    {
-      table: "Suggestion",
-      match: { subject: "id" },
-      json: { key: "recordId" },
-      where: { family: "image_description" },
-      path: owners,
-    },
-    {
-      // Decisions live on the Suggestion, whose own input above captures them.
-      table: "Suggestion",
-      capture: false,
-      match: { id: "id" },
-      path: [{ table: "Suggestion", from: "id", to: "recordId" }, ...owners],
-    },
-    {
       table: "Image",
       match: { id: "id" },
-      columns: ["sha256", "deletedAt"],
+      columns: [
+        "sha256",
+        "deletedAt",
+        "confirmedDescription",
+        "descriptionContentHash",
+        "descriptionConfirmedAt",
+        "descriptionConfirmationOwner",
+      ],
       path: owners,
     },
   ];

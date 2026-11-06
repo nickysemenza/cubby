@@ -41,10 +41,9 @@ import {
   loadImageAnalysisEvidence,
   loadImageAnalysisSummaries,
 } from "~/server/domains/image/repo/image-analysis-summary";
+import { confirmImageDescription } from "~/server/domains/image/repo/image-description-confirmation";
 import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
-import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
   publishSuggestion,
   recordFeedback,
@@ -612,13 +611,16 @@ describe("durable image representations", () => {
       .update(image)
       .set({ sha256: hash })
       .where(eq(image.id, imageId));
-    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
-      standalone: { kind: "image_description", id: row.shortcode },
-      operationId: crypto.randomUUID(),
-      verdict: "correct",
-      correction: { present: true, value: "Confirmed navy cotton shirt" },
-      intent: "apply",
-    });
+    await confirmImageDescription(
+      ctx.db,
+      {
+        imageId: imageId,
+        contentHash: "a".repeat(64),
+        operationId: crypto.randomUUID(),
+        description: "Confirmed navy cotton shirt",
+      },
+      ctx.actor.userId,
+    );
     expect(
       (await loadImageAnalysisSummaries(ctx.db, [row.shortcode])).get(
         row.shortcode,
@@ -757,16 +759,16 @@ describe("durable image representations", () => {
       authority: "automatic",
       actorUserId: null,
     });
-    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
-      standalone: { kind: "image_description", id: row.shortcode },
-      operationId: crypto.randomUUID(),
-      verdict: "correct",
-      correction: {
-        present: true,
-        value: "Confirmed searchable cobalt textile",
+    await confirmImageDescription(
+      ctx.db,
+      {
+        imageId: imageId,
+        contentHash: "a".repeat(64),
+        operationId: crypto.randomUUID(),
+        description: "Confirmed searchable cobalt textile",
       },
-      intent: "apply",
-    });
+      ctx.actor.userId,
+    );
     await drainDerivedRefreshFrontier(ctx.db);
     const before = await getDb(ctx.db)
       .select()
