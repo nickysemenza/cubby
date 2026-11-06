@@ -826,8 +826,8 @@ It takes the `run` and `workQueue` cache tags, not entity roots.
 `RUN_KINDS` owns Run purpose, triggers, effects and declared steps.
 `JOB_KIND_POLICY` in `packages/schemas/src/job.ts` co-locates each Job kind’s
 member explanation with its unchanged execution policy; the server kind-policy
-module re-exports that policy. `/runs/types` renders the static reference.
-Run and Job execution views link to these definitions, while actual outcomes,
+module re-exports that policy. Run and Job execution views show these definitions,
+while actual outcomes,
 waits, raw errors and retry controls remain on their existing records.
 Definitions are not evidence that execution happened. Retained unknown kinds
 keep their diagnostics and explicitly lack a current definition.

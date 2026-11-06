@@ -166,7 +166,6 @@
     "./suggestions": "./src/suggestions.ts",
     "./audit": "./src/audit.ts",
     "./ai": "./src/ai.ts",
-    "./ai-smoke": "./src/ai-smoke.ts",
     "./mutation-side-effects": "./src/mutation-side-effects.ts",
     "./background-tasks": "./src/background-tasks.ts",
     "./derived-refresh": "./src/derived-refresh.ts",

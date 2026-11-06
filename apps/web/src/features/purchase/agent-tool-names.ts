@@ -20,7 +20,6 @@ const LEGACY_TOOL_ACTIONS = {
   delete_statement_rows: "entity.delete",
   entity_batch: "entity.commands",
   entity_batch_preview: "entity_read.preview",
-  entity_preview: "entity_read.preview",
   explain_recipe_costing: "recipe_insights_read.costing_explanation",
   find_cookable_recipes: "recipe_insights_read.get_makeable",
   find_or_create_product_by_upc: "product_enrichment.find_or_create_by_upc",

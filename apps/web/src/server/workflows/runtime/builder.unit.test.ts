@@ -1,7 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { workflow } from "./builder";
-import { inspectWorkflow } from "./definition";
 import {
   executeWorkflow,
   WorkflowCancelledError,
@@ -9,7 +8,7 @@ import {
 } from "./execute";
 
 describe("workflow authoring", () => {
-  it("keeps mapped child branches visible to inspection and execution observers", async () => {
+  it("reports mapped child branches to execution observers", async () => {
     const child = workflow<undefined, number>("quantity")
       .branch("known", {
         when: async (_, { input }) => input > 0,
@@ -38,13 +37,6 @@ describe("workflow authoring", () => {
     expectTypeOf(result).toEqualTypeOf<(number | null)[]>();
     expect(result).toEqual([4, null, 6]);
     expect(steps).toContain("scale");
-    expect(inspectWorkflow(definition).steps[0]).toMatchObject({
-      type: "map",
-      concurrency: 1,
-      branches: {
-        item: { steps: [{ type: "branch", name: "known" }] },
-      },
-    });
   });
   it("maps selected items with prior outputs, bounded concurrency, and input ordering", async () => {
     let active = 0;
@@ -75,11 +67,6 @@ describe("workflow authoring", () => {
     ]);
     expect(maximum).toBeLessThanOrEqual(2);
     expect(active).toBe(0);
-    expect(inspectWorkflow(definition).steps[1]).toMatchObject({
-      name: "results",
-      type: "map",
-      concurrency: 2,
-    });
   });
 
   it("passes prior outputs into typed parallel branches and skips the unselected branch", async () => {
@@ -118,21 +105,6 @@ describe("workflow authoring", () => {
       await executeWorkflow(definition, { context: { factor: 3 }, input: -1 }),
     ).toBeNull();
     expect(calls).toEqual(["number", "label"]);
-    const selected = inspectWorkflow(definition).steps[1];
-    expect(selected?.dependencies).toEqual(["$input", "scaled"]);
-    expect(selected?.branches?.whenTrue?.steps[0]).toMatchObject({
-      type: "parallel",
-      concurrency: 2,
-      dependencies: ["$input"],
-      branches: {
-        number: {
-          steps: [{ function: "selected-reads.selected.then.reads.number" }],
-        },
-        label: {
-          steps: [{ function: "selected-reads.selected.then.reads.label" }],
-        },
-      },
-    });
   });
 
   it("does not run effects when cancellation or failure prevents commit", async () => {
@@ -246,7 +218,7 @@ describe("workflow authoring", () => {
     ).toThrow("must immediately follow");
   });
 
-  it("infers prior outputs and lowers registered functions to an inspectable graph", async () => {
+  it("infers prior outputs and executes registered functions", async () => {
     const definition = workflow<{ factor: number }, number>("multiply")
       .call("value", async ({ context }, { input }) => input * context.factor)
       .call("label", async (_, { value }) => `Result: ${value}`)
@@ -257,10 +229,6 @@ describe("workflow authoring", () => {
     });
     expectTypeOf(result).toEqualTypeOf<{ value: number; label: string }>();
     expect(result).toEqual({ value: 12, label: "Result: 12" });
-    expect(inspectWorkflow(definition).steps).toEqual([
-      expect.objectContaining({ name: "value", function: "multiply.value" }),
-      expect.objectContaining({ name: "label", function: "multiply.label" }),
-    ]);
   });
 
   it("keeps composed declarations independent", async () => {
@@ -278,7 +246,6 @@ describe("workflow authoring", () => {
     expect(await executeWorkflow(right, { context: undefined, input: 2 })).toBe(
       3,
     );
-    expect(inspectWorkflow(right).steps).toHaveLength(1);
   });
 
   it("preserves committed cancellation evidence", async () => {
@@ -334,13 +301,6 @@ describe("workflow authoring", () => {
     ).resolves.toBe("claimed");
     expect(events).toEqual(["recovered:Error: offline", "notified:claimed"]);
     expect(observed).toContain("settle:succeeded");
-    expect(inspectWorkflow(definition).steps[1]).toMatchObject({
-      type: "attempt",
-      branches: {
-        attempt: { name: "leased.provider.attempt" },
-        recover: { name: "leased.provider.recover" },
-      },
-    });
   });
 
   it("does not recover cancellation, effects, or a new attempted commit", async () => {

@@ -93,7 +93,7 @@ type RecipeFlowCandidateAssessment =
       issues: string[];
     };
 
-export function assessRecipeFlowCandidate(
+function assessRecipeFlowCandidate(
   recipe: RecipeOut,
   candidate: RecipeFlowAiPlan,
 ): RecipeFlowCandidateAssessment {

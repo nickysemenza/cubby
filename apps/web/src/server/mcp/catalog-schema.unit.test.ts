@@ -185,10 +185,10 @@ beforeAll(async () => {
 });
 
 describe("MCP catalog schemas", () => {
-  it("attaches the UI resource only to the dedicated render tool", () => {
+  it("does not advertise entity preview cards", () => {
     expect(
-      catalog.tools.find((tool) => tool.name === "entity_preview")?._meta,
-    ).toMatchObject({ ui: { resourceUri: "ui://cubby/entity-preview.html" } });
+      catalog.tools.find((tool) => tool.name === "entity_preview"),
+    ).toBeUndefined();
     expect(
       catalog.tools.find((tool) => tool.name === "entity_read")?._meta ?? {},
     ).not.toHaveProperty("ui");

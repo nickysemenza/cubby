@@ -5,7 +5,6 @@ import {
   type RunKindDeclaration,
   type RunStepDeclaration,
 } from "@cubby/schemas/run-fields";
-import { Link } from "@tanstack/react-router";
 
 import { Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
@@ -108,13 +107,6 @@ export function RunDefinition({ purpose }: { purpose: string }) {
       <Stack gap="md">
         <p className="max-w-prose text-sm">{kind.description}</p>
         <WorkEffects explanation={kind.explanation} />
-        <Link
-          to="/runs/types"
-          hash={parsed.data}
-          className="text-link hover:underline"
-        >
-          Full definition and declared steps
-        </Link>
       </Stack>
     </Disclosure>
   );
@@ -155,13 +147,6 @@ export function JobDefinition({
           Started by: {declaration.trigger} · Executor:{" "}
           {JOB_LANE_LABEL[declaration.lane]}
         </p>
-        <Link
-          to="/runs/types"
-          hash={`job-${kind}`}
-          className="text-link hover:underline"
-        >
-          Job type reference
-        </Link>
       </Stack>
     </Disclosure>
   );

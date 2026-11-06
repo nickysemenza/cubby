@@ -4,12 +4,11 @@ import { z } from "zod";
 import { Page } from "~/entity/page/page";
 import { AiUsagePage } from "~/features/ai/ai-usage-page";
 import { DecisionsCatalog } from "~/features/ai/decisions-catalog";
-import { AiSmokeTest } from "~/features/developer/ai-smoke-test";
 import { pageTitle } from "~/lib/page-title";
 import { useTabParam } from "~/ui/hooks/use-tab-param";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
-const tabSchema = z.enum(["decisions", "smoke", "usage"]);
+const tabSchema = z.enum(["decisions", "usage"]);
 
 const searchSchema = z.object({
   tab: tabSchema.optional().catch(undefined),
@@ -36,7 +35,6 @@ function AiRoute() {
           className="h-auto max-w-full flex-wrap justify-start gap-2 [&>[data-slot=tabs-trigger]]:flex-none"
         >
           <TabsTrigger value="decisions">Decisions</TabsTrigger>
-          <TabsTrigger value="smoke">Smoke tests</TabsTrigger>
           <TabsTrigger value="usage">Usage</TabsTrigger>
         </TabsList>
         <TabsContent value="decisions">
@@ -51,9 +49,6 @@ function AiRoute() {
               }
             />
           ) : null}
-        </TabsContent>
-        <TabsContent value="smoke">
-          {tabs.value === "smoke" ? <AiSmokeTest /> : null}
         </TabsContent>
         <TabsContent value="usage">
           {tabs.value === "usage" ? <AiUsagePage /> : null}

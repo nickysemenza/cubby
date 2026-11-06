@@ -1,6 +1,6 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import { auditChannelSchema } from "@cubby/schemas/context";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { EmbeddedEntityList } from "~/entity/entity-list/generic-entity-list";
@@ -42,7 +42,6 @@ function HistoryPage() {
           headingAs="h2"
           title="Run history"
           caption="Recorded executions, including routine work. Open a Run for its actual outcomes."
-          actions={<Link to="/runs/types">What does each Run do?</Link>}
         >
           <EmbeddedEntityList
             entity="run"

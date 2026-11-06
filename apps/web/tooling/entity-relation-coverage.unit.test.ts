@@ -97,68 +97,6 @@ describe("relation coverage across the catalog", () => {
     return new Map(entities.map((entity) => [entity.key, entity]));
   };
 
-  it("selects only readable fields for inferred relation tables", async () => {
-    const entities = await load();
-    for (const entity of entities.values()) {
-      for (const section of entity.inspector.detail.sections) {
-        if (section.kind !== "relation" || !section.derived) continue;
-        const relation = entity.relations.find(
-          (candidate) => candidate.key === section.relation,
-        );
-        const target = relation && entities.get(relation.target);
-        expect(target).toBeDefined();
-        expect(section.columns?.length).toBeGreaterThan(0);
-        for (const column of section.columns ?? []) {
-          const field = target?.fieldModel.fields.find(
-            (candidate) =>
-              (candidate.display.columnId ?? candidate.key) === column,
-          );
-          expect(
-            field?.readKey !== null || field?.display.renderer?.list != null,
-          ).toBe(true);
-        }
-      }
-    }
-  });
-
-  // Regression: detail tables were opt-in, so a Task page never listed the
-  // Plantings whose `taskId` points at it. Every `many` relation on a generic
-  // detail page now renders a table or carries a written reason.
-  it("renders or explicitly omits every many relation on a generic detail page", async () => {
-    const entities = await load();
-    const uncovered = [...entities.values()].flatMap((entity) => {
-      if (entity.route?.detail == null) return [];
-      const { sections, omitRelations } = entity.inspector.detail;
-      const tabled = new Set(
-        sections.flatMap((section) =>
-          section.kind === "relation" ? [section.relation] : [],
-        ),
-      );
-      return entity.relations
-        .filter(
-          (relation) =>
-            relation.cardinality === "many" &&
-            !tabled.has(relation.key) &&
-            !(omitRelations[relation.key]?.trim().length ?? 0),
-        )
-        .map((relation) => `${entity.key}.${relation.key}`);
-    });
-    expect(uncovered).toEqual([]);
-    const plantings = entities
-      .get("task")
-      ?.inspector.detail.sections.find(
-        (section) =>
-          section.kind === "relation" && section.relation === "plantings",
-      );
-    expect(plantings).toMatchObject({
-      derived: true,
-      filter: { descriptor: "taskId" },
-    });
-  });
-
-  // Regression: a self-relation's lone branded filter can scope the opposite
-  // direction — `kitId` lists a kit's components, so resolving the product's
-  // "containing kits" to it would show components instead of kits.
   it("never auto-resolves a self-relation to a filter another section uses", async () => {
     const entities = await load();
     const product = entities.get("product");

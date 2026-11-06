@@ -74,7 +74,6 @@ const routeIcons = {
   "/tools": WrenchIcon,
   "/cash-flow": ChartLineIcon,
   "/household-contribution": ArrowsLeftRightIcon,
-  "/runs/types": ListChecksIcon,
   "/suggestions": LightbulbIcon,
   "/entities": NetworkIcon,
   "/graph": NetworkIcon,

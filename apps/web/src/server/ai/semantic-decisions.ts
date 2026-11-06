@@ -86,22 +86,6 @@ export async function decideUpcOfferComparability(args: {
   return result.value ?? "unknown";
 }
 
-export async function decideImageProvenance(args: {
-  input: ImageProvenanceDecisionInput;
-  usage: AiRunContext;
-  port?: DecisionPort;
-}) {
-  if (!imageProvenanceInputIsComplete(args.input)) return "unknown" as const;
-  const result = await choice({
-    feature: IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
-    prompt: imageProvenancePrompt(args.input),
-    values: IMAGE_PROVENANCE_CHOICES,
-    usage: args.usage,
-    port: args.port,
-  });
-  return result.value ?? "unknown";
-}
-
 export async function decideImageProvenanceWithEvidence(args: {
   input: ImageProvenanceDecisionInput;
   usage: AiRunContext;

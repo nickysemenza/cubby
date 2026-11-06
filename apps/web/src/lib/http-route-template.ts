@@ -68,7 +68,6 @@ const STATIC_TRACE_ROUTES = new Set([
   "/recipes/new",
   "/recommendations/workbench",
   "/records",
-  "/runs/types",
   "/search",
   "/settings",
   "/source-transaction-records",

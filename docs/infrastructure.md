@@ -748,10 +748,7 @@ individual dimension prompts, source literals, and fingerprints stay in receipts
 Application feature tiers are declared in
 `apps/web/src/server/ai/policy/features.ts`; retier only with live-eval evidence or an
 explicit member choice. Small ceiling-scoring evals cannot establish parity.
-The opt-in feature eval uses production prompts, schema, validation and repair
-turns, scores synthetic cases, and saves revision/replay/results under
-`artifacts/feature-routing-eval/`. Its package script and environment options
-own the replay command. Mail import still needs controlled model comparison
+Mail import still needs controlled model comparison
 ([backlog](https://github.com/nickysemenza/cubby/issues/2151)).
 
 Image composition and identity-scope questions share a batch before dependent

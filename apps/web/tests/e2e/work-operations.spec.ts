@@ -133,28 +133,6 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
   });
   await expect(apply).toBeDisabled();
 
-  await page.goto("/runs/types");
-  await expect(
-    page.getByRole("heading", { name: "What does each Run do?", exact: true }),
-  ).toBeVisible();
-  await page.goto("/runs/types#maintenance");
-  await expect(
-    page.getByRole("heading", { name: "Maintenance", exact: true }),
-  ).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("run-types-desktop.png"),
-    fullPage: false,
-  });
-  await page.goto("/runs/types#job-jobs.maintenance");
-  await expect(
-    page.getByRole("heading", { name: "Internal queue upkeep", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("This is part of daily background recovery.", {
-      exact: false,
-    }),
-  ).toBeVisible();
-
   await page.setViewportSize({ width: 390, height: 844 });
   await gotoAuthenticatedPage(page, "/activity");
   await expect(page.getByTestId("work-health")).toContainText(/background/i);
@@ -185,17 +163,4 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await page.goto("/runs/types#maintenance");
-  await expect(
-    page.getByRole("heading", { name: "Maintenance", exact: true }),
-  ).toBeVisible();
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-  await page.screenshot({
-    path: testInfo.outputPath("run-types-phone.png"),
-    fullPage: false,
-  });
 });

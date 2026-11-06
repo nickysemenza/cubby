@@ -336,11 +336,6 @@ export const SIDEBAR_SECTIONS = [
         entity: "run",
       },
       {
-        label: "Run types",
-        route: "/runs/types",
-        sfSymbol: "list.bullet",
-      },
-      {
         label: "Devices",
         route: "/devices",
         entity: "device",

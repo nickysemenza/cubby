@@ -2,10 +2,8 @@
 
 Synthetic pages modeled on a saved retailer order-details layout and its
 matching order-confirmation emails. All values are invented — order numbers,
-ASINs, names, addresses, dates, prices, and product brand/model names — and
-generated deterministically by `apps/web/tooling/build-retailer-corpus.ts`.
-No real value from the source capture is embedded in these fixtures or in
-the builder script.
+ASINs, names, addresses, dates, prices, and product brand/model names.
+No real value from the source capture is embedded in these fixtures.
 
 Only the retailer's own generic template structure is preserved: the
 `data-component` attribute names, class names, and section labels (`Order
@@ -36,15 +34,3 @@ agent see realistic markup shapes.
   price; order-details entries also carry `shipmentLabel` when the order id
   has more than one shipment), used by the corpus's unit test, including its
   order/email consistency checks.
-
-## Regenerating
-
-```
-tsx apps/web/tooling/build-retailer-corpus.ts <inputDir> apps/web/tests/e2e/fixtures/retailer-corpus
-```
-
-`<inputDir>` is a local (never-committed) directory of a "Save as" capture of
-real order-details and order-confirmation pages. The builder parses the real
-markup only to locate structural fields (order id, date, item title/price,
-shipping address); every extracted value is discarded immediately after a
-synthetic replacement is generated for it.

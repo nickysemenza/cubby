@@ -49,14 +49,6 @@ import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
-export const runCatalogActivityEntry = z.object({
-  purpose: runPurpose,
-  shortcode: runShortcode,
-  status: runStatus,
-  startedAt: z.iso.datetime(),
-  endedAt: z.iso.datetime().nullable(),
-});
-
 const runProgress = z.object({
   eventId: z.string().min(1),
   phase: z.string().min(1),
@@ -439,15 +431,6 @@ export const runContract = defineContract(
           .nullable(),
       }),
       cache: { tags: [] },
-    }),
-    catalogActivity: query({
-      exposure: "view",
-      input: z.null(),
-      output: z.object({
-        latest: z.array(runCatalogActivityEntry),
-        completed: z.array(runCatalogActivityEntry),
-      }),
-      cache: { tags: [["run"]] },
     }),
     history: query({
       exposure: "view",

@@ -47,7 +47,7 @@ import {
  * The edge rendition normalizes EXIF/HEIF orientation and requests a provider-
  * compatible JPEG without mutating or replacing the original attachment.
  */
-export function imageAnalysisRenditionUrl(originalUrl: string): string {
+function imageAnalysisRenditionUrl(originalUrl: string): string {
   // An unbounded rendered width snaps to the largest rung.
   return transformedImageUrl(originalUrl, Number.POSITIVE_INFINITY, {
     format: "jpeg",

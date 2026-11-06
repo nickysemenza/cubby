@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   bindWorkflow,
   executeWorkflow,
-  inspectWorkflow,
   workflow,
   WorkflowCancelledError,
   WorkflowEffectError,
@@ -14,9 +13,8 @@ const flow = workflow<undefined, number>("arithmetic")
   .output(({ doubled }) => doubled);
 
 describe("workflow execution", () => {
-  it("binds a definition to (context, input) and keeps it inspectable", async () => {
+  it("binds a definition to (context, input)", async () => {
     const bound = bindWorkflow(flow);
-    expect(inspectWorkflow(bound.definition).name).toBe("arithmetic");
     expect(await bound(undefined, 4)).toBe(8);
   });
 

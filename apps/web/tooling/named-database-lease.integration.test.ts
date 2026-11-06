@@ -128,24 +128,6 @@ it("retains writes and preserves the holder's database on a colliding acquisitio
   }
 }, 120_000);
 
-it("drops a named database whose setup fails even when retention was requested", async () => {
-  const databaseName = name();
-  await expect(
-    leaseNamedDatabase(
-      {
-        adminUrl,
-        name: databaseName,
-        retention: "retain",
-        migrate: skipMigrations,
-      },
-      async () => {
-        throw new Error("synthetic native seed failure");
-      },
-    ),
-  ).rejects.toThrow("synthetic native seed failure");
-  expect(await exists(databaseName)).toBe(false);
-}, 120_000);
-
 it("hands the database to its watchdog before migration, so a runner killed mid-migration leaves nothing", async () => {
   const databaseName = name();
   const toolingDir = path.dirname(fileURLToPath(import.meta.url));

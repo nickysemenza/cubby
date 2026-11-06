@@ -6,7 +6,6 @@
     "src/server.ts",
     "src/start.ts",
     "src/lib/auth.ts",
-    "src/features/ai/server-functions/ai-smoke.ts",
     "worker-environment.d.ts"
   ],
   "exclude": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"]

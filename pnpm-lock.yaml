@@ -288,9 +288,6 @@ importers:
       '@better-auth/oauth-provider':
         specifier: 1.7.10
         version: 1.7.10(6d1f65e5ab21b3258fcab655cdf500ec)
-      '@cloudflare/codemode':
-        specifier: ^0.5.4
-        version: 0.5.4(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(@types/express@5.0.6)(supports-color@8.1.1)(zod@4.6.7))(ai@7.0.154(zod@4.6.7))(zod@4.6.7)
       '@cubby/design-tokens':
         specifier: workspace:*
         version: link:../../packages/design-tokens
@@ -489,9 +486,6 @@ importers:
       jose:
         specifier: 6.2.12
         version: 6.2.12
-      just-bash:
-        specifier: ^3.6.0
-        version: 3.6.0(supports-color@8.1.1)
       loading-dev:
         specifier: 0.3.5
         version: 0.3.5(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
@@ -6917,8 +6911,11 @@ packages:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
     peerDependencies:
       '@types/ajv': '*'
+      ajv: ^8.0.0
     peerDependenciesMeta:
       '@types/ajv':
+        optional: true
+      ajv:
         optional: true
 
   ajv@8.20.0:
@@ -11950,7 +11947,8 @@ snapshots:
 
   '@blazediff/core@1.10.0': {}
 
-  '@borewit/text-codec@0.2.2': {}
+  '@borewit/text-codec@0.2.2':
+    optional: true
 
   '@bramus/specificity@2.4.3':
     dependencies:
@@ -11993,6 +11991,7 @@ snapshots:
       '@modelcontextprotocol/sdk': 1.32.1(@cfworker/json-schema@4.1.1)(@types/express@5.0.6)(supports-color@8.1.1)(zod@4.6.7)
       ai: 7.0.154(zod@4.6.7)
       zod: 4.6.7
+    optional: true
 
   '@cloudflare/config@0.27.0':
     dependencies:
@@ -12903,7 +12902,8 @@ snapshots:
       '@types/react': 19.3.0
       '@types/react-dom': 19.3.0(@types/react@19.3.0)
 
-  '@mixmark-io/domino@2.2.0': {}
+  '@mixmark-io/domino@2.2.0':
+    optional: true
 
   '@modelcontextprotocol/client@2.3.1':
     dependencies:
@@ -12923,7 +12923,7 @@ snapshots:
     dependencies:
       '@hono/node-server': 2.1.5(hono@4.13.13)
       ajv: 8.20.0
-      ajv-formats: 3.0.1
+      ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
       cors: 2.8.6
       cross-spawn: 7.0.6
@@ -12951,7 +12951,7 @@ snapshots:
     dependencies:
       '@hono/node-server': 2.1.5(hono@4.13.13)
       ajv: 8.20.0
-      ajv-formats: 3.0.1
+      ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
       cors: 2.8.6
       cross-spawn: 7.0.6
@@ -13413,7 +13413,8 @@ snapshots:
 
   '@noble/hashes@2.4.0': {}
 
-  '@nodable/entities@3.1.0': {}
+  '@nodable/entities@3.1.0':
+    optional: true
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -15853,8 +15854,10 @@ snapshots:
       token-types: 6.1.2
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
-  '@tokenizer/token@0.3.0': {}
+  '@tokenizer/token@0.3.0':
+    optional: true
 
   '@total-typescript/shoehorn@0.1.2': {}
 
@@ -16432,7 +16435,8 @@ snapshots:
       mime-types: 3.0.2
       negotiator: 1.1.0
 
-  acorn@8.19.0: {}
+  acorn@8.19.0:
+    optional: true
 
   agent-base@6.0.2(supports-color@8.1.1):
     dependencies:
@@ -16496,8 +16500,8 @@ snapshots:
     optionalDependencies:
       ajv: 8.20.0
 
-  ajv-formats@3.0.1:
-    dependencies:
+  ajv-formats@3.0.1(ajv@8.20.0):
+    optionalDependencies:
       ajv: 8.20.0
 
   ajv@8.20.0:
@@ -16523,7 +16527,8 @@ snapshots:
 
   ansis@4.4.0: {}
 
-  anynum@1.0.1: {}
+  anynum@1.0.1:
+    optional: true
 
   argparse@2.0.1: {}
 
@@ -16878,7 +16883,8 @@ snapshots:
 
   commander@14.0.3: {}
 
-  commander@6.2.1: {}
+  commander@6.2.1:
+    optional: true
 
   concat-stream@2.0.0:
     dependencies:
@@ -17526,6 +17532,7 @@ snapshots:
     dependencies:
       path-expression-matcher: 1.6.2
       xml-naming: 0.3.0
+    optional: true
 
   fast-xml-parser@5.11.2:
     dependencies:
@@ -17535,6 +17542,7 @@ snapshots:
       path-expression-matcher: 1.6.2
       strnum: 2.5.1
       xml-naming: 0.3.0
+    optional: true
 
   fastq@1.20.3:
     dependencies:
@@ -17585,6 +17593,7 @@ snapshots:
       uint8array-extras: 1.6.0
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   fill-range@7.1.1:
     dependencies:
@@ -17776,6 +17785,7 @@ snapshots:
     dependencies:
       ipaddr.js: 2.2.0
       undici: 7.30.0
+    optional: true
 
   has-flag@4.0.0: {}
 
@@ -17946,7 +17956,8 @@ snapshots:
   ini@1.3.8:
     optional: true
 
-  ini@6.0.0: {}
+  ini@6.0.0:
+    optional: true
 
   inline-style-parser@0.2.7: {}
 
@@ -17966,7 +17977,8 @@ snapshots:
 
   ipaddr.js@1.9.1: {}
 
-  ipaddr.js@2.2.0: {}
+  ipaddr.js@2.2.0:
+    optional: true
 
   ipaddr.js@2.5.0: {}
 
@@ -18035,7 +18047,8 @@ snapshots:
 
   is-unicode-supported@2.1.0: {}
 
-  is-unsafe@2.0.2: {}
+  is-unsafe@2.0.2:
+    optional: true
 
   is-wsl@2.2.0:
     dependencies:
@@ -18153,6 +18166,7 @@ snapshots:
     transitivePeerDependencies:
       - '@types/typescript'
       - supports-color
+    optional: true
 
   jwa@2.0.1:
     dependencies:
@@ -18773,7 +18787,8 @@ snapshots:
   mkdirp-classic@0.5.3:
     optional: true
 
-  modern-tar@0.7.7: {}
+  modern-tar@0.7.7:
+    optional: true
 
   mrmime@2.0.1: {}
 
@@ -19226,7 +19241,8 @@ snapshots:
 
   package-manager-detector@1.9.0: {}
 
-  papaparse@5.7.0: {}
+  papaparse@5.7.0:
+    optional: true
 
   parent-module@1.0.1:
     dependencies:
@@ -19279,7 +19295,8 @@ snapshots:
 
   path-exists@4.0.0: {}
 
-  path-expression-matcher@1.6.2: {}
+  path-expression-matcher@1.6.2:
+    optional: true
 
   path-key@3.1.1: {}
 
@@ -19521,7 +19538,8 @@ snapshots:
       strip-json-comments: 2.0.1
     optional: true
 
-  re2js@1.3.3: {}
+  re2js@1.3.3:
+    optional: true
 
   react-async-script@1.2.0(@types/react@19.3.0)(react@19.3.1):
     dependencies:
@@ -19828,6 +19846,7 @@ snapshots:
   run@2.1.3(typescript@5.9.3):
     optionalDependencies:
       typescript: 5.9.3
+    optional: true
 
   rxjs@7.8.2:
     dependencies:
@@ -19848,6 +19867,7 @@ snapshots:
   seek-bzip@2.0.0:
     dependencies:
       commander: 6.2.1
+    optional: true
 
   selderee@0.11.0:
     dependencies:
@@ -20119,9 +20139,11 @@ snapshots:
 
   split2@4.2.0: {}
 
-  sprintf-js@1.1.3: {}
+  sprintf-js@1.1.3:
+    optional: true
 
-  sql.js@1.15.0: {}
+  sql.js@1.15.0:
+    optional: true
 
   srvx@1.0.5: {}
 
@@ -20196,10 +20218,12 @@ snapshots:
   strnum@2.5.1:
     dependencies:
       anynum: 1.0.1
+    optional: true
 
   strtok3@10.5.0:
     dependencies:
       '@tokenizer/token': 0.3.0
+    optional: true
 
   style-to-js@1.1.21:
     dependencies:
@@ -20289,6 +20313,7 @@ snapshots:
       '@borewit/text-codec': 0.2.2
       '@tokenizer/token': 0.3.0
       ieee754: 1.2.1
+    optional: true
 
   totalist@3.0.1: {}
 
@@ -20358,6 +20383,7 @@ snapshots:
   turndown@7.2.4:
     dependencies:
       '@mixmark-io/domino': 2.2.0
+    optional: true
 
   tw-animate-css@1.4.0: {}
 
@@ -20377,7 +20403,8 @@ snapshots:
 
   typedarray@0.0.6: {}
 
-  typescript@5.9.3: {}
+  typescript@5.9.3:
+    optional: true
 
   typescript@7.0.2:
     optionalDependencies:
@@ -20404,7 +20431,8 @@ snapshots:
 
   ufo@1.6.4: {}
 
-  uint8array-extras@1.6.0: {}
+  uint8array-extras@1.6.0:
+    optional: true
 
   unbash@5.1.0: {}
 
@@ -20777,7 +20805,8 @@ snapshots:
 
   xml-name-validator@5.0.0: {}
 
-  xml-naming@0.3.0: {}
+  xml-naming@0.3.0:
+    optional: true
 
   xmlbuilder2@4.0.3:
     dependencies:

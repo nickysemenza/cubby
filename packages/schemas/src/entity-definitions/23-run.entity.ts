@@ -370,7 +370,6 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
-      links: [{ label: "Run types", path: "/runs/types" }],
       // Display images borrow from the vendor; they load as list media.
       tree: { toggle: true, defaultNested: false },
       savedViews: [

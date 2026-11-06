@@ -4600,8 +4600,7 @@ abstains without inventing a value; provider and malformed-response failures
 fail the operation. Classification is prepared before business publication,
 which rechecks the evidence and stronger assignments. These changes apply when
 workflows next run; existing classifications and cached lookups are not
-reclassified automatically. New features also register their production adapter
-in the AI smoke catalog so the generic `/ai` form can exercise them.
+reclassified automatically.
 Image source Decisions record `sourceEvidence` separately from capture evidence;
 they establish neither a photographer nor a capture time or location. Existing
 manual, strong sighting, import, and meaningful EXIF evidence retains precedence
