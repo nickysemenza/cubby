@@ -731,6 +731,21 @@ export function IndexedSections({
         (target) => target.id === jumpTargetRef.current?.id,
       );
       const jumpedRect = jumped?.getBoundingClientRect();
+      // Streaming lead content can move a focused destination offscreen before
+      // ResizeObserver runs. Keep the jump alive until user navigation takes over.
+      if (
+        jumped &&
+        !scrollIntentRef.current &&
+        document.activeElement === jumped
+      ) {
+        if (
+          jumpedRect &&
+          (jumpedRect.bottom <= 0 || jumpedRect.top >= window.innerHeight)
+        )
+          focusTarget(jumped.id);
+        setActiveId(jumped.id);
+        return;
+      }
       if (
         jumped &&
         jumpedRect &&
