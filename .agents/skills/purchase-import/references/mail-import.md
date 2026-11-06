@@ -32,7 +32,14 @@ Claude or Codex session researches it later through the Research queue.
    `orderIds`, the order identifiers Cubby recognized in the Email, with
    `imported` true when an import already itemized it. Use them instead of
    repeating those lookups; look up only what they lack, such as an order id
-   Cubby did not recognize.
+   Cubby did not recognize. `known.products` contains bounded identity candidates
+   from exact printed link identifiers and matching own-account order history.
+   Compare their recorded facts with the source before reusing one; a candidate
+   or shared identifier never resolves a variant contradiction. `omitted: true`
+   means the list is incomplete; normal preparation still checks candidates.
+   If the claim includes `recovery`, call its tool with its exact retained
+   arguments before extracting again. This recovers an uncertain writer outcome;
+   changed extraction is mechanically blocked until that result is known.
 3. Decide what the Email is:
    - **An order with priced lines** (confirmation, receipt, invoice): import it.
      Check the receipt's printed seller against `known.senderVendor` before

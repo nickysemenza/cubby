@@ -26,6 +26,8 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import {
+  entityExternalId,
+  externalSource,
   emailClassificationObservation,
   email as emailTable,
   importSourceClaim,
@@ -39,6 +41,7 @@ import {
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
+import { readMailProductCandidates } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
@@ -298,6 +301,65 @@ describe("Mail import claim", () => {
   it("claims an incomplete lifecycle read instead of settling its first-page match", async () => {
     const { party, seller, order, retain } = await world();
     const target = await order("SYN-3001");
+    const recordedProduct = await insertWithShortcode(ctx.db, "product", {
+      name: "Synthetic previously ordered mug",
+      brandId: null,
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      name: "Synthetic mug",
+      purchaseId: target.id,
+      productId: recordedProduct.id,
+      cost: 12,
+      date: "2026-09-20",
+      lineKind: "principal",
+      costType: "tools",
+    });
+    await getDb(ctx.db).insert(externalSource).values({
+      slug: "synthetic-catalog",
+      label: "Synthetic seller catalog",
+      vendorId: seller.id,
+      issuer: true,
+    });
+    const variants = [];
+    for (const [index, name] of [
+      "Synthetic blue mug",
+      "Synthetic green mug",
+    ].entries()) {
+      const variant = await insertWithShortcode(ctx.db, "product", {
+        name,
+        brandId: null,
+      });
+      variants.push(variant.shortcode);
+      await getDb(ctx.db)
+        .insert(entityExternalId)
+        .values({
+          entityKind: "product",
+          entityId: variant.id,
+          source: "synthetic-catalog",
+          kind: index === 0 ? "asin" : "retailer_sku",
+          externalId: "B012345678",
+          isPrimary: true,
+        });
+    }
+    const linkEvidence = await readMailProductCandidates(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorId: seller.id,
+      purchaseIds: [],
+      links: [
+        { href: "https://www.amazon.com/dp/B012345678", text: "Synthetic mug" },
+        { href: "not a URL", text: "invalid" },
+      ],
+    });
+    expect(linkEvidence.omitted).toBe(false);
+    expect(
+      linkEvidence.candidates.map((candidate) => candidate.productId).sort(),
+    ).toEqual(variants.sort());
+    expect(
+      linkEvidence.candidates.every(
+        (candidate) => candidate.basis.kind === "printed_identifier",
+      ),
+    ).toBe(true);
+
     const mail = await retain(
       "paged-cancellation",
       "Your order SYN-3001 has shipped",
@@ -313,6 +375,15 @@ describe("Mail import claim", () => {
       // Purchase reads; only the deterministic settlement needs every page.
       known: {
         senderVendor: { id: seller.shortcode, name: seller.name },
+        products: {
+          omitted: false,
+          candidates: [
+            {
+              productId: recordedProduct.shortcode,
+              basis: { kind: "recorded_order", purchaseId: target.shortcode },
+            },
+          ],
+        },
         purchases: [
           {
             id: target.shortcode,
@@ -548,6 +619,18 @@ describe("Mail import claim", () => {
       identity: "initial",
       invocation: "initial-call",
       publicationPossible: false,
+      proposal: {
+        mail: {
+          mailboxId,
+          messageId: source.messageId,
+          checksum: source.rawChecksum,
+        },
+        extraction: {
+          status: "incomplete",
+          reason: "Synthetic retained proposal",
+        },
+        products: [],
+      },
     };
     expect(await recordMailAttempt(ctx.db, first.owner.id, request)).toEqual({
       kind: "admitted",
@@ -606,14 +689,66 @@ describe("Mail import claim", () => {
       ...malformed,
       action: "invalid",
     });
+    // Recovery of the same rejected call is not a fresh malformed submission.
+    expect(await recordMailAttempt(ctx.db, first.owner.id, malformed)).toEqual({
+      kind: "admitted",
+    });
     expect(
       await recordMailAttempt(ctx.db, first.owner.id, {
         ...malformed,
         invocation: "malformed-2",
       }),
     ).toEqual({ kind: "exhausted" });
+    await recordMailAttempt(ctx.db, first.owner.id, {
+      ...request,
+      identity: "repair",
+      action: "pending",
+    });
     const successor = await admit(party, [source]);
     expect(await claim(successor.owner)).toEqual(evidence);
+    const retry = {
+      ...request,
+      generation: `synthetic-generation:${successor.owner.id}`,
+      identity: "repair",
+      publicationPossible: true,
+    };
+    expect(await recordMailAttempt(ctx.db, successor.owner.id, retry)).toEqual({
+      kind: "pending",
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "needs_review", retiredAt: new Date() })
+      .where(eq(run.id, first.owner.id));
+    expect(await claimMailImportWork(ctx.db, successor.owner.id)).toMatchObject(
+      {
+        recovery: {
+          tool: "import_extracted_order",
+          arguments: request.proposal,
+        },
+      },
+    );
+    expect(
+      await recordMailAttempt(ctx.db, successor.owner.id, {
+        ...retry,
+        identity: "changed",
+      }),
+    ).toEqual({ kind: "pending" });
+    expect(await recordMailAttempt(ctx.db, successor.owner.id, retry)).toEqual({
+      kind: "admitted",
+    });
+    expect(
+      await recordMailAttempt(ctx.db, successor.owner.id, {
+        ...retry,
+        identity: "changed",
+      }),
+    ).toEqual({ kind: "pending" });
+    await recordMailAttempt(ctx.db, successor.owner.id, {
+      ...retry,
+      action: "complete",
+    });
+    expect(
+      await claimMailImportWork(ctx.db, successor.owner.id),
+    ).not.toHaveProperty("recovery");
     expect(
       await recordMailAttempt(ctx.db, successor.owner.id, {
         ...request,

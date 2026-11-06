@@ -397,7 +397,7 @@ const lineIdentifiers = (
 /** Every exact identifier a line can share with a Product; prepare flags and commit refuses the same set. */
 export const lineIdentifierRequests = (
   source: string,
-  line: ExtractedPurchaseLine,
+  line: Pick<ExtractedPurchaseLine, "title" | "productUrl" | "sku">,
 ): ExternalIdPair[] => {
   const ids = [
     ...new Set(

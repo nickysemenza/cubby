@@ -4,7 +4,8 @@
  * untrusted vendor pages, mail, and photos, so the host parses every input
  * with these schemas before it reaches the database. No input names a Run:
  * each service is bound to one Run when the host creates it, and none accepts
- * a party, account, vendor, SQL, script, or generic mutation target.
+ * a party, account, SQL, script, or generic mutation target. A retained ordinary
+ * proposal is validated extraction data; it grants no additional write authority.
  */
 import { z } from "zod";
 import { aiCallCostFields } from "./ai-cost";
@@ -27,6 +28,7 @@ export const mailAttemptInput = z.object({
   identity: z.string().min(1).max(256),
   invocation: z.string().min(1).max(256),
   publicationPossible: z.boolean(),
+  proposal: z.record(z.string(), z.json()).optional(),
   stage: z.enum(["primary", "escalation"]),
   action: z.enum(["admit", "exempt", "pending", "complete", "invalid"]),
 });

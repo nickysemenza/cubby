@@ -126,7 +126,14 @@ pending: nothing here starts Product research.
    edits do not reset it. Writer classification uses trusted MCP error metadata,
    never Email text. Held-source refusals are exempt. Known validation refusals
    return without automatic replay; unknown writes retain their reservation until
-   exact writer recovery. Generation response hooks only
+   exact writer recovery. After a predecessor is retired, only identical
+   extraction facts can replay under the successor's locked, unchanged Email.
+   Ordinary attempts retain their validated proposal before execution; a claim
+   returns an unreconciled retired proposal as `recovery` for exact tool replay,
+   so retiring the coordinator cannot lose the input needed to recover.
+   Canonical source writers preserve earlier effects; the successor retains its
+   own pending receipt, and replay identities count once across Runs. Changed
+   input remains blocked until that recovery has a known outcome. Generation response hooks only
    account for submissions; they never publish dispositions.
    Unresolved judgments retain a typed gap category alongside the explanation;
    older uncategorized judgments read as unknown. Exhaustion uses `attempt_limit`.
@@ -145,7 +152,13 @@ pending: nothing here starts Product research.
    returns the next Email with its evidence. The model does not spend a separate
    turn coordinating that claim. Unknown writes and conflicts do not advance.
    A Mail import claim (`operations/mail-import-claim.ts`) returns the
-   claimed Email's compact read (`readMail`, bounded by `fitMailRead`). Before
+   claimed Email's compact read (`readMail`, bounded by `fitMailRead`). Coordinator
+   claims also include up to20 Product candidates from exact printed link
+   identifiers under the verified sender's registered issuer, and live Products
+   recorded on up to5 matching own-account Purchases at that Vendor. Ambiguous
+   identifier hits stay separate candidates; omission is explicit. These hints
+   grant no identity authority and deterministic rule-only claims skip the lookup.
+   Before
    claiming, it settles leading roster Emails a Mail import rule decides
    (`service/mail-import-rule.ts`, revision `MAIL_IMPORT_RULE_REVISION`)
    through `purchase_import.mail_resolve`'s own writer, with no model call: a shipped,

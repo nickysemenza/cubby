@@ -386,12 +386,21 @@ export class PurchaseImportRunAgent
           ? "escalation"
           : "primary";
       const identity = await extractionIdentity(call);
+      const proposal =
+        call.name === EXTRACT_ORDER_TOOL
+          ? extractedOrderInput.safeParse(call.arguments)
+          : undefined;
       const admitted = await this.services().mailAttempt({
         source: { ...source, evidenceVersion: source.evidenceVersion },
         generation,
         identity,
         invocation: call.id,
         publicationPossible: validExtraction(call),
+        proposal: proposal?.success
+          ? z
+              .record(z.string(), z.json())
+              .parse(JSON.parse(JSON.stringify(proposal.data)))
+          : undefined,
         stage,
         action: "admit",
       });
@@ -399,7 +408,7 @@ export class PurchaseImportRunAgent
       if (admitted.kind === "pending")
         return {
           block:
-            "An earlier write outcome is pending. Replay identical input before changing extraction.",
+            "An earlier write outcome is pending. Claim the Email to recover its retained proposal, then replay its exact tool and arguments before changing extraction.",
         };
       if (accountingOnly) {
         this.writeState("mail-attempt-limit-pending", JSON.stringify(source));

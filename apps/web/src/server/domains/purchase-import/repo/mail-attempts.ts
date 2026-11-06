@@ -1,14 +1,15 @@
-import type { RunId } from "@cubby/schemas/identifiers";
+import type { LedgerPartyId, RunId } from "@cubby/schemas/identifiers";
+import { EXTRACT_ORDER_TOOL } from "@cubby/schemas/import-run-agent";
 import {
   mailAttemptInput,
   mailAttemptResult,
 } from "@cubby/schemas/purchase-agent-services";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { withTransaction } from "~/server/db/helpers";
+import { getDb, withTransaction } from "~/server/db/helpers";
 import { email, run, runOperation } from "~/server/db/schema";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 
@@ -51,6 +52,8 @@ export async function recordMailAttempt(
       source.checksum !== input.source.checksum
     )
       throw new Error("Mail attempt source changed ownership or evidence");
+    if (input.action === "admit" && source.status !== "researching")
+      throw new Error("Mail extraction source is already settled");
     // Only the host claim can establish the version; model-supplied versions
     // cannot create a fresh budget. Historical claims are read through runId.
     const [claim] = await tx
@@ -95,7 +98,7 @@ export async function recordMailAttempt(
     // Narrow Runs by member and frozen source before reading their runId-led
     // ledgers. Do not filter retirement/deletion: their receipts still count.
     const owners = await tx
-      .select({ id: run.id })
+      .select({ id: run.id, retiredAt: run.retiredAt })
       .from(run)
       .where(
         and(
@@ -128,29 +131,67 @@ export async function recordMailAttempt(
           charged: z.boolean(),
           pending: z.boolean(),
           rejected: z.boolean().default(false),
+          replayedFromRunId: z.string().optional(),
         })
         .parse(row.result),
       ownerRunId: row.runId,
     }));
+    const localReplay = saved.some(
+      (row) =>
+        row.ownerRunId === runId &&
+        row.identity === input.identity &&
+        row.charged &&
+        (!row.rejected || row.invocation === input.invocation),
+    );
+    if (localReplay) return mailAttemptResult.parse({ kind: "admitted" });
+    const reconciled = new Set(
+      saved
+        .filter((row) => row.charged && !row.pending)
+        .map((row) => row.identity),
+    );
+    const retired = new Set(
+      owners.filter((row) => row.retiredAt !== null).map((row) => row.id),
+    );
+    const pending = saved.filter(
+      (row) => row.pending && !reconciled.has(row.identity),
+    );
+    // Retirement fences every old writer, and this transaction holds the
+    // unchanged Email under its successor. Only identical facts can retry
+    // through the canonical source writer; a changed extraction must wait.
     if (
-      saved.some(
+      pending.some(
         (row) =>
-          row.identity === input.identity &&
-          row.charged &&
-          !row.rejected &&
-          (!row.pending || row.ownerRunId === runId),
+          row.identity !== input.identity || !retired.has(row.ownerRunId),
       )
     )
-      return mailAttemptResult.parse({ kind: "admitted" });
-    if (saved.some((row) => row.pending))
       return mailAttemptResult.parse({ kind: "pending" });
-    if (
-      saved.filter((row) => row.stage === input.stage && row.charged).length >=
-      (input.stage === "primary" ? 2 : 1)
-    )
+    const rejectedHere = saved.some(
+      (row) =>
+        row.ownerRunId === runId &&
+        row.identity === input.identity &&
+        row.charged &&
+        row.rejected,
+    );
+    const replay = rejectedHere
+      ? undefined
+      : saved.find(
+          (row) =>
+            row.identity === input.identity &&
+            row.charged &&
+            !row.rejected &&
+            (!row.pending || !reconciled.has(row.identity)),
+        );
+    const charged = new Set(
+      saved
+        .filter((row) => row.stage === input.stage && row.charged)
+        .map((row) =>
+          row.rejected && !row.replayedFromRunId
+            ? `invalid:${row.ownerRunId}:${row.invocation}`
+            : `candidate:${row.identity}`,
+        ),
+    );
+    if (!replay && charged.size >= (input.stage === "primary" ? 2 : 1))
       return mailAttemptResult.parse({ kind: "exhausted" });
-    if (source.status !== "researching")
-      throw new Error("Mail extraction source is already settled");
     const prior = saved.find(
       (row) =>
         row.identity === input.identity &&
@@ -165,12 +206,15 @@ export async function recordMailAttempt(
             ...input,
             charged: true,
             pending: input.publicationPossible,
+            ...(replay ? { replayedFromRunId: replay.ownerRunId } : {}),
           },
           updatedAt: new Date(),
         })
         .where(
           and(
             eq(runOperation.runId, runId),
+            eq(runOperation.kind, "mail_extraction_attempt"),
+            sql`${runOperation.result}->${"source"} = ${JSON.stringify(input.source)}::jsonb`,
             sql`${runOperation.result}->>${"identity"} = ${input.identity}`,
           ),
         );
@@ -182,8 +226,60 @@ export async function recordMailAttempt(
       kind: "mail_extraction_attempt",
       inputFingerprint: await sha256Hex(JSON.stringify(input)),
       state: "completed",
-      result: { ...input, charged: true, pending: input.publicationPossible },
+      result: {
+        ...input,
+        charged: true,
+        pending: input.publicationPossible,
+        ...(replay ? { replayedFromRunId: replay.ownerRunId } : {}),
+      },
     });
     return mailAttemptResult.parse({ kind: "admitted" });
   });
+}
+
+/** Retired ordinary work carries the exact proposal needed for receipt recovery. */
+export async function readMailAttemptRecovery(
+  db: Database,
+  input: {
+    ledgerPartyId: LedgerPartyId;
+    orderMailId: string;
+    source: z.infer<typeof mailAttemptInput.shape.source>;
+  },
+): Promise<{
+  tool: typeof EXTRACT_ORDER_TOOL;
+  arguments: NonNullable<z.infer<typeof mailAttemptInput.shape.proposal>>;
+} | null> {
+  const [attempt] = await getDb(db)
+    .select({ result: runOperation.result })
+    .from(runOperation)
+    .innerJoin(run, eq(run.id, runOperation.runId))
+    .where(
+      and(
+        eq(run.ledgerPartyId, input.ledgerPartyId),
+        eq(run.purpose, "mail_import"),
+        isNotNull(run.retiredAt),
+        sql`${run.input}->'sources' @> ${JSON.stringify([{ orderMailId: input.orderMailId, checksum: input.source.checksum }])}::jsonb`,
+        eq(runOperation.kind, "mail_extraction_attempt"),
+        sql`${runOperation.result}->${"source"} = ${JSON.stringify(input.source)}::jsonb`,
+        sql`${runOperation.result}->>${"pending"} = 'true'`,
+        sql`${runOperation.result}->>${"charged"} = 'true'`,
+        sql`${runOperation.result}->${"proposal"} IS NOT NULL`,
+        sql`/* includes-deleted: Retained replay receipts stay authoritative after their Run is deleted. */
+        NOT EXISTS (SELECT 1 FROM "RunOperation" known
+        JOIN "Run" known_owner ON known_owner.id = known."runId"
+        WHERE known_owner."ledgerPartyId" = ${input.ledgerPartyId}
+          AND known.kind = 'mail_extraction_attempt'
+          AND known.result->${"source"} = ${runOperation.result}->${"source"}
+          AND known.result->>${"identity"} = ${runOperation.result}->>${"identity"}
+          AND known.result->>${"charged"} = 'true'
+          AND known.result->>${"pending"} = 'false')`,
+      ),
+    )
+    .orderBy(desc(runOperation.updatedAt))
+    .limit(1);
+  const proposal = mailAttemptInput.shape.proposal.safeParse(
+    z.object({ proposal: z.unknown() }).safeParse(attempt?.result).data
+      ?.proposal,
+  ).data;
+  return proposal ? { tool: EXTRACT_ORDER_TOOL, arguments: proposal } : null;
 }

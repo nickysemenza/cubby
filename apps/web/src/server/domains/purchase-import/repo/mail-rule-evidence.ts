@@ -5,17 +5,29 @@ import {
   type VendorId,
 } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
+  expense,
+  product,
   importSourceOrder,
   orderMailAttachment,
   purchase,
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
+import {
+  externalIdKey,
+  findProductsByExternalIds,
+  type ProductHit,
+} from "~/server/domains/product/repo/find-by-external-ids";
+import { lookupProductIdentifierSources } from "~/server/domains/product/repo/product-identifier-source";
 import { wasm } from "~/server/wasm";
+
+import { amazonAsin, lineIdentifierRequests } from "./writer";
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_/-]{2,39}$/u;
 
@@ -149,4 +161,112 @@ export async function countRetainedMailAttachments(
       ),
     );
   return rows.length;
+}
+
+export type MailProductEvidence = {
+  candidates: Array<
+    Pick<ProductHit, "name" | "brandName" | "model"> & {
+      productId: ShortcodeFor<"product">;
+      basis:
+        | { kind: "recorded_order"; purchaseId: ShortcodeFor<"purchase"> }
+        | { kind: "printed_identifier"; url: string };
+    }
+  >;
+  omitted: boolean;
+};
+
+/** Bounded identity hints, never authority to reuse a Product or its variant. */
+export async function readMailProductCandidates(
+  db: Database,
+  input: {
+    ledgerPartyId: LedgerPartyId;
+    vendorId: VendorId | null;
+    purchaseIds: readonly ShortcodeFor<"purchase">[];
+    links: readonly { href: string; text: string }[];
+  },
+): Promise<MailProductEvidence> {
+  const candidates: MailProductEvidence["candidates"] = [];
+  const recorded = input.purchaseIds.length
+    ? await getDb(db)
+        .selectDistinct({
+          productId: product.shortcode,
+          name: product.name,
+          brandName: productBrandNameSql(product.brandId),
+          model: product.model,
+          purchaseId: purchase.shortcode,
+        })
+        .from(expense)
+        .innerJoin(product, eq(product.id, expense.productId))
+        .innerJoin(purchase, eq(purchase.id, expense.purchaseId))
+        .innerJoin(
+          vendorAccount,
+          eq(vendorAccount.id, purchase.vendorAccountId),
+        )
+        .where(
+          and(
+            inArray(purchase.shortcode, input.purchaseIds.slice(0, 5)),
+            eq(vendorAccount.ledgerPartyId, input.ledgerPartyId),
+            eq(vendorAccount.vendorId, purchase.vendorId),
+            notDeleted(expense),
+            notDeleted(product),
+            notDeleted(purchase),
+            notDeleted(vendorAccount),
+          ),
+        )
+        .orderBy(product.shortcode, purchase.shortcode)
+        .limit(21)
+    : [];
+  for (const row of recorded)
+    candidates.push({
+      productId: parseShortcodeFor("product", row.productId),
+      name: row.name,
+      brandName: row.brandName,
+      model: row.model,
+      basis: {
+        kind: "recorded_order",
+        purchaseId: parseShortcodeFor("purchase", row.purchaseId),
+      },
+    });
+  const links = input.links.filter(
+    (link) =>
+      z.url().safeParse(link.href).success && amazonAsin(link.href) !== null,
+  );
+  if (input.vendorId && links.length) {
+    const [issuer] = await lookupProductIdentifierSources(db, [
+      { vendorId: input.vendorId },
+    ]);
+    const identifierSource = issuer?.source;
+    if (identifierSource) {
+      const bounded = links.slice(0, 20);
+      const requests = bounded.map((link) =>
+        lineIdentifierRequests(identifierSource, {
+          title: link.text,
+          productUrl: link.href,
+        }),
+      );
+      const hits = await findProductsByExternalIds(db, requests.flat());
+      for (const [index, pairs] of requests.entries()) {
+        const url = bounded[index]?.href;
+        if (!url) continue;
+        for (const pair of pairs)
+          for (const hit of hits.get(externalIdKey(pair)) ?? [])
+            candidates.push({
+              productId: parseShortcodeFor("product", hit.shortcode),
+              name: hit.name,
+              brandName: hit.brandName,
+              model: hit.model,
+              basis: { kind: "printed_identifier", url },
+            });
+      }
+    }
+  }
+  const unique = [
+    ...new Map(
+      candidates.map((candidate) => [candidate.productId, candidate]),
+    ).values(),
+  ];
+  return {
+    candidates: unique.slice(0, 20),
+    omitted: recorded.length === 21 || links.length > 20 || unique.length > 20,
+  };
 }
