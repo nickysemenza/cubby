@@ -692,7 +692,7 @@ completion. Production application and readback require separate authorization.
 
 ## Suggestion review wire cutover (ADR 0025 L2)
 
-`0109_adr25-l2-suggestions` changes declared review-reference keys on
+`0111_adr25-l2-suggestions` changes declared review-reference keys on
 `AiEvaluation.target`, paid field-result outputs, publication receipts, and field
 Suggestion proposal/outcome envelopes. It locks both owners before reading,
 checks each transformed value by reversing the rename, and compares each full
@@ -721,7 +721,7 @@ There is no household-wide Email evidence gate.
 
 ## Field sweep consolidation (ADR 0025 L2e)
 
-Migration `0114_adr25-l2e-sweep` locks Runs, steps, Jobs and evaluation demand
+Migration `0115_adr25-l2e-sweep` locks Runs, steps, Jobs and evaluation demand
 before copying its verification witnesses. It converts `suggestion_sweep` Runs
 in place to a single field family under `sweep`, updates the execution Job's
 purpose, and records roster/evaluate steps. Run progress and every Job state,

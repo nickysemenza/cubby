@@ -12,6 +12,7 @@ import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { PreparedJobPage } from "~/server/generic/jobs/types";
 import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
+import { resumeClaimedWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 const runJobInput = z.object({
   runId: runEntityId,
@@ -42,6 +43,8 @@ export const runJobHandler = defineJobHandler(
       async (): Promise<PreparedJobPage> => {
         const params = { runId: input.runId, attempt: claim.generation };
         const before = await readRun(db, input.runId);
+        if (before?.status === "failed" && before.failureCode === "job_failed")
+          await resumeClaimedWorkflowRun(db, params);
         if (
           before?.status === "paused_auth" &&
           before.failureCode === "execution_limit"

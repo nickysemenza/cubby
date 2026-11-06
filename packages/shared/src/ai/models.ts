@@ -63,6 +63,7 @@ interface EmbeddingModelDeclaration extends ModelDeclaration {
   role: "embedding";
   provider: "openai";
   dimensions: number;
+  maxInputTokens: number;
 }
 
 /**
@@ -155,6 +156,7 @@ export const AI_MODELS = {
     provider: "openai",
     catalogProvider: "openai",
     dimensions: 1536,
+    maxInputTokens: 8191,
   },
   "typesafe/jev": {
     role: "decision",

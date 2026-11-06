@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { type ImageJobId, parseEntityId } from "@cubby/schemas/identifiers";
 import {
   IMAGE_IDENTIFICATION_MODEL,
@@ -5,10 +7,14 @@ import {
   IMAGE_IDENTIFICATION_RESULT_SCHEMA_REVISION,
   imageIdentificationResult,
 } from "@cubby/schemas/image-identification";
+import * as externalFetch from "@cubby/shared/external-fetch";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { identifyMedia } from "~/server/ai/run-feature";
+import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { getDb } from "~/server/db/helpers";
 import {
   aiAnalysis,
@@ -22,7 +28,7 @@ import {
 } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import { dispatchImageProcessingWakeup } from "~/server/domains/image-processing/service/dispatch";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { getVerifiedImageRenditionKey } from "~/server/domains/image/repo/image-identification";
+import { getVerifiedImageRendition } from "~/server/domains/image/repo/image-identification";
 
 import {
   claimImageProcessingJob,
@@ -218,7 +224,7 @@ describe("independent durable image identification", () => {
         },
       })
       .returning();
-    expect(await getVerifiedImageRenditionKey(ctx.db, imageId)).toBeNull();
+    expect(await getVerifiedImageRendition(ctx.db, imageId)).toBeNull();
     await getDb(ctx.db)
       .update(imageProcessingAttempt)
       .set({
@@ -230,12 +236,130 @@ describe("independent durable image identification", () => {
         },
       })
       .where(eq(imageProcessingAttempt.id, attempt!.id));
-    expect(await getVerifiedImageRenditionKey(ctx.db, imageId)).toBe(inputKey);
+    expect(await getVerifiedImageRendition(ctx.db, imageId)).toEqual({
+      key: inputKey,
+      sha256: "b".repeat(64),
+    });
+    expect(
+      await getVerifiedImageRendition(ctx.db, {
+        sourceKey: row.key,
+        sourceHash: hash,
+      }),
+    ).toEqual({ key: inputKey, sha256: "b".repeat(64) });
+    expect(
+      await getVerifiedImageRendition(ctx.db, {
+        sourceKey: row.key,
+        sourceHash: "d".repeat(64),
+      }),
+    ).toBeNull();
+    const avif = readFileSync(
+      new URL(
+        "../../../../../tests/e2e/fixtures/synthetic-white.avif",
+        import.meta.url,
+      ),
+    );
+    const jpeg = readFileSync(
+      new URL(
+        "../../../../../tests/e2e/fixtures/synthetic-white.jpg",
+        import.meta.url,
+      ),
+    );
+    const sourceHash = await sha256Hex(avif);
+    const renditionHash = await sha256Hex(jpeg);
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: sourceHash, contentType: "image/avif" })
+      .where(eq(image.id, imageId));
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({ sourceContentHash: sourceHash })
+      .where(eq(imageProcessingJob.imageId, imageId));
+    await getDb(ctx.db)
+      .update(imageProcessingAttempt)
+      .set({
+        diagnostics: {
+          sourceHash,
+          normalizationRevision: 1,
+          renditionKey: inputKey,
+          renditionHash,
+        },
+      })
+      .where(eq(imageProcessingAttempt.id, attempt!.id));
+    const fetch = vi
+      .spyOn(externalFetch, "fetchExternalResponse")
+      .mockImplementation(async (url) => {
+        if (url === getR2PublicUrl(row.key)) return new Response(avif);
+        if (url === getR2PublicUrl(inputKey)) return new Response(jpeg);
+        throw new Error(
+          "Synthetic evidence must not be re-encoded by the image edge",
+        );
+      });
+    try {
+      const prepared = await identifyMedia(
+        {
+          systemPrompts: [],
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  source: { type: "url", value: getR2PublicUrl(row.key) },
+                },
+              ],
+            },
+          ],
+        },
+        ctx.db,
+      );
+      expect(prepared.sent.messages[0]?.content).toEqual([
+        {
+          type: "image",
+          source: {
+            type: "inline",
+            value: jpeg.toString("base64"),
+            mimeType: "image/jpeg",
+          },
+        },
+      ]);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      fetch.mockImplementation(
+        async (url) =>
+          new Response(
+            url === getR2PublicUrl(row.key)
+              ? avif
+              : Buffer.concat([jpeg, Buffer.from("synthetic tampering")]),
+          ),
+      );
+      await expect(
+        identifyMedia(
+          {
+            systemPrompts: [],
+            messages: [
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "image",
+                    source: { type: "url", value: getR2PublicUrl(row.key) },
+                  },
+                ],
+              },
+            ],
+          },
+          ctx.db,
+        ),
+      ).rejects.toThrow(
+        "Retained AI image bytes do not match their recorded hash",
+      );
+    } finally {
+      fetch.mockRestore();
+    }
     await getDb(ctx.db)
       .update(image)
       .set({ sha256: "c".repeat(64) })
       .where(eq(image.id, imageId));
-    expect(await getVerifiedImageRenditionKey(ctx.db, imageId)).toBeNull();
+    expect(await getVerifiedImageRendition(ctx.db, imageId)).toBeNull();
   });
 
   it("rolls back failed analysis persistence and retains existing observations after replay", async () => {

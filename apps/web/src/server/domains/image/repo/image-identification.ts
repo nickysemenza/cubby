@@ -264,10 +264,10 @@ const retainedRendition = z.object({
 });
 
 /** Reuse only a server-owned JPEG snapshot already verified for the current source. */
-export async function getVerifiedImageRenditionKey(
+export async function getVerifiedImageRendition(
   db: Database,
-  imageId: ImageId,
-): Promise<string | null> {
+  source: ImageId | { sourceKey: string; sourceHash: string },
+): Promise<{ key: string; sha256: string } | null> {
   const attempts = await getDb(db)
     .select({
       key: imageProcessingAttempt.inputKey,
@@ -282,7 +282,12 @@ export async function getVerifiedImageRenditionKey(
     .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
     .where(
       and(
-        eq(image.id, imageId),
+        typeof source === "string"
+          ? eq(image.id, source)
+          : and(
+              eq(image.key, source.sourceKey),
+              eq(image.sha256, source.sourceHash),
+            ),
         notDeleted(image),
         eq(image.status, "UPLOADED"),
         eq(imageProcessingJob.kind, "describe_image"),
@@ -297,7 +302,10 @@ export async function getVerifiedImageRenditionKey(
       parsed.data.sourceHash === attempt.hash &&
       parsed.data.renditionKey === attempt.key
     )
-      return attempt.key;
+      return {
+        key: parsed.data.renditionKey,
+        sha256: parsed.data.renditionHash,
+      };
   }
   return null;
 }

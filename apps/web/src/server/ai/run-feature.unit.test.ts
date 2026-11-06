@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { DEFAULT_EMBEDDING_MODEL } from "@cubby/shared/ai/models";
 import * as externalFetch from "@cubby/shared/external-fetch";
@@ -22,6 +24,7 @@ import * as cfEnv from "~/server/cf-env";
 import { createDatabase } from "~/server/db/database-runtime";
 import { withJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { classifyJobFailure } from "~/server/generic/jobs/failure";
 
 import {
   PURCHASE_IMPORT_REPAIR_FEATURE,
@@ -47,6 +50,11 @@ const db = createDatabase(() => {
   throw new Error("run-feature unit tests never resolve a database runtime");
 });
 const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
+
+const syntheticPng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aOtQAAAAASUVORK5CYII=",
+  "base64",
+);
 
 const request: AiChatRequest = {
   systemPrompts: ["frame"],
@@ -172,9 +180,15 @@ it("keys a structured answer by its output schema", async () => {
 });
 
 // Regression: an external image changed behind the same URL replayed the
-// answer to its old bytes. Our bucket's write-unique keys need no download.
-it("keys external media by its bytes and our bucket's media by URL", async () => {
-  const bodies = ["synthetic image one", "synthetic image two"];
+// answer to its old bytes. Bucket originals can select retained JPEGs, so their
+// application cache identity also follows the admitted bytes.
+it("keys external and bucket media by their admitted bytes", async () => {
+  const bodies = [
+    syntheticPng,
+    syntheticPng,
+    Buffer.concat([syntheticPng, Buffer.from("one")]),
+    Buffer.concat([syntheticPng, Buffer.from("two")]),
+  ];
   const fetch = vi
     .spyOn(externalFetch, "fetchExternalResponse")
     .mockImplementation(
@@ -205,10 +219,10 @@ it("keys external media by its bytes and our bucket's media by URL", async () =>
   try {
     const bucket = "http://localhost:9000/synthetic/images/shelf.jpg";
     expect(await key(bucket)).toBe(await key(bucket));
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(2);
     const external = "https://example.com/shelf.jpg";
     expect(await key(external)).not.toBe(await key(external));
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
   } finally {
     fetch.mockRestore();
   }
@@ -487,15 +501,27 @@ it("keeps paid admission refusal as the terminal cause after a recovered subscri
 
 describe("runStructuredFeature", () => {
   it.each([
-    ["invalid", "application/octet-stream"],
+    ["invalid", "image/png"],
+    ["image/avif", "image/png", "http://localhost:9000/synthetic/source.avif"],
+    [
+      "image/avif",
+      "image/png",
+      "http://localhost:9000/cdn-cgi/image/width=128,format=auto/synthetic/source.avif",
+      "http://localhost:9000/synthetic/source.avif",
+    ],
     ["image/png; charset=utf-8", "image/png"],
   ])(
-    "normalizes upstream content type %s with a binary MIME fallback",
-    async (contentType, mimeType) => {
+    "uses image bytes instead of upstream content type %s",
+    async (
+      contentType,
+      mimeType,
+      url = "https://example.com/image",
+      fetchUrl = url,
+    ) => {
       const fetch = vi
         .spyOn(externalFetch, "fetchExternalResponse")
         .mockResolvedValue(
-          new Response("synthetic image bytes", {
+          new Response(syntheticPng, {
             headers: { "content-type": contentType },
           }),
         );
@@ -513,7 +539,7 @@ describe("runStructuredFeature", () => {
                 content: [
                   {
                     type: "image",
-                    source: { type: "url", value: "https://example.com/image" },
+                    source: { type: "url", value: url, mimeType: "image/avif" },
                   },
                 ],
               },
@@ -525,11 +551,65 @@ describe("runStructuredFeature", () => {
         expect(calls[0]?.context.messages[0]?.content).toEqual([
           expect.objectContaining({ mimeType }),
         ]);
+        expect(fetch).toHaveBeenCalledWith(fetchUrl);
+        expect(calls[0]?.context.messages[0]?.content).toEqual([
+          {
+            type: "image",
+            data: syntheticPng.toString("base64"),
+            mimeType: "image/png",
+          },
+        ]);
       } finally {
         fetch.mockRestore();
       }
     },
   );
+
+  it("waits for device normalization of a bucket AVIF without calling the model", async () => {
+    const avif = readFileSync(
+      new URL(
+        "../../../tests/e2e/fixtures/synthetic-white.avif",
+        import.meta.url,
+      ),
+    );
+    const fetch = vi
+      .spyOn(externalFetch, "fetchExternalResponse")
+      .mockResolvedValue(new Response(avif));
+    const { calls, ports } = fakePorts([]);
+    try {
+      await expect(
+        runStructuredFeature(
+          LOCATION_DESCRIPTION_FEATURE,
+          {
+            systemPrompts: ["Describe the synthetic location."],
+            messages: [
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "image",
+                    source: {
+                      type: "url",
+                      value: "http://localhost:9000/synthetic/source.avif",
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          { operation: "locationDescription" },
+          ports,
+        ),
+      ).rejects.toSatisfy((error: unknown) => {
+        const failure = classifyJobFailure(error);
+        return failure.kind === "deferred" && failure.reason === "device";
+      });
+      expect(calls).toEqual([]);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      fetch.mockRestore();
+    }
+  });
 
   it("passes transient inline receipt bytes to the provider without fetching a URL", async () => {
     const { calls, ports } = fakePorts([
@@ -799,4 +879,42 @@ describe("modelOptionsFor", () => {
       toolChoice: { type: "function", name: RESPOND_TOOL_NAME },
     });
   });
+});
+
+// Oversized notes must not poison a provider batch or change source text. Query
+// and background callers share this admission boundary and preserve input order.
+it("budgets oversized embedding inputs before provider submission", async () => {
+  const { Tiktoken } = await import("js-tiktoken/lite");
+  const { default: ranks } = await import("js-tiktoken/ranks/cl100k_base");
+  const encoder = new Tiktoken(ranks);
+  const original =
+    "product: Synthetic cabinet\nnotes: " +
+    "工具🙂 <|endoftext|> ".repeat(4000);
+  const batches: string[][] = [];
+  const result = await runEmbeddingFeature(
+    { feature: "synthetic-budget", model: DEFAULT_EMBEDDING_MODEL },
+    {
+      texts: [original, "small", original + "tail edit"],
+      dimensions: 1,
+      cache: false,
+      embed: async (texts) => {
+        batches.push(texts);
+        for (const text of texts) {
+          expect(encoder.encode(text, [], []).length).toBeLessThanOrEqual(8191);
+          expect(original.startsWith(text) || text === "small").toBe(true);
+        }
+        return {
+          embeddings: texts.map((text, index) => ({
+            index,
+            vector: [text === "small" ? 2 : 1],
+          })),
+        };
+      },
+    },
+    { operation: "synthetic-budget" },
+  );
+  expect(batches.flat()).toHaveLength(2);
+  expect(batches.flat()[0]).toMatch(/^product: Synthetic cabinet/);
+  expect(result).toEqual([[1], [2], [1]]);
+  expect(original.length).toBeGreaterThan(batches.flat()[0]!.length);
 });

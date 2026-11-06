@@ -45,6 +45,17 @@ type TransformOptions = {
   anyOrigin?: boolean;
 };
 
+/** Recover immutable bucket source bytes from a negotiated UI rendition URL. */
+export const originalImageUrl = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    parsed.pathname = parsed.pathname.replace(/^\/cdn-cgi\/image\/[^/]+/, "");
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+};
+
 /**
  * A server-only analysis JPEG bounded on both axes. UI rungs bound only the
  * width, so a tall portrait at the 2048 rung outgrows a model byte budget.
@@ -52,11 +63,10 @@ type TransformOptions = {
 export const analysisImageUrl = (url: string, maxEdge: number): string => {
   let parsed: URL;
   try {
-    parsed = new URL(url);
+    parsed = new URL(originalImageUrl(url));
   } catch {
     return url;
   }
-  if (!isTransformable(parsed, true)) return url;
   return `${parsed.origin}/cdn-cgi/image/width=${maxEdge},height=${maxEdge},fit=scale-down,format=jpeg${parsed.pathname}${parsed.search}`;
 };
 

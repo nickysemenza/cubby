@@ -325,6 +325,22 @@ to `maxMs`, and fails after `maxAttempts`; `maxAttempts: null` never exhausts. `
 attempt, and deferrals never count. Drain items keep their own attempts and
 backoff.
 
+Serialization recovery is bounded inside a DB-only snapshot transaction. If all
+attempts roll back, its owner emits `SnapshotWriteConflictError`; the durable Job
+then backs off without exhausting its attempt budget. A raw SQLSTATE on an
+after-commit effect is not this signal and cannot request unbounded replay.
+Location description and inventory-analysis Jobs also never exhaust and use a
+one-minute base with a fifteen-minute backoff cap: unchanged
+failures keep diagnostics and backoff until corrected code or input heals them.
+The model-input recovery migration reopens their retained failures and proven
+failed outer Email gates, preserving checkpoints, attempts and errors. Reopened
+location work is staggered over fifteen minutes without advancing an existing
+future deadline. When the recovered universal Job executes, its matching Run reconciled to
+`job_failed` returns to running under the Job fence. Another active Run owning
+the admission slot causes retry backoff until it finishes;
+member-controlled, retired and superseded Runs are excluded. Member
+pauses/cancellations and running leases keep their states.
+
 Retry now (`job.retryNow`, `retryJobsNow`) makes a filtered set due at once:
 backoff and provider waits clear, prior errors stay, failed and cancelled Jobs
 reopen with a fresh budget and generation, and running or member-paused Jobs
@@ -357,6 +373,11 @@ subject-lift derivative is rebuilt. Explicit image retry reopens a negative cuto
 without discarding its evidence or allowing maintenance to immediately settle it again.
 A changed source or new processor revision is new work, and
 a newer Apple build's first pull makes backing-off device work due.
+On-device descriptions use a fresh session, a full-frame image bounded to 1024 pixels,
+and an explicit response budget of at most 512 tokens, reserved from the runtime
+model context size. A context overflow retries once with 512 pixels and half the
+response budget. Persistent failures retain the reported context/token counts and
+return to durable server backoff; no cloud fallback or fabricated description is used.
 
 Recurring image-execution repair also settles retained negative cutout failures in
 bounded batches. This negative-outcome pass requires the current source/revision and the matching settled
