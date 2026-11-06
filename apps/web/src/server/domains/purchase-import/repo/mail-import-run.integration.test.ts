@@ -143,15 +143,13 @@ describe("mail research admission", () => {
       .where(eq(vendorAccount.shortcode, accountResult.output.id));
     if (!vendorAccountRow)
       throw new Error("Synthetic recovery account missing");
-    await getDb(ctx.db)
-      .insert(account)
-      .values({
-        id: crypto.randomUUID(),
-        accountId: mail.mailboxId,
-        providerId: "google",
-        userId: ctx.actor.userId,
-        updatedAt: new Date(),
-      });
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: mail.mailboxId,
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
     await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: true });
     const [original] = await admitMailImport(ctx.db, {
       ledgerPartyId: party.id,
@@ -168,7 +166,7 @@ describe("mail research admission", () => {
     const block = async (ownerId: string) => {
       await settleMail(ctx.db, {
         mail,
-        importRunId: ownerId,
+        importRunId: parseEntityId("run", ownerId),
         status: "blocked",
         detail: "Synthetic missing original",
       });
@@ -214,7 +212,7 @@ describe("mail research admission", () => {
     // A Purchase edit is not new source evidence and cannot reset reasoning.
     await getDb(ctx.db)
       .update(purchase)
-      .set({ statedTotal: 13 })
+      .set({ statedTotal: 1300n })
       .where(eq(purchase.orderId, "SYN-RECOVERY-42"));
     await importPendingEmails(ctx.db);
     expect(await owner()).toBe(successor);

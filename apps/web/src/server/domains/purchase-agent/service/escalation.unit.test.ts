@@ -12,12 +12,14 @@ function harness(
     escalation: "claude-opus-5-5",
   },
   configure?: (model: SupportedChatModel) => Promise<void>,
-  unavailable?: () => Promise<string | null>,
+  unavailable?: (model: SupportedChatModel) => Promise<string | null>,
+  fundedAlternative?: SupportedChatModel,
 ) {
   const state = new Map<string, string>();
   const configured: SupportedChatModel[] = [];
   const escalation = coordinatorEscalation({
     models,
+    fundedAlternative,
     store: {
       read: (key) => state.get(key),
       write: (key, value) => {
@@ -52,10 +54,48 @@ function harness(
           }
         : ok,
     );
-  return { escalation, configured, claim };
+  return { escalation, configured, claim, state };
 }
 
 describe("coordinator escalation", () => {
+  it.each([true, false])(
+    "selects Sol before transmission only when its free funding is available=%s",
+    async (available) => {
+      const models = {
+        primary: "gpt-6-luna",
+        escalation: "claude-opus-5-5",
+      } as const;
+      const { escalation, configured, claim, state } = harness(
+        models,
+        undefined,
+        async (model) =>
+          model === "gpt-6-sol" && available
+            ? null
+            : "Synthetic credit unavailable",
+        "gpt-6-sol",
+      );
+      await claim("claim", "synthetic-order");
+      expect(
+        await escalation.escalate({
+          category: "identity",
+          reason: "Synthetic variant ambiguity",
+        }),
+      ).toMatchObject({
+        escalated: available,
+        model: available ? "gpt-6-sol" : "gpt-6-luna",
+      });
+      expect(configured).toEqual(available ? ["gpt-6-sol"] : []);
+      const recovered = coordinatorEscalation({
+        models,
+        store: {
+          read: (key) => state.get(key),
+          write: (key, value) => state.set(key, value),
+        },
+        useModel: async () => {},
+      });
+      expect(recovered.model()).toBe(available ? "gpt-6-sol" : "gpt-6-luna");
+    },
+  );
   it.each([
     "missing_evidence",
     "member_decision",

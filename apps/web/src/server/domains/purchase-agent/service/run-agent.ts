@@ -338,6 +338,12 @@ export class PurchaseImportRunAgent
     );
     const escalation = coordinatorEscalation({
       models,
+      // The provider ladder already reaches Sol after Claude credit refuses.
+      // Reuse that funded model without first sending a known-refused request.
+      fundedAlternative:
+        purpose === "mail_import" && !this.agentEnv.coordinatorModels
+          ? "gpt-6-sol"
+          : undefined,
       store: {
         read: (key) => this.readState(key),
         write: (key, value) => this.writeState(key, value),
@@ -360,7 +366,7 @@ export class PurchaseImportRunAgent
       if (!attempts) return;
       const admitted = attempts.admit(
         callId,
-        escalation.active && escalation.model() === models.escalation
+        escalation.active && escalation.model() !== models.primary
           ? "escalation"
           : "primary",
       );
