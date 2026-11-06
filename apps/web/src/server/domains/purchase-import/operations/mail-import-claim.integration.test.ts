@@ -14,6 +14,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import type { PurchaseId, RunId } from "@cubby/schemas/identifiers";
+import { preparePurchaseImportInput } from "@cubby/schemas/purchase-import";
 import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -41,10 +42,15 @@ import {
   vendor,
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import {
+  cubbyToolResult,
+  mailWriterOutcome,
+} from "~/server/domains/purchase-agent/service/cubby-mcp";
 import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
 import { readMailProductCandidates } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { describeToolError } from "~/server/mcp/tools/tool-registration";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 import {
   createProductIdentityFixture,
@@ -53,6 +59,7 @@ import {
 
 import { recordMailAttempt } from "../repo/mail-attempts";
 import { MAIL_IMPORT_RULE_REVISION } from "../service/mail-import-rule";
+import { preparePurchaseImport } from "./import-orders";
 import { claimMailImportWork } from "./mail-import-claim";
 import { resolveMail } from "./mail-tool";
 import { retainedMailFixture } from "./order-import.fixtures";
@@ -88,12 +95,19 @@ describe("Mail import claim", () => {
       vendorId: seller.id,
       ledgerPartyId: party.id,
     });
-    const order = (orderId: string) =>
-      insertWithShortcode(ctx.db, "purchase", {
-        vendorId: seller.id,
-        vendorAccountId: account.id,
+    const order = async (orderId: string) => {
+      const created = await createRepoIdentity(ctx, "purchase", {
+        vendorId: seller.shortcode,
+        vendorAccountId: account.shortcode,
         orderId,
       });
+      const [row] = await getDb(ctx.db)
+        .select()
+        .from(purchase)
+        .where(eq(purchase.id, created.entityId));
+      if (!row) throw new Error("Synthetic Purchase fixture missing");
+      return row;
+    };
     const retain = async (
       messageId: string,
       subject: string,
@@ -597,11 +611,13 @@ describe("Mail import claim", () => {
     expect(recipient).toHaveBeenCalledTimes(1);
   });
   it("carries unchanged-evidence budgets into successor Runs and preserves replay at the limit", async () => {
-    const { party, retain } = await world();
+    const { party, seller, order, retain } = await world();
+    const target = await order("SYN-BUDGET-1");
+    const wrongTarget = await order("SYN-WRONG-1");
     const source = await retain(
       "attempt-budget",
       "Synthetic order evidence",
-      "Incomplete synthetic order evidence",
+      "Order SYN-BUDGET-1 placed 2026-01-02. Synthetic mug USD 12.00. Total USD 12.00.",
     );
     const first = await admit(party, [source]);
     async function claim(owner: typeof first.owner) {
@@ -662,12 +678,116 @@ describe("Mail import claim", () => {
       }),
     ).toEqual({ kind: "admitted" });
 
+    const preparation = preparePurchaseImportInput.parse({
+      _runExecution: {
+        runId: first.owner.id,
+        operationId: "synthetic-refused-prepare",
+        generation: request.generation,
+        itemOperationIds: ["synthetic-budget-item"],
+      },
+      orders: [
+        {
+          stableOrderId: "synthetic-budget-order",
+          itemOperationId: "synthetic-budget-item",
+          vendorId: seller.shortcode,
+          targetPurchaseId: wrongTarget.shortcode,
+          source: {
+            kind: "mail_message",
+            externalKey: `gmail:${mailboxId}:${source.messageId}`,
+            checksum: source.rawChecksum,
+          },
+          evidenceChecksum: source.rawChecksum,
+          extractionRevision: "synthetic@1",
+          extraction: {
+            status: "ready",
+            candidate: {
+              orderId: "SYN-BUDGET-1",
+              orderedAt: "2026-01-02",
+              merchant: seller.name,
+              currency: "USD",
+              printedGrandTotal: 12,
+              lines: [
+                { title: "Synthetic mug", amount: 12, lineKind: "principal" },
+              ],
+              payments: [],
+              allShipmentsDelivered: false,
+            },
+          },
+          lineIds: ["synthetic-budget-line"],
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        },
+      ],
+    });
+    const decision: DecisionPort = async () => ({
+      answers: {
+        selection: {
+          type: "choice",
+          choice: "c0",
+          confidence: 0.97,
+          probabilities: { c0: 0.97, c1: 0.01, c2: 0.01 },
+        },
+      },
+    });
+    const refusal = await preparePurchaseImport(
+      ctx.db,
+      preparation,
+      first.pi,
+      decision,
+    ).then(
+      () => {
+        throw new Error("Expected synthetic target refusal");
+      },
+      (error: unknown) => error,
+    );
+    expect(refusal).toMatchObject({
+      message:
+        "The reviewed Purchase target has a different vendor or order identity.",
+    });
+    const outcome = mailWriterOutcome({
+      stage: "prepare",
+      result: cubbyToolResult({
+        isError: true,
+        content: [],
+        _meta: { "cubby/error": describeToolError(refusal) },
+      }),
+    });
+    expect(outcome).toBe("invalid");
+    await recordMailAttempt(ctx.db, first.owner.id, {
+      ...request,
+      action: outcome,
+    });
+
     expect(
       await recordMailAttempt(ctx.db, first.owner.id, {
         ...request,
         identity: "repair",
       }),
     ).toEqual({ kind: "admitted" });
+    const repaired = await preparePurchaseImport(
+      ctx.db,
+      {
+        ...preparation,
+        _runExecution: {
+          ...preparation._runExecution,
+          operationId: "synthetic-repaired-prepare",
+        },
+        orders: preparation.orders.map((item) => ({
+          ...item,
+          targetPurchaseId: target.shortcode,
+        })),
+      },
+      first.pi,
+      decision,
+    );
+    expect(repaired.orders).toMatchObject([
+      {
+        targetPurchaseId: target.shortcode,
+        orderId: "SYN-BUDGET-1",
+        lines: [{ amount: 12 }],
+      },
+    ]);
+
     expect(
       await recordMailAttempt(ctx.db, first.owner.id, {
         ...request,
@@ -733,7 +853,7 @@ describe("Mail import claim", () => {
     });
     await getDb(ctx.db)
       .update(run)
-      .set({ status: "needs_review", retiredAt: new Date() })
+      .set({ status: "failed", retiredAt: null })
       .where(eq(run.id, first.owner.id));
     expect(await claimMailImportWork(ctx.db, successor.owner.id)).toMatchObject(
       {

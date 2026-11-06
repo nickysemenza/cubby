@@ -14,6 +14,7 @@ import {
   importRunAgentIdentity,
   importRunAgentManifest,
 } from "@cubby/schemas/import-run-agent";
+import { mailMessageRef } from "@cubby/schemas/mailbox-research";
 import { preparePurchaseImportInput } from "@cubby/schemas/purchase-import";
 import {
   runProgressStamp,
@@ -58,7 +59,11 @@ import {
   cubbyAgentModel,
   cubbyAgentProviders,
 } from "./cubby-ai-provider";
-import { cubbyMcpExtension, settleMailAttemptLimit } from "./cubby-mcp";
+import {
+  cubbyMcpExtension,
+  settleMailAttemptLimit,
+  mailWriterOutcome,
+} from "./cubby-mcp";
 import type {
   DispatchInput,
   PurchaseAgentEnvironment,
@@ -380,6 +385,52 @@ export class PurchaseImportRunAgent
         return {
           block: "Claim current trusted Email evidence before extracting.",
         };
+      const named = z
+        .object({
+          mail: mailMessageRef.extend({ checksum: z.string().optional() }),
+        })
+        .safeParse(call.arguments);
+      const namedOrders = z
+        .object({
+          orders: z.array(
+            z.object({
+              source: z.unknown(),
+              evidenceChecksum: z.string().optional(),
+            }),
+          ),
+        })
+        .safeParse(call.arguments.input);
+      const foreignMail =
+        named.success &&
+        (named.data.mail.mailboxId !== source.mailboxId ||
+          named.data.mail.messageId !== source.messageId ||
+          (named.data.mail.checksum !== undefined &&
+            named.data.mail.checksum !== source.checksum));
+      const foreignOrder =
+        namedOrders.success &&
+        namedOrders.data.orders.some((order) => {
+          const mail = z
+            .object({
+              kind: z.literal("mail_message"),
+              externalKey: z.string(),
+              checksum: z.string().optional(),
+            })
+            .safeParse(order.source);
+          return (
+            mail.success &&
+            (mail.data.externalKey !==
+              `gmail:${source.mailboxId}:${source.messageId}` ||
+              (mail.data.checksum !== undefined &&
+                mail.data.checksum !== source.checksum) ||
+              (order.evidenceChecksum !== undefined &&
+                order.evidenceChecksum !== source.checksum))
+          );
+        });
+      if (foreignMail || foreignOrder)
+        return {
+          block:
+            "This extraction names a different Email or checksum. Claim its current evidence before extracting; no attempt was charged.",
+        };
       this.writeState(`mail-attempt-source:${call.id}`, JSON.stringify(source));
       const stage =
         escalation.active && escalation.model() !== models.primary
@@ -415,12 +466,16 @@ export class PurchaseImportRunAgent
         return;
       }
 
-      await settleMailAttemptLimit({
+      const settlement = await settleMailAttemptLimit({
         services: () => this.services(),
         runId,
         source,
         generation,
       });
+      if (settlement.kind === "refused")
+        return {
+          block: `Attempt exhaustion settlement was refused: ${settlement.diagnostic}. Re-claim the current evidence and resolve the supported gap through mail_resolve; do not retry extraction for this unchanged source.`,
+        };
       return {
         block:
           "This Email reached its durable extraction attempt limit. Claim the next Email; do not prepare this source again.",
@@ -481,20 +536,14 @@ export class PurchaseImportRunAgent
                         context,
                       );
                       if (source?.evidenceVersion && generation) {
-                        const codes =
-                          result.diagnostics?.map((item) => item.code) ?? [];
-                        const action = codes.includes("MAIL_SOURCE_HELD_BY_RUN")
-                          ? "exempt"
-                          : result.isError
-                            ? codes.some(
-                                (code) =>
-                                  code === "MAIL_SOURCE_ADMISSION_REFUSED" ||
-                                  code === "MAIL_REQUEST_REFUSED" ||
-                                  code === "INVALID_INPUT",
-                              )
-                              ? "invalid"
-                              : "pending"
-                            : "complete";
+                        const failure = z
+                          .object({ stage: z.enum(["prepare", "commit"]) })
+                          .safeParse(result.structuredOutput);
+                        const stage =
+                          call.name === EXTRACT_ORDER_TOOL
+                            ? (failure.data?.stage ?? "commit")
+                            : "prepare";
+                        const action = mailWriterOutcome({ result, stage });
                         await this.services().mailAttempt({
                           source: {
                             ...source,
@@ -565,6 +614,7 @@ export class PurchaseImportRunAgent
                 `request-generation:${api.taskId}`,
                 z.object({ generation: z.string() }).parse(memo).generation,
               );
+              let settlementRefusal: string | undefined;
               const exhausted = this.readState("mail-attempt-limit-pending");
               if (attempts && exhausted) {
                 const source = z
@@ -581,17 +631,30 @@ export class PurchaseImportRunAgent
                   source,
                   generation,
                 });
-                this.writeState(
-                  "mail-attempt-limit-refusal",
-                  settlement.kind === "refused" ? settlement.diagnostic : "",
-                );
+                if (settlement.kind === "refused")
+                  settlementRefusal = settlement.diagnostic;
                 this.writeState("mail-attempt-limit-pending", "");
               }
               this.requestStartedAt = Date.now();
               this.requestTransport = "unknown";
               this.requestGateway = undefined;
+              const messages =
+                manifest.workItemContext === "current"
+                  ? currentWorkItemMessages(request.messages)
+                  : request.messages;
+              if (settlementRefusal)
+                return {
+                  messages: [
+                    ...messages,
+                    {
+                      role: "user" as const,
+                      timestamp: Date.now(),
+                      content: `Automatic exhaustion settlement was refused: ${settlementRefusal}. Re-claim the current evidence and resolve the supported gap through mail_resolve; do not retry extraction for this unchanged source.`,
+                    },
+                  ],
+                };
               return manifest.workItemContext === "current"
-                ? { messages: currentWorkItemMessages(request.messages) }
+                ? { messages }
                 : undefined;
             },
             afterResponse: async (message, api, context) => {
@@ -600,8 +663,15 @@ export class PurchaseImportRunAgent
               // submissions here too, but not transient failed generations.
               if (attempts && message.stopReason === "toolUse") {
                 for (const part of message.content) {
-                  if (part.type === "toolCall" && isMailExtractionCall(part))
-                    await reserveExtraction(part, api, context, true);
+                  if (part.type === "toolCall" && isMailExtractionCall(part)) {
+                    try {
+                      await reserveExtraction(part, api, context, true);
+                    } catch (error) {
+                      // ToolTask repeats admission before any writer. Accounting
+                      // failure cannot authorize a write or strand the generation.
+                      this.report(error);
+                    }
+                  }
                 }
               }
             },

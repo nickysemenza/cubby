@@ -19,6 +19,7 @@ import {
 } from "@earendil-works/pi-durable";
 import { z } from "zod";
 
+import { hasWriterVerdict, mailWriterOutcome } from "./cubby-mcp";
 import type { MailAttemptEvidence } from "./mail-attempts";
 
 const orderFields = preparePurchaseImportInput.shape.orders.element.shape;
@@ -61,6 +62,12 @@ const output = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("incomplete"), reason: z.string() }),
   z.object({
+    kind: z.literal("writer_refusal"),
+    stage: z.enum(["prepare", "commit"]),
+    operationId: z.string(),
+    diagnostic: z.string(),
+  }),
+  z.object({
     kind: z.literal("operation_error"),
     stage: z.enum(["prepare", "commit"]),
     operationId: z.string(),
@@ -81,16 +88,6 @@ function nestedValue<S extends z.ZodType>(
   }
 }
 
-function knownWriterRefusal(result: NestedToolExecutionResult) {
-  return result.diagnostics?.some(
-    (item) =>
-      item.code === "MAIL_SOURCE_HELD_BY_RUN" ||
-      item.code === "MAIL_SOURCE_ADMISSION_REFUSED" ||
-      item.code === "MAIL_REQUEST_REFUSED" ||
-      item.code === "INVALID_INPUT",
-  );
-}
-
 /** Pi supplies source facts once; code owns IDs, preparation and publication. */
 export function importExtractedOrderTool(
   runId: string,
@@ -109,7 +106,7 @@ export function importExtractedOrderTool(
   return defineTool({
     name: EXTRACT_ORDER_TOOL,
     description:
-      "Import one ordinary itemized Email in one call: provide the exact extraction, candidate.sourceReferences with literal Email excerpts, and Product decisions. Cubby generates stable operation/line IDs and uses its normal prepare/commit writers. Incomplete evidence stays incomplete. A needs_resolution result returns the prepared receipt for targeted Product resolution; never re-prepare it. On operation_error, the write outcome may be unknown: replay identical input to recover its durable result before changing it.",
+      "Import one ordinary itemized Email in one call: provide the exact extraction, candidate.sourceReferences with literal Email excerpts, and Product decisions. Cubby generates stable operation/line IDs and uses its normal prepare/commit writers. Incomplete evidence stays incomplete. A needs_resolution result returns the prepared receipt for targeted Product resolution; never re-prepare it. On writer_refusal, correct the diagnostic; a commit refusal can reuse its preparation with a repaired Product decision. On operation_error, the commit outcome is unknown: replay identical input to recover its durable result before changing it.",
     parameters: Type.Unsafe<JsonObject>(parameters),
     structuredOutputSchema: Type.Unsafe<JsonObject>(resultSchema),
     replay: "safe",
@@ -125,7 +122,8 @@ export function importExtractedOrderTool(
       ) => ({
         output: [{ type: "text" as const, text: JSON.stringify(value) }],
         structuredOutput: z.json().parse(value),
-        isError: value.kind === "operation_error",
+        isError:
+          value.kind === "operation_error" || value.kind === "writer_refusal",
         diagnostics,
       });
       const claimed = ordinaryEvidence();
@@ -172,6 +170,8 @@ export function importExtractedOrderTool(
           reason:
             "Source references must quote the current retained Email and cover every submitted identifier, date, total, line and payment. Repair the references before publication.",
         });
+      // Writer operation IDs belong to this Run; canonical source identity
+      // preserves earlier effects when identical facts replay in a successor.
       const identity = await sha256Hex(
         JSON.stringify({
           runId,
@@ -210,44 +210,44 @@ export function importExtractedOrderTool(
         ],
       });
       const { _runExecution, ...prepareInput } = preparation;
+      const prepareArguments = z.record(z.string(), z.json()).parse(
+        JSON.parse(
+          JSON.stringify({
+            action: "prepare",
+            input: prepareInput,
+            _runExecution,
+          }),
+        ),
+      );
       let preparedResult = await api.executeTool(
         "mcp__cubby__purchase_import",
-        z.record(z.string(), z.json()).parse(
-          JSON.parse(
-            JSON.stringify({
-              action: "prepare",
-              input: prepareInput,
-              _runExecution,
-            }),
-          ),
-        ),
+        prepareArguments,
         context,
         { key: "prepare" },
       );
-      if (preparedResult.isError && !knownWriterRefusal(preparedResult))
+      let prepared = nestedValue(preparedResult, preparePurchaseImportOut);
+      if (
+        (preparedResult.isError && !hasWriterVerdict(preparedResult)) ||
+        (!preparedResult.isError && !prepared.success)
+      ) {
         preparedResult = await api.executeTool(
           "mcp__cubby__purchase_import",
-          z.record(z.string(), z.json()).parse(
-            JSON.parse(
-              JSON.stringify({
-                action: "prepare",
-                input: prepareInput,
-                _runExecution,
-              }),
-            ),
-          ),
+          prepareArguments,
           context,
           { key: "prepare-receipt-recovery" },
         );
-      const prepared = nestedValue(preparedResult, preparePurchaseImportOut);
+        prepared = nestedValue(preparedResult, preparePurchaseImportOut);
+      }
       if (preparedResult.isError || !prepared.success)
         return finish(
           {
-            kind: "operation_error",
+            kind: "writer_refusal",
             stage: "prepare",
             operationId: _runExecution.operationId,
-            diagnostic: JSON.stringify(
-              preparedResult.structuredOutput ?? preparedResult.diagnostics,
+            diagnostic: (
+              JSON.stringify(
+                preparedResult.structuredOutput ?? preparedResult.diagnostics,
+              ) ?? "No preparation verdict"
             ).slice(0, 8_000),
           },
           preparedResult.diagnostics,
@@ -291,44 +291,53 @@ export function importExtractedOrderTool(
         ...defaults,
       });
       const { _runExecution: commitExecution, ...commitInput } = commit;
+      const commitArguments = z.record(z.string(), z.json()).parse(
+        JSON.parse(
+          JSON.stringify({
+            action: "commit",
+            input: commitInput,
+            _runExecution: commitExecution,
+          }),
+        ),
+      );
       let committedResult = await api.executeTool(
         "mcp__cubby__purchase_import",
-        z.record(z.string(), z.json()).parse(
-          JSON.parse(
-            JSON.stringify({
-              action: "commit",
-              input: commitInput,
-              _runExecution: commitExecution,
-            }),
-          ),
-        ),
+        commitArguments,
         context,
         { key: "commit" },
       );
-      if (committedResult.isError && !knownWriterRefusal(committedResult))
+      let committed = nestedValue(committedResult, commitPurchaseImportOut);
+      if (
+        (committedResult.isError &&
+          mailWriterOutcome({ result: committedResult, stage: "commit" }) ===
+            "pending") ||
+        (!committedResult.isError && !committed.success)
+      ) {
         committedResult = await api.executeTool(
           "mcp__cubby__purchase_import",
-          z.record(z.string(), z.json()).parse(
-            JSON.parse(
-              JSON.stringify({
-                action: "commit",
-                input: commitInput,
-                _runExecution: commitExecution,
-              }),
-            ),
-          ),
+          commitArguments,
           context,
           { key: "commit-receipt-recovery" },
         );
-      const committed = nestedValue(committedResult, commitPurchaseImportOut);
+        committed = nestedValue(committedResult, commitPurchaseImportOut);
+      }
       if (committedResult.isError || !committed.success)
         return finish(
           {
-            kind: "operation_error",
+            kind:
+              !committedResult.isError ||
+              mailWriterOutcome({
+                result: committedResult,
+                stage: "commit",
+              }) === "pending"
+                ? "operation_error"
+                : "writer_refusal",
             stage: "commit",
             operationId: commitId,
-            diagnostic: JSON.stringify(
-              committedResult.structuredOutput ?? committedResult.diagnostics,
+            diagnostic: (
+              JSON.stringify(
+                committedResult.structuredOutput ?? committedResult.diagnostics,
+              ) ?? "No commit verdict"
             ).slice(0, 8_000),
           },
           committedResult.diagnostics,

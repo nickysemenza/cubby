@@ -4,6 +4,7 @@ import {
   mailAttemptInput,
   mailAttemptResult,
 } from "@cubby/schemas/purchase-agent-services";
+import { runStatus } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -11,7 +12,22 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { email, run, runOperation } from "~/server/db/schema";
-import { insertOperation } from "~/server/domains/run/repo/run-operation";
+import {
+  insertOperation,
+  setOperationResult,
+} from "~/server/domains/run/repo/run-operation";
+
+const fencedOwnerStatuses = runStatus.extract([
+  "completed",
+  "failed",
+  "needs_review",
+]).options;
+const attemptReceipt = mailAttemptInput.extend({
+  charged: z.boolean(),
+  pending: z.boolean(),
+  rejected: z.boolean().default(false),
+  replayedFromRunId: z.string().optional(),
+});
 
 /** Evidence-scoped receipts survive coordinator retirement and successor Runs. */
 export async function recordMailAttempt(
@@ -73,32 +89,38 @@ export async function recordMailAttempt(
     if (!claim) throw new Error("Mail attempt requires trusted claim evidence");
     const operationId = `mail-attempt:${await sha256Hex(JSON.stringify([input.source, input.identity, input.invocation]))}`;
     if (input.action !== "admit") {
-      await tx
-        .update(runOperation)
-        .set({
-          // Result classification cannot move a reservation to a different
-          // stage when coordinator recovery changed the active model.
-          result: sql`${runOperation.result} || ${JSON.stringify({
-            charged: input.action !== "exempt",
-            pending: input.action === "pending",
-            rejected: input.action === "invalid",
-          })}::jsonb`,
-          updatedAt: new Date(),
+      const aliases = await tx
+        .select({
+          operationId: runOperation.operationId,
+          result: runOperation.result,
         })
+        .from(runOperation)
         .where(
           and(
             eq(runOperation.runId, runId),
+            eq(runOperation.kind, "mail_extraction_attempt"),
             sql`${runOperation.result}->${"source"} = ${JSON.stringify(input.source)}::jsonb`,
             sql`${runOperation.result}->>${"identity"} = ${input.identity}`,
-            eq(runOperation.kind, "mail_extraction_attempt"),
           ),
+        );
+      for (const alias of aliases)
+        await setOperationResult(
+          tx,
+          { runId, operationId: alias.operationId },
+          {
+            // Classification preserves the original stage when model recovery moved on.
+            ...attemptReceipt.parse(alias.result),
+            charged: input.action !== "exempt",
+            pending: input.action === "pending",
+            rejected: input.action === "invalid",
+          },
         );
       return mailAttemptResult.parse({ kind: "admitted" });
     }
-    // Narrow Runs by member and frozen source before reading their runId-led
-    // ledgers. Do not filter retirement/deletion: their receipts still count.
+    // includes-deleted: terminal and erased owners' receipts still constrain replay.
+    // Narrow Runs by member and frozen source before reading their runId-led ledgers.
     const owners = await tx
-      .select({ id: run.id, retiredAt: run.retiredAt })
+      .select({ id: run.id, retiredAt: run.retiredAt, status: run.status })
       .from(run)
       .where(
         and(
@@ -112,7 +134,11 @@ export async function recordMailAttempt(
       );
     const receipts = owners.length
       ? await tx
-          .select({ result: runOperation.result, runId: runOperation.runId })
+          .select({
+            result: runOperation.result,
+            runId: runOperation.runId,
+            operationId: runOperation.operationId,
+          })
           .from(runOperation)
           .where(
             and(
@@ -126,14 +152,8 @@ export async function recordMailAttempt(
           )
       : [];
     const saved = receipts.map((row) => ({
-      ...mailAttemptInput
-        .extend({
-          charged: z.boolean(),
-          pending: z.boolean(),
-          rejected: z.boolean().default(false),
-          replayedFromRunId: z.string().optional(),
-        })
-        .parse(row.result),
+      ...attemptReceipt.parse(row.result),
+      operationId: row.operationId,
       ownerRunId: row.runId,
     }));
     const localReplay = saved.some(
@@ -149,19 +169,24 @@ export async function recordMailAttempt(
         .filter((row) => row.charged && !row.pending)
         .map((row) => row.identity),
     );
-    const retired = new Set(
-      owners.filter((row) => row.retiredAt !== null).map((row) => row.id),
+    const fenced = new Set(
+      owners
+        .filter(
+          (row) =>
+            row.retiredAt !== null ||
+            fencedOwnerStatuses.some((status) => status === row.status),
+        )
+        .map((row) => row.id),
     );
     const pending = saved.filter(
       (row) => row.pending && !reconciled.has(row.identity),
     );
-    // Retirement fences every old writer, and this transaction holds the
+    // A terminal or retired owner fences its writers; this transaction holds the
     // unchanged Email under its successor. Only identical facts can retry
     // through the canonical source writer; a changed extraction must wait.
     if (
       pending.some(
-        (row) =>
-          row.identity !== input.identity || !retired.has(row.ownerRunId),
+        (row) => row.identity !== input.identity || !fenced.has(row.ownerRunId),
       )
     )
       return mailAttemptResult.parse({ kind: "pending" });
@@ -199,25 +224,16 @@ export async function recordMailAttempt(
         row.ownerRunId === runId,
     );
     if (prior) {
-      await tx
-        .update(runOperation)
-        .set({
-          result: {
-            ...input,
-            charged: true,
-            pending: input.publicationPossible,
-            ...(replay ? { replayedFromRunId: replay.ownerRunId } : {}),
-          },
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(runOperation.runId, runId),
-            eq(runOperation.kind, "mail_extraction_attempt"),
-            sql`${runOperation.result}->${"source"} = ${JSON.stringify(input.source)}::jsonb`,
-            sql`${runOperation.result}->>${"identity"} = ${input.identity}`,
-          ),
-        );
+      await setOperationResult(
+        tx,
+        { runId, operationId: prior.operationId },
+        {
+          ...input,
+          charged: true,
+          pending: input.publicationPossible,
+          ...(replay ? { replayedFromRunId: replay.ownerRunId } : {}),
+        },
+      );
       return mailAttemptResult.parse({ kind: "admitted" });
     }
     await insertOperation(tx, {
@@ -237,7 +253,7 @@ export async function recordMailAttempt(
   });
 }
 
-/** Retired ordinary work carries the exact proposal needed for receipt recovery. */
+/** Fenced ordinary work carries the exact proposal needed for receipt recovery. */
 export async function readMailAttemptRecovery(
   db: Database,
   input: {
@@ -257,7 +273,7 @@ export async function readMailAttemptRecovery(
       and(
         eq(run.ledgerPartyId, input.ledgerPartyId),
         eq(run.purpose, "mail_import"),
-        isNotNull(run.retiredAt),
+        or(isNotNull(run.retiredAt), inArray(run.status, fencedOwnerStatuses)),
         sql`${run.input}->'sources' @> ${JSON.stringify([{ orderMailId: input.orderMailId, checksum: input.source.checksum }])}::jsonb`,
         eq(runOperation.kind, "mail_extraction_attempt"),
         sql`${runOperation.result}->${"source"} = ${JSON.stringify(input.source)}::jsonb`,

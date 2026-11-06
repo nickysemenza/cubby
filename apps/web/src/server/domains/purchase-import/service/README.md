@@ -124,12 +124,14 @@ pending: nothing here starts Product research.
    and successor Runs retain the budget. The claim binds the original checksum,
    sender proof and accepted order-source context; display-name and Purchase-date
    edits do not reset it. Writer classification uses trusted MCP error metadata,
-   never Email text. Held-source refusals are exempt. Known validation refusals
-   return without automatic replay; unknown writes retain their reservation until
-   exact writer recovery. After a predecessor is retired, only identical
+   never Email text. Held-source refusals are exempt. Confirmed writer refusals
+   return for repair without automatic replay. Preparation failures cannot leave
+   uncertain money writes. Commit failures without a server verdict, deadlines,
+   and explicitly uncertain operation outcomes retain their reservation until
+   exact writer recovery. After a predecessor is terminal or retired, only identical
    extraction facts can replay under the successor's locked, unchanged Email.
    Ordinary attempts retain their validated proposal before execution; a claim
-   returns an unreconciled retired proposal as `recovery` for exact tool replay,
+   returns an unreconciled terminal proposal as `recovery` for exact tool replay,
    so retiring the coordinator cannot lose the input needed to recover.
    Canonical source writers preserve earlier effects; the successor retains its
    own pending receipt, and replay identities count once across Runs. Changed
@@ -153,7 +155,7 @@ pending: nothing here starts Product research.
    turn coordinating that claim. Unknown writes and conflicts do not advance.
    A Mail import claim (`operations/mail-import-claim.ts`) returns the
    claimed Email's compact read (`readMail`, bounded by `fitMailRead`). Coordinator
-   claims also include up to20 Product candidates from exact printed link
+   claims also include up to20 Product candidates from exact printed ASIN-shaped link
    identifiers under the verified sender's registered issuer, and live Products
    recorded on up to5 matching own-account Purchases at that Vendor. Ambiguous
    identifier hits stay separate candidates; omission is explicit. These hints

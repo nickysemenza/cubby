@@ -76,6 +76,7 @@ const callResult = z.object({
           message: z.string(),
           code: z.string().optional(),
           reason: z.string().optional(),
+          diagnostics: z.object({ stage: z.string().optional() }).optional(),
         })
         .optional(),
     })
@@ -156,7 +157,11 @@ export function cubbyToolResult(raw: unknown): ToolExecutionResult {
         {
           severity: "error",
           message: error.message,
-          code: error.reason ?? error.code,
+          code: `cubby:${
+            error.diagnostics?.stage === "output"
+              ? "RUN_OPERATION_OUTCOME_UNCERTAIN"
+              : (error.reason ?? error.code ?? "UNKNOWN_ERROR")
+          }`,
         },
       ]
     : undefined;
@@ -190,6 +195,35 @@ export function cubbyToolResult(raw: unknown): ToolExecutionResult {
       text: JSON.stringify(parsed.structuredContent),
     });
   return { output: content, isError: parsed.isError === true, diagnostics };
+}
+
+type WriterResult = Pick<ToolExecutionResult, "isError" | "diagnostics">;
+
+/** Only the MCP adapter emits this prefix; source text cannot supply a verdict. */
+export function hasWriterVerdict(result: WriterResult): boolean {
+  return (
+    result.diagnostics?.some((item) => item.code?.startsWith("cubby:")) ?? false
+  );
+}
+
+export function mailWriterOutcome({
+  result,
+  stage,
+}: {
+  result: WriterResult;
+  stage: "prepare" | "commit";
+}): "complete" | "exempt" | "invalid" | "pending" {
+  if (!result.isError) return "complete";
+  const reasons = result.diagnostics?.map((item) => item.code) ?? [];
+  if (reasons.includes("cubby:MAIL_SOURCE_HELD_BY_RUN")) return "exempt";
+  const uncertain =
+    !hasWriterVerdict(result) ||
+    reasons.includes("cubby:MCP_TOOL_DEADLINE_EXCEEDED") ||
+    reasons.includes("cubby:RUN_OPERATION_OUTCOME_UNCERTAIN");
+  // Preparation publishes no money. Transport failures do not spend a
+  // semantic repair; an uncertain commit must retain the exact replay input.
+  if (uncertain) return stage === "prepare" ? "exempt" : "pending";
+  return "invalid";
 }
 
 /**

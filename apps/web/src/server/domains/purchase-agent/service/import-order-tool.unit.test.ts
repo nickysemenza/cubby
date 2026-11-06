@@ -90,7 +90,7 @@ function writerPeer(
             diagnostics: [
               {
                 severity: "error",
-                code: options.refusal,
+                code: `cubby:${options.refusal}`,
                 message: "Synthetic input refusal",
               },
             ],
@@ -227,7 +227,9 @@ describe("ordinary Email extraction", () => {
       runId,
       () => ordinaryMail,
     ).execute(extraction, refused.api, BACKGROUND_CONTEXT);
-    expect(refusal.diagnostics).toMatchObject([{ code: "INVALID_INPUT" }]);
+    expect(refusal.diagnostics).toMatchObject([
+      { code: "cubby:INVALID_INPUT" },
+    ]);
     expect(refused.effects.map((effect) => effect.action)).toEqual(["prepare"]);
     expect(refused.claims).toEqual([]);
   });

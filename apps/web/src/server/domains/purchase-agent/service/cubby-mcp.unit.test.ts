@@ -9,7 +9,11 @@ import {
   mailReadContent,
 } from "~/server/domains/purchase-import/repo/gmail/read-content";
 
-import { cubbyToolResult, stampGeneration } from "./cubby-mcp";
+import {
+  cubbyToolResult,
+  stampGeneration,
+  mailWriterOutcome,
+} from "./cubby-mcp";
 
 describe("cubbyToolResult Email reads", () => {
   it("classifies writer refusals only from server metadata", () => {
@@ -34,10 +38,42 @@ describe("cubbyToolResult Email reads", () => {
     ).toEqual([
       {
         severity: "error",
-        code: "MAIL_SOURCE_ADMISSION_REFUSED",
+        code: "cubby:MAIL_SOURCE_ADMISSION_REFUSED",
         message: "Synthetic source ownership refusal",
       },
     ]);
+    for (const reason of [
+      "CONSTRAINT_VIOLATION",
+      "PURCHASE_IMPORT_ITEM_PREPARED",
+      "RUN_OPERATION_REPLAY_CONFLICT",
+      "UNKNOWN_ERROR",
+    ]) {
+      const result = cubbyToolResult({
+        isError: true,
+        content: [],
+        _meta: {
+          "cubby/error": { message: "Synthetic writer refusal", reason },
+        },
+      });
+      expect(mailWriterOutcome({ result, stage: "prepare" })).toBe("invalid");
+      expect(mailWriterOutcome({ result, stage: "commit" })).toBe("invalid");
+    }
+    for (const result of [
+      { isError: true },
+      ...["MCP_TOOL_DEADLINE_EXCEEDED", "RUN_OPERATION_OUTCOME_UNCERTAIN"].map(
+        (reason) =>
+          cubbyToolResult({
+            isError: true,
+            content: [],
+            _meta: {
+              "cubby/error": { message: "Synthetic uncertain outcome", reason },
+            },
+          }),
+      ),
+    ]) {
+      expect(mailWriterOutcome({ result, stage: "commit" })).toBe("pending");
+      expect(mailWriterOutcome({ result, stage: "prepare" })).toBe("exempt");
+    }
   });
 
   it("keeps an attachment read's agent text under the cap", () => {

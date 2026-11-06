@@ -202,6 +202,14 @@ async function settleByRule(
       imported: candidate.importedSource,
     })),
   };
+  const attemptContext = JSON.stringify(
+    candidates
+      .map((candidate) => [
+        candidate.purchaseId,
+        candidate.acceptedSourceFingerprint,
+      ])
+      .sort(),
+  );
   const knownForCoordinator = async (): Promise<KnownForEmail> => ({
     ...known,
     products: await readMailProductCandidates(db, {
@@ -222,14 +230,7 @@ async function settleByRule(
   if (content.truncated || content.nextOffset !== null)
     return {
       known: await knownForCoordinator(),
-      attemptContext: JSON.stringify(
-        candidates
-          .map((candidate) => [
-            candidate.purchaseId,
-            candidate.acceptedSourceFingerprint,
-          ])
-          .sort(),
-      ),
+      attemptContext,
     };
   const decision = decideMailByRule({
     subject: mail.subject,
@@ -255,14 +256,7 @@ async function settleByRule(
   if (decision.kind === "coordinator")
     return {
       known: await knownForCoordinator(),
-      attemptContext: JSON.stringify(
-        candidates
-          .map((candidate) => [
-            candidate.purchaseId,
-            candidate.acceptedSourceFingerprint,
-          ])
-          .sort(),
-      ),
+      attemptContext,
     };
   const ref = {
     mailboxId: mail.mailboxId,
@@ -279,7 +273,7 @@ async function settleByRule(
         actor,
       ))
         ? "settled"
-        : { known: await knownForCoordinator() };
+        : { known: await knownForCoordinator(), attemptContext };
     await resolveMail(
       db,
       {
@@ -296,14 +290,7 @@ async function settleByRule(
     if (error instanceof AppError)
       return {
         known: await knownForCoordinator(),
-        attemptContext: JSON.stringify(
-          candidates
-            .map((candidate) => [
-              candidate.purchaseId,
-              candidate.acceptedSourceFingerprint,
-            ])
-            .sort(),
-        ),
+        attemptContext,
       };
     throw error;
   }
