@@ -12,7 +12,8 @@ import type { Fenced } from "~/server/generic/jobs/types";
 
 import { admitConnectionDiscoveryPage } from "./connection-refresh";
 
-const CONNECTION_DISCOVERY_CURSOR_ID = "00000000-0000-4000-8000-000000000076";
+// Random id: production holds the AI budget at …077 and a retired settings row at …076.
+const CONNECTION_DISCOVERY_CURSOR_ID = "0553199e-d21b-4325-8c52-cfb28fc26a2f";
 const cursorSchema = z.object({
   stopped: z.boolean().default(false),
   error: z.string().nullable().default(null),
