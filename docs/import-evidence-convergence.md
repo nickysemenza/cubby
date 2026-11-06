@@ -600,9 +600,12 @@ or preservation guarantees leave the duplicate unresolved.
 [Terminology](guide/terminology.md#naming-policy) owns the names; the
 [README overview](../README.md#financial-evidence) owns the entity map.
 Source transaction records and Transaction imports retain their generated list
-and detail routes. `SourceOccurrence` is the internal, read-only owner of proven
-source identity, current judgment/account, selected observation, withdrawal and
-one nullable `acceptedTransactionId` FK. Multiple independent occurrences may
+and detail routes. Every bank record (`SourceTransactionRecord`) belongs to one
+`SourceOccurrence`, its read-only judgment owner for current account/disposition,
+selected record, withdrawal and nullable `acceptedTransactionId`. Proven owners
+represent bank events; singleton `unproven` owners hold uncertain historical records
+without proving identity. Database checks forbid accepted money or a ready state
+on an unproven owner. Multiple independent occurrences may
 support one FinancialTransaction; one occurrence has at most one accepted owner.
 
 `finance.record` retains immutable normalized observations. Monarch provider
@@ -615,8 +618,8 @@ a historical request can replay one uniquely retained collection member without
 creating identity or money. Distinct identical physical positions stay distinct.
 
 Generic create/merge remain unavailable. Existing judgment edits resolve to the
-one occurrence for proven observations. Unproven observations keep their own
-unresolved decisions; observation notes always stay local. Preserved historical
+one occurrence for every observation, including unproven records. Observation
+notes and exact reviewed replacement selections stay local. Preserved historical
 annotations retain every original decision without copying it into new revisions.
 A reviewed replacement names its exact retained observation, with an occurrence
 FK when proven. It never copies accepted ownership. No alias-to-transaction
@@ -624,8 +627,11 @@ resolver or charge-key aggregation controls current state.
 
 The public number shape is unchanged: source amounts store exact signed bigint
 minor units, with checked dollar-number reads for shipped clients. `chargeKey`
-is an opaque occurrence handle (`SOC-`) for proven or explicitly reviewed records; a retained record's
-`STR-` handle addresses its unresolved review when proof is absent. Original v1/v2/v3 references
+is always the judgment owner's opaque `SOC-` handle. `STR-` still addresses the
+original bank record. Find uncertain groups through Source occurrence's
+`reviewState: unproven` and `supersededByOccurrenceIdPresenceFilter: none` filters;
+retired consolidated reservations remain readable as history. A non-null owner
+never grants financial authority. Original v1/v2/v3 references
 remain evidence aliases. Fresh source acceptance uses an SOC handle and rechecks
 its ready state, head, live target, exact amount and account. Old successful
 operation receipts replay before fresh guards; uncommitted legacy-reference
@@ -633,8 +639,35 @@ applications require a new preview.
 
 Unproven identity blocks automatic acceptance/correction, with money unchanged.
 It creates no new member task for missing source proof. Original evidence and
-existing actionable member review remain retained. `matchState: held` blocks automatic actions for unresolved identity, historical ownership, or a retained accepted reservation whose transaction was deleted. Summary splits heldHistorical from heldNeverMatched; a hold without a historical link may still be unbooked spending. `historicalTransactionIds` lists those retained links explicitly; it never supplies accepted ownership. Existing SourceRecord updates accept `identityResolution` only as an explicit reviewed judgment, with expectedDisposition, the observation fingerprint, expected owner version, accepted owner, complete live historical transaction set, resolved account, explicit open/ignored judgment and note. Choose distinct, accept_existing, or assign. The transaction is audited, preserves ignore decisions and original aliases, and does not alter money. Exact replay never supplies that decision. Prior member suppressions
-remain negative fences through retained alias provenance; they never prove identity.
+existing actionable member review remain retained. `matchState: held` blocks automatic actions for unresolved identity, historical ownership, or a retained accepted reservation whose transaction was deleted. Summary splits heldHistorical from heldNeverMatched; a hold without a historical link may still be unbooked spending. `historicalTransactionIds` lists those retained links explicitly; it never supplies accepted ownership. Existing SourceRecord updates accept `identityResolution` only as an explicit reviewed judgment, with expectedDisposition, the observation fingerprint, expected owner version, accepted owner, complete live historical transaction set, resolved account, explicit open/ignored judgment and note. Choose distinct, accept_existing, or assign. The transaction is audited and preserves explicit ignore decisions and original
+aliases. `distinct` and `accept_existing` promote an unproven owner in place.
+`assign` consolidates a complete eligible unproven, positioned or reviewed owner
+into a provider owner, keeping the provider's selected record and transaction
+contents. Both versions, reviewed facts/history, account, amount and financial
+judgments must agree. Conflicting direct historical transactions or provider IDs
+refuse; another owner's exact replacement reference must be resolved first.
+An existing accepted link may transfer after explicit review. Retirement clears
+the old head and accepted link, retains its identity reservation and audited
+preimage, and records released acceptance as tombstoned evidence. Intake follows
+one consolidation reservation directly to its provider survivor; ordinary replacement
+edges do not redirect intake. Remaining overlaps keep the provider held. Bulk
+moves to one target must reread its version between commands.
+The survivor retains the latest observation time across both groups. Deleting
+the last live record of an unproven group retires that group while retaining its
+original decisions and evidence.
+
+Financial suggestion dismissal applies to the exact current recommendation
+fingerprint or unchanged evidence fingerprint. Label-only revisions preserve
+the dismissal; changed evidence or recommendation policy may produce new advice. Retired suggestions and
+legacy aliases never propagate dismissal to another bank event. Explicit financial
+ignore decisions remain authoritative; presentation feedback is not an ignore.
+Exact import replay never submits an identity or financial judgment.
+
+Suggestion record reach is declared per family with explicit affected roles and
+forward/reverse SQL. Statement reach starts at its primary bank record, follows
+occurrence siblings and collection memberships, and does not depend on a retained
+legacy charge-key string. One and many-record badges use the same bounded record
+expansion. Work retains the narrower account-owned statement reach.
 
 Read projections materialize retained historical closure before applying root
 predicates. List filters use the generic whole-list value set; state sorts use

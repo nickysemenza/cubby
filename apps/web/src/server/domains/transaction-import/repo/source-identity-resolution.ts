@@ -1,28 +1,37 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { SourceTransactionRecordId } from "@cubby/schemas/identifiers";
-import type { SourceIdentityResolution } from "@cubby/schemas/source-occurrence-fields";
+import {
+  sourceOccurrenceIdentityKind,
+  type SourceIdentityResolution,
+} from "@cubby/schemas/source-occurrence-fields";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { sourceHistoricalTransactionRows } from "~/server/db/computed/source-occurrence-history-sql";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import {
+  databaseForTransaction,
+  notDeleted,
+  unwrapDb,
+} from "~/server/db/helpers";
 import {
   financialAccount,
   financialEvidenceAlias,
   financialTransaction,
   sourceOccurrence,
-  sourceObservationAnnotation,
   sourceTransactionRecord,
+  suggestionTable,
 } from "~/server/db/schema";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
   financialEvidenceAmountMinor,
   lockFinancialEvidenceKeys,
 } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
+import { providerIdentityClaims } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import { createAppError } from "~/server/errors/app-error";
+import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { auditEvidenceRows } from "./intake-audit";
@@ -56,9 +65,7 @@ export async function resolveSourceIdentity(
     .from(sourceOccurrence)
     .where(
       or(
-        initial.occurrenceId
-          ? eq(sourceOccurrence.id, initial.occurrenceId)
-          : undefined,
+        eq(sourceOccurrence.id, initial.occurrenceId),
         input.decision === "assign"
           ? eq(sourceOccurrence.shortcode, input.occurrenceId)
           : undefined,
@@ -110,8 +117,10 @@ export async function resolveSourceIdentity(
   const originalOwner = owners.find(
     (owner) => owner.id === observation.occurrenceId,
   );
+  if (!originalOwner)
+    return refuse("Every bank record must have a judgment owner.");
   if (
-    (originalOwner?.version ?? null) !== input.expectedOccurrenceVersion ||
+    originalOwner.version !== input.expectedOccurrenceVersion ||
     owners.some(
       (owner) =>
         owner.acceptedTransactionId !==
@@ -120,7 +129,7 @@ export async function resolveSourceIdentity(
     )
   )
     return refuse("Source ownership changed after review.");
-  const [priorAccepted] = originalOwner?.acceptedTransactionId
+  const [priorAccepted] = originalOwner.acceptedTransactionId
     ? await db
         .select({ code: financialTransaction.shortcode })
         .from(financialTransaction)
@@ -128,27 +137,38 @@ export async function resolveSourceIdentity(
     : [];
   if ((priorAccepted?.code ?? null) !== input.expectedAcceptedTransactionId)
     return refuse("The accepted transaction changed after review.");
-  if (originalOwner?.deletedAt || originalOwner?.supersededByOccurrenceId)
+  if (originalOwner.deletedAt || originalOwner.supersededByOccurrenceId)
     return refuse(
       "Retired or replaced source identity must retain its reservation.",
     );
-  let owner =
+  const owner =
     input.decision === "assign"
       ? owners.find((candidate) => candidate.shortcode === input.occurrenceId)
       : originalOwner;
   if (
     input.decision === "assign" &&
-    (observation.occurrenceId !== null ||
+    (owner?.id === originalOwner.id ||
       !owner ||
+      owner.identityKind !== "provider" ||
+      !owner.currentObservationId ||
+      !["unproven", "positioned", "reviewed"].includes(
+        originalOwner.identityKind,
+      ) ||
+      ![
+        "unproven",
+        "ready",
+        "identity_conflict",
+        "ownership_conflict",
+      ].includes(originalOwner.reviewState) ||
       owner.source !== observation.source ||
       owner.version !== input.expectedTargetVersion ||
-      owner.reviewState !== "ready" ||
+      !["ready", "identity_conflict"].includes(owner.reviewState) ||
       owner.deletedAt ||
       owner.withdrawnAt ||
       owner.supersededByOccurrenceId)
   )
     return refuse(
-      "Assign only unresolved observations to a current reviewed occurrence from the same source.",
+      "Consolidate only an unproven, positioned or reviewed owner into a current provider occurrence from the same source.",
     );
   const [account] = await db
     .select()
@@ -169,7 +189,7 @@ export async function resolveSourceIdentity(
           dispositionNote: null,
         }
       : input.judgment;
-  if (originalOwner?.withdrawnAt && input.decision !== "assign") {
+  if (originalOwner.withdrawnAt && input.decision !== "assign") {
     const { rows: positive } =
       await db.execute(sql`SELECT 1 FROM "TransactionImportRecord" member
       JOIN "TransactionImport" collection ON collection.id=member."importId" AND ${notDeleted("collection")}
@@ -179,37 +199,80 @@ export async function resolveSourceIdentity(
         "A confirmed withdrawal needs retained positive source evidence from after its proof before reappearance can be confirmed.",
       );
   }
-  const [annotation] = await db
-    .select()
-    .from(sourceObservationAnnotation)
-    .where(eq(sourceObservationAnnotation.observationId, observationId))
-    .for("update");
-  if (!annotation) return refuse("Original source judgments are missing.");
-  if (
-    (originalOwner?.disposition ?? annotation.disposition) !==
-    input.expectedDisposition
-  )
-    return refuse(
-      "The source disposition changed after review. Read the current member judgment before resolving identity.",
-    );
+  if (!owner) return refuse("The reviewed target owner is missing.");
+  if (originalOwner.disposition !== input.expectedDisposition)
+    return refuse("The source disposition changed after review.");
   if (
     input.decision === "assign" &&
-    (annotation.accountId !== owner?.accountId ||
-      annotation.disposition !== owner?.disposition)
-  )
-    return refuse(
-      "The observation account or disposition differs from the target owner; preserve and review both member judgments before assignment.",
-    );
-  if (
-    input.decision === "assign" &&
-    (owner?.accountId !== account.id ||
+    (originalOwner.accountId !== owner.accountId ||
+      originalOwner.disposition !== owner.disposition ||
+      originalOwner.dispositionReason !== owner.dispositionReason ||
+      originalOwner.dispositionNote !== owner.dispositionNote ||
+      owner.accountId !== account.id ||
       financialJudgment.disposition !== owner.disposition ||
       financialJudgment.dispositionReason !== owner.dispositionReason ||
-      financialJudgment.dispositionNote !== owner.dispositionNote)
+      financialJudgment.dispositionNote !== owner.dispositionNote ||
+      originalOwner.withdrawnAt ||
+      originalOwner.replacementObservationId ||
+      (originalOwner.acceptedTransactionId &&
+        owner.acceptedTransactionId &&
+        originalOwner.acceptedTransactionId !== owner.acceptedTransactionId))
   )
     return refuse(
-      "Resolve conflicting account or ignore judgments explicitly before assigning the observation.",
+      "Resolve conflicting account, ignore, lifecycle or accepted transaction judgments before consolidation.",
     );
+  // Ordered owner locks and versions fence the complete closure against serializable intake.
+  const closure = await db
+    .select()
+    .from(sourceTransactionRecord)
+    .where(eq(sourceTransactionRecord.occurrenceId, originalOwner.id))
+    .orderBy(sourceTransactionRecord.id)
+    .for("update");
+  const [head] = owner.currentObservationId
+    ? await db
+        .select()
+        .from(sourceTransactionRecord)
+        .where(eq(sourceTransactionRecord.id, owner.currentObservationId))
+        .for("update")
+    : [];
+  if (input.decision === "assign") {
+    if (
+      !head ||
+      head.deletedAt ||
+      closure.some((record) => {
+        const claims = providerIdentityClaims(
+          z.json().parse(record.providerData),
+        );
+        return (
+          claims.malformed ||
+          record.amount !== head.amount ||
+          record.deletedAt ||
+          (record.providerAccountId !== null &&
+            record.providerAccountId !== head.providerAccountId) ||
+          (record.providerTransactionId !== null &&
+            record.providerTransactionId !== head.providerTransactionId) ||
+          claims.accounts.some((id) => id !== head.providerAccountId) ||
+          claims.providerIds.some((id) => id !== head.providerTransactionId)
+        );
+      })
+    )
+      return refuse(
+        "Consolidation needs equal amounts, compatible provider identity and live evidence across the complete closure.",
+      );
+    const replacements = await db
+      .select({ id: sourceOccurrence.id })
+      .from(sourceOccurrence)
+      .where(
+        and(
+          eq(sourceOccurrence.supersededByOccurrenceId, originalOwner.id),
+          sql`${sourceOccurrence.replacementObservationId} IS NOT NULL`,
+        ),
+      );
+    if (replacements.length)
+      return refuse(
+        "Another owner names an exact replacement in this closure; resolve that replacement before consolidation.",
+      );
+  }
   const { rows: history } = await db.execute<{ id: string; code: string }>(sql`
     SELECT * FROM (${sourceHistoricalTransactionRows(
       sql`${observation.id}::uuid`,
@@ -231,7 +294,7 @@ export async function resolveSourceIdentity(
     input.decision === "accept_existing"
       ? chosenTransaction?.id
       : input.decision === "assign"
-        ? owner?.acceptedTransactionId
+        ? (owner.acceptedTransactionId ?? originalOwner.acceptedTransactionId)
         : null;
   const [target] = targetId
     ? await db
@@ -247,21 +310,35 @@ export async function resolveSourceIdentity(
       target.deletedAt ||
       target.status === "void" ||
       target.accountId !== account.id ||
-      financialEvidenceAmountMinor(target.amount) !== observation.amount)
+      financialEvidenceAmountMinor(target.amount) !== observation.amount ||
+      (input.decision === "assign" &&
+        (!head || head.amount !== financialEvidenceAmountMinor(target.amount))))
   )
     return refuse(
       "The chosen transaction must be live and match the exact reviewed source account and amount.",
     );
   if (input.decision === "accept_existing" && !target)
     return refuse("The chosen transaction is no longer live.");
+  if (input.decision === "assign") {
+    const { rows: conflicts } = await db.execute(sql`
+      SELECT 1 FROM "FinancialEvidenceAlias" evidence
+      JOIN "FinancialEvidenceAlias" binding ON binding.source=evidence.source AND binding.value=evidence.value AND ${notDeleted("binding")}
+      JOIN "FinancialTransaction" money ON money.id=binding."historicalTransactionId" AND ${notDeleted("money")}
+      WHERE evidence."occurrenceId" IN (${originalOwner.id}::uuid, ${owner.id}::uuid)
+        AND money.id IS DISTINCT FROM ${target?.id ?? null}::uuid LIMIT 1`);
+    if (conflicts.length)
+      return refuse(
+        "A direct historical binding names different live money; consolidation cannot resolve it implicitly.",
+      );
+  }
   const priorProof = z
     .object({ originalIdentityProof: z.json() })
     .passthrough()
-    .safeParse(owner?.identityProof);
+    .safeParse(owner.identityProof);
   const proof = jsonSnapshot.parse({
     originalIdentityProof: priorProof.success
       ? priorProof.data.originalIdentityProof
-      : (owner?.identityProof ?? null),
+      : (owner.identityProof ?? null),
     resolvedHistoricalTransactionIds: history.map((item) => item.id),
     resolution: {
       decision: input.decision,
@@ -272,41 +349,29 @@ export async function resolveSourceIdentity(
       note: input.note,
       expectedDisposition: input.expectedDisposition,
       judgment: input.judgment,
-      priorWithdrawal: originalOwner
-        ? {
-            at: originalOwner.withdrawnAt,
-            importId: originalOwner.withdrawalImportId,
-          }
-        : null,
+      priorWithdrawal: {
+        at: originalOwner.withdrawnAt,
+        importId: originalOwner.withdrawalImportId,
+      },
       userId: actor.userId,
       at: new Date().toISOString(),
     },
   });
-  const createdOwner = !owner;
-  if (!owner)
-    owner = await insertWithShortcode(tx, "sourceOccurrence", {
-      source: observation.source,
-      identityKind: "reviewed",
-      identityScope: `reviewed-observation:${observation.id}`,
-      accountId: account.id,
-      ...financialJudgment,
-      identityProof: proof,
-      currentObservationId: null,
-      lastObservedAt: annotation.lastObservedAt,
-      reviewState: "ready",
-    });
-  const beforeOwners = originalOwner
-    ? [originalOwner]
-    : input.decision === "assign"
-      ? [owner]
-      : [];
+  const beforeOwners =
+    input.decision === "assign" ? [originalOwner, owner] : [owner];
   const beforeAliases = await db
     .select()
     .from(financialEvidenceAlias)
-    .where(eq(financialEvidenceAlias.observationId, observation.id));
+    .where(
+      inArray(
+        financialEvidenceAlias.occurrenceId,
+        owners.map((item) => item.id),
+      ),
+    );
   if (
-    originalOwner?.acceptedTransactionId &&
-    originalOwner.acceptedTransactionId !== (target?.id ?? null)
+    originalOwner.acceptedTransactionId &&
+    (input.decision === "assign" ||
+      originalOwner.acceptedTransactionId !== (target?.id ?? null))
   ) {
     await db.insert(financialEvidenceAlias).values({
       source: originalOwner.source,
@@ -329,17 +394,82 @@ export async function resolveSourceIdentity(
       deletedAt: new Date(),
     });
   }
-  await db
-    .update(sourceTransactionRecord)
-    .set({ occurrenceId: owner.id })
-    .where(eq(sourceTransactionRecord.id, observation.id));
-  await db
-    .update(financialEvidenceAlias)
-    .set({ occurrenceId: owner.id })
-    .where(eq(financialEvidenceAlias.observationId, observation.id));
+  let retired = originalOwner;
+  if (input.decision === "assign") {
+    // Immediate membership FKs require clearing the old head before moving any record.
+    const [released] = await db
+      .update(sourceOccurrence)
+      .set({
+        currentObservationId: null,
+        accountId: null,
+        acceptedTransactionId: null,
+        supersededByOccurrenceId: owner.id,
+        replacementObservationId: null,
+        identityProof: jsonSnapshot.parse({
+          kind: "consolidated",
+          previousOwner: originalOwner,
+          survivorId: owner.id,
+          note: input.note,
+          userId: actor.userId,
+        }),
+        version: originalOwner.version + 1,
+        updatedAt: new Date(),
+      })
+      .where(eq(sourceOccurrence.id, originalOwner.id))
+      .returning();
+    if (!released) return refuse("The retired owner disappeared.");
+    retired = released;
+    await db
+      .update(sourceTransactionRecord)
+      .set({ occurrenceId: owner.id })
+      .where(eq(sourceTransactionRecord.occurrenceId, originalOwner.id));
+    await db
+      .update(financialEvidenceAlias)
+      .set({ occurrenceId: owner.id })
+      .where(eq(financialEvidenceAlias.occurrenceId, originalOwner.id));
+    await transitionAssessmentStates(
+      databaseForTransaction(tx),
+      and(
+        eq(suggestionTable.family, "statement_transaction"),
+        eq(suggestionTable.status, "pending"),
+        suggestionTable.active,
+        inArray(
+          suggestionTable.recordId,
+          closure.map((record) => record.id),
+        ),
+        sql`${suggestionTable.data}->>'chargeKey'=${originalOwner.shortcode}`,
+      ),
+      { active: false, status: "superseded" },
+    );
+  }
+  const { rows: overlaps } =
+    input.decision === "assign"
+      ? await db.execute<{
+          remaining: boolean;
+        }>(sql`-- includes-deleted: retained legacy records and identity reservations still fence duplicate acceptance.
+        SELECT EXISTS (
+        SELECT 1 FROM "SourceTransactionRecord" record
+        JOIN "SourceOccurrence" other ON other.id=record."occurrenceId"
+        WHERE record.source=${owner.source} AND record."providerTransactionId"=${owner.providerIdentity}
+          AND record."occurrenceId"<>${owner.id}::uuid AND other."identityKind"<>${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
+      ) OR
+        -- includes-deleted: retained alias overlaps still fence unresolved identities after tombstoning.
+      EXISTS (
+        SELECT 1 FROM "FinancialEvidenceAlias" own
+        JOIN "FinancialEvidenceAlias" sibling ON sibling.source=own.source AND sibling.value=own.value
+        JOIN "SourceTransactionRecord" record ON record.id=sibling."observationId"
+        JOIN "SourceOccurrence" other ON other.id=record."occurrenceId"
+        WHERE own."occurrenceId"=${owner.id}::uuid AND record."occurrenceId"<>${owner.id}::uuid
+          AND other."identityKind"<>${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
+      ) AS remaining`)
+      : { rows: [] };
   const [updatedOwner] = await db
     .update(sourceOccurrence)
     .set({
+      lastObservedAt:
+        owner.lastObservedAt > originalOwner.lastObservedAt
+          ? owner.lastObservedAt
+          : originalOwner.lastObservedAt,
       currentObservationId:
         input.decision === "assign"
           ? owner.currentObservationId
@@ -347,47 +477,73 @@ export async function resolveSourceIdentity(
       accountId: account.id,
       ...financialJudgment,
       acceptedTransactionId: target?.id ?? null,
-      reviewState: "ready",
+      ...(owner.identityKind === "unproven" && input.decision !== "assign"
+        ? { identityKind: "reviewed" as const }
+        : {}),
+      // Consolidation does not waive other overlaps or unlock a conflicted provider.
+      reviewState:
+        input.decision === "assign" && overlaps[0]?.remaining
+          ? "identity_conflict"
+          : "ready",
       withdrawnAt: input.decision === "assign" ? owner.withdrawnAt : null,
       withdrawalImportId:
         input.decision === "assign" ? owner.withdrawalImportId : null,
       identityProof: proof,
-      version: owner.version + (createdOwner ? 0 : 1),
+      version: owner.version + 1,
       updatedAt: new Date(),
     })
     .where(eq(sourceOccurrence.id, owner.id))
     .returning();
-  const [updatedObservation] = await db
+  const updatedObservations = await db
     .select()
     .from(sourceTransactionRecord)
-    .where(eq(sourceTransactionRecord.id, observation.id));
+    .where(
+      inArray(
+        sourceTransactionRecord.id,
+        closure.map((record) => record.id),
+      ),
+    );
   const afterAliases = await db
     .select()
     .from(financialEvidenceAlias)
-    .where(eq(financialEvidenceAlias.observationId, observation.id));
-  if (!updatedOwner || !updatedObservation)
+    .where(
+      inArray(
+        financialEvidenceAlias.occurrenceId,
+        owners.map((item) => item.id),
+      ),
+    );
+  if (!updatedOwner || updatedObservations.length !== closure.length)
     return refuse("Source resolution did not retain its evidence rows.");
-  await auditEvidenceRows(tx, actor, "sourceOccurrence", beforeOwners, [
-    updatedOwner,
-  ]);
+  const ownerSnapshot = (
+    item: typeof sourceOccurrence.$inferSelect,
+    aliases: typeof beforeAliases,
+  ) => ({
+    ...item,
+    aliases: aliases.filter((alias) => alias.occurrenceId === item.id),
+  });
+  await auditEvidenceRows(
+    tx,
+    actor,
+    "sourceOccurrence",
+    beforeOwners.map((item) => ownerSnapshot(item, beforeAliases)),
+    [...(input.decision === "assign" ? [retired] : []), updatedOwner].map(
+      (item) => ownerSnapshot(item, afterAliases),
+    ),
+  );
+  const recordSnapshot = (
+    record: typeof sourceTransactionRecord.$inferSelect,
+    aliases: typeof beforeAliases,
+  ) => ({
+    id: record.id,
+    occurrenceId: record.occurrenceId,
+    aliases: aliases.filter((alias) => alias.observationId === record.id),
+  });
   await auditEvidenceRows(
     tx,
     actor,
     "sourceTransactionRecord",
-    [
-      {
-        id: observation.id,
-        occurrenceId: observation.occurrenceId,
-        aliases: beforeAliases,
-      },
-    ],
-    [
-      {
-        id: updatedObservation.id,
-        occurrenceId: updatedObservation.occurrenceId,
-        aliases: afterAliases,
-      },
-    ],
+    closure.map((record) => recordSnapshot(record, beforeAliases)),
+    updatedObservations.map((record) => recordSnapshot(record, afterAliases)),
   );
   await recordChange(tx, { kind: "source", categories: [] });
   return { source: owner.source, chargeKey: owner.shortcode };

@@ -3,6 +3,7 @@ import {
   entityFieldAssignmentKeys,
 } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { parseShortcode } from "@cubby/shared";
 import { getTableColumns, sql, type AnyColumn } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -30,6 +31,7 @@ export async function loadCurrentAssignmentFacts(
   db: RepositoryQueryInput,
   entity: ShortcodeEntity,
   ids: readonly string[],
+  projected: ReadonlyMap<string, CurrentReadFacts> = new Map(),
 ): Promise<ReadonlyMap<string, CurrentReadFacts>> {
   const table = alias(SHORTCODE_TABLE[entity], "assignment_facts");
   const storedColumns: Readonly<Record<string, AnyColumn | undefined>> =
@@ -67,25 +69,39 @@ export async function loadCurrentAssignmentFacts(
         ]
       : [];
   });
-  if (!ids.length || !slots.length) return new Map();
+  if (!ids.length) return new Map();
   const columns = slots.flatMap(({ key, value }) => [sql`${key}::text`, value]);
-  const rows = await repositoryQueries(db).execute(sql`
+  const rows = slots.length
+    ? await repositoryQueries(db).execute(sql`
     SELECT ${table.id} AS id, jsonb_build_object(${sql.join(columns, sql`, `)}) AS raw
     FROM ${SHORTCODE_TABLE[entity]} AS ${sql.identifier("assignment_facts")}
-    WHERE ${table.id} = ANY(${uuidArrayParam(ids)})`);
-  const facts = z.array(intentRow).parse(rows.rows);
+    WHERE ${table.id} = ANY(${uuidArrayParam(ids)})`)
+    : { rows: [] };
+  const stored = new Map(
+    z
+      .array(intentRow)
+      .parse(rows.rows)
+      .map((fact) => [fact.id, fact.raw]),
+  );
+  const facts = ids.map((id) => ({
+    id,
+    raw: { ...projected.get(id), ...stored.get(id) },
+  }));
   const references = model.fields.filter(
-    (field) => field.reference && keys.includes(field.key),
+    (field) => field.kind === "identifier" && field.reference,
   );
   const referenceIds = new Set<string>();
   for (const fact of facts)
     for (const field of references) {
       const value = fact.raw[field.key];
       if (value == null) continue;
-      for (const id of Array.isArray(value)
-        ? z.array(z.uuid()).parse(value)
-        : [z.uuid().parse(value)])
-        referenceIds.add(id);
+      const physical = Object.hasOwn(stored.get(fact.id) ?? {}, field.key);
+      for (const valueId of Array.isArray(value) ? value : [value]) {
+        const id = physical ? z.string().parse(valueId) : valueId;
+        if (typeof id !== "string" || parseShortcode(id)) continue;
+        const parsed = z.uuid().safeParse(id);
+        if (physical || parsed.success) referenceIds.add(z.uuid().parse(id));
+      }
     }
   if (referenceIds.size) {
     const identities = await repositoryQueries(db).execute(sql`
@@ -97,21 +113,24 @@ export async function loadCurrentAssignmentFacts(
         .parse(identities.rows)
         .map((identity) => [identity.id, identity.shortcode]),
     );
-    const codeFor = (id: string) => {
+    const codeFor = (value: unknown, physical: boolean) => {
+      const id = physical ? z.string().parse(value) : value;
+      if (typeof id !== "string" || parseShortcode(id)) return id;
       const code = codes.get(id);
-      if (!code)
+      if (!code && physical)
         throw new Error(
           `Current ${entity} assignment has no public reference identity`,
         );
-      return code;
+      return code ?? id;
     };
     for (const fact of facts)
       for (const field of references) {
         const value = fact.raw[field.key];
         if (value == null) continue;
+        const physical = Object.hasOwn(stored.get(fact.id) ?? {}, field.key);
         fact.raw[field.key] = Array.isArray(value)
-          ? z.array(z.uuid()).parse(value).map(codeFor)
-          : codeFor(z.uuid().parse(value));
+          ? value.map((id) => codeFor(id, physical))
+          : codeFor(value, physical);
       }
   }
   return new Map(facts.map((fact) => [fact.id, fact.raw]));

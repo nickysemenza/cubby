@@ -91,7 +91,7 @@ export const sourceSuggestionAutomaticEligible = (
 ) => sql`EXISTS (
   SELECT 1 FROM ${sourceObservationFacts} observed
   WHERE observed.id=${sql.identifier(alias)}."recordId" AND ${notDeleted("observed")}
-    AND observed."occurrenceId" IS NOT NULL AND observed."occurrenceId" IN (${sourceReadyOccurrenceIds})
+    AND observed."occurrenceId" IN (${sourceReadyOccurrenceIds})
     AND observed.current AND observed.disposition <> ${sourceTransactionRecordDisposition.enum.ignored} AND observed."supersededByRowId" IS NULL
     AND observed."chargeKey"=${sql.identifier(alias)}.data->>'chargeKey'
     AND (observed."withdrawnAt" IS NULL OR ${allowRetainedCorrection ? sql`${sql.identifier(alias)}.data->>'reviewReason' IS NOT NULL` : sql`${sql.identifier(alias)}.data->>'recommended'=${statementTransactionAction.enum.void}`})

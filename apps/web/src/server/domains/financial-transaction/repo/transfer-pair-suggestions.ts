@@ -62,7 +62,6 @@ import { createFinancialTransaction } from "~/server/domains/financial-transacti
 import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
 import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo";
 import {
-  sourceOccurrenceSuppressed,
   sourceObservations,
   sourceObservationFrom,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
@@ -491,7 +490,7 @@ async function loadStatementLegs(
     JOIN ${sourceObservations} r ON r.source = cs.source AND ${chargeKeyOf("r")} = cs."chargeKey"
       AND ${notDeleted("r")}
     JOIN "TransactionImport" si ON si.id = r."batchId"
-    WHERE NOT ${sourceOccurrenceSuppressed(sql`cs."occurrenceId"`)} AND NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NULL
+    WHERE NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NULL
       AND cs."acceptedTransactionId" IS NULL AND cs."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
     ORDER BY r."createdAt" DESC, r.id
   `);

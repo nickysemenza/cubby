@@ -15,7 +15,7 @@ CREATE INDEX IF NOT EXISTS "Suggestion_connection_target_ref_idx" ON "Suggestion
  WHERE served AND subject->>'scope' LIKE 'connection.%';
 `;
 
-/** Inactive statement revisions retain suppression and paid labels, so history lookups cannot use an active-only index. */
+/** Inactive statement revisions retain paid labels and review history, so label reuse cannot use an active-only index. */
 export const statementSuggestionDdl = () => `
 CREATE UNIQUE INDEX IF NOT EXISTS "Suggestion_statement_charge_key" ON "Suggestion" ((data->>'source'),(data->>'chargeKey')) WHERE family='statement_transaction' AND active;
 CREATE INDEX IF NOT EXISTS "Suggestion_statement_charge_history_idx" ON "Suggestion" ((data->>'source'),(data->>'chargeKey'),"createdAt" DESC,id DESC) WHERE family='statement_transaction';

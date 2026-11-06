@@ -1,13 +1,17 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import type { SourceTransactionRecordId } from "@cubby/schemas/identifiers";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { isTransaction, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sourceOccurrence, sourceTransactionRecord } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { createAppError } from "~/server/errors/app-error";
+
+import { auditEvidenceRows } from "./intake-audit";
 
 /** Retained replacement decisions and accepted owners protect their observation evidence. */
 export async function assertSourceTransactionRecordDeletionAllowed(
@@ -69,9 +73,7 @@ export async function lockSourceObservationRemoval(
     "source",
     observations.map((row) => row.source),
   );
-  const ownerIds = observations.flatMap((row) =>
-    row.occurrenceId ? [row.occurrenceId] : [],
-  );
+  const ownerIds = observations.map((row) => row.occurrenceId);
   if (!ownerIds.length) return;
   const before = await db
     .select()
@@ -103,4 +105,75 @@ export async function lockSourceObservationRemoval(
       "CONSTRAINT_VIOLATION",
       "Source ownership changed before removal; refresh the retained evidence and retry.",
     );
+}
+
+/** An unproven reservation survives deletion without keeping a current account assignment live. */
+export async function retireDeletedUnprovenOwners(
+  db: Database,
+  ids: readonly SourceTransactionRecordId[],
+  actor: ActorContext,
+): Promise<void> {
+  if (!ids.length) return;
+  const query = unwrapDb(db);
+  if (!isTransaction(query))
+    throw new Error(
+      "Unproven owner retirement must share the bank-record deletion transaction.",
+    );
+  const selected = await query
+    .select({ id: sourceTransactionRecord.occurrenceId })
+    .from(sourceTransactionRecord)
+    .where(inArray(sourceTransactionRecord.id, [...ids]));
+  if (!selected.length) return;
+  const candidates = await query
+    .select()
+    .from(sourceOccurrence)
+    .where(
+      and(
+        inArray(
+          sourceOccurrence.id,
+          selected.map((row) => row.id),
+        ),
+        eq(sourceOccurrence.identityKind, "unproven"),
+        notDeleted(sourceOccurrence),
+      ),
+    )
+    .orderBy(sourceOccurrence.id)
+    .for("update");
+  if (!candidates.length) return;
+  const live = await query
+    .select({ id: sourceTransactionRecord.occurrenceId })
+    .from(sourceTransactionRecord)
+    .where(
+      and(
+        inArray(
+          sourceTransactionRecord.occurrenceId,
+          candidates.map((owner) => owner.id),
+        ),
+        notDeleted(sourceTransactionRecord),
+      ),
+    );
+  const liveIds = new Set(live.map((row) => row.id));
+  const owners = candidates.filter((owner) => !liveIds.has(owner.id));
+  if (!owners.length) return;
+  const at = new Date();
+  const retired = await query
+    .update(sourceOccurrence)
+    .set({
+      deletedAt: at,
+      updatedAt: at,
+      version: sql`${sourceOccurrence.version}+1`,
+    })
+    .where(
+      inArray(
+        sourceOccurrence.id,
+        owners.map((owner) => owner.id),
+      ),
+    )
+    .returning();
+  await tombstoneEntityIdentities(
+    query,
+    owners.map((owner) => owner.id),
+    at,
+  );
+  await auditEvidenceRows(db, actor, "sourceOccurrence", owners, retired);
 }

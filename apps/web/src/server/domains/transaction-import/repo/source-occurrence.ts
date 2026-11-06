@@ -87,7 +87,7 @@ async function replacementDecisionClosure(
   return rows;
 }
 
-/** One current judgment owner. Unattested observations retain their own decisions; notes stay local. */
+/** Every bank record shares financial decisions through its owner; notes and reviewed version selections stay local. */
 export async function updateSourceObservationJudgments(
   tx: DrizzleTransaction,
   ids: readonly SourceTransactionRecordId[],
@@ -322,12 +322,8 @@ export async function updateSourceObservationJudgments(
       .where(eq(sourceObservationAnnotation.observationId, observation.id))
       .for("update");
     const values = {
-      ...(observation.occurrenceId === null
-        ? { ...financial, supersededByObservationId: patch.supersededByRowId }
-        : {}),
       // Retain the exact reviewed version selection as history without copying financial judgments.
-      ...(observation.occurrenceId !== null &&
-      successor?.occurrenceId === observation.occurrenceId
+      ...(successor?.occurrenceId === observation.occurrenceId
         ? { supersededByObservationId: successor.id }
         : {}),
       notes: patch.notes,

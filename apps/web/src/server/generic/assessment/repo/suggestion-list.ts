@@ -432,7 +432,13 @@ async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
     },
     assessmentIds: touching ? [...touching] : undefined,
   };
-  return { families, touching, matchedFamilies, familyScope };
+  return {
+    families,
+    touching,
+    matchedFamilies,
+    familyScope,
+    records: query.records,
+  };
 }
 
 /** Counts use the queue's eligibility and declared subjects, including either endpoint. */
@@ -447,16 +453,15 @@ export async function suggestionRecordCounts(
     });
   // Discovery already applies family, status and record scope. A badge may count
   // a row whose evidence went stale; opening the row revalidates it.
-  const { touching } = await scopedFamilyQuery(
+  const { touching, records } = await scopedFamilyQuery(
     db,
     suggestionListFilters.parse({ recordIds: input.recordIds }),
   );
-  const [only, ...others] = input.recordIds;
-  if (only && !others.length)
-    return suggestionRecordCountsOut.parse({
-      records: [{ id: only, pending: touching?.size ?? 0 }],
-    });
-  const refs = await readAssessmentRecordRefs(db, [...(touching ?? [])]);
+  const refs = await readAssessmentRecordRefs(
+    db,
+    [...(touching ?? [])],
+    [...new Set(records?.map((ref) => ref.entity))],
+  );
   const counts = new Map(input.recordIds.map((id) => [id, 0]));
   for (const references of refs.values())
     for (const record of references)

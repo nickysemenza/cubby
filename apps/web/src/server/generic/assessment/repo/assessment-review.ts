@@ -428,13 +428,20 @@ async function settleReview(
   let prediction:
     | Pick<
         typeof suggestionTable.$inferSelect,
-        "id" | "family" | "subject" | "judgment" | "producer" | "evidence"
+        | "id"
+        | "family"
+        | "subject"
+        | "judgment"
+        | "producer"
+        | "evidence"
+        | "fingerprint"
       >
     | undefined;
   if (input.assessmentId) {
     [prediction] = await getDb(db)
       .select({
         id: suggestionTable.id,
+        fingerprint: suggestionTable.fingerprint,
         family: suggestionTable.family,
         subject: suggestionTable.subject,
         judgment: suggestionTable.judgment,
@@ -510,6 +517,18 @@ async function settleReview(
     if (sourceState[0]?.held) input = { ...input, suppression: null };
   }
 
+  if (
+    input.suppression &&
+    (prediction.subject.kind === "statement_transaction" ||
+      prediction.subject.kind === "transfer_pair")
+  )
+    input = {
+      ...input,
+      suppression: {
+        ...input.suppression,
+        fingerprint: prediction.fingerprint,
+      },
+    };
   if (input.suppression) {
     if (
       !["dismissed", "wrong"].includes(input.verdict) ||

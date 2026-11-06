@@ -750,6 +750,13 @@
       "when": 1793930381775,
       "tag": "0106_transaction_amount_minor_units",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1793938298369,
+      "tag": "0107_source_judgment_owner_cutover",
+      "breakpoints": true
     }
   ]
 }

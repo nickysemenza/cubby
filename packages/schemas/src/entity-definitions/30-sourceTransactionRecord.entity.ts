@@ -179,11 +179,10 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "occurrenceId",
         kind: "identifier",
-        nullable: true,
         reference: { entity: "sourceOccurrence" },
         display: { list: false },
         validation: {
-          read: shortcodeSchema("sourceOccurrence").nullable(),
+          read: shortcodeSchema("sourceOccurrence"),
           create: null,
           update: null,
         },
@@ -474,8 +473,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "relation",
           sources: [
             {
-              label:
-                "Explicit source occurrence or retained observation decision",
+              label: "Current bank-record group decision",
             },
           ],
         },
@@ -507,8 +505,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "relation",
           sources: [
             {
-              label:
-                "Explicit source occurrence or retained observation decision",
+              label: "Current bank-record group decision",
             },
           ],
         },
@@ -545,8 +542,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "relation",
           sources: [
             {
-              label:
-                "Explicit source occurrence or retained observation decision",
+              label: "Current bank-record group decision",
             },
           ],
         },
@@ -581,8 +577,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "relation",
           sources: [
             {
-              label:
-                "Explicit source occurrence or retained observation decision",
+              label: "Current bank-record group decision",
             },
           ],
         },

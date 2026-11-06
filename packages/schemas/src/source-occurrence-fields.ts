@@ -6,11 +6,13 @@ import {
 import { shortcodeSchema } from "./identifier-fields";
 
 export const sourceOccurrenceIdentityKind = z.enum([
+  "unproven",
   "provider",
   "positioned",
   "reviewed",
 ]);
 export const sourceOccurrenceReviewState = z.enum([
+  "unproven",
   "ready",
   "identity_conflict",
   "judgment_conflict",
@@ -22,7 +24,7 @@ export const sourceOccurrenceReviewState = z.enum([
 const sourceResolutionReview = z.object({
   expectedDisposition: sourceTransactionRecordDisposition,
   expectedFactFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-  expectedOccurrenceVersion: z.number().int().positive().nullable(),
+  expectedOccurrenceVersion: z.number().int().positive(),
   expectedAcceptedTransactionId: shortcodeSchema(
     "financialTransaction",
   ).nullable(),

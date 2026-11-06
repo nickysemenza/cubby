@@ -33,7 +33,6 @@ import {
   buildPartialUpdateValues,
   notDeleted,
   unwrapDb,
-  uuidArrayParam,
   withTransaction,
 } from "~/server/db/helpers";
 import {
@@ -99,7 +98,7 @@ export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
     code: "preserve-source-account-history",
     effect: "preserve",
     description:
-      "Original observation judgments retain their account tombstone; current unresolved assignments are guarded before deletion.",
+      "Original observation judgments retain their account tombstone; current assignments are guarded by the occurrence edge.",
   },
 } as const satisfies IncomingEdgePolicy<
   "financialAccount",
@@ -722,20 +721,6 @@ export const updateFinancialAccount = defineMutationWriter({
 
 export const financialAccountRepository = defineRepository("financialAccount", {
   lifecycle: { delete: FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY },
-  deleteHooks: {
-    beforeDelete: async (tx, ids) => {
-      const { rows } = await unwrapDb(tx).execute<{ blocked: boolean }>(sql`
-        SELECT EXISTS (SELECT 1 FROM "SourceObservationAnnotation" annotation
-          JOIN "SourceTransactionRecord" observation ON observation.id=annotation."observationId"
-          WHERE observation."occurrenceId" IS NULL AND ${notDeleted("observation")}
-            AND annotation."accountId"=ANY(${uuidArrayParam(ids)})) AS blocked`);
-      if (rows[0]?.blocked)
-        throw createAppError(
-          "ENTITY_DELETE_BLOCKED",
-          "Unresolved source observations still retain an account assignment. Reassign those judgments before deleting the account.",
-        );
-    },
-  },
   scaffold: financialAccountScaffold,
   create: asActor(createFinancialAccount),
   update: asActor(updateFinancialAccount),

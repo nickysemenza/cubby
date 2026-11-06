@@ -16,7 +16,7 @@ import {
   makeRecipeInput,
 } from "~/server/testing/repo.fixtures";
 
-import { upsertRecipe } from "./crud";
+import { readRecipeById, upsertRecipe } from "./crud";
 
 describe("upsertRecipe", () => {
   const ctx = withTestDb();
@@ -77,6 +77,11 @@ describe("upsertRecipe", () => {
     });
 
     expect(allRecipes).toHaveLength(1);
+    // Relation counts carry reference metadata but remain numbers during page-fact hydration.
+    expect(await readRecipeById(ctx.db, firstRun.id)).toMatchObject({
+      id: firstRun.shortcode,
+      name: "Test Recipe Direct",
+    });
   });
 
   it("recovers from a concurrent create race instead of 500ing", async () => {

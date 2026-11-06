@@ -17,6 +17,7 @@ import {
 } from "@cubby/schemas/statement-suggestion";
 import { workQueueInput } from "@cubby/schemas/work-queue";
 import { DECISION_MODEL } from "@cubby/shared/ai/models";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
@@ -75,6 +76,7 @@ import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { renewJob } from "~/server/generic/jobs/jobs.fixtures";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   captureBackgroundQueue,
   drainStoredDerived,
@@ -2728,6 +2730,101 @@ describe("statement Transaction suggestions", () => {
       }
     },
   );
+
+  it("dismisses only the current financial recommendation and allows changed evidence", async () => {
+    await card(ctx);
+    const observed = rowInput({
+      providerTransactionId: "synthetic-revision-dismissal",
+    });
+    await record(ctx, [observed]);
+    const [legacyOwner] = await getDb(ctx.db)
+      .select({
+        id: sourceOccurrence.id,
+        version: sourceOccurrence.version,
+        reviewState: sourceOccurrence.reviewState,
+        currentObservationId: sourceOccurrence.currentObservationId,
+        acceptedTransactionId: sourceOccurrence.acceptedTransactionId,
+      })
+      .from(sourceOccurrence);
+    const [legacyRecord] = (await listSourceTransactionRecords(ctx.db, {}))
+      .data;
+    if (!legacyOwner || !legacyRecord)
+      throw new Error("Synthetic predecessor evidence missing");
+    // Frozen predecessor hash: removing a presentation field must not revive unchanged dismissed advice.
+    const predecessorOwnerHash = await sha256Hex(
+      canonicalJson(jsonSnapshot.parse({ ...legacyOwner, suppressed: false })),
+    );
+    const [proposal] = await buildChargeProposals(ctx.db, [
+      { source: legacyRecord.source, chargeKey: legacyRecord.chargeKey },
+    ]);
+    expect(proposal?.providerScopeFingerprint).toBe(predecessorOwnerHash);
+    await generate(ctx);
+    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
+    const [current] = await readPendingStatements(ctx);
+    const [bankRecord] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!current || !bankRecord)
+      throw new Error("Synthetic current financial recommendation missing");
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      operationId: "synthetic-current-dismissal",
+      assessmentId: current.assessmentId,
+      verdict: "dismissed",
+      intent: "history",
+      suppression: {
+        scope: "statement_transaction",
+        candidateKey: `${bankRecord.source}:${bankRecord.chargeKey}`,
+        fingerprint: null,
+      },
+      evidence: { note: "Dismiss this recommendation, not the bank event" },
+    });
+    const [dismissed] = await getDb(ctx.db)
+      .select()
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, current.assessmentId));
+    expect(dismissed?.suppression?.fingerprint).toBe(dismissed?.fingerprint);
+    await generate(ctx);
+    expect(await readPendingStatements(ctx)).toEqual([]);
+    const [retainedDismissal] = await getDb(ctx.db)
+      .select()
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, current.assessmentId));
+    expect(retainedDismissal).toMatchObject({
+      active: true,
+      status: "resolved",
+      data: { evidenceFingerprint: proposal?.evidenceFingerprint },
+    });
+    expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
+    await getDb(ctx.db)
+      .update(suggestionTable)
+      .set({
+        producer: sql`jsonb_set(${suggestionTable.producer},'{revision}',to_jsonb(${"synthetic-old-label-revision"}::text))`,
+      })
+      .where(eq(suggestionTable.id, current.assessmentId));
+    await generate(ctx);
+    expect(await readPendingStatements(ctx)).toEqual([]);
+    await record(
+      ctx,
+      [
+        {
+          ...observed,
+          rowPosition: 10,
+          providerAmount: -45.5,
+          rawDescription: "SYNTHETIC REVISED CHARGE",
+        },
+      ],
+      { fingerprint: "synthetic-dismissal-revision" },
+    );
+    await generate(ctx);
+    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
+    const pending = await readPendingStatements(ctx);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.assessmentId).not.toBe(current.assessmentId);
+    expect(
+      (await listSourceTransactionRecords(ctx.db, {})).data.every(
+        (row) => row.disposition === "open",
+      ),
+    ).toBe(true);
+    expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
+  });
 
   // Observation-only evidence churn must not discard paid labels or ask the
   // model again; the rebuilt judgment still uses the current evidence fence.

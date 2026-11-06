@@ -43,12 +43,12 @@ export const { definition, readSchemas } = defineEntityModel(
       domain: "finance",
       nativeBrowse: false,
       description:
-        "One proven event identity within its original source scope.",
+        "One bank-record judgment owner; unproven identity stays held.",
       icons: { phosphor: "Receipt", sfSymbol: "doc.text", emoji: "🧾" },
       emptyState: {
-        title: "No proven occurrences",
+        title: "No bank record groups",
         description:
-          "Source intake retains unattested observations separately.",
+          "Imported bank records share decisions only after source proof or explicit review.",
       },
       list: { savedViews: [] },
       detail: {
@@ -334,7 +334,11 @@ export const { definition, readSchemas } = defineEntityModel(
         { column: "dispositionReason", nullClause: true },
         {
           name: "SourceOccurrence_identity_check",
-          sql: "({identityKind} = 'provider' AND {providerIdentity} IS NOT NULL AND {physicalImportId} IS NULL AND {physicalPosition} IS NULL) OR ({identityKind} = 'positioned' AND {providerIdentity} IS NULL AND {physicalImportId} IS NOT NULL AND {physicalPosition} > 0) OR ({identityKind} = 'reviewed' AND {providerIdentity} IS NULL AND {physicalImportId} IS NULL AND {physicalPosition} IS NULL)",
+          sql: "({identityKind} = 'provider' AND {providerIdentity} IS NOT NULL AND {physicalImportId} IS NULL AND {physicalPosition} IS NULL) OR ({identityKind} = 'positioned' AND {providerIdentity} IS NULL AND {physicalImportId} IS NOT NULL AND {physicalPosition} > 0) OR ({identityKind} IN ('reviewed', 'unproven') AND {providerIdentity} IS NULL AND {physicalImportId} IS NULL AND {physicalPosition} IS NULL)",
+        },
+        {
+          name: "SourceOccurrence_unproven_check",
+          sql: "({identityKind} = 'unproven') = ({reviewState} = 'unproven') AND ({identityKind} <> 'unproven' OR {acceptedTransactionId} IS NULL)",
         },
         { name: "SourceOccurrence_version_check", sql: "{version} > 0" },
         {
@@ -370,6 +374,13 @@ export const { definition, readSchemas } = defineEntityModel(
           deriveSchema: true,
           stored: true,
           placeholder: "Filter source state...",
+        },
+        {
+          columnId: "supersededByOccurrenceId",
+          kind: "idMulti",
+          brandRef: { entity: "sourceOccurrence" },
+          deriveSchema: true,
+          placeholder: "Filter replacement group...",
         },
       ],
     },
