@@ -69,14 +69,14 @@ it("preserves signed receipt amounts and source relationships while refusing unp
       [run],
     );
     await expect(
-      migrateDatabase(db, { through: "0099_payment_evidence_minor_units" }),
+      migrateDatabase(db, { through: "0100_payment_evidence_minor_units" }),
     ).rejects.toThrow("Financial refresh has unfinished steps");
     await client.query(
       `UPDATE "Run" SET status='failed',"failureCode"='user_cancelled',"endedAt"=now() WHERE id=$1`,
       [run],
     );
     await expect(
-      migrateDatabase(db, { through: "0099_payment_evidence_minor_units" }),
+      migrateDatabase(db, { through: "0100_payment_evidence_minor_units" }),
     ).rejects.toThrow("Financial refresh has unfinished steps");
     await client.query(
       `UPDATE "Job" SET state='cancelled' WHERE key='synthetic-payment-cancel'`,
@@ -85,7 +85,7 @@ it("preserves signed receipt amounts and source relationships while refusing unp
       `UPDATE "PurchasePaymentEvidence" SET amount=10.010000000000002 WHERE "evidenceIndex"=0`,
     );
     await expect(
-      migrateDatabase(db, { through: "0099_payment_evidence_minor_units" }),
+      migrateDatabase(db, { through: "0100_payment_evidence_minor_units" }),
     ).rejects.toThrow("independent IEEE");
     expect(
       (
@@ -97,7 +97,7 @@ it("preserves signed receipt amounts and source relationships while refusing unp
     await client.query(
       `UPDATE "PurchasePaymentEvidence" SET amount=10.01 WHERE "evidenceIndex"=0`,
     );
-    await migrateDatabase(db, { through: "0099_payment_evidence_minor_units" });
+    await migrateDatabase(db, { through: "0100_payment_evidence_minor_units" });
     expect(
       (
         await client.query(
