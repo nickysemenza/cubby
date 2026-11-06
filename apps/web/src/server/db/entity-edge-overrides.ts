@@ -74,7 +74,6 @@ import {
   orderMail,
   orderMailAttachment,
   photoGroupProposal,
-  photoGroupSourceEvidence,
   photoRunImage,
   runPushRegistration,
   runStep,
@@ -1863,14 +1862,6 @@ export const ENTITY_EDGE_OVERRIDES = {
       role: "owned-child",
       label: "prepared orders",
       description: "Immutable prepared order evidence captured by this run.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PhotoGroupSourceEvidence.runId": {
-      column: photoGroupSourceEvidence.runId,
-      role: "owned-child",
-      label: "retained photo source evidence",
-      description:
-        "Original manufacturer evidence retained when this run's photo groups are replaced.",
       liveness: { kind: "must-target-live" },
     },
     "PhotoGroupProposal.runId": {

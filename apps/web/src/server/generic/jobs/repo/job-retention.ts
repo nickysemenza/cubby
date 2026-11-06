@@ -1,10 +1,9 @@
 import { jobState } from "@cubby/schemas/job";
-import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, or } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb, withTransaction } from "~/server/db/helpers";
-import { job, jobInvalidationCapture } from "~/server/db/retained-tables";
-import { drainPending } from "~/server/generic/jobs/repo/work-items";
+import { withTransaction } from "~/server/db/helpers";
+import { job } from "~/server/db/retained-tables";
 import { FAILURE_LOOKBACK_DAYS } from "~/server/generic/jobs/repo/work-status";
 
 const DAY_MS = 24 * 60 * 60_000;
@@ -48,10 +47,6 @@ export async function pruneFinishedJobs(
               olderThan(FAILED_RETENTION_MS),
             ),
           ),
-          // Producers hold a key-share lock through their wake transaction;
-          // a committed wake or pending item keeps its execution identity.
-          sql`NOT EXISTS (SELECT 1 FROM "JobInvalidationCapture" c WHERE c.key = ${job.key} AND NOT c.observed)`,
-          sql`NOT ${drainPending(sql`${job.key}`)}`,
         ),
       )
       .limit(limit)
@@ -62,21 +57,4 @@ export async function pruneFinishedJobs(
       .returning({ id: job.id });
     return deleted.length;
   });
-}
-
-/** Delete one bounded batch of invalidation captures already observed by a Job. */
-export async function pruneObservedInvalidationCaptures(
-  db: Database,
-  { limit }: { limit: number },
-): Promise<number> {
-  const doomed = getDb(db)
-    .select({ id: jobInvalidationCapture.id })
-    .from(jobInvalidationCapture)
-    .where(eq(jobInvalidationCapture.observed, true))
-    .limit(limit);
-  const deleted = await getDb(db)
-    .delete(jobInvalidationCapture)
-    .where(inArray(jobInvalidationCapture.id, doomed))
-    .returning({ id: jobInvalidationCapture.id });
-  return deleted.length;
 }

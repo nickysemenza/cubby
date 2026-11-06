@@ -21,7 +21,6 @@ import {
   retryRunStep,
   type StepPlan,
 } from "~/server/domains/run/service/step-run";
-import { deleteWorkItems } from "~/server/generic/jobs/jobs.fixtures";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
@@ -196,8 +195,6 @@ describe("maintenance Run", () => {
       UPDATE "Product" SET "deletedAt" = now() WHERE id = ${item.entityId}::uuid`);
     await getDb(ctx.db).execute(sql`
       UPDATE "Entity" SET "deletedAt" = now() WHERE id = ${item.entityId}::uuid`);
-    // As if the removal predated the triggers: nothing is marked.
-    await deleteWorkItems(ctx.db);
     const id = await startPass();
     await drive(id, only("derived-refresh", {}));
     const [document] = (

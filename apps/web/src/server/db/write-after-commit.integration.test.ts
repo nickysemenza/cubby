@@ -22,7 +22,6 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { jobInvalidationCaptureCounts } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
@@ -137,13 +136,10 @@ describe("repository writes publish after their commit", () => {
 
   it("coalesces source wakes across savepoints without enrolling work from notifications", async () => {
     await recordChange(ctx.db, { kind: "source", categories: ["task"] });
-    // Captures append input without changing the execution Job.
-    const generations = () => jobInvalidationCaptureCounts(ctx.db);
     const executions = async () =>
       (
         await readJobs(ctx.db, { kind: "derived.drain" }, { order: ["id"] })
       ).map(({ id, generation, state }) => ({ id, generation, state }));
-    const before = await generations();
     const executionsBefore = await executions();
     const published = recordingQueue();
     await withTransactionDatabase(ctx.db, async (outer) => {
@@ -168,15 +164,12 @@ describe("repository writes publish after their commit", () => {
       });
       expect(published).toEqual([]);
     });
-    expect(await generations()).toEqual(before);
     expect(await executions()).toEqual(executionsBefore);
     expect(published).toHaveLength(1);
-    const afterSource = await generations();
     await recordChange(ctx.db, {
       kind: "projection",
       categories: ["search", "relatedData"],
     });
-    expect(await generations()).toEqual(afterSource);
     expect(published).toHaveLength(1);
   });
 

@@ -32,7 +32,7 @@ import {
 } from "~/server/db/repository-access.boundary";
 import { entityEmbedding, searchDocument } from "~/server/db/retained-tables";
 import type { DrainStore } from "~/server/generic/jobs/drain-store";
-import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
+import type { DrainItem } from "~/server/generic/jobs/drain-store";
 
 const EMBEDDING_REFRESH_TARGET = "embedding.refresh";
 const EMBEDDING_CLEANUP_TARGET = "embedding.cleanup";
@@ -52,7 +52,7 @@ const item = (
   ref: string,
   ticket: number,
   attempts: number,
-): WorkItem => ({ target, ref, ticket, priority: 0, attempts });
+): DrainItem => ({ target, ref, ticket, priority: 0, attempts });
 
 /**
  * Owe a fresh embedding for these sources. A page in flight keeps its lease: it can
@@ -88,7 +88,7 @@ export async function markEmbeddingRefresh(
 export async function postponeEmbeddingRefresh(
   tx: Database,
   store: EmbeddingRefreshStore,
-  items: readonly WorkItem[],
+  items: readonly DrainItem[],
   until: Date,
 ) {
   for (const entry of items)
@@ -100,9 +100,9 @@ export async function postponeEmbeddingRefresh(
 
 export type EmbeddingRefreshStore = DrainStore & {
   /** The page holds this source's lease and the intent it claimed is still the latest. */
-  current(entry: WorkItem): SQL | undefined;
+  current(entry: DrainItem): SQL | undefined;
   /** Sources this page still holds, whatever was re-marked since: what its receipts may record. */
-  holding(tx: Database, items: readonly WorkItem[]): Promise<WorkItem[]>;
+  holding(tx: Database, items: readonly DrainItem[]): Promise<DrainItem[]>;
   /** Give up what this page still holds; a re-mark it could not settle is then claimable. */
   release(db: Database): Promise<void>;
 };
@@ -112,13 +112,13 @@ const leaseFree = () =>
 
 /** One page's view of the refresh work; its `token` is that page's execution lease. */
 export function embeddingRefreshStore(token: string): EmbeddingRefreshStore {
-  const held = (entry: WorkItem) =>
+  const held = (entry: DrainItem) =>
     and(
       eq(searchDocument.entityId, entry.ref),
       eq(searchDocument.embeddingLeaseToken, token),
       isNull(searchDocument.deletedAt),
     );
-  const current = (entry: WorkItem) =>
+  const current = (entry: DrainItem) =>
     and(held(entry), eq(searchDocument.embeddingGeneration, entry.ticket));
   const locked = (tx: Database, condition: SQL | undefined) =>
     getDb(tx)

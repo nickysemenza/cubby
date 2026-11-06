@@ -3,17 +3,14 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { image, imageProcessingJob } from "~/server/db/schema";
 import { createTransparentDerivativeAndJob } from "~/server/domains/image-processing/repo/image-processing";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import {
-  JOB_RETENTION_MS,
-  pruneFinishedJobs,
-} from "~/server/generic/jobs/repo/job-retention";
-import { enqueueJob, wakeJob } from "~/server/generic/jobs/repo/producer";
+import { JOB_RETENTION_MS } from "~/server/generic/jobs/repo/job-retention";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 
 import { enrollQueueMaintenance } from "./job-maintenance";
@@ -77,43 +74,6 @@ describe("Job maintenance", () => {
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, jobId));
     expect(processing?.state).toBe("pending");
-  });
-
-  it("keeps a drain while a producer commits a fresh wake", async () => {
-    const input = {
-      key: "synthetic.retention.wake",
-      kind: "synthetic.retention",
-      input: {},
-    };
-    const saved = await enqueueJob(ctx.db, input);
-    await updateJobs(
-      ctx.db,
-      { id: saved.id },
-      {
-        state: "completed",
-        updatedAt: new Date(Date.now() - JOB_RETENTION_MS - 60_000),
-      },
-    );
-    const woken = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    const producer = withTransactionDatabase(ctx.db, async (tx) => {
-      await wakeJob(tx, input);
-      woken.resolve();
-      await release.promise;
-    });
-    try {
-      await woken.promise;
-      expect(await pruneFinishedJobs(ctx.db, { limit: 100 })).toBe(0);
-    } finally {
-      release.resolve();
-      await producer;
-    }
-    expect(await pruneFinishedJobs(ctx.db, { limit: 100 })).toBe(0);
-    expect(
-      await readJobs(ctx.db, { id: saved.id }).then((rows) =>
-        rows.map(({ id }) => ({ id })),
-      ),
-    ).toEqual([{ id: saved.id }]);
   });
 
   it("prunes terminal Jobs only after their retention window", async () => {

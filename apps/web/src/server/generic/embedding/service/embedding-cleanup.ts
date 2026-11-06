@@ -13,7 +13,7 @@ import {
   productionVectorStore,
   type VectorStorePort,
 } from "~/server/generic/embedding/service/semantic/vector-store";
-import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
+import type { DrainItem } from "~/server/generic/jobs/drain-store";
 import { defineDrain } from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
 
@@ -21,7 +21,7 @@ const PAGE_LIMIT = 100;
 const EMBEDDING_BACKOFF = { baseMs: 60_000, maxMs: 15 * 60_000 };
 
 type CleanupPage = {
-  receipts: Map<WorkItem, string>;
+  receipts: Map<DrainItem, string>;
 };
 
 const checkSignal = (signal: AbortSignal) => {
@@ -31,7 +31,7 @@ const checkSignal = (signal: AbortSignal) => {
 async function prepareCleanupPage(
   store: VectorStorePort,
   db: Database,
-  items: readonly WorkItem[],
+  items: readonly DrainItem[],
   context: JobContext,
 ) {
   const prepared: CleanupPage = { receipts: new Map() };
@@ -46,7 +46,7 @@ async function prepareCleanupPage(
     embeddingCleanupStore.lock(tx, candidates),
   );
   const activeSet = new Set(active);
-  const deletable: WorkItem[] = [];
+  const deletable: DrainItem[] = [];
   for (const item of candidates) {
     if (!activeSet.has(item)) continue;
     if (await assertEmbeddingArtifactCanBeDeleted(db, item.ref))

@@ -17,48 +17,12 @@ supplies the lane and internal-kind flag. Work shows on the Work page and throug
 
 ## Coarse Jobs and work items
 
-A Job is a unit of execution, not a unit of household work. Work that fans out
-over many records is a **drain Job** over **work items** in the generic
-`WorkItem` table (`generic/jobs/repo/work-items.ts`): one Job per kind and
-feature, and one item per `(target, ref)` it still owes. Drains:
-
-| Drain Job key   | Kind            | Item `target`  | Item `ref` |
-| --------------- | --------------- | -------------- | ---------- |
-| `derived:drain` | `derived.drain` | derived family | source row |
-
-An item holds scheduling and refresh metadata: `drain` (its owning Job key), a fresh
-`ticket` per mark, `priority` (0 for member and Run demand, 1 for automatic
-work), `readyAt`, `attempts` and `lastError`. Domain rows keep outcomes.
-Nullable `reason` records one trigger for the current ticket, without record
-names, values or identifiers. Source marks record their operation; fanout carries
-that reason or a broader source description when several causes coalesce.
-Dependency publications, clock expiry and consistency checks use their owning
-producer's description. A new ticket replaces its reason; retries and `keep`
-preserve it. Existing work can have no recorded trigger.
-Nullable `waitCause` and `waitStartedAt` record an explicit attempt-free wait
-(`workWaitCause`, one cause so far: `search_coverage`); `readyAt` remains its known
-deadline. `reason` keeps why refresh was requested and `lastError` keeps retained
-history, but a stored wait outranks that error in every status read. A new ticket
-or a real failure clears the wait; a retry that still waits keeps its start.
-Nullable execution observations record a page's lease token, exact item ticket
-and start time. They grant no authority: readers show running only for the
-same ticket under a current unexpired Job lease, with no later postponement.
-Queued, future-waiting and failed items remain distinct, and an item with a stored
-wait never counts as failed. Activity's derived
-backlog reports their observed per-value counts and next known attempt without
-adding idle polling or assuming an empty queue means Neon is suspended.
-Execution observations belong to public refresh metadata. Derived computations
-that depend on owed work use the owed-item reader without joining Job state;
-an observation must not add Job lifecycle changes to a calculation's inputs.
-`markWork` upserts items in the producer's transaction and wakes the drain
-Job; `markWorkFrom` marks the rows a SQL source selects in one statement,
-returning per-target counts (and a bounded ref sample) so a large fanout never
-reaches the Worker. A re-mark during a page takes a new ticket, so the page
-clears only the ticket it claimed and the item stays owed. The drain Job's
-lease fences every item it claimed; items have no leases of their own.
-`work-items.ts` is the producer and adapter interface (marking, pending and
-ticket predicates, backlog); claiming, clearing and backoff
-(`repo/work-claims.ts`) belong to `defineDrain` alone.
+A Job is a unit of execution, not a unit of household work. Work that fans out over many
+records is a **drain** over **items** held on the rows that owe them: `AiEvaluation`,
+`SearchDocument`, `EntityEmbedding` and `ImageProcessingJob` each supply a `DrainStore`
+(`generic/jobs/drain-store.ts`). An item's ticket says which intent a page may settle, so a
+re-mark during a page takes a new ticket, and the page clears only what it claimed. The
+derived rebuild is a resumable pass with its own row, not items.
 
 `defineDrain` (`generic/jobs/service/drain.ts`) is the one claim → prepare →
 publish helper. It observes items by priority, readiness and ticket, keeps
@@ -87,9 +51,6 @@ transaction returns its own counts, and the page adds them after it commits, so
 a rollback or SERIALIZABLE replay inflates nothing. The three do not overlap.
 `processed` also includes items a page declined or retained, which have no
 outcome yet.
-The production derived drain can use two such passes under the same Job claim:
-it first expands fanouts from the admitted ordered prefix, then observes direct
-work under the [independent expansion and preparation budgets](entities.md#background-derived-data).
 Busy fanouts stay owed. A direct-only prefix keeps the ordinary single pass.
 Neither pass finishes the Job independently;
 their counters combine and any processed work keeps the page unfinished.
@@ -145,10 +106,7 @@ waits on; every client (web, Apple, CLI, MCP) and every rollup reads it.
   `expired` once the lease lapsed unreclaimed. The holder is `Job.leaseHolder`
   (`{name, deviceId}`), which an external executor records at hand-off;
   generic code never reads a domain's attempt rows.
-- `backing_off`: a failure backoff or provider wait (`cause`) until a time. A
-  healthy drain sleeping until its next item reports that item's explicit wait as
-  `cause`, read from the WorkItem and described through `WORK_WAIT_CAUSE_TEXT`; the
-  Job stores no typed wait, so a new mark still wakes it for healthy siblings.
+- `backing_off`: a failure backoff or provider wait (`cause`) until a time.
 - `blocked`: waiting on other work, such as a device preparing AVIF input.
 - `paused`: stopped by a member or its Run.
 - `update_required`: reserved for an Apple device that must update; the
@@ -195,12 +153,9 @@ Declared entity fields carry the same facts to web, Apple and MCP:
   `appleIntelligenceAvailable` (the hello's actual-image description
   availability, null until a hello reports it).
 
-Retention skips Jobs with pending WorkItems or unobserved wakes. A producer
-holds the existing Job's key-share lock through the wake transaction, so
-retention either skips it or deletes it before the producer reads and recreates
-it. A resumed Run's evaluation item is rechecked under Run locks
-before a prepared parked item can be cleared. Embedding publication takes
-source locks before WorkItem locks, matching source producers.
+A resumed Run's evaluation item is rechecked under Run locks before a prepared parked item
+can be cleared. Embedding publication takes source locks before item locks, matching source
+producers.
 
 ## Selection and admission
 
@@ -361,11 +316,9 @@ everything else:
 Image processing owns its own execution on `ImageProcessingJob`, with no Job
 row: see [image processing](#image-processing). Producers use
 `repo/producer.ts`, member and Run controls `repo/operator.ts`, drains
-`defineDrain` and `repo/work-items.ts`, and readers `repo/job-reads.ts` (rows
-by identity, a Run's live lease, stopped Run executions). The queue core,
-selection and item claiming (`repo/queue.ts`, `repo/work-claims.ts`),
-`db/job-schema.ts` and the `Job`, `JobInvalidationCapture`,
-`WorkItem` and `WorkTicket` table objects are private to
+`defineDrain`, and readers `repo/job-reads.ts` (rows
+by identity, a Run's live lease, stopped Run executions). The queue core
+and selection (`repo/queue.ts`), `db/job-schema.ts` and the `Job` table object are private to
 `generic/jobs`, tests included: oxlint's `no-restricted-imports` and
 `no-restricted-properties` exempt only `generic/jobs` and the files that
 declare or aggregate the tables. Tests seed, age, lock, claim and inspect that
@@ -374,30 +327,11 @@ migrations checks, test setup) import `db/drizzle-schema.ts`.
 
 ## Wakes
 
-A source capture appends its own row to `JobInvalidationCapture` in the
-save's transaction (`wakeJob`; the generated derived mark function captures
-`derived:drain` once per writing transaction, ADR 0021). It never updates
-another capture or the Job's execution row, so concurrent writers share no
-mutable counter, and a rolled-back save leaves no capture. A first wake
-creates the Job.
-`wakeJob` joins the source transaction through either its native handle or a
-transaction-backed Database facade. A standalone wake owns its transaction;
-first-enrollment collision retries retain their explicit savepoints.
-
-A Job is due when it is queued and not waiting, or completed, and has an
-unobserved capture. A claim acknowledges exactly the captures visible in its
-transaction; there is no timestamp or sequence frontier, so a capture that
-commits later stays pending. Wakes never restart a pass: a running pass
-finishes and publishes its paid outputs, and the pending capture makes the Job
-due again. `enqueueJob({ invalidate: true })` is the only restart: it bumps the
-generation and clears the lease, so the old pass fails its fence. Catch-up
-(`repeatJob`) requeues only a completed Job no capture has woken.
-Retention deletes only acknowledged captures.
-
-Retained completed Jobs outnumber live ones, so the due predicate tests
-pending captures as key membership in the few distinct pending keys; a
-BitmapOr reaches woken Jobs through `Job_key_unique` and live ones through
-`Job_due_idx`.
+A Job is due when it is queued or in backoff and its time has come, or when its lease has
+expired. A wake is only a Queue message that makes the drain look sooner (`wakeJobs`, `wakeAt`);
+it carries no durable state, and the hourly cron recovers a lost one. `enqueueJob({ invalidate:
+true })` is the only restart: it bumps the generation and clears the lease, so the old pass
+fails its fence. Catch-up (`repeatJob`) requeues a completed Job.
 
 ## Retries
 
@@ -405,10 +339,9 @@ Claiming is not an attempt; a failure is, and so is reclaiming an expired
 lease (the previous executor vanished mid-pass, and a crash loop must still
 exhaust). A failed Job backs off by its policy, `baseMs · 2^(failures - 1)` up
 to `maxMs`, and fails after `maxAttempts`; `maxAttempts: null` (drains, image
-processing, maintenance) never exhausts. A woken completed Job starts a fresh
-pass with a fresh budget. `releaseJobClaim` hands a claim back without an
-attempt, and deferrals never count. Work items keep their own attempts and
-backoff inside a drain.
+processing, maintenance) never exhausts. `releaseJobClaim` hands a claim back without an
+attempt, and deferrals never count. Drain items keep their own attempts and
+backoff.
 
 Retry now (`job.retryNow`, `retryJobsNow`) makes a filtered set due at once:
 backoff and provider waits clear, prior errors stay, failed and cancelled Jobs
@@ -610,7 +543,7 @@ Explicit member retries retain their `retryEvaluationId` receipt.
 
 ### Embedding execution
 
-Embeddings run on two registered drains with no Job or `WorkItem` row
+Embeddings run on two registered drains with no Job row
 (`generic/background/drains.ts`). A `SearchDocument` owes a fresh embedding when
 `embeddingDueAt` is set; a failure backs off on the document, and Vectorize
 visibility polling reschedules it without spending an attempt. An `EntityEmbedding`
@@ -909,7 +842,7 @@ eligibility does not imply a human review queue.
 
 ## Deadline scheduling and idle recovery
 
-PostgreSQL owns Jobs, WorkItems, claims, progress, member pauses and retry policy.
+PostgreSQL owns Jobs, drain items, claims, progress, member pauses and retry policy.
 The queue executes ready work immediately; subsequent pages continue while work
 is runnable. Kind capacity refusals do not themselves generate immediate wake loops.
 Nothing but Postgres holds a deadline. At the end of a round the drains and the Job
@@ -920,9 +853,7 @@ invocation recovers without waiting for the cron. A wake cannot be cancelled, so
 stale one touches Postgres once and finds nothing due. A process dying between commit
 and its post-commit signal recovers on app-open or the next hourly tick.
 
-Derived drains retain WorkItem retry deadlines rather than completing and relying
-on minute enrollment. Daily reconciliation pages through all 24 buckets. Queue
-maintenance finishes after bounded repair/retention pages instead of repeating every
+Queue maintenance finishes after bounded repair/retention pages instead of repeating every
 five minutes. Existing Job identities, cursors, tickets, errors and stops survive.
 
 The cron fires hourly and drains whatever is due, so it is the timer for work due

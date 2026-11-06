@@ -93,12 +93,10 @@ export const repositoryOwners = [
   "src/server/generic/jobs/repo/queue.ts",
   "src/server/generic/jobs/repo/producer.ts",
   "src/server/generic/jobs/repo/job-reads.ts",
-  "src/server/generic/jobs/repo/work-items.ts",
   "src/server/generic/jobs/limits.ts",
   "src/server/generic/jobs/kind-policy.ts",
   "src/server/entity-kernel/repo/entity-identity-writer.ts",
   "src/server/generic/jobs/context.ts",
-  "src/server/generic/jobs/repo/work-claims.ts",
   "src/server/errors/db-errors.ts",
   "src/server/operation-runtime/operation.contract.ts",
 

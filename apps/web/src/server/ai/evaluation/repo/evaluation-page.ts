@@ -4,11 +4,11 @@ import type { z } from "zod";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import type { aiEvaluation } from "~/server/db/retained-tables";
-import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
+import type { DrainItem } from "~/server/generic/jobs/drain-store";
 
 /** Pages are transient; each slot keeps its drain item and frozen evidence. */
 export type EvaluationPageTarget = {
-  item: WorkItem;
+  item: DrainItem;
   evaluation: typeof aiEvaluation.$inferSelect;
   target: AiEvaluationTarget;
 };

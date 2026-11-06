@@ -22,7 +22,7 @@ import {
   saveMailboxMetadata,
 } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import * as changes from "~/server/generic/changes/repo/change";
-import { readWorkItems, renewJob } from "~/server/generic/jobs/jobs.fixtures";
+import { renewJob } from "~/server/generic/jobs/jobs.fixtures";
 import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { systemPrincipal } from "~/server/http/authenticate";
@@ -70,7 +70,7 @@ const abortedAttempt = z.object({
   retry: z.boolean(),
 });
 // Competing source and Job lifecycle writes use a second client after intake's
-// snapshot. Generated marks retain derived work without replacing the drain Job.
+// snapshot.
 describe("finance.record source and Job lifecycle contention", () => {
   const ctx = withTestDb();
   async function prepareCloudCompletion() {
@@ -117,16 +117,6 @@ describe("finance.record source and Job lifecycle contention", () => {
     const before = await getDb(ctx.db).execute(
       sql`SELECT key, generation, xmin::text AS xmin FROM "Job" ORDER BY key`,
     );
-    const marks = async () =>
-      (await readWorkItems(ctx.db)).map(({ target, ref, ticket }) => ({
-        target,
-        ref,
-        ticket,
-      }));
-    const marksBefore = await marks();
-    const invalidationsBefore = await getDb(ctx.db).execute(
-      sql`SELECT id, key FROM "JobInvalidationCapture" ORDER BY id`,
-    );
     const invalidate = changes.recordChange;
     const capture = vi
       .spyOn(changes, "recordChange")
@@ -160,15 +150,7 @@ describe("finance.record source and Job lifecycle contention", () => {
           )
         ).rows,
       ).toEqual(before.rows);
-      expect(await marks()).toEqual(marksBefore);
       // The rolled-back capture left no wake behind.
-      expect(
-        (
-          await getDb(ctx.db).execute(
-            sql`SELECT id, key FROM "JobInvalidationCapture" ORDER BY id`,
-          )
-        ).rows,
-      ).toEqual(invalidationsBefore.rows);
       expect(
         (
           await getDb(ctx.db).execute(sql`SELECT

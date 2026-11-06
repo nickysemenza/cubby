@@ -23,8 +23,8 @@ import {
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { repositoryBeforeCommit } from "~/server/db/repository-access.boundary";
 import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";
+import type { DrainItem } from "~/server/generic/jobs/drain-store";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
-import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 import type { DrainContext } from "~/server/generic/jobs/service/drain";
 
 import type {
@@ -62,7 +62,7 @@ export type ClaimedAiEvaluation = typeof aiEvaluation.$inferSelect & {
 /** Bind one item to its live owner; its lease fences every later write. */
 export async function claimAiEvaluation(
   context: Pick<DrainContext, "claim" | "fenced">,
-  item: WorkItem,
+  item: DrainItem,
   requestingRunId?: string,
 ): Promise<ClaimedAiEvaluation | null> {
   return context.fenced(async (tx) => {

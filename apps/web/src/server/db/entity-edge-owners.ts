@@ -36,7 +36,6 @@ import {
   mealRecipe,
   mealRecipePortion,
   photoGroupProposal,
-  photoGroupSourceEvidence,
   photoRunImage,
   runStep,
   productConversionCoverage,
@@ -124,7 +123,6 @@ export const ENTITY_EDGE_OWNERS = {
   PhotoRunImage: { owner: photoRunImage.runId },
   RunStep: { owner: runStep.runId },
   PhotoGroupProposal: { owner: photoGroupProposal.runId },
-  PhotoGroupSourceEvidence: { owner: photoGroupSourceEvidence.runId },
   ImageDerivative: { owner: imageDerivative.imageId },
   // An Image job's attempts, events and submission memberships belong to the job.
   ImageProcessingAttempt: { owner: imageProcessingAttempt.jobId },
