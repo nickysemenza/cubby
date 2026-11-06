@@ -37,11 +37,6 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
-import {
-  currentTransferPairs,
-  transferPairEvidenceFingerprint,
-  transferPairStateData,
-} from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import { type StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { suggestionCounts } from "~/server/generic/suggestions/repo/suggestion-review";
 
@@ -357,9 +352,8 @@ export async function transferPairRows(
     fingerprint: string | null;
     createdAt: Date | string;
     judgment: unknown;
-    data: unknown;
   }>(sql`
-    SELECT s.id, s.fingerprint, s."createdAt", s.judgment, s.data
+    SELECT s.id, s.fingerprint, s."createdAt", s.judgment
     FROM "Suggestion" s
     WHERE s.family = ${suggestionFamily.enum.transfer_pair} AND s.status = ${query.filters.status}
       AND ${suggestionIdScope(query.suggestionIds, sql`s.id`)}
@@ -367,39 +361,11 @@ export async function transferPairRows(
       ${query.filters.status === "pending" ? sql`AND s.active` : sql``}
       ${query.filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${query.filters.runId})` : sql``}
   `);
-  if (!rows.length) return [];
-  // Browse pages list stored pairs; apply rechecks the evidence with its fence.
-  const current =
-    query.filters.status === "pending" && !ids && !query.suggestionIds
-      ? new Map(
-          await Promise.all(
-            (
-              await currentTransferPairs(
-                db,
-                rows.map(
-                  (row) => transferPairStateData.parse(row.data).pairKey,
-                ),
-              )
-            ).map(
-              async (pair) =>
-                [
-                  pair.key,
-                  await transferPairEvidenceFingerprint(pair),
-                ] as const,
-            ),
-          ),
-        )
-      : null;
-  return rows.flatMap((row) => {
-    const evidence = transferPairJudgment.parse(row.judgment);
-    if (
-      current &&
-      current.get(evidence.key) !==
-        transferPairStateData.parse(row.data).evidenceFingerprint
-    )
-      return [];
-    return [{ ...row, evidence, createdAt: new Date(row.createdAt) }];
-  });
+  return rows.map((row) => ({
+    ...row,
+    evidence: transferPairJudgment.parse(row.judgment),
+    createdAt: new Date(row.createdAt),
+  }));
 }
 
 export const TRANSFER_WEAK_BLOCKERS = [
