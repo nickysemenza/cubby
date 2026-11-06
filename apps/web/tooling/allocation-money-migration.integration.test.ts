@@ -57,6 +57,34 @@ it("preserves signed allocation edges and refuses noisy originals without changi
         ],
       );
     }
+    for (const [i, kind, code] of [
+      [6, "financialTransaction", "FTX-SYNALLOC2"],
+      [7, "purchase", "PUR-SYNALLOC2"],
+    ] as const)
+      await client.query(
+        `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,$2,$3)`,
+        [uuid(i), kind, code],
+      );
+    await client.query(
+      `INSERT INTO "Purchase" (id,shortcode,"vendorId") VALUES ($1,'PUR-SYNALLOC2',$2)`,
+      [uuid(7), uuid(1)],
+    );
+    await client.query(
+      `INSERT INTO "FinancialTransaction" (id,shortcode,"accountId",kind,status,amount,"postedDate") VALUES ($1,'FTX-SYNALLOC2',$2,'purchase','posted',0.3,'2026-01-01')`,
+      [uuid(6), uuid(3)],
+    );
+    for (const [i, amount] of [0.1, 0.2].entries())
+      await client.query(
+        `INSERT INTO "FinancialTransactionAllocation" (id,"transactionId","purchaseId",amount) VALUES ($1,$2,$3,$4)`,
+        [uuid(i + 12), uuid(6), uuid(i === 0 ? 2 : 7), amount],
+      );
+    const snapshotBefore = JSON.stringify(
+      (
+        await client.query(
+          `SELECT a.amount,(SELECT sum(coverage.amount) FROM "FinancialTransactionAllocation" coverage WHERE coverage."transactionId"=a."transactionId") AS "allocatedAmount" FROM "FinancialTransactionAllocation" a ORDER BY a.id`,
+        )
+      ).rows,
+    );
     await client.query(
       `CREATE TABLE "AllocationConsumer" ("allocationId" uuid REFERENCES "FinancialTransactionAllocation"(id)); INSERT INTO "AllocationConsumer" SELECT id FROM "FinancialTransactionAllocation"`,
     );
@@ -123,7 +151,12 @@ it("preserves signed allocation edges and refuses noisy originals without changi
           `SELECT "amountMinor"::text AS minor FROM "FinancialTransactionAllocation" ORDER BY id`,
         )
       ).rows,
-    ).toEqual([{ minor: "1001" }, { minor: "-1002" }]);
+    ).toEqual([
+      { minor: "1001" },
+      { minor: "-1002" },
+      { minor: "10" },
+      { minor: "20" },
+    ]);
     expect(
       (
         await client.query(
@@ -144,7 +177,16 @@ it("preserves signed allocation edges and refuses noisy originals without changi
           `SELECT count(*)::int AS count FROM "AllocationConsumer" c JOIN "FinancialTransactionAllocation" a ON a.id=c."allocationId" JOIN "Purchase" p ON p.id=a."purchaseId" JOIN "FinancialTransaction" f ON f.id=a."transactionId"`,
         )
       ).rows[0].count,
-    ).toBe(2);
+    ).toBe(4);
+    // Raw execute fields are driver values: numeric text and exact numeric sums change retained snapshot bytes.
+    const snapshotAfter = JSON.stringify(
+      (
+        await client.query(
+          `SELECT a."amountMinor"::float8/100 AS amount,(SELECT sum(coverage."amountMinor"::float8/100) FROM "FinancialTransactionAllocation" coverage WHERE coverage."transactionId"=a."transactionId") AS "allocatedAmount" FROM "FinancialTransactionAllocation" a ORDER BY a.id`,
+        )
+      ).rows,
+    );
+    expect(snapshotAfter).toBe(snapshotBefore);
     await expect(
       client.query(
         `UPDATE "FinancialTransactionAllocation" SET "amountMinor"=0`,

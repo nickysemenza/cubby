@@ -181,7 +181,7 @@ export async function loadFinanceSuggestionContext(
       ? rowsSchema.parse(
           (
             await database.execute(sql`
-    SELECT p.shortcode AS purchase, (a."amountMinor"::numeric / 100) AS amount FROM "FinancialTransactionAllocation" a JOIN "Purchase" p ON p.id = a."purchaseId"
+    SELECT p.shortcode AS purchase, (a."amountMinor"::float8 / 100) AS amount FROM "FinancialTransactionAllocation" a JOIN "Purchase" p ON p.id = a."purchaseId"
     WHERE a."transactionId" = ${id} AND ${notDeleted("a")} AND ${notDeleted("p")}
     ORDER BY p.shortcode LIMIT 101
   `)

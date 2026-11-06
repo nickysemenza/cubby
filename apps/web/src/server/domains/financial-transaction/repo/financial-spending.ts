@@ -557,9 +557,9 @@ async function loadSpendingGraphBatch(
           transaction: unknown;
           account: unknown;
           owner: unknown;
-        }>(sql`SELECT a."purchaseId", a."transactionId", f.shortcode AS "transactionCode", (a."amountMinor"::numeric / 100) AS amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
+        }>(sql`SELECT a."purchaseId", a."transactionId", f.shortcode AS "transactionCode", (a."amountMinor"::float8 / 100) AS amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
     f.amount AS "transactionAmount", fa."deletedAt" AS "accountDeletedAt",
-    (SELECT sum((coverage."amountMinor"::numeric / 100)) FROM "FinancialTransactionAllocation" coverage
+    (SELECT sum(coverage."amountMinor"::float8 / 100) FROM "FinancialTransactionAllocation" coverage
       WHERE coverage."transactionId" = f.id AND ${notDeleted("coverage")}) AS "allocatedAmount",
     to_jsonb(f) AS transaction, to_jsonb(fa) AS account, to_jsonb(lp) AS owner
     FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" f ON f.id = a."transactionId"

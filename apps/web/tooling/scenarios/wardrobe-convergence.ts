@@ -167,7 +167,7 @@ async function readConvergenceFacts(
         sourceRefs: { source: string; externalId: string }[];
       }>(
         `SELECT t.shortcode, a."purchaseId", t.amount::text AS amount,
-              a.amount::text AS "allocatedAmount", t."postedDate",
+              (a."amountMinor"::float8 / 100)::text AS "allocatedAmount", t."postedDate",
               t."transactionDate",
               COALESCE((
                 SELECT jsonb_agg(jsonb_build_object('source', x.source, 'externalId', x.value)
