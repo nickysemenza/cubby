@@ -796,7 +796,7 @@ describe("public mail tool", () => {
           return {
             transactionId: row.id,
             purchaseId: purchased.id,
-            amount: row.amount,
+            amountMinor: moneyToMinor(row.amount),
           };
         }),
       );
