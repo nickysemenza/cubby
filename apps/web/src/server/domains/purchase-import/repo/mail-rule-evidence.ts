@@ -15,6 +15,17 @@ import {
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
+import { wasm } from "~/server/wasm";
+
+const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_/-]{2,39}$/u;
+
+/** Order, invoice or tracking identifiers the Email prints (`purchase_cues`). */
+export function orderIdentifiers(subject: string | null, text: string) {
+  const { cues } = wasm.purchase_cues(`${subject ?? ""}\n${text}`);
+  return [
+    ...new Set(cues.filter((cue) => IDENTIFIER.test(cue) && /\d/u.test(cue))),
+  ];
+}
 
 /** A live Purchase whose order id equals an identifier an Email prints. */
 export type MailRuleCandidate = {

@@ -40,12 +40,12 @@ import { senderProofVendor } from "../repo/import-vendor";
 import {
   countRetainedMailAttachments,
   readMailRuleCandidates,
+  orderIdentifiers,
 } from "../repo/mail-rule-evidence";
 import {
   carrierNotice,
   decideMailByRule,
   MAIL_IMPORT_RULE_REVISION,
-  orderIdentifiers,
   type CarrierNotice,
 } from "../service/mail-import-rule";
 import { readMail, resolveMail } from "./mail-tool";

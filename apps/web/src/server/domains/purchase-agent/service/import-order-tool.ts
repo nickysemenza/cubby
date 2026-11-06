@@ -1,5 +1,8 @@
 import { EXTRACT_ORDER_TOOL } from "@cubby/schemas/import-run-agent";
-import { mailMessageRef } from "@cubby/schemas/mailbox-research";
+import {
+  mailMessageRef,
+  MAIL_READ_RESPONSE_MAX_BYTES,
+} from "@cubby/schemas/mailbox-research";
 import {
   commitPurchaseImportInput,
   commitPurchaseImportOut,
@@ -49,6 +52,7 @@ const output = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("commit_result"),
     result: commitPurchaseImportOut,
+    nextWork: z.json().optional(),
   }),
   z.object({
     kind: z.literal("needs_resolution"),
@@ -95,6 +99,10 @@ export function importExtractedOrderTool(
     parameters: Type.Unsafe<JsonObject>(parameters),
     structuredOutputSchema: Type.Unsafe<JsonObject>(resultSchema),
     replay: "safe",
+    outputLimits: {
+      maxBytes: MAIL_READ_RESPONSE_MAX_BYTES * 2,
+      maxLines: 10_000,
+    },
     execute: async (raw, api, context) => {
       const args = input.parse(raw);
       const finish = (value: z.infer<typeof output>) => ({
@@ -245,7 +253,30 @@ export function importExtractedOrderTool(
             committedResult.structuredOutput ?? committedResult.diagnostics,
           ).slice(0, 8_000),
         });
-      return finish({ kind: "commit_result", result: committed.data });
+      // Conflicts retain the current evidence and its recovery context. Only a
+      // known publication advances to the next source; the nested claim keeps
+      // that continuation durable without another coordination model turn.
+      if (committed.data.items.some((item) => item.outcome === "conflict"))
+        return finish({ kind: "commit_result", result: committed.data });
+      const next = await api.executeTool(
+        "claim_next_import_work",
+        {},
+        context,
+        { key: "next-work" },
+      );
+      const nextWork = nestedValue(next, z.json());
+      return finish({
+        kind: "commit_result",
+        result: committed.data,
+        nextWork:
+          !next.isError && nextWork.success
+            ? nextWork.data
+            : {
+                kind: "retry",
+                reason:
+                  "The order committed, but continuation was interrupted. Claim the next Email; do not prepare this order again.",
+              },
+      });
     },
   });
 }

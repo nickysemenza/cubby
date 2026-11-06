@@ -1,3 +1,4 @@
+import { EXTRACT_ORDER_TOOL } from "@cubby/schemas/import-run-agent";
 /**
  * Failures: a Mail import coordinator resends every earlier Email's reads on
  * each request, so a 50-Email Run reached ~970k context tokens; trimming
@@ -33,6 +34,28 @@ const read = (id: string) => [
 ];
 
 describe("currentWorkItemMessages", () => {
+  it("advances context only when a bundled publication returns the next durable claim", () => {
+    const kickoff = user("Import.");
+    const before = [kickoff, ...claim("first"), ...read("first-body")];
+    const extract = call("extract", EXTRACT_ORDER_TOOL);
+    const committed = outcome(
+      "extract",
+      EXTRACT_ORDER_TOOL,
+      JSON.stringify({ kind: "commit_result", nextWork: { kind: "email" } }),
+    );
+    expect(currentWorkItemMessages([...before, extract, committed])).toEqual([
+      kickoff,
+      extract,
+      committed,
+    ]);
+    const conflicted = outcome(
+      "extract",
+      EXTRACT_ORDER_TOOL,
+      JSON.stringify({ kind: "commit_result" }),
+    );
+    const conflict = [...before, extract, conflicted];
+    expect(currentWorkItemMessages(conflict)).toBe(conflict);
+  });
   it("keeps the kickoff and only the current work item", () => {
     const kickoff = user("Import the Run's Emails.");
     const current = [...claim("c2"), ...read("r2")];

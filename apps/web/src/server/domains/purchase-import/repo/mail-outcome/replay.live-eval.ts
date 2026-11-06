@@ -491,7 +491,10 @@ describe("isolated Mail coordinator replay", () => {
                             },
                             products: [{ kind: "new" }, { kind: "new" }, null],
                           }),
-                          call("done", "claim_next_import_work"),
+                          {
+                            check: "extract",
+                            includes: '"nextWork":{"kind":"none"}',
+                          },
                         ]
                       : [
                           call("claim", "claim_next_import_work"),

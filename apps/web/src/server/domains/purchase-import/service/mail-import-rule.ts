@@ -8,8 +8,6 @@ import type {
   MailEvent,
 } from "@cubby/schemas/mailbox-research";
 
-import { wasm } from "~/server/wasm";
-
 import type { MailRuleCandidate } from "../repo/mail-rule-evidence";
 
 export const MAIL_IMPORT_RULE_REVISION = "mail-import-rule-2026-11-06.1";
@@ -57,16 +55,6 @@ export function mailLifecycleEvent(
   if (SHIPPED.test(line)) events.push("shipped");
   if (CONFIRMATION.test(line)) events.push("confirmation");
   return events.length === 1 ? events[0]! : null;
-}
-
-const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_/-]{2,39}$/u;
-
-/** Order, invoice or tracking identifiers the Email prints (`purchase_cues`). */
-export function orderIdentifiers(subject: string | null, text: string) {
-  const { cues } = wasm.purchase_cues(`${subject ?? ""}\n${text}`);
-  return [
-    ...new Set(cues.filter((cue) => IDENTIFIER.test(cue) && /\d/u.test(cue))),
-  ];
 }
 
 const MONTHS = [

@@ -87,6 +87,15 @@ pending: nothing here starts Product research.
    a `purchase.dispatch` Job in the admission transaction (`dispatch.ts`). Each paid call checks
    the Run is still executable and draws from the household AI budget
    (`run/service/execution-transport.ts`, `server/ai/budget.ts`).
+   Existing discovery wakes also recover untouched automatic unresolved work
+   when its retained original changes, its sender becomes verified, or accepted
+   source evidence now establishes its exact order on the member's own Vendor
+   account. Source and accepted-evidence fingerprints deduplicate attempts;
+   Purchase edits and unchanged evidence do not reopen work. Admission rechecks
+   literal identifiers, current source bytes, source ownership, live dispatch
+   leases and retained member intent under the existing evidence-write scope.
+   A successor retains the predecessor's frozen roster/outcomes and records the
+   ownership transfer. Foreground, retired, reviewed and excluded work stays held.
 3. **Pi** (`agent-host.ts`, `server/domains/purchase-agent/`) runs on the generic agent
    tools (`claim_next_import_work`, `report_agent_progress`,
    `stop_import_run_for_review`) plus the MCP actions its manifest mounts
@@ -110,6 +119,9 @@ pending: nothing here starts Product research.
    nested calls. Newly discovered Product candidates return the preparation for
    review instead of creating a possible duplicate. Incomplete source views and
    complex originals retain the exception path.
+   After a known, non-conflicting publication, the same durable tool claims and
+   returns the next Email with its evidence. The model does not spend a separate
+   turn coordinating that claim. Unknown writes and conflicts do not advance.
    A Mail import claim (`operations/mail-import-claim.ts`) returns the
    claimed Email's compact read (`readMail`, bounded by `fitMailRead`). Before
    claiming, it settles leading roster Emails a Mail import rule decides

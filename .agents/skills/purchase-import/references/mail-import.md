@@ -51,6 +51,10 @@ Claude or Codex session researches it later through the Research queue.
      identity explicitly. The host generates stable IDs and runs the normal
      prepare/commit writers without another model turn. Inspect every
      `commit_result` item: conflict is review work, not success.
+     A successful `commit_result.nextWork` is already the next durable claim,
+     including its read and known facts: process it directly without another
+     claim call. `none` means the roster is settled. `retry` requests a new
+     claim because continuation was interrupted; the order already committed.
      `needs_resolution` returns the canonical preparation and its Product
      candidates: review those and call the existing commit with that preparation's
      operation ID and stable line IDs. Do not prepare the same facts again.

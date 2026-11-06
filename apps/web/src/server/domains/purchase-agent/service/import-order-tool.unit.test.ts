@@ -45,8 +45,17 @@ const extraction = {
 function writerPeer(options: { candidate?: boolean; conflict?: boolean } = {}) {
   const effects: { action: string; operation: string }[] = [];
   const commits: string[] = [];
+  const claims: string[] = [];
   const api = fromPartial<ToolExecutionApi>({
     executeTool: async (name: string, args: JsonObject) => {
+      if (name === "claim_next_import_work") {
+        claims.push(name);
+        return fromPartial({
+          isError: false,
+          diagnostics: [],
+          structuredOutput: JSON.stringify({ kind: "none" }),
+        });
+      }
       expect(name).toBe("mcp__cubby__purchase_import");
       const fields = zObject(args.input);
       if (args.action === "prepare") {
@@ -128,7 +137,7 @@ function writerPeer(options: { candidate?: boolean; conflict?: boolean } = {}) {
       });
     },
   });
-  return { api, effects, commits };
+  return { api, effects, commits, claims };
 }
 
 // Optional fields must pass through the same JSON boundary as MCP transport.
@@ -160,6 +169,7 @@ describe("ordinary Email extraction", () => {
         "canonical-prepared-receipt",
       ]);
       expect(peer.effects.slice(0, 2)).toEqual(peer.effects.slice(2));
+      expect(peer.claims).toHaveLength(conflict ? 0 : 2);
     },
   );
 

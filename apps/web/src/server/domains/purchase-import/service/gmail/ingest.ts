@@ -844,7 +844,11 @@ async function acquireEligible(
         }
         if (observation)
           await recordEmailClassificationApplication(tx, observation.id);
-        if (input.reclassify && decision.classification === "related")
+        if (
+          decision.classification === "related" &&
+          (input.reclassify ||
+            (current?.checksum !== checksum && current?.runId))
+        )
           await (
             await import("~/server/workflows/background-tasks/publish")
           ).publishBackgroundTasks(

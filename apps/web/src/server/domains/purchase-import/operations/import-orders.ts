@@ -1053,6 +1053,7 @@ export async function commitPurchaseImport(
             ),
           );
       }
+      // oxlint-disable-next-line complexity -- Ledger publication, source settlement and its recovery wake share this transaction.
       return withTransactionDatabase(db, async (transactionDb) => {
         const database = getDb(transactionDb);
         // Lock the Run before the operation: cancellation uses the same order.
@@ -1382,6 +1383,24 @@ export async function commitPurchaseImport(
           throw new Error("Product resolutions include unknown line ids");
         for (const emailImport of importedMail.values())
           await linkImportedMail(transactionDb, emailImport);
+        if (
+          importedMail.size > 0 &&
+          items.some(
+            (item) => item.outcome === "created" || item.outcome === "updated",
+          )
+        )
+          await (
+            await import("~/server/workflows/background-tasks/publish")
+          ).publishBackgroundTasks(
+            transactionDb,
+            [
+              {
+                kind: "maintenance.purchase-discovery",
+                requestedAt: new Date().toISOString(),
+              },
+            ],
+            { source: "mail-import-evidence" },
+          );
         const publicResult = commitPurchaseImportOut.parse({
           runId: scope.shortcode,
           operationId: input._runExecution.operationId,
