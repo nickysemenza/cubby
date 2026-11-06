@@ -23,6 +23,7 @@ import { JobRetryableError } from "~/server/generic/jobs/errors";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import {
   createProductFixture,
+  createProductIdentityFixture,
   makeProductInput,
   renameFixtureRaw,
 } from "~/server/testing/repo.fixtures";
@@ -338,7 +339,7 @@ describe("embedding refresh and cleanup drains", () => {
   it("chunks provider requests by byte limits and isolates a long input", async () => {
     const refs: SearchableEntityRef[] = [];
     for (let index = 0; index < 39; index++) {
-      const subject = await createProductFixture(
+      const subject = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
           name: `Synthetic byte fixture ${index}`,
@@ -348,7 +349,7 @@ describe("embedding refresh and cleanup drains", () => {
       );
       refs.push({ entityKind: "product", entityId: subject.entityId });
     }
-    const long = await createProductFixture(
+    const long = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic long input fixture",
