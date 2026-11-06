@@ -336,7 +336,7 @@ export async function readEntityConnectionsBatch(
     .where(
       and(
         eq(suggestionTable.family, "recommendation"),
-        eq(suggestionTable.served, true),
+
         eq(suggestionTable.active, true),
         eq(suggestionTable.status, "pending"),
         sql`${suggestionTable.subject}->>'scope' LIKE 'connection.%'`,

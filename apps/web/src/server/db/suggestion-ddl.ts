@@ -9,10 +9,10 @@ DROP FUNCTION IF EXISTS "assessment_retired_family_refused"();
 -- Point-match connection endpoints. Both UUID and shortcode values remain text.
 CREATE INDEX IF NOT EXISTS "Suggestion_connection_source_ref_idx" ON "Suggestion"
  ((evidence #>> '{candidate,source,entityKind}'), (evidence #>> '{candidate,source,entityId}')) INCLUDE (id)
- WHERE served AND subject->>'scope' LIKE 'connection.%';
+ WHERE subject->>'scope' LIKE 'connection.%';
 CREATE INDEX IF NOT EXISTS "Suggestion_connection_target_ref_idx" ON "Suggestion"
  ((evidence #>> '{candidate,target,entityKind}'), (evidence #>> '{candidate,target,entityId}')) INCLUDE (id)
- WHERE served AND subject->>'scope' LIKE 'connection.%';
+ WHERE subject->>'scope' LIKE 'connection.%';
 `;
 
 /** Inactive statement revisions retain paid labels and review history, so label reuse cannot use an active-only index. */

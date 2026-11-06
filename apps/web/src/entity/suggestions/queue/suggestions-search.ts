@@ -32,7 +32,7 @@ const scopeSearchSchema = z.object({
    * Legacy `applied_automatically` URLs redirect to the automatic tab.
    */
   status: z
-    .enum(["applied_automatically", "automatic", "rules"])
+    .enum(["applied_automatically", "automatic"])
     .optional()
     .catch(undefined),
   /** `<entityKind>:<SHORTCODE>`; a connection matches either endpoint. */

@@ -524,7 +524,7 @@ export async function listProductMatchRows(
       and(
         eq(suggestionTable.family, "product_pair"),
         eq(suggestionTable.active, true),
-        eq(suggestionTable.served, true),
+
         options.suggestionIds
           ? sql`${suggestionTable.id} IN (${sql.join(
               options.suggestionIds.map((id) => sql`${id}::uuid`),

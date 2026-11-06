@@ -109,9 +109,9 @@ function reviewableRow(suggestion: SuggestionStateRow, runCode: string | null) {
     },
   ];
 }
-/** Only served Suggestions are member review candidates. */
+/** Saved records are member review candidates. */
 // An answer for an unsaved record has nothing to review against.
-const reviewableSuggestionSql = sql`${suggestionTable.served} AND ${suggestionTable.recordId} IS NOT NULL`;
+const reviewableSuggestionSql = sql`${suggestionTable.recordId} IS NOT NULL`;
 
 /** Pending review queue, or reviewed history by `status` (the label set a
  * decision eval replays). Every filter composes, including a list page's
@@ -508,11 +508,11 @@ async function automaticFieldFillRefusal(
       row.confidence - row.runnerUpConfidence < 0.1)
   )
     return `Field ${row.entity}.${row.field} is not eligible for automatic fill`;
-  const [served] = await getDb(db)
+  const [saved] = await getDb(db)
     .select({ id: suggestionTable.id })
     .from(suggestionTable)
     .where(and(eq(suggestionTable.id, row.id), reviewableSuggestionSql));
-  if (!served) return "Only a served field suggestion can apply automatically";
+  if (!saved) return "Only a saved field suggestion can apply automatically";
   const provenance = aiProvenance.safeParse(row.provenance);
   const manifest = await producingAiManifest(db);
   if (

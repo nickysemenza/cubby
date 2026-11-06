@@ -4475,6 +4475,12 @@ review.
 
 ### Shared proposal queue and automatic decisions
 
+ADR 0025 fixes automatic application policy: high-confidence eligible field additions
+and clean supported import spending always apply through their domain validation.
+Attaching an existing transaction requires review. There are no per-revision
+member switches or Rules tab. Automatic-decision history and its Wrong grade
+remain available; a Wrong decision prevents unchanged work from applying again.
+
 The review implementation and wire use Suggestion names (`suggestionId`,
 `suggestionIds`, `targetSuggestionId`). The generic owner is
 `generic/suggestions`; field-resolution evidence belongs to

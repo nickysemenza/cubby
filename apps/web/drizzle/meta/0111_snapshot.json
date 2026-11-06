@@ -1,6 +1,6 @@
 {
-  "id": "cb310e70-6b51-4452-a3bb-597caa8e9837",
-  "prevId": "32e7cad5-5c4e-477a-b58e-b646ab3fdd24",
+  "id": "a754eb67-59fc-4e45-8f31-c42d2dacf40e",
+  "prevId": "cb310e70-6b51-4452-a3bb-597caa8e9837",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -848,25 +848,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.AssessmentCorrectionLock": {
-      "name": "AssessmentCorrectionLock",
-      "schema": "",
-      "columns": {
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
         }
       },
       "indexes": {},
@@ -4877,6 +4858,25 @@
           ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.AssessmentCorrectionLock": {
+      "name": "AssessmentCorrectionLock",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -21734,13 +21734,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "served": {
-          "name": "served",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
         "decisions": {
           "name": "decisions",
           "type": "jsonb",
@@ -22130,7 +22123,7 @@
             }
           ],
           "isUnique": false,
-          "where": "\"Suggestion\".\"served\" AND (\"Suggestion\".\"subject\"->>'otherId') IS NOT NULL",
+          "where": "(\"Suggestion\".\"subject\"->>'otherId') IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -22152,7 +22145,7 @@
             }
           ],
           "isUnique": false,
-          "where": "\"Suggestion\".\"served\" AND (\"Suggestion\".\"judgment\" #>> '{create,sourceRef,source}') IS NOT NULL AND (\"Suggestion\".\"judgment\" #>> '{create,sourceRef,externalId}') IS NOT NULL",
+          "where": "(\"Suggestion\".\"judgment\" #>> '{create,sourceRef,source}') IS NOT NULL AND (\"Suggestion\".\"judgment\" #>> '{create,sourceRef,externalId}') IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -22168,7 +22161,6 @@
             }
           ],
           "isUnique": false,
-          "where": "\"Suggestion\".\"served\"",
           "concurrently": false,
           "method": "gin",
           "with": {}

@@ -34,7 +34,6 @@ export const suggestionChildren = [
       { key: "judgment", kind: "jsonb", notNull: true },
       { key: "producer", kind: "jsonb", type: "SuggestionProducer" },
       { key: "evidence", kind: "jsonb" },
-      { key: "served", kind: "boolean", notNull: true, default: true },
       {
         key: "decisions",
         kind: "jsonb",
@@ -174,7 +173,7 @@ export const suggestionChildren = [
       {
         name: "Suggestion_served_other_id_idx",
         on: [{ sql: "md5({subject}->>'otherId')" }],
-        where: "{served} AND ({subject}->>'otherId') IS NOT NULL",
+        where: "({subject}->>'otherId') IS NOT NULL",
       },
       {
         name: "Suggestion_served_source_ref_idx",
@@ -183,13 +182,12 @@ export const suggestionChildren = [
           { sql: "md5({judgment} #>> '{create,sourceRef,externalId}')" },
         ],
         where:
-          "{served} AND ({judgment} #>> '{create,sourceRef,source}') IS NOT NULL AND ({judgment} #>> '{create,sourceRef,externalId}') IS NOT NULL",
+          "({judgment} #>> '{create,sourceRef,source}') IS NOT NULL AND ({judgment} #>> '{create,sourceRef,externalId}') IS NOT NULL",
       },
       {
         name: "Suggestion_reference_records_idx",
         using: "gin",
         on: [{ sql: "({evidence}->'records')" }],
-        where: "{served}",
       },
     ],
     checks: [

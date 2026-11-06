@@ -208,7 +208,7 @@ export async function publishFieldSuggestion(
     field: string;
     recordId: string;
   },
-  served: boolean,
+  _served: boolean,
 ) {
   const data = z.record(z.string(), z.json()).parse(projection.data ?? {});
   if (projection.status === undefined || projection.status === "pending") {
@@ -258,7 +258,6 @@ export async function publishFieldSuggestion(
         currentValue: z.json().parse(projection.currentValue ?? null),
         provenance: projection.provenance ?? null,
       },
-      served,
     },
     { ...projection, data },
   );
@@ -283,7 +282,6 @@ export async function recordFeedbackWithInsertion(
     const client = getDb(transactionDb);
     const [prediction] = await client
       .select({
-        served: suggestionTable.served,
         family: suggestionTable.family,
         subject: suggestionTable.subject,
         decisions: suggestionTable.decisions,
@@ -300,10 +298,6 @@ export async function recordFeedbackWithInsertion(
       .where(eq(suggestionTable.id, suggestionId))
       .for("update");
     if (!prediction) throw new Error("Suggestion not found");
-    if (!prediction.served && input.authority === "member")
-      throw new Error(
-        "Unserved trial suggestions are not member review candidates",
-      );
     if (
       input.authority === "evaluation" &&
       (input.intent !== "history" || input.suppression)

@@ -14,7 +14,7 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { JobTargetError } from "~/server/generic/jobs/errors";
-import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
+import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,

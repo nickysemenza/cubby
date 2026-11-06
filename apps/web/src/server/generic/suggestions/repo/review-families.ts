@@ -428,7 +428,6 @@ export const reviewFamilyDeclarations = {
             .from(indexed)
             .where(
               and(
-                indexed.served,
                 sql`${indexed.evidence}->'records' @> ${requestedName}.${valueName}`,
               ),
             );
@@ -626,7 +625,7 @@ export function pendingSuggestionRecordsSql(ids?: readonly string[]) {
     SELECT s.family, record->>'entity', record->>'id'
       FROM "Suggestion" s
       CROSS JOIN LATERAL jsonb_array_elements(${suggestionRecordsSql(undefined, sql`s.family`)}) record
-      WHERE s.served AND ${pending([
+      WHERE ${pending([
         suggestionFamily.enum.field,
         suggestionFamily.enum.transfer_pair,
         suggestionFamily.enum.product_pair,
@@ -792,7 +791,6 @@ function settlementSuggestionQuery(db: Database, scope: SuggestionRecordScope) {
     .from(indexed)
     .where(
       and(
-        indexed.served,
         eq(indexed.family, suggestionFamily.enum.statement_transaction),
         suggestionStateAdmission(db, scope.eligibility, {
           family: outer(indexed.family),
@@ -836,7 +834,7 @@ function settlementSuggestionQuery(db: Database, scope: SuggestionRecordScope) {
     JOIN "SourceOccurrence" owner ON owner."acceptedTransactionId"=accepted_keys."transactionId"
     JOIN "SourceTransactionRecord" anchor ON anchor."occurrenceId"=owner.id
     JOIN "Suggestion" s ON s."recordId"=anchor.id
-    WHERE s.served AND s.family=${suggestionFamily.enum.statement_transaction}
+    WHERE s.family=${suggestionFamily.enum.statement_transaction}
       AND ${suggestionStateAdmission(db, scope.eligibility)}`;
   // Both arms start at the requested settlement graph and keep their own lookup indexes.
   return sql`${retained} UNION ALL ${accepted}`;
@@ -877,7 +875,7 @@ function touchingSuggestionQuery(db: Database, scope: SuggestionRecordScope) {
                 status: s.status,
               })
               .from(s)
-              .where(and(s.served, stateAdmission, eq(s.family, family), match))
+              .where(and(stateAdmission, eq(s.family, family), match))
               .getSQL(),
           ]
         : [],
@@ -929,7 +927,7 @@ export async function touchingSuggestionIds(
  * Callers select from Suggestion s.
  */
 export function pendingImageDescriptionEligibility() {
-  return sql`s.family = ${suggestionFamily.enum.image_description} AND s.served
+  return sql`s.family = ${suggestionFamily.enum.image_description}
     AND s.active AND s.status = ${suggestionStatus.enum.pending}
     AND s.suppression IS NULL AND ${reviewFamilyDeclarations.image_description.actionable}
     AND EXISTS (SELECT 1 FROM "Image" i WHERE i.id = s."recordId" AND ${notDeleted("i")})`;

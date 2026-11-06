@@ -126,7 +126,6 @@ function existingConnectionSuggestionIds(
       .from(suggestionTable)
       .where(
         and(
-          suggestionTable.served,
           pendingState,
           inArray(
             suggestionTable.family,
@@ -143,7 +142,7 @@ function existingConnectionSuggestionIds(
     .where(
       and(
         pendingState,
-        suggestionTable.served,
+
         eq(suggestionTable.family, "field"),
         // Exact equality remains authoritative for arbitrary historical text.
         sql`md5(${suggestionTable.suggestedValue} #>> '{}') IN (${codeHashes})
@@ -190,7 +189,6 @@ function connectionSourcePeers(db: Database, sourceKind: SQL, sourceCode: SQL) {
     .from(indexed)
     .where(
       and(
-        indexed.served,
         sql`${indexed.subject}->>'scope' LIKE 'connection.%'`,
         sql`${indexed.evidence} #>> '{candidate,source,entityKind}' = ${sourceKind}`,
         sql`${indexed.evidence} #>> '{candidate,source,entityId}' = ${sourceCode}`,
@@ -299,7 +297,7 @@ export async function readConnectionEdgeSuggestionIds(
       SELECT matched.id FROM requested_edges r
       CROSS JOIN LATERAL (
         SELECT s.id FROM ${suggestionTable} s
-        WHERE s.served AND s.family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.recommendation)}
+        WHERE s.family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.recommendation)}
           AND s.subject->>'scope' LIKE 'connection.%'
           AND s.evidence #>> '{candidate,source,entityKind}' = r."sourceKind"
           AND s.evidence #>> '{candidate,source,entityId}' = r."sourceCode"
@@ -316,7 +314,7 @@ export async function readConnectionEdgeSuggestionIds(
       CROSS JOIN LATERAL (
         SELECT s.id FROM ${suggestionTable} s
         WHERE s.entity = r.entity AND s."recordId" = owner.id AND s.field = r.field
-          AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)} AND s.served AND s.family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.field)}
+          AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)} AND s.family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.field)}
           AND md5(s."suggestedValue" #>> '{}') = md5(target.shortcode)
           AND s."suggestedValue" #>> '{}' = target.shortcode
         OFFSET 0
@@ -327,7 +325,7 @@ export async function readConnectionEdgeSuggestionIds(
       JOIN ${entityIdentity} target ON target.kind = r."targetKind" AND target.shortcode = r."targetCode"
       CROSS JOIN LATERAL (
         SELECT s.id FROM ${suggestionTable} s
-        WHERE s.served AND s.family = r.family AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
+        WHERE s.family = r.family AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
           AND s.entity = owner.kind AND s."recordId" = owner.id
           AND s.subject->>'otherId' IS NOT NULL
           AND md5(s.subject->>'otherId') = md5(target.id::text)
@@ -408,7 +406,6 @@ export async function readExistingConnectionSuggestions(
       )
       .where(
         and(
-          eq(suggestionTable.served, true),
           eq(suggestionTable.active, true),
           eq(suggestionTable.status, "pending"),
           family === "field"

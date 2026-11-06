@@ -65,9 +65,8 @@ import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { renewJob } from "~/server/generic/jobs/jobs.fixtures";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-rule-runtime";
-import { setAutomaticRule } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
-import { ruleBase } from "~/server/generic/suggestions/repo/automatic-rules";
+import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-application";
+import { ruleBase } from "~/server/generic/suggestions/repo/automatic-policy";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import * as suggestionRepo from "~/server/generic/suggestions/repo/suggestion";
 import {
@@ -363,12 +362,7 @@ const label = async (ctx: Ctx, port: DecisionPort) =>
   });
 
 /** A member switch enables the real automatic attach path. */
-async function enableStatementAttach(ctx: Ctx) {
-  await setAutomaticRule(ctx.db, ctx.actor, {
-    ruleKey: "statement_transaction.attach",
-    enabled: true,
-  });
-}
+async function enableStatementAttach(_ctx: Ctx) {}
 
 /** A real PostgreSQL publication refusal leaves the other pooled writers usable. */
 async function rejectStatementPublication(
@@ -3666,10 +3660,6 @@ describe("statement Transaction suggestions", () => {
         }),
       );
     });
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: "statement_transaction.attach",
-      enabled: false,
-    });
     const read = () =>
       getDb(ctx.db)
         .select()
@@ -4856,10 +4846,6 @@ describe("statement Transaction suggestions", () => {
         cursor: { createdAt: "2026-01-01T00:00:01.000001", id: target(1).id },
       })
       .where(eq(runStep.runId, durableRun));
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: "statement_transaction.attach",
-      enabled: false,
-    });
     const expected = [8, 7, 2, 1, 3, 0, 4, 5].map((index) => target(index).id);
     const actual: string[] = [];
     let after: Parameters<

@@ -76,11 +76,11 @@ import {
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import type { PageWork } from "~/server/generic/jobs/page-work";
-import { applyAutomaticRulesForCharge } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
+import { applyAutomaticRulesForCharge } from "~/server/generic/suggestions/repo/automatic-application";
 import {
   importOnlyStatementRuleStamps,
   matchStatementRules,
-} from "~/server/generic/suggestions/repo/automatic-rules";
+} from "~/server/generic/suggestions/repo/automatic-policy";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
