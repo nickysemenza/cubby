@@ -1208,7 +1208,7 @@ export async function currentTransferPairs(
 // ------------------------------------------------------------- publication
 
 /** `Suggestion.data` of a transfer-pair suggestion. */
-export const transferPairStateData = z.object({
+const transferPairStateData = z.object({
   pairKey: z.string(),
   outflowAccountId: z.uuid(),
   inflowAccountId: z.uuid(),
