@@ -11,8 +11,6 @@ import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { suggestionRecordsSql } from "~/server/generic/suggestions/repo/suggestion-work-tokens";
 
-export { pendingRecommendationEligibility } from "~/server/generic/suggestions/repo/pending-admission";
-
 /** A typed entity plus UUID or shortcode; stored families predate a shared reference representation. */
 const storedRef = z.object({
   entity: z.enum(shortcodeEntities),

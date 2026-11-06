@@ -9,11 +9,8 @@ import { uuidArrayParam } from "~/server/db/helpers";
 import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
 import {
   reviewSuggestion,
-  reviewState,
   entities,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
-
-export { pendingRecommendationEligibility } from "~/server/generic/suggestions/repo/pending-admission";
 
 /** Rule applications leave pending and name the rule that applied them. */
 export function automaticSuggestionEligibility(appliedRule: SQL) {
@@ -24,7 +21,7 @@ export function automaticSuggestionEligibility(appliedRule: SQL) {
         suggestionFamily.parse(family),
       ),
     ),
-    ne(reviewState.status, suggestionStatus.enum.pending),
+    ne(reviewSuggestion.status, suggestionStatus.enum.pending),
     isNotNull(appliedRule),
   );
 }

@@ -65,7 +65,7 @@ export async function withEmailEvidenceWrite<T>(
   const entry: ActiveScope = { scope: null };
   return current.run(entry, () =>
     repositorySnapshotWriteDatabase(db, async (transactionDb) => {
-      // Admission and member review can race on Email intent; their owning-row
+      // Email intake and relevance correction can race with member review; their owning-row
       // locks and this serializable retry boundary recheck the retained decisions.
       // Unrelated Emails need no shared serialization key.
       const scope = new EmailEvidenceScope();

@@ -25,8 +25,6 @@ export { pendingRecommendationEligibility } from "~/server/generic/suggestions/r
 
 export const reviewSuggestion = alias(suggestionTable, "s");
 
-export const reviewState = reviewSuggestion;
-
 const referenceEntity = z.enum(shortcodeEntities);
 
 export const entities = referenceEntity.enum;
@@ -94,8 +92,8 @@ export function fieldReferenceMatch(scope: SuggestionRecordScope) {
           sql`CASE WHEN jsonb_typeof(${value}) = 'array' THEN ${value} ELSE jsonb_build_array(${value}) END`;
         return [
           and(
-            eq(reviewState.entity, entity),
-            eq(reviewState.field, field.key),
+            eq(reviewSuggestion.entity, entity),
+            eq(reviewSuggestion.field, field.key),
             sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${values(sql`s."suggestedValue"`)} || ${values(sql`s."currentValue"`)}) v WHERE ${match})`,
           )!,
         ];
@@ -364,13 +362,13 @@ export function declareAffectedRecords(spec: {
 
 export function primaryRecordMatch(scope: SuggestionRecordScope) {
   return and(
-    scope.entity ? eq(reviewState.entity, scope.entity) : undefined,
+    scope.entity ? eq(reviewSuggestion.entity, scope.entity) : undefined,
     scope.records
       ? or(
           ...scope.records.map((record) =>
             and(
-              eq(reviewState.entity, record.entity),
-              eq(reviewState.recordId, record.id),
+              eq(reviewSuggestion.entity, record.entity),
+              eq(reviewSuggestion.recordId, record.id),
             ),
           ),
         )

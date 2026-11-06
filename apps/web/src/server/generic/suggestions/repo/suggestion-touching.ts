@@ -17,7 +17,7 @@ import { type SuggestionRecordSelection } from "~/server/generic/suggestions/rep
 import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
 import {
   ReviewFamily,
-  reviewState,
+  reviewSuggestion,
   statementSettlementMatch,
   reviewQueryBuilder,
   statementSettlementRelation,
@@ -26,8 +26,6 @@ import {
   statementReferenceMatch,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import { automaticSuggestionEligibility } from "~/server/generic/suggestions/repo/suggestion-work-tokens";
-
-export { pendingRecommendationEligibility } from "~/server/generic/suggestions/repo/pending-admission";
 
 type SuggestionEligibility =
   | {
@@ -54,10 +52,10 @@ function suggestionStateAdmission(
     RelatedColumns<typeof suggestionTable>,
     "family" | "status" | "active" | "runId"
   > = {
-    family: outer(reviewState.family),
-    status: outer(reviewState.status),
-    active: outer(reviewState.active),
-    runId: outer(reviewState.runId),
+    family: outer(reviewSuggestion.family),
+    status: outer(reviewSuggestion.status),
+    active: outer(reviewSuggestion.active),
+    runId: outer(reviewSuggestion.runId),
   },
 ) {
   if (eligibility.kind === "automatic")
@@ -171,7 +169,7 @@ function settlementSuggestionQuery(db: Database, scope: SuggestionRecordScope) {
 /** Scope identities before expensive automatic receipts; retain a statement-local barrier. */
 function touchingSuggestionQuery(db: Database, scope: SuggestionRecordScope) {
   const client = unwrapDb(db);
-  const s = reviewState;
+  const s = reviewSuggestion;
   const families =
     scope.eligibility.kind === "suggestions"
       ? scope.eligibility.families
