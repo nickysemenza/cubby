@@ -56,14 +56,10 @@ test("a person accepts a data gap as an exception that survives evidence changes
       "Checked [synthetic catalog](https://example.test/catalog); no brandName is listed.",
     );
   await check.getByRole("button", { name: "Accept exception" }).click();
-  // The waiver can supersede the publication captured by this explanation.
+  // The durable decision is current even while the published checks await the bulk pass.
   await expect(async () => {
     if (!(await popover.isVisible())) await trigger.click();
-    const refresh = popover.getByRole("button", {
-      name: "Refresh value and explanation",
-    });
-    if (await refresh.isVisible()) await refresh.click();
-    await expect(check).toContainText("Accepted exception");
+    await expect(check).toContainText("Recorded as Not applicable");
   }).toPass();
   await expect(
     check.getByRole("link", { name: "synthetic catalog" }),
