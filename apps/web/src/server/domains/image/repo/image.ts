@@ -159,7 +159,6 @@ import {
   singularAttachmentImageIds,
 } from "~/server/entity-kernel/repo/singular-attachment";
 import { createAppError } from "~/server/errors/app-error";
-import { retireAssessmentTargetsTx } from "~/server/generic/assessment/repo/assessment-state";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
@@ -177,6 +176,7 @@ import {
   type ShortcodeTable,
 } from "~/server/generic/shortcode/repo/shortcode-tables";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { retireSuggestionTargetsTx } from "~/server/generic/suggestions/repo/suggestion-state";
 
 /** The attachment role already chose gallery storage for this target. */
 const galleryTarget = (entity: AttachableImageEntity): GalleryEntity => {
@@ -1976,7 +1976,7 @@ const deleteImagesTx = async (
   }
 
   await softDeleteEntitySearchArtifactsTx(tx, "image", ids);
-  await retireAssessmentTargetsTx(tx, "image", ids);
+  await retireSuggestionTargetsTx(tx, "image", ids);
   await tombstoneEntityIdentities(tx, ids);
   await tx.delete(image).where(inArray(image.id, ids));
   await recordChange(tx, {

@@ -9,21 +9,24 @@ import { z } from "zod";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { run as runTable, suggestionTable } from "~/server/db/schema";
+import { suggestionTable } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
-import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
-import {
-  suggestionStateColumns,
-  transitionAssessmentStates,
-} from "~/server/generic/assessment/repo/assessment-state";
-import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { JobTargetError } from "~/server/generic/jobs/errors";
+import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
-} from "~/server/generic/assessment/repo/field-input-fence";
-import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import { JobTargetError } from "~/server/generic/jobs/errors";
+} from "~/server/generic/suggestions/repo/field-input-fence";
+import {
+  fieldSuggestionPublication,
+  publishSuggestions,
+} from "~/server/generic/suggestions/repo/suggestion";
+import {
+  suggestionStateColumns,
+  transitionSuggestionStates,
+} from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 export type SuggestionValue =
@@ -55,38 +58,8 @@ export const sweepSuggestionSchema = z.object({
   runnerUpValue: suggestionValueSchema,
   runnerUpConfidence: z.number().nullable(),
   model: z.string(),
-  served: z.boolean(),
 });
 export type SweepSuggestion = z.infer<typeof sweepSuggestionSchema>;
-
-export const readSuggestionSweepRun = async (db: Database, runId: RunId) => {
-  const [row] = await getDb(db)
-    .select()
-    .from(runTable)
-    .where(eq(runTable.id, runId));
-  if (!row || row.purpose !== "suggestion_sweep")
-    throw new Error("Suggestion sweep Run not found");
-  return row;
-};
-
-/** Replaces the sweep Run's progress checkpoint. */
-export async function writeSuggestionSweepProgress(
-  db: Database,
-  runId: RunId,
-  progress: (typeof runTable.$inferInsert)["progress"],
-) {
-  await getDb(db)
-    .update(runTable)
-    .set({ progress })
-    .where(eq(runTable.id, runId));
-}
-
-export async function pauseRunningSuggestionSweep(db: Database, runId: RunId) {
-  await getDb(db)
-    .update(runTable)
-    .set({ status: "paused" })
-    .where(and(eq(runTable.id, runId), eq(runTable.status, "running")));
-}
 
 export async function saveSweepSuggestions(
   db: Database,
@@ -292,7 +265,7 @@ export async function saveSweepSuggestions(
           (input.predecessorIds && !input.predecessorIds.includes(previous.id))
         )
           continue;
-        await transitionAssessmentStates(
+        await transitionSuggestionStates(
           tx,
           and(
             eq(suggestionTable.id, previous.id),
@@ -310,9 +283,8 @@ export async function saveSweepSuggestions(
       }
       const created: string[] = [];
       for (const entry of admissible) {
-        const row = await publishFieldAssessment(
-          tx,
-          {
+        const [row] = await publishSuggestions(tx, [
+          fieldSuggestionPublication({
             runId,
             entity: input.entity,
             recordId: typedRecordId,
@@ -330,14 +302,13 @@ export async function saveSweepSuggestions(
             model: entry.model,
             kind: entry.kind,
             data: {
-              served: entry.served,
               liveInputFingerprint,
               reviewKey: entry.reviewKey ?? null,
             },
             status: "pending",
-          },
-          entry.served,
-        );
+          }),
+        ]);
+        if (!row) throw new Error("Field publication returned no row");
         created.push(row.id);
       }
       // Proposals publish pending; a confident assignment then applies only

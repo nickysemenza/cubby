@@ -1,9 +1,9 @@
 import { z } from "zod";
 import {
-  assessmentChildHandle,
+  suggestionChildHandle,
   mailImportOutcome,
-  assessmentProducer,
-} from "./assessment";
+  suggestionProducer,
+} from "./suggestion";
 import { mailMessageRef } from "./mailbox-research";
 import { runShortcode } from "./identifier-fields";
 
@@ -16,10 +16,10 @@ export const mailImportOutcomesInput = mailMessageRef.extend({
  * the writer's judgment, not a current state.
  */
 export const mailOutcomeSnapshot = z.object({
-  /** Reviews cite this handle; a carried outcome keeps its Assessment id. */
+  /** Reviews cite this handle; a carried outcome keeps its Suggestion id. */
   id: z.uuid(),
   judgment: mailImportOutcome,
-  producer: assessmentProducer.nullable(),
+  producer: suggestionProducer.nullable(),
   checksum: z.string(),
   fingerprint: z.string().nullable(),
   createdAt: z.iso.datetime(),
@@ -29,9 +29,9 @@ export type MailOutcomeSnapshot = z.infer<typeof mailOutcomeSnapshot>;
 export const mailImportOutcomesOut = z.object({
   items: z.array(
     z.object({
-      assessmentId: assessmentChildHandle,
+      suggestionId: suggestionChildHandle,
       judgment: mailImportOutcome,
-      producer: assessmentProducer
+      producer: suggestionProducer
         .extend({ runId: runShortcode.nullable() })
         .nullable(),
       checksum: z.string(),

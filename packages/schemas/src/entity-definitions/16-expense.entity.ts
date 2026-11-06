@@ -425,9 +425,11 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         resolution: {
           reset: { spendingCategoryId: null },
+          resetSource: "expenseCategory",
           redundancy: "eligible",
         },
         explanation: {
+          evidence: { kind: "category", allocated: true },
           ruleId: "expense.effective-spending-category",
           description:
             "An explicit Expense category wins over contextual defaults, Product Category mappings, and the stored Purchase fallback. Shared adjustments use the principal lines' category allocation.",
@@ -444,10 +446,6 @@ export const { definition, readSchemas } = defineEntityModel({
             {
               path: "fields.spendingCategoryId.current.assignment.value",
               label: "Stored override",
-            },
-            {
-              path: "fields.spendingCategoryId.current.controls.reset.preview.result.decision.outcome.value",
-              label: "Inherited value",
             },
           ],
         },
@@ -633,6 +631,7 @@ Rules:
           mobile: { slot: "meta", priority: 20 },
         },
         explanation: {
+          evidence: { kind: "scalar", allocated: true },
           ruleId: "expense.effective-cost-type",
           description:
             "An item line's cost type is its own. A tax, shipping, or fee line follows the items it was charged on, unless it names its own trade.",
@@ -676,6 +675,7 @@ Rules:
           redundancy: "eligible",
         },
         explanation: {
+          evidence: { kind: "contextTrade", allocated: true },
           ruleId: "expense.effective-trade",
           description:
             "An expense trade override wins. Otherwise an item line uses its purchase default trade, then its effective project's default trade, and a tax, shipping, or fee line follows the items it was charged on.",
@@ -692,10 +692,6 @@ Rules:
             {
               path: "fields.trade.current.assignment.value",
               label: "Stored override",
-            },
-            {
-              path: "fields.trade.current.controls.reset.preview.result.decision.outcome.value",
-              label: "Inherited value",
             },
           ],
         },
@@ -763,9 +759,11 @@ Rules:
         },
         resolution: {
           reset: { projectId: null },
+          resetSource: "expenseInheritance",
           redundancy: "eligible",
         },
         explanation: {
+          evidence: { kind: "contextProject", allocated: true },
           ruleId: "expense.effective-project",
           description:
             "A principal expense project override wins; otherwise the expense uses its purchase's default project, then Household for food or Unassigned. Purchase-level adjustments are allocated across the purchase's principal project totals.",
@@ -782,10 +780,6 @@ Rules:
             {
               path: "fields.projectId.current.assignment.value",
               label: "Stored override",
-            },
-            {
-              path: "fields.projectId.current.controls.reset.preview.result.decision.outcome.value",
-              label: "Inherited value",
             },
           ],
         },
@@ -2171,6 +2165,10 @@ Rules:
   },
   extensions: {
     ports: {
+      reports: {
+        module: "~/server/domains/expense/repo/report-bindings",
+        export: "reportBindings",
+      },
       repository: {
         module: "~/server/domains/expense/repo/repository",
         export: "expenseRepository",

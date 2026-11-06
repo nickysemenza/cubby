@@ -4,7 +4,7 @@ import { useContext } from "react";
 
 import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { useEntityMetadata } from "~/entity/metadata";
-import { assessment } from "~/integrations/tanstack-query/generated/domains/assessment.gen";
+import { suggestion as suggestionApi } from "~/integrations/tanstack-query/generated/domains/suggestion.gen";
 
 import {
   type EntitySuggestionsOperations,
@@ -84,10 +84,10 @@ function StandaloneSuggestion({
       onApply={
         suggestion
           ? async () => {
-              if (!suggestion.assessmentId)
-                throw new Error("Suggestion Assessment is missing");
-              await assessment.review.call({
-                assessmentId: suggestion.assessmentId,
+              if (!suggestion.suggestionId)
+                throw new Error("Suggestion Suggestion is missing");
+              await suggestionApi.review.call({
+                suggestionId: suggestion.suggestionId,
                 operationId: crypto.randomUUID(),
                 verdict: "correct",
                 intent: "draft",
@@ -95,8 +95,8 @@ function StandaloneSuggestion({
               if (!suggestion.financeReview) return onApply(suggestion);
               try {
                 await financeApply.apply(suggestion);
-                await assessment.review.call({
-                  assessmentId: suggestion.assessmentId,
+                await suggestionApi.review.call({
+                  suggestionId: suggestion.suggestionId,
                   operationId: crypto.randomUUID(),
                   verdict: "correct",
                   intent: "apply",

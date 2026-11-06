@@ -1,6 +1,5 @@
+import { problemQuery } from "@cubby/schemas/entity-definitions/problems/problem-registry";
 import { describe, expect, it } from "vitest";
-
-import { problemQuery } from "~/entity/problems/problem-registry";
 
 import { problemWorklistState } from "./problem-worklist";
 

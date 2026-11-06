@@ -5,18 +5,14 @@ import { describe, expect, it } from "vitest";
 
 import { createDatabase } from "~/server/db/database-runtime";
 
-import type { RelatednessDependencies } from "./relatedness.service";
-import {
-  getProductRelatedness,
-  getProductTagPropagation,
-} from "./relatedness.service";
+type RelatednessDependencies = NonNullable<
+  Parameters<typeof getEntityRelatedness>[2]
+>;
+import { getEntityRelatedness } from "./relatedness.service";
 
-const sourceId = testShortcode("product", "PRD-ABCD");
-const scoreId = testShortcode("product", "score");
-const hiddenId = testShortcode("product", "hidden");
-const oneId = testShortcode("product", "one");
-const twoId = testShortcode("product", "two");
-const threeId = testShortcode("product", "three");
+const sourceId = testShortcode("recipe", "RCP-ABCD");
+const scoreId = testShortcode("recipe", "score");
+const hiddenId = testShortcode("recipe", "hidden");
 const dependencyOnlyDatabase = createDatabase(() => {
   throw new Error("Relatedness unit dependencies must not resolve a database");
 });
@@ -24,7 +20,7 @@ const dependencyOnlyDatabase = createDatabase(() => {
 const searchHit = (id: string, title: string) =>
   searchHitSchema.parse({
     id,
-    entityKind: "product",
+    entityKind: "recipe",
     title,
     subtitle: null,
     typeHint: null,
@@ -39,42 +35,55 @@ function dependenciesFor(
   overrides: Partial<RelatednessDependencies> = {},
 ): RelatednessDependencies {
   const dependencies: RelatednessDependencies = {
-    resolveSourceId: async () => testEntityId("product", "source"),
-    findSimilarEntities: async () => ({
-      source: { entityKind: "product", entityId: sourceId },
+    resolveOrThrow: async (_db, entity) => testEntityId(entity, "source"),
+    findSemanticNeighbours: async () => ({
+      source: { entityKind: "recipe", entityId: sourceId },
       status: "ready",
+      complete: true,
       results: [],
     }),
-    getProductsSharingTags: async () => [],
-    readProducts: async () => [],
-    getActiveDismissalKeys: async () => new Set(),
-    makeCandidateKey: async (_kind, values) => `key:${values.join(":")}`,
+    readScalarOverlaps: async () => [],
+    hydrateSearchHitRefs: async () => [],
   };
   return { ...dependencies, ...overrides };
 }
 
-describe("getProductRelatedness", () => {
-  it("suppresses dismissed candidates while retaining flat merged evidence", async () => {
+describe("getEntityRelatedness", () => {
+  it("retains flat merged evidence and scalar-only records", async () => {
     const dependencies = dependenciesFor({
-      findSimilarEntities: async (): Promise<SimilarEntitiesOut> => ({
-        source: { entityKind: "product", entityId: sourceId },
+      findSemanticNeighbours: async (): Promise<SimilarEntitiesOut> => ({
+        source: { entityKind: "recipe", entityId: sourceId },
         status: "ready",
+        complete: true,
         results: [
           {
             similarity: 0.9,
-            entity: searchHit(scoreId, "Scored product"),
+            entity: searchHit(scoreId, "Scored recipe"),
           },
         ],
       }),
-      getProductsSharingTags: async () => [
-        { shortcode: scoreId, name: "Scored product", tags: ["useful"] },
-        { shortcode: hiddenId, name: "Hidden product", tags: ["old"] },
+      readScalarOverlaps: async () => [
+        { entityId: testEntityId("recipe", "score"), values: ["useful"] },
+        { entityId: testEntityId("recipe", "hidden"), values: ["old"] },
       ],
-      getActiveDismissalKeys: async () => new Set([`key:${hiddenId}`]),
+      hydrateSearchHitRefs: async () => [
+        {
+          ...searchHit(scoreId, "Scored recipe"),
+          entityId: testEntityId("recipe", "score"),
+        },
+        {
+          ...searchHit(hiddenId, "Tag-only recipe"),
+          entityId: testEntityId("recipe", "hidden"),
+        },
+      ],
     });
 
     await expect(
-      getProductRelatedness(dependencyOnlyDatabase, sourceId, dependencies),
+      getEntityRelatedness(
+        dependencyOnlyDatabase,
+        { entity: "recipe", id: sourceId },
+        dependencies,
+      ),
     ).resolves.toMatchObject({
       status: "ready",
       items: [
@@ -83,44 +92,7 @@ describe("getProductRelatedness", () => {
           score: 0.9,
           evidence: [{ signal: "Similar meaning" }, { signal: "Shared tag" }],
         },
-      ],
-    });
-  });
-});
-
-describe("getProductTagPropagation", () => {
-  it("proposes tags with three semantic-neighbour votes", async () => {
-    const dependencies = dependenciesFor({
-      findSimilarEntities: async (): Promise<SimilarEntitiesOut> => ({
-        source: { entityKind: "product", entityId: sourceId },
-        status: "ready",
-        results: [
-          { entity: searchHit(oneId, "One"), similarity: 0.9 },
-          { entity: searchHit(twoId, "Two"), similarity: 0.8 },
-          { entity: searchHit(threeId, "Three"), similarity: 0.7 },
-        ],
-      }),
-      getActiveDismissalKeys: async () => new Set(),
-      makeCandidateKey: async () => "candidate-key",
-      readProducts: async () => [
-        { id: sourceId, tags: ["already"] },
-        { id: oneId, tags: ["shared", "low-vote"] },
-        { id: twoId, tags: ["shared"] },
-        { id: threeId, tags: ["shared", "already"] },
-      ],
-    });
-
-    await expect(
-      getProductTagPropagation(dependencyOnlyDatabase, sourceId, dependencies),
-    ).resolves.toEqual({
-      status: "ready",
-      currentTags: ["already"],
-      proposals: [
-        {
-          tag: "shared",
-          supportingProductCount: 3,
-          supportingProductIds: [oneId, twoId, threeId],
-        },
+        { shortcode: hiddenId, score: 0, evidence: [{ signal: "Shared tag" }] },
       ],
     });
   });

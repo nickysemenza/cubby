@@ -23,15 +23,15 @@ import { labelStatementSuggestions } from "~/server/domains/transaction-import/s
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { isSerializationFailure } from "~/server/errors/db-errors";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
-import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import * as changes from "~/server/generic/changes/repo/change";
 import {
   lockJobs,
   replaceJobGeneration,
 } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 import {
@@ -173,7 +173,7 @@ describe("statement spending review and re-import", () => {
       });
       const suggestion = page.items[0]!;
       const command = {
-        assessmentId: suggestion.id,
+        suggestionId: suggestion.id,
         operationId: "synthetic-shared-card-contention",
         verdict: "correct" as const,
         correction: { present: false as const },
@@ -186,7 +186,7 @@ describe("statement spending review and re-import", () => {
       };
       await expect(
         previewStatementSuggestion(ctx.db, {
-          assessmentId: command.assessmentId,
+          suggestionId: command.suggestionId,
           expectedFingerprint: command.expectedFingerprint,
           application: command.application,
         }),
@@ -272,7 +272,7 @@ describe("statement spending review and re-import", () => {
       try {
         const scenarios = {
           once: async () => {
-            const result = await reviewAssessment(
+            const result = await reviewSuggestion(
               ctx.db,
               kernelCtx(ctx),
               command,
@@ -283,7 +283,7 @@ describe("statement spending review and re-import", () => {
           },
           exhausted: async () => {
             await expect(
-              reviewAssessment(ctx.db, kernelCtx(ctx), command),
+              reviewSuggestion(ctx.db, kernelCtx(ctx), command),
             ).rejects.toSatisfy(isSerializationFailure);
             expect(calls).toBe(3);
             expect(builds).toBe(3);
@@ -298,11 +298,11 @@ describe("statement spending review and re-import", () => {
               }),
             ).toMatchObject({ active: true, status: "pending" });
             racing.mockRestore();
-            return reviewAssessment(ctx.db, kernelCtx(ctx), command);
+            return reviewSuggestion(ctx.db, kernelCtx(ctx), command);
           },
           stale: async () => {
             await expect(
-              reviewAssessment(ctx.db, kernelCtx(ctx), command),
+              reviewSuggestion(ctx.db, kernelCtx(ctx), command),
             ).rejects.toThrow(/statement or transaction evidence changed/i);
             expect(builds).toBe(2);
             expect(await read()).toEqual({
@@ -319,14 +319,14 @@ describe("statement spending review and re-import", () => {
           },
           committed: async () => {
             await expect(
-              reviewAssessment(ctx.db, kernelCtx(ctx), command),
+              reviewSuggestion(ctx.db, kernelCtx(ctx), command),
             ).rejects.toThrow(
               /Transaction committed, but an after-commit effect failed/,
             );
             expect(calls).toBe(1);
             expect(builds).toBe(1);
             racing.mockRestore();
-            const result = await reviewAssessment(
+            const result = await reviewSuggestion(
               ctx.db,
               kernelCtx(ctx),
               command,
@@ -352,7 +352,7 @@ describe("statement spending review and re-import", () => {
           }),
         ).toMatchObject({ status: "applied" });
         const stored = await read();
-        expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
+        expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), command)).toEqual(
           result,
         );
         expect(await read()).toEqual(stored);
@@ -378,7 +378,7 @@ describe("statement spending review and re-import", () => {
       booking: { costType: "services" },
     });
     const command = {
-      assessmentId: suggestion.assessmentId,
+      suggestionId: suggestion.suggestionId,
       expectedFingerprint: suggestion.fingerprint,
       operationId: "synthetic-source-replay",
       verdict: "wrong" as const,
@@ -386,11 +386,11 @@ describe("statement spending review and re-import", () => {
       intent: "apply" as const,
       application,
     };
-    const receipt = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
+    const receipt = await reviewSuggestion(ctx.db, kernelCtx(ctx), command);
     await getDb(ctx.db)
       .update(sourceOccurrence)
       .set({ reviewState: "identity_conflict" });
-    expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
+    expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), command)).toEqual(
       receipt,
     );
     expect(await total()).toBe(42.5);
@@ -402,13 +402,13 @@ describe("statement spending review and re-import", () => {
     ).toHaveLength(1);
   });
 
-  // Preview must fence missing/stale assessments and invalid drafts before
+  // Preview must fence missing/stale suggestions and invalid drafts before
   // planning, replan the selected draft, and never publish or mutate evidence.
-  it("fences missing fingerprints, replaced assessments, and changed statement evidence in preview", async () => {
+  it("fences missing fingerprints, replaced suggestions, and changed statement evidence in preview", async () => {
     await fixture();
     const suggestion = await pendingPreview();
     const input = {
-      assessmentId: suggestion.assessmentId,
+      suggestionId: suggestion.suggestionId,
       expectedFingerprint: suggestion.fingerprint,
       application: { kind: "statement_transaction", action: "create" },
     };
@@ -421,7 +421,7 @@ describe("statement spending review and re-import", () => {
     await expect(
       previewStatementSuggestion(ctx.db, {
         ...input,
-        assessmentId: crypto.randomUUID(),
+        suggestionId: crypto.randomUUID(),
       }),
     ).rejects.toThrow(/no longer available/i);
     await expect(
@@ -437,7 +437,7 @@ describe("statement spending review and re-import", () => {
       /evidence changed/i,
     );
   });
-  it("replans draft kind and booking without writing transactions, vendors, aliases, or assessment state", async () => {
+  it("replans draft kind and booking without writing transactions, vendors, aliases, or suggestion state", async () => {
     const { advice } = await fixture();
     const suggestion = await pendingPreview();
     const snapshot = async () =>
@@ -451,13 +451,13 @@ describe("statement spending review and re-import", () => {
         'expenses', (SELECT jsonb_agg(to_jsonb(v)) FROM "Expense" v),
         'refs', (SELECT jsonb_agg(to_jsonb(v)) FROM "EntityExternalId" v),
         'rows', (SELECT jsonb_agg(to_jsonb(v)) FROM "SourceTransactionRecord" v),
-        'assessments', (SELECT jsonb_agg(to_jsonb(v)) FROM "Suggestion" v)
+        'advice', (SELECT jsonb_agg(to_jsonb(v)) FROM "Suggestion" v)
       ) AS state
     `)
       ).rows[0]!.state;
     const before = await snapshot();
     const input = {
-      assessmentId: suggestion.assessmentId,
+      suggestionId: suggestion.suggestionId,
       expectedFingerprint: suggestion.fingerprint,
       application: {
         kind: "statement_transaction",
@@ -513,7 +513,7 @@ describe("statement spending review and re-import", () => {
     });
     const suggestion = await pendingPreview();
     const input = {
-      assessmentId: suggestion.assessmentId,
+      suggestionId: suggestion.suggestionId,
       expectedFingerprint: suggestion.fingerprint,
       application: { kind: "statement_transaction", action: "attach" },
     };
@@ -559,8 +559,8 @@ describe("statement spending review and re-import", () => {
         (row) => row.status === "pending",
       ),
     ).toBe(true);
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: suggestion.assessmentId,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: suggestion.suggestionId,
       operationId: "synthetic-preview-attach",
       verdict: "wrong",
       correction: {
@@ -600,7 +600,7 @@ describe("statement spending review and re-import", () => {
     );
     const suggestion = await pendingPreview();
     const result = await previewStatementSuggestion(ctx.db, {
-      assessmentId: suggestion.assessmentId,
+      suggestionId: suggestion.suggestionId,
       expectedFingerprint: suggestion.fingerprint,
       application: {
         kind: "statement_transaction",
@@ -720,7 +720,7 @@ describe("statement spending review and re-import", () => {
       (row) => row.source === "copilot",
     )!;
     expect(
-      (await readStatementSuggestions(ctx.db, [suggestion.assessmentId]))[0]!
+      (await readStatementSuggestions(ctx.db, [suggestion.suggestionId]))[0]!
         .sourceCategories,
     ).toEqual([
       { source: "monarch", sourceCategory: "Food and drink" },
@@ -750,7 +750,7 @@ describe("statement spending review and re-import", () => {
     });
 
     expect(
-      await readStatementSuggestions(ctx.db, [suggestion.assessmentId]),
+      await readStatementSuggestions(ctx.db, [suggestion.suggestionId]),
     ).toEqual([]);
     // Shared settlement refs establish cross-provider membership; the stale
     // create suggestion is replaced by pending booking work for that charge.
@@ -801,8 +801,8 @@ describe("statement spending review and re-import", () => {
       trade: "other",
     });
     await expect(
-      reviewAssessment(ctx.db, kernelCtx(ctx), {
-        assessmentId: suggestion!.id,
+      reviewSuggestion(ctx.db, kernelCtx(ctx), {
+        suggestionId: suggestion!.id,
         operationId: "synthetic-spending-accept",
         verdict: "correct",
         intent: "apply",
@@ -916,8 +916,8 @@ describe("statement spending review and re-import", () => {
       action: "create",
       booking: { vendorId: vendor!.shortcode },
     });
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: suggestion.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: suggestion.id,
       operationId: "synthetic-vendor-only-review",
       verdict: "wrong",
       correction: { present: true, value: application },

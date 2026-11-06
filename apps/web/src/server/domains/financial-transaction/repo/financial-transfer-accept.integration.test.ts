@@ -21,7 +21,6 @@ import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-par
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { acceptFinancialTransferPair } from "./financial-transfer-accept";
-import { suggestFinancialTransferPairs } from "./financial-transfer-pairing";
 
 describe("acceptFinancialTransferPair", () => {
   const ctx = withTestDb("mcp");
@@ -234,26 +233,6 @@ describe("acceptFinancialTransferPair", () => {
       null,
       "observed",
     );
-
-    const pairing = await suggestFinancialTransferPairs(ctx.db, {
-      transactionIds: [out, inn],
-      maxDateDistanceDays: 5,
-      maxCandidatesPerTransaction: 3,
-    });
-    expect(pairing.status).toBe("proposed");
-    expect(pairing.suggestions).toHaveLength(2);
-    for (const suggestion of pairing.suggestions) {
-      expect(suggestion).toMatchObject({
-        status: "proposed",
-        candidates: [
-          {
-            outflowTransactionId: out,
-            inflowTransactionId: inn,
-            dateDistanceDays: 2,
-          },
-        ],
-      });
-    }
 
     const result = await acceptFinancialTransferPair(
       ctx.db,

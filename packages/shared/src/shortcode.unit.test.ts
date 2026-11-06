@@ -5,7 +5,6 @@ import {
   LEGACY_SHORTCODE_PREFIX,
   SHORTCODE_CHARS,
   SHORTCODE_PREFIX,
-  SHORTCODE_LENGTH,
   type LocationShortcode,
   type AnyShortcode,
   type EmailShortcode,
@@ -95,7 +94,7 @@ describe("prefix registry", () => {
 describe("shortcodeSchema", () => {
   it.each(ENTITIES)("normalizes and brands a %s code", (entity) => {
     const schema = shortcodeSchema(entity);
-    const canonical = `${SHORTCODE_PREFIX[entity]}${"4K7MN4K7MN".slice(0, SHORTCODE_LENGTH[entity] ?? 4)}`;
+    const canonical = `${SHORTCODE_PREFIX[entity]}${"4K7MN4K7MN".slice(0, 4)}`;
     expect(schema.parse(canonical)).toBe(canonical);
     expect(schema.parse(`  ${canonical.toLowerCase()}  `)).toBe(canonical);
   });
@@ -171,9 +170,7 @@ describe("generateShortcode", () => {
       for (let i = 0; i < 50; i++) {
         const code = generateShortcode(entity);
         expect(schema.safeParse(code).success).toBe(true);
-        expect(code.slice(SHORTCODE_PREFIX[entity].length)).toHaveLength(
-          SHORTCODE_LENGTH[entity] ?? 5,
-        );
+        expect(code.slice(SHORTCODE_PREFIX[entity].length)).toHaveLength(5);
       }
     },
   );

@@ -1,0 +1,144 @@
+/**
+ * Server/compiler entrypoint for Problem filter semantics.
+ *
+ * Declarations live in `filter-search-fields.ts`, the dependency-light
+ * semantic registry. Compilation stays here so eager route validation does
+ * not pull the richer filter runtime (including ts-pattern) into the
+ * application shell.
+ */
+import { scoredEntities } from "@cubby/schemas/data-quality";
+import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import {
+  buildFiltersFromManifest,
+  type FilterPatch,
+  type FilterSpecCore,
+  filterUrlKey,
+} from "@cubby/schemas/entity-definitions/list-filters";
+import { problemFilterSemantics } from "@cubby/schemas/entity-definitions/problems/filter-fields";
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
+import { parseRangeBounds, resolveRelativeDate } from "@cubby/shared";
+
+import { householdLocalDate } from "~/lib/household-date";
+
+const entityFilterUrlKeys = (entity: Entity): readonly string[] =>
+  generatedEntityListFields[entity].filterUrlKeys;
+import type { FilterAssembly } from "@cubby/schemas/entity-definitions/problems/problem-query";
+
+/** Every scored entity with a list surface exposes the generated quality-gap filter. */
+export const problemFilterSpecs: Record<string, readonly FilterSpecCore[]> =
+  Object.fromEntries(
+    entitySchema.options.map((entity) => {
+      const declared =
+        Object.entries(problemFilterSemantics).find(
+          ([key]) => key === entity,
+        )?.[1] ?? [];
+      const hasQuality =
+        scoredEntities.some((key) => key === entity) &&
+        entityFilterUrlKeys(entity).includes("dataGaps");
+      const quality: FilterSpecCore = {
+        columnId: "dataGaps",
+        field: "dataGap",
+        kind: "multiselect",
+      };
+      return [
+        entity,
+        hasQuality
+          ? [
+              ...declared.filter((spec) => spec.columnId !== "dataGaps"),
+              quality,
+            ]
+          : declared,
+      ] satisfies [Entity, readonly FilterSpecCore[]];
+    }),
+  );
+
+/**
+ * The first declared range filter whose preset expands to an empty patch, or
+ * undefined when every one resolves.
+ *
+ * A range spec expands a closed set of preset keys and returns an empty patch
+ * for anything else. From a URL that leniency is deliberate — an unknown
+ * `?date=` resolves to no bound rather than an error page. From a DECLARATION
+ * it is a silent widening: the constraint vanishes and the view reports every
+ * row. `unclassifiedExpenses` declared `cost` as the multiselect sentinel
+ * `FILTER_NONE` where that expander accepts only `"none"`, and reported 7,450
+ * rows against a true count of zero (#785).
+ *
+ * Exported because the same question has two askers with different reach.
+ * {@link compileProblemFilters} asks it at runtime, but only for the Problem-
+ * BACKED views it compiles; every other saved view goes straight to
+ * `buildFiltersFromManifest`, where an empty patch is an `Object.assign` no-op
+ * and the constraint disappears in silence. `view-manifest.unit.test.tsx` asks
+ * it of the whole manifest so those are covered too — one predicate, not two.
+ */
+export function findUnexpandedRangeFilter(
+  specs: readonly FilterSpecCore[],
+  assembly: FilterAssembly,
+): FilterAssembly[number] | undefined {
+  const byColumn = new Map(specs.map((spec) => [spec.columnId, spec]));
+  return assembly.find(({ id, value }) => {
+    const spec = byColumn.get(id);
+    if (spec?.kind !== "range") return false;
+    const preset = Array.isArray(value) ? value[0] : value;
+    if (preset === undefined) return false;
+    if (spec.range && parseRangeBounds(preset)) return false;
+    const patch = spec.expand?.(preset);
+    return !patch || Object.keys(patch).length === 0;
+  });
+}
+
+/**
+ * A Problem assembly's filters through the server-safe semantic registry,
+ * exactly as its URL decodes: relative date tokens stay tokens.
+ */
+export function problemFilterPatch(
+  entity: Entity,
+  assembly: FilterAssembly,
+): FilterPatch {
+  const specs = problemFilterSpecs[entity] ?? [];
+  const values = new Map(assembly.map(({ id, value }) => [id, value]));
+  const byColumn = new Map(specs.map((spec) => [spec.columnId, spec]));
+  const unknown = assembly.find(({ id }) => !byColumn.has(id));
+  if (unknown) {
+    throw new Error(
+      `No server-safe Problem filter semantic for ${entity}.${unknown.id}`,
+    );
+  }
+  const urlKeys = new Set(entityFilterUrlKeys(entity));
+  const nonSerializable = assembly.find(({ id }) => {
+    const spec = byColumn.get(id);
+    return !spec || !urlKeys.has(filterUrlKey(spec));
+  });
+  if (nonSerializable) {
+    throw new Error(
+      `Problem filter ${entity}.${nonSerializable.id} has no canonical URL semantic`,
+    );
+  }
+  const unexpanded = findUnexpandedRangeFilter(specs, assembly);
+  if (unexpanded) {
+    throw new Error(
+      `Problem filter ${entity}.${unexpanded.id} declares the range preset ` +
+        `"${String(unexpanded.value)}", which expands to nothing — the filter ` +
+        "would be dropped and the Problem would match every row.",
+    );
+  }
+  return buildFiltersFromManifest(specs, (columnId) => values.get(columnId));
+}
+
+/**
+ * A Problem assembly's repository filters. Problems read repositories
+ * outside the entity kernel, so their relative date bounds (`@today-1d`)
+ * resolve here against the household's `today` (#2415); a declared Problem
+ * spells no other value as a token.
+ */
+export const compileProblemFilters = (
+  entity: Entity,
+  assembly: FilterAssembly,
+  today: string = householdLocalDate(),
+): FilterPatch =>
+  Object.fromEntries(
+    Object.entries(problemFilterPatch(entity, assembly)).map(([key, value]) => [
+      key,
+      typeof value === "string" ? resolveRelativeDate(value, today) : value,
+    ]),
+  );

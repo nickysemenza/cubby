@@ -406,7 +406,7 @@ export const { definition, readSchemas } = defineEntityModel(
           storedPath: ["effectiveOwnerId"],
           kind: "identifier",
           nullable: true,
-          labelOverride: "Owner",
+          label: "Owner",
           reference: {
             entity: "ledgerParty",
             filters: [{ field: "kind", values: ["member", "guest"] }],
@@ -415,7 +415,7 @@ export const { definition, readSchemas } = defineEntityModel(
           display: {
             columnGroup: "Ownership",
             // Owner leads; the Stock band (valuation, verified) follows it.
-            listOrderOverride: 2,
+            listOrder: 2,
             columnLabel: "Owner",
             width: "md",
             labelPath: "effectiveOwnership.effectiveOwner.name",
@@ -430,6 +430,7 @@ export const { definition, readSchemas } = defineEntityModel(
             labels: { none: "Household", unresolved: "Unknown" },
           },
           explanation: {
+            evidence: { kind: "ownership" },
             ruleId: "inventory.effective-owner",
             version: 2,
             description:
@@ -451,10 +452,6 @@ export const { definition, readSchemas } = defineEntityModel(
               {
                 path: "fields.ownerLedgerPartyId.current.assignment.value",
                 label: "Current override",
-              },
-              {
-                path: "fields.ownerLedgerPartyId.current.controls.reset.preview.result.decision.outcome.value",
-                label: "Current inherited value",
               },
             ],
           },
@@ -1140,6 +1137,9 @@ export const { definition, readSchemas } = defineEntityModel(
       },
     },
     extensions: {
+      relatednessSignals: [
+        { kind: "semantic", label: "Similar meaning", weight: 1, limit: 8 },
+      ],
       ports: {
         repository: {
           module: "~/server/domains/inventory/repo/repository",

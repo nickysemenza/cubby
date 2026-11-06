@@ -43,7 +43,17 @@ async function runHourlyBackstop(
               getSourceRelease(env).commit,
             ).catch((error: unknown) => Sentry.captureException(error));
             await ringDueDeviceWork(db);
-            await drainProductionJobs(db);
+            const steps = await Promise.allSettled([
+              drainProductionJobs(db),
+              (await import("~/server/workflows/job-maintenance")).maintainJobs(
+                db,
+              ),
+            ]);
+            const errors = steps.flatMap((step) =>
+              step.status === "rejected" ? [step.reason] : [],
+            );
+            if (errors.length)
+              throw new AggregateError(errors, "Hourly background work failed");
           },
           { "cubby.scheduled.job": "hourly-backstop" },
         );

@@ -1,7 +1,7 @@
 import { confidence } from "@cubby/schemas/ai";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
-import { assessmentProducer } from "@cubby/schemas/assessment";
 import { productId } from "@cubby/schemas/identifiers";
+import { suggestionProducer } from "@cubby/schemas/suggestion";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -15,7 +15,7 @@ export const productIdentitySide = z.object({
   model: z.string().nullable(),
 });
 
-// Decoder for retained Assessment JSON only; these receipts confer no current authority.
+// Decoder for retained Suggestion JSON only; these receipts confer no current authority.
 const variantLiteral = z.object({
   productId,
   sourceId: z.uuid(),
@@ -45,7 +45,7 @@ const variantDecisionReceipt = z.object({
   inputFingerprint: z.string(),
 });
 export const groundedVariantEvidence = z.object({
-  producer: assessmentProducer,
+  producer: suggestionProducer,
   inputFingerprint: z.string(),
   priorConflictIds: z.array(z.uuid()),
   dependencies: aiProvenance.shape.dependencies,
@@ -127,7 +127,7 @@ export async function readVariantVerifications(
     .where(
       and(
         eq(suggestionTable.family, "product_pair"),
-        eq(suggestionTable.served, true),
+
         sql`(${inArray(subjectKey, keys)} OR ${inArray(stateKey, keys)})`,
       ),
     )

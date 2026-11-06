@@ -107,10 +107,10 @@ struct EntityRelationshipsTests {
 
         #expect(model.source == second)
         #expect(model.graph?.root == second)
-        #expect(model.recommendationDocument?.source == EntityGraphRoot(second))
+        #expect(model.relatednessDocument?.items.first?.shortcode == second.id)
     }
 
-    @Test @MainActor func failedRefreshRetainsLoadedGraphAndRecommendations() async throws {
+    @Test @MainActor func failedRefreshRetainsLoadedGraphAndRelatedness() async throws {
         let root = ref(.product, "PRD-1001")
         let client = RelationshipClientStub(graphs: [root: singleNodeGraph(root)])
         let model = EntityRelationshipsModel(client: client)
@@ -121,48 +121,12 @@ struct EntityRelationshipsTests {
 
         #expect(model.phase == .loaded)
         #expect(model.graph?.root == root)
-        #expect(model.recommendationDocument?.source == EntityGraphRoot(root))
+        #expect(model.relatednessDocument?.items.first?.shortcode == root.id)
         #expect(model.graphError != nil)
-        #expect(model.recommendationError != nil)
+        #expect(model.relatednessError != nil)
     }
 
-    @Test @MainActor func sourceChangeDuringAcceptanceCannotRefreshOrOverwriteTheNewSource() async {
-        let expense = ref(.expense, "EXP-1001")
-        let product = ref(.product, "PRD-1001")
-        let client = SuspendedAcceptanceClient(graphs: [
-            expense: singleNodeGraph(expense),
-            product: singleNodeGraph(product),
-        ])
-        let model = EntityRelationshipsModel(client: client)
-        await model.loadInitial(source: expense)
-        let proposal = ExpenseProjectProposal(
-            kind: .expenseProject,
-            expenseId: expense.id,
-            target: .init(id: "PRJ-1001", name: "Workshop"),
-            effectiveStart: nil,
-            effectiveEnd: nil,
-            sameTradeCount: 1,
-            exactProductCount: 0,
-            supportingExpenses: [],
-            reasons: ["Same trade"]
-        )
-
-        let acceptance = Task {
-            await model.accept(.expenseProject(proposal), basisKey: "basis-\(expense.id)")
-        }
-        await client.acceptance.arrivals(1)
-        await model.loadInitial(source: product)
-        client.acceptance.open()
-
-        #expect(await acceptance.value == nil)
-        #expect(model.source == product)
-        #expect(model.graph?.root == product)
-        #expect(model.recommendationDocument?.source == EntityGraphRoot(product))
-        #expect(model.acceptingRecommendationID == nil)
-        #expect(model.acceptError == nil)
-    }
-
-    @Test @MainActor func depthKeepsRecommendationsScopedToTheDetailSource() async {
+    @Test @MainActor func depthKeepsRelatednessScopedToTheDetailSource() async {
         let detailSource = ref(.product, "PRD-1001")
         let client = RelationshipClientStub(graphs: [detailSource: singleNodeGraph(detailSource)])
         let model = EntityRelationshipsModel(client: client)
@@ -172,142 +136,10 @@ struct EntityRelationshipsTests {
 
         #expect(model.source == detailSource)
         #expect(model.graph?.root == detailSource)
-        #expect(model.recommendationDocument?.source == EntityGraphRoot(detailSource))
+        #expect(model.relatednessDocument?.items.first?.shortcode == detailSource.id)
         #expect(model.depth == 3)
     }
 
-    @Test @MainActor func failedExpenseAcceptanceRetainsProposalAndRetryDispatchesUpdate() async {
-        let root = ref(.expense, "EXP-1001")
-        let proposal = ExpenseProjectProposal(
-            kind: .expenseProject,
-            expenseId: root.id,
-            target: .init(id: "PRJ-1001", name: "Workshop"),
-            effectiveStart: nil,
-            effectiveEnd: nil,
-            sameTradeCount: 2,
-            exactProductCount: 1,
-            supportingExpenses: [],
-            reasons: ["Same trade"]
-        )
-        let recommendations = EntityRecommendationsOut(
-            source: .init(root),
-            basisKey: "expense-basis",
-            groups: [
-                .expenseProject(
-                    .init(kind: .expenseProject, status: .ready, currentTarget: nil, proposals: [proposal]))
-            ]
-        )
-        let client = RetryingAcceptanceClient(
-            graph: singleNodeGraph(root),
-            recommendations: recommendations
-        )
-        let model = EntityRelationshipsModel(
-            client: client,
-            initialGraph: singleNodeGraph(root),
-            initialRecommendations: recommendations
-        )
-
-        let firstAccepted = await model.accept(.expenseProject(proposal), basisKey: "expense-basis")
-
-        #expect(firstAccepted == nil)
-        #expect(model.recommendationDocument == recommendations)
-        #expect(model.acceptError != nil)
-
-        let retryAccepted = await model.accept(.expenseProject(proposal), basisKey: "expense-basis")
-
-        #expect(retryAccepted?.destination == root)
-        #expect(model.acceptError == nil)
-        #expect(
-            await client.recordedActions() == [
-                .expense(expenseID: "EXP-1001", projectID: "PRJ-1001"),
-                .expense(expenseID: "EXP-1001", projectID: "PRJ-1001"),
-            ])
-    }
-
-    @Test @MainActor func failedInventoryAcceptanceRetainsProposalAndRetryDispatchesMove() async {
-        let root = ref(.inventory, "INV-1001")
-        let proposal = InventoryPlacementProposal(
-            kind: .inventoryPlacement,
-            inventoryId: InventoryEntryCode(root.id),
-            target: .init(id: LocationCode("LOC-1001"), name: "Pantry"),
-            reasons: ["Only established stock location"]
-        )
-        let recommendations = EntityRecommendationsOut(
-            source: .init(root),
-            basisKey: "inventory-basis",
-            groups: [
-                .inventoryPlacement(
-                    .init(
-                        kind: .inventoryPlacement, status: .ready, currentTarget: nil, proposals: [proposal]))
-            ]
-        )
-        let client = RetryingAcceptanceClient(
-            graph: singleNodeGraph(root),
-            recommendations: recommendations
-        )
-        let model = EntityRelationshipsModel(
-            client: client,
-            initialGraph: singleNodeGraph(root),
-            initialRecommendations: recommendations
-        )
-
-        let firstAccepted = await model.accept(.inventoryPlacement(proposal), basisKey: "inventory-basis")
-
-        #expect(firstAccepted == nil)
-        #expect(model.recommendationDocument == recommendations)
-        #expect(model.acceptError != nil)
-
-        let retryAccepted = await model.accept(.inventoryPlacement(proposal), basisKey: "inventory-basis")
-
-        #expect(retryAccepted?.destination == root)
-        #expect(model.acceptError == nil)
-        #expect(
-            await client.recordedActions() == [
-                .inventory(inventoryID: "INV-1001", locationID: "LOC-1001"),
-                .inventory(inventoryID: "INV-1001", locationID: "LOC-1001"),
-            ])
-    }
-
-    @Test @MainActor func mergedInventoryAcceptanceReturnsSurvivorWithoutRefreshingDeletedSource() async {
-        let source = ref(.inventory, "INV-1001")
-        let survivor = ref(.inventory, "INV-2002")
-        let proposal = InventoryPlacementProposal(
-            kind: .inventoryPlacement,
-            inventoryId: InventoryEntryCode(source.id),
-            target: .init(id: LocationCode("LOC-1001"), name: "Workshop"),
-            reasons: ["Only established stock location"]
-        )
-        let recommendations = EntityRecommendationsOut(
-            source: .init(source),
-            basisKey: "inventory-basis",
-            groups: [
-                .inventoryPlacement(
-                    .init(
-                        kind: .inventoryPlacement, status: .ready, currentTarget: nil, proposals: [proposal]))
-            ]
-        )
-        let client = MergedInventoryAcceptanceClient(
-            graph: singleNodeGraph(source),
-            recommendations: recommendations,
-            survivor: survivor
-        )
-        let model = EntityRelationshipsModel(
-            client: client,
-            initialGraph: singleNodeGraph(source),
-            initialRecommendations: recommendations
-        )
-
-        let acceptance = await model.accept(
-            .inventoryPlacement(proposal),
-            basisKey: "inventory-basis"
-        )
-
-        #expect(acceptance?.subject == source)
-        #expect(acceptance?.destination == survivor)
-        #expect(acceptance?.replacedSubject == true)
-        #expect(await client.refreshRequestCount() == 0)
-        #expect(model.acceptError == nil)
-    }
 }
 
 private actor RelationshipClientStub: EntityRelationshipsClient {
@@ -322,7 +154,7 @@ private actor RelationshipClientStub: EntityRelationshipsClient {
     func discoverConnections(_ input: EntityGraphRootInput) throws -> ConnectionDiscoveryOut {
         throw URLError(.unsupportedURL)
     }
-    func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
+    func reviewSuggestion(_ input: SuggestionReviewInput) throws -> SuggestionReviewOut {
         throw URLError(.unsupportedURL)
     }
 
@@ -347,15 +179,15 @@ private actor RelationshipClientStub: EntityRelationshipsClient {
         throw URLError(.unsupportedURL)
     }
 
-    func recommendations(for source: EntityRef) throws -> EntityRecommendationsOut {
+    func relatedness(for source: EntityRef) throws -> RecommendationWorkbenchOut {
         if shouldFail { throw URLError(.notConnectedToInternet) }
-        return EntityRecommendationsOut(source: .init(source), basisKey: "basis-\(source.id)", groups: [])
+        return RecommendationWorkbenchOut(
+            status: .ready,
+            items: [
+                .init(entity: source.entity, shortcode: source.id, title: "Fixture", score: 1, evidence: [])
+            ])
     }
 
-    func assignExpense(_ expenseID: String, toProject projectID: String) throws {}
-    func moveInventory(_ inventoryID: String, to locationID: String) -> EntityRef {
-        EntityRef(entity: .inventory, id: inventoryID)
-    }
 }
 
 private actor SuspendedRelationshipClient: EntityRelationshipsClient {
@@ -369,7 +201,7 @@ private actor SuspendedRelationshipClient: EntityRelationshipsClient {
     func discoverConnections(_ input: EntityGraphRootInput) throws -> ConnectionDiscoveryOut {
         throw URLError(.unsupportedURL)
     }
-    func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
+    func reviewSuggestion(_ input: SuggestionReviewInput) throws -> SuggestionReviewOut {
         throw URLError(.unsupportedURL)
     }
 
@@ -399,186 +231,14 @@ private actor SuspendedRelationshipClient: EntityRelationshipsClient {
         throw URLError(.unsupportedURL)
     }
 
-    func recommendations(for source: EntityRef) -> EntityRecommendationsOut {
-        EntityRecommendationsOut(source: .init(source), basisKey: "basis-\(source.id)", groups: [])
+    func relatedness(for source: EntityRef) -> RecommendationWorkbenchOut {
+        RecommendationWorkbenchOut(
+            status: .ready,
+            items: [
+                .init(entity: source.entity, shortcode: source.id, title: "Fixture", score: 1, evidence: [])
+            ])
     }
 
-    func assignExpense(_ expenseID: String, toProject projectID: String) throws {}
-    func moveInventory(_ inventoryID: String, to locationID: String) -> EntityRef {
-        EntityRef(entity: .inventory, id: inventoryID)
-    }
-}
-
-private actor SuspendedAcceptanceClient: EntityRelationshipsClient {
-    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunSnapshot {
-        throw URLError(.unsupportedURL)
-    }
-
-    func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
-        return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
-    }
-    func discoverConnections(_ input: EntityGraphRootInput) throws -> ConnectionDiscoveryOut {
-        throw URLError(.unsupportedURL)
-    }
-    func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
-        throw URLError(.unsupportedURL)
-    }
-
-    let graphs: [EntityRef: EntityGraph]
-    let acceptance = Gate()
-
-    init(graphs: [EntityRef: EntityGraph]) { self.graphs = graphs }
-
-    func exploreRelationships(root: EntityRef, depth: Int) throws -> EntityGraph {
-        guard let graph = graphs[root] else { throw URLError(.resourceUnavailable) }
-        return graph
-    }
-
-    func relationshipPage(
-        root: EntityRef,
-        relationshipKey: String,
-        offset: Int,
-        limit: Int
-    ) throws -> EntityGraphOutput {
-        throw URLError(.unsupportedURL)
-    }
-
-    func recommendations(for source: EntityRef) -> EntityRecommendationsOut {
-        EntityRecommendationsOut(source: .init(source), basisKey: "basis-\(source.id)", groups: [])
-    }
-
-    func assignExpense(_ expenseID: String, toProject projectID: String) async {
-        await acceptance.hold()
-        // Deliberately ignore cancellation to exercise the model's generation guard.
-    }
-
-    func moveInventory(_ inventoryID: String, to locationID: String) -> EntityRef {
-        EntityRef(entity: .inventory, id: inventoryID)
-    }
-}
-
-private actor RetryingAcceptanceClient: EntityRelationshipsClient {
-    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunSnapshot {
-        throw URLError(.unsupportedURL)
-    }
-
-    func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
-        return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
-    }
-    func discoverConnections(_ input: EntityGraphRootInput) throws -> ConnectionDiscoveryOut {
-        throw URLError(.unsupportedURL)
-    }
-    func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
-        throw URLError(.unsupportedURL)
-    }
-
-    enum Action: Sendable, Equatable {
-        case expense(expenseID: String, projectID: String)
-        case inventory(inventoryID: String, locationID: String)
-    }
-
-    let graph: EntityGraph
-    let recommendationDocument: EntityRecommendationsOut
-    var shouldFail = true
-    var actions: [Action] = []
-
-    init(graph: EntityGraph, recommendations: EntityRecommendationsOut) {
-        self.graph = graph
-        recommendationDocument = recommendations
-    }
-
-    func recordedActions() -> [Action] { actions }
-
-    func exploreRelationships(root: EntityRef, depth: Int) -> EntityGraph { graph }
-
-    func relationshipPage(
-        root: EntityRef,
-        relationshipKey: String,
-        offset: Int,
-        limit: Int
-    ) throws -> EntityGraphOutput {
-        throw URLError(.unsupportedURL)
-    }
-
-    func recommendations(for source: EntityRef) -> EntityRecommendationsOut {
-        recommendationDocument
-    }
-
-    func assignExpense(_ expenseID: String, toProject projectID: String) throws {
-        actions.append(.expense(expenseID: expenseID, projectID: projectID))
-        try failOnce()
-    }
-
-    func moveInventory(_ inventoryID: String, to locationID: String) throws -> EntityRef {
-        actions.append(.inventory(inventoryID: inventoryID, locationID: locationID))
-        try failOnce()
-        return EntityRef(entity: .inventory, id: inventoryID)
-    }
-
-    private func failOnce() throws {
-        if shouldFail {
-            shouldFail = false
-            throw URLError(.cannotConnectToHost)
-        }
-    }
-}
-
-private actor MergedInventoryAcceptanceClient: EntityRelationshipsClient {
-    func discoveryRunSnapshot(runID: RunShortcode) throws -> RunSnapshot {
-        throw URLError(.unsupportedURL)
-    }
-
-    func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
-        return .init(source: .init(entityKind: input.entityKind, entityId: input.entityId), proposals: [])
-    }
-    func discoverConnections(_ input: EntityGraphRootInput) throws -> ConnectionDiscoveryOut {
-        throw URLError(.unsupportedURL)
-    }
-    func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
-        throw URLError(.unsupportedURL)
-    }
-
-    let graph: EntityGraph
-    let recommendationDocument: EntityRecommendationsOut
-    let survivor: EntityRef
-    var refreshRequests = 0
-
-    init(
-        graph: EntityGraph,
-        recommendations: EntityRecommendationsOut,
-        survivor: EntityRef
-    ) {
-        self.graph = graph
-        recommendationDocument = recommendations
-        self.survivor = survivor
-    }
-
-    func refreshRequestCount() -> Int { refreshRequests }
-
-    func exploreRelationships(root: EntityRef, depth: Int) -> EntityGraph {
-        refreshRequests += 1
-        return graph
-    }
-
-    func relationshipPage(
-        root: EntityRef,
-        relationshipKey: String,
-        offset: Int,
-        limit: Int
-    ) throws -> EntityGraphOutput {
-        throw URLError(.unsupportedURL)
-    }
-
-    func recommendations(for source: EntityRef) -> EntityRecommendationsOut {
-        refreshRequests += 1
-        return recommendationDocument
-    }
-
-    func assignExpense(_ expenseID: String, toProject projectID: String) throws {}
-
-    func moveInventory(_ inventoryID: String, to locationID: String) -> EntityRef {
-        survivor
-    }
 }
 
 private func ref(_ entity: EntityKey, _ id: String) -> EntityRef {

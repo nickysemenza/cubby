@@ -9,6 +9,7 @@ import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { seedPerformanceCorpus } from "tooling/scenarios/performance";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { seedEntity, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -32,13 +33,12 @@ import {
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
-import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import {
   type DerivedAdapter,
   derivedSink,
 } from "~/server/generic/derived/repo/compute";
-import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
 import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
+import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -63,7 +63,9 @@ const computes = new Map<string, DerivedAdapter>([
       prepare: (db, ids) =>
         // SAFETY: the tracer samples Product ids for this declaration.
         prepareProductConversionCoverage(db, ids as ProductId[], offlineUsda),
-      publish: (tx, ids, prepared) => prepared.publish(tx, ids),
+      publish: async (tx, ids, prepared) => {
+        await prepared.publish(tx, ids);
+      },
     }),
   ],
 ]);
@@ -152,7 +154,7 @@ describe("deterministic cache rebuild", () => {
       .from(product)
       .limit(1);
     if (!subject) throw new Error("Synthetic Product was not created");
-    await publishFieldAssessment(
+    await seedFieldSuggestion(
       ctx.db,
       {
         entity: "product",

@@ -9,7 +9,7 @@ import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
-import { repositoryReadPorts } from "~/server/entity-kernel/repo/read-ports";
+import { repositoryReadBinding } from "~/server/entity-kernel/read.boundary";
 import { entityFieldEnvelopeProjectors } from "~/server/generated/entity-field-envelope-projectors.gen";
 import { presentPublishedQuality } from "~/server/generic/data-quality/repo/presentation";
 import { buildFieldEnvelopeRow } from "~/server/generic/derived/repo/envelope";
@@ -367,8 +367,7 @@ export async function publicFieldEnvelopeBatch({
     const missing = [...codes].filter((code) => !existing.has(code));
     let loaded: PageFieldReadContexts | undefined;
     if (missing.length) {
-      const read = repositoryReadPorts(kind);
-      if (!read) throw new Error(`No repository read ports for ${kind}`);
+      const read = await repositoryReadBinding(kind);
       loaded = await read.fieldReads(db, missing);
     }
     facts.set(kind, new Map([...existing, ...(loaded ?? [])]));

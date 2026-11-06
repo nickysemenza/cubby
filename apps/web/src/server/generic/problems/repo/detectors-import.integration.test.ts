@@ -2,6 +2,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { getDb } from "~/server/db/helpers";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { findProblemByType } from "~/server/generic/problems/service/problem-execution.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -11,6 +12,7 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import {
+  runFinding,
   patchRunFindingData,
   seedRunFindings,
 } from "~/server/testing/run-finding.fixtures";
@@ -50,7 +52,7 @@ describe("SQL-backed finding diagnostic intent", () => {
       }),
       ctx.actor,
     );
-    const rows = await seedRunFindings(
+    await seedRunFindings(
       ctx.db,
       Array.from({ length: 16 }, (_, index) => ({
         ledgerPartyId: party.id,
@@ -61,13 +63,12 @@ describe("SQL-backed finding diagnostic intent", () => {
         evidenceFingerprint: `synthetic-diagnostic-${index}`,
       })),
     );
-    const ordered = [...rows].sort((left, right) => {
-      const created = left.createdAt.getTime() - right.createdAt.getTime();
-      if (created !== 0) return created;
-      if (left.id === right.id) return 0;
-      return left.id < right.id ? -1 : 1;
-    });
-    const last = rows.at(-1);
+    // PostgreSQL retains timestamp precision that the driver truncates in Date values.
+    const ordered = await getDb(ctx.db)
+      .select({ id: runFinding.id })
+      .from(runFinding)
+      .orderBy(runFinding.createdAt, runFinding.id);
+    const last = ordered.at(-1);
     if (!last) throw new Error("Synthetic finding fixture is empty");
     await patchRunFindingData(ctx.db, last.id, {
       proposedFix: { syntheticInvalidFix: true },

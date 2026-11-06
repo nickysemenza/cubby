@@ -499,22 +499,22 @@ const validateFieldOverrides = (
   const inferredLabel = inferredFieldLabel(key, field.reference !== null);
   if (field.label === inferredLabel)
     throw new EntityDeclarationError(
-      `${context}.labelOverride is redundant with the inferred label.`,
+      `${context}.label is redundant with the inferred label.`,
     );
   if (
     field.readKey !== undefined &&
     field.readKey === (field.validation.read === null ? null : key)
   )
     throw new EntityDeclarationError(
-      `${context}.readKeyOverride is redundant with the declared read schema.`,
+      `${context}.readKey is redundant with the declared read schema.`,
     );
   if (field.display.columnId === key)
     throw new EntityDeclarationError(
-      `${context}.display.columnIdOverride is redundant with the field key.`,
+      `${context}.display.columnId is redundant with the field key.`,
     );
   if (field.display.listOrder === (key === titleField ? 0 : index + 1))
     throw new EntityDeclarationError(
-      `${context}.display.listOrderOverride is redundant with model order.`,
+      `${context}.display.listOrder is redundant with model order.`,
     );
 };
 
@@ -1016,7 +1016,6 @@ const compileFieldModel = (
     rows: model.rows,
     hierarchy,
     grouping: model.grouping ?? [],
-    groupingOmit: model.groupingOmit,
     intents: compileEditIntents(model.intents, fieldKeys, `${context}.intents`),
     research: model.research,
   };
@@ -1199,16 +1198,14 @@ const resolveFilterRange = (
       `${context} range needs range.kind or a numeric/date model field ${value.columnId}.`,
     );
   const int = options.int ?? false;
-  const finite = options.finite ?? false;
-  if (rangeKind === "date" && (int || finite))
+  if (rangeKind === "date" && int)
     throw new EntityDeclarationError(
-      `${context} range.int/finite apply only to numeric ranges.`,
+      `${context} range.int apply only to numeric ranges.`,
     );
   return {
     kind: rangeKind,
     int,
     nonnegative: options.nonnegative ?? false,
-    finite,
     describe: options.describe ?? null,
   };
 };
@@ -1797,7 +1794,6 @@ const declarationDescriptor = (
   declaration: EntityDeclarationMetadata,
   context: string,
 ): DeclarationObject => {
-  const extensions = declaration.extensions;
   const descriptor: DeclarationObject = {
     dbTable: declaration.table,
     idBrand: declaration.identifiers.brand,
@@ -1816,6 +1812,36 @@ const declarationDescriptor = (
   descriptor.displayImages = true;
   descriptor.searchable = declaration.search.enabled;
   descriptor.embeddable = declaration.search.embedding;
+  const signals = declaration.extensions.relatednessSignals;
+  if (
+    signals.length &&
+    signals.filter((signal) => signal.kind === "semantic").length !== 1
+  )
+    throw new Error(
+      `${context}: relatedness requires exactly one semantic signal`,
+    );
+  if (signals.length && !declaration.search.embedding)
+    throw new Error(`${context}: relatedness requires semantic search`);
+  for (const signal of signals) {
+    if (signal.kind !== "scalarOverlap") continue;
+    const field = declaration.model?.fields.find(
+      (field) => field.key === signal.field,
+    );
+    if (
+      !field ||
+      field.kind !== "text-array" ||
+      !declaration.model?.storage.some(
+        (field) =>
+          typeof field !== "string" &&
+          field.key === signal.field &&
+          field.specialized === "text-array",
+      )
+    )
+      throw new Error(
+        `${context}: relatedness overlap ${signal.field} must be stored text arrays`,
+      );
+  }
+  descriptor.relatednessSignals = signals;
   descriptor.countable = declaration.capabilities.countable;
   descriptor.relationships = serializedDeclarationRelations(
     declaration.relations,
@@ -1825,12 +1851,6 @@ const declarationDescriptor = (
     merge: declaration.capabilities.merge,
   };
   descriptor.mcp = [...compileMcpActions(declaration, context)];
-  if (
-    extensions.relatednessSignals !== null &&
-    extensions.relatednessSignals !== undefined
-  ) {
-    descriptor.relatednessSignals = extensions.relatednessSignals;
-  }
 
   return descriptor;
 };

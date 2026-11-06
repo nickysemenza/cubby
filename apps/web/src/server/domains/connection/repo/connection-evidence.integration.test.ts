@@ -21,8 +21,8 @@ import { prepareEntityConnectionSources } from "~/server/domains/connection/serv
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { measureDatabaseTransfer } from "~/server/testing/database-transfer.fixtures";
 import {
@@ -85,24 +85,6 @@ describe("prepared connection bases", () => {
         postedDate: "2026-09-14",
       }),
     ]);
-    const transferAccount = await createRepoEntity(ctx, "financialAccount", {
-      name: "Synthetic basis reserve",
-      identity: { kind: "cash" },
-    });
-    const transferOut = await createRepoEntity(ctx, "financialTransaction", {
-      accountId: account.output.id,
-      amount: 73,
-      kind: "account_transfer",
-      status: "posted",
-      postedDate: "2026-09-12",
-    });
-    const transferIn = await createRepoEntity(ctx, "financialTransaction", {
-      accountId: transferAccount.output.id,
-      amount: -73,
-      kind: "account_transfer",
-      status: "posted",
-      postedDate: "2026-09-13",
-    });
     const project = await createRepoEntity(ctx, "project", {
       name: "Synthetic basis project",
     });
@@ -187,11 +169,6 @@ describe("prepared connection bases", () => {
         ref("purchase", order.output.id),
       ),
       candidate(
-        "transaction-transfer",
-        ref("financialTransaction", transferOut.output.id),
-        ref("financialTransaction", transferIn.output.id),
-      ),
-      candidate(
         "project-tool",
         ref("project", project.output.id),
         ref("product", product.shortcode),
@@ -243,39 +220,22 @@ describe("prepared connection bases", () => {
       merchant: "Synthetic later candidate",
     });
     // A stale proposal may still be listed; accepting it must be refused.
-    const expectAcceptRefused = (assessmentId: string) =>
+    const expectAcceptRefused = (suggestionId: string) =>
       expect(
-        reviewAssessment(ctx.db, kernelCtx(ctx), {
-          assessmentId,
-          operationId: `synthetic-stale-${assessmentId}`,
+        reviewSuggestion(ctx.db, kernelCtx(ctx), {
+          suggestionId,
+          operationId: `synthetic-stale-${suggestionId}`,
           verdict: "correct",
           intent: "apply",
         }),
       ).rejects.toThrow(/changed|stale/i);
-    await expectAcceptRefused(proposal.review.assessmentId);
-    const recordedTransfer = candidates.find(
-      (row) => row.relation === "transaction-transfer",
-    );
-    if (!recordedTransfer)
-      throw new Error("Synthetic recorded-transfer candidate missing");
-    const transferProposal = await publishEntityConnection(
-      ctx.db,
-      recordedTransfer,
-    );
-    await createRepoEntity(ctx, "financialTransaction", {
-      accountId: transferAccount.output.id,
-      amount: -73,
-      kind: "account_transfer",
-      status: "posted",
-      postedDate: "2026-09-14",
-    });
-    await expectAcceptRefused(transferProposal.review.assessmentId);
+    await expectAcceptRefused(proposal.review.suggestionId);
     const toolCandidate = candidates.find(
       (row) => row.relation === "project-tool",
     );
     if (!toolCandidate) throw new Error("Synthetic tool candidate missing");
     const toolProposal = await publishEntityConnection(ctx.db, toolCandidate);
-    const toolId = toolProposal.review.assessmentId;
+    const toolId = toolProposal.review.suggestionId;
     await getDb(ctx.db)
       .update(productTable)
       .set({ name: "Synthetic changed clock tool" })

@@ -347,6 +347,10 @@ export const { definition, readSchemas } = defineEntityModel({
   },
   extensions: {
     ports: {
+      reports: {
+        module: "~/server/domains/vendor-account/repo/report-bindings",
+        export: "reportBindings",
+      },
       repository: {
         module: "~/server/domains/vendor-account/repo/vendor-account",
         export: "vendorAccountRepository",

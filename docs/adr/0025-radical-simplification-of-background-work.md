@@ -37,9 +37,12 @@ evidence and photo-group decisions.
    Durable Objects that own their own feature, such as calendar and the mail
    agent, keep their alarms.
 3. **Background work has three forms.** A drain is a registered function over the
-   rows a domain already owes, and it has no Job row. A Task is one table holding
-   one-off and resumable work, deleted on success. A Run is only a member- or
-   agent-started session worth reviewing; automatic purposes stop creating Runs.
+   rows a domain already owes, and it has no Job row. A Job is one row of one-off
+   or resumable work (amended 2026-11-06: the existing `Job` table is this form;
+   no separate Task table, and `Task` remains the household to-do entity). Run
+   execution is one Job kind. Completed Jobs are pruned by retention rather than
+   deleted on success. A Run is only a member- or agent-started session worth
+   reviewing; automatic purposes stop creating Runs.
    Automatic Runs retire only after their NOT NULL AI usage references and
    background budget check have another owner. Image processing is owned by
    `ImageProcessingJob`, with the device wire unchanged.
@@ -59,9 +62,20 @@ evidence and photo-group decisions.
    aliases. Identity needs proof, and ambiguous history stays unresolved with its
    money unchanged. This may add tables; the goal is fewer authoritative facts and
    write paths, not fewer tables.
-7. **Member-visible features stay.** Removals cover machinery and developer tools
-   only. The in-app mail agent stays. The native app keeps its features and wire;
-   only unused generated Swift goes.
+7. **Member-visible features stay, except those the owner removes by name.**
+   Removals cover machinery and developer tools. The in-app mail agent stays.
+   Amended 2026-11-06: the owner removed the AI smoke-test tab, automatic-rule
+   switches (book spending and field additions always apply; attach is
+   review-only), the duplicate transaction-transfer connection, "Compare with
+   current inputs", tag-propagation suggestions, MCP entity preview cards, the
+   Run-types page, the feature-routing harness and readable server-function URLs.
+   The entity explorer, schema inspector, graph explorer and path search stay.
+   Related records and reset previews stay as generic declarations: any entity
+   that declares relatedness signals gets the related-records rail, and every
+   resettable field previews its reset through the inheritance declarations. The
+   native app keeps its other features; its wire follows the Suggestion rename
+   (`assessmentId` becomes `suggestionId`) under a raised minimum write version,
+   and unused generated Swift goes.
 8. **AI funding stays as ordered pools.** The ChatGPT plan and provider subscriber
    credits come first, then paid API. The accounting around them may be simplified.
 9. **Delivery shrinks the live system in place, with direct cutovers.** Relief ships
@@ -69,15 +83,14 @@ evidence and photo-group decisions.
    breaking migration with its matching deploy, with no rehearsal, staged rollout
    or dual writers. The migration verifies preservation row by row and aborts the
    deployment on a mismatch.
-10. **Proven machinery tables may be dropped without an archive.** A table qualifies
-    only when a hand trace shows it holds no member facts, money, evidence,
-    decisions or unfinished paid or member-requested work, its readers and writers
-    are already gone from a deployed Worker, and a named Neon snapshot is taken
-    first, because production's history window is only 6 hours. Recovery exports
-    from a separate restored branch and never overwrites production. Authoritative
-    tables replaced by a reshape,
-    and the Assessment and Feedback ledgers, are retained under an archive name
-    until the owner decides otherwise.
+10. **Proven machinery tables and columns may be dropped without an archive.** A
+    table or column qualifies only when a hand trace shows it holds no member
+    facts, money, evidence, decisions or unfinished paid or member-requested work.
+    Amended 2026-11-06: the drop may ship in the same change that removes its last
+    reader and writer, with no Neon snapshot; old requests may fail during the
+    cutover. Authoritative tables replaced by a reshape, and the Assessment and
+    Feedback ledgers, are retained under an archive name until the owner decides
+    otherwise.
 11. **Entity features are composable capabilities declared in the manifest.** Each
     capability has one owner and brings its own fields, list columns, detail slot,
     filters, MCP output and native presentation, so adopting it means declaring it

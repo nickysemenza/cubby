@@ -143,18 +143,30 @@ export async function publishBackgroundTasks(
 ): Promise<BackgroundTaskReceipt> {
   if (!tasks.length) return { count: 0 };
   await repositoryTransactionDatabase(db, async (tx) => {
-    for (const input of tasks) {
-      const task = backgroundTaskSchema.parse(input);
-      if (task.kind === "entity-embedding.refresh") {
-        const { enqueueEmbeddingRefs } = await import("./embedding");
-        const { prepareSearchDocuments, publishPreparedSearchDocuments } =
-          await import("~/server/generic/search/repo/search-document");
-        const prepared = await prepareSearchDocuments(tx, [task]);
-        // The document owes the embedding, so it exists before the mark.
+    const parsed = tasks.map((input) => backgroundTaskSchema.parse(input));
+    const embeddingTasks = [
+      ...new Map(
+        parsed
+          .filter((task) => task.kind === "entity-embedding.refresh")
+          .map((task) => [`${task.entityKind}:${task.entityId}`, task]),
+      ).values(),
+    ];
+    if (embeddingTasks.length) {
+      const { enqueueEmbeddingRefs } = await import("./embedding");
+      const { prepareSearchDocuments, publishPreparedSearchDocuments } =
+        await import("~/server/generic/search/repo/search-document");
+      for (let offset = 0; offset < embeddingTasks.length; offset += 200) {
+        const prepared = await prepareSearchDocuments(
+          tx,
+          embeddingTasks.slice(offset, offset + 200),
+        );
         await publishPreparedSearchDocuments(tx, prepared);
         await enqueueEmbeddingRefs(tx, prepared);
-        continue;
       }
+    }
+    for (const task of parsed) {
+      if (task.kind === "entity-embedding.refresh") continue;
+      const input = task;
       await enqueueJob(tx, {
         key: taskKey(input),
         kind: task.kind,

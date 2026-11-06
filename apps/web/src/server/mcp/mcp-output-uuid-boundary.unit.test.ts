@@ -42,21 +42,6 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "nutrition.recipes[].id",
   "nutrition.mealRecipeId",
   "nutrition_read.preparations[].mealRecipeId",
-  // Import findings are internal review proposals. Their own id is the write
-  // handle for apply/dismiss, while proposed fixes retain the exact internal
-  // rows the audited transaction would mutate; neither is an entity link.
-  "activity_read.runFindings[].id",
-  "activity_read.runFindings[].proposedFix.expenseId",
-  "activity_read.runFindings[].proposedFix.productId",
-  "activity_read.runFindings[].proposedFix.purchaseId",
-  // Nullable row handles in the reviewed replacement snapshot participate in
-  // the approval fingerprint and attribution comparison in applyFix.
-  "activity_read.runFindings[].proposedFix.reviewedLineIdentities[].productId",
-  "activity_read.runFindings[].proposedFix.reviewedLineIdentities[].distinctFrom[].productId",
-  "activity_read.runFindings[].proposedFix.reviewedLineAttributions[].partyId",
-  // The source observation a reconcile_source_order proposal was built from;
-  // applyFix commits exactly that observation, never a newer one.
-  "activity_read.runFindings[].proposedFix.observationId",
   // purchase_import.prepare_reconciliation echoes the finding id it reviewed
   // (the same row handle as activity.runFindings[].id) or the accepted source
   // order it reviewed, and its commits take those handles back. An accepted
@@ -64,9 +49,6 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // can prepare that order's reconciliation.
   "purchase_import.id",
   "purchase_import.sourceOrderId",
-  // Review proposals and feedback use child-row handles with no shortcodes.
-  "activity_read.duplicateProductIdentities[].assessmentId",
-  "activity_read.duplicateProductIdentities[].pairs[].assessmentId",
   // Shipment evidence child rows have no shortcodes. These handles preserve
   // capture membership, timeline provenance and explicit source reassignment;
   // Shipment, Purchase, Email and Vendor entity references remain shortcodes.
@@ -75,9 +57,7 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // handles consumed by their matching follow-up actions. Entity references
   // in these outputs remain shortcodes.
   "activity.id",
-  "ai_read.latestRunId",
-  "ai.id",
-  "entity_graph.proposals[].review.assessmentId",
+  "entity_graph.proposals[].review.suggestionId",
   "image.deletedIds[]",
   "inventory.items[].product.externalIds[].id",
   "inventory.items[].product.unitMappings[].id",
@@ -88,14 +68,14 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "maintenance_read.items[].sourceId",
   "maintenance_read.entries[].id",
   "nutrition.id",
-  // Photo approval retains shared Assessment child handles for review provenance.
+  // Photo approval retains shared Suggestion child handles for review provenance.
   // These are not Product/Vendor/Image identities or entity lookup selectors.
   "photo_run.proposals[].review.fieldSuggestions[].id",
   "photo_run.fieldSuggestions[].id",
   "photo_run_read.proposals[].review.fieldSuggestions[].id",
   "photo_run_read.candidates[].purchaseLines[].acceptedSourceLines[].sourceOrderId",
   "product_enrichment.product.externalIds[].id",
-  "purchase_import_read.items[].assessmentId",
+  "purchase_import_read.items[].suggestionId",
   "purchase_import_read.items[].producer.evaluationId",
   "purchase_import_read.acceptedSourceOrders[].sourceOrderId",
   "run_read.entries[].commandId",
@@ -114,25 +94,33 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // evidence rows above; they are readback lineage, not entity identifiers.
   "shipments_read.observations[].captureSources[].captureId",
   "shipments_read.observations[].supersededByObservationId",
-  // Correction provenance names immutable Feedback/Assessment children and effect
+  // Correction provenance names immutable Feedback/Suggestion children and effect
   // receipts; these are audit handles, not externally addressable entity IDs.
+  // Image description confirmation returns the same correction audit handles.
+  "image.owner.effectId",
+  "image.owner.commandFeedbackId",
+  "image.owner.sourceFeedbackId",
+  "image.owner.sourceApplicationFeedbackId",
+  "image.owner.targetSuggestionId",
+  "image.owner.originalApplicationFeedbackId",
+  "image.owner.priorCorrectionApplicationFeedbackId",
   "image_read.correction.owner.effectId",
   "image_read.correction.owner.commandFeedbackId",
   "image_read.correction.owner.sourceFeedbackId",
   "image_read.correction.owner.sourceApplicationFeedbackId",
-  "image_read.correction.owner.targetAssessmentId",
+  "image_read.correction.owner.targetSuggestionId",
   "image_read.correction.owner.originalApplicationFeedbackId",
   "image_read.correction.owner.priorCorrectionApplicationFeedbackId",
   "suggestions_read.items[].id",
-  "suggestions_read.items[].assessmentId",
-  "suggestions_read.items[].evidence.assessmentId",
+  "suggestions_read.items[].suggestionId",
+  "suggestions_read.items[].evidence.suggestionId",
   "suggestions_read.items[].evidence.acceptanceReceipt.auditIds[]",
   "suggestions_read.items[].evidence.id",
-  "suggestions_read.items[].evidence.review.assessmentId",
-  // A draft preview echoes the same Assessment child-row handle for explicit review.
-  "finance_read.assessmentId",
-  "suggestions.assessmentId",
-  "suggestions.items[].assessmentId",
+  "suggestions_read.items[].evidence.review.suggestionId",
+  // A draft preview echoes the same Suggestion child-row handle for explicit review.
+  "finance_read.suggestionId",
+  "suggestions.suggestionId",
+  "suggestions.items[].suggestionId",
   // Historical enrollment advances over opaque Feedback rows, not entities.
   "suggestions.feedbackId",
   "suggestions.items[].feedbackId",

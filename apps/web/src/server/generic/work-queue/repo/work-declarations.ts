@@ -5,6 +5,12 @@ import {
   type DataCheck,
 } from "@cubby/schemas/data-quality";
 import { entityQualityCheckState } from "@cubby/schemas/data-quality-shape";
+import {
+  problemActionId,
+  problemActionsFor,
+} from "@cubby/schemas/entity-definitions/problems/problem-actions";
+import type { FilterAssembly } from "@cubby/schemas/entity-definitions/problems/problem-query";
+import { problemQueryDeclarations } from "@cubby/schemas/entity-definitions/problems/problem-registry";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { oneOrManyValues } from "@cubby/schemas/pagination";
@@ -14,23 +20,26 @@ import {
   type WorkSourceActionId,
 } from "@cubby/schemas/work-queue";
 import { workQueueGapChecks } from "@cubby/schemas/work-queue-policy";
-import { eq, isNull, or, sql, type SQL } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { eq, isNull, or, sql, type SQL, type AnyColumn } from "drizzle-orm";
+import { alias, PgDialect, type PgTable } from "drizzle-orm/pg-core";
 
-import {
-  problemActionId,
-  problemActionsFor,
-} from "~/entity/problems/problem-actions";
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
-import type { FilterAssembly } from "~/entity/problems/problem-query";
-import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import type { Database } from "~/server/db";
+import { getDb } from "~/server/db/helpers";
 import { qualitySnapshot } from "~/server/db/retained-tables";
 import { storedEntryFor } from "~/server/generic/data-quality/repo/entry";
 import { relatedGapCondition } from "~/server/generic/data-quality/repo/sql";
+import type {
+  ListFilterValues,
+  ListPrepare,
+} from "~/server/generic/list/repo/field-compiler";
+import type { EntityListScaffold } from "~/server/generic/list/repo/list";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 
 import {
   admittedReasons,
+  selectWorkCandidates,
+  scopeAdmitsReasons,
+  type WorkCandidateColumns,
   type WorkCandidates,
   type WorkScope,
   type WorkSource,
@@ -186,20 +195,150 @@ export const workProblemActions = (
 /** Domain readers supply their own query; declaration metadata stays shared. */
 export const entityProblemSources = (
   entity: ShortcodeEntity,
-  candidates: (
-    db: Database,
-    source: WorkSource,
-    scope: WorkScope,
-    filters: FilterAssembly,
-  ) => Promise<WorkCandidates | null>,
-): WorkSource[] =>
-  problemQueryDeclarations().flatMap((definition) => {
+  read: {
+    table: PgTable & { shortcode: AnyColumn };
+    columns:
+      | Omit<WorkCandidateColumns, "entity" | "id" | "reason" | "reasonKeys">
+      | ((source: WorkSource) => Omit<WorkCandidateColumns, "entity" | "id">);
+    scaffold: Pick<EntityListScaffold, "context" | "plan" | "hasResultFilters">;
+    parseFilters: (values: ListFilterValues) => object;
+    prepare?: (
+      db: Database,
+      scope: WorkScope,
+      filters: FilterAssembly,
+    ) => Promise<ReadonlyArray<readonly [ListPrepare<unknown>, unknown]>>;
+  },
+): WorkSource[] => {
+  const definitions = problemQueryDeclarations().filter(
+    (definition) =>
+      definition.source.kind === "entity" &&
+      definition.source.entity === entity,
+  );
+  // The scope object belongs to one queue request. Share one preparation and
+  // materialized relation across its admitted Problems, never across requests.
+  const prepared = new WeakMap<WorkScope, Promise<WorkCandidates["ctes"]>>();
+  const baseName = `work_problem_${entity}`;
+  const base = (db: Database, scope: WorkScope) => {
+    let pending = prepared.get(scope);
+    if (!pending) {
+      pending = (async () => {
+        const columns: Record<string, SQL> = {};
+        const facts: Record<string, SQL> = {};
+        const expressions = new Map<string, string>();
+        const dialect = new PgDialect();
+        const factName = `${baseName}_facts`;
+        // Bind values are part of identity: prepared contexts can differ by Problem.
+        const project = (value: SQL): SQL => {
+          const compiled = dialect.sqlToQuery(value);
+          const key = JSON.stringify([compiled.sql, compiled.params]);
+          let name = expressions.get(key);
+          if (!name) {
+            name = `fact_${expressions.size}`;
+            expressions.set(key, name);
+            facts[name] = value;
+          }
+          return sql`${sql.identifier(factName)}.${sql.identifier(name)}`;
+        };
+        for (const [index, definition] of definitions.entries()) {
+          if (definition.source.kind !== "entity") continue;
+          const filters = read.parseFilters(
+            compileProblemFilters(entity, definition.source.filters),
+          );
+          const seeded =
+            (await read.prepare?.(db, scope, definition.source.filters)) ?? [];
+          const context = await read.scaffold.context(
+            db,
+            { filters, readIntent: "count" },
+            seeded,
+          );
+          columns[`match_${index}`] =
+            read.scaffold.plan(filters, {
+              context,
+              membership: "certain",
+              project,
+            }).where ?? sql`true`;
+          columns[`missing_${index}`] = read.scaffold.hasResultFilters(filters)
+            ? (read.scaffold.plan(filters, {
+                context,
+                membership: "possible",
+                project,
+              }).where ?? sql`true`)
+            : sql`false`;
+        }
+        const routedColumns =
+          typeof read.columns === "function"
+            ? Object.fromEntries(
+                sources.flatMap((source, index) =>
+                  Object.entries(
+                    typeof read.columns === "function"
+                      ? read.columns(source)
+                      : {},
+                  ).map(([key, value]) => {
+                    const expression = Array.isArray(value)
+                      ? sql`ARRAY[${sql.join(
+                          value.map((item) => sql`${item}`),
+                          sql`, `,
+                        )}]::text[]`
+                      : sql`${value}`;
+                    return [`source_${index}_${key}`, project(expression)];
+                  }),
+                ),
+              )
+            : {};
+        const factQuery = getDb(db)
+          .select({
+            code: sql`${read.table.shortcode}`.as("code"),
+            ...Object.fromEntries(
+              Object.entries(facts).map(([key, value]) => [key, value.as(key)]),
+            ),
+          })
+          .from(read.table)
+          .where(recordScope(scope, sql`${read.table.shortcode}`));
+        const root = getDb(db)
+          .select({
+            code: sql`${read.table.shortcode}`.as("code"),
+            ...(typeof read.columns === "function"
+              ? {}
+              : Object.fromEntries(
+                  Object.entries(read.columns).map(([key, value]) => [
+                    key,
+                    sql`${value}`.as(key),
+                  ]),
+                )),
+            ...Object.fromEntries(
+              Object.entries(routedColumns).map(([key, value]) => [
+                key,
+                value.as(key),
+              ]),
+            ),
+            ...Object.fromEntries(
+              Object.entries(columns).map(([key, value]) => [
+                key,
+                sql`(${value}) IS TRUE`.as(key),
+              ]),
+            ),
+          })
+          .from(read.table)
+          .innerJoin(
+            sql`${sql.identifier(factName)}`,
+            sql`${sql.identifier(factName)}.code = ${read.table.shortcode}`,
+          )
+          .where(recordScope(scope, sql`${read.table.shortcode}`));
+        return [
+          { name: factName, sql: sql`${factQuery}` },
+          { name: baseName, sql: sql`${root}` },
+        ];
+      })();
+      prepared.set(scope, pending);
+    }
+    return pending;
+  };
+  const sources: WorkSource[] = definitions.flatMap((definition, index) => {
     if (
       definition.source.kind !== "entity" ||
       definition.source.entity !== entity
     )
       return [];
-    const filters = definition.source.filters;
     const source: WorkSource = {
       id: definition.key,
       family: "problem",
@@ -222,7 +361,79 @@ export const entityProblemSources = (
             ]
           : []),
       ],
-      candidates: (db, scope) => candidates(db, source, scope, filters),
+      candidates: async (db, scope) => {
+        const ctes = await base(db, scope);
+        if (typeof read.columns !== "function") {
+          const columns = Object.fromEntries(
+            Object.keys(read.columns).map((key) => [
+              key,
+              sql`base.${sql.identifier(key)}`,
+            ]),
+          );
+          const admitted = definitions.flatMap((definition, index) =>
+            scopeAdmitsReasons(scope, [
+              { key: definition.key, label: definition.title },
+            ])
+              ? [
+                  sql`(${definition.key}::text, ${definition.title}::text, base.${sql.identifier(`match_${index}`)}, (base.${sql.identifier(`missing_${index}`)} AND NOT base.${sql.identifier(`match_${index}`)}))`,
+                ]
+              : [],
+          );
+          const candidates = (missing: boolean) =>
+            selectWorkCandidates(db, source, {
+              entity,
+              id: sql`base.code`,
+              name: sql`base.name`,
+              owners: sql`base.owners`,
+              ...columns,
+              source: sql`reason.source`,
+              key: sql`reason.source || ':' || base.code`,
+              reason: sql`reason.label`,
+              reasonKeys: sql`ARRAY[reason.source]`,
+            })
+              .from(sql`${sql.identifier(baseName)} base`)
+              .innerJoin(
+                sql`LATERAL (VALUES ${sql.join(admitted, sql`, `)}) reason(source, label, matched, missing)`,
+                sql`true`,
+              )
+              .where(missing ? sql`reason.missing` : sql`reason.matched`);
+          return {
+            query: candidates(false),
+            missingInputs: candidates(true),
+            relationKey: baseName,
+            ctes,
+          };
+        }
+        const sourceColumns = read.columns(source);
+        const candidates = (unresolved: boolean) =>
+          selectWorkCandidates(db, source, {
+            entity,
+            id: sql`base.code`,
+            reason: definition.title,
+            reasonKeys: [definition.key],
+            name: sql`base.${sql.identifier(`source_${index}_name`)}`,
+            owners: sql`base.${sql.identifier(`source_${index}_owners`)}`,
+            ...Object.fromEntries(
+              Object.keys(sourceColumns).map((key) => [
+                key,
+                sql`base.${sql.identifier(`source_${index}_${key}`)}`,
+              ]),
+            ),
+          })
+            .from(sql`${sql.identifier(baseName)} base`)
+            .where(
+              unresolved
+                ? sql`base.${sql.identifier(`missing_${index}`)} AND NOT base.${sql.identifier(`match_${index}`)}`
+                : sql`base.${sql.identifier(`match_${index}`)}`,
+            );
+        return {
+          query: candidates(false),
+          missingInputs: candidates(true),
+          ctes,
+        };
+      },
     };
     return [source];
   });
+  return sources;
+};

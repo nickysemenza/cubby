@@ -24,8 +24,8 @@ import {
   publishEntityConnection,
   readEntityConnections,
 } from "~/server/domains/connection/repo/entity-connections";
+import { getEntityRecommendations } from "~/server/domains/connection/service/connection-recommendations";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
-import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
@@ -482,7 +482,7 @@ describe("connection discovery source freshness", () => {
       }),
     );
     const fresh = await publishEntityConnection(ctx.db, candidate);
-    expect(fresh.review.assessmentId).not.toBe(proposal.review.assessmentId);
+    expect(fresh.review.suggestionId).not.toBe(proposal.review.suggestionId);
     expect(await readEntityConnections(ctx.db, ref)).toEqual([
       expect.objectContaining({ review: fresh.review }),
     ]);

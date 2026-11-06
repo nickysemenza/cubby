@@ -301,15 +301,10 @@ struct EntityRowTests {
         payload["fields"] = .object(fields)
         let row = try #require(product.row(from: .object(payload)))
         let detail = try row.decode(ProductDetail.self)
-        guard case .live(let result) = detail.fields.images.result,
-            case .value(let outcome) = result.decision.outcome
-        else {
-            Issue.record("Expected an available image result")
-            return
-        }
-        let attachment = try #require(outcome.value.first)
-        #expect(attachment.source == .catalog)
-        #expect(attachment.purpose == .item)
+        let value = try #require(FieldEnvelope(detail.fields.images)?.result.value)
+        let attachment = try #require(value.arrayValue?.first)
+        #expect(attachment["source"]?.stringValue == "catalog")
+        #expect(attachment["purpose"]?.stringValue == "item")
     }
 
     @Test func imageIDsReadAttachmentsInOrder() {

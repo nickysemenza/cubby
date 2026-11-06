@@ -254,15 +254,19 @@ function runDisplayStatusOf(
   return status;
 }
 const runPurposeSelection = z
-  .object({ purpose: z.unknown().optional() })
+  .object({
+    purpose: z.unknown().optional(),
+    ids: z.array(z.string()).optional(),
+  })
   .passthrough();
 
 export const runScaffold = listScaffold("run", runTable, {
   // Automatic work nobody opens: old grouping Runs always, routine passes once they ended,
   // and mail discovery once it completed, since its failures need a member. An explicit
-  // purpose filter keeps their history directly accessible.
-  population: (filters) =>
-    runPurposeSelection.parse(filters).purpose === undefined
+  // purpose or identity filter keeps their history directly accessible.
+  population: (filters) => {
+    const { purpose, ids } = runPurposeSelection.parse(filters);
+    return purpose === undefined && ids === undefined
       ? sql`${notInArray(runTable.purpose, ["ai_suggest", "background"])} AND (
           ${notInArray(runTable.purpose, ["ai_refresh", "connection_discovery", "derived_refresh"])}
           OR ${inArray(runTable.status, ["running", "paused", "paused_auth"])}
@@ -270,7 +274,8 @@ export const runScaffold = listScaffold("run", runTable, {
           ${runTable.purpose} <> ${"mail_discovery"}
           OR ${runTable.status} <> ${"completed"}
         )`
-      : sql`true`,
+      : sql`true`;
+  },
   derived: {
     stalled: listReadValue(() => runStalledSql()),
     needsAttention: listReadValue(() => runNeedsAttentionSql()),

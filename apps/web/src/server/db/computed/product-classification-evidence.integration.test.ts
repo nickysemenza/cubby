@@ -14,9 +14,8 @@ import {
 } from "~/server/db/schema";
 import { persistImageProcessingSubmission } from "~/server/domains/image-processing/repo/image-processing-submission";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { confirmImageDescription } from "~/server/domains/image/repo/image-description-confirmation";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityAttachments } from "~/server/testing/repo.fixtures";
 
@@ -160,13 +159,17 @@ describe("retained classification evidence", () => {
           result: { description: "Uncertain fabric lettering" },
         },
       ]);
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      standalone: { kind: "image_description", id: label.shortcode },
-      operationId: crypto.randomUUID(),
-      verdict: "correct",
-      correction: { present: true, value: "Label confirms 100% cotton" },
-      intent: "apply",
-    });
+    await confirmImageDescription(
+      ctx.db,
+      {
+        imageId: label.id,
+        contentHash: "a".repeat(64),
+        operationId: crypto.randomUUID(),
+        expectedEffectId: null,
+        description: "Label confirms 100% cotton",
+      },
+      ctx.actor.userId,
+    );
     const before = await getProductClassificationEvidence(ctx.db, product.id);
     expect(before).toContain("item: Blue jacket with long sleeves");
     expect(before).toContain(

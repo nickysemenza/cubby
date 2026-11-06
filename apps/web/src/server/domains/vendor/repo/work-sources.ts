@@ -1,7 +1,6 @@
 import { vendorFiltersSchema } from "@cubby/schemas/vendor";
 import { and, getTableName, sql } from "drizzle-orm";
 
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { vendor as table } from "~/server/db/schema";
 import { vendorScaffold } from "~/server/domains/vendor/repo/vendor";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
@@ -48,30 +47,16 @@ const gapSource: WorkSource = {
     return { query: candidates(false), missingInputs: candidates(true) };
   },
 };
-export const vendorWorkSources = (): WorkSource[] => [
+export const vendorWorkSources = async (): Promise<WorkSource[]> => [
   gapSource,
-  ...entityProblemSources("vendor", async (db, source, scope, assembly) => {
-    const filters = compileProblemFilters("vendor", assembly);
-    return {
-      query: selectWorkCandidates(db, source, {
-        entity: "vendor",
-        id: sql`${table.shortcode}`,
-        name: labelSql("vendor", `"${getTableName(table)}"`),
-        owners: sql`ARRAY[]::uuid[]`,
-        shared: true,
-        reason: source.reasons[0]!.label,
-        reasonKeys: [source.id],
-      })
-        .from(table)
-        .where(
-          and(
-            await vendorScaffold.prepareWhere(
-              db,
-              vendorFiltersSchema.parse(filters),
-            ),
-            recordScope(scope, sql`${table.shortcode}`),
-          ),
-        ),
-    };
+  ...entityProblemSources("vendor", {
+    table,
+    columns: {
+      name: await labelSql("vendor", `"${getTableName(table)}"`),
+      owners: sql`ARRAY[]::uuid[]`,
+      shared: true,
+    },
+    scaffold: vendorScaffold,
+    parseFilters: vendorFiltersSchema.parse,
   }),
 ];

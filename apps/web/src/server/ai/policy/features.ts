@@ -318,7 +318,7 @@ export const MAIL_FINANCIAL_EVENT_FEATURE = defineFeature({
   schema: mailFinancialEventModelOutput,
 }) satisfies AiStructuredFeature<MailFinancialEventModelOutput>;
 
-export const PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE = defineFeature({
+const PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE = defineFeature({
   rules: PRODUCT_IDENTITY_RULES,
   feature: "product-line-identity",
   tier: "decision",
@@ -366,7 +366,7 @@ export const PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE = defineFeature({
   promptVersion: "2026-10-14.1",
 }) satisfies AiDecisionFeature;
 
-export const PURCHASE_IMPORT_KIT_DETECTION_FEATURE = defineFeature({
+const PURCHASE_IMPORT_KIT_DETECTION_FEATURE = defineFeature({
   ...purchaseLinePrompts.kit,
   prompt: (line: Parameters<typeof purchaseLinePrompt>[1]) =>
     purchaseLinePrompt("kit", line),
@@ -376,7 +376,7 @@ export const PURCHASE_IMPORT_KIT_DETECTION_FEATURE = defineFeature({
   promptVersion: "2026-09-19.1",
 }) satisfies AiDecisionFeature;
 
-export const PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE = defineFeature({
+const PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE = defineFeature({
   ...purchaseLinePrompts.promotion,
   prompt: (line: Parameters<typeof purchaseLinePrompt>[1]) =>
     purchaseLinePrompt("promotion", line),
@@ -386,7 +386,7 @@ export const PURCHASE_IMPORT_PRODUCT_PROMOTION_FEATURE = defineFeature({
   promptVersion: "2026-09-19.1",
 }) satisfies AiDecisionFeature;
 
-export const PURCHASE_IMPORT_REVERSAL_KIND_FEATURE = defineFeature({
+const PURCHASE_IMPORT_REVERSAL_KIND_FEATURE = defineFeature({
   ...purchaseLinePrompts.reversal,
   prompt: (line: Parameters<typeof purchaseLinePrompt>[1]) =>
     purchaseLinePrompt("reversal", line),
@@ -475,7 +475,7 @@ export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
   schema: importExtractionModelOutput,
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
-export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
+const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
   request: orderMailRequest,
   feature: "purchase-import-mail-classification",
   tier: "quality",

@@ -1,5 +1,4 @@
-import { aiProvenance, type AiProvenance } from "@cubby/schemas/ai-evaluation";
-import { productId, runEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { productId } from "@cubby/schemas/identifiers";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { isMiscProduct } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -7,16 +6,9 @@ import { and, eq, inArray } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
 
-import { enqueueAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
-import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
 import type { Database } from "~/server/db";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
-import {
-  getDb,
-  isTransaction,
-  notDeleted,
-  withTransactionDatabase,
-} from "~/server/db/helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   product,
   entityExternalId,
@@ -35,11 +27,6 @@ import {
   type ProductVariantVerification,
 } from "~/server/domains/product/repo/product-variant-evidence";
 import { canonicalJson } from "~/server/lib/canonical-json";
-
-import {
-  productIdentityEvidenceFence,
-  productIdentityEvidenceFences,
-} from "./product-identity-fence";
 
 /**
  * Product identity evidence: the frozen per-Product snapshot, the prepared
@@ -292,108 +279,4 @@ export async function prepareProductIdentityPair(
       productIdentityPairKey(ids),
     ) ?? null
   );
-}
-/** Canonical work identity shares actual producer lineage and frozen pair input. */
-async function enqueuePreparedProductIdentityPair(
-  db: Database,
-  pair: z.infer<typeof preparedProductIdentityPair>,
-  runId: RunId,
-  provenance: AiProvenance,
-) {
-  const shareKey = `product-identity:${await sha256Hex(canonicalJson({ productIds: pair.productIds, fingerprint: pair.fingerprint, dependencies: provenance.dependencies, optionFingerprint: provenance.optionFingerprint }))}`;
-  const frozen = aiProvenance.parse({
-    ...provenance,
-    inputFingerprint: pair.fingerprint,
-    model: provenance.model,
-  });
-  return enqueueAiEvaluation(db, {
-    runId: runEntityId.parse(runId),
-    executionKind: "ai_refresh",
-    feature: PRODUCT_IDENTITY_FEATURE.feature,
-    workKey: shareKey,
-    shareKey,
-    target: {
-      kind: "product_pair",
-      entity: "product",
-      recordId: pair.productIds[0],
-      otherId: pair.productIds[1],
-      field: null,
-      assessmentIds: [],
-    },
-    provenance: frozen,
-    snapshot: z.json().parse(pair),
-  });
-}
-
-/** A queued pair carries the same frozen evidence checked in its short write transaction.
- * Publication accepts a root handle or a caller-owned SERIALIZABLE transaction;
- * savepoints inherit outer isolation and cannot upgrade it.
- */
-export async function prepareProductIdentityPairRequests(
-  db: Database,
-  expected: readonly z.infer<typeof preparedProductIdentityPair>[],
-  runId: RunId,
-  provenance: AiProvenance,
-) {
-  const prepared = await prepareFencedProductIdentityPairs(db, expected);
-  if (
-    prepared.some(
-      ({ pair }, index) => pair.fingerprint !== expected[index]!.fingerprint,
-    )
-  )
-    throw new Error("Product pair evidence changed during inference");
-  return prepared.map(
-    ({ pair, fence }) =>
-      (db: Database) =>
-        withTransactionDatabase(
-          db,
-          async (tx) => {
-            if (
-              (await productIdentityEvidenceFence(tx, pair.productIds)) !==
-              fence
-            )
-              throw new Error("Product pair evidence changed during inference");
-            return enqueuePreparedProductIdentityPair(
-              tx,
-              pair,
-              runId,
-              provenance,
-            );
-          },
-          { isolationLevel: "serializable" },
-        ),
-  );
-}
-
-/** Batch unlocked evidence preparation; each publication still checks its own fence. */
-async function prepareFencedProductIdentityPairs(
-  db: Database,
-  expected: readonly {
-    productIds: readonly [ProductId, ProductId];
-    fingerprint?: string | null;
-  }[],
-) {
-  if (isTransaction(getDb(db)))
-    throw new Error(
-      "Product pair preparation requires a database outside a transaction",
-    );
-  const ids = expected.map((pair) => pair.productIds);
-  const targets = ids.map((productIds) => ({
-    key: productIdentityPairKey(productIds),
-    productIds,
-  }));
-  const before = await productIdentityEvidenceFences(db, targets);
-  const pairs = await prepareProductIdentityPairs(db, ids);
-  const after = await productIdentityEvidenceFences(db, targets);
-  return expected.map((input) => {
-    const key = productIdentityPairKey(input.productIds);
-    const pair = pairs.get(key);
-    if (
-      !pair ||
-      (input.fingerprint && pair.fingerprint !== input.fingerprint) ||
-      before.get(key) !== after.get(key)
-    )
-      throw new Error("Product pair evidence changed during inference");
-    return { pair, fence: before.get(key)! };
-  });
 }

@@ -1,6 +1,5 @@
 /** Member correction must retain only the exact reviewed original, preserve prediction
  * history and disposition, refuse authority/content races, and clean only new cache keys. */
-import { emailReviewFrontierReceipt } from "@cubby/schemas/email-observations";
 import { emailId } from "@cubby/schemas/identifiers";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { MAIL_ATTACHMENT_MAX_BYTES } from "@cubby/schemas/mailbox-research";
@@ -33,8 +32,8 @@ import {
 import { readEmailProtectingIntent } from "~/server/domains/purchase-import/repo/email-review-intent";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 
 import { withEmailEvidenceWrite } from "../email-evidence-write-scope";
 import { productionOrderMailAttachmentStorage } from "./attachment-storage";
@@ -202,7 +201,7 @@ describe("member-only exact original relevance correction", () => {
       model: "typesafe/jev",
     });
     const review = {
-      assessmentId: observation.id,
+      suggestionId: observation.id,
       operationId: "synthetic-prepared-review",
       verdict: "wrong" as const,
       intent: "apply" as const,
@@ -381,12 +380,12 @@ describe("member-only exact original relevance correction", () => {
       }),
     );
     await expect(
-      reviewAssessment(ctx.db, kernelCtx(ctx), f.review),
+      reviewSuggestion(ctx.db, kernelCtx(ctx), f.review),
     ).rejects.toThrow("Synthetic preparation unavailable");
     const events = await getDb(ctx.db)
       .select()
       .from(emailReview)
-      .where(eq(emailReview.subjectId, f.review.assessmentId));
+      .where(eq(emailReview.subjectId, f.review.suggestionId));
     expect(
       events.find((event) => event.operationId === f.review.operationId),
     ).toMatchObject({ intent: "apply", authority: "member", verdict: "wrong" });
@@ -396,20 +395,6 @@ describe("member-only exact original relevance correction", () => {
           event.operationId === `command-application:${f.review.operationId}`,
       ),
     ).toBeUndefined();
-    const command = events.find(
-      (event) => event.operationId === f.review.operationId,
-    );
-    const frontier = events.find(
-      (event) => event.operationId === `email-review-frontier:${command?.id}`,
-    );
-    expect(emailReviewFrontierReceipt.parse(frontier?.receipt)).toMatchObject({
-      commandFeedbackId: command?.id,
-      frontier: {
-        status: "captured",
-        emailId: f.email.id,
-        feedbackIds: expect.arrayContaining([command?.id]),
-      },
-    });
     expect(
       (
         await getDb(ctx.db)
@@ -428,12 +413,12 @@ describe("member-only exact original relevance correction", () => {
   });
   it("replays a successful shared application without consulting an unavailable provider", async () => {
     const f = await sharedReviewFixture();
-    const first = await reviewAssessment(ctx.db, kernelCtx(ctx), f.review);
+    const first = await reviewSuggestion(ctx.db, kernelCtx(ctx), f.review);
     const application = (
       await getDb(ctx.db)
         .select()
         .from(emailReview)
-        .where(eq(emailReview.subjectId, f.review.assessmentId))
+        .where(eq(emailReview.subjectId, f.review.suggestionId))
     ).find(
       (event) =>
         event.operationId === `command-application:${f.review.operationId}`,
@@ -452,7 +437,7 @@ describe("member-only exact original relevance correction", () => {
     f.factory.mockRejectedValue(
       new Error("Synthetic provider unavailable after success"),
     );
-    expect(await reviewAssessment(ctx.db, kernelCtx(ctx), f.review)).toEqual(
+    expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), f.review)).toEqual(
       first,
     );
     expect(f.factory).toHaveBeenCalledTimes(1);
@@ -462,7 +447,7 @@ describe("member-only exact original relevance correction", () => {
   it("returns a concurrent canonical success when its own preparation fails", async () => {
     const f = await sharedReviewFixture();
     f.getMessage.mockImplementationOnce(async () => {
-      await reviewAssessment(ctx.db, kernelCtx(ctx), f.review);
+      await reviewSuggestion(ctx.db, kernelCtx(ctx), f.review);
       throw new GmailApiError({
         message:
           "Synthetic first attempt retrieval failed after concurrent success",
@@ -470,14 +455,14 @@ describe("member-only exact original relevance correction", () => {
       });
     });
     expect(
-      await reviewAssessment(ctx.db, kernelCtx(ctx), f.review),
+      await reviewSuggestion(ctx.db, kernelCtx(ctx), f.review),
     ).toMatchObject({ applied: true });
     expect(f.getMessage).toHaveBeenCalledTimes(2);
     expect(f.put).toHaveBeenCalledTimes(1);
     const events = await getDb(ctx.db)
       .select()
       .from(emailReview)
-      .where(eq(emailReview.subjectId, f.review.assessmentId));
+      .where(eq(emailReview.subjectId, f.review.suggestionId));
     expect(
       events.filter(
         (event) =>
@@ -495,16 +480,16 @@ describe("member-only exact original relevance correction", () => {
     );
     f.put.mockImplementationOnce(async (key, bytes) => {
       f.objects.set(key, bytes);
-      await reviewAssessment(ctx.db, kernelCtx(ctx), f.review);
+      await reviewSuggestion(ctx.db, kernelCtx(ctx), f.review);
       throw new Error("Synthetic first upload failed after concurrent success");
     });
     await expect(
-      reviewAssessment(ctx.db, kernelCtx(ctx), f.review),
+      reviewSuggestion(ctx.db, kernelCtx(ctx), f.review),
     ).rejects.toBeInstanceOf(EmailCorrectionCleanupError);
     const events = await getDb(ctx.db)
       .select()
       .from(emailReview)
-      .where(eq(emailReview.subjectId, f.review.assessmentId));
+      .where(eq(emailReview.subjectId, f.review.suggestionId));
     expect(
       events.filter(
         (event) =>
@@ -735,8 +720,8 @@ describe("member-only exact original relevance correction", () => {
       model: "typesafe/jev",
     });
     expect(
-      await reviewAssessment(ctx.db, kernelCtx(ctx), {
-        assessmentId: observation.id,
+      await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+        suggestionId: observation.id,
         operationId: "synthetic-valid-relevance",
         verdict: "wrong",
         intent: "apply",

@@ -1,3 +1,7 @@
+import {
+  advanceStepRun,
+  type StepPlan,
+} from "~/server/domains/run/service/step-run";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
@@ -5,10 +9,10 @@ import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { pauseJob } from "~/server/generic/jobs/repo/operator";
 import { postponeAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { run } from "~/server/db/schema";
+import { run, runStep } from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
 import {
   advanceAiWorkRun,
@@ -55,15 +59,36 @@ export async function driveAiWork(
   db: Database,
   id: RunId,
   ports: AiWorkPorts = {},
+  plan?: StepPlan,
 ) {
   const handlers: JobHandlers = {
     "run.execute": {
       prepare: async (database, claim) => {
-        const pending = await advanceAiWorkRun(
-          database,
-          { runId: id, attempt: claim.generation },
-          ports,
-        );
+        const [owner] = await getDb(database)
+          .select({ purpose: run.purpose })
+          .from(run)
+          .where(eq(run.id, id));
+        if (owner?.purpose === "sweep") {
+          // Advance persisted step waits alongside the Job's synthetic clock.
+          await getDb(database)
+            .update(runStep)
+            .set({ meta: sql`${runStep.meta} - 'capacityUntil'` })
+            .where(eq(runStep.runId, id));
+          const result = await advanceStepRun(
+            database,
+            { runId: id, attempt: claim.generation },
+            plan,
+          );
+          return {
+            page: {
+              done: result.kind === "finished" || result.kind === "lost",
+            },
+          };
+        }
+        const pending = await advanceAiWorkRun(database, {
+          runId: id,
+          attempt: claim.generation,
+        });
         return { page: { done: !pending } };
       },
     },

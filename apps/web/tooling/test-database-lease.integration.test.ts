@@ -1,23 +1,16 @@
-import { getDb } from "~/server/db/helpers";
-import { sql } from "drizzle-orm";
 import { createPostgresPool } from "./postgres-pool";
 import { pollUntil } from "@cubby/shared/retry";
 import { type Pool } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 import { createE2EDatabase } from "../tests/e2e/support/e2e-database";
-import {
-  withMigrationDatabase,
-  leaseDatabase,
-  prepareTemplate,
-} from "./test-database-lease";
+import { prepareTemplate } from "./test-database-lease";
 import { TEST_USER_ID, withTestDb } from "./test-setup";
 
 // Failure modes this file pins at the real IntegreSQL/PostgreSQL boundary:
 // a released database returns to the pool still dirty (reuse instead of
 // recreate, or no release at all); a second close re-releases a slot another
 // lease may already hold; preparing one namespace's template invalidates a
-// database the other namespace has checked out; a checkout whose setup fails
-// (seeding, opening the holder's pool) leaks a dirty database.
+// database the other namespace has checked out.
 
 const maintenance = new Map<string, Pool>();
 afterAll(async () => {
@@ -92,46 +85,6 @@ async function recreatedProbeSurvives(
 describe("disposable database lease", { timeout: 60_000 }, () => {
   const ctx = withTestDb();
 
-  it("leases empty migration schemas and recreates a failed rehearsal without affecting current-schema leases", async () => {
-    let failed: { name: string; databaseUrl: string; oid: string } | undefined;
-    await expect(
-      withMigrationDatabase(async (client, databaseUrl) => {
-        expect(
-          (await client.query(`SELECT to_regclass('public."Task"') AS target`))
-            .rows,
-        ).toEqual([{ target: null }]);
-        const name = (
-          await client.query<{ name: string }>(
-            "SELECT current_database() AS name",
-          )
-        ).rows[0]!.name;
-        const oid = await databaseOid(databaseUrl, name);
-        if (!oid) throw new Error("Missing migration lease database");
-        failed = { name, databaseUrl, oid };
-        await client.query("CREATE TABLE lease_probe (id integer)");
-        throw new Error("synthetic migration rehearsal failure");
-      }),
-    ).rejects.toThrow("synthetic migration rehearsal failure");
-    if (!failed) throw new Error("Migration lease callback did not run");
-    expect(
-      await recreatedProbeSurvives(failed.databaseUrl, failed.name, failed.oid),
-    ).toBe(false);
-    expect(
-      await withMigrationDatabase(
-        async (client) =>
-          (await client.query(`SELECT to_regclass('public."Task"') AS target`))
-            .rows,
-      ),
-    ).toEqual([{ target: null }]);
-    expect(
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT to_regclass('public."Task"') AS target`,
-        )
-      ).rows,
-    ).toEqual([{ target: '"Task"' }]);
-  });
-
   it("recreates a released database from the template, once", async () => {
     await prepareTemplate("browser");
     const lease = await createE2EDatabase();
@@ -144,31 +97,6 @@ describe("disposable database lease", { timeout: 60_000 }, () => {
 
     expect(
       await recreatedProbeSurvives(lease.databaseUrl, lease.name, oid ?? ""),
-    ).toBe(false);
-  });
-
-  it("releases a checkout whose setup fails", async () => {
-    await prepareTemplate("browser");
-    let leased: { name: string; databaseUrl: string; oid?: string } | undefined;
-    await expect(
-      leaseDatabase("browser", async ({ name, databaseUrl }) => {
-        await writeProbe(databaseUrl);
-        leased = {
-          name,
-          databaseUrl,
-          oid: await databaseOid(databaseUrl, name),
-        };
-        throw new Error("synthetic seed failure");
-      }),
-    ).rejects.toThrow("synthetic seed failure");
-
-    expect(leased?.oid).toBeDefined();
-    expect(
-      await recreatedProbeSurvives(
-        leased?.databaseUrl ?? "",
-        leased?.name ?? "",
-        leased?.oid ?? "",
-      ),
     ).toBe(false);
   });
 

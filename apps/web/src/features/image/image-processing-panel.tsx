@@ -21,7 +21,6 @@ import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { assessment } from "~/integrations/tanstack-query/generated/domains/assessment.gen";
 import { image as imageOperations } from "~/integrations/tanstack-query/generated/domains/image.gen";
 import { imageProcessing } from "~/integrations/tanstack-query/generated/domains/imageProcessing.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
@@ -272,7 +271,7 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
   }, [id, queryClient, status.data]);
   const [correction, setCorrection] = useState("");
   const save = useActionMutation({
-    mutationFn: assessment.review.mutationOptions,
+    mutationFn: imageProcessing.confirmDescription.mutationOptions,
     success: "Description correction saved",
   });
   if (image.status !== "UPLOADED") return null;
@@ -326,16 +325,15 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
       <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
-          disabled={save.isPending || !correction.trim()}
+          disabled={save.isPending || !correction.trim() || !image.sha256}
           onClick={() =>
             save.mutate({
-              standalone: { kind: "image_description", id },
+              id,
+              contentHash: image.sha256 ?? "",
               operationId: crypto.randomUUID(),
-              verdict: "correct",
-              correction: { present: true, value: correction.trim() },
-              intent: "apply",
-              reason: null,
-              evidence: null,
+              expectedEffectId:
+                status.data?.correction?.owner?.effectId ?? null,
+              description: correction.trim(),
             })
           }
         >

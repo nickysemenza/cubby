@@ -1,11 +1,16 @@
-import { and, sql } from "drizzle-orm";
-
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { gardenEntry } from "~/server/db/retained-tables";
-import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
+
+const loadGardenEntryQualityRecords = qualityCheck.records(
+  "gardenEntry",
+  gardenEntry,
+  {
+    kind: gardenEntry.kind,
+    notes: gardenEntry.notes,
+    harvestAmount: gardenEntry.harvestAmount,
+  },
+);
 
 /** Bump when the rules or their declared scoring metadata change. */
 const GARDEN_ENTRY_QUALITY_RULES_VERSION = 1;
@@ -31,26 +36,3 @@ export const gardenEntryChecks = defineStoredEntityChecks({
     ),
   },
 });
-
-async function loadGardenEntryQualityRecords(
-  db: Database | DrizzleTransaction,
-  ids: readonly string[],
-) {
-  if (!ids.length) return [];
-  return unwrapDb(db)
-    .select({
-      id: gardenEntry.id,
-      shortcode: gardenEntry.shortcode,
-      kind: gardenEntry.kind,
-      notes: gardenEntry.notes,
-      harvestAmount: gardenEntry.harvestAmount,
-      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("gardenEntry", sql`${gardenEntry.id}`)}`,
-    })
-    .from(gardenEntry)
-    .where(
-      and(
-        notDeleted(gardenEntry),
-        sql`${gardenEntry.id} = ANY(${uuidArrayParam(ids)})`,
-      ),
-    );
-}

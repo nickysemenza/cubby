@@ -1,11 +1,15 @@
-import { and, sql } from "drizzle-orm";
-
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { planting } from "~/server/db/retained-tables";
-import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
+
+const loadPlantingQualityRecords = qualityCheck.records("planting", planting, {
+  status: planting.status,
+  locationId: planting.locationId,
+  sowedOn: planting.sowedOn,
+  transplantedOn: planting.transplantedOn,
+  finishedOn: planting.finishedOn,
+  outcome: planting.outcome,
+});
 
 /** Bump when the rules or their declared scoring metadata change. */
 const PLANTING_QUALITY_RULES_VERSION = 1;
@@ -62,29 +66,3 @@ export const plantingChecks = defineStoredEntityChecks({
     ),
   },
 });
-
-async function loadPlantingQualityRecords(
-  db: Database | DrizzleTransaction,
-  ids: readonly string[],
-) {
-  if (!ids.length) return [];
-  return unwrapDb(db)
-    .select({
-      id: planting.id,
-      shortcode: planting.shortcode,
-      status: planting.status,
-      locationId: planting.locationId,
-      sowedOn: planting.sowedOn,
-      transplantedOn: planting.transplantedOn,
-      finishedOn: planting.finishedOn,
-      outcome: planting.outcome,
-      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("planting", sql`${planting.id}`)}`,
-    })
-    .from(planting)
-    .where(
-      and(
-        notDeleted(planting),
-        sql`${planting.id} = ANY(${uuidArrayParam(ids)})`,
-      ),
-    );
-}

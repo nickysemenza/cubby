@@ -55,7 +55,7 @@ export async function prepareReclassification(
           entity: "email",
           recordId: item.id,
           field: null,
-          assessmentIds: [],
+          suggestionIds: [],
         },
         provenance: {
           dependencies: [],

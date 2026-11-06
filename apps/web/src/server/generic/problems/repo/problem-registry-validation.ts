@@ -1,0 +1,104 @@
+import type { Entity } from "@cubby/schemas/entity";
+import { problemActionsFor } from "@cubby/schemas/entity-definitions/problems/problem-actions";
+import type {
+  DiagnosticKey,
+  ProblemQuery,
+} from "@cubby/schemas/entity-definitions/problems/problem-query";
+import { validateProblemQueries } from "@cubby/schemas/entity-definitions/problems/problem-query";
+import {
+  expectedProblemKeys,
+  problemQueryDeclarations,
+} from "@cubby/schemas/entity-definitions/problems/problem-registry";
+import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
+
+import { compileProblemFilters } from "./problem-filter-semantics";
+
+// The browser registry's `getSortableFields`, without importing that client
+// module into this server-only validation path. The registry is declared
+// `satisfies Record<BrowserRoutedEntity, …>`, so its keys are this set.
+const routedEntities: ReadonlySet<Entity> = new Set(browserRoutedEntities);
+const sortableFields = (entity: Entity): readonly string[] =>
+  routedEntities.has(entity) ? (generatedEntitySort[entity]?.fields ?? []) : [];
+
+type RuntimeCapabilities = {
+  listEntities?: ReadonlySet<Entity>;
+  diagnostics?: ReadonlySet<DiagnosticKey>;
+};
+
+const validateRegistryContracts = (
+  definitions: readonly ProblemQuery[],
+  capabilities: RuntimeCapabilities,
+): void => {
+  for (const definition of definitions) {
+    if (definition.source.kind === "entity") {
+      if (definition.continuation.kind !== "entity-list") {
+        throw new Error(
+          `Entity Problem "${definition.key}" must continue to its entity list`,
+        );
+      }
+      if (
+        capabilities.listEntities &&
+        !capabilities.listEntities.has(definition.source.entity)
+      ) {
+        throw new Error(
+          `Entity Problem "${definition.key}" has no ${definition.source.entity} list adapter`,
+        );
+      }
+      compileProblemFilters(
+        definition.source.entity,
+        definition.source.filters,
+      );
+      const legalSorts = new Set(sortableFields(definition.source.entity));
+      const illegalSort = definition.source.sort?.find(
+        ({ id }) => !legalSorts.has(id),
+      );
+      if (illegalSort) {
+        throw new Error(
+          `Problem "${definition.key}" uses illegal ${definition.source.entity} sort "${illegalSort.id}"`,
+        );
+      }
+    } else {
+      if (definition.continuation.kind !== "none") {
+        throw new Error(
+          `Derived Problem "${definition.key}" cannot claim an entity-list continuation`,
+        );
+      }
+      if (
+        capabilities.diagnostics &&
+        !capabilities.diagnostics.has(definition.source.diagnostic)
+      ) {
+        throw new Error(
+          `Derived Problem "${definition.key}" has no ${definition.source.diagnostic} diagnostic adapter`,
+        );
+      }
+      for (const input of definition.source.inputs ?? []) {
+        compileProblemFilters(input.entity, input.filters);
+      }
+    }
+    if (
+      problemActionsFor(definition.key).some(
+        (action) =>
+          action.target === "canonical-query" &&
+          definition.source.kind !== "entity",
+      )
+    ) {
+      throw new Error(
+        `Derived Problem "${definition.key}" cannot target a canonical entity query`,
+      );
+    }
+  }
+};
+
+/**
+ * Server/startup validator for contracts that require repository adapters.
+ * Keeping this boundary out of the UI metadata registry prevents list routes
+ * from downloading server-only filter compilers and sortable-field catalogs.
+ */
+export const validateCompleteProblemRegistry = (
+  definitions: readonly ProblemQuery[] = problemQueryDeclarations(),
+  capabilities: RuntimeCapabilities = {},
+): void => {
+  validateProblemQueries(definitions, expectedProblemKeys);
+  validateRegistryContracts(definitions, capabilities);
+};

@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { assessmentFamily } from "./assessment";
+import { suggestionFamily } from "./suggestion";
 import {
-  assessmentReviewReference,
-  assessmentSuppression,
-} from "./assessment-reference";
+  suggestionReviewReference,
+  suggestionSuppression,
+} from "./suggestion-reference";
 import { entityGraphRootSchema } from "./entity-graph";
 
 import { entitySchema } from "./entity-core";
@@ -69,7 +69,6 @@ export const orphanEntitiesOut = z.object({
 export type OrphanEntitiesOut = z.infer<typeof orphanEntitiesOut>;
 
 /** Canonical recorded-transfer evidence and its invalidation use one window. */
-export const CONNECTION_TRANSFER_WINDOW_DAYS = 5;
 
 export const connectionRelation = z.enum([
   "product-purchase",
@@ -77,7 +76,6 @@ export const connectionRelation = z.enum([
   "product-identity",
   "email-purchase",
   "transaction-purchase",
-  "transaction-transfer",
   "transaction-refund",
   "expense-project",
   "project-tool",
@@ -96,7 +94,6 @@ const connectionEndpoints = {
   "product-identity": ["product", "product"],
   "email-purchase": ["email", "purchase"],
   "transaction-purchase": ["financialTransaction", "purchase"],
-  "transaction-transfer": ["financialTransaction", "financialTransaction"],
   "transaction-refund": ["financialTransaction", "purchase"],
   "expense-project": ["expense", "project"],
   "project-tool": ["project", "product"],
@@ -165,10 +162,10 @@ export type ConnectionCandidate = z.infer<typeof connectionCandidate>;
 export const connectionProposal = connectionCandidate.safeExtend({
   sourceName: z.string().optional(),
   targetName: z.string().optional(),
-  review: assessmentReviewReference.extend({
-    suppression: assessmentSuppression.nullable(),
-    /** The stored Assessment family; entity-pair families flag list rows. */
-    family: assessmentFamily.optional(),
+  review: suggestionReviewReference.extend({
+    suppression: suggestionSuppression.nullable(),
+    /** The stored Suggestion family; entity-pair families flag list rows. */
+    family: suggestionFamily.optional(),
   }),
   fingerprint: z.string().min(1),
   integration: z.discriminatedUnion("kind", [
@@ -180,8 +177,8 @@ export const connectionProposal = connectionCandidate.safeExtend({
 });
 export type ConnectionProposal = z.infer<typeof connectionProposal>;
 
-/** Immutable payload in recommendation Assessment evidence; no separate ledger. */
-export const connectionAssessmentEvidence = z.object({
+/** Immutable payload in recommendation Suggestion evidence; no separate ledger. */
+export const connectionSuggestionEvidence = z.object({
   version: z.literal(1),
   candidate: connectionCandidate,
   basis: z.json(),

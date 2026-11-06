@@ -186,9 +186,9 @@ export const { definition, readSchemas } = defineEntityModel(
         {
           output: false,
           key: "nutritionSourceProductId",
-          labelOverride: "Nutrition source Product",
+          label: "Nutrition source Product",
           kind: "identifier",
-          readKeyOverride: null,
+          readKey: null,
           nullable: true,
           reference: { entity: "product" },
           display: {
@@ -247,7 +247,7 @@ export const { definition, readSchemas } = defineEntityModel(
         {
           display: { detail: false, list: false },
           key: "naKinds",
-          labelOverride: "Not applicable",
+          label: "Not applicable",
           description:
             "Measurement kinds or nutrient keys intentionally excluded from enrichment. Nutrient opt-outs remain unavailable rather than zero.",
           kind: "text-array",
@@ -647,7 +647,14 @@ export const { definition, readSchemas } = defineEntityModel(
       },
     },
     extensions: {
+      relatednessSignals: [
+        { kind: "semantic", label: "Similar meaning", weight: 1, limit: 8 },
+      ],
       ports: {
+        reports: {
+          module: "~/server/domains/ingredient/repo/report-bindings",
+          export: "reportBindings",
+        },
         repository: {
           module: "~/server/domains/ingredient/repo/repository",
           export: "ingredientRepository",

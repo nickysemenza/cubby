@@ -56,13 +56,13 @@ test("wardrobe lists only the owner's entries and follows explicit ownership edi
   await page
     .getByRole("button", { name: "How owner is determined", exact: true })
     .click();
-  // The owner is the generic resolved field: set here, then inherited (no
-  // purchase evidence names anyone, so Unknown), then Household.
+  // Reset saves inheritance intent immediately; the published ownership result
+  // can remain missing until the bulk pass. Household is an explicit decision.
   await page
     .getByRole("button", { name: "Use inherited", exact: true })
     .click();
   await expect(
-    page.getByText("Unknown", { exact: true }).first(),
+    page.getByText("Following inherited values", { exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Set to Household", exact: true })

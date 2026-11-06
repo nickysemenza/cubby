@@ -958,11 +958,11 @@ async function writeShipmentEvidence(
       };
       if (packet.carrierId)
         await carrierReference(tdb, packet.carrierId, packet.carrierName);
-      const assessment = await assessCarrierPacket(tdb, packet, sourceEvidence);
+      const suggestion = await assessCarrierPacket(tdb, packet, sourceEvidence);
       // Explicit source attribution wins over extraction; normal extracted Vendor names
       // still populate a new/missing carrier without a separate proof ledger.
-      let carrier = assessment.primary.carrier
-        ? await carrierReference(tdb, assessment.primary.carrier.code, null)
+      let carrier = suggestion.primary.carrier
+        ? await carrierReference(tdb, suggestion.primary.carrier.code, null)
         : packet.carrierClaims?.some(
               (claim) =>
                 claim.role === "intermediary" &&
@@ -1095,7 +1095,7 @@ async function writeShipmentEvidence(
           : [];
       // Replay follows the existing package assignment; an unsubstantiated re-extraction
       // cannot restore an old guess or invent an additional handoff.
-      if (boundCarrier && row && !assessment.primary.carrier)
+      if (boundCarrier && row && !suggestion.primary.carrier)
         carrier = {
           id: row.carrierId,
           code: parseShortcodeFor("vendor", boundCarrier.code),
@@ -1103,7 +1103,7 @@ async function writeShipmentEvidence(
       const extraTrackingNumbers = [];
       for (const extra of packet.extraTrackingNumbers) {
         const number = normalizeNumber(extra.trackingNumber);
-        const supported = assessment.forReference(number).carrier;
+        const supported = suggestion.forReference(number).carrier;
         const retained =
           binding && row
             ? [
@@ -1249,7 +1249,7 @@ async function writeShipmentEvidence(
         : null;
       let carrierIssue: string | null = sourceBindingAmbiguous
         ? "The source has multiple package bindings for this reference; review the original source key before alias re-extraction."
-        : carrierClaimsConflict(assessment.explicit)
+        : carrierClaimsConflict(suggestion.explicit)
           ? "Explicit package-specific carrier claims conflict; retain them for handoff review."
           : null;
       if (row || references.length) {
@@ -1262,7 +1262,7 @@ async function writeShipmentEvidence(
           carrierIssue =
             "Carrier evidence exceeds the bounded history scan; review before correction.";
         else if (
-          carrierClaimsConflict([...assessment.explicit, ...history.claims])
+          carrierClaimsConflict([...suggestion.explicit, ...history.claims])
         )
           carrierIssue =
             "Conflicting explicit carrier evidence may describe a handoff; review before association or correction.";
@@ -1275,7 +1275,7 @@ async function writeShipmentEvidence(
         row.carrierId !== carrier.id &&
         (!row.trackingNumber || normalizeNumber(row.trackingNumber) === number)
       ) {
-        if (assessment.primary.carrier) correctingCarrier = !carrierIssue;
+        if (suggestion.primary.carrier) correctingCarrier = !carrierIssue;
         else
           carrierIssue ??=
             "Carrier claims disagree; inspect the retained source before replacing the stored carrier.";
@@ -1298,7 +1298,7 @@ async function writeShipmentEvidence(
             number,
             extraTrackingNumbers,
             correctingCarrier,
-            carrierName: assessment.primary.carrier?.name ?? null,
+            carrierName: suggestion.primary.carrier?.name ?? null,
           })
         : null;
       let projectedCollision = false;
@@ -1400,7 +1400,7 @@ async function writeShipmentEvidence(
           reason: ambiguity,
         });
         const namedCarrier =
-          assessment.primary.carrier ??
+          suggestion.primary.carrier ??
           (await resolveCarrierName(tdb, packet.carrierName));
         const format = number
           ? carrierFormatEvidence(
@@ -1465,7 +1465,7 @@ async function writeShipmentEvidence(
       if (!row) {
         row = await insertWithShortcode(tdb, "shipment", {
           name:
-            [assessment.primary.carrier?.name ?? "Package", number]
+            [suggestion.primary.carrier?.name ?? "Package", number]
               .filter(Boolean)
               .join(" · ") || "Package",
           purchaseId,

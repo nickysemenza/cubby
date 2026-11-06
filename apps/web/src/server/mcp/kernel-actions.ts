@@ -11,10 +11,6 @@ import {
 } from "@cubby/schemas/product";
 import { z } from "zod";
 
-import {
-  entityCardsInput,
-  entityCardsOutput,
-} from "~/contracts/entity-preview";
 import type { KernelActionName } from "~/contracts/mcp-define";
 import {
   entitySummaryFields,
@@ -68,9 +64,8 @@ import {
   generatedMcpEntityRelationCommandSchema,
   generatedMcpEntityRelationPreviewInputSchema,
 } from "~/server/generated/entity-relation-contracts.gen";
-import { previewOperation } from "~/server/generic/integrity/operations/entity-integrity-preview.server";
+import { previewOperation } from "~/server/generic/removal/repo/relation-preview";
 import type { Principal } from "~/server/http/authenticate";
-import { readEntityCards } from "~/server/mcp/entity-cards";
 
 import {
   batchInputSchema,
@@ -358,16 +353,6 @@ export const createKernelMcpActions = (
   execute: McpEntityExecutor = executeMcpEntity,
 ) =>
   ({
-    renderCards: {
-      input: entityCardsInput,
-      output: entityCardsOutput,
-      run: async (raw, principal) =>
-        readEntityCards(
-          principal.context,
-          entityCardsInput.parse(raw),
-          execute,
-        ),
-    },
     get: commandAction(
       execute,
       "get",

@@ -1,9 +1,8 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
   connectionCandidate,
-  connectionAssessmentEvidence,
+  connectionSuggestionEvidence,
   type ConnectionCandidate,
-  CONNECTION_TRANSFER_WINDOW_DAYS,
 } from "@cubby/schemas/entity-connections";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
@@ -32,7 +31,6 @@ import {
   type RecommendationHistoryRow,
 } from "~/server/domains/expense/repo/project-recommendations";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
-import { suggestFinancialTransferPairs } from "~/server/domains/financial-transaction/repo/financial-transfer-pairing";
 import { getProductStockRows } from "~/server/domains/inventory/repo/scan";
 import { suggestProjectTools } from "~/server/domains/project/repo/tools";
 import {
@@ -186,7 +184,7 @@ function freezeSnapshot(value: ConnectionJson): ConnectionJson {
 const relevantSnapshot = (value: unknown) =>
   relevantDependencyEvidence(snapshotJson(value));
 
-export const connectionReadEvidence = connectionAssessmentEvidence.omit({
+export const connectionReadEvidence = connectionSuggestionEvidence.omit({
   basis: true,
 });
 
@@ -199,7 +197,7 @@ export const connectionReadEvidenceSql = (evidence: SQL) => sql<unknown>`CASE
 /** JSONB equality preserves canonical object/array semantics without downloading the snapshot. */
 export async function connectionBasisIsCurrent(
   db: Database,
-  assessmentId: string,
+  suggestionId: string,
   basis: Awaited<ReturnType<typeof captureConnectionBasis>>,
 ) {
   const [match] = await getDb(db)
@@ -207,7 +205,7 @@ export async function connectionBasisIsCurrent(
     .from(suggestionTable)
     .where(
       and(
-        eq(suggestionTable.id, assessmentId),
+        eq(suggestionTable.id, suggestionId),
         sql`${suggestionTable.data}->'connectionEvidence'->'basis' = ${JSON.stringify(basis)}::jsonb`,
       ),
     )
@@ -701,20 +699,6 @@ export async function captureConnectionEvidence(
       });
       break;
     }
-    case "transaction-transfer":
-      dependencies = snapshotJson(
-        await suggestFinancialTransferPairs(db, {
-          transactionIds: [
-            parseShortcodeFor(
-              "financialTransaction",
-              candidate.source.entityId,
-            ),
-          ],
-          maxDateDistanceDays: CONNECTION_TRANSFER_WINDOW_DAYS,
-          maxCandidatesPerTransaction: 3,
-        }),
-      );
-      break;
     case "product-purchase": {
       const prepared_ = prepared?.purchaseProducts.get(
         pairKey(target.id, source.id),

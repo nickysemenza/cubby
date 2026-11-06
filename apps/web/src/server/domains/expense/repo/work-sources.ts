@@ -1,7 +1,6 @@
 import { expenseFiltersSchema } from "@cubby/schemas/project";
 import { and, sql } from "drizzle-orm";
 
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { outer } from "~/server/db/helpers/related";
 import { expense as table } from "~/server/db/schema";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
@@ -56,29 +55,15 @@ const gapSource: WorkSource = {
 };
 export const expenseWorkSources = (): WorkSource[] => [
   gapSource,
-  ...entityProblemSources("expense", async (db, source, scope, assembly) => {
-    const filters = compileProblemFilters("expense", assembly);
-    return {
-      query: selectWorkCandidates(db, source, {
-        entity: "expense",
-        id: sql`${table.shortcode}`,
-        name: sql`"Expense".name`,
-        owners: workExpenseOwners(outer(table.id)),
-        shared: false,
-        reason: source.reasons[0]!.label,
-        reasonKeys: [source.id],
-        ...expenseWorkFacts(),
-      })
-        .from(table)
-        .where(
-          and(
-            await expenseScaffold.prepareWhere(
-              db,
-              expenseFiltersSchema.parse(filters),
-            ),
-            recordScope(scope, sql`${table.shortcode}`),
-          ),
-        ),
-    };
+  ...entityProblemSources("expense", {
+    table,
+    columns: {
+      name: sql`"Expense".name`,
+      owners: workExpenseOwners(outer(table.id)),
+      ...expenseWorkFacts(),
+      shared: false,
+    },
+    scaffold: expenseScaffold,
+    parseFilters: expenseFiltersSchema.parse,
   }),
 ];

@@ -748,10 +748,7 @@ individual dimension prompts, source literals, and fingerprints stay in receipts
 Application feature tiers are declared in
 `apps/web/src/server/ai/policy/features.ts`; retier only with live-eval evidence or an
 explicit member choice. Small ceiling-scoring evals cannot establish parity.
-The opt-in feature eval uses production prompts, schema, validation and repair
-turns, scores synthetic cases, and saves revision/replay/results under
-`artifacts/feature-routing-eval/`. Its package script and environment options
-own the replay command. Mail import still needs controlled model comparison
+Mail import still needs controlled model comparison
 ([backlog](https://github.com/nickysemenza/cubby/issues/2151)).
 
 Image composition and identity-scope questions share a batch before dependent
@@ -884,7 +881,12 @@ as zero-input work. Stored steps outside the current declaration/selection are
 shown separately as historical execution history, not future planned work.
 Scope summaries describe selected accounts/imports without exposing source IDs.
 A Sweep selecting exactly transfer pairs and statements is named Financial
-reconciliation; its stored purpose remains `sweep`.
+reconciliation; its stored purpose remains `sweep`. Field sweeps use that same
+purpose and the `field_roster` / `field_evaluate` steps. Start them with
+`run.sweep` and a field family containing entity, fields and filters; inspect
+and pause/resume them with regular Run reads and controls. There are no separate
+AI sweep operations or model overrides on a Run. Each evaluation retains its
+own pinned model and evidence.
 
 Observed throughput is available after the first completed interval; it does
 not by itself support a completion estimate.

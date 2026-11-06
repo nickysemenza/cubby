@@ -1,7 +1,7 @@
 import {
-  assessmentReviewInput,
-  type AssessmentReviewBatchOut,
-} from "@cubby/schemas/assessment";
+  suggestionReviewInput,
+  type SuggestionReviewBatchOut,
+} from "@cubby/schemas/suggestion";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -19,7 +19,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 // A completed request belongs to the submitted view, even if the same row appears elsewhere.
 it("does not publish an old review failure into a new scope", async () => {
-  const gate = Promise.withResolvers<AssessmentReviewBatchOut>();
+  const gate = Promise.withResolvers<SuggestionReviewBatchOut>();
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => Response.json({ ok: true, data: await gate.promise })),
@@ -28,8 +28,9 @@ it("does not publish an old review failure into a new scope", async () => {
   const id = crypto.randomUUID();
   const row = fromPartial<SuggestionListRow>({ id });
   const item: ReviewItem = {
-    ...assessmentReviewInput.parse({
+    ...suggestionReviewInput.parse({
       operationId: "synthetic-review",
+      suggestionId: id,
       verdict: "dismissed",
       intent: "history",
     }),
@@ -59,7 +60,7 @@ it("does not publish an old review failure into a new scope", async () => {
   rerender();
   await act(async () => {
     gate.resolve([
-      { assessmentId: null, ok: false, error: "Synthetic old-scope failure" },
+      { suggestionId: null, ok: false, error: "Synthetic old-scope failure" },
     ]);
     await Promise.all(pending);
   });

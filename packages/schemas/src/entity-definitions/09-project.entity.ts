@@ -630,7 +630,7 @@ Rules:
       },
       {
         key: "assigneeId",
-        labelOverride: "Default assignee",
+        label: "Default assignee",
         kind: "identifier",
         nullable: true,
         reference: {
@@ -809,7 +809,7 @@ Rules:
           semantics: "period",
         },
         control: { kind: "dateRange" },
-        display: { columnGroup: "Plan", columnIdOverride: "startDate" },
+        display: { columnGroup: "Plan", columnId: "startDate" },
         validation: {
           read: storedDateRangeSchema.nullable(),
           create: dateRangeSchema.nullable().default(null),
@@ -957,7 +957,7 @@ Rules:
       },
       {
         key: "taskProgress",
-        labelOverride: "Tasks",
+        label: "Tasks",
         kind: "text",
         provenance: {
           kind: "derived",
@@ -1907,7 +1907,14 @@ Rules:
     },
   },
   extensions: {
+    relatednessSignals: [
+      { kind: "semantic", label: "Similar meaning", weight: 1, limit: 8 },
+    ],
     ports: {
+      reports: {
+        module: "~/server/domains/project/repo/report-bindings",
+        export: "reportBindings",
+      },
       repository: {
         module: "~/server/domains/project/repo/repository",
         export: "projectRepository",

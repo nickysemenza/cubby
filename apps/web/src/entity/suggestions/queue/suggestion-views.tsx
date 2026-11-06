@@ -71,7 +71,7 @@ const helper = createCubbyColumnHelper<Row>();
 export const viewFilterSpecs = (
   view: SuggestionView,
 ): readonly FilterSpecCore[] =>
-  (view === "product_pair" || view === "image_description"
+  (view === "product_pair"
     ? suggestionRelationLists.all
     : suggestionRelationLists[view]
   ).specs;

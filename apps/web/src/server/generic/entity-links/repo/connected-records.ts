@@ -37,19 +37,19 @@ function resolveConnectedView(source: Entity, viewKey: string) {
   return view;
 }
 
-const nodeExpression = (
+const nodeExpression = async (
   entity: Entity,
   alias: string,
   via?: RelationshipWitness,
-): SQL =>
+): Promise<SQL> =>
   sql`jsonb_build_object(
     'entityKind', ${entity}::text,
     'entityId', ${sql.raw(`${alias}."shortcode"`)},
-    'label', ${labelSql(entity, alias)}
+    'label', ${await labelSql(entity, alias)}
     ${via ? sql`, 'via', ${JSON.stringify(via)}::jsonb` : sql``}
   )`;
 
-export function compiledConnectedRoutes(source: Entity, viewKey: string) {
+export async function compiledConnectedRoutes(source: Entity, viewKey: string) {
   const view = resolveConnectedView(source, viewKey);
   if (view.kind === "derived") return [];
   const variants = view.routes.flatMap((route) =>
@@ -68,45 +68,53 @@ export function compiledConnectedRoutes(source: Entity, viewKey: string) {
       variant,
     );
   }
-  return [...distinct.values()].map((variant, index) => {
-    const traversal = compileTraversal(source, variant.steps, `c${index}_`, {
-      root: "s",
-      leaf: "t",
-      to: view.target,
-    });
-    const nodes: {
-      entity: Entity;
-      alias: string;
-      via?: RelationshipWitness;
-    }[] = [
-      { entity: source, alias: "s" },
-      ...traversal.hops.flatMap((hop, index) => {
-        const entity = entityByTable.get(hop.table);
-        return entity === undefined
-          ? []
-          : [
-              {
-                entity,
-                alias: hop.alias,
-                via: variant.witnesses.find(
-                  (item) => item.stepCount === index + 1,
-                )?.witness,
-              },
-            ];
-      }),
-    ];
-    if (nodes.at(-1)?.entity !== view.target) {
-      throw new Error(`Connected view ${source}.${viewKey} has no target node`);
-    }
-    return {
-      traversal,
-      hops: nodes.length - 1,
-      path: sql`jsonb_build_array(${sql.join(
-        nodes.map((node) => nodeExpression(node.entity, node.alias, node.via)),
-        sql`, `,
-      )})`,
-    };
-  });
+  return Promise.all(
+    [...distinct.values()].map(async (variant, index) => {
+      const traversal = compileTraversal(source, variant.steps, `c${index}_`, {
+        root: "s",
+        leaf: "t",
+        to: view.target,
+      });
+      const nodes: {
+        entity: Entity;
+        alias: string;
+        via?: RelationshipWitness;
+      }[] = [
+        { entity: source, alias: "s" },
+        ...traversal.hops.flatMap((hop, index) => {
+          const entity = entityByTable.get(hop.table);
+          return entity === undefined
+            ? []
+            : [
+                {
+                  entity,
+                  alias: hop.alias,
+                  via: variant.witnesses.find(
+                    (item) => item.stepCount === index + 1,
+                  )?.witness,
+                },
+              ];
+        }),
+      ];
+      if (nodes.at(-1)?.entity !== view.target) {
+        throw new Error(
+          `Connected view ${source}.${viewKey} has no target node`,
+        );
+      }
+      return {
+        traversal,
+        hops: nodes.length - 1,
+        path: sql`jsonb_build_array(${sql.join(
+          await Promise.all(
+            nodes.map((node) =>
+              nodeExpression(node.entity, node.alias, node.via),
+            ),
+          ),
+          sql`, `,
+        )})`,
+      };
+    }),
+  );
 }
 
 const pageRowSchema = z.object({
@@ -122,14 +130,14 @@ const pageRowSchema = z.object({
 });
 
 /** Shared page query for individual tables and the batched detail preview. */
-function prepareConnectedPage(input: ConnectedRecordsInput) {
+async function prepareConnectedPage(input: ConnectedRecordsInput) {
   const { source, viewKey } = input;
   const view = resolveConnectedView(source.entityKind, viewKey);
   // A derived relation has no edge path to witness; its list filter is the
   // whole answer, so there is no per-record route evidence to return.
   if (view.kind === "derived" || input.targetIds?.length === 0)
     return { target: view.target, query: null };
-  const routes = compiledConnectedRoutes(source.entityKind, viewKey);
+  const routes = await compiledConnectedRoutes(source.entityKind, viewKey);
   if (routes.length === 0)
     throw new Error(`No routes for ${source.entityKind}.${viewKey}`);
   const rootTable = entityManifest[source.entityKind].dbTable;
@@ -143,10 +151,11 @@ function prepareConnectedPage(input: ConnectedRecordsInput) {
         sql`, `,
       )})`
     : sql``;
-  const routeQueries = routes.map(
-    (route) => sql`
+  const routeQueries = await Promise.all(
+    routes.map(
+      async (route) => sql`
       SELECT t."shortcode" AS "targetId",
-        ${labelSql(view.target, "t")} AS "targetLabel",
+        ${await labelSql(view.target, "t")} AS "targetLabel",
         ${route.hops}::int AS "hops",
         ${route.path} AS "path"
       FROM ${sql.raw(`"${rootTable}"`)} s
@@ -155,6 +164,7 @@ function prepareConnectedPage(input: ConnectedRecordsInput) {
         ${rootLiveness}
         ${targetFilter}
     `,
+    ),
   );
   const query = sql`
     WITH paths AS (${sql.join(routeQueries, sql` UNION ALL `)}),
@@ -209,7 +219,7 @@ export async function getConnectedRecords(
   db: Database,
   input: ConnectedRecordsInput,
 ): Promise<ConnectedRecordsOutput> {
-  const plan = prepareConnectedPage(input);
+  const plan = await prepareConnectedPage(input);
   if (!plan.query) return connectedPage(plan.target, emptyPage);
   const result = await unwrapDb(db).execute(plan.query);
   return connectedPage(plan.target, result.rows[0]);
@@ -222,14 +232,16 @@ export async function getConnectedRecordsPreview(
 ): Promise<ConnectedRecordsPreviewOutput> {
   const views = connectionCatalog.views(input.source.entityKind, input.scope);
   if (views.length === 0) return { views: [] };
-  const queries = views.map((view, index) => {
-    const { query } = prepareConnectedPage({
-      source: input.source,
-      viewKey: view.key,
-      limit: input.limit ?? 3,
-    });
-    return sql`SELECT ${index}::int AS "viewIndex", page."totalCount", page."items" FROM (${query ?? emptyPageQuery}) page`;
-  });
+  const queries = await Promise.all(
+    views.map(async (view, index) => {
+      const { query } = await prepareConnectedPage({
+        source: input.source,
+        viewKey: view.key,
+        limit: input.limit ?? 3,
+      });
+      return sql`SELECT ${index}::int AS "viewIndex", page."totalCount", page."items" FROM (${query ?? emptyPageQuery}) page`;
+    }),
+  );
   const result = await unwrapDb(db).execute(
     sql`${sql.join(queries, sql` UNION ALL `)} ORDER BY "viewIndex"`,
   );

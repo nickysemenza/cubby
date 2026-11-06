@@ -348,7 +348,7 @@ export const { definition, readSchemas } = defineEntityModel({
           semantics: "period",
         },
         control: { kind: "dateRange" },
-        display: { columnGroup: "Schedule", columnIdOverride: "sowedOn" },
+        display: { columnGroup: "Schedule", columnId: "sowedOn" },
         validation: {
           read: storedDateRangeSchema.nullable(),
           create: dateRangeSchema.nullable().default(null),
@@ -838,6 +838,9 @@ export const { definition, readSchemas } = defineEntityModel({
     },
   },
   extensions: {
+    relatednessSignals: [
+      { kind: "semantic", label: "Similar meaning", weight: 1, limit: 8 },
+    ],
     ports: {
       repository: {
         module: "~/server/domains/garden/repo/repository",

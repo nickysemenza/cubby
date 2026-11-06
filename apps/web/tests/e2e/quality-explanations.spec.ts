@@ -41,8 +41,15 @@ test("a person accepts a data gap as an exception that survives evidence changes
   });
   const popover = page.locator('[data-slot="popover-content"]:visible');
   const check = popover.locator('[data-quality-check="product_brand"]');
-  await expect(async () => {
+  const openCurrentExplanation = async () => {
     if (!(await popover.isVisible())) await trigger.click();
+    const refresh = popover.getByRole("button", {
+      name: "Refresh value and explanation",
+    });
+    if (await refresh.isVisible()) await refresh.click();
+  };
+  await expect(async () => {
+    await openCurrentExplanation();
     await expect(check).toContainText("Missing data");
   }).toPass();
   await check.getByRole("button", { name: "Accept as…" }).click();
@@ -56,14 +63,10 @@ test("a person accepts a data gap as an exception that survives evidence changes
       "Checked [synthetic catalog](https://example.test/catalog); no brandName is listed.",
     );
   await check.getByRole("button", { name: "Accept exception" }).click();
-  // The waiver can supersede the publication captured by this explanation.
+  // The durable decision is current even while the published checks await the bulk pass.
   await expect(async () => {
-    if (!(await popover.isVisible())) await trigger.click();
-    const refresh = popover.getByRole("button", {
-      name: "Refresh value and explanation",
-    });
-    if (await refresh.isVisible()) await refresh.click();
-    await expect(check).toContainText("Accepted exception");
+    await openCurrentExplanation();
+    await expect(check).toContainText("Recorded as Not applicable");
   }).toPass();
   await expect(
     check.getByRole("link", { name: "synthetic catalog" }),
@@ -78,7 +81,7 @@ test("a person accepts a data gap as an exception that survives evidence changes
   // Waivers never reopen: the recorded decision remains after the evidence changes.
   await reloadAuthenticatedPage(page, row);
   await expect(async () => {
-    if (!(await popover.isVisible())) await trigger.click();
+    await openCurrentExplanation();
     await expect(check).toContainText("Recorded as");
   }).toPass();
   await expect(

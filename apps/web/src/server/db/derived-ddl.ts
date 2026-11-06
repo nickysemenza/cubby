@@ -4,9 +4,9 @@ import { entityIdentityDropTriggerSql } from "~/server/db/entity-identity-ddl";
 import { entityLinkDropLivenessTriggerSql } from "~/server/db/entity-link-schema";
 import { shipmentIdentityDdl } from "~/server/db/shipment-identity-ddl";
 
-import { assessmentHistoryDdl, statementSuggestionDdl } from "./assessment-ddl";
 import { productBrandDdl } from "./product-brand-ddl";
 import { searchPrefixDdl } from "./search-prefix-ddl";
+import { suggestionHistoryDdl, statementSuggestionDdl } from "./suggestion-ddl";
 
 /**
  * One CHECK per field of an enforced same-record classification policy:
@@ -56,12 +56,12 @@ const classificationConstraintSql = (): string =>
 
 /**
  * Desired-state DDL for the database catalog check beyond the Drizzle schema:
- * retired business triggers, assessment projection indexes and mail view,
+ * retired business triggers, suggestion projection indexes and mail view,
  * plus classification constraints. db:check applies it only to its scratch
  * model database and compares that catalog with a migration-built database.
  * Changes require targeted SQL in an unmerged migration, not another copy of
  * this whole script.
  */
 export function renderDerivedDdl(): string {
-  return `${productBrandDdl()}\n\n${entityIdentityDropTriggerSql()}\n\n${entityLinkDropLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${assessmentHistoryDdl()}\n\n${statementSuggestionDdl()}\n\n${searchPrefixDdl()}\n\n${shipmentIdentityDdl()}\n`;
+  return `${productBrandDdl()}\n\n${entityIdentityDropTriggerSql()}\n\n${entityLinkDropLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${suggestionHistoryDdl()}\n\n${statementSuggestionDdl()}\n\n${searchPrefixDdl()}\n\n${shipmentIdentityDdl()}\n`;
 }

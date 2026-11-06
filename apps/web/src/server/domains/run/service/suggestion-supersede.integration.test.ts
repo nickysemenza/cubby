@@ -13,11 +13,11 @@ import { getDb } from "~/server/db/helpers";
 import { purchase as purchaseTable } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { projectCreateFromTasksWorkflow } from "~/server/domains/project/operations.server";
-import { listSuggestions } from "~/server/generic/assessment/repo/suggestion-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 
+import { readReviewFields } from "./suggestion-sweep.fixtures";
 import {
   categoryPorts,
   expenseFixture,
@@ -172,7 +172,7 @@ describe("Suggestion supersede", () => {
         }),
       ),
     );
-    const assessmentIds = [];
+    const suggestionIds = [];
     for (const expense of expenses) {
       const { id } = await seedPending(ctx, {
         entity: "expense",
@@ -182,7 +182,7 @@ describe("Suggestion supersede", () => {
         suggestedValue: "Synthetic vendor C",
         kind: "correction",
       });
-      assessmentIds.push(id);
+      suggestionIds.push(id);
     }
     // A: the Expense vendor edit rewrites its Purchase.
     await updateExpense(
@@ -204,7 +204,7 @@ describe("Suggestion supersede", () => {
     await reconcileDerivedRefreshInputs(ctx.db);
     expect(
       await Promise.all(
-        assessmentIds.map((id) => isSuggestionReviewable(ctx.db, id)),
+        suggestionIds.map((id) => isSuggestionReviewable(ctx.db, id)),
       ),
       // Backing Purchase fields remain part of the live review fence.
     ).toEqual([false, false, false]);
@@ -225,7 +225,7 @@ describe("Suggestion supersede", () => {
         { context: kernelCtx(ctx), ...categoryPorts() },
       );
     const firstRun = await sweep();
-    const [first] = await listSuggestions(ctx.db, {
+    const [first] = await readReviewFields(ctx.db, {
       runId: await runCode(ctx.db, firstRun.id),
       minConfidence: 0,
     });

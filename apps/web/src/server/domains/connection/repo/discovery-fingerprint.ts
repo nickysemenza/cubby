@@ -12,7 +12,7 @@ import {
 /**
  * The source's own connection-relevant snapshot, the same projection its
  * candidate evidence captures. A candidate's side is fenced by the basis its
- * published Assessment stores and by that endpoint's own discovery, so no
+ * published Suggestion stores and by that endpoint's own discovery, so no
  * corpus-wide revision is read here.
  */
 export async function connectionDiscoveryFingerprints(

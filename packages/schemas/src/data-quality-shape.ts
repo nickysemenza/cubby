@@ -13,7 +13,7 @@ import {
  */
 /**
  * `not_assessed`: no applicable check holds a gap and none counts toward
- * assessment. `complete_with_exceptions`: no unresolved gap, but at least one is
+ * suggestion. `complete_with_exceptions`: no unresolved gap, but at least one is
  * satisfied only by an accepted exception.
  */
 /** Persisted check outcomes; waivers apply only while a check has a gap. */

@@ -71,7 +71,6 @@ import {
   productAcquisitionDateFilterSql,
   productExpenseCountFilterSql,
   productExpenseTotalFilterSql,
-  actualExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
 import {
   productBrandNameSql,
@@ -160,10 +159,7 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
-import {
-  storedDerivedSql,
-  storedFieldAvailableSql,
-} from "~/server/generic/derived/repo/read";
+import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import {
   ensureExternalSources,
   lockExternalIdentifierParents,
@@ -174,7 +170,6 @@ import {
   loadProductExpenseEvidence,
 } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
-import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import {
@@ -208,22 +203,13 @@ import {
   productFieldResolutions,
   productImageShortcodesOf,
 } from "./mappers";
-import { ownershipExitExpensePredicate } from "./ownership";
 import {
   productReadPriceSql,
   productReadCostSql,
   resolveProductPricing,
 } from "./pricing";
 import { storedEffectivePrice } from "./pricing";
-import {
-  EMPTY_QUANTITY_LEDGER,
-  expectedQuantityFilterSql,
-  hasUnknownAcquisitionLinesSql,
-  hasUnknownQuantityLinesSql,
-  unknownQuantityLinesReadSql,
-  onHandUnitsFilterSql,
-  onHandUnitsSql,
-} from "./quantity-ledger";
+import { EMPTY_QUANTITY_LEDGER } from "./quantity-ledger";
 import { unitMappingColumns } from "./unit-mappings";
 import {
   assertNoCanonicalPriceMapping,
@@ -262,30 +248,6 @@ const productIdsWithExpenses = qb
   .select({ productId: expense.productId })
   .from(expense)
   .where(and(notDeleted(expense), isNotNull(expense.productId)));
-
-// Kit membership requires live parent and component rows; do not approximate liveness with stale joins.
-const partsAccountedKitsSql = sql`(SELECT min(floor(COALESCE(${sql.raw(onHandUnitsSql("kac_p"))}, 0) / kac."quantity"))
-       FROM "EntityLink" kac
-       JOIN "Product" kac_p
-         ON kac_p."id" = kac."toEntityId" AND ${notDeleted("kac_p")}
-      WHERE kac."fromEntityId" = ${product.id}
-        AND ${notDeleted("kac")} AND kac."kind" = 'productComponent')`;
-
-// The entity-list form of the sold-but-still-stocked diagnostic. The quantity
-// ledger remains the authority for expected quantity and unknown acquisition
-// lines; the shared exit predicate keeps ordinary refunds/adjustments from
-// reading as an ownership exit while including $0 hand-entered discards.
-const productIdsWithRecordedDisposal = qb
-  .select({ productId: expense.productId })
-  .from(expense)
-  .where(
-    and(
-      notDeleted(expense),
-      actualExpense(),
-      isNotNull(expense.productId),
-      ownershipExitExpensePredicate(),
-    ),
-  );
 
 const productIdsWithConversionCoverage = (condition: SQL) =>
   inArray(
@@ -341,6 +303,8 @@ export const productScaffold = listScaffold<
     ),
     // Stored (ADR 0021): the kit walk per row made price sorts ~300 ms.
     price: productReadPriceSql,
+    priced: sql`CASE WHEN ${serviceCategorySql(sql`${product.categoryId}`)} THEN false
+      WHEN ${productReadPriceSql} IS NOT NULL THEN true END`,
     cost: productReadCostSql,
     primaryGtin: sql.raw(
       `(SELECT pei."externalId" FROM "EntityExternalId" pei ` +
@@ -404,21 +368,6 @@ export const productScaffold = listScaffold<
         .groupBy(inventoryEntry.productId, inventoryEntry.placement)
         .having(sql`count(*) > 1`),
     )})`,
-    kitAccounting: listReadValue((read) => {
-      const onHand = onHandUnitsFilterSql(product.id, read);
-      const expected =
-        read?.derivedValue?.("expectedQuantity", product.id) ??
-        expectedQuantityFilterSql(product.id);
-      // Unknown stock is not applicable; make that false before expensive kit work.
-      return sql`((${onHand} > 0) IS TRUE AND ${partsAccountedKitsSql} > 0
-        AND ${onHand} + ${partsAccountedKitsSql} > ${expected})`;
-    }),
-    ownershipReconciliation: listReadValue(
-      (read) => sql`(${inArray(product.id, productIdsWithRecordedDisposal)}
-        AND (${onHandUnitsFilterSql(product.id, read)} > 0) IS TRUE
-        AND ${expectedQuantityFilterSql(product.id)} <= 0
-        AND NOT ${hasUnknownAcquisitionLinesSql(product.id)})`,
-    ),
     conversionCoverage: productIdsWithConversionCoverage(
       eq(productConversionCoverage.coverageTier, "partial"),
     ),
@@ -436,14 +385,6 @@ export const productScaffold = listScaffold<
     // category default takes its members out of it.
     stockTrackedDecided: sql`${effectiveFieldSql("product", "stockTracked")} IS NOT NULL`,
     miscBucket: sql`lower(${product.name}) LIKE 'misc:%'`,
-    unknownQuantityLines: {
-      value: hasUnknownQuantityLinesSql(product.id),
-      set: unknownQuantityLinesReadSql(),
-    },
-    priced: sql`CASE WHEN ${serviceCategorySql(sql`${product.categoryId}`)} THEN false
-      WHEN ${productReadPriceSql} IS NOT NULL THEN true
-      WHEN ${storedFieldAvailableSql("product", "price", product.id, { currentValue: productReadPriceSql })} THEN false
-      ELSE NULL::boolean END`,
     effectiveOwner: (value) =>
       productOwnerFilterSql(value.values, value.presence),
   },

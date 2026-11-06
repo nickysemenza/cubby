@@ -9,12 +9,9 @@ import { createTransparentDerivativeAndJob } from "~/server/domains/image-proces
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { JOB_RETENTION_MS } from "~/server/generic/jobs/repo/job-retention";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 
-import { enrollQueueMaintenance } from "./job-maintenance";
-import { productionJobHandlers } from "./jobs";
+import { maintainJobs } from "./job-maintenance";
 
 describe("Job maintenance", () => {
   const ctx = withTestDb();
@@ -40,35 +37,13 @@ describe("Job maintenance", () => {
     return scheduled.jobId;
   };
 
-  const runMaintenance = async () => {
-    await enrollQueueMaintenance(ctx.db);
-    const [maintenance] = await readJobs(ctx.db, { key: "jobs.maintenance" });
-    if (!maintenance) throw new Error("Expected maintenance Job");
-    await updateJobs(
-      ctx.db,
-      { id: maintenance.id },
-      { availableAt: new Date(0) },
-    );
-    return advanceJob(ctx.db, maintenance.id, productionJobHandlers);
-  };
-
-  it("enrolls one internal jobs.maintenance Job", async () => {
-    await enrollQueueMaintenance(ctx.db);
-    await enrollQueueMaintenance(ctx.db);
-    const rows = await readJobs(ctx.db, { key: "jobs.maintenance" }).then(
-      (rows) => rows.map(({ id, kind }) => ({ id, kind })),
-    );
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.kind).toBe("jobs.maintenance");
-  });
-
   it("reopens an image row a pre-cutover writer left leased", async () => {
     const jobId = await subjectLift();
     await getDb(ctx.db)
       .update(imageProcessingJob)
       .set({ state: "leased", attemptId: crypto.randomUUID() })
       .where(eq(imageProcessingJob.id, jobId));
-    await expect(runMaintenance()).resolves.toBe("succeeded");
+    await maintainJobs(ctx.db);
     const [processing] = await getDb(ctx.db)
       .select({ state: imageProcessingJob.state })
       .from(imageProcessingJob)
@@ -77,7 +52,7 @@ describe("Job maintenance", () => {
   });
 
   it("prunes terminal Jobs only after their retention window", async () => {
-    const old = new Date(Date.now() - JOB_RETENTION_MS - 60_000);
+    const old = new Date(Date.now() - 9 * 24 * 60 * 60_000);
     const retained: string[] = [];
     for (const [key, state] of [
       ["synthetic.retention.completed", "completed"],
@@ -102,7 +77,7 @@ describe("Job maintenance", () => {
         updatedAt: new Date(Date.now() - 31 * 24 * 60 * 60_000),
       },
     );
-    await expect(runMaintenance()).resolves.toBe("succeeded");
+    await maintainJobs(ctx.db);
     expect(await readJobs(ctx.db, { id: expired.id })).toEqual([]);
     expect(await readJobs(ctx.db, { id: retained[0]! })).toEqual([]);
     expect(

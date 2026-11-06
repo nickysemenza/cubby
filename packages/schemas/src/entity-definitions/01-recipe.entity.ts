@@ -178,6 +178,7 @@ export const { definition, readSchemas } = defineEntityModel(
           },
         ],
         links: [
+          { label: "Graph", path: "/recipes/graph" },
           { label: "Compare", path: "/recipes/compare" },
           { label: "Import", path: "/recipes/import" },
         ],
@@ -204,7 +205,7 @@ export const { definition, readSchemas } = defineEntityModel(
           audit: false,
           key: "meta",
           kind: "json",
-          labelOverride: "Source URL",
+          label: "Source URL",
           nullable: true,
           control: { kind: "specialized", renderer: "structured-field" },
           // The detail row is the source URL: read from the structured value, drawn as a link.
@@ -245,6 +246,7 @@ export const { definition, readSchemas } = defineEntityModel(
           },
           resolution: { reset: { servings: null }, redundancy: "eligible" },
           explanation: {
+            evidence: { kind: "yield" },
             ruleId: "recipe.effective-servings",
             description:
               "An explicit serving count wins; otherwise a recipe yield measured in servings supplies the count. Clearing servings resumes the live yield fallback.",
@@ -258,10 +260,6 @@ export const { definition, readSchemas } = defineEntityModel(
               {
                 path: "fields.servings.current.assignment.value",
                 label: "Stored servings",
-              },
-              {
-                path: "fields.servings.current.controls.reset.preview.result.decision.outcome.value",
-                label: "Serving yield",
               },
               { path: "yield", label: "Recipe yield" },
             ],
@@ -387,7 +385,7 @@ export const { definition, readSchemas } = defineEntityModel(
           audit: false,
           key: "sections",
           kind: "json",
-          labelOverride: "Composition",
+          label: "Composition",
           control: { kind: "specialized", renderer: "structured-field" },
           // The body renders in the workflow slot; this row is the composition summary.
           display: { detailLabelPath: "compositionLabel" },
@@ -497,7 +495,7 @@ export const { definition, readSchemas } = defineEntityModel(
         },
         {
           key: "protein",
-          labelOverride: "Protein (g)",
+          label: "Protein (g)",
           kind: "number",
           nullable: true,
           display: { detail: false, list: false, preview: true },
@@ -511,7 +509,7 @@ export const { definition, readSchemas } = defineEntityModel(
         },
         {
           key: "carbs",
-          labelOverride: "Carbs (g)",
+          label: "Carbs (g)",
           kind: "number",
           nullable: true,
           display: { detail: false, list: false, preview: true },
@@ -525,7 +523,7 @@ export const { definition, readSchemas } = defineEntityModel(
         },
         {
           key: "fat",
-          labelOverride: "Fat (g)",
+          label: "Fat (g)",
           kind: "number",
           nullable: true,
           display: { detail: false, list: false, preview: true },
@@ -542,7 +540,7 @@ export const { definition, readSchemas } = defineEntityModel(
           key: "sourceType",
           kind: "enum",
           nullable: true,
-          readKeyOverride: "source",
+          readKey: "source",
         },
         {
           output: false,
@@ -552,7 +550,7 @@ export const { definition, readSchemas } = defineEntityModel(
           key: "sourceUrl",
           kind: "text",
           nullable: true,
-          readKeyOverride: "source",
+          readKey: "source",
         },
         {
           output: false,
@@ -561,7 +559,7 @@ export const { definition, readSchemas } = defineEntityModel(
           key: "sourceLabel",
           kind: "text",
           nullable: true,
-          readKeyOverride: "source",
+          readKey: "source",
         },
         {
           output: false,
@@ -1334,7 +1332,21 @@ export const { definition, readSchemas } = defineEntityModel(
       },
     },
     extensions: {
+      relatednessSignals: [
+        { kind: "semantic", label: "Similar meaning", weight: 1, limit: 8 },
+        {
+          kind: "scalarOverlap",
+          label: "Shared tag",
+          field: "tags",
+          popularityCap: 24,
+          scoring: "displayOnly",
+        },
+      ],
       ports: {
+        reports: {
+          module: "~/server/domains/recipe/repo/report-bindings",
+          export: "reportBindings",
+        },
         repository: {
           module: "~/server/domains/recipe/repo/repository",
           export: "recipeRepository",

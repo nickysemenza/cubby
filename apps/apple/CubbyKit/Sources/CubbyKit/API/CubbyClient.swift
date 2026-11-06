@@ -291,17 +291,12 @@ public actor CubbyClient {
         )
     }
 
-    public func recommendations(for source: EntityRef) async throws -> EntityRecommendationsOut {
-        return  // `recommendations.forEntity` declares its own copy of the entity enum; match by raw value.
-            try await native_recommendations_forEntity(
-                body: .init(
-                    entityKind: .init(rawValue: source.entityKind.rawValue)!, entityId: source.entityId)
-            )
-    }
-
-    public func assignExpense(_ expenseID: String, toProject projectID: String) async throws {
-        return try await EntityCatalog[.expense].update(
-            ["projectId": .string(projectID)], id: expenseID, client: self)
+    public func relatedness(for source: EntityRef) async throws -> RecommendationWorkbenchOut {
+        let entity = EmbeddableEntity(rawValue: source.entityKind.rawValue)
+        guard EntityCatalog[source.entity].hasRelatedness, EmbeddableEntity.allCases.contains(entity) else {
+            return .init(status: .unavailable, items: [])
+        }
+        return try await native_relatedness_forEntity(body: .init(entity: entity, id: source.entityId))
     }
 
     public func moveInventory(_ inventoryID: String, to locationID: String) async throws -> EntityRef {

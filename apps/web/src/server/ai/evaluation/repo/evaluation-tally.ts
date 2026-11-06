@@ -12,7 +12,6 @@ import {
   aiEvaluationTargetKind,
 } from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
 import { RUN_STEP_ERROR_SAMPLE } from "@cubby/schemas/run-step";
 import { and, eq, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { SelectedFields } from "drizzle-orm/pg-core";
@@ -37,7 +36,7 @@ const connectionTarget = () => {
     AND jsonb_typeof(${field("entity")}) = 'string'
     AND ${uuidString(field("recordId"))}
     AND jsonb_typeof(${field("field")}) = 'null'
-    AND ${field("assessmentIds")} = '[]'::jsonb)`;
+    AND ${field("suggestionIds")} = '[]'::jsonb)`;
 };
 
 /** A cancelled request hides a falsy receipt; otherwise its own receipt wins over the shared one. */
@@ -126,7 +125,15 @@ export type EvaluationTally = Awaited<ReturnType<typeof readEvaluationTally>>;
 
 const outcomeReceipt = z.object({
   outcome: z.string(),
-  diagnostics: suggestionSweepRunProgress.shape.diagnostics.optional(),
+  diagnostics: z
+    .array(
+      z.object({
+        targetId: z.string(),
+        stage: z.enum(["apply", "paired_model"]),
+        reason: z.string(),
+      }),
+    )
+    .optional(),
 });
 
 /**

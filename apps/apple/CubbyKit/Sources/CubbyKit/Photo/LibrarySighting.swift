@@ -220,7 +220,7 @@ public enum LibrarySightingBuilder {
     /// `matchKind` is always `.libraryMatch`: this builder is never used for the import path, which
     /// the server derives server-side from the commit item's `library` block instead.
     public static func recordItem(
-        imageId: ImageShortcode,
+        imageId: ImageCode,
         deviceId: DeviceShortcode,
         ledgerPartyId: LedgerPartyShortcode? = nil,
         metadata: LibraryAssetMetadata,

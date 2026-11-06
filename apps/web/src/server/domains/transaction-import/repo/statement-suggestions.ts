@@ -1,26 +1,17 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import {
-  assessmentFamily,
-  assessmentJudgments,
-  assessmentProducer,
-  type AssessmentProducer,
-  feedbackEvent,
-  feedbackVerdict,
-} from "@cubby/schemas/assessment";
 import { financialAccountSourceAliases } from "@cubby/schemas/financial-account";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import {
   FINANCIAL_STATEMENT_IMPORT_MAX_ROWS,
-  type FinancialTransactionImportRow,
-} from "@cubby/schemas/financial-transaction";
-import {
   financialTransactionKind,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
-import { financialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
-import { financialTransactionProviderStatus } from "@cubby/schemas/financial-transaction-fields";
-import type { RunId } from "@cubby/schemas/identifiers";
-import type { RunStepError } from "@cubby/schemas/run-step";
+import {
+  financialTransactionSourceRef,
+  financialTransactionProviderStatus,
+} from "@cubby/schemas/financial-transaction-fields";
+import { type RunId } from "@cubby/schemas/identifiers";
+import { type RunStepError } from "@cubby/schemas/run-step";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
 import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record-fields";
@@ -35,16 +26,27 @@ import {
   type StatementLabelCheckpoint,
   statementApplicationOrder,
 } from "@cubby/schemas/statement-suggestion";
+import {
+  suggestionJudgments,
+  suggestionSubjects,
+  suggestionFamily,
+  suggestionProducer,
+  type SuggestionProducer,
+  feedbackEvent,
+  feedbackVerdict,
+} from "@cubby/schemas/suggestion";
+import { statementSuggestionRow } from "@cubby/schemas/suggestion-list";
+import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { cents } from "@cubby/shared";
 import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { sql, and, eq, inArray, isNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { plainDateDaysBetween } from "~/lib/household-date";
-import type { Database } from "~/server/db";
+import { type Database } from "~/server/db";
 import {
   getDb,
   runAfterCommit,
@@ -60,7 +62,7 @@ import {
   previewFinancialTransactionImport,
   prepareFinancialStatementPreview,
 } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
-import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
+import { type FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   findTransferPairsForCharges,
   transferPairSourceCharges,
@@ -81,30 +83,53 @@ import {
   suggestionRefKey,
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
+  chargeId,
+  previewRowFor,
+  type ChargeRef,
+} from "~/server/domains/transaction-import/repo/statement-input";
+import {
   statementLabelInputs,
   statementLabelSubject,
   statementCandidateSubject,
 } from "~/server/domains/transaction-import/repo/statement-label-input";
 import {
-  decideStatementKind,
+  readStatementSuggestions,
+  statementSuggestionFacts,
+  statementSuggestionKeys,
+} from "~/server/domains/transaction-import/repo/statement-suggestion-read";
+import {
   kindAgreed,
+  decideStatementKind,
   type OwnAccount,
   ownAccountNamed,
   statementTransactionKind,
 } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  publishAssessment,
-  publishAssessments,
-  matchedRulesOf,
-} from "~/server/generic/assessment/repo/assessment";
-import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import {
   automaticRuleStamp,
   importOnlyStatementRuleStamps,
   matchStatementRules,
-} from "~/server/generic/assessment/repo/automatic-rules";
+} from "~/server/generic/suggestions/repo/automatic-policy";
+import {
+  publishSuggestion as publishStoredSuggestion,
+  publishSuggestions,
+  matchedRulesOf,
+} from "~/server/generic/suggestions/repo/suggestion";
+import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
+import { outcomes } from "~/server/generic/suggestions/repo/suggestion-outcomes";
+import {
+  stamps,
+  verbs,
+  keyBase,
+  cleanAcceptance,
+  statementImpact,
+  statementStrength,
+  otherTransaction,
+  statementAcceptApplication,
+  statementScope,
+} from "~/server/generic/suggestions/repo/suggestion-presentation";
 import {
   countSuggestionLabelBacklog,
   inSuggestionBatches,
@@ -116,8 +141,14 @@ import {
   type SuggestionOutcome,
   type SuggestionRow,
   unchangedSuggestions,
-} from "~/server/generic/assessment/repo/suggestion-publication";
-import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
+} from "~/server/generic/suggestions/repo/suggestion-publication";
+import {
+  statementRecords,
+  statementReferenceMatch,
+  declareAffectedRecords,
+} from "~/server/generic/suggestions/repo/suggestion-record-discovery";
+import { suggestionStateData as stateData } from "~/server/generic/suggestions/repo/suggestion-state";
+import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   assertWorkflowEffect,
@@ -140,8 +171,7 @@ import {
 
 const STATE = "Suggestion";
 const log = createLogger("statement-suggestions");
-const pendingStatementState = sql`${suggestionTable.family} = ${assessmentFamily.enum.statement_transaction} AND ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}`;
-const stateData = z.record(z.string(), z.json());
+const pendingStatementState = sql`${suggestionTable.family} = ${suggestionFamily.enum.statement_transaction} AND ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}`;
 
 /** Matching revision and Automatic attach rule revision; clean-only changes use the policy below. */
 export const STATEMENT_SUGGESTION_REVISION = "2026-10-21.1";
@@ -166,10 +196,6 @@ const HISTORY_MIN_TRANSACTIONS = 2;
  * share are capped at 12, so a Sweep keeps most of them free.
  */
 export const STATEMENT_PUBLISH_CONCURRENCY = 4;
-
-export type ChargeRef = { source: string; chargeKey: string };
-export const chargeId = (charge: ChargeRef) =>
-  `${charge.source}:${charge.chargeKey}`;
 
 export function statementChargeFromWorkRef(ref: string): ChargeRef | null {
   const match = /^charge:([^:]+):(.+)$/.exec(ref);
@@ -337,26 +363,6 @@ async function loadObservations(
 
 /** The newest observation with a physical position names the charge's settlement ref. */
 const canonicalObservation = (observations: Observation[]) => observations[0]!;
-
-const previewRowFor = (
-  charge: ChargeRef,
-  row: Observation,
-): FinancialTransactionImportRow => ({
-  key: chargeId(charge),
-  source: row.source,
-  account: row.accountDescriptor,
-  date: row.statementDate,
-  amount: row.providerAmount,
-  merchant: row.merchant,
-  originalStatement: row.rawDescription,
-  category: row.sourceCategory,
-  notes: row.providerNotes,
-  importFingerprint: row.importFingerprint,
-  ...(row.rowPosition === null ? {} : { rowPosition: row.rowPosition }),
-  providerTransactionId: row.providerTransactionId,
-  providerAccountId: row.providerAccountId,
-  ...(row.providerStatus ? { providerStatus: row.providerStatus } : {}),
-});
 
 type PendingTransaction = {
   id: string;
@@ -584,7 +590,7 @@ async function merchantHistory(
       CROSS JOIN LATERAL jsonb_array_elements_text(s.data->'refs') ref(key)
       JOIN ${financialSourceReferenceRows} fx ON fx.source = split_part(ref.key, ':', 1)
         AND fx."externalId" = substr(ref.key, length(split_part(ref.key, ':', 1)) + 2)
-      WHERE s.family = ${assessmentFamily.enum.statement_transaction}
+      WHERE s.family = ${suggestionFamily.enum.statement_transaction}
         AND (s.judgment->>'clean')::boolean
         AND s.judgment->>'recommended' = ${statementTransactionAction.enum.create}
         AND s.status = ${suggestionStatus.enum.applied}
@@ -1319,7 +1325,7 @@ async function finishProposal(
   providerScopeFingerprint?: string,
   providerScopeCharges?: readonly ChargeRef[],
 ): Promise<ChargeProposal> {
-  assessmentJudgments.statement_transaction.parse(judgment);
+  suggestionJudgments.statement_transaction.parse(judgment);
   const fingerprint = await sha256Hex(
     canonicalJson({
       revision: STATEMENT_SUGGESTION_REVISION,
@@ -1365,7 +1371,7 @@ export async function labelledProposal(
   proposal: ChargeProposal,
   judgment: StatementTransactionJudgment,
 ): Promise<ChargeProposal> {
-  assessmentJudgments.statement_transaction.parse(judgment);
+  suggestionJudgments.statement_transaction.parse(judgment);
   return {
     ...proposal,
     judgment,
@@ -1570,7 +1576,7 @@ const isSettledBooking = (judgment: StatementTransactionJudgment) =>
 
 /** Complete a previously committed publication's missed retirement check, even without a new proposal. */
 async function retireSettledChargeAdvice(db: Database, charge: ChargeRef) {
-  return transitionAssessmentStates(
+  return transitionSuggestionStates(
     db,
     sql`${pendingStatementState} AND ${suggestionField("source", STATE)}=${charge.source} AND ${suggestionField("chargeKey", STATE)}=${charge.chargeKey}
             AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.void}
@@ -1589,7 +1595,7 @@ type ReusablePublication = Pick<
   typeof suggestionTable.$inferSelect,
   "active" | "fingerprint"
 > & {
-  producer: AssessmentProducer | null;
+  producer: SuggestionProducer | null;
   evidenceFingerprint: string | null;
   judgment: unknown;
 };
@@ -1612,7 +1618,7 @@ function reusableRuleLabels<
       !["pending", "superseded"].includes(row.status)
     )
       return false;
-    const previous = assessmentJudgments.statement_transaction.parse(
+    const previous = suggestionJudgments.statement_transaction.parse(
       row.judgment,
     );
     return canonicalJson(statementLabelInputs(previous)) === inputs;
@@ -1628,7 +1634,7 @@ const countLabels = (value: StatementTransactionJudgment) =>
 
 function chargePublication(
   proposal: ChargeProposal,
-  producer: AssessmentProducer,
+  producer: SuggestionProducer,
   priorCount: number,
   applicationOrder: z.infer<typeof statementApplicationOrder> | null = null,
   checkpoint: StatementLabelCheckpoint | undefined = undefined,
@@ -1683,14 +1689,14 @@ function chargePublication(
       },
     },
   } satisfies {
-    input: Parameters<typeof publishAssessment>[1];
-    projection: Parameters<typeof publishAssessment>[2];
+    input: Parameters<typeof publishStoredSuggestion>[1];
+    projection: Parameters<typeof publishStoredSuggestion>[2];
   };
 }
 
 /** A statement slot's locked row in the family's own shape. */
 type ChargePublicationHistory = SuggestionRow & {
-  producer: AssessmentProducer | null;
+  producer: SuggestionProducer | null;
   needsLabel: string | null;
   checkpoint: unknown;
   applicationPending: string | null;
@@ -1715,7 +1721,7 @@ async function priorStatementPublications(
     WITH roots(owner, observation) AS (VALUES ${sql.join(roots, sql`, `)})
     SELECT DISTINCT roots.owner, s.id::text AS id, s.status, s.active, s.fingerprint, s.suppression, s.data,
       s.data->>'evidenceFingerprint' AS "evidenceFingerprint", to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt", s.producer, s.judgment
-    FROM roots JOIN "Suggestion" s ON s.family=${assessmentFamily.enum.statement_transaction}
+    FROM roots JOIN "Suggestion" s ON s.family=${suggestionFamily.enum.statement_transaction}
       AND (s."recordId"=roots.observation OR EXISTS (
         SELECT 1 FROM "FinancialEvidenceAlias" evidence
         WHERE evidence."observationId"=roots.observation AND ${notDeleted("evidence")} AND evidence.source=s.data->>${financialTransactionSourceRef.keyof().enum.source} AND evidence.value=s.data->>'chargeKey'))
@@ -1725,7 +1731,7 @@ async function priorStatementPublications(
     const value: ChargePublicationHistory = {
       ...row,
       data,
-      producer: assessmentProducer.nullable().parse(row.producer),
+      producer: suggestionProducer.nullable().parse(row.producer),
       needsLabel: jsonText(data.needsLabel),
       checkpoint: data.labelCheckpoint ?? null,
       applicationPending: jsonText(data.applicationPending),
@@ -1744,9 +1750,9 @@ async function retireRetainedStatementAdvice(
   proposal: ChargeProposal,
 ) {
   if (!proposal.observations.length) return;
-  await transitionAssessmentStates(
+  await transitionSuggestionStates(
     db,
-    sql`${suggestionTable.family}=${assessmentFamily.enum.statement_transaction}
+    sql`${suggestionTable.family}=${suggestionFamily.enum.statement_transaction}
     AND ${suggestionTable.active} AND ${suggestionTable.status}=${suggestionStatus.enum.pending}
     AND ${inArray(
       suggestionTable.recordId,
@@ -1826,16 +1832,17 @@ type StatementCandidate = {
  * charge. Batch admission defers anything that needs the one-at-a-time
  * writer's repairs (settled advice, reused labels) to that writer.
  */
-const statementSuggestions: SuggestionFamily<
-  StatementCandidate,
-  ChargePublicationHistory,
-  "settled",
-  {
-    states: Map<string, ChargeState> | null;
-    history: Map<string, ChargePublicationHistory[]>;
-  }
-> = {
-  family: assessmentFamily.enum.statement_transaction,
+export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transaction"> &
+  SuggestionFamily<
+    StatementCandidate,
+    ChargePublicationHistory,
+    "settled",
+    {
+      states: Map<string, ChargeState> | null;
+      history: Map<string, ChargePublicationHistory[]>;
+    }
+  > = {
+  family: suggestionFamily.enum.statement_transaction,
   slot: ({ proposal: { charge } }) => ({
     lock: `statement-suggestion:${chargeId(charge)}`,
     fields: { source: charge.source, chargeKey: charge.chargeKey },
@@ -1844,7 +1851,7 @@ const statementSuggestions: SuggestionFamily<
   evidenceFingerprint: ({ proposal }) => proposal.evidenceFingerprint,
   row: (row) => ({
     ...row,
-    producer: assessmentProducer.nullable().parse(row.producer),
+    producer: suggestionProducer.nullable().parse(row.producer),
     needsLabel: jsonText(row.data.needsLabel),
     checkpoint: row.data.labelCheckpoint ?? null,
     applicationPending: jsonText(row.data.applicationPending),
@@ -1948,7 +1955,7 @@ const statementSuggestions: SuggestionFamily<
     // still gets a fresh fingerprint and current apply-time validation.
     const reusable = reusableRuleLabels(history, proposal);
     if (!reusable) return { candidate, producer };
-    const previous = assessmentJudgments.statement_transaction.parse(
+    const previous = suggestionJudgments.statement_transaction.parse(
       reusable.judgment,
     );
     const previousProducer = reusable.producer;
@@ -2057,11 +2064,11 @@ const statementSuggestions: SuggestionFamily<
         charges: tuples(
           published.map(({ candidate }) => candidate.proposal.charge),
         ),
-        assessmentIds: published.map(({ assessmentId }) => assessmentId),
+        suggestionIds: published.map(({ suggestionId }) => suggestionId),
       });
       return;
     }
-    for (const { assessmentId, candidate } of published) {
+    for (const { suggestionId, candidate } of published) {
       const { charge, judgment } = candidate.proposal;
       // A ref writer holds evidence keys, not this charge's lock: one that
       // committed between the settled check and this commit has a trigger that
@@ -2070,9 +2077,9 @@ const statementSuggestions: SuggestionFamily<
         await runAfterCommit(tx, (committed) =>
           withTransactionDatabase(committed, async (retirement) => {
             await assertWorkflowEffect(retirement);
-            await transitionAssessmentStates(
+            await transitionSuggestionStates(
               retirement,
-              sql`${suggestionTable.id} = ${assessmentId}::uuid AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}
+              sql`${suggestionTable.id} = ${suggestionId}::uuid AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}
                 AND EXISTS (
                   SELECT 1 FROM ${chargeStateOf(
                     sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
@@ -2087,10 +2094,160 @@ const statementSuggestions: SuggestionFamily<
   },
   labelBacklog: sql`${pendingSuggestion()} AND ${sourceSuggestionAutomaticEligible("s", true)} AND ((s.data->>'needsLabel')::boolean
     OR coalesce((s.data->>'applicationPending')::boolean, false))`,
+  facts: (query, needs) => {
+    const scope = statementScope(query);
+    return scope ? statementSuggestionFacts(scope, needs) : null;
+  },
+  keys: async (db, query) => {
+    const scope = statementScope(query);
+    if (!scope) return [];
+    const status = scope.status ?? "pending";
+    const rows = await statementSuggestionKeys(db, scope);
+    return rows.map((row) => ({
+      family: "statement_transaction" as const,
+      suggestionId: row.id,
+      status,
+      matchedRules: stamps.parse(row.matchedRules),
+      automaticRule: row.automaticRule,
+      fingerprint: row.fingerprint,
+      clean: row.clean,
+      strength: statementStrength(row),
+      impact: row.reviewReason
+        ? [{ kind: "caution", label: row.reviewReason }]
+        : statementImpact[row.recommended],
+      createdAt: row.createdAt,
+      columns: {
+        date: row.statementDate,
+        month: row.statementDate.slice(0, 7),
+        account: row.accountCode,
+        owner: row.ownerCode,
+        merchant: [row.merchant, row.rawDescription].filter(Boolean).join(" "),
+        amount: row.amount,
+        action: row.recommended,
+        kind: row.kind,
+        kindSource: row.kindSource,
+        providerCategory: row.sourceCategory,
+        providerStatus: row.providerStatus,
+        candidate: row.candidateCode,
+        modelLabel:
+          row.labelSame && row.labelConfidence
+            ? `${row.labelSame}:${row.labelConfidence}`
+            : null,
+      },
+    }));
+  },
+  rows: async (db, keys) => {
+    const rows = await readStatementSuggestions(
+      db,
+      keys.map((key) => key.suggestionId),
+      keys[0]?.status === "applied" ? "applied" : "pending",
+    );
+    const byId = new Map(keys.map((key) => [key.suggestionId, key]));
+    return new Map(
+      rows.flatMap((row) => {
+        const key = byId.get(row.suggestionId);
+        if (!key) return [];
+        const other = otherTransaction(row);
+        return [
+          [
+            row.suggestionId,
+            statementSuggestionRow.parse({
+              ...keyBase(key),
+              fingerprint: row.fingerprint,
+              family: "statement_transaction",
+              record: { entity: "financialAccount", id: row.accountId },
+              ...(other
+                ? { other: { entity: "financialTransaction", id: other } }
+                : {}),
+              summary: [
+                { kind: "amount", amount: row.amount },
+                { kind: "date", date: row.statementDate },
+                { kind: "text", text: row.merchant ?? row.rawDescription },
+              ],
+              // Dismissal suppresses the charge permanently.
+              actions: row.reviewReason
+                ? verbs("dismiss")
+                : verbs("accept", "correct", "dismiss"),
+              evidence: row,
+            }),
+          ],
+        ];
+      }),
+    );
+  },
+  outcomes: outcomes("statement_transaction"),
+  acceptAsIs: (row) => {
+    // Labels ride on top of the evidence fingerprint, so a create labelled
+    // clean under an earlier rule still passes the apply-time check.
+    // Accept clean re-reads today's rule instead of the stored flag.
+    if (row.evidence.reviewReason) return null;
+    const { recommended, create, transfer, transferPair } = row.evidence;
+    if (
+      recommended === "create" &&
+      create &&
+      !kindAgreed(create, transfer, transferPair)
+    )
+      return null;
+    const application = statementAcceptApplication(row.evidence);
+    return application
+      ? {
+          ...cleanAcceptance(row),
+          application,
+        }
+      : null;
+  },
+  ...suggestionReviewFamilies.statement_transaction,
+  ...declareAffectedRecords({
+    roles: [
+      "source",
+      "occurrence",
+      "import",
+      "account",
+      "candidate",
+      "settlement",
+    ],
+    forward: statementRecords,
+    reverse: statementReferenceMatch,
+  }),
+  actionable: sql`true`,
+  summarize: (value: unknown) => {
+    const decision = suggestionJudgments.statement_transaction.parse(value);
+    return `Statement transaction: ${decision.recommended}`;
+  },
+  isolationLevel: "serializable",
+  lockForApply: async (db, prediction) => {
+    const judgment = suggestionJudgments.statement_transaction.parse(
+      prediction.judgment,
+    );
+    const subject = suggestionSubjects.statement_transaction.parse(
+      prediction.subject,
+    );
+    const { lockTransferPairLegs } =
+      await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+    // Even a prediction made before pair discovery shares its charge's leg
+    // lock with a later pair apply, before either can hold its projection.
+    await lockTransferPairLegs(
+      db,
+      judgment.transferPair?.key ??
+        `stmt:${subject.source}:${subject.chargeKey}`,
+    );
+  },
+  apply: async (db, context, state, input) => {
+    if (input.application?.kind !== "statement_transaction")
+      throw new Error(
+        "Applying a Transaction suggestion requires the chosen statement action",
+      );
+    const { applyStatementTransactionSuggestion } =
+      await import("~/server/domains/transaction-import/repo/statement-suggestion-apply");
+    await applyStatementTransactionSuggestion(db, context, state, {
+      application: input.application,
+      corrected: input.correction.present,
+    });
+  },
 };
 
 type StatementPublishResult =
-  | { outcome: "published"; labelsReused: number; assessmentId: string }
+  | { outcome: "published"; labelsReused: number; suggestionId: string }
   | { outcome: Exclude<PublishOutcome, "published">; labelsReused: number };
 
 /** A rule re-run counts the paid labels it kept, unchanged or republished. */
@@ -2100,13 +2257,13 @@ function statementOutcome(
     ChargePublicationHistory,
     "settled"
   >,
-  requested: AssessmentProducer,
+  requested: SuggestionProducer,
 ): StatementPublishResult {
   switch (published.outcome) {
     case "published":
       return {
         outcome: "published",
-        assessmentId: published.assessmentId,
+        suggestionId: published.suggestionId,
         labelsReused:
           requested.kind === "rule" && published.producer.kind === "model"
             ? countLabels(published.candidate.proposal.judgment)
@@ -2119,7 +2276,7 @@ function statementOutcome(
         labelsReused:
           requested.kind === "rule" && row?.producer?.kind === "model"
             ? countLabels(
-                assessmentJudgments.statement_transaction.parse(row.judgment),
+                suggestionJudgments.statement_transaction.parse(row.judgment),
               )
             : 0,
       };
@@ -2142,7 +2299,7 @@ function statementOutcome(
 export async function publishChargeProposal(
   db: Database,
   proposal: ChargeProposal,
-  producer: AssessmentProducer,
+  producer: SuggestionProducer,
   labelPublication?: StatementCandidate["labelPublication"],
 ): Promise<StatementPublishResult> {
   return statementOutcome(
@@ -2158,14 +2315,14 @@ export async function publishChargeProposal(
 
 async function retireStatementPublications(
   db: Database,
-  input: { charges: SQL; assessmentIds: readonly string[] },
+  input: { charges: SQL; suggestionIds: readonly string[] },
 ) {
-  if (!input.assessmentIds.length) return;
+  if (!input.suggestionIds.length) return;
   await withTransactionDatabase(db, async (retirement) => {
     await assertWorkflowEffect(retirement);
-    await transitionAssessmentStates(
+    await transitionSuggestionStates(
       retirement,
-      sql`${inArray(suggestionTable.id, [...input.assessmentIds])}
+      sql`${inArray(suggestionTable.id, [...input.suggestionIds])}
           AND ${pendingStatementState}
           AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.void}
           AND EXISTS (SELECT 1 FROM ${chargeStateOf(
@@ -2184,7 +2341,7 @@ function enrollStatementPublicationRetirement(
   tx: Database,
   input: Parameters<typeof retireStatementPublications>[1],
 ) {
-  if (!input.assessmentIds.length) return;
+  if (!input.suggestionIds.length) return;
   return runAfterCommit(tx, (committed) =>
     retireStatementPublications(committed, input),
   );
@@ -2193,11 +2350,11 @@ function enrollStatementPublicationRetirement(
 /** A crash can leave a durable application receipt before its retirement check ran. */
 export async function repairStatementApplicationReceipts(
   db: Database,
-  receipts: readonly { assessmentId: string; charge: ChargeRef }[],
+  receipts: readonly { suggestionId: string; charge: ChargeRef }[],
 ) {
   if (!receipts.length) return;
   await retireStatementPublications(db, {
-    assessmentIds: receipts.map((receipt) => receipt.assessmentId),
+    suggestionIds: receipts.map((receipt) => receipt.suggestionId),
     charges: sql.join(
       receipts.map(
         ({ charge }) => sql`(${charge.source}, ${charge.chargeKey})`,
@@ -2211,7 +2368,7 @@ export type CompleteStatementLabelPublication = {
   proposal: ChargeProposal;
   evidenceFingerprint: string;
   checkpoint: StatementLabelCheckpoint;
-  producer: AssessmentProducer & { kind: "model" };
+  producer: SuggestionProducer & { kind: "model" };
 };
 
 export type StatementLabelPublicationResult =
@@ -2219,7 +2376,7 @@ export type StatementLabelPublicationResult =
       kind: "ready";
       origin: "published" | "recovered";
       receipt: {
-        assessmentId: string;
+        suggestionId: string;
         evidenceFingerprint: string;
         applicationOrder: z.infer<typeof statementApplicationOrder> | null;
       };
@@ -2289,7 +2446,7 @@ async function publishCompleteLabelBatch(
       const id = chargeId(proposal.charge);
       const history = prior[index]!;
       // Check the live resolver before publication and receipt recovery, not
-      // merely the account retained on the previously admitted Assessment.
+      // merely the account retained on the previously admitted Suggestion.
       const pending = history.filter(
         (row) => row.active && row.status === suggestionStatus.enum.pending,
       );
@@ -2340,7 +2497,7 @@ async function publishCompleteLabelBatch(
       if (isSettledBooking(proposal.judgment)) {
         const fresh = await prepareStatementSpending(tx, proposal.judgment);
         if (fresh?.status === "already_booked") {
-          await transitionAssessmentStates(
+          await transitionSuggestionStates(
             tx,
             sql`${pendingStatementState} AND ${suggestionField("source", STATE)}=${proposal.charge.source} AND ${suggestionField("chargeKey", STATE)}=${proposal.charge.chargeKey}`,
             { active: false, status: "superseded" },
@@ -2368,7 +2525,7 @@ async function publishCompleteLabelBatch(
             kind: "ready",
             origin: "recovered",
             receipt: {
-              assessmentId: recovered.id,
+              suggestionId: recovered.id,
               evidenceFingerprint: proposal.evidenceFingerprint,
               applicationOrder: statementApplicationOrder
                 .nullable()
@@ -2428,7 +2585,7 @@ async function publishCompleteLabelBatch(
                 kind: "ready",
                 origin: "published",
                 receipt: {
-                  assessmentId: outcome.assessmentId,
+                  suggestionId: outcome.suggestionId,
                   evidenceFingerprint: proposal.evidenceFingerprint,
                   applicationOrder,
                 },
@@ -2450,7 +2607,7 @@ async function publishCompleteLabelBatch(
       ),
     );
     if (publications.length) {
-      const published = await publishAssessments(
+      const published = await publishSuggestions(
         tx,
         publications.map(({ entry, history, applicationOrder }) =>
           chargePublication(
@@ -2463,15 +2620,15 @@ async function publishCompleteLabelBatch(
         ),
       );
       for (const [index, publication] of publications.entries()) {
-        const assessment = published[index];
-        if (!assessment)
+        const suggestion = published[index];
+        if (!suggestion)
           throw new Error("Statement publication returned no receipt");
-        retirementIds.push(assessment.id);
+        retirementIds.push(suggestion.id);
         outcomes.set(chargeId(publication.entry.proposal.charge), {
           kind: "ready",
           origin: "published",
           receipt: {
-            assessmentId: assessment.id,
+            suggestionId: suggestion.id,
             evidenceFingerprint: publication.entry.proposal.evidenceFingerprint,
             applicationOrder: publication.applicationOrder,
           },
@@ -2481,7 +2638,7 @@ async function publishCompleteLabelBatch(
     // Recovery-only batches must finish the lost effect too.
     await enrollStatementPublicationRetirement(tx, {
       charges,
-      assessmentIds: retirementIds,
+      suggestionIds: retirementIds,
     });
     return outcomes;
   };
@@ -2508,7 +2665,7 @@ export async function publishCompleteStatementLabels(
   const outcomes = new Map<string, StatementLabelPublicationResult>();
   await inSuggestionBatches(entries, {
     concurrency: STATEMENT_PUBLISH_CONCURRENCY,
-    label: assessmentFamily.enum.statement_transaction,
+    label: suggestionFamily.enum.statement_transaction,
     batch: async (batch) => {
       const published = await publishCompleteLabelBatch(db, batch, scope);
       return batch.map((entry) => published.get(key(entry)));
@@ -2528,7 +2685,7 @@ export async function publishCompleteStatementLabels(
   return outcomes;
 }
 
-const ruleProducer = (runId: RunId | null): AssessmentProducer => ({
+const ruleProducer = (runId: RunId | null): SuggestionProducer => ({
   kind: "rule",
   model: null,
   revision: STATEMENT_SUGGESTION_REVISION,
@@ -2888,7 +3045,7 @@ export async function generateStatementSuggestionPage(
   );
   if (input.scope?.importId) {
     const { applyAutomaticRulesForCharge } =
-      await import("~/server/generic/assessment/repo/automatic-rule-runtime");
+      await import("~/server/generic/suggestions/repo/automatic-application");
     for (const [chargeIndex, charge] of proposalCharges.entries()) {
       const ref = `charge:${chargeId(charge)}`;
       if (failed.some((failure) => failure.ref === ref)) continue;
@@ -3035,7 +3192,7 @@ export type LabelCursor = z.infer<typeof statementApplicationOrder> & {
   inclusive?: boolean;
 };
 
-/** A partial judgment is unpublished work, not a new advisory assessment. */
+/** A partial judgment is unpublished work, not a new advisory suggestion. */
 export async function recordStatementLabelCheckpoint(
   db: Database,
   input: {
@@ -3070,7 +3227,7 @@ export async function recordStatementLabelCheckpoint(
         return "out_of_scope";
     }
     let matched = 0;
-    await transitionAssessmentStates(
+    await transitionSuggestionStates(
       tx,
       sql`${pendingSuggestion(STATE)}
       AND ${suggestionField("source", STATE)} = ${input.charge.source}
@@ -3153,20 +3310,20 @@ export async function recordStatementLabelCheckpoint(
 /** Clear only the receipt whose application settled; a replacement owns its own receipt. */
 export async function completeStatementApplications(
   db: Database,
-  assessmentIds: readonly string[],
+  suggestionIds: readonly string[],
   scope?: StatementSuggestionScope,
 ) {
-  if (!assessmentIds.length) return [];
+  if (!suggestionIds.length) return [];
   const complete = async (tx: Database) => {
     await assertWorkflowEffect(tx);
     // Completion mutates durable receipt/cursor state even when no financial
     // rule applied. Its write admission must retain the original selection.
     const scoped = scope
-      ? await statementLabelTargetsInScope(tx, scope, assessmentIds)
+      ? await statementLabelTargetsInScope(tx, scope, suggestionIds)
       : null;
-    const admitted = assessmentIds.filter((id) => !scoped || scoped.has(id));
+    const admitted = suggestionIds.filter((id) => !scoped || scoped.has(id));
     if (!admitted.length) return [];
-    await transitionAssessmentStates(
+    await transitionSuggestionStates(
       tx,
       inArray(suggestionTable.id, admitted),
       (row) => {
@@ -3197,7 +3354,7 @@ export const STATEMENT_APPLICATION_PREFIX_LIMIT =
 export async function completeNoActionStatementPrefix(
   db: Database,
   entries: readonly {
-    assessmentId: string;
+    suggestionId: string;
     charge: ChargeRef;
     evidenceFingerprint: string;
   }[],
@@ -3206,7 +3363,7 @@ export async function completeNoActionStatementPrefix(
   if (scope?.importId) return 0;
   const window = entries.slice(0, STATEMENT_APPLICATION_PREFIX_LIMIT);
   if (!window.length) return 0;
-  if (new Set(window.map((entry) => entry.assessmentId)).size !== window.length)
+  if (new Set(window.map((entry) => entry.suggestionId)).size !== window.length)
     throw new Error("Statement application prefix contains duplicate receipts");
   // A negative preflight only declines batching; ordinary admission reads fresh.
   // Positive results prove nothing until the whole prefix is locked and checked.
@@ -3222,8 +3379,8 @@ export async function completeNoActionStatementPrefix(
     .from(suggestionTable)
     .where(
       and(
-        eq(suggestionTable.id, first.assessmentId),
-        eq(suggestionTable.family, assessmentFamily.enum.statement_transaction),
+        eq(suggestionTable.id, first.suggestionId),
+        eq(suggestionTable.family, suggestionFamily.enum.statement_transaction),
         eq(suggestionTable.active, true),
         eq(suggestionTable.status, suggestionStatus.enum.pending),
         isNull(suggestionTable.suppression),
@@ -3252,7 +3409,7 @@ export async function completeNoActionStatementPrefix(
       .where(
         inArray(
           suggestionTable.id,
-          window.map((entry) => entry.assessmentId),
+          window.map((entry) => entry.suggestionId),
         ),
       )
       .orderBy(suggestionTable.id)
@@ -3267,12 +3424,12 @@ export async function completeNoActionStatementPrefix(
       : null;
     const settled: string[] = [];
     for (const entry of window) {
-      const row = byId.get(entry.assessmentId);
+      const row = byId.get(entry.suggestionId);
       const data = stateData.safeParse(row?.data);
       if (
         !row ||
-        (scoped && !scoped.has(entry.assessmentId)) ||
-        row.family !== assessmentFamily.enum.statement_transaction ||
+        (scoped && !scoped.has(entry.suggestionId)) ||
+        row.family !== suggestionFamily.enum.statement_transaction ||
         !row.active ||
         row.status !== suggestionStatus.enum.pending ||
         row.suppression !== null ||
@@ -3284,7 +3441,7 @@ export async function completeNoActionStatementPrefix(
         data.data.applicationPending !== true
       )
         break;
-      settled.push(entry.assessmentId);
+      settled.push(entry.suggestionId);
     }
     return (await completeStatementApplications(tx, settled, scope)).length;
   };
@@ -3428,7 +3585,7 @@ export async function suggestionsNeedingLabels(
   const { rows } = await read(db);
   return rows.map((row) => ({
     ...row,
-    judgment: assessmentJudgments.statement_transaction.parse(row.judgment),
+    judgment: suggestionJudgments.statement_transaction.parse(row.judgment),
     amount: z.number().finite().parse(row.amount),
     checkpoint: statementLabelCheckpoint.nullable().parse(row.checkpoint),
   }));
@@ -3445,19 +3602,19 @@ const labelIdentityScope = (scope: StatementSuggestionScope) =>
 async function statementLabelScope(
   db: Database,
   scope: StatementSuggestionScope,
-  assessmentIds: readonly string[],
+  suggestionIds: readonly string[],
 ) {
   const identity = labelIdentityScope(scope);
-  const selected = assessmentIds.length
+  const selected = suggestionIds.length
     ? sql`s.id IN (${sql.join(
-        assessmentIds.map((id) => sql`${id}::uuid`),
+        suggestionIds.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})`
     : sql`false`;
   if (!scope.accountIds?.length) return sql`${identity} AND ${selected}`;
   // Re-admission checks scope alone. Replaced/completed rows still reach the
   // existing evidence fences and later-round regeneration/replay path.
-  const eligible = sql`s.family = ${assessmentFamily.enum.statement_transaction}`;
+  const eligible = sql`s.family = ${suggestionFamily.enum.statement_transaction}`;
   const { rows } = await unwrapDb(db).execute<
     ChargeRef & {
       id: string;
@@ -3512,12 +3669,12 @@ async function statementLabelScope(
 export async function statementLabelTargetsInScope(
   db: Database,
   scope: StatementSuggestionScope,
-  assessmentIds: readonly string[],
+  suggestionIds: readonly string[],
 ) {
-  const scoped = await statementLabelScope(db, scope, assessmentIds);
+  const scoped = await statementLabelScope(db, scope, suggestionIds);
   const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
     SELECT s.id FROM "Suggestion" s
-    WHERE s.family = ${assessmentFamily.enum.statement_transaction} AND ${scoped}
+    WHERE s.family = ${suggestionFamily.enum.statement_transaction} AND ${scoped}
   `);
   return new Set(rows.map((row) => row.id));
 }
@@ -3555,3 +3712,8 @@ export async function countSuggestionsNeedingLabels(
     labelIdentityScope(scope),
   );
 }
+
+export {
+  chargeId,
+  type ChargeRef,
+} from "~/server/domains/transaction-import/repo/statement-input";

@@ -45,7 +45,6 @@ import {
   resolvePurchaseImportTarget,
 } from "~/server/domains/purchase-import/repo/run-target";
 import { readPurchaseAgentConversation } from "~/server/domains/purchase-import/service/agent-proxy";
-import { readRunCatalogActivity } from "~/server/domains/run/repo/catalog-activity";
 import {
   findOwnedMailDiscovery,
   loadMailDiscoveryRead,
@@ -234,7 +233,6 @@ export const runHandlers = implementOperationDomain(runContract, {
   },
   resumeControlledMailImport: async (context, input) =>
     changeMailImport(context, { kind: "resume", ...input }),
-  catalogActivity: async (context) => readRunCatalogActivity(context.db),
   mailImport: async (context) => mailImportStatusFor(context),
   setMailImport: async (context, input) =>
     changeMailImport(context, { kind: "switch", ...input }),

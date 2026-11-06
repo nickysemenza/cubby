@@ -135,8 +135,8 @@ it("selected clean decisions override filtered-ready scope and retain review fin
     const queue = rows.map((row, index) =>
       fromPartial<SuggestionListRow>({
         id: row.id,
-        assessmentId: row.id,
-        family: "image_description",
+        suggestionId: row.id,
+        family: "product_pair",
         clean: index < 2,
         fingerprint: `synthetic-fingerprint-${index}`,
         actions: [{ verb: "accept", ownerOnly: false }],
@@ -185,7 +185,7 @@ it("selected clean decisions override filtered-ready scope and retain review fin
       screen.getByRole("button", { name: "Accept 1 ready selected" }),
     );
     expect(requests).toHaveLength(1);
-    expect(requests[0]?.assessmentId).toBe(rows[0]?.id);
+    expect(requests[0]?.suggestionId).toBe(rows[0]?.id);
     expect(requests[0]?.expectedFingerprint).toBe("synthetic-fingerprint-0");
   } finally {
     harness.dispose();

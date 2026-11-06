@@ -3,12 +3,11 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { listProductComponents } from "~/server/domains/product/repo/product-components";
+import { previewOperation } from "~/server/generic/removal/repo/relation-preview";
 import {
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
-
-import { previewOperation } from "./entity-integrity-preview.server";
 
 describe("entityIntegrity.previewOperation", () => {
   const ctx = withTestDb();

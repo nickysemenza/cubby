@@ -174,11 +174,14 @@ describe("product list declared filters", () => {
           { pageIndex: 0, pageSize: 25 },
         )
       ).data;
+    expect((await list({ kitAccounting: false })).map((row) => row.id)).toEqual(
+      [],
+    );
+    await drainStoredDerived(ctx.db);
     expect((await list({ kitAccounting: true })).map((row) => row.id)).toEqual([
       w.kit.id,
     ]);
-    // Work binds the catalog's expected quantities as one statement-local
-    // walk; it must find the same kit the per-row list filter does.
+    // Work and the list use the same publication, including kit accounting.
     const work = await readWorkQueue(ctx.db, {
       input: workQueueInput.parse({ pageSize: 100 }),
       memberPartyId: null,
@@ -212,6 +215,7 @@ describe("product list declared filters", () => {
           cost: 0,
         }),
       );
+    await drainStoredDerived(ctx.db);
     expect(
       (await list({ ownershipReconciliation: true })).map((row) => row.id),
     ).toEqual([w.driver.id]);

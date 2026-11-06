@@ -1,5 +1,5 @@
 import type { ListEntity } from "~/entity/model/list-contracts";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 
 import type { EntityBindingSchemas, EntityKernelCoreBinding } from "./adapter";
 import { defineListOperations } from "./list-read";

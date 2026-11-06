@@ -1,7 +1,7 @@
 import { entityReportOut } from "@cubby/schemas/entity-report";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
-import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
+import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -18,6 +18,7 @@ import {
   purchase as purchaseTable,
   run,
 } from "~/server/db/schema";
+import { emailReviewReport } from "~/server/domains/email/repo/report-email";
 import { queueSearchClassification } from "~/server/domains/purchase-import/repo/gmail/reclassify-state";
 import { startAgentRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -27,7 +28,6 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { emailReviewReport } from "./email";
 import { buildEntityReport } from "./index";
 
 describe("Email review report", () => {

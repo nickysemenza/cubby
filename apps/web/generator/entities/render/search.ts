@@ -13,7 +13,6 @@ import {
 } from "../declarations.ts";
 import { sourceRefImports } from "./filters.ts";
 import { entityProjectionMaps } from "./capabilities.ts";
-import { renderRecord } from "./record.ts";
 import { resolvedPrimarySearch } from "./shared.ts";
 
 /**
@@ -198,6 +197,7 @@ export const renderSearchArtifacts = (
       relativePath: "apps/web/src/entity/generated/entity-search.gen.ts",
       source: rawSource(
         generatedHeader +
+          'import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";\n' +
           'import type { Entity } from "@cubby/schemas/entity";\n' +
           'import { CURRENT_MEMBER_FILTER } from "@cubby/shared";\n' +
           `${imports}\n` +
@@ -205,32 +205,7 @@ export const renderSearchArtifacts = (
           'import { tableSearchFields } from "~/ui/data-table/table-search";\n' +
           `import { ${tokenImports} } from "~/entity/filters";\n` +
           'import { urlEnumListParam, urlPlainDateParam, urlShortcodeListParam, urlStringParam } from "~/lib/search-params";\n\n' +
-          renderRecord({
-            name: "entityFilterUrlKeyRoster",
-            entries: Object.fromEntries(
-              filterEntities.map((entity) => {
-                const primarySearch = resolvedPrimarySearch(entity);
-                return [
-                  entity.key,
-                  primarySearch === null
-                    ? entity.filterUrlKeys
-                    : [
-                        ...new Set([
-                          primarySearch.key,
-                          ...entity.filterUrlKeys,
-                        ]),
-                      ],
-                ];
-              }),
-            ),
-            satisfies: "Record<Entity, readonly string[]>",
-            comment: "// Generated data stays one entity per line.",
-            exported: false,
-          }) +
-          "\n" +
-          "/** The URL keys an entity accepts for its canonical filter assembly. */\n" +
-          "export const entityFilterUrlKeys = (entity: Entity): readonly string[] =>\n" +
-          "  entityFilterUrlKeyRoster[entity] ?? [];\n\n" +
+          "export const entityFilterUrlKeys = (entity: Entity): readonly string[] => generatedEntityListFields[entity].filterUrlKeys;\n\n" +
           "// A filter list also accepts the tokens the filter UI writes into it.\n" +
           "const withTokens = <T extends z.ZodType<string>>(\n" +
           "  schema: T,\n" +

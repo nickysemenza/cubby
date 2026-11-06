@@ -4,7 +4,6 @@ import { z } from "zod";
 
 import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
-import { loadCurrentFieldOwnership } from "~/server/generic/assessment/repo/automatic-fields";
 import { loadCurrentAssignmentFacts } from "~/server/generic/derived/repo/assignment-read";
 import {
   loadPageStoredMeta,
@@ -14,6 +13,7 @@ import type {
   CurrentReadFacts,
   PageFieldReadContexts,
 } from "~/server/generic/derived/repo/read-context";
+import { loadCurrentFieldOwnership } from "~/server/generic/suggestions/repo/automatic-fields";
 
 const identitySchema = z.object({ id: z.string(), shortcode: z.string() });
 const rowValues = z.record(z.string(), z.unknown());

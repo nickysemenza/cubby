@@ -1,4 +1,4 @@
-export { assessmentContract } from "./assessment.contract";
+export { suggestionContract } from "./suggestion.contract";
 export { shipmentContract } from "./shipment.contract";
 export { chatgptContract } from "./chatgpt.contract";
 export { workQueueContract } from "./work-queue.contract";
@@ -61,10 +61,7 @@ export {
   recipeAvailabilityContract,
   recipeStreamsContract,
 } from "./recipe.contract";
-export {
-  relatednessContract,
-  recommendationsContract,
-} from "./recommendations.contract";
+export { productMatchContract } from "./product-match.contract";
 export { relatedDataContract } from "./related-data.contract";
 export { runContract } from "./run.contract";
 export { runDetailContract } from "./run-detail.contract";
@@ -79,3 +76,5 @@ export { usdaFoodContract } from "./usda.contract";
 export { vendorContract } from "./vendor.contract";
 
 export { fieldExplanationContract } from "./field-explanation.contract";
+
+export { relatednessContract } from "./relatedness.contract";

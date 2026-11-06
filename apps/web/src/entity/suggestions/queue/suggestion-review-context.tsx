@@ -1,11 +1,11 @@
-import {
-  assessmentReviewBatchOut,
-  type AssessmentReviewOut,
-} from "@cubby/schemas/assessment";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
 import type { StatementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import type { StatementTransactionApplication } from "@cubby/schemas/statement-suggestion";
+import {
+  suggestionReviewBatchOut,
+  type SuggestionReviewOut,
+} from "@cubby/schemas/suggestion";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { getErrorMessage } from "@cubby/shared";
 import { chunk } from "es-toolkit";
@@ -19,8 +19,8 @@ import {
   type ReactNode,
 } from "react";
 
-import { assessmentContract } from "~/contracts/assessment.contract";
 import { operationCommandRequest } from "~/contracts/define";
+import { suggestionContract } from "~/contracts/suggestion.contract";
 import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 
 import type {
@@ -29,7 +29,7 @@ import type {
   StatementTransactionField,
 } from "./suggestion-review";
 
-/** `assessment.reviewBatch` takes at most this many items per call. */
+/** `suggestion.reviewBatch` takes at most this many items per call. */
 const REVIEW_BATCH_MAX = 100;
 
 type RowOutcome = { state: "pending" } | { state: "failed"; error: string };
@@ -103,7 +103,7 @@ export function SuggestionReviewProvider({
   scope: string;
   children: ReactNode;
   onApplied?: (
-    result: NonNullable<AssessmentReviewOut["applicationResult"]>,
+    result: NonNullable<SuggestionReviewOut["applicationResult"]>,
   ) => Promise<void>;
 }) {
   const { mutateAsync: executeCommand } = useWorkflowCommand();
@@ -132,11 +132,11 @@ export function SuggestionReviewProvider({
       for (const batch of chunk(pairs, REVIEW_BATCH_MAX)) {
         try {
           const { result } = await executeCommand(
-            operationCommandRequest(assessmentContract, "reviewBatch", {
+            operationCommandRequest(suggestionContract, "reviewBatch", {
               items: batch.map(({ item }) => item),
             }),
           );
-          const results = assessmentReviewBatchOut.parse(result);
+          const results = suggestionReviewBatchOut.parse(result);
           for (const [index, result] of results.entries()) {
             const pair = batch[index];
             if (pair && !result.ok)

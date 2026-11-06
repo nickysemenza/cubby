@@ -277,7 +277,13 @@ const resolutionJSON = (
   resolution: CompiledEntity["fieldModel"]["fields"][number]["resolution"],
 ) => {
   if (resolution?.reset === undefined) return null;
-  const { inherit: _inherit, labels, reset, ...rest } = resolution;
+  const {
+    inherit: _inherit,
+    resetSource: _resetSource,
+    labels,
+    reset,
+    ...rest
+  } = resolution;
   return {
     ...rest,
     reset,
@@ -792,6 +798,9 @@ const entityJSON = (
     recordIconEntityField: entity.inspector.recordIconEntityField,
     searchable,
     nativeBrowse: entity.inspector.nativeBrowse,
+    hasRelatedness:
+      Array.isArray(entity.descriptor.relatednessSignals) &&
+      entity.descriptor.relatednessSignals.length > 0,
     emptyState: {
       title: entity.inspector.emptyState.title,
       description: entity.inspector.emptyState.description,

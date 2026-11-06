@@ -689,3 +689,70 @@ account, accepted-money and attribution decisions remain unchanged. New MCP inpu
 states require a reconnect because tools/list is cached per session. A local
 migration fixture does not establish deployment, connector refresh or reconciliation
 completion. Production application and readback require separate authorization.
+
+## Suggestion review wire cutover (ADR 0025 L2)
+
+`0111_adr25-l2-suggestions` changes declared review-reference keys on
+`AiEvaluation.target`, paid field-result outputs, publication receipts, and field
+Suggestion proposal/outcome envelopes. It locks both owners before reading,
+checks each transformed value by reversing the rename, and compares each full
+row after writing. Conflicting old/new keys abort. Input snapshots and provenance
+fingerprints, immutable archive ledgers, member decisions, publication identities
+and queued/paid work remain unchanged. The migration does not traverse arbitrary
+member values or frozen source evidence. Apple writes require 2.71.0, matching the
+new review inputs. The parent renumbers the migration during integration.
+
+## Suggestion served flag retirement (ADR 0025 L2b)
+
+0111 locks Suggestion before inspecting every unserved row. It aborts if any
+such row has retained decisions, confirmed/correct values, suppression, an
+acceptance receipt, or applied/rejected status. It then rebuilds the three
+partial reference indexes without the obsolete flag and drops the column.
+Publication, evidence and decisions remain unchanged. The two connection scope
+indexes also drop their served predicate in desired-state DDL.
+
+## CorrectionLock retirement (ADR 0025 L2d)
+
+0112 removes the last CorrectionLock writers and drops its key-only table under
+an exclusive lock. Keys contain no member facts, money, evidence, decisions or
+unfinished work. Image intent uses its Image row, Suggestion review its Suggestion
+row, and Email mutations their existing domain rows and serializable retries.
+There is no household-wide Email evidence gate.
+
+## Field sweep consolidation (ADR 0025 L2e)
+
+Migration `0115_adr25-l2e-sweep` locks Runs, steps, Jobs and evaluation demand
+before copying its verification witnesses. It converts `suggestion_sweep` Runs
+in place to a single field family under `sweep`, updates the execution Job's
+purpose, and records roster/evaluate steps. Run progress and every Job state,
+generation, cursor and result remain intact; the evaluate step also retains
+the old progress as diagnostic JSON text. Evaluation targets, requests, results,
+receipts and model fingerprints stay intact. Frozen input drops the legacy kind
+and paused flag and moves its pinned model to `model`.
+
+The migration compares every retained row and row count before contracting the
+Run purpose check. Malformed scopes, conflicting ledgers or Job purposes, and
+unfinished pre-roster progress without durable targets refuse atomically; they
+need evidence reconciliation rather than replaying already completed paid work.
+After deployment verify the converted Run's field scope, steps, original status
+and Job checkpoint, then resume through `run.control` when appropriate.
+
+## Image description ownership (ADR 0025 L2f)
+
+`adr25-l2f-image` is one breaking migration with matching clients. It locks
+Suggestion and Image against writes through commit, archives every image-description
+Suggestion exactly in `archive.Suggestion_image_description`, and checks archive
+JSON against every source row. Each confirmed text, source hash, confirmation time
+(the latest application decision time, otherwise the retained update time) and
+owner provenance is copied into Image and read back with null-safe comparisons.
+A missing Image, non-text confirmation, subject/target mismatch or unequal copy
+raises an exception. Historical rows remain in archive; the latest live confirmation
+owns the Image columns. Only after verification are live family rows deleted.
+There is no database family enum or CHECK to contract; the schema union removes
+the family. No history is reconstructed.
+
+Before integration, run the migration in a transaction on synthetic predecessor
+data, verify text/hash/time/provenance and full archived JSON, exercise refusal,
+and roll back. After the matching deployment, verify the four Image columns,
+archive parity, absence of live family rows, selected description reads and
+`image.confirm_description`. Old Suggestion review requests for images are unsupported.

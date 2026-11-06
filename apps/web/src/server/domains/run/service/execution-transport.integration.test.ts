@@ -572,7 +572,7 @@ describe("household AI funding at the paid transport boundary", () => {
       runId: null,
       key: expect.stringMatching(/^funding-resume:\d{4}-\d{2}-\d{2}T/),
       waitReason: "ai_funding_window",
-      waitUntil: expect.any(Date),
+      availableAt: expect.any(Date),
     });
     if (!resume) throw new Error("Expected durable funding resume");
     // The window ends: the timer's own deadline has passed.
@@ -642,7 +642,7 @@ describe("household AI funding at the paid transport boundary", () => {
     );
     expect(await timer()).toMatchObject({
       state: "queued",
-      availableAt: armed.waitUntil,
+      availableAt: armed.availableAt,
       waitReason: "ai_funding_window",
     });
     await expect(
@@ -652,7 +652,7 @@ describe("household AI funding at the paid transport boundary", () => {
     expect(await timer()).toMatchObject({
       id: armed.id,
       state: "queued",
-      availableAt: armed.waitUntil,
+      availableAt: armed.availableAt,
     });
   });
 

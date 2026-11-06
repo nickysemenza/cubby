@@ -6,10 +6,11 @@ import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
 import { readDeviceBacklog } from "~/server/domains/image-processing/repo/device-backlog";
+import { readStoppedRuns } from "~/server/generic/jobs/repo/job-queue";
 import {
   readBackgroundWorkStatus,
   STUCK_WINDOW_MINUTES,
-} from "~/server/generic/jobs/repo/work-status";
+} from "~/server/generic/jobs/repo/observation";
 
 import { readWorkQueue } from "./work-queue-read";
 
@@ -47,10 +48,11 @@ export async function readWorkStatus(
   read: NeedsYouRead,
   now = new Date(),
 ): Promise<WorkStatus> {
-  const [background, device, needsYou] = await Promise.all([
+  const [background, device, needsYou, runs] = await Promise.all([
     readBackgroundWorkStatus(db, now),
     readDeviceBacklog(db, now),
     readNeedsYou(db, read),
+    readStoppedRuns(db, now),
   ]);
   const deviceWindow = new Date(now.getTime() - STUCK_WINDOW_MINUTES * 60_000);
   const deviceStuck: WorkStuckItem[] =
@@ -78,6 +80,6 @@ export async function readWorkStatus(
     needsYou,
     lastFinishedAt: background.lastFinishedAt?.toISOString() ?? null,
     behind: background.behind,
-    stuck: [...deviceStuck, ...background.stuck],
+    stuck: [...deviceStuck, ...background.stuck, ...runs],
   };
 }

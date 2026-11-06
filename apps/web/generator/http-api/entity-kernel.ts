@@ -1,7 +1,7 @@
 import { rawSource } from "../artifacts.ts";
 import { z } from "zod";
 import { entityTimelineWindowFor } from "@cubby/schemas/entity-timeline";
-import { entityInspectorMetadata } from "@cubby/schemas/compiler/generated/entity-inspector.gen";
+import { entityInspectorMetadata } from "@cubby/schemas/compiler/generated/entity-record-metadata.gen";
 import { entityKeys } from "@cubby/schemas/entity-summary";
 import {
   nativeCoverage,

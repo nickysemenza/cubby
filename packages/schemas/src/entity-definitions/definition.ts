@@ -1,3 +1,4 @@
+import { relatedRecordSignalSchema } from "../related-record-signals";
 import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { storedProjectionVersionsSchema } from "../field-envelope";
 import {
@@ -459,21 +460,21 @@ const buildMetadataSchemas = () => {
     .strictObject({
       list: z.boolean({ error: "must be a boolean" }).optional(),
       detail: z.boolean({ error: "must be a boolean" }).optional(),
-      columnIdOverride: orNull(nonEmptyString()),
+      columnId: orNull(nonEmptyString()),
       standard: orNull(z.enum(["name", "image"])),
       /**
        * Orders generated list columns independently of model order (which
        * also drives form field order, so it cannot be re-sequenced). Ordered
        * columns come first, ascending; the rest keep model order.
        */
-      listOrderOverride: orNull(z.number().int().nonnegative()),
+      listOrder: orNull(z.number().int().nonnegative()),
       /**
        * List column width bucket; the shared table maps it to a class and the
        * Mac table to a width range. `xl` is for long prose such as notes.
        */
       width: orNull(z.enum(columnWidths)),
       /**
-       * Where a field with no flat read key (`readKeyOverride: null`) is read
+       * Where a field with no flat read key (`readKey: null`) is read
        * from on a list or detail row: a dotted path with `[n]` indexing and
        * an optional `[]` projection over an array (`quantityLedger.locationCount`,
        * `sourceRefs[].source`, `category.path[0].name`).
@@ -588,10 +589,10 @@ const buildMetadataSchemas = () => {
        */
       preview: flag(false),
     })
-    .transform(({ columnIdOverride, listOrderOverride, ...display }) => ({
+    .transform(({ columnId, listOrder, ...display }) => ({
       ...display,
-      columnId: columnIdOverride,
-      listOrder: listOrderOverride,
+      columnId: columnId,
+      listOrder: listOrder,
     }));
 
   const entityFieldProvenanceSourceMetadataSchema = z.union([
@@ -626,9 +627,9 @@ const buildMetadataSchemas = () => {
       /** Identity or owned-resource semantics; these values cannot be shared by bulk assignment. */
       semanticRole: z.enum(["externalIdentifier", "attachment"]).optional(),
       nullable: flag(false),
-      labelOverride: nonEmptyString().optional(),
+      label: nonEmptyString().optional(),
       description: orNull(nonEmptyString()),
-      readKeyOverride: nonEmptyString().nullable().optional(),
+      readKey: nonEmptyString().nullable().optional(),
       /** Existing DerivedValue key supplying this public field snapshot. */
       storedKey: nonEmptyString().optional(),
       /** Typed object or scalar member of the stored snapshot supplying this field. */
@@ -660,6 +661,25 @@ const buildMetadataSchemas = () => {
       ),
       explanation: orNull(
         z.strictObject({
+          /** Selects reusable source/contributor evidence behavior for lazy explanations. */
+          evidence: z
+            .object({
+              kind: z.enum([
+                "ownership",
+                "yield",
+                "policy",
+                "category",
+                "contextProject",
+                "contextTrade",
+                "owners",
+                "price",
+                "policyAggregate",
+                "scalar",
+              ]),
+              inheritField: nonEmptyString().optional(),
+              allocated: z.boolean().optional(),
+            })
+            .optional(),
           ruleId: nonEmptyString(),
           version: z.number().int().positive().default(1),
           description: nonEmptyString(),
@@ -705,6 +725,16 @@ const buildMetadataSchemas = () => {
         .strictObject({
           /** Absent for a field that only inherits: clients get no actions. */
           reset: z.record(z.string(), z.json()).optional(),
+          /** Canonical resolution evaluated over the declared reset patch. */
+          resetSource: z
+            .enum([
+              "vendorEvidence",
+              "purchaseEvidence",
+              "transactionEvidence",
+              "expenseCategory",
+              "expenseInheritance",
+            ])
+            .optional(),
           /**
            * The fallback chain. Without `mode`, NULL inherits. With `mode`,
            * the row's stored value wins unless the mode field holds
@@ -774,21 +804,13 @@ const buildMetadataSchemas = () => {
       validation: entityFieldValidationMetadataSchema.prefault({}),
     })
     .transform(
-      ({
+      ({ key, kind, nullable, label, description, readKey, ...field }) => ({
         key,
         kind,
         nullable,
-        labelOverride,
+        label: label,
         description,
-        readKeyOverride,
-        ...field
-      }) => ({
-        key,
-        kind,
-        nullable,
-        label: labelOverride,
-        description,
-        readKey: readKeyOverride,
+        readKey: readKey,
         ...field,
       }),
     );
@@ -1276,8 +1298,6 @@ const buildMetadataSchemas = () => {
       hierarchy: entityHierarchyMetadataSchema.optional(),
       /** Explicit menu order and opt-in text choices; bounded scalar and reference choices are inferred. */
       grouping: z.array(nonEmptyString()).optional().default([]),
-      /** Suppress an otherwise inferred grouping choice. */
-      groupingOmit: z.array(nonEmptyString()).optional().default([]),
       intents: entityFieldModelIntentsMetadataSchema.optional(),
     })
     .transform((model) => ({
@@ -1356,7 +1376,6 @@ const buildMetadataSchemas = () => {
   const entityIdentifiersMetadataSchema = z.strictObject({
     brand: nonEmptyString().nullable(),
     shortcode: nonEmptyString().nullable(),
-    shortcodeLength: z.int().min(5).max(32).optional(),
     /** References to this entity may select the requesting member. */
     currentMember: z.literal(true).optional(),
   });
@@ -2335,11 +2354,6 @@ const buildMetadataSchemas = () => {
     label: nonEmptyString(),
     /** `gap.message` shown beside the check. */
     message: nonEmptyString(),
-    /**
-     * The Problems coverage meter (`coverageTotalsSchema` key) whose
-     * denominator is this check's `expected` population; the generator
-     * counts it instead of a hand-written query.
-     */
     coverage: nonEmptyString().optional(),
   });
 
@@ -2455,12 +2469,7 @@ const buildMetadataSchemas = () => {
        */
       suggestions: z
         .array(
-          z.enum([
-            "statement_transaction",
-            "transfer_pair",
-            "product_pair",
-            "image_description",
-          ]),
+          z.enum(["statement_transaction", "transfer_pair", "product_pair"]),
         )
         .optional()
         .default([]),
@@ -2649,7 +2658,6 @@ const buildMetadataSchemas = () => {
         kind: z.enum(["number", "date"]).optional(),
         int: z.boolean({ error: "must be a boolean" }).optional(),
         nonnegative: z.boolean({ error: "must be a boolean" }).optional(),
-        finite: z.boolean({ error: "must be a boolean" }).optional(),
         /** MCP prose for the two bounds the range derives. */
         describe: z
           .object({ lower: nonEmptyString(), upper: nonEmptyString() })
@@ -2841,41 +2849,14 @@ const buildMetadataSchemas = () => {
       module: "~/server/generic/search/repo/search-document",
       export: "refreshSearchDocument",
     },
-    semanticText: {
-      module: "~/server/generic/search/repo/search-document",
-      export: "getSearchDocumentEmbeddingText",
-    },
   };
 
   const entityExtensionsMetadataSchema = z.strictObject({
-    relatednessSignals: orNull(
-      z.array(
-        z.union([
-          z
-            .object({
-              kind: z.literal("semantic"),
-              label: nonEmptyString(),
-              pair: nonEmptyString(),
-              weight: z.number(),
-              limit: z.number().int().positive(),
-            })
-            .strict(),
-          z
-            .object({
-              kind: z.literal("scalarOverlap"),
-              label: nonEmptyString(),
-              pair: nonEmptyString(),
-              column: nonEmptyString(),
-              popularityCap: z.number().int().positive(),
-              scoring: z.literal("displayOnly"),
-            })
-            .strict(),
-        ]),
-      ),
-    ),
+    relatednessSignals: z.array(relatedRecordSignalSchema).default([]),
     ports: z
       .object({
         repository: orNull(sourceRefMetadataSchema),
+        reports: orNull(sourceRefMetadataSchema),
         /** Pure final projection over selected envelopes and already loaded facts. */
         fieldEnvelope: orNull(sourceRefMetadataSchema),
         references: z
@@ -2903,7 +2884,6 @@ const buildMetadataSchemas = () => {
               .object({
                 read: orNull(sourceRefMetadataSchema),
                 projection: sourceRefMetadataSchema.nullable(),
-                semanticText: sourceRefMetadataSchema.nullable(),
               })
               .strict(),
           ])
@@ -2911,7 +2891,6 @@ const buildMetadataSchemas = () => {
           .default({
             read: null,
             projection: null,
-            semanticText: null,
           }),
         /** `(context, input) => EntityTimelineOut` for `capabilities.timeline: "custom"`. */
         timeline: orNull(sourceRefMetadataSchema),
@@ -3086,10 +3065,10 @@ export function parseEntityFieldModelMetadata(
   if (field === "read" || field === "create" || field === "update")
     throw new Error(`${path} must be a Zod schema.`);
   if (
-    field === "labelOverride" ||
+    field === "label" ||
     field === "key" ||
     field === "entity" ||
-    field === "columnIdOverride" ||
+    field === "columnId" ||
     field === "sectionOverride"
   )
     throw new Error(`${path} must be a non-empty string.`);
@@ -3320,7 +3299,6 @@ type ReadableDeclaration = {
   model: {
     fields: readonly {
       key: string;
-      readKeyOverride?: string | null;
       readKey?: string | null;
       output?: boolean;
       validation?: { read?: z.ZodType | null; publicRead?: z.ZodType };
@@ -3336,7 +3314,7 @@ type ReadFieldSchemas<D extends ReadableDeclaration> = {
     }
       ? F extends { output: false }
         ? never
-        : F extends { readKeyOverride: infer R extends string }
+        : F extends { readKey: infer R extends string }
           ? R
           : F["key"]
       : never
@@ -3366,9 +3344,9 @@ type LabelFieldSchemas<D extends ReadableDeclaration> = {
     F in D["model"]["fields"][number] as F extends {
       validation: { read: z.ZodType };
     }
-      ? F extends { readKeyOverride: null }
+      ? F extends { readKey: null }
         ? never
-        : F extends { readKeyOverride: infer R extends string }
+        : F extends { readKey: infer R extends string }
           ? R
           : F["key"]
       : never
@@ -3462,7 +3440,7 @@ type PublicReadFieldSchemas<D extends ReadableDeclaration> = {
     F in D["model"]["fields"][number] as F extends {
       validation: { publicRead: z.ZodType };
     }
-      ? F extends { readKeyOverride: infer K extends string }
+      ? F extends { readKey: infer K extends string }
         ? K
         : F extends { readKey: infer K extends string }
           ? K
@@ -3479,12 +3457,7 @@ export function publicReadFieldSchemas<const D extends ReadableDeclaration>(
 ): PublicReadFieldSchemas<D> {
   const entries = definition.model.fields.flatMap((field) =>
     field.validation?.publicRead
-      ? [
-          [
-            field.readKeyOverride ?? field.readKey ?? field.key,
-            field.validation.publicRead,
-          ],
-        ]
+      ? [[field.readKey ?? field.key, field.validation.publicRead]]
       : [],
   );
   // SAFETY: only declared publicRead schemas enter the map, under their exact declared read key.
@@ -3499,12 +3472,7 @@ export function readFieldSchemas<const D extends ReadableDeclaration>(
     if (field.output === false) return [];
     if (!field.validation?.read)
       throw new Error(`Missing declared read schema for ${field.key}`);
-    return [
-      [
-        field.readKeyOverride ?? field.readKey ?? field.key,
-        field.validation.read,
-      ],
-    ];
+    return [[field.readKey ?? field.key, field.validation.read]];
   });
   // SAFETY: only output fields enter the map; every field retains its declared read schema.
   return Object.fromEntries(entries) as ReadFieldSchemas<D>;

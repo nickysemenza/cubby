@@ -4,7 +4,6 @@ import { and, eq, inArray, lt, or } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { withTransaction } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
-import { FAILURE_LOOKBACK_DAYS } from "~/server/generic/jobs/repo/work-status";
 
 const DAY_MS = 24 * 60 * 60_000;
 /**
@@ -12,7 +11,7 @@ const DAY_MS = 24 * 60 * 60_000;
  * older failure in Work. It has to outlast that failure lookback, or a recovered kind reads
  * as failed again. Its owner holds the result.
  */
-export const JOB_RETENTION_MS = (FAILURE_LOOKBACK_DAYS + 1) * DAY_MS;
+const JOB_RETENTION_MS = 8 * DAY_MS;
 /** A cancelled row records a member's stop. */
 const CANCELLED_RETENTION_MS = 14 * DAY_MS;
 const FAILED_RETENTION_MS = 30 * DAY_MS;

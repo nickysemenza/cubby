@@ -185,10 +185,10 @@ beforeAll(async () => {
 });
 
 describe("MCP catalog schemas", () => {
-  it("attaches the UI resource only to the dedicated render tool", () => {
+  it("does not advertise entity preview cards", () => {
     expect(
-      catalog.tools.find((tool) => tool.name === "entity_preview")?._meta,
-    ).toMatchObject({ ui: { resourceUri: "ui://cubby/entity-preview.html" } });
+      catalog.tools.find((tool) => tool.name === "entity_preview"),
+    ).toBeUndefined();
     expect(
       catalog.tools.find((tool) => tool.name === "entity_read")?._meta ?? {},
     ).not.toHaveProperty("ui");
@@ -681,8 +681,6 @@ describe("MCP catalog schemas", () => {
       // separate discriminator, so no one shortcode prefix can describe them.
       "activity.resolve_run_finding.id",
       "ai.apply_finance_category_suggestion.entityId",
-      "ai.pause_suggestion_sweep.runId",
-      "ai.resume_suggestion_sweep.runId",
       "ai_read.suggest_fields.entityId",
       "field_explanation.explain.entityId",
       "field_explanation.explain.scope.entityId",
@@ -694,12 +692,14 @@ describe("MCP catalog schemas", () => {
       "nutrition.save_food.id",
       "nutrition.save_preparation.mealRecipeId",
       "nutrition.update_recipe.id",
-      // Photo review carries shared Assessment child handles for provenance.
+      // Photo review carries shared Suggestion child handles for provenance.
       "photo_run.commit_group.review.fieldSuggestions[].id",
       "photo_run.propose_groups.groups[].review.fieldSuggestions[].id",
       "photo_run.save_groups.groups[].review.fieldSuggestions[].id",
       "photo_run.reject_candidate.operationId",
-      "product_enrichment.merge_product_match.assessmentId",
+      "image.confirm_description.operationId",
+      "image.confirm_description.expectedEffectId",
+      "product_enrichment.merge_product_match.suggestionId",
       "purchase_import.commit.prepareOperationId",
       "purchase_import.commit.resolutions[].stableOrderId",
       "purchase_import.commit.resolutions[].stableLineId",
@@ -740,11 +740,11 @@ describe("MCP catalog schemas", () => {
       "suggestions_read.automatic_decisions.recordIds",
       "suggestions_read.list.recordIds",
       "suggestions.review.operationId",
-      // Preview consumes the same opaque Assessment review handle as acceptance.
-      "finance_read.preview_suggestion.assessmentId",
-      "suggestions.review.assessmentId",
+      // Preview consumes the same opaque Suggestion review handle as acceptance.
+      "finance_read.preview_suggestion.suggestionId",
+      "suggestions.review.suggestionId",
       "suggestions.review_batch.items[].operationId",
-      "suggestions.review_batch.items[].assessmentId",
+      "suggestions.review_batch.items[].suggestionId",
     ]);
     const freeTextIds = new Set([
       "orderId",

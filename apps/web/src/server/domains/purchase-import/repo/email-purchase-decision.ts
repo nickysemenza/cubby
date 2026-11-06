@@ -14,6 +14,7 @@ import { MAILBOX_RESEARCH_VERSION } from "@cubby/schemas/mailbox-research";
 import { and, eq, isNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { storedDerived } from "~/server/db/derived-declarations";
 import {
   databaseForTransaction,
   getDb,
@@ -28,6 +29,7 @@ import {
   purchase,
   vendorAccount,
 } from "~/server/db/schema";
+import { emailDerivedComputes } from "~/server/domains/email/repo/derived";
 import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
 import {
   foldPurchaseLinks,
@@ -35,6 +37,7 @@ import {
 } from "~/server/domains/email/repo/email-purchase-links";
 import { createAppError } from "~/server/errors/app-error";
 import { isUniqueViolation } from "~/server/errors/db-errors";
+import { publishRebuiltValues } from "~/server/generic/derived/repo/rebuild";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { ensureMailVendorAccount } from "./gmail/mail-account";
@@ -124,7 +127,7 @@ async function decideOnce(
     if (options.originalId && orderMailId !== options.originalId)
       throw createAppError(
         "MAIL_EVIDENCE_STALE",
-        "Email original changed; request a fresh Assessment",
+        "Email original changed; request a fresh Suggestion",
       );
     if (!orderMailId)
       throw createAppError(
@@ -297,6 +300,20 @@ async function decideOnce(
         })
         .where(eq(emailTable.id, email.id));
     }
+
+    // The member's decision must reach the same snapshot used by list values and predicates.
+    const declaration = storedDerived("email", "relationshipFacts");
+    if (!declaration)
+      throw new Error("Email relationship declaration is missing");
+    const transactionDb = databaseForTransaction(tx);
+    await publishRebuiltValues(
+      transactionDb,
+      declaration,
+      [email.id],
+      await emailDerivedComputes["email.relationshipFacts"](transactionDb, [
+        email.id,
+      ]),
+    );
 
     const link = foldPurchaseLinks(
       await readEmailPurchaseEvidence(

@@ -524,7 +524,7 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "spendingCategorySummary",
         kind: "json",
-        labelOverride: "Expense categories",
+        label: "Expense categories",
         provenance: {
           kind: "derived",
           sources: [{ label: "Live Expense category allocations" }],
@@ -548,7 +548,7 @@ export const { definition, readSchemas } = defineEntityModel({
         audit: true,
         key: "spendingCategoryOrigin",
         kind: "enum",
-        labelOverride: "Fallback provenance",
+        label: "Fallback provenance",
         display: {
           list: false,
           optionRole: "category",
@@ -566,7 +566,7 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       {
         key: "spendingCategoryId",
-        labelOverride: "Fallback category",
+        label: "Fallback category",
         description:
           "Explicit fallback used only when an Expense has no more specific classification. Mixed Purchase categories come from its Expense lines.",
         kind: "identifier",
@@ -647,9 +647,11 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         resolution: {
           reset: { itemizationExpectation: null },
+          resetSource: "purchaseEvidence",
           redundancy: "eligible",
         },
         explanation: {
+          evidence: { kind: "policy" },
           ruleId: "purchase.effective-evidence-expectation",
           description:
             "An explicit Purchase itemization policy wins; otherwise the live Vendor policy supplies it, followed by the Purchase spending category.",
@@ -666,10 +668,6 @@ export const { definition, readSchemas } = defineEntityModel({
             {
               path: "fields.itemizationExpectation.current.assignment.value",
               label: "Stored override",
-            },
-            {
-              path: "fields.itemizationExpectation.current.controls.reset.preview.result.decision.outcome.value",
-              label: "Inherited value",
             },
           ],
         },
@@ -738,7 +736,7 @@ export const { definition, readSchemas } = defineEntityModel({
         display: {
           columnGroup: "Order",
           // Vendor, date and total lead; the coverage statuses follow.
-          listOrderOverride: 1,
+          listOrder: 1,
           labelPath: "vendorName",
           renderer: { list: "vendor-cell" },
         },
@@ -813,7 +811,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         display: {
           columnGroup: "Order",
-          listOrderOverride: 2,
+          listOrder: 2,
           format: "plainDate",
           mobile: { slot: "meta", priority: 30 },
         },
@@ -838,7 +836,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         display: {
           columnGroup: "Booking",
-          listOrderOverride: 7,
+          listOrder: 7,
           format: "currency",
           mobile: { slot: "trailing", priority: 1 },
           width: "sm",
@@ -1134,7 +1132,7 @@ export const { definition, readSchemas } = defineEntityModel({
         output: false,
         key: "transactionCount",
         kind: "number",
-        labelOverride: "Transactions",
+        label: "Transactions",
         display: {
           columnGroup: "Settlement",
           detail: false,
@@ -2118,6 +2116,10 @@ export const { definition, readSchemas } = defineEntityModel({
   },
   extensions: {
     ports: {
+      reports: {
+        module: "~/server/domains/purchase/repo/report-bindings",
+        export: "reportBindings",
+      },
       repository: {
         module: "~/server/domains/purchase/repo/purchase.repository",
         export: "purchaseRepository",

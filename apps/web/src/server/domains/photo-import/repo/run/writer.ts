@@ -59,9 +59,9 @@ import { assertRunCapability } from "~/server/domains/purchase-import/repo/capab
 import { loadRunScopeByShortcode } from "~/server/domains/purchase-import/repo/run-service";
 import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { buildCrudServices } from "~/server/http/request-context";
 import { nameOrAliasSql } from "~/server/lib/name-alias-match";
 
@@ -386,11 +386,11 @@ async function resolveProduct(
         actor,
       );
       for (const suggestion of suggestions) {
-        await reviewAssessment(
+        await reviewSuggestion(
           txDb,
           { ...crud, actorContext: actor },
           {
-            assessmentId: suggestion.id,
+            suggestionId: suggestion.id,
             operationId: `photo-approval:${input.runId}:${input.groupKey}:${suggestion.field}`,
             verdict: "correct",
             intent: "apply",

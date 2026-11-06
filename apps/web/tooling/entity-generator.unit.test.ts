@@ -126,12 +126,12 @@ const base = {
     mcp: [],
   },
   extensions: {
-    relatednessSignals: null,
+    relatednessSignals: [],
     ports: {
       repository: null,
       references: { label: null, resolver: null },
       filters: null,
-      search: { projection: null, semanticText: null },
+      search: { projection: null },
     },
   },
 };
@@ -189,7 +189,7 @@ describe("typed entity compiler", () => {
               output: false,
               key: "name",
               kind: "text",
-              labelOverride: "Title",
+              label: "Title",
               nullable: true,
             },
           ],
@@ -553,35 +553,6 @@ describe("entity table storage", () => {
     );
     expect(() => compileEntityDeclarations([declaration, beta])).toThrow(
       "syntheticContent",
-    );
-  });
-
-  it("binds declared SQL to table columns and emits identity, indexes, and relations", () => {
-    const artifacts = renderEntityTableArtifacts(
-      compileEntityDeclarations([
-        alpha({
-          indexes: [
-            {
-              name: "Alpha_live_idx",
-              on: ["name"],
-              where: "{deletedAt} IS NULL",
-            },
-          ],
-          relations: { beta: "betaId", siblings: { many: "alphaSibling" } },
-        }),
-        beta,
-      ]),
-    );
-    const source = artifacts.definitions + artifacts.relations;
-    expect(source).toContain(
-      'index("Alpha_live_idx").on(table.name).where(sql`${table.deletedAt} IS NULL`)',
-    );
-    expect(source).toContain('index("Alpha_betaId_idx").on(table.betaId)');
-    expect(source).toContain(
-      "beta: one(beta, { fields: [alpha.betaId], references: [beta.id] })",
-    );
-    expect(source).toContain(
-      'import { alphaSibling } from "~/server/db/retained-tables";',
     );
   });
 });

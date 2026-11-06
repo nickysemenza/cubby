@@ -9,6 +9,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { sql } from "drizzle-orm";
 import { StatusCodes } from "http-status-codes";
 import { createRepoEntity } from "tooling/factories/repo";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -22,7 +23,6 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
@@ -160,7 +160,7 @@ describe("MCP catalog", () => {
       (
         await getDb(ctx.db).execute(sql`
       SELECT (SELECT count(*) FROM "Run") AS runs, (SELECT count(*) FROM "Job") AS jobs,
-        (SELECT count(*) FROM "Suggestion") AS assessments,
+        (SELECT count(*) FROM "Suggestion") AS suggestions,
         (SELECT coalesce(sum(cost),0) FROM "Expense" WHERE "deletedAt" IS NULL) AS money
     `)
       ).rows;
@@ -900,7 +900,7 @@ describe("MCP catalog", () => {
       trigger: "manual",
       status: "completed",
     });
-    await publishFieldAssessment(
+    await seedFieldSuggestion(
       ctx.db,
       {
         runId,

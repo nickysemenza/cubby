@@ -462,7 +462,7 @@ export const { definition, readSchemas } = defineEntityModel(
         {
           key: "spendingCategorySummary",
           kind: "json",
-          labelOverride: "Expense categories",
+          label: "Expense categories",
           provenance: {
             kind: "derived",
             sources: [{ label: "Live Expense category allocations" }],
@@ -550,9 +550,11 @@ export const { definition, readSchemas } = defineEntityModel(
           },
           resolution: {
             reset: { itemizationExpectation: null },
+            resetSource: "transactionEvidence",
             redundancy: "eligible",
           },
           explanation: {
+            evidence: { kind: "policyAggregate" },
             ruleId: "financialTransaction.effective-evidence-expectation",
             description:
               "Reviewed reimbursement expects no itemization. Otherwise an explicit transaction policy wins, followed by linked purchase policies and the transaction spending category.",
@@ -569,10 +571,6 @@ export const { definition, readSchemas } = defineEntityModel(
               {
                 path: "fields.itemizationExpectation.current.assignment.value",
                 label: "Stored override",
-              },
-              {
-                path: "fields.itemizationExpectation.current.controls.reset.preview.result.decision.outcome.value",
-                label: "Inherited value",
               },
             ],
           },
@@ -629,7 +627,7 @@ export const { definition, readSchemas } = defineEntityModel(
           // linked to a purchase, read from the mirror column above.
           key: "purchasePresence",
           kind: "boolean",
-          labelOverride: "Linked",
+          label: "Linked",
           display: {
             columnGroup: "Booking",
             detail: false,
@@ -1445,7 +1443,6 @@ export const { definition, readSchemas } = defineEntityModel(
           placeholder: "Filter by amount...",
           deriveSchema: true,
           stored: true,
-          range: { finite: true },
           options: [
             {
               value: "gte1000",
@@ -2005,6 +2002,10 @@ export const { definition, readSchemas } = defineEntityModel(
     },
     extensions: {
       ports: {
+        reports: {
+          module: "~/server/domains/financial-transaction/repo/report-bindings",
+          export: "reportBindings",
+        },
         repository: {
           module:
             "~/server/domains/financial-transaction/repo/financial-transaction",

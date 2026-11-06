@@ -1,7 +1,7 @@
 import {
-  assessmentChildHandle,
-  assessmentReviewReference,
-} from "./assessment-reference";
+  suggestionChildHandle,
+  suggestionReviewReference,
+} from "./suggestion-reference";
 import { z } from "zod";
 import { locationRefOut } from "./location-fields";
 import { ledgerPartyRefOut } from "./ledger-party-fields";
@@ -46,7 +46,7 @@ export const duplicateProductRecommendationInput = z.object({
   sourceId: productShortcode,
 });
 export const duplicateProductRecommendationOut = duplicateProductIdentitySchema
-  .extend({ review: assessmentReviewReference.optional() })
+  .extend({ review: suggestionReviewReference.optional() })
   .nullable();
 
 export const tagPropagationRecommendationInput = z.object({
@@ -57,7 +57,7 @@ export const tagPropagationRecommendationOut = z.object({
   currentTags: z.array(z.string()),
   proposals: z.array(
     z.object({
-      review: assessmentReviewReference.optional(),
+      review: suggestionReviewReference.optional(),
       tag: z.string(),
       supportingProductCount: z.number().int().positive(),
       supportingProductIds: z.array(productShortcode).optional(),
@@ -134,8 +134,8 @@ export const PRODUCT_PAIR_NOT_ACTIONABLE =
   "Not actionable: no exact identifier binds both records; investigate before merging";
 
 export const productMatchCandidate = z.object({
-  review: assessmentReviewReference.optional(),
-  assessmentId: assessmentChildHandle,
+  review: suggestionReviewReference.optional(),
+  suggestionId: suggestionChildHandle,
   fingerprint: z.string().nullable(),
   identityConflict: z.boolean(),
   /** Raw stored values behind `identityConflict` (model or variant literals). */
@@ -172,7 +172,7 @@ export type ProductMatchQueueOut = z.infer<typeof productMatchQueueOut>;
 
 /** Merge `mergeId` into `keepId`, then lead the survivor's covers with own photos. */
 export const mergeProductMatchInput = z.object({
-  assessmentId: assessmentChildHandle,
+  suggestionId: suggestionChildHandle,
   expectedFingerprint: z.string().min(1),
   keepId: productShortcode,
   mergeId: productShortcode,

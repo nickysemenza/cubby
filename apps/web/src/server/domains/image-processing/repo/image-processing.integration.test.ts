@@ -41,15 +41,14 @@ import {
   loadImageAnalysisEvidence,
   loadImageAnalysisSummaries,
 } from "~/server/domains/image/repo/image-analysis-summary";
+import { confirmImageDescription } from "~/server/domains/image/repo/image-description-confirmation";
 import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
-import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import {
-  publishAssessment,
+  publishSuggestion,
   recordFeedback,
-} from "~/server/generic/assessment/repo/assessment";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
+} from "~/server/generic/suggestions/repo/suggestion";
+import { transitionSuggestionState } from "~/server/generic/suggestions/repo/suggestion-state";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
@@ -612,13 +611,17 @@ describe("durable image representations", () => {
       .update(image)
       .set({ sha256: hash })
       .where(eq(image.id, imageId));
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      standalone: { kind: "image_description", id: row.shortcode },
-      operationId: crypto.randomUUID(),
-      verdict: "correct",
-      correction: { present: true, value: "Confirmed navy cotton shirt" },
-      intent: "apply",
-    });
+    await confirmImageDescription(
+      ctx.db,
+      {
+        imageId: imageId,
+        contentHash: "a".repeat(64),
+        operationId: crypto.randomUUID(),
+        expectedEffectId: null,
+        description: "Confirmed navy cotton shirt",
+      },
+      ctx.actor.userId,
+    );
     expect(
       (await loadImageAnalysisSummaries(ctx.db, [row.shortcode])).get(
         row.shortcode,
@@ -732,7 +735,7 @@ describe("durable image representations", () => {
       imageId,
       sortOrder: 0,
     });
-    const unrelated = await publishAssessment(ctx.db, {
+    const unrelated = await publishSuggestion(ctx.db, {
       publicationKey: "synthetic:image-search-capture:unrelated",
       family: "recommendation",
       subject: {
@@ -747,26 +750,27 @@ describe("durable image representations", () => {
       producer: null,
       evidence: null,
     });
-    await transitionAssessmentState(ctx.db, unrelated.id, {
+    await transitionSuggestionState(ctx.db, unrelated.id, {
       status: "resolved",
     });
     await recordFeedback(ctx.db, {
-      assessmentId: unrelated.id,
+      suggestionId: unrelated.id,
       operationId: crypto.randomUUID(),
       verdict: "ungraded",
       authority: "automatic",
       actorUserId: null,
     });
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      standalone: { kind: "image_description", id: row.shortcode },
-      operationId: crypto.randomUUID(),
-      verdict: "correct",
-      correction: {
-        present: true,
-        value: "Confirmed searchable cobalt textile",
+    await confirmImageDescription(
+      ctx.db,
+      {
+        imageId: imageId,
+        contentHash: "a".repeat(64),
+        operationId: crypto.randomUUID(),
+        expectedEffectId: null,
+        description: "Confirmed searchable cobalt textile",
       },
-      intent: "apply",
-    });
+      ctx.actor.userId,
+    );
     await drainDerivedRefreshFrontier(ctx.db);
     const before = await getDb(ctx.db)
       .select()

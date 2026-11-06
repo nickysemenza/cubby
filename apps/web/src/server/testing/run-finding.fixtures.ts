@@ -1,5 +1,5 @@
-import { feedbackAuthority } from "@cubby/schemas/assessment";
 import { runFindingEntity } from "@cubby/schemas/purchase-import";
+import { feedbackAuthority } from "@cubby/schemas/suggestion";
 import { eq, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";

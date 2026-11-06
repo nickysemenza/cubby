@@ -81,7 +81,7 @@ export async function getMonthlyExpenseSpend(
       `Monthly spend must target Expense: ${entityKind}.${chart.viewKey}`,
     );
   const source = root(entityKind, entityId);
-  const routes = compiledConnectedRoutes(entityKind, chart.viewKey);
+  const routes = await compiledConnectedRoutes(entityKind, chart.viewKey);
   if (!routes.length)
     throw new Error(
       `No traversable Expense paths for ${entityKind}.${chart.viewKey}`,
@@ -124,13 +124,13 @@ export async function getDetailActivity(
       entityFieldModels[target].fields;
     const allDay =
       fields.find((field) => field.key === entry.dateField)?.kind === "date";
-    for (const route of compiledConnectedRoutes(
+    for (const route of await compiledConnectedRoutes(
       entityKind,
       `relation:${entry.relation}`,
     )) {
       queries.push(sql`
         SELECT DISTINCT ${`record:${target}:`} || t."shortcode" AS id, ${detailActivityEventSchema.shape.kind.enum.record}::text AS kind,
-          ${target}::text AS entity, t."shortcode", ${labelSql(target, "t")} AS title,
+          ${target}::text AS entity, t."shortcode", ${await labelSql(target, "t")} AS title,
           NULL::text AS subtitle, ${date}::timestamp AS date,
           ${allDay}::boolean AS "allDay",
           ${target === "expense" ? sql`round(t."cost"::numeric * 100)::float` : sql`NULL::float`} AS "amountCents"

@@ -223,7 +223,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "appleIntelligenceAvailable",
         kind: "boolean",
         nullable: true,
-        labelOverride: "Apple Intelligence",
+        label: "Apple Intelligence",
         display: { columnGroup: "Background work" },
         validation: readOnly(z.boolean().nullable()),
       },

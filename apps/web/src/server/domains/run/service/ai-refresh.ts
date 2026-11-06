@@ -87,32 +87,32 @@ import { scheduleAutomaticEvaluations } from "~/server/domains/run/repo/ai-refre
 import { readAutomaticAiStop } from "~/server/domains/run/repo/automatic-ai-stop";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
-import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
-import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
-import {
-  fieldInputFingerprint,
-  fenceFieldInputsAtCommit,
-  fieldInputFingerprintIfLive,
-} from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
+import type { DrainContext } from "~/server/generic/background/drains";
 import {
   SemanticCoverageIncomplete,
   semanticCoveragePending,
 } from "~/server/generic/embedding/repo/entity-embedding";
 import { withJobPhase } from "~/server/generic/jobs/context";
-import type { DrainContext } from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
 import {
   lookupShortcodes,
   resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
+import {
+  fieldInputFingerprint,
+  fenceFieldInputsAtCommit,
+  fieldInputFingerprintIfLive,
+} from "~/server/generic/suggestions/repo/field-input-fence";
+import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
 import {
-  assessmentStatesById,
+  suggestionStatesById,
   emailClassificationObservations,
   fieldRefreshHistory,
   liveProductIdsAfter,
@@ -123,10 +123,7 @@ import {
   type FieldRefreshCursor,
 } from "../repo/ai-refresh-state";
 import { guardAiEvaluationAttempt } from "../repo/ai-work-state";
-import {
-  connectionSourceFingerprintsOrMissing,
-  countConnectionSweepSources,
-} from "../repo/connection-refresh";
+import { connectionSourceFingerprintsOrMissing } from "../repo/connection-refresh";
 import { systemActor } from "../repo/ensure-run";
 import {
   makeSweepSuggestion,
@@ -363,7 +360,7 @@ async function scheduleProductIdentityDiscovery(
           entity: "product",
           recordId: item.id,
           field: null,
-          assessmentIds: [],
+          suggestionIds: [],
         }),
         provenance: aiProvenance.parse({
           dependencies: dependencyStamps(activation.manifest, [
@@ -398,30 +395,6 @@ const fieldCursorFor = (pending: readonly FieldRefreshCursor[]) =>
   pending.length === EMAIL_RECLASSIFY_LIMIT ? (pending.at(-1) ?? null) : null;
 const emailCursorFor = (rows: readonly { item: { id: string } }[]) =>
   rows.length === EMAIL_RECLASSIFY_LIMIT * 2 ? rows.at(-1)!.item.id : null;
-
-/**
- * Connection coverage is one routine Sweep per discovery generation: a
- * visible Run with its own step, instead of one Run per record. Sources
- * already evaluated under their current fingerprint are skipped by it.
- */
-async function scheduleConnectionDiscovery(
-  db: Database,
-  cursor: Awaited<ReturnType<typeof readAiDiscoveryCursor>>,
-) {
-  if (cursor.connectionDone || !(await countConnectionSweepSources(db)))
-    return { done: true, cursor: null };
-  try {
-    const { startRoutineSweep } = await import("./sweep");
-    await startRoutineSweep(db, "recommendation");
-  } catch (error) {
-    // Still done: a pending connection pass would hold the generation open
-    // and stall field and product rediscovery. The next generation retries.
-    log.error("Connection discovery Sweep failed to start", {
-      error: scrubErrorMessage(String(error)),
-    });
-  }
-  return { done: true, cursor: null };
-}
 
 /** Preparation enumerates evidence using live renderers; no model calls happen here. */
 // oxlint-disable-next-line complexity -- Independent discovery streams checkpoint their capacity deferrals together.
@@ -485,7 +458,7 @@ export async function discoverAiRefresh(
         entity: first.entity,
         recordId: first.recordId,
         field: first.field,
-        assessmentIds: rows.map((row) => row.id),
+        suggestionIds: rows.map((row) => row.id),
       });
       if (target.kind !== "field") continue;
       const applied =
@@ -628,7 +601,7 @@ export async function discoverAiRefresh(
               entity: "email",
               recordId: item.id,
               field: null,
-              assessmentIds: [],
+              suggestionIds: [],
             }),
             provenance: aiProvenance.parse({
               dependencies,
@@ -688,7 +661,6 @@ export async function discoverAiRefresh(
     activation,
     cursor,
   );
-  const connectionDiscovery = await scheduleConnectionDiscovery(db, cursor);
   const nextCursor = {
     revision: activation.revision,
     productDone: productDiscovery.productDone,
@@ -701,8 +673,8 @@ export async function discoverAiRefresh(
       (cursor.emailDone || candidates.length < EMAIL_RECLASSIFY_LIMIT * 2),
     field: fieldDeferred ? cursor.field : fieldCursorFor(pending),
     email: emailDeferred ? cursor.email : emailCursorFor(candidates),
-    connectionDone: connectionDiscovery.done,
-    connection: connectionDiscovery.cursor,
+    connectionDone: true,
+    connection: null,
   };
   const complete =
     nextCursor.fieldDone &&
@@ -769,9 +741,9 @@ export async function executeAiRefreshTarget(
     prepared.provenance.inputFingerprint !== claimed.provenance.inputFingerprint
   )
     throw new Error("AI evaluation target changed during inference");
-  const previous = await assessmentStatesById(db, target.assessmentIds);
+  const previous = await suggestionStatesById(db, target.suggestionIds);
   if (
-    previous.length !== target.assessmentIds.length ||
+    previous.length !== target.suggestionIds.length ||
     previous.some(
       (row) =>
         row.acceptanceReceipt === null &&
@@ -864,7 +836,7 @@ export async function executeAiRefreshTarget(
         recordId: target.recordId,
         currentValue: snapshot.currentValue,
         fieldDecisionId: snapshot.fieldDecisionId,
-        predecessorIds: target.assessmentIds,
+        predecessorIds: target.suggestionIds,
         evaluationId: id,
         provenance: saved.provenance,
       },
@@ -881,7 +853,7 @@ export async function executeAiRefreshTarget(
       kernel(tx, ports, claimed.runId),
       (error) => applicationFailures.push(scrubErrorMessage(String(error))),
     );
-    const [predecessorId] = target.assessmentIds;
+    const [predecessorId] = target.suggestionIds;
     if (outcome === "settled" && predecessorId) {
       await settleAppliedFieldRefresh(
         tx,
@@ -934,7 +906,7 @@ function inEvaluationContext<T>(
   return withWorkflowExecution(
     {
       runId: target.evaluation.runId,
-      attempt: context.claim.generation,
+      attempt: target.item.attempts + 1,
       database: db,
       job: context,
     },
@@ -1370,7 +1342,7 @@ async function stageProductEnrollment(
                   recordId: pair.productIds[0],
                   otherId: pair.productIds[1],
                   field: null,
-                  assessmentIds: [],
+                  suggestionIds: [],
                 }),
                 provenance,
                 snapshot: jsonSnapshot(pair),

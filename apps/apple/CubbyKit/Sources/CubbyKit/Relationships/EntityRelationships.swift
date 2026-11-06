@@ -142,27 +142,6 @@ public struct EntityGraph: Sendable, Hashable {
     }
 }
 
-public enum ActionableRelationshipRecommendation: Sendable, Hashable, Identifiable {
-    case expenseProject(ExpenseProjectProposal)
-    case inventoryPlacement(InventoryPlacementProposal)
-
-    public var id: String {
-        switch self {
-        case .expenseProject(let proposal): proposal.id
-        case .inventoryPlacement(let proposal): proposal.id
-        }
-    }
-
-    public var subject: EntityRef {
-        switch self {
-        case .expenseProject(let proposal):
-            EntityRef(entity: .expense, id: proposal.expenseId)
-        case .inventoryPlacement(let proposal):
-            EntityRef(entity: .inventory, id: proposal.inventoryId.rawValue)
-        }
-    }
-}
-
 /// Navigation and invalidation after a relationship mutation. `subject` is the displayed record;
 /// reviewing from the other endpoint invalidates affected kinds without replacing that endpoint.
 public struct RelationshipAcceptance: Sendable, Hashable {
@@ -176,19 +155,6 @@ public struct RelationshipAcceptance: Sendable, Hashable {
         self.affectedEntities = affectedEntities
     }
 
-    public init(
-        recommendation: ActionableRelationshipRecommendation,
-        destination: EntityRef
-    ) {
-        let affectedEntities: Set<EntityKey>
-        switch recommendation {
-        case .expenseProject: affectedEntities = [.expense, .project]
-        case .inventoryPlacement: affectedEntities = [.inventory, .location, .product]
-        }
-        self.init(
-            subject: recommendation.subject, destination: destination, affectedEntities: affectedEntities)
-    }
-
     public var replacedSubject: Bool { subject != destination }
 }
 
@@ -197,7 +163,7 @@ public protocol EntityRelationshipsClient: Sendable {
     func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut
     func discoverConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut
     func discoveryRunSnapshot(runID: RunShortcode) async throws -> RunSnapshot
-    func reviewAssessment(_ input: AssessmentReviewInput) async throws -> AssessmentReviewOut
+    func reviewSuggestion(_ input: SuggestionReviewInput) async throws -> SuggestionReviewOut
     func exploreRelationships(root: EntityRef, depth: Int) async throws -> EntityGraph
     func relationshipPage(
         root: EntityRef,
@@ -205,9 +171,7 @@ public protocol EntityRelationshipsClient: Sendable {
         offset: Int,
         limit: Int
     ) async throws -> EntityGraphOutput
-    func recommendations(for source: EntityRef) async throws -> EntityRecommendationsOut
-    func assignExpense(_ expenseID: String, toProject projectID: String) async throws
-    func moveInventory(_ inventoryID: String, to locationID: String) async throws -> EntityRef
+    func relatedness(for source: EntityRef) async throws -> RecommendationWorkbenchOut
 }
 
 @MainActor
@@ -223,7 +187,7 @@ public final class EntityRelationshipsModel {
 
     public private(set) var source: EntityRef?
     public private(set) var graph: EntityGraph?
-    public private(set) var recommendationDocument: EntityRecommendationsOut?
+    public private(set) var relatednessDocument: RecommendationWorkbenchOut?
     public private(set) var connectionDocument: ConnectionDiscoveryOut?
     public private(set) var connectionError: String?
     public private(set) var isFindingConnections = false
@@ -233,25 +197,22 @@ public final class EntityRelationshipsModel {
     public private(set) var phase: Phase = .idle
     public private(set) var activity: Activity = .idle
     public private(set) var graphError: String?
-    public private(set) var recommendationError: String?
-    public private(set) var acceptingRecommendationID: String?
-    public private(set) var acceptError: String?
+    public private(set) var relatednessError: String?
     public private(set) var depth = 1
 
     private let client: any EntityRelationshipsClient
     private var requestGeneration = 0
     private var graphTask: Task<EntityGraph, Error>?
-    private var recommendationTask: Task<EntityRecommendationsOut, Error>?
-    private var acceptTask: Task<RelationshipAcceptance, Error>?
+    private var relatednessTask: Task<RecommendationWorkbenchOut, Error>?
     private var connectionTask: Task<ConnectionDiscoveryOut, Error>?
-    private var connectionReviewTask: Task<AssessmentReviewOut, Error>?
+    private var connectionReviewTask: Task<SuggestionReviewOut, Error>?
     private var discoveryObservationTask: Task<Void, Error>?
     private let waitForDiscoveryPoll: @Sendable () async throws -> Void
 
     public init(
         client: any EntityRelationshipsClient,
         initialGraph: EntityGraph? = nil,
-        initialRecommendations: EntityRecommendationsOut? = nil,
+        initialRelatedness: RecommendationWorkbenchOut? = nil,
         initialConnections: ConnectionDiscoveryOut? = nil,
         waitForDiscoveryPoll: @escaping @Sendable () async throws -> Void = {
             try await Task.sleep(for: .seconds(3))
@@ -260,10 +221,10 @@ public final class EntityRelationshipsModel {
         self.client = client
         self.waitForDiscoveryPoll = waitForDiscoveryPoll
         graph = initialGraph
-        recommendationDocument = initialRecommendations
+        relatednessDocument = initialRelatedness
         connectionDocument = initialConnections
         source =
-            initialGraph?.root ?? initialRecommendations.map { EntityRef($0.source) }
+            initialGraph?.root
             ?? initialConnections.map { EntityRef($0.source) }
         if source != nil { phase = .loaded }
     }
@@ -306,7 +267,6 @@ public final class EntityRelationshipsModel {
 
     public var connectionControlsDisabled: Bool {
         activity != .idle || isFindingConnections || reviewingConnectionID != nil
-            || acceptingRecommendationID != nil
     }
 
     /// Only this explicit action runs matchers; initial loading and refresh read stored evidence.
@@ -417,7 +377,7 @@ public final class EntityRelationshipsModel {
     ) async -> Bool {
         guard !connectionControlsDisabled, let source,
             connectionDocument?.proposals.contains(where: {
-                $0.review.assessmentId == proposal.review.assessmentId
+                $0.review.suggestionId == proposal.review.suggestionId
                     && $0.fingerprint == proposal.fingerprint
             }) == true,
             !persistent || (verdict == .dismissed && proposal.review.suppression != nil),
@@ -425,13 +385,13 @@ public final class EntityRelationshipsModel {
                 || (!proposal.requiresIdentityReview && proposal.evidence.contradictions.isEmpty)
         else { return false }
         let generation = requestGeneration
-        reviewingConnectionID = proposal.review.assessmentId
+        reviewingConnectionID = proposal.review.suggestionId
         connectionError = nil
-        var input = AssessmentReviewInput(
+        var input = SuggestionReviewInput(
             operationId: UUID().uuidString, verdict: .dismissed,
             correction: .value1(.init(present: .falseValue)),
             intent: verdict == .correct ? .apply : .history,
-            assessmentId: proposal.review.assessmentId, expectedFingerprint: .value(proposal.fingerprint))
+            suggestionId: proposal.review.suggestionId, expectedFingerprint: .value(proposal.fingerprint))
         switch verdict {
         case .correct: input.verdict = .correct
         case .wrong: input.verdict = .wrong
@@ -448,7 +408,7 @@ public final class EntityRelationshipsModel {
         let reviewInput = input
         let task = Task {
             try Task.checkCancellation()
-            return try await client.reviewAssessment(reviewInput)
+            return try await client.reviewSuggestion(reviewInput)
         }
         connectionReviewTask = task
         do {
@@ -513,73 +473,6 @@ public final class EntityRelationshipsModel {
     }
 
     @discardableResult
-    public func accept(
-        _ recommendation: ActionableRelationshipRecommendation,
-        basisKey: String
-    ) async -> RelationshipAcceptance? {
-        guard recommendationDocument?.basisKey == basisKey,
-            acceptingRecommendationID == nil,
-            !isFindingConnections, reviewingConnectionID == nil,
-            activity == .idle,
-            let source
-        else { return nil }
-
-        let generation = requestGeneration
-        let recommendationID = recommendation.id
-        acceptingRecommendationID = recommendation.id
-        acceptError = nil
-        let client = client
-        let task = Task {
-            try Task.checkCancellation()
-            switch recommendation {
-            case .expenseProject(let proposal):
-                try await client.assignExpense(proposal.expenseId, toProject: proposal.target.id)
-                return RelationshipAcceptance(
-                    recommendation: recommendation,
-                    destination: recommendation.subject
-                )
-            case .inventoryPlacement(let proposal):
-                return RelationshipAcceptance(
-                    recommendation: recommendation,
-                    destination: try await client.moveInventory(
-                        proposal.inventoryId.rawValue,
-                        to: proposal.target.id.rawValue
-                    )
-                )
-            }
-        }
-        acceptTask = task
-        do {
-            let acceptance = try await task.value
-            guard generation == requestGeneration, self.source == source,
-                acceptingRecommendationID == recommendationID
-            else { return nil }
-            acceptTask = nil
-            acceptingRecommendationID = nil
-            // A merged inventory source no longer exists. Its destination screen will load the
-            // surviving row; refreshing this model would turn the successful action into a 404.
-            if source != recommendation.subject || !acceptance.replacedSubject {
-                await refresh()
-            }
-            return acceptance
-        } catch is CancellationError {
-            if generation == requestGeneration, acceptingRecommendationID == recommendationID {
-                acceptTask = nil
-                acceptingRecommendationID = nil
-            }
-            return nil
-        } catch {
-            if generation == requestGeneration, self.source == source,
-                acceptingRecommendationID == recommendationID
-            {
-                acceptTask = nil
-                acceptError = error.userMessage
-                acceptingRecommendationID = nil
-            }
-            return nil
-        }
-    }
-
     private func load(
         source: EntityRef,
         graphRoot: EntityRef,
@@ -594,13 +487,12 @@ public final class EntityRelationshipsModel {
         }
         self.source = source
         graphError = nil
-        recommendationError = nil
+        relatednessError = nil
         connectionError = nil
-        acceptError = nil
         activity = retainingContent ? .refreshing : .loadingInitial
         if !retainingContent {
             graph = nil
-            recommendationDocument = nil
+            relatednessDocument = nil
             connectionDocument = nil
             phase = .loading
         }
@@ -611,12 +503,12 @@ public final class EntityRelationshipsModel {
             try Task.checkCancellation()
             return try await client.exploreRelationships(root: graphRoot, depth: depth)
         }
-        let nextRecommendationTask = Task {
+        let nextRelatednessTask = Task {
             try Task.checkCancellation()
-            return try await client.recommendations(for: source)
+            return try await client.relatedness(for: source)
         }
         graphTask = nextGraphTask
-        recommendationTask = nextRecommendationTask
+        relatednessTask = nextRelatednessTask
         let nextConnectionTask = Task {
             try Task.checkCancellation()
             return try await client.storedConnections(source.graphRootInput)
@@ -633,14 +525,14 @@ public final class EntityRelationshipsModel {
         }
 
         do {
-            let result = try await nextRecommendationTask.value
-            if generation == requestGeneration, EntityRef(result.source) == source {
-                recommendationDocument = result
+            let result = try await nextRelatednessTask.value
+            if generation == requestGeneration, self.source == source {
+                relatednessDocument = result
             }
         } catch is CancellationError {
             // A new source or depth owns the state now.
         } catch {
-            if generation == requestGeneration { recommendationError = error.userMessage }
+            if generation == requestGeneration { relatednessError = error.userMessage }
         }
 
         do {
@@ -662,12 +554,12 @@ public final class EntityRelationshipsModel {
 
         guard generation == requestGeneration else { return }
         graphTask = nil
-        recommendationTask = nil
+        relatednessTask = nil
         connectionTask = nil
         activity = .idle
-        if graph == nil, recommendationDocument == nil, connectionDocument == nil {
+        if graph == nil, relatednessDocument == nil, connectionDocument == nil {
             let message =
-                graphError ?? recommendationError ?? connectionError ?? "Relationships are unavailable"
+                graphError ?? relatednessError ?? connectionError ?? "Relationships are unavailable"
             phase = .failed(message)
         } else {
             phase = .loaded
@@ -679,15 +571,12 @@ public final class EntityRelationshipsModel {
 
     private func cancelRequests() {
         graphTask?.cancel()
-        recommendationTask?.cancel()
-        acceptTask?.cancel()
+        relatednessTask?.cancel()
         connectionTask?.cancel()
         connectionReviewTask?.cancel()
         discoveryObservationTask?.cancel()
         graphTask = nil
-        recommendationTask = nil
-        acceptTask = nil
-        acceptingRecommendationID = nil
+        relatednessTask = nil
         connectionTask = nil
         connectionReviewTask = nil
         discoveryObservationTask = nil
@@ -716,7 +605,7 @@ private enum ConnectionReviewError: LocalizedError {
         case .notApplied: "Connection review returned applied=false for an explicit apply request."
         case .missingApplicationResult: "Inventory connection review returned no applicationResult."
         case .invalidApplicationResult:
-            "Assessment applicationResult does not match the reviewed connection endpoints."
+            "Suggestion applicationResult does not match the reviewed connection endpoints."
         case .discoveryRunMismatch: "Run status response does not match the connection discovery Run."
         case .discoveryStopped(let message): message
         }

@@ -9,7 +9,6 @@ import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import {
   suggestionTable,
@@ -23,7 +22,6 @@ import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-par
 import { productPairFingerprint } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import {
   publishProductPair,
-  prepareProductPairPublication,
   upsertAgentProductMatch,
   productPairKey,
 } from "~/server/domains/product/repo/match/product-match-candidate";
@@ -36,9 +34,9 @@ import {
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { createMcpServer } from "~/server/mcp/server";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import {
@@ -77,67 +75,6 @@ describe("product match queue", () => {
       }),
       ctx.actor,
     );
-
-  it("refuses prepared publication after a new evidence row or Product change", async () => {
-    const first = await product("Synthetic fence first"),
-      second = await product("Synthetic fence second");
-    const input = {
-      productIds: [first.entityId, second.entityId] as const,
-      source: "agent" as const,
-      evidence: "Synthetic proof",
-      sourceUrls: [],
-    };
-    const publish = await prepareProductPairPublication(ctx.db, input);
-    await getDb(ctx.db)
-      .update(productTable)
-      .set({ name: "Synthetic changed evidence" })
-      .where(eq(productTable.id, first.entityId));
-    await expect(publish(ctx.db)).rejects.toThrow("evidence changed");
-    expect(
-      (await getProductMatchQueue(ctx.db, { productId: first.id })).items,
-    ).toEqual([]);
-    const current = await prepareProductPairPublication(ctx.db, input);
-    const image = await createImageFixture(ctx.db, "synthetic-evidence-fence");
-    await insertEntityAttachments(ctx.db, [
-      { entityId: first.entityId, imageId: image.id },
-    ]);
-    await expect(current(ctx.db)).rejects.toThrow("evidence changed");
-    const fresh = await prepareProductPairPublication(ctx.db, input);
-    await fresh(ctx.db);
-    expect(
-      (await getProductMatchQueue(ctx.db, { productId: first.id })).items,
-    ).toHaveLength(1);
-  });
-
-  it("refuses prepared pair publication when identity policy changes before its transaction", async () => {
-    const first = await product("Synthetic policy fence first"),
-      second = await product("Synthetic policy fence second");
-    const active = await activateAiRefresh(
-      ctx.db,
-      "synthetic-prepared-policy",
-      { enabled: true },
-    );
-    const publish = await prepareProductPairPublication(ctx.db, {
-      productIds: [first.entityId, second.entityId],
-      source: "agent",
-      evidence: "Synthetic policy-bound proposal",
-      sourceUrls: [],
-    });
-    await activateAiRefresh(ctx.db, "synthetic-revised-policy", {
-      enabled: true,
-      manifest: {
-        ...active.manifest,
-        "product-identity": {
-          ...active.manifest["product-identity"]!,
-          promptVersion: "synthetic-next",
-        },
-      },
-    });
-    await expect(publish(ctx.db)).rejects.toThrow("evidence changed");
-    expect(
-      (await getProductMatchQueue(ctx.db, { productId: first.id })).items,
-    ).toEqual([]);
-  });
 
   it("requires stored pair evidence for a directed photo-review comparison", async () => {
     const source = await product("Synthetic directed source"),
@@ -335,7 +272,7 @@ describe("product match queue", () => {
       sourceUrls: [],
     });
     const command = {
-      assessmentId: pair.id,
+      suggestionId: pair.id,
       operationId: "synthetic-merge-command",
       verdict: "correct" as const,
       intent: "apply" as const,
@@ -346,13 +283,13 @@ describe("product match queue", () => {
         mergeId: photo.id,
       },
     };
-    const applied = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
+    const applied = await reviewSuggestion(ctx.db, kernelCtx(ctx), command);
     const appliedHistory = await readSuggestionDecisions(ctx.db, pair.id);
-    expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
+    expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), command)).toEqual(
       applied,
     );
     await expect(
-      reviewAssessment(ctx.db, kernelCtx(ctx), {
+      reviewSuggestion(ctx.db, kernelCtx(ctx), {
         ...command,
         application: {
           ...command.application,
@@ -367,7 +304,7 @@ describe("product match queue", () => {
         {
           keepId: bought.id,
           mergeId: photo.id,
-          assessmentId: pair.id,
+          suggestionId: pair.id,
           expectedFingerprint: pair.fingerprint!,
         },
       ),
@@ -552,8 +489,8 @@ describe("product_enrichment.propose_product_match", () => {
     expect(row).toMatchObject({ id: pair.id, source: "agent" });
     expect(row?.fingerprint).toEqual(expect.any(String));
     expect(row?.fingerprint).not.toBe(pair.fingerprint);
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: pair.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: pair.id,
       operationId: "synthetic-enriched-merge",
       verdict: "correct",
       intent: "apply",
@@ -567,8 +504,8 @@ describe("product_enrichment.propose_product_match", () => {
       () => expect.fail("A stale fingerprint must not merge"),
       (error: Error) => expect(error.message).toMatch(/fingerprint changed/),
     );
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: pair.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: pair.id,
       operationId: "synthetic-enriched-merge-current",
       verdict: "correct",
       intent: "apply",
@@ -658,8 +595,8 @@ describe("product match review surfaces", () => {
       actionable: true,
       conflict: false,
     });
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: wrong.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: wrong.id,
       operationId: crypto.randomUUID(),
       verdict: "wrong",
       intent: "history",
@@ -720,7 +657,7 @@ describe("product match review surfaces", () => {
           entityKind: "product",
           entityId: primaryProduct.id,
         })
-      ).map((proposal) => proposal.review.assessmentId),
+      ).map((proposal) => proposal.review.suggestionId),
     ).not.toContain(weakPublication.id);
   });
 
@@ -772,7 +709,7 @@ describe("product match review surfaces", () => {
 async function dismissPair(
   db: Parameters<typeof proposeProductMatch>[0],
   input: { productIds: readonly [ProductShortcode, ProductShortcode] },
-  context: Parameters<typeof reviewAssessment>[1],
+  context: Parameters<typeof reviewSuggestion>[1],
 ) {
   const ids = await Promise.all(
     input.productIds.map((id) => resolveOrThrow(db, "product", id)),
@@ -782,8 +719,8 @@ async function dismissPair(
     evidence: "Synthetic hide preference",
     sourceUrls: [],
   });
-  return reviewAssessment(db, context, {
-    assessmentId: pair.id,
+  return reviewSuggestion(db, context, {
+    suggestionId: pair.id,
     operationId: crypto.randomUUID(),
     verdict: "dismissed",
     suppression: {

@@ -1,4 +1,3 @@
-export { imageDescriptionReceiptWhere } from "./entity-definitions/image-description-inputs";
 import { runShortcode } from "./identifier-fields";
 import { z } from "zod";
 

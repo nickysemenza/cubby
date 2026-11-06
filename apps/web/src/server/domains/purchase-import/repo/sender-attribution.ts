@@ -8,11 +8,9 @@ import { z } from "zod";
 
 import { broadcastSender, senderAddress } from "~/lib/vendor/domains";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb, isTransaction } from "~/server/db/helpers";
-import { databaseForTransaction } from "~/server/db/helpers";
+import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { vendor } from "~/server/db/retained-tables";
 import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
-import { lockCorrectionKey } from "~/server/generic/assessment/repo/correction-lock";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 type Db = Database | DrizzleTransaction;
@@ -23,6 +21,7 @@ export async function lockSenderAttributionAddress(
   address: string,
   tryOnly = false,
 ): Promise<boolean> {
+  // Receipt learning and member reassignment can claim the same previously unmapped address.
   const key = `vendor-sender:${address}`;
   const client = unwrapDb(db);
   if (tryOnly) {
@@ -38,10 +37,6 @@ export async function lockSenderAttributionAddress(
     await client.execute(
       sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`,
     );
-  await lockCorrectionKey(
-    isTransaction(db) ? databaseForTransaction(db) : db,
-    key,
-  );
   return true;
 }
 

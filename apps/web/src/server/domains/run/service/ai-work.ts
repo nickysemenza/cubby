@@ -5,10 +5,7 @@ import {
   mailReclassificationCheckpoint,
 } from "@cubby/schemas/email-actions";
 import { runEntityId } from "@cubby/schemas/identifiers";
-import {
-  OWNED_AI_WORK_PURPOSES,
-  suggestionSweepRunProgress,
-} from "@cubby/schemas/run-fields";
+import { OWNED_AI_WORK_PURPOSES } from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
 import { aiBudgetWindow } from "~/server/ai/budget-window";
@@ -19,7 +16,6 @@ import {
 } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import {
   readEvaluationErrorText,
-  readEvaluationOutcomes,
   readEvaluationTally,
   readFirstEvaluationErrors,
   type EvaluationScope,
@@ -62,33 +58,9 @@ export type AiWorkPorts = {
 export async function advanceAiWorkRun(
   db: Database,
   params: WorkflowRunParams,
-  ports: Pick<AiWorkPorts, "sweep"> = {},
 ) {
   const owner = await claimWorkflowRun(db, params);
   if (!owner) return null;
-  if (
-    owner.purpose === "suggestion_sweep" &&
-    !z.object({ rosterPrepared: z.literal(true) }).safeParse(owner.progress)
-      .success
-  ) {
-    await (
-      await import("./suggestion-sweep")
-    ).prepareSuggestionSweep(db, owner.id, {
-      ...ports.sweep,
-      context: ports.sweep?.context ?? {
-        ...buildCrudServices(db),
-        actorContext: buildActorContext(owner.actorUserId, owner.channel, {
-          oauthClientId: owner.oauthClientId,
-          deviceId: owner.deviceId,
-          runId: owner.id,
-        }),
-      },
-    });
-    // Preparation preserves the current Job generation.
-    const prepared = await readRun(db, owner.id);
-    if (!prepared) return null;
-    Object.assign(owner, prepared);
-  }
   if (owner.purpose === "ai_refresh") {
     const summary = await readAiRefreshWorkSummary(
       db,
@@ -114,7 +86,7 @@ export async function advanceAiWorkRun(
       },
       { requireNoOwnedPendingWork: complete },
     );
-    if (complete && !written) return advanceAiWorkRun(db, params, ports);
+    if (complete && !written) return advanceAiWorkRun(db, params);
     return summary.pending.length;
   }
   const work = await readAiWork(db, owner, params.attempt);
@@ -143,7 +115,7 @@ export async function advanceAiWorkRun(
   );
   // Work joined this Run after its roster read: continue with it instead of settling.
   if (!work.pending && !written && ownsAiWork(owner))
-    return advanceAiWorkRun(db, params, ports);
+    return advanceAiWorkRun(db, params);
   return work.pending;
 }
 
@@ -187,15 +159,7 @@ async function readAiWork(db: Database, owner: RunRow, attempt: number) {
       errorText: () => readEvaluationErrorText(db, scope),
     };
   }
-  const scope: EvaluationScope = { runId: owner.id, source: "requested" };
-  const outcomes = await readEvaluationOutcomes(db, scope);
-  return {
-    total: outcomes.tally.total,
-    pending: outcomes.tally.pending,
-    failed: outcomes.tally.failed > 0,
-    progress: suggestionSweepProgress(owner, outcomes, attempt),
-    errorText: () => readEvaluationErrorText(db, scope),
-  };
+  throw new Error(`Run ${owner.purpose} does not use the AI-work driver`);
 }
 
 export async function aiWorkItems(db: Database, owner: RunRow) {
@@ -282,28 +246,6 @@ function reclassificationProgress(
     complete,
     results,
   });
-}
-
-function suggestionSweepProgress(
-  owner: RunRow,
-  { tally, ...outcomes }: Awaited<ReturnType<typeof readEvaluationOutcomes>>,
-  attempt: number,
-) {
-  const legacy = suggestionSweepRunProgress.safeParse(owner.progress).data
-    ?.legacyCounts;
-  return {
-    ...suggestionSweepRunProgress.parse({
-      total: tally.total,
-      done: tally.total - tally.pending,
-      applied: (legacy?.applied ?? 0) + outcomes.applied,
-      queued: (legacy?.queued ?? 0) + outcomes.queued,
-      failed: (legacy?.failed ?? 0) + tally.failed,
-      diagnostics: outcomes.diagnostics,
-    }),
-    ...(legacy ? { legacyCounts: legacy } : {}),
-    rosterPrepared: true,
-    attempt,
-  };
 }
 
 /** A member-raised budget may wake queued work earlier; exhausted or controlled Jobs stay stopped. */

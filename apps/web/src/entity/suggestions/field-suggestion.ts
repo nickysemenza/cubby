@@ -180,8 +180,8 @@ export function savedSuggestionEntityId(
 export interface FieldSuggestionSource {
   readonly entityId?: string;
   readonly savedRecord?: boolean;
-  /** Assessment UUID backing live inference, when the server publishes it. */
-  readonly assessmentId?: string;
+  /** Suggestion UUID backing live inference, when the server publishes it. */
+  readonly suggestionId?: string;
   basisMode: "provided" | "suggested";
   readonly entity: ShortcodeEntity;
   /** Bare manifest field keys of `entity` being requested this call. */

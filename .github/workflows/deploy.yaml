@@ -43,6 +43,3 @@ jobs:
           production-migration-through: ${{ vars.PRODUCTION_MIGRATION_THROUGH }}
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Bootstrap deployed scheduler
-        run: curl --fail --silent --show-error --retry 3 https://cubby.nickysemenza.com/ --output /dev/null

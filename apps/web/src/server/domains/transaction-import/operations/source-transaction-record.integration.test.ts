@@ -224,8 +224,8 @@ describe("finance.record source and Job lifecycle contention", () => {
       const originalEmail = await readEmail(ctx.db, emailIdentity);
       expect(originalEmail).not.toBeNull();
       const search = await enqueueJob(ctx.db, {
-        key: "derived:drain",
-        kind: "derived.drain",
+        key: "synthetic:unrelated-work",
+        kind: "synthetic.unrelated-work",
         input: {},
       });
       const cloudCompletions: Awaited<
@@ -278,7 +278,7 @@ describe("finance.record source and Job lifecycle contention", () => {
           .parse(
             (
               await getDb(ctx.db).execute(
-                sql`SELECT generation, xmin::text AS xmin FROM "Job" WHERE key = 'derived:drain'`,
+                sql`SELECT generation, xmin::text AS xmin FROM "Job" WHERE key = 'synthetic:unrelated-work'`,
               )
             ).rows[0],
           );

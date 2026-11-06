@@ -4,7 +4,7 @@ import type {
 } from "@cubby/schemas/ai";
 import type { ReactNode } from "react";
 
-import { assessment } from "~/integrations/tanstack-query/generated/domains/assessment.gen";
+import { suggestion as suggestionApi } from "~/integrations/tanstack-query/generated/domains/suggestion.gen";
 
 import { stringLabelOf } from "./field-suggestion";
 import type { SuggestionOutcomeSurface } from "./suggestion-outcome-mark";
@@ -67,12 +67,12 @@ export function FieldSuggestionHint({
       pending={pending}
       onApply={onApply}
       onDismiss={async () => {
-        const assessmentId =
-          suggestion?.assessmentId ??
-          (outcome?.kind === "evaluated" ? outcome.assessmentId : undefined);
-        if (!assessmentId) throw new Error("Suggestion Assessment is missing");
-        await assessment.review.call({
-          assessmentId,
+        const suggestionId =
+          suggestion?.suggestionId ??
+          (outcome?.kind === "evaluated" ? outcome.suggestionId : undefined);
+        if (!suggestionId) throw new Error("Suggestion Suggestion is missing");
+        await suggestionApi.review.call({
+          suggestionId,
           operationId: crypto.randomUUID(),
           verdict: "wrong",
           intent: "history",

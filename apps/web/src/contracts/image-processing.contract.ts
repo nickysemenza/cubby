@@ -15,6 +15,8 @@ import {
   renewCompanionImageProcessingOutput,
   evaluateAppleImageDescriptionInput,
   evaluateAppleImageDescriptionOutput,
+  confirmImageDescriptionInput,
+  imageDescriptionCorrection,
   imageProcessingStatusInput,
   imageProcessingStatusOutput,
   scheduleImageProcessingInput,
@@ -67,6 +69,14 @@ export const imageProcessingContract = defineContract(
       input: retryImageProcessingInput,
       output: retryImageProcessingOutput,
       invalidates: ["image"],
+    }),
+    confirmDescription: mutation({
+      exposure: "capability",
+      description:
+        "Confirm an Image description for its current content hash. This changes selected text only; model analysis remains evidence.",
+      input: confirmImageDescriptionInput,
+      output: imageDescriptionCorrection,
+      invalidates: ["image", "product"],
     }),
     status: query({
       exposure: "capability",

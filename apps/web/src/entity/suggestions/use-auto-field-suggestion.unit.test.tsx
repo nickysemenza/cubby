@@ -4,7 +4,7 @@ import type {
   FieldSuggestionsInput,
   FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
-import { assessmentReviewInput } from "@cubby/schemas/assessment";
+import { suggestionReviewInput } from "@cubby/schemas/suggestion";
 import { sleep } from "@cubby/shared/retry";
 import {
   act,
@@ -40,7 +40,7 @@ let harness: ReturnType<typeof createBrowserTestHarness>;
 let restoreDispatch: () => void;
 let calls: FieldSuggestionsInput[];
 let reviewCalls: {
-  assessmentId?: string;
+  suggestionId?: string;
   intent: string;
   application?: unknown;
 }[];
@@ -56,16 +56,16 @@ beforeEach(() => {
   calls = [];
   reviewCalls = [];
   restoreDispatch = overrideOperationDispatch(async (operation, input) => {
-    if (operation !== "assessment.review")
+    if (operation !== "suggestion.review")
       throw new Error(`Unexpected operation: ${operation}`);
-    const { assessmentId, intent, application } =
-      assessmentReviewInput.parse(input);
-    if (!assessmentId) throw new Error("Review requires an assessment ID.");
-    reviewCalls.push({ assessmentId, intent, application });
+    const { suggestionId, intent, application } =
+      suggestionReviewInput.parse(input);
+    if (!suggestionId) throw new Error("Review requires an suggestion ID.");
+    reviewCalls.push({ suggestionId, intent, application });
     return {
       ok: true,
       data: {
-        assessmentId,
+        suggestionId,
         feedbackId: crypto.randomUUID(),
         status: "recorded",
         applied: intent === "apply",
@@ -192,7 +192,7 @@ function Harness({
 }
 
 const tradeSuggestion: FieldSuggestion = {
-  assessmentId: "77777777-7777-4777-8777-777777777777",
+  suggestionId: "77777777-7777-4777-8777-777777777777",
   value: "cabinetry",
   label: "Cabinetry",
   detail: null,
@@ -788,7 +788,7 @@ describe("useAutoFieldSuggestion", () => {
   it("preserves a newer category draft when explicit finance Apply finishes later, while acknowledging its saved default", async () => {
     let form!: UseFormReturn<FieldValues>;
     const proposal: FieldSuggestion = {
-      assessmentId: "88888888-8888-4888-8888-888888888888",
+      suggestionId: "88888888-8888-4888-8888-888888888888",
       value: "SPC-4K7M",
       label: "Fixture clothing",
       detail: null,
@@ -862,7 +862,7 @@ describe("useAutoFieldSuggestion", () => {
     expect(form.getValues("name")).toBe("Unsaved sibling note");
     expect(reviewCalls).toContainEqual(
       expect.objectContaining({
-        assessmentId: proposal.assessmentId,
+        suggestionId: proposal.suggestionId,
         intent: "apply",
         application: { kind: "saved_field", recordId: "EXP-4K7M" },
       }),
@@ -876,7 +876,7 @@ describe("useAutoFieldSuggestion", () => {
     async (change) => {
       let form!: UseFormReturn<FieldValues>;
       const proposal: FieldSuggestion = {
-        assessmentId: "99999999-9999-4999-8999-999999999999",
+        suggestionId: "99999999-9999-4999-8999-999999999999",
         value: "SPC-4K7M",
         label: "Fixture clothing",
         detail: null,
@@ -994,7 +994,7 @@ describe("useAutoFieldSuggestion", () => {
     await waitFor(() =>
       expect(reviewCalls).toContainEqual(
         expect.objectContaining({
-          assessmentId: tradeSuggestion.assessmentId,
+          suggestionId: tradeSuggestion.suggestionId,
           intent: "draft",
         }),
       ),

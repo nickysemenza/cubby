@@ -1,28 +1,40 @@
 import { describe, expect, it } from "vitest";
 
-import { buildProductRelatednessLedger } from "./relatedness-ledger";
+import { buildRelatednessLedger } from "./relatedness-ledger";
 
-describe("buildProductRelatednessLedger", () => {
+describe("buildRelatednessLedger", () => {
   it("deduplicates tag evidence into scored candidates and keeps tags display-only", () => {
-    const ledger = buildProductRelatednessLedger(
-      [{ id: "PRD-SCORE", title: "Scored", similarity: 0.9 }],
-      [
-        { shortcode: "PRD-SCORE", name: "Ignored title", tags: ["useful"] },
-        { shortcode: "PRD-TAG", name: "Tagged", tags: ["compatible"] },
-      ],
-      () => true,
-    );
+    const ledger = buildRelatednessLedger("recipe", [
+      {
+        shortcode: "RCP-SCORE",
+        title: "Scored",
+        score: 0.9,
+        evidence: [{ signal: "Similar meaning", detail: null, weight: 0.9 }],
+      },
+      {
+        shortcode: "RCP-SCORE",
+        title: "Ignored title",
+        score: 0,
+        evidence: [{ signal: "Shared tag", detail: "useful", weight: 0 }],
+      },
+      {
+        shortcode: "RCP-TAG",
+        title: "Tagged",
+        score: 0,
+        evidence: [{ signal: "Shared tag", detail: "compatible", weight: 0 }],
+      },
+    ]);
 
     expect(ledger).toEqual([
       expect.objectContaining({
-        shortcode: "PRD-SCORE",
+        shortcode: "RCP-SCORE",
         score: 0.9,
         evidence: [
           expect.objectContaining({ signal: "Similar meaning" }),
           expect.objectContaining({ signal: "Shared tag" }),
         ],
       }),
-      expect.objectContaining({ shortcode: "PRD-TAG", score: 0 }),
+      expect.objectContaining({ shortcode: "RCP-TAG", score: 0 }),
     ]);
   });
 });

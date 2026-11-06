@@ -32,8 +32,8 @@ export function RecordProposals({ id }: { id: string }) {
   );
   const loading = useHydratedLoading(query.isLoading);
   const accept = useAcceptClean(
-    (assessmentId) =>
-      query.data?.items.find((row) => row.assessmentId === assessmentId)
+    (suggestionId) =>
+      query.data?.items.find((row) => row.suggestionId === suggestionId)
         ?.record,
   );
   const clean = query.data?.meta.cleanCount ?? 0;

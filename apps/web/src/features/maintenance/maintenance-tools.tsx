@@ -1,7 +1,7 @@
 import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import type {
   ClassifyImageProvenanceOut,
-  SearchIndexRepairCounters,
+  SearchRebuildResult,
 } from "@cubby/schemas/maintenance";
 import type { MaintenanceCounts } from "@cubby/schemas/problems";
 import { getErrorMessage } from "@cubby/shared";
@@ -425,26 +425,17 @@ function PruneAliasesAction() {
   );
 }
 
-// One cancellable stream: retire orphaned documents, rebuild missing and
-// stale projections, publish embedding refreshes. The toast reports THIS run's
-// findings and outcomes; the Awaiting-work card is the live truth afterwards.
 function RepairIndexAction() {
   return (
-    <BackfillButton<SearchIndexRepairCounters>
+    <BackfillButton<SearchRebuildResult>
       run={(signal) => openSearchIndexRepairStream(signal)}
       invalidateTags={ripple.search}
       idleLabel="Run"
       pendingLabel="Repairing…"
-      toastResult={(r) => {
-        const findings = r.orphaned + r.missing + r.stale;
-        return {
-          tone: findings > 0 ? "success" : "info",
-          message:
-            findings > 0
-              ? `Scanned ${r.scanned}: retired ${r.retired} orphaned, rebuilt ${r.rebuilt} (${r.missing} missing, ${r.stale} stale), published ${countLabel(r.published, "embedding refresh")}.`
-              : `Scanned ${r.scanned}: nothing to repair.`,
-        };
-      }}
+      toastResult={(r) => ({
+        tone: r.failedPages ? "info" : "success",
+        message: `Rebuild finished: ${countLabel(r.processedRecords, "record computation")}, ${countLabel(r.failedPages, "failed page")}.`,
+      })}
     />
   );
 }

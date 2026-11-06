@@ -160,9 +160,6 @@ const detailSlots = {
     "unit-mappings": slot(() =>
       named(import("~/features/product/slots"), "ProductUnitMappings"),
     ),
-    "fits-with": slot(() =>
-      named(import("~/features/product/slots"), "ProductFitsWith"),
-    ),
     cookbooks: slot(
       () => named(import("~/features/product/slots"), "ProductCookbooks"),
       (product) => product.cookbooks.length > 0,
@@ -361,7 +358,7 @@ const detailSlots = {
     "import-debug-log": runReportSlot("import-debug-log", undefined, true),
     suggestions: slot(
       () => named(import("~/features/run/slots"), "RunSuggestions"),
-      (run) => run.purpose === "suggestion_sweep",
+      (run) => run.purpose === "sweep",
     ),
     "photo-batch": slot(
       () =>
@@ -596,9 +593,6 @@ const headerActions: HeaderActionTable = {
   ),
   expense: headerAction<"expense">(() =>
     named(import("~/entity/entity-detail/report-slot"), "ExpenseDetailActions"),
-  ),
-  product: headerAction<"product">(() =>
-    named(import("~/features/product/product-runs"), "ProductDetailActions"),
   ),
   image: headerAction<"image">(() =>
     named(

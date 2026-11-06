@@ -67,7 +67,7 @@ export async function pauseExecutionRun(
   // Recovery resumes these purposes in a later window: AI work through
   // Job execution, agent imports and Mail discovery through
   // `resumeFundingPausedRuns` (run/service/ai-work.ts).
-  const recoverable = sql`${run.purpose} IN (${runPurpose.enum.mail_reclassify}, ${runPurpose.enum.suggestion_sweep}, ${runPurpose.enum.mail_import}, ${runPurpose.enum.photo_inventory}, ${runPurpose.enum.mail_discovery})`;
+  const recoverable = sql`${run.purpose} IN (${runPurpose.enum.mail_reclassify}, ${runPurpose.enum.mail_import}, ${runPurpose.enum.photo_inventory}, ${runPurpose.enum.mail_discovery})`;
   const paused = await unwrapDb(db)
     .update(run)
     .set({
@@ -132,7 +132,7 @@ export async function pauseForFunding(
       availableAt: until,
     });
     await unwrapDb(tx)
-      .execute(sql`UPDATE "Job" SET "waitReason"=${jobWaitReason.enum.ai_funding_window}, "waitUntil"=${until.toISOString()}::timestamp
+      .execute(sql`UPDATE "Job" SET "waitReason"=${jobWaitReason.enum.ai_funding_window}, "availableAt"=${until.toISOString()}::timestamp
       WHERE key=${key} AND state=${jobState.enum.queued}`);
   });
 }

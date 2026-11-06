@@ -1,57 +1,73 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import type { ImageId } from "@cubby/schemas/identifiers";
 import { imageDescriptionConfirmationOwner } from "@cubby/schemas/image-processing";
-import { and, eq, sql } from "drizzle-orm";
-import { z } from "zod";
+import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import { suggestionTable, image } from "~/server/db/schema";
 import {
-  suggestionRecordId,
-  transitionAssessmentState,
-  transitionAssessmentStates,
-} from "~/server/generic/assessment/repo/assessment-state";
+  getDb,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
+import { image } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
-/** Caller holds content, record-intent, Image and target projection locks in that order. */
-export async function writeImageDescriptionConfirmation(
+/** The Image lock fences confirmation against content replacement; inference never writes these columns. */
+export async function confirmImageDescription(
   db: Database,
-  state: Pick<
-    typeof suggestionTable.$inferSelect,
-    "id" | "recordId" | "fingerprint" | "data"
-  >,
-  description: string,
-  owner: z.infer<typeof imageDescriptionConfirmationOwner>,
+  input: {
+    imageId: ImageId;
+    contentHash: string;
+    description: string;
+    operationId: string;
+    expectedEffectId: string | null;
+  },
+  actorUserId: string,
 ) {
-  const [source] = await getDb(db)
-    .select({ hash: image.sha256 })
-    .from(image)
-    .where(
-      and(
-        eq(image.id, parseEntityId("image", state.recordId)),
-        notDeleted(image),
-      ),
+  return withTransactionDatabase(db, async (tx) => {
+    const [source] = await getDb(tx)
+      .select()
+      .from(image)
+      .where(and(eq(image.id, input.imageId), notDeleted(image)))
+      .for("update");
+    if (!source || source.sha256 !== input.contentHash)
+      throw new Error("Image evidence changed before confirmation");
+    const current = imageDescriptionConfirmationOwner
+      .nullable()
+      .parse(source.descriptionConfirmationOwner);
+    // A retried operation returns its own committed effect; a retry that lost
+    // the race to a newer confirmation must not overwrite it.
+    if (
+      current?.effectId === input.operationId &&
+      source.confirmedDescription !== null &&
+      source.descriptionConfirmedAt
     )
-    .for("update")
-    .limit(1);
-  if (!source || state.fingerprint !== source.hash)
-    throw new Error("Image evidence changed before confirmation");
-  await transitionAssessmentStates(
-    db,
-    and(
-      eq(suggestionTable.family, "image_description"),
-      eq(suggestionTable.recordId, suggestionRecordId(state)),
-      sql`${suggestionTable.id} <> ${state.id}`,
-    ),
-    { confirmedValue: null },
-  );
-  await transitionAssessmentState(db, state.id, {
-    confirmedValue: { present: true, value: description },
-    status: "applied",
-    data: {
-      ...z.record(z.string(), z.json()).parse(state.data ?? {}),
-      confirmationOwner: imageDescriptionConfirmationOwner.parse(owner),
-    },
+      return {
+        description: source.confirmedDescription,
+        confirmedAt: source.descriptionConfirmedAt.toISOString(),
+        owner: current,
+      };
+    if ((current?.effectId ?? null) !== input.expectedEffectId)
+      throw new Error("Image description changed before confirmation");
+    const owner = imageDescriptionConfirmationOwner.parse({
+      kind: "member",
+      effectId: input.operationId,
+      actorUserId,
+    });
+    const confirmedAt = new Date();
+    await getDb(tx)
+      .update(image)
+      .set({
+        confirmedDescription: input.description,
+        descriptionContentHash: input.contentHash,
+        descriptionConfirmedAt: confirmedAt,
+        descriptionConfirmationOwner: owner,
+      })
+      .where(eq(image.id, input.imageId));
+    await recordChange(tx, { kind: "source", categories: ["image"] });
+    return {
+      description: input.description,
+      confirmedAt: confirmedAt.toISOString(),
+      owner,
+    };
   });
-  await recordChange(db, { kind: "source", categories: ["image"] });
 }

@@ -9,6 +9,7 @@ import {
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fields";
+import { RUN_KINDS } from "@cubby/schemas/run-fields";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { eq } from "drizzle-orm";
 import { driveAiWork } from "tooling/ai-work";
@@ -16,6 +17,7 @@ import {
   taxonomyId,
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import type { TestDbContext } from "tooling/test-setup";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
@@ -28,27 +30,40 @@ import {
   suggestionTable,
 } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
-import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
-import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import {
   lookupShortcodes,
   resolveLiveShortcode,
+  resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import {
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
 import { ensureRun } from "../repo/ensure-run";
+import type { StepPlan } from "./step-run";
 import {
-  startSuggestionSweep as startSweep,
-  resumeSuggestionSweep as resumeSweep,
+  rosterSuggestionTargets,
+  suggestionSweepInput,
+  type SuggestionSweepPorts,
 } from "./suggestion-sweep";
+import { startSweep, sweepStepDrivers } from "./sweep";
 
 type Ctx = Pick<TestDbContext, "db" | "actor">;
-type SweepPorts = Parameters<typeof startSweep>[2];
+type SweepPorts = SuggestionSweepPorts;
+type SweepInput = {
+  entity: ShortcodeEntity;
+  fields: string[];
+  filters: Record<
+    string,
+    import("./../repo/suggestion-sweep-state").SuggestionValue
+  >;
+  trigger?: "manual" | "scheduled";
+};
 
 export const PRIMARY_MODEL =
   "typesafe/jev" as const satisfies SupportedDecisionModel;
@@ -58,28 +73,66 @@ export const kernelCtx = (ctx: Ctx) =>
     createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
   );
 
-/** Defaults: pinned primary model, no pacing waits. */
+/** Provider seam shared by the existing review journeys. */
 const sweepDefaults = {
   decisionModel: () => PRIMARY_MODEL,
-  wait: async () => {},
 };
+function fieldPlan(
+  target: Omit<SweepInput, "trigger">,
+  ports: SweepPorts,
+): StepPlan {
+  return RUN_KINDS.sweep.steps
+    .filter((step) => step.family === "field")
+    .map((declaration) => ({
+      declaration,
+      driver:
+        declaration.key === "field_roster"
+          ? {
+              ...sweepStepDrivers.field_roster,
+              page: async ({ db, run }) => ({
+                kind: "progress" as const,
+                delta: { done: 1 },
+                cursor: 1,
+                tallies: {
+                  evaluations: await rosterSuggestionTargets(
+                    db,
+                    run.id,
+                    await suggestionSweepInput(db, target, ports),
+                    ports,
+                  ),
+                },
+                done: true,
+              }),
+            }
+          : sweepStepDrivers.field_evaluate,
+    }));
+}
 export const startSuggestionSweep = async (
   db: Database,
-  input: Parameters<typeof startSweep>[1],
+  input: SweepInput,
   ports: SweepPorts,
 ) => {
   const options = { ...sweepDefaults, ...ports };
-  const started = await startSweep(db, input, options);
-  await driveAiWork(db, started.id, { sweep: options });
-  return started;
+  const { trigger = "manual", ...target } = input;
+  const id = await startSweep(db, ports.context.actorContext, {
+    trigger,
+    families: [{ family: "field", scope: { targets: [target] } }],
+  });
+  await driveAiWork(db, id, { sweep: options }, fieldPlan(target, options));
+  return { id };
 };
 export const resumeSuggestionSweep = async (
   db: Database,
-  runId: Parameters<typeof resumeSweep>[1],
+  runId: RunId,
   ports: SweepPorts,
 ) => {
   const options = { ...sweepDefaults, ...ports };
-  await resumeSweep(db, runId);
+  await controlWorkflowRun(
+    db,
+    ports.context.actorContext,
+    { runPublicId: await runCode(db, runId), action: "resume" },
+    "sweep",
+  );
   await driveAiWork(db, runId, { sweep: options });
 };
 
@@ -143,7 +196,7 @@ export async function seedPending(
     trigger: "manual",
     status: "completed",
   });
-  const saved = await publishFieldAssessment(
+  const saved = await seedFieldSuggestion(
     ctx.db,
     {
       runId,
@@ -167,9 +220,7 @@ export async function seedPending(
 
 /** Eligibility follows current field inputs; historical state need not be rewritten. */
 export async function isSuggestionReviewable(db: Database, id: string) {
-  const { listSuggestions } =
-    await import("~/server/generic/assessment/repo/suggestion-review");
-  return (await listSuggestions(db, { minConfidence: 0 })).some(
+  return (await readReviewFields(db, { minConfidence: 0 })).some(
     (row) => row.id === id,
   );
 }
@@ -281,3 +332,48 @@ export const categoryPorts = (confidence = 0.97) => ({
     registry: { "product.categoryId": categorySpec },
   },
 });
+
+/** Existing review journeys use the production key reader and field hydrator. */
+export async function readReviewFields(
+  db: Database,
+  input: {
+    entity?: ShortcodeEntity;
+    field?: string;
+    fields?: string[];
+    kind?: "addition" | "correction";
+    status?: "pending" | "applied" | "rejected" | "superseded";
+    minConfidence?: number;
+    limit?: number;
+    recordIds?: string[];
+    runId?: string;
+  } = {},
+) {
+  if (input.recordIds && !input.entity)
+    throw new Error("recordIds filters one entity's records; name its entity.");
+  const { fieldSuggestionKeys, readFieldSuggestions } =
+    await import("~/server/generic/suggestions/repo/suggestion-review");
+  const keys = await fieldSuggestionKeys(db, {
+    status: input.status ?? "pending",
+    entities: input.entity ? [input.entity] : undefined,
+    runId: input.runId,
+    recordUuids:
+      input.recordIds && input.entity
+        ? [
+            ...(
+              await resolveLiveShortcodes(db, input.recordIds, input.entity)
+            ).values(),
+          ]
+        : undefined,
+  });
+  const selected = keys.filter(
+    (row) =>
+      row.confidence >= (input.minConfidence ?? 0.5) &&
+      (!input.field || row.field === input.field) &&
+      (!input.fields || input.fields.includes(row.field)) &&
+      (!input.kind || row.kind === input.kind),
+  );
+  return readFieldSuggestions(
+    db,
+    selected.slice(0, input.limit ?? 500).map((row) => row.id),
+  );
+}

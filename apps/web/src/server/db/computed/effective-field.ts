@@ -562,18 +562,3 @@ export const inheritanceLadderSql = (
     FROM ${name(walk)}
   )`;
 };
-
-/**
- * Whether `field` inherits through its entity's hierarchy first, and the
- * entity it references (null for a plain value), for readers that show a
- * ladder; null when the field declares no such chain.
- */
-export const hierarchyInheritance = (
-  entity: Entity,
-  field: string,
-): { reference: Entity | null } | null => {
-  const chain = chainOf(entity, field);
-  return chain?.from[0]?.kind === "hierarchy"
-    ? { reference: chain.reference }
-    : null;
-};

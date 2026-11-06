@@ -1,38 +1,9 @@
 import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
-import { and, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
+import { and, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { entityEmbedding } from "~/server/db/retained-tables";
-
-export async function assertEmbeddingArtifactCanBeDeleted(
-  db: Database,
-  artifactId: string,
-) {
-  const [artifact] = await getDb(db)
-    .select({
-      id: entityEmbedding.id,
-      artifactState: entityEmbedding.artifactState,
-      deletedAt: entityEmbedding.deletedAt,
-      deletionId: entityEmbedding.deletionId,
-    })
-    .from(entityEmbedding)
-    .where(eq(entityEmbedding.id, artifactId))
-    .limit(1);
-  if (!artifact || artifact.deletionId) return false;
-  if (
-    artifact.artifactState === embeddingArtifactState.enum.selected &&
-    !artifact.deletedAt
-  )
-    throw new Error("Cannot delete a selected embedding artifact");
-  if (
-    artifact.artifactState !== embeddingArtifactState.enum.retired &&
-    artifact.artifactState !== embeddingArtifactState.enum.failed &&
-    !artifact.deletedAt
-  )
-    return false;
-  return true;
-}
 
 export async function findDeletableEmbeddingArtifactIds(
   db: Database,
@@ -66,26 +37,16 @@ export async function findDeletableEmbeddingArtifactIds(
   );
 }
 
-export async function recordEmbeddingDeletion(
+/** Receipts apply only while artifacts remain deletable. */
+export async function recordEmbeddingDeletions(
   db: Database,
-  artifactId: string,
-  deletionId: string,
+  receipts: readonly { id: string; receipt: string }[],
 ) {
-  await getDb(db)
-    .update(entityEmbedding)
-    .set({ artifactState: "retired", deletedAt: new Date(), deletionId })
-    .where(
-      and(
-        eq(entityEmbedding.id, artifactId),
-        isNull(entityEmbedding.deletionId),
-        ne(entityEmbedding.artifactState, embeddingArtifactState.enum.selected),
-        or(
-          isNotNull(entityEmbedding.deletedAt),
-          inArray(entityEmbedding.artifactState, [
-            embeddingArtifactState.enum.retired,
-            embeddingArtifactState.enum.failed,
-          ]),
-        ),
-      ),
-    );
+  for (let offset = 0; offset < receipts.length; offset += 200) {
+    await getDb(db).execute(sql`
+      UPDATE "EntityEmbedding" e SET "deletionId" = r.receipt, "deletedAt" = coalesce(e."deletedAt", now()), "artifactState" = ${embeddingArtifactState.enum.retired}
+      FROM jsonb_to_recordset(${JSON.stringify(receipts.slice(offset, offset + 200))}::jsonb) AS r(id uuid, receipt text)
+      WHERE e.id = r.id AND e."deletionId" IS NULL AND e."artifactState" <> ${embeddingArtifactState.enum.selected}
+        AND (e."deletedAt" IS NOT NULL OR e."artifactState" IN (${embeddingArtifactState.enum.retired}, ${embeddingArtifactState.enum.failed}))`);
+  }
 }

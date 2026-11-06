@@ -23,7 +23,7 @@ import {
   generatedMcpEntityMutationCreateResultSchema,
   generatedMcpEntityMutationUpdateResultSchema,
 } from "~/server/generated/entity-bindings.gen";
-import { ENTITY_KERNEL_OPERATIONS } from "~/server/generated/entity-kernel-bindings.gen";
+import { ENTITY_KERNEL_OPERATIONS } from "~/server/generated/entity-kernel-runtime.gen";
 import { createMcpServer } from "~/server/mcp/server";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {

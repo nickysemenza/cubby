@@ -18,7 +18,6 @@ type Kind = "query" | "mutation";
 
 /** Entity-kernel verbs; their schemas and executor live in `server/mcp/kernel-actions.ts`. */
 export const kernelActionName = z.enum([
-  "renderCards",
   "get",
   "list",
   "search",

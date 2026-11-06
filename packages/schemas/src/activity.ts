@@ -24,7 +24,6 @@ const activityIconFallback = {
   product_enrichment: "product",
   photo_inventory: "inventory",
   ai_suggest: "run",
-  suggestion_sweep: "run",
   ai_refresh: "run",
   background: "run",
   file_import: "purchase",

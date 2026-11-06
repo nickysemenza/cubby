@@ -35,7 +35,7 @@ function isTerminalReadiness(status: string | undefined): boolean {
  * `search.requestEmbeddingRefresh` only reports `{ accepted: true }` — the
  * refresh runs on the queue, and there is no batch left to watch for
  * completion. This is what actually observes it landing: the EXISTING
- * entity recommendation query, re-checked on a fixed interval instead of a
+ * related-records query, re-checked on a fixed interval instead of a
  * background-job poll.
  *
  * `status` is read via `notifyStatus` rather than as a hook argument so the
@@ -51,7 +51,7 @@ export function useEmbeddingReadinessPoll(
   phaseRef.current = phase;
   const deadlineRef = useRef<number | null>(null);
 
-  // Switching products abandons any in-flight poll — left running, it would
+  // Switching records abandons any in-flight poll — left running, it would
   // keep re-checking (and could report readiness for) the entity the rail
   // just left behind.
   const entityRef = useRef(entityId);

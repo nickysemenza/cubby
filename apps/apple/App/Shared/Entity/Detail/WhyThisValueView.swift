@@ -336,7 +336,7 @@ struct WhyThisValueView: View {
             }
         }
         technicalDetails(explanation, envelope: envelope)
-        if let envelope { freshness(envelope, comparison: explanation.comparison) }
+        if let envelope { freshness(envelope) }
     }
 
     private func effectiveResult(_ envelope: FieldEnvelope) -> some View {
@@ -667,9 +667,9 @@ struct WhyThisValueView: View {
         }
     }
 
-    /// The result's own age and the refresh work, kept apart from the live comparison: a cached
+    /// The result's own age and refresh work: a cached
     /// result's recorded provenance is never restated as a current observation.
-    private func freshness(_ envelope: FieldEnvelope, comparison: FieldLiveComparison) -> some View {
+    private func freshness(_ envelope: FieldEnvelope) -> some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             switch envelope.result {
             case .cached(_, let computedAt, let freshness):
@@ -680,22 +680,6 @@ struct WhyThisValueView: View {
                     case .unsupported(let kind): Text("Cached result (unsupported freshness: \(kind)) ·")
                     }
                     DateDisplay(computedAt)
-                }
-                switch comparison {
-                case .available(let available):
-                    if let live = (try? JSONValue(encoding: available.result)).flatMap(
-                        FieldEnvelope.parseResult)
-                    {
-                        HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.xs) {
-                            Text("Live now:")
-                            resultText(live, failure: nil)
-                        }
-                    }
-                case .unavailable(let unavailable):
-                    Text("Live comparison unavailable: \(unavailable.reason)")
-                case .unrecognized(let raw):
-                    Text("Unsupported live comparison: \(raw["kind"]?.stringValue ?? "unknown")")
-                        .foregroundStyle(FieldGuideTokens.warning)
                 }
             case .live:
                 Text("Live result")

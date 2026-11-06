@@ -1,9 +1,10 @@
+import { relatedRecordSignalSchema } from "./related-record-signals";
 import { z } from "zod";
 import { type Entity, entitySchema } from "./entity-core";
 export {
   entityInspectorMetadata,
   type EntityInspectorMetadata,
-} from "./generated/entity-inspector.gen";
+} from "./generated/entity-record-metadata.gen";
 import {
   imagePolicyCatalog,
   type ImageDisplayBinding,
@@ -51,7 +52,6 @@ export type {
   ControlRendererId,
 } from "./generated/entity-field-model.gen";
 export type { DetailSlotId, ListSlotId } from "./generated/entity-summary.gen";
-import { relatednessSignalSchema } from "./relatedness";
 import {
   type EntityRelationship,
   entityLifecycleSchema,
@@ -145,9 +145,9 @@ export const entityDescriptor = z.object({
   searchable: z.boolean(),
   /** Whether this searchable entity also gets an `EntityEmbedding` vector. */
   embeddable: z.boolean(),
+  relatednessSignals: z.array(relatedRecordSignalSchema).readonly(),
   countable: z.boolean(),
   relationships: z.array(entityRelationshipSchema).readonly(),
-  relatednessSignals: z.array(relatednessSignalSchema).readonly().optional(),
   lifecycle: entityLifecycleSchema,
   mcp: z.array(mcpOp).readonly(),
 });

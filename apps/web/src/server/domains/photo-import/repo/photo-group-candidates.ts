@@ -16,9 +16,9 @@ import {
 } from "~/server/db/helpers";
 import { suggestionTable, product } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
 
 import {
   photoProductCandidates,
@@ -65,7 +65,7 @@ export async function rejectPhotoProductCandidate(
         { productId: input.productId },
         "run",
       );
-      await reviewAssessment(
+      await reviewSuggestion(
         txDb,
         { ...context, db: txDb },
         {

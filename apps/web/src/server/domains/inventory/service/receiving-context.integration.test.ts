@@ -10,7 +10,7 @@ import {
 import { proposeProductMatch } from "~/server/domains/product/repo/match/product-match-review";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
   createLocationFixture,
   createProductFixture,
@@ -85,8 +85,8 @@ describe("receiving context", () => {
     expect(await totalUnits(photo.entityId, bought.entityId)).toBe(before);
 
     const [pair] = await listProductMatchRows(ctx.db, bought.entityId);
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: pair!.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: pair!.id,
       operationId: crypto.randomUUID(),
       verdict: "dismissed",
       suppression: {

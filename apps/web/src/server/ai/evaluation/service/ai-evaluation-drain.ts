@@ -1,6 +1,5 @@
 import { aiEvaluationTarget } from "@cubby/schemas/ai-evaluation";
 import { workWaitCause } from "@cubby/schemas/job";
-import { z } from "zod";
 
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { findErrorCause, scrubErrorMessage } from "~/lib/error-diagnostics";
@@ -10,7 +9,7 @@ import { findErrorCause, scrubErrorMessage } from "~/lib/error-diagnostics";
  * connection refresh evaluate a whole page and publish it in fenced chunks; other
  * features run each item's own guarded transactions under their lease. Activation,
  * pending state and generation are checked here; requester Runs and feature
- * execution arrive through `AiEvaluationExecution`; `defineDrain` owns publication,
+ * execution arrive through `AiEvaluationExecution`; `rowDrain` owns publication,
  * attempts and backoff.
  */
 import type { UnparsedError } from "~/lib/error-utils";
@@ -57,6 +56,11 @@ import {
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
+import {
+  rowDrain,
+  type DrainContext,
+  stopsDrainPage,
+} from "~/server/generic/background/drains";
 import type { DrainItem } from "~/server/generic/jobs/drain-store";
 import {
   JobDeferredError,
@@ -64,12 +68,6 @@ import {
   JobTargetError,
 } from "~/server/generic/jobs/errors";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
-import {
-  defineDrain,
-  type DrainContext,
-  type DrainHandler,
-  stopsDrainPage,
-} from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
 
 /**
@@ -237,16 +235,19 @@ function aiEvaluationPage(
   execution: AiEvaluationExecution,
   feature: string,
   token: string,
-): DrainHandler {
+  context: DrainContext,
+): BackgroundDrain {
   const paged = PAGE_FEATURES.has(feature);
-  return defineDrain<Prepared>({
+  return rowDrain<Prepared>({
+    name: aiEvaluationPageKey(feature),
+    transaction: context.fenced,
     store: aiEvaluationStore(feature, token),
     backoff: AI_EVALUATION_BACKOFF,
     limit: PAGE_LIMIT,
     isolationLevel: "serializable",
     maxAttempts: AI_EVALUATION_MAX_ATTEMPTS,
     weight: (item, prepared) => prepared.page?.ready.get(item.ref)?.weight ?? 1,
-    async prepare(db, items, context) {
+    async prepare(db, items) {
       const targets = new Map<string, EvaluationPageTarget>();
       const entries = new Map<string, Entry>();
       const failed = new Map<DrainItem, unknown>();
@@ -527,15 +528,14 @@ export async function runAiEvaluationPage(
     check: () => assertHeld(db),
   });
   try {
-    const { page } = await aiEvaluationPage(execution, feature, token).prepare(
-      db,
-      { key: aiEvaluationPageKey(feature), generation: 1, leaseToken: token },
-      context,
-    );
-    const counts = settledCounts.parse(page.result);
+    const page = await aiEvaluationPage(execution, feature, token, {
+      ...context,
+      name: aiEvaluationPageKey(feature),
+      attemptToken: token,
+    }).page(db, { deadline: Date.now() + 20_000 });
     return {
-      outcome: counts.processed ? "succeeded" : "skipped",
-      settled: counts.published + counts.failed,
+      outcome: page.processed ? "succeeded" : "skipped",
+      settled: page.settled ?? 0,
     };
   } catch (error) {
     const failure = classifyJobFailure(error);
@@ -563,14 +563,6 @@ export async function runAiEvaluationPage(
     await releaseAiEvaluationPage(db, token);
   }
 }
-
-const settledCounts = z
-  .object({
-    processed: z.number().catch(0),
-    published: z.number().catch(0),
-    failed: z.number().catch(0),
-  })
-  .catch({ processed: 0, published: 0, failed: 0 });
 
 /** Up to `FEATURE_LANES` features each round, most urgent first; product and connections page. */
 export function aiEvaluationDrain(

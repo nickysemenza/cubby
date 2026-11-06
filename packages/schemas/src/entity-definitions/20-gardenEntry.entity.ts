@@ -195,7 +195,7 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "notes",
         // Stored and sent as `notes`; a garden entry still reads as one "Note".
-        labelOverride: "Note",
+        label: "Note",
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
@@ -489,6 +489,9 @@ export const { definition, readSchemas } = defineEntityModel({
     },
   },
   extensions: {
+    relatednessSignals: [
+      { kind: "semantic", label: "Similar meaning", weight: 1, limit: 8 },
+    ],
     ports: {
       repository: {
         module: "~/server/domains/garden/repo/repository",

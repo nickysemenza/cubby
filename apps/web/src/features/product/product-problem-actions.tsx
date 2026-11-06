@@ -8,7 +8,7 @@ import { WorkActionTrigger } from "~/entity/work-queue/work-actions";
 import { useBackfill } from "~/features/maintenance/backfill-button";
 import { BACKFILL } from "~/features/maintenance/backfill-registry";
 import { ProblemItemsAction } from "~/features/work-queue/problem-items-action";
-import { recommendations } from "~/integrations/tanstack-query/generated/domains/recommendations.gen";
+import { productMatch } from "~/integrations/tanstack-query/generated/domains/productMatch.gen";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
@@ -79,7 +79,7 @@ export function DuplicateProductMergeFix({
   close: () => void;
 }) {
   const mutation = useActionMutation({
-    mutationFn: () => recommendations.mergeProductMatch.mutationOptions(),
+    mutationFn: () => productMatch.mergeProductMatch.mutationOptions(),
     success: "Merged Product identity",
     onSuccess: close,
   });
@@ -111,7 +111,7 @@ export function DuplicateProductMergeFix({
         mutation.mutate({
           keepId,
           mergeId,
-          assessmentId: pair.assessmentId,
+          suggestionId: pair.suggestionId,
           expectedFingerprint: pair.fingerprint,
         });
       }}

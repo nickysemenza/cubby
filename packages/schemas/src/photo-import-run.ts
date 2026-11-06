@@ -11,7 +11,7 @@ import {
 import { rawProductDetail } from "./product-raw-read";
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { z } from "zod";
-import { assessmentChildHandle } from "./assessment-reference";
+import { suggestionChildHandle } from "./suggestion-reference";
 import { productSummaryWithCover } from "./product-fields";
 
 import {
@@ -57,7 +57,7 @@ export type PhotoRunImageState = z.infer<typeof photoRunImageState>;
 export const photoRunImageOutcome = z.enum(["attached", "skipped"]);
 export type PhotoRunImageOutcome = z.infer<typeof photoRunImageOutcome>;
 const photoFieldSuggestionReferences = z.array(
-  z.object({ id: assessmentChildHandle, field: z.string(), value: z.json() }),
+  z.object({ id: suggestionChildHandle, field: z.string(), value: z.json() }),
 );
 
 /** A committed group's receipt survives a failed operation-ledger completion. */
@@ -136,7 +136,7 @@ export const photoGroupReview = z.object({
   rejectedBrandNames: z.array(z.string().trim().min(1)).optional(),
   /** Server-owned revision of an explicit field selection; ordinary saves retain it. */
   fieldDecisionRevisions: z.record(z.string(), z.string()).optional(),
-  /** Shared field Assessments, published without applying Product changes. */
+  /** Shared field Suggestions, published without applying Product changes. */
   fieldSuggestions: photoFieldSuggestionReferences.optional(),
   /** Server-captured existing Brand and photo evidence before a proposed Vendor exists. */
   brandCreateInputFingerprint: z.string().optional(),

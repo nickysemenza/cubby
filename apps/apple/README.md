@@ -33,6 +33,13 @@ restore all slices before a Mac/CLI build.
 After adding or removing app/test Swift files, run `pnpm apple gen` before a
 direct Xcode build. Low-level Nx build targets expect artifacts prepared by
 `pnpm apple check` locally or the shared setup action in CI.
+Native similarity reads use the generic `relatedness.forEntity` contract and render its
+readiness, entity references and evidence. The native manifest derives `hasRelatedness`
+from declared signals; both Apple layouts show the same generic related-records rail
+for eligible entities. Connection application uses Suggestion review;
+removed expense-project and inventory-placement recommendation proposals have no native
+acceptance path.
+
 The native typed-record keep-list retains schemas still decoded from generic kernel
 rows. The [native model pipeline](CubbyKit/Sources/CubbyAPI/README.md) owns generation
 and codec rules.

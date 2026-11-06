@@ -20,7 +20,6 @@ import {
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
-import { ENTITY_PREVIEW_RESOURCE } from "~/contracts/entity-preview";
 import { expenseContract } from "~/contracts/expense.contract";
 import { imageUploadContract } from "~/contracts/image-upload.contract";
 import { imageContract } from "~/contracts/image.contract";
@@ -49,7 +48,7 @@ import {
 } from "~/contracts/usda.contract";
 import { workQueueContract } from "~/contracts/work-queue.contract";
 
-import { assessmentContract } from "./assessment.contract";
+import { suggestionContract } from "./suggestion.contract";
 
 const usdaFoodLookupOut = z.object({ food: usdaFoodMcpOut });
 const usdaFood = (output: {
@@ -58,10 +57,6 @@ const usdaFood = (output: {
 
 /** MCP-only metadata: kernel verbs, tool descriptions, and schema/output shaping. */
 export const MCP_TOOL_DESCRIPTIONS = {
-  entity_preview: {
-    description:
-      "Show compact inline previews of existing household records by shortcode. Use deliberately when the member asks to see records or visual context helps; ordinary reads stay on entity_read.",
-  },
   activity: { description: "What changed recently, and what needs fixing." },
   ai: {
     description: "Agent-facing AI operations, usage, and suggestion work.",
@@ -171,11 +166,11 @@ export const MCP_TOOL_DESCRIPTIONS = {
 } as const;
 
 export const MCP_ACTION_OVERRIDES = {
-  "assessment.reviewBatch": mcpActionOverride(
-    assessmentContract.ops.reviewBatch,
+  "suggestion.reviewBatch": mcpActionOverride(
+    suggestionContract.ops.reviewBatch,
     {
       project: (items) => ({ items }),
-      output: mcpItemsEnvelope(assessmentContract.ops.reviewBatch.output),
+      output: mcpItemsEnvelope(suggestionContract.ops.reviewBatch.output),
     },
   ),
   "expense.analytics": mcpActionOverride(expenseContract.ops.analytics, {
@@ -329,16 +324,6 @@ export const MCP_ACTION_OVERRIDES = {
 } satisfies Readonly<Record<string, McpActionOverride>>;
 
 export const MCP_TOOLS = defineMcpTools({
-  entity_preview: {
-    actions: {
-      show: mcpAction({
-        op: kernelAction("renderCards", "query"),
-        uiResourceUri: ENTITY_PREVIEW_RESOURCE,
-        description:
-          "Render 1–20 existing records in caller order from shortcodes. Mixed entity kinds are supported. Returns names, canonical display images, declared preview facts and Cubby links; unavailable records remain visible individually. Read-only snapshot; no edits or automatic refresh.",
-      }),
-    },
-  },
   entity_read: {
     actions: {
       get: mcpAction({

@@ -8,7 +8,7 @@ import type { RunDetail } from "~/contracts/run.contract";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
-import { importReportBlocks } from "~/server/generic/entity-report/repo/run";
+import { importReportBlocks } from "~/server/domains/run/repo/report-run";
 
 import {
   RunAgentActions,
@@ -360,10 +360,7 @@ it("runs a waiting import now with paid models after confirmation", async () => 
 
 // Discovery and suggestion work wait on the same funding policy but must not
 // acquire import-agent controls merely to expose their paid override.
-it.each([
-  "mail_discovery",
-  "suggestion_sweep",
-] satisfies RunDetail["purpose"][])(
+it.each(["mail_discovery"] satisfies RunDetail["purpose"][])(
   "offers only funding controls for a waiting %s Run",
   async (purpose) => {
     detailRun = {

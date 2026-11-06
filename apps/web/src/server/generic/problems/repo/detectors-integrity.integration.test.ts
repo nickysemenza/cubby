@@ -65,10 +65,10 @@ import {
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { makeCookbookExtraction } from "~/server/testing/repo.fixtures";
 import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -780,7 +780,7 @@ const SOURCE_FACTORIES = {
 
   "Suggestion.ledgerPartyId": async (db, targetId) => {
     const run = await mkRun(db);
-    return publishAssessment(
+    return publishSuggestion(
       db,
       {
         publicationKey: uniq("ledger-party-recommendation"),
@@ -1932,10 +1932,10 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("retains historical Assessment execution provenance when its Run is soft-deleted", async () => {
+  it("retains historical Suggestion execution provenance when its Run is soft-deleted", async () => {
     const target = await mkRun(ctx.db);
     const product = await mkProduct(ctx.db);
-    const prediction = await publishAssessment(
+    const prediction = await publishSuggestion(
       ctx.db,
       {
         publicationKey: uniq("historical-field"),

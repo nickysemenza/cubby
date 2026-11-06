@@ -148,7 +148,7 @@ describe("Product page transport packing", () => {
               recordId: pair.productIds[0],
               otherId: pair.productIds[1],
               field: null,
-              assessmentIds: [],
+              suggestionIds: [],
             }),
             provenance: aiProvenance.parse({
               dependencies: dependencyStamps(activation.manifest, [

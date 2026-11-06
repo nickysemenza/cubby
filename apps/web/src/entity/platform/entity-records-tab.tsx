@@ -10,11 +10,11 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { useCallback, useMemo } from "react";
+import { z } from "zod";
 
 import {
   entityRecordsInputSchema,
-  entityRecordSortSchema,
-  type EntityRecord,
+  entityRecordSchema,
   type EntityRecordsInput,
 } from "~/contracts/entity-records.schema";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -50,6 +50,8 @@ import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/text/description";
 import { EnumPill } from "~/ui/text/enum-pill";
 import { renderScalarValue } from "~/ui/values/scalar-value";
+
+type EntityRecord = z.infer<typeof entityRecordSchema>;
 
 const EMPTY_ROWS: EntityRecord[] = [];
 const helper = createCubbyColumnHelper<EntityRecord>();
@@ -272,7 +274,7 @@ export function EntityRecordsTab({
       const next = functionalUpdate(updater, sorting)[0];
       if (next)
         onChange({
-          orderBy: entityRecordSortSchema.parse(next.id),
+          orderBy: entityRecordsInputSchema.shape.orderBy.parse(next.id),
           direction: next.desc ? "desc" : "asc",
           page: 1,
         });

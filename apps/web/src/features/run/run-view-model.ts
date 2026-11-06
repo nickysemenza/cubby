@@ -1,7 +1,3 @@
-import {
-  assessmentFamily,
-  type AssessmentFamily,
-} from "@cubby/schemas/assessment";
 import type { JobWaitReason } from "@cubby/schemas/job";
 import {
   runStepDeclaration,
@@ -16,6 +12,10 @@ import {
   runWorkEstimate,
   formatRunWorkEstimate,
 } from "@cubby/schemas/run-work-progress";
+import {
+  suggestionFamily,
+  type SuggestionFamily,
+} from "@cubby/schemas/suggestion";
 import { z } from "zod";
 
 import type { JobFacts, JobListOut } from "~/contracts/job.contract";
@@ -131,7 +131,7 @@ export type RunStepView = {
   startedAt: string | null;
   endedAt: string | null;
   durationMs: number | null;
-  results: AssessmentFamily | null;
+  results: SuggestionFamily | null;
 };
 
 /** `no_candidate`, `image.process` and `publishFailed` read as words. */
@@ -299,7 +299,7 @@ function stepView(
     durationMs:
       started === null ? null : (ended ?? (live ? now : started)) - started,
     results:
-      assessmentFamily.safeParse(declaration?.results?.family).data ?? null,
+      suggestionFamily.safeParse(declaration?.results?.family).data ?? null,
   };
 }
 

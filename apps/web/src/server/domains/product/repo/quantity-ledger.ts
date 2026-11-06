@@ -10,8 +10,7 @@ import type {
 } from "@cubby/schemas/product";
 import { productPrimaryPlacement } from "@cubby/schemas/product";
 import { classifyProductOnHand } from "@cubby/schemas/product-read-fields";
-import type { AnyColumn } from "drizzle-orm";
-import { and, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -36,7 +35,6 @@ import {
   serviceProductIdSql,
   serviceProductSqlText,
 } from "~/server/domains/product/repo/service-category";
-import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { liveAliasSqlText } from "~/server/lib/live-row";
 import {
   deriveProductQuantitySummary,
@@ -86,31 +84,6 @@ const QUANTITY_PROJECTION_FROM = kitProjectionFrom(QUANTITY_OWN_AGGREGATE);
 const PROJECTED_ACQUIRED = `CASE WHEN bool_or(${serviceProductSqlText("ka.target")}) THEN 0 ELSE ${unitWeighted('"acquiredUnits"')} END`;
 const PROJECTED_EXITED = `CASE WHEN bool_or(${serviceProductSqlText("ka.target")}) THEN 0 ELSE ${unitWeighted('"exitedUnits"')} END`;
 const PROJECTED_EXPECTED = `COALESCE(${PROJECTED_ACQUIRED} - ${PROJECTED_EXITED}, 0)::double precision`;
-const PROJECTED_UNKNOWN_QUANTITY = `COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0) > 0`;
-
-/**
- * Catalog quantity filters share one kit walk and own ledger aggregation
- * before evaluating their measure for each target.
- */
-const quantityMeasureReadSql = (value: SQL) => sql`${kitAncestorCteSql(
-  kitSeedForProductIds([], true),
-  { groupedSiblingQuantities: true },
-)}, kit_own AS MATERIALIZED (
-  SELECT kqe."productId", ${sql.raw(QUANTITY_OWN_MEASURES)}
-  FROM "Expense" kqe
-  WHERE ${sql.raw(QUANTITY_OWN_PREDICATES)}
-  GROUP BY kqe."productId"
-)
-SELECT ka.target AS "id", ${value} AS "value"
-FROM kit_anc ka LEFT JOIN kit_own ko ON ko."productId" = ka."productId"
-GROUP BY ka.target`;
-/** Every Product's expected balance as (id, value), matching expectedQuantitySql. */
-export const expectedQuantityReadSql = () =>
-  quantityMeasureReadSql(sql.raw(PROJECTED_EXPECTED));
-
-/** Catalog quantity gaps reuse the same live ancestry and unknown-line counts. */
-export const unknownQuantityLinesReadSql = () =>
-  quantityMeasureReadSql(sql.raw(PROJECTED_UNKNOWN_QUANTITY));
 const PROJECTED_COMPARABLE_HISTORY = `COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0) = 0 AND COALESCE(${PROJECTED_ACQUIRED} + ${PROJECTED_EXITED}, 0) > 0`;
 const comparableQuantityHistorySql = (productAlias = '"product"') =>
   `(${kitAncestorCteText(kitSeedForProductAlias(productAlias))} SELECT ${PROJECTED_COMPARABLE_HISTORY} ${QUANTITY_PROJECTION_FROM})`;
@@ -138,9 +111,7 @@ const onHandUnitsProjection = (
              ELSE COALESCE(ohu_inv.qty, 0) + ${locationCount}
            END::double precision`;
 
-/** Stock evidence stated once for the correlated (`onHandUnitsSql`,
- * `onHandUnitsFilterSql`) and grouped (`onHandUnitsReadSql`) forms; each
- * appends its own product condition. */
+/** Stock evidence shared by correlated and grouped reads; each adds its product condition. */
 const ON_HAND_INVENTORY = `count(*) AS n,
                    bool_or(ohu_i."amountUnit" <> 'each') AS noncount,
                    sum(ohu_i."amountValue"::numeric) AS qty
@@ -182,37 +153,6 @@ export const onHandUnitsReadSql = () => sql`
  */
 export const quantityVarianceSql = (productAlias = '"product"') =>
   `(CASE WHEN ${comparableQuantityHistorySql(productAlias)} THEN ${onHandUnitsSql(productAlias)} - ${expectedQuantitySql(productAlias)} END)`;
-
-/** Shared SQL fragments for product-list filters; interpolate product.id rather than a hand-qualified alias. */
-export const expectedQuantityFilterSql = (productId: AnyColumn) =>
-  sql`(${kitAncestorCteSql(
-    sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`,
-  )}
-      SELECT ${sql.raw(PROJECTED_EXPECTED)}
-      ${sql.raw(QUANTITY_PROJECTION_FROM)})`;
-
-export const onHandUnitsFilterSql = (
-  productId: AnyColumn,
-  context?: QualityReadContext,
-) =>
-  context?.derivedValue?.("onHandUnits", productId) ??
-  sql`(SELECT CASE WHEN ${serviceProductIdSql(sql`${productId}`)} THEN NULL ELSE ${sql.raw(onHandUnitsProjection())} END
-         FROM (SELECT ${sql.raw(ON_HAND_INVENTORY)}
-                  AND ohu_i."productId" = ${productId}) ohu_inv,
-              (SELECT ${sql.raw(ON_HAND_LOCATIONS)}
-                  AND ohu_ol."productId" = ${productId}) ohu_loc)`;
-
-/** Quantity gaps include inherited kit lines, matching the displayed ledger. */
-export const hasUnknownQuantityLinesSql = (productId: AnyColumn) =>
-  sql`(${kitAncestorCteSql(sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`)}
-    SELECT ${sql.raw(PROJECTED_UNKNOWN_QUANTITY)}
-    ${sql.raw(QUANTITY_PROJECTION_FROM)})`;
-
-/** An unknown acquisition anywhere in the kit ancestry keeps disposal uncertain. */
-export const hasUnknownAcquisitionLinesSql = (productId: AnyColumn) =>
-  sql`(${kitAncestorCteSql(sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`)}
-    SELECT COALESCE(sum(ko."unknownAcquisitionLines"), 0) > 0
-    ${sql.raw(QUANTITY_PROJECTION_FROM)})`;
 
 const ownershipQuantityEvidenceRow = z.object({
   productId,

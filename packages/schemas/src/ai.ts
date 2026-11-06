@@ -1,5 +1,4 @@
-import { entityIdSchema } from "./identifier-fields";
-import { assessmentChildHandle } from "./assessment-reference";
+import { suggestionChildHandle } from "./suggestion-reference";
 import { aiCallCostFields, aiCostSummaryFields } from "./ai-cost";
 import {
   HIGH_CONFIDENCE_PROBABILITY,
@@ -551,22 +550,6 @@ export const suggestionStatus = z.enum([
   "rejected",
   "superseded",
 ]);
-/** The most rows one field-suggestion read returns. */
-export const SUGGESTION_LIST_LIMIT_MAX = 1000;
-export const suggestionReviewListInput = z.object({
-  entity: z.enum(shortcodeEntities).optional(),
-  field: z.string().optional(),
-  kind: z.enum(["correction", "addition"]).optional(),
-  minConfidence: z.number().min(0).max(1).default(0.5),
-  runId: runShortcode.optional(),
-  /** Reviewed history (applied, rejected, superseded) is the decision-eval
-   * label set; the review queue reads `pending`. */
-  status: suggestionStatus.default("pending"),
-  limit: z.number().int().min(1).max(SUGGESTION_LIST_LIMIT_MAX).default(500),
-  /** Bounded list-page read; both are supplied together by generic entity lists. */
-  recordIds: z.array(z.string().min(1)).max(250).optional(),
-  fields: z.array(z.string()).max(100).optional(),
-});
 const [firstShortcodeEntity, ...otherShortcodeEntities] = shortcodeEntities;
 if (!firstShortcodeEntity) throw new Error("No entity has a shortcode");
 /** A stored suggestion names its record by that kind's public shortcode. */
@@ -575,7 +558,7 @@ const suggestionRecordId = anyShortcodeSchema([
   ...otherShortcodeEntities,
 ]);
 export const suggestionReviewRowSchema = z.object({
-  assessmentId: assessmentChildHandle,
+  suggestionId: suggestionChildHandle,
   provenance: aiProvenance.nullable().optional(),
   acceptanceReceipt: suggestionAcceptanceReceipt
     .omit({ runId: true })
@@ -586,7 +569,7 @@ export const suggestionReviewRowSchema = z.object({
     .omit({ evaluationId: true })
     .nullable()
     .optional(),
-  id: assessmentChildHandle,
+  id: suggestionChildHandle,
   /** The sweep or page Run that produced it, opened from its provenance. */
   runId: runShortcode.nullable(),
   entity: z.enum(shortcodeEntities),
@@ -654,25 +637,6 @@ export const decisionCatalogRowSchema = z.object({
 });
 export const decisionCatalogOut = z.array(decisionCatalogRowSchema);
 export type DecisionCatalogRow = z.infer<typeof decisionCatalogRowSchema>;
-export const suggestionSweepStartInput = z.object({
-  entity: z.enum(shortcodeEntities),
-  fields: z.array(z.string().min(1)).min(1),
-  filters: z.record(z.string(), z.json()).default({}),
-});
-export const suggestionSweepStartOut = z.object({ id: z.string().uuid() });
-export const suggestionSweepControlInput = z.object({
-  runId: entityIdSchema("run"),
-});
-export const suggestionSweepStatusOut = z.object({
-  latestRunId: z.string().uuid().nullable(),
-  entity: z.string().nullable(),
-  fields: z.array(z.string()),
-  taxonomyChanged: z.boolean(),
-  status: z.string().nullable(),
-  paused: z.boolean(),
-  progress: z.json().nullable(),
-});
-
 /**
  * One target's answer: `value` is the raw field value (a shortcode for a
  * reference target, the enum member for an enum target, the chosen string
@@ -707,7 +671,7 @@ export type FieldSuggestionRemoval = z.infer<
 >;
 
 export const fieldSuggestionSchema = z.object({
-  assessmentId: assessmentChildHandle.optional(),
+  suggestionId: suggestionChildHandle.optional(),
   financeReview: financeCategoryReviewSchema.optional(),
   value: z.string().nullable(),
   label: z.string().nullable(),
@@ -748,7 +712,7 @@ export const fieldSuggestionOutcomeSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("evaluated"),
     reviewStatus: z.literal("rejected").optional(),
-    assessmentId: assessmentChildHandle.optional(),
+    suggestionId: suggestionChildHandle.optional(),
     answer: z.enum(["pick", "none"]),
     confidence,
     /** Calibrated probability of `answer` — the winner's for a pick, `none`'s
@@ -861,17 +825,6 @@ export const fieldSuggestionsBatchInput = z.object({
 export const fieldSuggestionsBatchOut = batchOutSchema(fieldSuggestionsOut);
 
 /** Swift keeps nullable object properties, but drops nullable dictionary values. */
-export const fieldSuggestionsReviewOut = fieldSuggestionsOut
-  .omit({ suggestions: true })
-  .extend({
-    suggestions: z.array(
-      z.object({
-        field: z.string(),
-        suggestion: fieldSuggestionSchema.nullable(),
-      }),
-    ),
-  });
-
 /** JSON-safe provider runtime details, independent of any feature result schema. */
 export type AiAnalysisRuntime = Record<
   string,

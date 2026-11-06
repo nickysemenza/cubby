@@ -85,9 +85,8 @@ import {
   imageRepresentationRow,
   imageRepresentationsFromRows,
 } from "~/server/domains/image-processing/repo/image-representations";
+import { readConfirmedDescription } from "~/server/domains/image/repo/image-description-read";
 import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/domains/mail/repo/mail-attachment-uploads";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
-import { readConfirmedDescription } from "~/server/generic/assessment/repo/assessment-image";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { JobSupersededError } from "~/server/generic/jobs/errors";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -1853,36 +1852,6 @@ export async function saveImageDescriptionAnalysis(
   });
   if (!result)
     throw new Error("Persisted image description analysis is unavailable");
-  const fingerprint = parseImageDescriptionInputFingerprint(
-    input.inputFingerprint,
-  );
-  await publishAssessment(
-    db,
-    {
-      publicationKey: `image-description:${input.imageId}:${input.inputFingerprint}:${input.provider}:${input.model}:${input.promptRevision}`,
-      family: "image_description",
-      subject: {
-        kind: "image_description",
-        entity: "image",
-        recordId: input.imageId,
-        contentHash: fingerprint?.sourceContentHash ?? null,
-      },
-      judgment: result.description,
-      producer: {
-        kind: "model",
-        model: input.model,
-        revision: String(input.promptRevision),
-        runId: null,
-        evaluationId: null,
-      },
-      fingerprint: fingerprint?.sourceContentHash ?? null,
-      evidence: z.json().parse({
-        inputFingerprint: input.inputFingerprint,
-        result,
-      }),
-    },
-    { suggestedValue: result.description },
-  );
   await recordChange(db, {
     kind: "projection",
     categories: ["image"],

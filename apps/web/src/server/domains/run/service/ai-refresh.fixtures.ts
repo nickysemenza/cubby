@@ -34,7 +34,7 @@ export const fillAutomaticBacklog = (db: Database) =>
           entity: "task" as const,
           recordId: crypto.randomUUID(),
           field: null,
-          assessmentIds: [],
+          suggestionIds: [],
         },
         provenance: {
           dependencies: [],

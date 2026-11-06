@@ -86,38 +86,6 @@ extension EntityGraphPath: Identifiable {
     public var destination: EntityRef? { nodeRefs.last }
 }
 
-extension ExpenseProjectProposal: Identifiable {
-    public var id: String { "expense-project:\(expenseId):\(target.id)" }
-}
-
-extension InventoryPlacementProposal: Identifiable {
-    public var id: String { "inventory-placement:\(inventoryId.rawValue):\(target.id.rawValue)" }
-}
-
-extension ProductRelatedProposal: Identifiable {
-    public var id: String { "product-related:\(target.id.rawValue)" }
-}
-
-extension EntityRecommendationGroup: Identifiable {
-    public var id: JSONValue {
-        switch self {
-        case .expenseProject: .string("expense-project")
-        case .inventoryPlacement: .string("inventory-placement")
-        case .productRelated: .string("product-related")
-        case .unrecognized(let raw): raw
-        }
-    }
-
-    public var status: EmbeddingReadiness? {
-        switch self {
-        case .expenseProject(let group): group.status
-        case .inventoryPlacement(let group): group.status
-        case .productRelated(let group): group.status
-        case .unrecognized: nil
-        }
-    }
-}
-
 // MARK: - Scanning
 
 extension ScanStrayOut: Identifiable {
@@ -288,50 +256,25 @@ extension InitiateUploadWithoutEntity {
 
 extension ImageOut {
     public var imageURL: URL? {
-        switch fields.url.result {
-        case .live(let result):
-            guard case .value(let outcome) = result.decision.outcome else { return nil }
-            return URL(string: outcome.value)
-        case .cached(let result):
-            guard case .value(let outcome) = result.decision.outcome else { return nil }
-            return URL(string: outcome.value)
-        case .missing, .unrecognized: return nil
-        }
+        FieldEnvelope(fields.url)?.result.value?.stringValue.flatMap(URL.init(string:))
     }
 }
 
 extension ImageDetailOut {
     /// Read only the selected envelope snapshots; image access never re-encodes the record.
     private var representationURLs: (preferred: URL?, original: URL?, transparent: URL?)? {
-        switch fields.representations.result {
-        case .live(let result):
-            guard case .value(let outcome) = result.decision.outcome else { return nil }
-            let value = outcome.value
-            return (
-                URL(string: value.preferred), URL(string: value.original),
-                value.transparent.flatMap(URL.init(string:))
-            )
-        case .cached(let result):
-            guard case .value(let outcome) = result.decision.outcome else { return nil }
-            let value = outcome.value
-            return (
-                URL(string: value.preferred), URL(string: value.original),
-                value.transparent.flatMap(URL.init(string:))
-            )
-        case .missing, .unrecognized: return nil
-        }
+        guard let value = FieldEnvelope(fields.representations)?.result.value,
+            let preferred = value["preferred"]?.stringValue,
+            let original = value["original"]?.stringValue
+        else { return nil }
+        return (
+            URL(string: preferred), URL(string: original),
+            value["transparent"]?.stringValue.flatMap(URL.init(string:))
+        )
     }
 
     private var selectedURL: URL? {
-        switch fields.url.result {
-        case .live(let result):
-            guard case .value(let outcome) = result.decision.outcome else { return nil }
-            return URL(string: outcome.value)
-        case .cached(let result):
-            guard case .value(let outcome) = result.decision.outcome else { return nil }
-            return URL(string: outcome.value)
-        case .missing, .unrecognized: return nil
-        }
+        FieldEnvelope(fields.url)?.result.value?.stringValue.flatMap(URL.init(string:))
     }
 
     public var imageURL: URL? { representationURLs?.preferred ?? selectedURL }

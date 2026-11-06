@@ -77,7 +77,7 @@ describe("AI evaluation drain publication", () => {
           entity: "product",
           recordId: crypto.randomUUID(),
           field: null,
-          assessmentIds: [],
+          suggestionIds: [],
         }),
         provenance: aiProvenance.parse({
           dependencies: dependencyStamps(activation.manifest, [

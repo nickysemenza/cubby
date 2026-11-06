@@ -47,16 +47,13 @@ test("browser dispatch restores plain JSON dates and gates outdated Apple writes
 
     // The stale write body is invalid for this operation; the runner's gate must
     // refuse it before parsing the operation-specific input.
-    const write = await page.request.post(
-      browserOperationPath("ai.pauseSuggestionSweep"),
-      {
-        data: {
-          operation: "ai.pauseSuggestionSweep",
-          input: "invalid-for-the-operation",
-        },
-        headers: outdatedHeaders,
+    const write = await page.request.post(browserOperationPath("run.control"), {
+      data: {
+        operation: "run.control",
+        input: "invalid-for-the-operation",
       },
-    );
+      headers: outdatedHeaders,
+    });
     expect(write.status()).toBe(426);
     expect(await write.json()).toMatchObject({
       code: "UPGRADE_REQUIRED",

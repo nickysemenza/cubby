@@ -200,7 +200,7 @@ function inputInspection(
         ],
         note:
           key === "transfer_pair_retire"
-            ? "Stored transfer-pair assessments in account/date/cutoff scope, including inactive or reviewed ones. Related decisions are not an exact input list."
+            ? "Stored transfer-pair suggestions in account/date/cutoff scope, including inactive or reviewed ones. Related decisions are not an exact input list."
             : key === "transfer_pair_label"
               ? "This Run’s pending pairs needing labels, or pairs awaiting statement refresh. Related decisions are not an exact input list."
               : "Current pending statement advice needing a label or application, optionally restricted by import. This population can span Runs; the link shows only this Run’s decisions.",

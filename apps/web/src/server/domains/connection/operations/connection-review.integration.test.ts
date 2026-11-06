@@ -14,8 +14,8 @@ import {
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
@@ -84,18 +84,18 @@ describe("connection application through generic Feedback", () => {
       },
     });
     const input = {
-      assessmentId: proposal.review.assessmentId,
+      suggestionId: proposal.review.suggestionId,
       operationId: "synthetic-placement-survivor",
       verdict: "correct" as const,
       intent: "apply" as const,
       expectedFingerprint: proposal.fingerprint,
     };
-    const first = await reviewAssessment(ctx.db, kernelCtx(ctx), input);
+    const first = await reviewSuggestion(ctx.db, kernelCtx(ctx), input);
     expect(first.applicationResult).toEqual({
       source,
       destination: { entityKind: "inventory", entityId: survivor.id },
     });
-    expect(await reviewAssessment(ctx.db, kernelCtx(ctx), input)).toEqual(
+    expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), input)).toEqual(
       first,
     );
   });
@@ -129,8 +129,8 @@ describe("connection application through generic Feedback", () => {
       .where(eq(product.id, productId));
     expect(await readEntityConnections(ctx.db, source)).toEqual([]);
     await expect(
-      reviewAssessment(ctx.db, kernelCtx(ctx), {
-        assessmentId: proposal.review.assessmentId,
+      reviewSuggestion(ctx.db, kernelCtx(ctx), {
+        suggestionId: proposal.review.suggestionId,
         operationId: "synthetic-stale-acquisition",
         verdict: "correct",
         intent: "apply",
@@ -144,7 +144,7 @@ describe("connection application through generic Feedback", () => {
         status: suggestionTable.status,
       })
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.suggestionId));
     expect(state).toEqual({ active: true, status: "pending" });
     expect(
       await getDb(ctx.db)
@@ -214,8 +214,8 @@ describe("connection application through generic Feedback", () => {
       },
     });
     await expect(
-      reviewAssessment(ctx.db, kernelCtx(ctx), {
-        assessmentId: proposal.review.assessmentId,
+      reviewSuggestion(ctx.db, kernelCtx(ctx), {
+        suggestionId: proposal.review.suggestionId,
         operationId: "synthetic-preserve-allocation",
         verdict: "correct",
         intent: "apply",
@@ -226,7 +226,7 @@ describe("connection application through generic Feedback", () => {
       await getDb(ctx.db).select().from(financialTransactionAllocation),
     ).toEqual(before);
   });
-  it("settles the one Assessment through Work and retries without another write", async () => {
+  it("settles the one Suggestion through Work and retries without another write", async () => {
     const item = await createProduct(
       ctx.db,
       makeProductInput({ name: "Synthetic review wrench" }),
@@ -265,15 +265,15 @@ describe("connection application through generic Feedback", () => {
       }),
     );
     const input = {
-      assessmentId: proposal.review.assessmentId,
+      suggestionId: proposal.review.suggestionId,
       operationId: "synthetic-connection-accept",
       verdict: "correct" as const,
       intent: "apply" as const,
       expectedFingerprint: proposal.fingerprint,
     };
-    const first = await reviewAssessment(ctx.db, kernelCtx(ctx), input);
+    const first = await reviewSuggestion(ctx.db, kernelCtx(ctx), input);
     expect(first.applied).toBe(true);
-    expect(await reviewAssessment(ctx.db, kernelCtx(ctx), input)).toEqual(
+    expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), input)).toEqual(
       first,
     );
     expect(
@@ -290,7 +290,7 @@ describe("connection application through generic Feedback", () => {
     );
     const events = await readSuggestionDecisions(
       ctx.db,
-      proposal.review.assessmentId,
+      proposal.review.suggestionId,
     );
     expect(
       events.filter(

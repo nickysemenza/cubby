@@ -19,14 +19,14 @@ import {
 import { workPurchaseSourceOwners } from "~/server/domains/purchase/repo/work-owners";
 import { workRunReviewOwners } from "~/server/domains/run/repo/work-owners";
 import { workRecordFactsFor } from "~/server/domains/work/repo/record-facts";
-import {
-  pendingSuggestionRecordsSql,
-  touchingAssessmentIds,
-  UNAPPLIED_CORRECTION_REASON,
-} from "~/server/generic/assessment/repo/review-families";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
+import { touchingSuggestionIds } from "~/server/generic/suggestions/repo/suggestion-touching";
+import {
+  pendingSuggestionRecordsSql,
+  UNAPPLIED_CORRECTION_REASON,
+} from "~/server/generic/suggestions/repo/suggestion-work-tokens";
 import { recordScope } from "~/server/generic/work-queue/repo/work-declarations";
 import {
   selectWorkCandidates,
@@ -73,7 +73,6 @@ const source: WorkSource = {
   link: { kind: "suggestions" },
   reasons: Object.entries({
     field: "Pending field suggestions",
-    image_description: "Pending image descriptions",
     recommendation: "Pending connection suggestions",
     statement_transaction: "Pending statement transactions",
     transfer_pair: "Pending transfer pairs",
@@ -83,7 +82,7 @@ const source: WorkSource = {
   candidates: async (db, scope) => {
     // A record read discovers its own suggestions; the unscoped queue reads State.
     const ids = scope.record
-      ? await touchingAssessmentIds(db, {
+      ? await touchingSuggestionIds(db, {
           entity: scope.record.entity,
           records: [
             {
@@ -105,31 +104,34 @@ const source: WorkSource = {
       : null;
     if (ids?.size === 0) return null;
     const liveIdentity = sql`${notDeleted(alias(entityIdentity, "work_identity"))} AND work_identity."mergedIntoId" IS NULL`;
-    const queries = shortcodeEntities
-      .filter((entity) => !scope.record || scope.record.entity === entity)
-      .map((entity) => {
-        const table = SHORTCODE_TABLE[entity];
-        return selectWorkCandidates(db, source, {
-          entity,
-          id: sql`${table.shortcode}`,
-          name: labelSql(entity, `"${getTableName(table)}"`),
-          reason: "Pending suggestions",
-          reasonKeys: sql`pending.reason_keys`,
-          ...recordAuthority(entity, outer(table.id)),
-          ...workRecordFactsFor(entity),
-        })
-          .from(table)
-          .innerJoin(
-            sql`work_pending_records pending`,
-            sql`pending.entity = ${entity} AND pending.record_id = ${table.id}`,
-          )
-          .where(
-            and(
-              "deletedAt" in table ? notDeleted(table) : undefined,
-              recordScope(scope, sql`${table.shortcode}`),
-            ),
-          );
-      });
+    const queries = await Promise.all(
+      shortcodeEntities
+        .filter((entity) => !scope.record || scope.record.entity === entity)
+        .map(async (entity) => {
+          const table = SHORTCODE_TABLE[entity];
+          const query = selectWorkCandidates(db, source, {
+            entity,
+            id: sql`${table.shortcode}`,
+            name: await labelSql(entity, `"${getTableName(table)}"`),
+            reason: "Pending suggestions",
+            reasonKeys: sql`pending.reason_keys`,
+            ...recordAuthority(entity, outer(table.id)),
+            ...workRecordFactsFor(entity),
+          })
+            .from(table)
+            .innerJoin(
+              sql`work_pending_records pending`,
+              sql`pending.entity = ${entity} AND pending.record_id = ${table.id}`,
+            )
+            .where(
+              and(
+                "deletedAt" in table ? notDeleted(table) : undefined,
+                recordScope(scope, sql`${table.shortcode}`),
+              ),
+            );
+          return sql`${query}`;
+        }),
+    );
     return {
       query: sql.join(
         queries.map((query) => sql`(${query})`),

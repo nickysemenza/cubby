@@ -27,7 +27,7 @@ import {
 import { reconcilePhotoImport } from "~/server/domains/photo-import/service/photo-import-reconcile.service";
 import { manifestPhotoImportRouteAdapter } from "~/server/domains/photo-import/service/photo-import-route.adapter";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 import {
   createImageFixture,
   createLocationFixture,

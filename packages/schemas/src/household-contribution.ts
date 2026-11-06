@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { plainDate } from "./base-entity";
 import {
-  financialAccountShortcode,
   financialTransactionShortcode,
   expenseShortcode,
   ledgerPartyShortcode,
@@ -153,44 +152,6 @@ export const projectContributionOut = z.object({
   gapsTruncated: z.boolean(),
 });
 export type ProjectContributionOut = z.infer<typeof projectContributionOut>;
-
-export const suggestFinancialTransferPairsInput = z.object({
-  transactionIds: z.array(financialTransactionShortcode).min(1).max(200),
-  maxDateDistanceDays: z.number().int().min(0).max(14).default(5),
-  maxCandidatesPerTransaction: z.number().int().min(1).max(10).default(3),
-});
-export type SuggestFinancialTransferPairsInput = z.infer<
-  typeof suggestFinancialTransferPairsInput
->;
-
-export const financialTransferPairSuggestionsOut = z.object({
-  status: z.enum(["proposed", "ambiguous", "no_match"]),
-  suggestions: z.array(
-    z.object({
-      transactionId: financialTransactionShortcode,
-      status: z.enum(["proposed", "ambiguous", "no_match"]),
-      candidates: z.array(
-        z.object({
-          transactionId: financialTransactionShortcode,
-          /** The positive leg; with `inflowTransactionId`, the accept input. */
-          outflowTransactionId: financialTransactionShortcode,
-          inflowTransactionId: financialTransactionShortcode,
-          fromAccountId: financialAccountShortcode,
-          toAccountId: financialAccountShortcode,
-          from: ledgerReportPartyOut.nullable(),
-          to: ledgerReportPartyOut.nullable(),
-          amount: money,
-          dateDistanceDays: z.number().int().nonnegative(),
-          reasons: z.array(z.string()),
-          transferId: ledgerTransferShortcode.optional(),
-        }),
-      ),
-    }),
-  ),
-});
-export type FinancialTransferPairSuggestionsOut = z.infer<
-  typeof financialTransferPairSuggestionsOut
->;
 
 /** One reviewed suggestion: the positive (outflow) and negative (inflow) legs. */
 export const acceptFinancialTransferPairInput = z.object({

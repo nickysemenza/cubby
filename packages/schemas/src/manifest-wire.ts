@@ -429,6 +429,7 @@ export const manifestWire = {
       recordIconEntityField: "string~",
       searchable: "boolean",
       nativeBrowse: "boolean",
+      hasRelatedness: "boolean",
       emptyState: "EntityEmptyState",
       primarySearch: "PrimarySearchDescriptor~",
       timeline: "EntityTimelineMode~",

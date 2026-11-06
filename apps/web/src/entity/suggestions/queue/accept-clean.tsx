@@ -60,8 +60,8 @@ type Failure = {
  * limit), stay pending for review and show their raw errors.
  */
 export function useAcceptClean(
-  /** The loaded row's record for an Assessment id, to name a failure. */
-  recordOf: (assessmentId: string) => SuggestionRecordRef | undefined,
+  /** The loaded row's record for an Suggestion id, to name a failure. */
+  recordOf: (suggestionId: string) => SuggestionRecordRef | undefined,
 ) {
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState<CleanTarget | null>(null);
@@ -102,18 +102,18 @@ export function useAcceptClean(
         // A chunk with no unseen id moved nothing; report it once, then stop.
         const progressed = results.some(
           (result) =>
-            result.assessmentId &&
-            !accepted.has(result.assessmentId) &&
-            !failed.has(result.assessmentId),
+            result.suggestionId &&
+            !accepted.has(result.suggestionId) &&
+            !failed.has(result.suggestionId),
         );
         for (const result of results) {
-          if (result.assessmentId)
-            (result.ok ? accepted : failed).add(result.assessmentId);
+          if (result.suggestionId)
+            (result.ok ? accepted : failed).add(result.suggestionId);
           if (!result.ok)
             failures.push({
               record:
-                (result.assessmentId && recordOf(result.assessmentId)) || null,
-              label: result.assessmentId
+                (result.suggestionId && recordOf(result.suggestionId)) || null,
+              label: result.suggestionId
                 ? "A suggestion outside the loaded rows"
                 : "A suggestion the server could not identify",
               error: result.error,

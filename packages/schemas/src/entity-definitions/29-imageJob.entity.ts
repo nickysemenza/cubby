@@ -602,6 +602,10 @@ export const { definition, readSchemas } = defineEntityModel({
   },
   extensions: {
     ports: {
+      reports: {
+        module: "~/server/domains/image-job/repo/report-bindings",
+        export: "reportBindings",
+      },
       repository: {
         module: "~/server/domains/image-job/repo",
         export: "imageJobRepository",

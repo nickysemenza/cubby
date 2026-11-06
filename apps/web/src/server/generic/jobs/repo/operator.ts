@@ -17,7 +17,6 @@ import { jobWhere, type JobFilter } from "~/server/generic/jobs/repo/job-reads";
 const ACTIVE = ["queued", "running", "retry_wait", "paused"] as const;
 const stopped = {
   waitReason: null,
-  waitUntil: null,
   leaseToken: null,
   leaseExpiresAt: null,
 };
@@ -131,23 +130,6 @@ export const pauseJob = (db: RepositoryQueryInput, id: string) =>
   controlJob(db, id, "paused");
 
 /**
- * Cancel every active Job matching `where` in one statement. Callers holding
- * a global lock must never loop per row.
- */
-export async function cancelJobsWhere(db: RepositoryQueryInput, where: SQL) {
-  return repositoryQueries(db)
-    .update(job)
-    .set({
-      ...stopped,
-      state: "cancelled",
-      generation: sql`${job.generation} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(and(where, inArray(job.state, ACTIVE)))
-    .returning({ id: job.id });
-}
-
-/**
  * A cancelled Run stops its own Jobs. Never-exhausting work (image
  * processing) belongs to its subject, not the Run that requested it: it
  * keeps running and only loses the Run's priority.
@@ -169,7 +151,7 @@ export async function cancelRunJobs(db: RepositoryQueryInput, runId: string) {
 export async function bringQueuedJobsForward(db: Database, now: Date) {
   return repositoryQueries(db)
     .update(job)
-    .set({ availableAt: now, waitUntil: null, waitReason: null })
+    .set({ availableAt: now, waitReason: null })
     .where(
       and(
         inArray(job.state, ["queued", "retry_wait"]),

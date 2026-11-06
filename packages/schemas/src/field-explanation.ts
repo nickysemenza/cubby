@@ -11,7 +11,7 @@ export {
   fieldEvidenceCoverage,
   type FieldDecisionStep,
 } from "./field-explanation-evidence";
-import { fieldEnvelope, fieldResult } from "./field-envelope";
+import { fieldEnvelope } from "./field-envelope";
 import { dataExceptionReason, dataQualityStatus } from "./data-quality-shape";
 import { entityRefSchema } from "./entity-core";
 import { reportRecordsBlock } from "./entity-report";
@@ -32,8 +32,6 @@ export const fieldExplanationInput = entityRefSchema.extend({
   field: z.string().min(1),
   /** The result visible on the requesting surface, including its publication revision. */
   displayedResult: displayedFieldResult.optional(),
-  /** Live recomputation is an explicit diagnostic, never part of opening an explanation. */
-  diagnostic: z.boolean().optional(),
   /** The singular list scope whose contextual value is being explained. */
   scope: entityRefSchema.optional(),
   surface: z.enum(["list", "detail", "summary"]).default("detail"),
@@ -58,7 +56,7 @@ export const qualityBreakdown = z.object({
   status: dataQualityStatus,
   weightedScore: z.number().nullable(),
   scoreCap: z.number().nullable(),
-  /** Applicable checks that count toward assessment, and those not currently gaps. */
+  /** Applicable checks that count toward suggestion, and those not currently gaps. */
   expectedWeight: z.number(),
   satisfiedWeight: z.number(),
   /** What is missing, as display text; clients render it verbatim. */
@@ -69,7 +67,7 @@ export const qualityBreakdown = z.object({
       label: z.string(),
       facet: z.string(),
       kind: z.enum(["missing", "defect"]),
-      /** 1 when the check counts toward assessment, 0 for a diagnostic. */
+      /** 1 when the check counts toward suggestion, 0 for a diagnostic. */
       weight: z.number(),
       /** Always 100; kept for shipped native builds. */
       scoreCap: z.number(),
@@ -102,15 +100,6 @@ export const qualityBreakdown = z.object({
     }),
   ),
 });
-
-/** A computed empty result is distinct from a comparison that cannot be run. */
-export const fieldLiveComparison = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("available"),
-    result: fieldResult(z.json()).options[1],
-  }),
-  z.object({ kind: z.literal("unavailable"), reason: z.string() }),
-]);
 
 /** A display image's precedence chain: one level per source, in order. */
 export const imageChainExplanation = z.object({
@@ -149,7 +138,6 @@ export const fieldExplanationOutput = z.object({
   qualityBreakdown: qualityBreakdown.optional(),
   /** Current member decisions and available controls, separate from published score evidence. */
   currentQualityControls: qualityBreakdown.shape.checks.optional(),
-  comparison: fieldLiveComparison,
   imageChain: imageChainExplanation.optional(),
   rule: z.object({
     id: z.string(),

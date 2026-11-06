@@ -1,6 +1,5 @@
 export { derivedRebuild } from "./derived-rebuild-schema";
 export { qualitySnapshot } from "./quality-snapshot-schema";
-export { assessmentCorrectionLock } from "./assessment-correction-lock-schema";
 export { job } from "./job-schema";
 import type { AiAnalysisRuntime } from "@cubby/schemas/ai";
 import {

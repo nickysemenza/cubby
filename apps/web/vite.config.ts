@@ -14,7 +14,6 @@ import {
   type PluginOption,
 } from "vite";
 import wasm from "vite-plugin-wasm";
-import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
 import { resolveDevProfile } from "./tooling/dev-services/dev-profile.ts";
 import { devLifecycle } from "./tooling/dev/lifecycle.ts";
 import { readR2PublicUrl } from "./tooling/cloudflare-public-config.ts";
@@ -386,9 +385,6 @@ export default defineConfig(async ({ command }) => {
       tailwindcss(),
       // tanstackStart must come BEFORE viteReact per TanStack Router plugin
       tanstackStart({
-        serverFns: {
-          generateFunctionId: createServerFunctionIdGenerator(),
-        },
         router: {
           codeSplittingOptions: {
             // Keep the route component and its recovery UI in one request, and

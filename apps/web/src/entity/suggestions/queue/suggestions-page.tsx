@@ -69,7 +69,6 @@ import { Alert, AlertAction } from "~/ui/reui/alert";
 
 import { useAcceptClean, type CleanTarget } from "./accept-clean";
 import { AutomaticDecisions } from "./automatic-decisions";
-import { AutomaticRulesSection } from "./automatic-rules";
 import { MobileEvidenceDisclosure } from "./suggestion-actions";
 import { SuggestionEvidence } from "./suggestion-evidence";
 import { acceptItem, dismissItem, neverSuggestItem } from "./suggestion-review";
@@ -138,15 +137,13 @@ function StatusTabs({
       value={search.status ?? "pending"}
       onValueChange={(value) =>
         onSearch({
-          status:
-            value === "rules" || value === "automatic" ? value : undefined,
+          status: value === "automatic" ? value : undefined,
         })
       }
     >
       <TabsList variant="line" aria-label="Suggestion status">
         <TabsTrigger value="pending">Pending</TabsTrigger>
         <TabsTrigger value="automatic">Automation history</TabsTrigger>
-        <TabsTrigger value="rules">Automatic rules</TabsTrigger>
       </TabsList>
     </Tabs>
   );
@@ -278,7 +275,7 @@ export function SuggestionsPage({
         preset={
           search.family === "product_pair"
             ? { families: ["recommendation"] }
-            : search.family && search.family !== "image_description"
+            : search.family
               ? { families: [search.family] }
               : undefined
         }
@@ -297,7 +294,7 @@ export function SuggestionsPage({
         {!search.status ? (
           <FamilyChips search={search} onSearch={onSearch} />
         ) : null}
-        {search.status !== "rules" ? (
+        {
           <ScopeChips
             search={
               search.status === "automatic"
@@ -306,13 +303,9 @@ export function SuggestionsPage({
             }
             onSearch={onSearch}
           />
-        ) : null}
+        }
       </div>
-      {search.status === "rules" ? (
-        <div className="px-2 py-2 md:px-4">
-          <AutomaticRulesSection />
-        </div>
-      ) : search.status === "automatic" ? (
+      {search.status === "automatic" ? (
         <div className="px-2 py-2 md:px-4">
           <AutomaticDecisions
             key={`${search.record}:${search.auditFamily ?? search.family}`}

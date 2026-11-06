@@ -26,7 +26,7 @@ export type AffectedDeleteEdge = {
 };
 
 /** Convert the before/after snapshots into the public, exact delete report. */
-export const calculateAffectedDeleteEdges = (
+const calculateAffectedDeleteEdges = (
   policy: Record<string, OperationDisposition>,
   before: ReadonlyMap<string, number>,
   after: ReadonlyMap<string, number>,

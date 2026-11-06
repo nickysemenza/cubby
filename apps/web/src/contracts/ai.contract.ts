@@ -20,14 +20,9 @@ import {
   fieldSuggestionsOut,
   fieldSuggestionsBatchInput,
   fieldSuggestionsBatchOut,
-  fieldSuggestionsReviewOut,
   settledSuggestionQuestionsInput,
   settledSuggestionQuestionsOut,
   decisionCatalogOut,
-  suggestionSweepControlInput,
-  suggestionSweepStartInput,
-  suggestionSweepStartOut,
-  suggestionSweepStatusOut,
   ingredientMergeSuggestionBatchInput,
   ingredientMergeSuggestionBatchOut,
   locationDescriptionSchema,
@@ -147,13 +142,6 @@ export const aiContract = defineContract(
       output: fieldSuggestionsBatchOut,
       cache: { profile: "stable" },
     }),
-    suggestFieldsReview: query({
-      note: "The same suggestions as a list for Swift",
-      readPolicy: "strong",
-      input: fieldSuggestionsInput,
-      output: fieldSuggestionsReviewOut,
-      cache: { profile: "stable" },
-    }),
     settledSuggestionQuestions: query({
       note: "List pages skip re-asking declined suggestion questions",
       input: settledSuggestionQuestionsInput,
@@ -168,32 +156,6 @@ export const aiContract = defineContract(
       input: zod.undefined(),
       output: decisionCatalogOut,
       cache: { profile: "stable" },
-    }),
-    startSuggestionSweep: mutation({
-      exposure: "capability",
-      description:
-        "Start a bounded background suggestion sweep for the requested scope. It enqueues model-backed proposal work; inspect progress with latest_suggestion_sweep_status and review proposals in suggestions_read.list.",
-      input: suggestionSweepStartInput,
-      output: suggestionSweepStartOut,
-      invalidates: [],
-    }),
-    pauseSuggestionSweep: mutation({
-      exposure: "capability",
-      description:
-        "Pause the active suggestion sweep. Existing progress and proposals remain recorded; inspect the result with latest_suggestion_sweep_status.",
-      command: { label: "Pause suggestions", confirmation: null },
-      input: suggestionSweepControlInput,
-      output: zod.object({ paused: zod.literal(true) }),
-      invalidates: [],
-    }),
-    resumeSuggestionSweep: mutation({
-      exposure: "capability",
-      description:
-        "Resume a paused suggestion sweep from its saved checkpoint. Inspect progress with latest_suggestion_sweep_status and review proposals in suggestions_read.list.",
-      command: { label: "Resume suggestions", confirmation: null },
-      input: suggestionSweepControlInput,
-      output: suggestionSweepStartOut,
-      invalidates: [],
     }),
     automaticWork: query({
       exposure: "capability",
@@ -220,14 +182,6 @@ export const aiContract = defineContract(
       input: zod.strictObject({}),
       output: zod.object({ resumed: zod.number().int().nonnegative() }),
       invalidates: ["runOnly"],
-    }),
-    latestSuggestionSweepStatus: query({
-      exposure: "capability",
-      description:
-        "Read the latest suggestion sweep status and progress. This does not start or resume work.",
-      input: zod.undefined(),
-      output: suggestionSweepStatusOut,
-      cache: { profile: "stable" },
     }),
     suggestExternalIdKind: query({
       readPolicy: "strong",

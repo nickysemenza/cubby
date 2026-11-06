@@ -62,26 +62,6 @@ const effectiveValue = (
   // counterfactual has no override keys of its own to enumerate.
   declared: CompiledEntity = entity,
 ): ComparisonValue => {
-  const fieldPath = /^model\.fields\[([^\]]+)\]\.(.*)$/u.exec(path);
-  if (fieldPath !== null) {
-    const field = entity.fieldModel.fields.find(
-      ({ key }) => key === fieldPath[1],
-    );
-    if (field === undefined)
-      throw new Error(`${entity.key}.${path} has no field.`);
-    switch (fieldPath[2]) {
-      case "readKeyOverride":
-        return field.readKey;
-      case "labelOverride":
-        return field.label;
-      case "display.columnIdOverride":
-        return field.display.columnId ?? field.key;
-      case "display.listOrderOverride":
-        return field.display.listOrder;
-      default:
-        throw new Error(`No effective-value reader for ${path}.`);
-    }
-  }
   const storagePath = /^model\.storage\[([^\]]+)\]\.(.*)$/u.exec(path);
   if (storagePath !== null) {
     const field = entity.fieldModel.storage.find(

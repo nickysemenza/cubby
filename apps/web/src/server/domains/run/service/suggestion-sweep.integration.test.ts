@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -6,16 +6,15 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { readEvaluationOutcomes } from "~/server/ai/evaluation/repo/evaluation-tally";
 import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
-  aiEvaluationRequest,
   auditLog,
   expense as expenseTable,
   run as runTable,
   vendor as vendorTable,
   product as productTable,
-  suggestionTable,
 } from "~/server/db/schema";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
@@ -23,8 +22,8 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { declaredFilterPredicates } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
+import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
-import { pauseSuggestionSweep } from "./suggestion-sweep";
 import {
   PRIMARY_MODEL,
   SUGGESTED_CATEGORY,
@@ -37,6 +36,7 @@ import {
   recordId,
   resumeSuggestionSweep,
   runSuggestions,
+  runCode,
   startSuggestionSweep,
   suggestion,
 } from "./suggestion-sweep.fixtures";
@@ -52,6 +52,22 @@ const savedRun = async (
   if (!row) throw new Error("Synthetic sweep Run is missing");
   return row;
 };
+
+async function evaluationProgress(
+  db: Parameters<typeof getDb>[0],
+  id: Parameters<typeof runSuggestions>[1],
+) {
+  const { tally, ...outcomes } = await readEvaluationOutcomes(db, {
+    runId: id,
+    source: "requested",
+  });
+  return {
+    ...outcomes,
+    total: tally.total,
+    done: tally.total - tally.pending,
+    failed: tally.failed,
+  };
+}
 
 // Regression modes: an empty-field Addition above threshold publishes pending
 // and then applies only through the field.addition policy, as automatic
@@ -122,16 +138,6 @@ describe("persisted Suggestion sweeps", () => {
     );
     const rows = await runSuggestions(ctx.db, started.id);
     expect(rows).toHaveLength(1);
-    const histories = await getDb(ctx.db)
-      .select({ served: suggestionTable.served })
-      .from(suggestionTable)
-      .where(
-        sql`${suggestionTable.id} IN (${sql.join(
-          rows.map((row) => sql`${row.id}::uuid`),
-          sql`, `,
-        )})`,
-      );
-    expect(histories.map((row) => row.served)).toEqual([true]);
     const visible = await getDb(ctx.db)
       .select({ id: productTable.id })
       .from(productTable)
@@ -240,7 +246,7 @@ describe("persisted Suggestion sweeps", () => {
     ]);
     const finished = await savedRun(ctx.db, started.id);
     expect(finished.status).toBe("completed");
-    expect(finished.progress).toMatchObject({
+    expect(await evaluationProgress(ctx.db, started.id)).toMatchObject({
       done: 2,
       total: 2,
       queued: 0,
@@ -266,11 +272,11 @@ describe("persisted Suggestion sweeps", () => {
 
     await expect(
       resumeSuggestionSweep(ctx.db, started.id, { context, suggest }),
-    ).rejects.toThrow(/completed suggestion sweep/i);
+    ).rejects.toThrow(/Only paused AI work can be resumed/);
     expect(processed).toHaveLength(2);
   });
 
-  it("retains an explicit model override, applies Additions and resumes a paused filtered sweep", async () => {
+  it("retains evaluation models, applies Additions and resumes a paused filtered sweep", async () => {
     const context = kernelCtx(ctx);
     const products = await Promise.all(
       ["Alpha", "Beta", "Gamma"].map((name) =>
@@ -289,13 +295,24 @@ describe("persisted Suggestion sweeps", () => {
       { context, pauseAfter: 2, ...categoryPorts() },
     );
     const paused = await savedRun(ctx.db, started.id);
-    expect(paused.purpose).toBe("suggestion_sweep");
+    expect(paused.purpose).toBe("sweep");
     expect(paused.status).toBe("paused");
     expect(paused.input).toMatchObject({
-      entity: "product",
-      fields: ["categoryId"],
-      filters: { categoryIdPresenceFilter: "none" },
-      decisionModelOverride: PRIMARY_MODEL,
+      kind: "sweep",
+      families: [
+        {
+          family: "field",
+          scope: {
+            targets: [
+              {
+                entity: "product",
+                fields: ["categoryId"],
+                filters: { categoryIdPresenceFilter: "none" },
+              },
+            ],
+          },
+        },
+      ],
     });
     // The test driver pauses before the Run's progress checkpoint is written;
     // count settled evaluations instead.
@@ -308,14 +325,21 @@ describe("persisted Suggestion sweeps", () => {
       ).filter((row) => row.state === "completed"),
     ).toHaveLength(2);
 
-    await pauseSuggestionSweep(ctx.db, started.id);
+    await expect(
+      controlWorkflowRun(
+        ctx.db,
+        context.actorContext,
+        { runPublicId: await runCode(ctx.db, started.id), action: "pause" },
+        "sweep",
+      ),
+    ).rejects.toThrow("Only running member-requested AI work can be paused");
     await resumeSuggestionSweep(ctx.db, started.id, {
       context,
       ...categoryPorts(),
     });
     const finished = await savedRun(ctx.db, started.id);
     expect(finished.status).toBe("completed");
-    expect(finished.progress).toMatchObject({
+    expect(await evaluationProgress(ctx.db, started.id)).toMatchObject({
       total: 3,
       done: 3,
       applied: 3,
@@ -335,67 +359,6 @@ describe("persisted Suggestion sweeps", () => {
       expect(await productCategoryId(ctx.db, product.id)).toBe(
         taxonomyId(SUGGESTED_CATEGORY),
       );
-  });
-
-  // A migrated paused Sweep has counts and processed IDs but no target ledger yet.
-  it("prepares a legacy paused roster on resume without losing completed counts", async () => {
-    const context = kernelCtx(ctx);
-    const products = await Promise.all(
-      ["Legacy first", "Legacy next"].map((name) =>
-        productFixture(ctx, `Synthetic ${name}`),
-      ),
-    );
-    const started = await startSuggestionSweep(
-      ctx.db,
-      {
-        entity: "product",
-        fields: ["categoryId"],
-        filters: { categoryIdPresenceFilter: "none" },
-      },
-      { context, pauseAfter: 1, ...categoryPorts() },
-    );
-    const processed = (
-      await getDb(ctx.db)
-        .select()
-        .from(aiEvaluation)
-        .where(
-          and(
-            eq(aiEvaluation.runId, started.id),
-            eq(aiEvaluation.state, "completed"),
-          ),
-        )
-    )[0]!;
-    await getDb(ctx.db)
-      .delete(aiEvaluationRequest)
-      .where(eq(aiEvaluationRequest.runId, started.id));
-    // Existing Suggestion history retains its evaluation; make only the unprocessed target legacy.
-    await getDb(ctx.db)
-      .delete(aiEvaluation)
-      .where(
-        and(
-          eq(aiEvaluation.runId, started.id),
-          eq(aiEvaluation.state, "queued"),
-        ),
-      );
-    await getDb(ctx.db)
-      .update(runTable)
-      .set({
-        status: "paused",
-        progress: sql`${JSON.stringify({ total: 2, done: 1, applied: 1, queued: 0, failed: 0, processedTargetIds: [`${processed.target.recordId}:categoryId`] })}::jsonb`,
-      })
-      .where(eq(runTable.id, started.id));
-    await resumeSuggestionSweep(ctx.db, started.id, {
-      context,
-      ...categoryPorts(),
-    });
-    const finished = await savedRun(ctx.db, started.id);
-    expect(finished.status).toBe("completed");
-    expect(finished.progress).toMatchObject({ total: 2, done: 2, applied: 2 });
-    for (const product of products)
-      expect(await productCategoryId(ctx.db, product.id)).toBe(
-        taxonomyId(SUGGESTED_CATEGORY),
-      );
-    expect(await runSuggestions(ctx.db, started.id)).toHaveLength(2);
   });
 
   it("keeps a high-confidence Correction and a low-confidence Addition pending", async () => {
@@ -502,8 +465,7 @@ describe("persisted Suggestion sweeps", () => {
     // A refused automatic application leaves no Feedback: nobody reviewed it.
     expect(await readSuggestionDecisions(ctx.db, pending!.id)).toEqual([]);
     expect(await productCategoryId(ctx.db, product.id)).toBeNull();
-    const finished = await savedRun(ctx.db, started.id);
-    expect(finished.progress).toMatchObject({
+    expect(await evaluationProgress(ctx.db, started.id)).toMatchObject({
       queued: 1,
       applied: 0,
       diagnostics: [expect.objectContaining({ stage: "apply" })],
@@ -560,7 +522,7 @@ describe("persisted Suggestion sweeps", () => {
       .from(expenseTable)
       .where(eq(expenseTable.id, expense.id));
     expect(savedExpense?.spendingCategoryId).toBeNull();
-    expect((await savedRun(ctx.db, started.id)).progress).toMatchObject({
+    expect(await evaluationProgress(ctx.db, started.id)).toMatchObject({
       done: 1,
       queued: 1,
     });

@@ -10,6 +10,7 @@ import {
   taxonomyId,
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -23,25 +24,24 @@ import {
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
-import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
+import { inferFieldSuggestions } from "~/server/domains/run/operations/ai.server";
 import { loadVendorSuggestionContext } from "~/server/domains/vendor/repo/vendor-suggestion-context";
 import { executeEntity } from "~/server/entity-kernel";
-import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
-  reviewAssessment,
-  reviewAssessmentBatch,
-} from "~/server/generic/assessment/repo/assessment-review";
-import { suggestionCountsByFamily } from "~/server/generic/assessment/repo/suggestion-list";
+  reviewSuggestion,
+  reviewSuggestionBatch,
+} from "~/server/generic/suggestions/repo/review";
+import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import { suggestionCountsByFamily } from "~/server/generic/suggestions/repo/suggestion-list";
 import {
   acceptSuggestion,
-  listSuggestions,
   applyFieldCorrection,
-} from "~/server/generic/assessment/repo/suggestion-review";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+} from "~/server/generic/suggestions/repo/suggestion-review";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 
 import { ensureRun } from "../repo/ensure-run";
+import { readReviewFields } from "./suggestion-sweep.fixtures";
 import {
   PRIMARY_MODEL,
   SUGGESTED_CATEGORY,
@@ -82,7 +82,7 @@ describe("Suggestion review", () => {
     const record = await productFixture(ctx, "Synthetic live inference", {
       categoryId: taxonomyId("tools"),
     });
-    const inference = await inferFieldAssessments(
+    const inference = await inferFieldSuggestions(
       kernelCtx(ctx),
       {
         entity: "product",
@@ -96,9 +96,9 @@ describe("Suggestion review", () => {
       },
       categoryPorts(0.8).suggestPorts,
     );
-    expect(inference.suggestions.categoryId?.assessmentId).toBeDefined();
+    expect(inference.suggestions.categoryId?.suggestionId).toBeDefined();
     expect(
-      await listSuggestions(ctx.db, {
+      await readReviewFields(ctx.db, {
         entity: "product",
         recordIds: [record.id],
         minConfidence: 0,
@@ -114,7 +114,7 @@ describe("Suggestion review", () => {
       { context: kernelCtx(ctx), ...categoryPorts(0.8) },
     );
     expect(
-      await listSuggestions(ctx.db, {
+      await readReviewFields(ctx.db, {
         runId: await runCode(ctx.db, runId.id),
         minConfidence: 0,
       }),
@@ -134,26 +134,26 @@ describe("Suggestion review", () => {
       },
       targets: ["categoryId"],
     };
-    const first = await inferFieldAssessments(
+    const first = await inferFieldSuggestions(
       kernelCtx(ctx),
       { ...input, runKey: crypto.randomUUID() },
       { ...categoryPorts(0.8).suggestPorts, decisionModel: PRIMARY_MODEL },
     );
-    const id = first.suggestions.categoryId?.assessmentId;
-    if (!id) throw new Error("Synthetic live assessment missing");
-    const repeat = await inferFieldAssessments(
+    const id = first.suggestions.categoryId?.suggestionId;
+    if (!id) throw new Error("Synthetic live suggestion missing");
+    const repeat = await inferFieldSuggestions(
       kernelCtx(ctx),
       { ...input, runKey: crypto.randomUUID() },
       { ...categoryPorts(0.8).suggestPorts, decisionModel: PRIMARY_MODEL },
     );
-    expect(repeat.suggestions.categoryId?.assessmentId).toBe(id);
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: id,
+    expect(repeat.suggestions.categoryId?.suggestionId).toBe(id);
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: id,
       operationId: "synthetic:live-wrong",
       verdict: "wrong",
       intent: "history",
     });
-    const replay = await inferFieldAssessments(
+    const replay = await inferFieldSuggestions(
       kernelCtx(ctx),
       { ...input, runKey: crypto.randomUUID() },
       { ...categoryPorts(0.8).suggestPorts, decisionModel: PRIMARY_MODEL },
@@ -165,7 +165,7 @@ describe("Suggestion review", () => {
       id: record.id,
       data: { name: "Synthetic revised live evidence" },
     });
-    const revised = await inferFieldAssessments(
+    const revised = await inferFieldSuggestions(
       kernelCtx(ctx),
       {
         ...input,
@@ -174,8 +174,8 @@ describe("Suggestion review", () => {
       },
       { ...categoryPorts(0.8).suggestPorts, decisionModel: PRIMARY_MODEL },
     );
-    expect(revised.suggestions.categoryId?.assessmentId).toBeDefined();
-    expect(revised.suggestions.categoryId?.assessmentId).not.toBe(id);
+    expect(revised.suggestions.categoryId?.suggestionId).toBeDefined();
+    expect(revised.suggestions.categoryId?.suggestionId).not.toBe(id);
   });
   it.each([false, true])(
     "keeps identical served decision evidence wrong across live and stored inference, different candidate=%s",
@@ -252,7 +252,7 @@ describe("Suggestion review", () => {
         },
       };
       const live = await withAiInputs(false, () =>
-        inferFieldAssessments(
+        inferFieldSuggestions(
           kernelCtx(ctx),
           {
             entity: "product",
@@ -264,8 +264,8 @@ describe("Suggestion review", () => {
           { ...ports, decisionModel: PRIMARY_MODEL },
         ),
       );
-      const id = live.result.suggestions.categoryId?.assessmentId;
-      if (!id) throw new Error("Synthetic live assessment missing");
+      const id = live.result.suggestions.categoryId?.suggestionId;
+      if (!id) throw new Error("Synthetic live suggestion missing");
       const [liveRow] = await getDb(ctx.db)
         .select()
         .from(suggestionTable)
@@ -281,8 +281,8 @@ describe("Suggestion review", () => {
           active: true,
           status: "pending",
         });
-      const reviewed = await reviewAssessment(ctx.db, kernelCtx(ctx), {
-        assessmentId: id,
+      const reviewed = await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+        suggestionId: id,
         operationId: "synthetic-cross-path-wrong",
         verdict: "wrong",
         intent: "history",
@@ -296,7 +296,7 @@ describe("Suggestion review", () => {
         data: { governingFeedbackId: reviewed.feedbackId },
       });
       chooseOther = differentCandidate;
-      const changed = await inferFieldAssessments(
+      const changed = await inferFieldSuggestions(
         kernelCtx(ctx),
         {
           entity: "product",
@@ -311,7 +311,7 @@ describe("Suggestion review", () => {
       expect(changed.suggestions.categoryId?.value).toBe(
         differentCandidate ? taxonomyShortcode("books") : undefined,
       );
-      expect(changed.suggestions.categoryId?.assessmentId).not.toBe(id);
+      expect(changed.suggestions.categoryId?.suggestionId).not.toBe(id);
       const stored = await withAiInputs(false, () =>
         startSuggestionSweep(
           ctx.db,
@@ -329,7 +329,7 @@ describe("Suggestion review", () => {
       expect(stored.inputs).toEqual(live.inputs);
       expect(
         (
-          await listSuggestions(ctx.db, {
+          await readReviewFields(ctx.db, {
             entity: "product",
             recordIds: [record.id],
             minConfidence: 0,
@@ -353,20 +353,20 @@ describe("Suggestion review", () => {
         { context: kernelCtx(ctx), ...categoryPorts(0.8) },
       );
     const first = await start();
-    const [row] = await listSuggestions(ctx.db, {
+    const [row] = await readReviewFields(ctx.db, {
       runId: await runCode(ctx.db, first.id),
       minConfidence: 0,
     });
-    if (!row) throw new Error("Synthetic field assessment missing");
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: row.id,
+    if (!row) throw new Error("Synthetic field suggestion missing");
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: row.id,
       operationId: "synthetic:wrong-field",
       verdict: "wrong",
       intent: "history",
     });
     await start();
     expect(
-      await listSuggestions(ctx.db, {
+      await readReviewFields(ctx.db, {
         entity: "product",
         recordIds: [record.id],
         minConfidence: 0,
@@ -388,7 +388,7 @@ describe("Suggestion review", () => {
     });
     await start();
     expect(
-      await listSuggestions(ctx.db, {
+      await readReviewFields(ctx.db, {
         entity: "product",
         recordIds: [record.id],
         minConfidence: 0,
@@ -402,14 +402,14 @@ describe("Suggestion review", () => {
       categoryId: taxonomyId("tools"),
     });
     const runId = await sweepCategories([product.id]);
-    const [row] = await listSuggestions(ctx.db, {
+    const [row] = await readReviewFields(ctx.db, {
       runId: await runCode(ctx.db, runId),
       minConfidence: 0,
     });
     if (!row) throw new Error("Synthetic Suggestion was not persisted");
     expect(row.suggestedValue).toBe(taxonomyShortcode(SUGGESTED_CATEGORY));
     expect(
-      await listSuggestions(ctx.db, {
+      await readReviewFields(ctx.db, {
         minConfidence: 0,
         entity: "product",
         recordIds: [product.id],
@@ -422,7 +422,7 @@ describe("Suggestion review", () => {
         recordId: product.id,
       }),
     ]);
-    const sibling = await publishFieldAssessment(
+    const sibling = await seedFieldSuggestion(
       ctx.db,
       {
         runId,
@@ -447,7 +447,7 @@ describe("Suggestion review", () => {
       taxonomyId(SUGGESTED_CATEGORY),
     );
     expect(
-      await listSuggestions(ctx.db, {
+      await readReviewFields(ctx.db, {
         minConfidence: 0,
         entity: "product",
         recordIds: [product.id],
@@ -466,7 +466,7 @@ describe("Suggestion review", () => {
     const uuid = await recordId(ctx.db, product.id, "product");
     await Promise.all(
       [0.99, 0.98, 0.97].map((confidence) =>
-        publishFieldAssessment(
+        seedFieldSuggestion(
           ctx.db,
           {
             runId,
@@ -484,7 +484,7 @@ describe("Suggestion review", () => {
         ),
       ),
     );
-    const page = await listSuggestions(ctx.db, {
+    const page = await readReviewFields(ctx.db, {
       entity: "product",
       recordIds: [product.id],
       fields: ["categoryId"],
@@ -503,7 +503,7 @@ describe("Suggestion review", () => {
       categoryId: taxonomyId("tools"),
     });
     const runId = await sweepCategories([dismissed.id, corrected.id]);
-    const pending = await listSuggestions(ctx.db, {
+    const pending = await readReviewFields(ctx.db, {
       runId: await runCode(ctx.db, runId),
       minConfidence: 0,
     });
@@ -517,8 +517,8 @@ describe("Suggestion review", () => {
     const correctedRow = pendingFor(corrected.id);
     expect(dismissedRow.kind).toBe("correction");
 
-    await reviewAssessment(ctx.db, context, {
-      assessmentId: dismissedRow.id,
+    await reviewSuggestion(ctx.db, context, {
+      suggestionId: dismissedRow.id,
       operationId: crypto.randomUUID(),
       verdict: "wrong",
       intent: "history",
@@ -546,13 +546,13 @@ describe("Suggestion review", () => {
       taxonomyId("household"),
     );
     expect(
-      await listSuggestions(ctx.db, {
+      await readReviewFields(ctx.db, {
         runId: await runCode(ctx.db, runId),
         minConfidence: 0,
       }),
     ).toHaveLength(0);
     // Reviewed history is the decision-eval label set read over MCP.
-    const history = await listSuggestions(ctx.db, {
+    const history = await readReviewFields(ctx.db, {
       runId: await runCode(ctx.db, runId),
       minConfidence: 0,
       status: "rejected",
@@ -563,7 +563,7 @@ describe("Suggestion review", () => {
     // A record-scoped history read keeps its status; it once fell through to
     // a pending-only page read and returned no labels.
     expect(
-      await listSuggestions(ctx.db, {
+      await readReviewFields(ctx.db, {
         entity: "product",
         recordIds: [dismissed.id, corrected.id],
         fields: ["categoryId"],
@@ -572,10 +572,10 @@ describe("Suggestion review", () => {
       }),
     ).toHaveLength(2);
     await expect(
-      listSuggestions(ctx.db, { recordIds: [dismissed.id] }),
+      readReviewFields(ctx.db, { recordIds: [dismissed.id] }),
     ).rejects.toThrow(/name its entity/);
     expect(
-      await listSuggestions(ctx.db, {
+      await readReviewFields(ctx.db, {
         minConfidence: 0,
         entity: "product",
         recordIds: [dismissed.id, corrected.id],
@@ -594,16 +594,16 @@ describe("Suggestion review", () => {
     });
     const runId = await sweepCategories([accepted.id, rejected.id]);
     const code = await runCode(ctx.db, runId);
-    const pending = await listSuggestions(ctx.db, {
+    const pending = await readReviewFields(ctx.db, {
       runId: code,
       minConfidence: 0,
     });
     const idFor = (recordId: string) =>
       pending.find((row) => row.recordId === recordId)?.id ?? "";
-    const accept = await reviewAssessmentBatch(ctx.db, context, {
+    const accept = await reviewSuggestionBatch(ctx.db, context, {
       items: [
         {
-          assessmentId: idFor(accepted.id),
+          suggestionId: idFor(accepted.id),
           operationId: crypto.randomUUID(),
           verdict: "correct",
           intent: "apply",
@@ -612,24 +612,24 @@ describe("Suggestion review", () => {
     });
     expect(accept).toEqual([
       expect.objectContaining({
-        assessmentId: idFor(accepted.id),
+        suggestionId: idFor(accepted.id),
         ok: true,
         status: "applied",
         applied: true,
       }),
     ]);
     // The already-applied id fails on its own; the pending one still rejects.
-    const reject = await reviewAssessmentBatch(ctx.db, context, {
+    const reject = await reviewSuggestionBatch(ctx.db, context, {
       items: [
         {
-          assessmentId: idFor(accepted.id),
+          suggestionId: idFor(accepted.id),
           operationId: crypto.randomUUID(),
           verdict: "correct",
           intent: "apply",
           expectedFingerprint: "synthetic-stale-fingerprint",
         },
         {
-          assessmentId: idFor(rejected.id),
+          suggestionId: idFor(rejected.id),
           operationId: crypto.randomUUID(),
           verdict: "wrong",
           intent: "history",
@@ -637,9 +637,9 @@ describe("Suggestion review", () => {
       ],
     });
     expect(reject).toEqual([
-      expect.objectContaining({ assessmentId: idFor(accepted.id), ok: false }),
+      expect.objectContaining({ suggestionId: idFor(accepted.id), ok: false }),
       expect.objectContaining({
-        assessmentId: idFor(rejected.id),
+        suggestionId: idFor(rejected.id),
         ok: true,
         status: "rejected",
         applied: false,
@@ -683,7 +683,7 @@ describe("Suggestion review", () => {
       purpose: "ai_suggest",
       clientKey: crypto.randomUUID(),
     });
-    const prediction = await publishAssessment(
+    const prediction = await publishSuggestion(
       ctx.db,
       {
         publicationKey: "synthetic:live-field-miss",
@@ -708,8 +708,8 @@ describe("Suggestion review", () => {
         kind: "correction",
       },
     );
-    await reviewAssessment(ctx.db, context, {
-      assessmentId: prediction.id,
+    await reviewSuggestion(ctx.db, context, {
+      suggestionId: prediction.id,
       operationId: crypto.randomUUID(),
       verdict: "wrong",
       intent: "history",
@@ -758,7 +758,7 @@ describe("Suggestion review", () => {
       },
       { context, suggest },
     );
-    const [row] = await listSuggestions(ctx.db, {
+    const [row] = await readReviewFields(ctx.db, {
       runId: await runCode(ctx.db, started.id),
       minConfidence: 0,
     });
@@ -833,7 +833,7 @@ describe("Suggestion review", () => {
     expect(await vendorCategory(autoVendor.id)).toBe(category.id);
     expect(await vendorCategory(reviewedVendor.id)).toBeNull();
 
-    const pending = await listSuggestions(ctx.db, {
+    const pending = await readReviewFields(ctx.db, {
       runId: await runCode(ctx.db, started.id),
       minConfidence: 0,
     });

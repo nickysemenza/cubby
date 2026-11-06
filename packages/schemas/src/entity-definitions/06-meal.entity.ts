@@ -401,13 +401,13 @@ Rules:
           key: "costTotal",
           kind: "json",
           nullable: true,
-          labelOverride: "Cost",
+          label: "Cost",
           // Not sortable: a read-time rollup of `recipe.totals x scale` through
           // the estimate engine, which a SQL ORDER BY cannot reproduce for
           // partial/pending/unavailable results. The server composes the text.
           display: {
             columnGroup: "Food",
-            columnIdOverride: "cost",
+            columnId: "cost",
             labelPath: "costTotalLabel",
             width: "xs",
             mobile: { slot: "trailing", priority: 10 },
@@ -802,7 +802,14 @@ Rules:
       },
     },
     extensions: {
+      relatednessSignals: [
+        { kind: "semantic", label: "Similar meaning", weight: 1, limit: 8 },
+      ],
       ports: {
+        reports: {
+          module: "~/server/domains/meal/repo/report-bindings",
+          export: "reportBindings",
+        },
         repository: {
           module: "~/server/domains/meal/repo/repository",
           export: "mealRepository",

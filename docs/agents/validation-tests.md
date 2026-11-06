@@ -1,5 +1,10 @@
 # Test tiers and runtime traps
 
+After a merge adds modules to an existing `import.meta.glob`, a missing loader
+can be a stale Vitest filesystem transform. Run
+`pnpm --dir apps/web exec vitest --clearCache` before diagnosing a loader whose
+source pattern already covers the new file. Do not weaken loader admission.
+
 Browser preview discovery stays under `src/`. Workspace package symlinks in
 `node_modules` can lead back to the repository and old agent worktrees; they
 must not become duplicate test entries or import stale component contracts.

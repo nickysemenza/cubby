@@ -1,46 +1,37 @@
 import {
-  assessmentFamily,
-  assessmentProducer,
-  assessmentSubjects,
-} from "@cubby/schemas/assessment";
-import {
   emailProtectingIntentFrontier,
-  emailReviewFrontierReceipt,
   type EmailProtectingIntentFrontier,
 } from "@cubby/schemas/email-observations";
 import { connectionCandidate } from "@cubby/schemas/entity-connections";
 import { emailId } from "@cubby/schemas/identifiers";
+import {
+  suggestionFamily,
+  suggestionProducer,
+  suggestionSubjects,
+} from "@cubby/schemas/suggestion";
 import { correctionAuthorityReceiptKinds } from "@cubby/schemas/suggestion-correction";
 import { and, asc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import {
-  repositoryQueries as getDb,
-  repositoryTransactionDatabase as withTransactionDatabase,
-} from "~/server/db/repository-access.boundary";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { email, emailReview } from "~/server/db/retained-tables";
-import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
 import {
   assertEmailEvidenceScope,
   withEmailEvidenceWrite,
   type EmailEvidenceWriteScope,
 } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
-import {
-  recordFeedback,
-  type recordFeedbackWithInsertion,
-} from "~/server/generic/assessment/repo/assessment";
 
 type ReviewSubject = {
-  family: z.infer<typeof assessmentFamily>;
+  family: z.infer<typeof suggestionFamily>;
   subject: unknown;
 };
 
 const relevantReview = (input: ReviewSubject) => {
   if (input.family === "email_relevance" || input.family === "email_link")
     return true;
-  const subject = assessmentSubjects.recommendation.safeParse(input.subject);
+  const subject = suggestionSubjects.recommendation.safeParse(input.subject);
   return (
     input.family === "recommendation" &&
     subject.success &&
@@ -52,14 +43,14 @@ const relevantReview = (input: ReviewSubject) => {
 function emailIntentSubjectSql(id: SQL, originalId: SQL) {
   return and(
     inArray(emailReview.family, [
-      assessmentFamily.enum.email_relevance,
-      assessmentFamily.enum.email_link,
-      assessmentFamily.enum.recommendation,
+      suggestionFamily.enum.email_relevance,
+      suggestionFamily.enum.email_link,
+      suggestionFamily.enum.recommendation,
     ]),
     or(
       sql`${emailReview.emailId} = ${id}`,
       and(
-        eq(emailReview.family, assessmentFamily.enum.email_link),
+        eq(emailReview.family, suggestionFamily.enum.email_link),
         isNull(emailReview.emailId),
         sql`${emailReview.originalId} = ${originalId}`,
       ),
@@ -70,7 +61,7 @@ function emailIntentSubjectSql(id: SQL, originalId: SQL) {
 /** Same retained-subject boundary used by admission before bounded pagination. */
 export function emailHasProtectingIntentSql(id: SQL, originalId: SQL) {
   const subject = emailIntentSubjectSql(id, originalId);
-  const kind = sql`${emailReview.metadata}->>${assessmentProducer.keyof().enum.kind}`;
+  const kind = sql`${emailReview.metadata}->>${suggestionProducer.keyof().enum.kind}`;
   return sql`EXISTS (SELECT 1 FROM ${emailReview}
     WHERE ${subject} AND ((${emailReview.authority} = ${"member"}
       AND (${kind} IS NULL OR ${kind} NOT IN (${sql.join(
@@ -80,7 +71,7 @@ export function emailHasProtectingIntentSql(id: SQL, originalId: SQL) {
       OR ${kind} IN (${"email_resolution"}, ${"email_link"})))`;
 }
 
-/** The endpoints a connection review stored from its Assessment's evidence. */
+/** The endpoints a connection review stored from its Suggestion's evidence. */
 const reviewedConnection = z.object({
   candidate: z
     .object({
@@ -116,7 +107,7 @@ export async function readEmailProtectingIntent(
       authority: emailReview.authority,
       kind: sql<
         string | null
-      >`${emailReview.metadata}->>${assessmentProducer.keyof().enum.kind}`,
+      >`${emailReview.metadata}->>${suggestionProducer.keyof().enum.kind}`,
       family: emailReview.family,
       subject: emailReview.subject,
     })
@@ -160,7 +151,7 @@ export async function readEmailProtectingIntent(
           reason:
             "Retained Email connection intent has incomplete endpoint proof",
         };
-    } else if (!assessmentSubjects[row.family].safeParse(row.subject).success) {
+    } else if (!suggestionSubjects[row.family].safeParse(row.subject).success) {
       return {
         status: "held",
         emailId: id,
@@ -174,53 +165,6 @@ export async function readEmailProtectingIntent(
     emailId: id,
     feedbackIds,
   });
-}
-
-async function reviewFrontier(
-  db: Database,
-  input: ReviewSubject,
-): Promise<EmailProtectingIntentFrontier> {
-  if (input.family === "email_relevance") {
-    const subject = assessmentSubjects.email_relevance.safeParse(input.subject);
-    if (subject.success)
-      return readEmailProtectingIntent(
-        db,
-        emailId.parse(subject.data.recordId),
-      );
-  } else if (input.family === "recommendation") {
-    const subject = assessmentSubjects.recommendation.safeParse(input.subject);
-    if (subject.success)
-      return readEmailProtectingIntent(
-        db,
-        emailId.parse(subject.data.recordId),
-      );
-  } else if (input.family === "email_link") {
-    const subject = assessmentSubjects.email_link.safeParse(input.subject);
-    if (subject.success) {
-      if (subject.data.recordId)
-        return readEmailProtectingIntent(
-          db,
-          emailId.parse(subject.data.recordId),
-        );
-      const matches = await getDb(db)
-        .select({ id: email.id })
-        .from(email)
-        .where(
-          and(
-            eq(email.orderMailId, subject.data.originalId),
-            notDeleted(email),
-          ),
-        )
-        .limit(2);
-      if (matches.length === 1 && matches[0])
-        return readEmailProtectingIntent(db, emailId.parse(matches[0].id));
-    }
-  }
-  return {
-    status: "held",
-    emailId: null,
-    reason: "Retained review does not prove one current Email identity",
-  };
 }
 
 /** Select only Email review writes; other families retain their own transaction owner. */
@@ -239,78 +183,4 @@ export async function withEmailReviewBoundary<T>(
     return action(db, scope);
   }
   return withEmailEvidenceWrite(db, action);
-}
-
-/** Atomic command/frontier association only; complete effect ownership and outer fences remain required. */
-export async function withEmailReviewFrontier(
-  db: Database,
-  input: ReviewSubject,
-  action: (
-    transactionDb: Database,
-  ) => ReturnType<typeof recordFeedbackWithInsertion>,
-  scope?: EmailEvidenceWriteScope,
-) {
-  if (!relevantReview(input)) return action(db);
-  return withEmailReviewBoundary(
-    db,
-    input,
-    (scopedDb) =>
-      withTransactionDatabase(scopedDb, async (transactionDb) => {
-        const publication = await action(transactionDb);
-        const command = publication.event;
-        // Historical retries cannot reconstruct the baseline of the original command.
-        if (!publication.inserted || command.authority !== "member")
-          return publication;
-        const capture = emailReviewFrontierReceipt.parse({
-          version: "email-review-frontier-v1",
-          commandFeedbackId: command.id,
-          frontier: await reviewFrontier(transactionDb, input),
-        });
-        await recordFeedback(transactionDb, {
-          assessmentId: command.assessmentId,
-          operationId: `email-review-frontier:${command.id}`,
-          verdict: "ungraded",
-          authority: "system",
-          actorUserId: null,
-          intent: "history",
-          receipt: capture,
-          metadata: {
-            kind: "email_review_frontier",
-            commandFeedbackId: command.id,
-          },
-        });
-        return publication;
-      }),
-    scope,
-  );
-}
-
-/** The frontier of a mail decision command, retained beside its review. */
-export async function appendEmailReviewFrontier(
-  db: Database,
-  input: ReviewSubject & { subjectId: string },
-  commandId: string,
-) {
-  await appendEmailReview(db, {
-    family: input.family,
-    subjectId: input.subjectId,
-    emailId: null,
-    originalId: null,
-    checksum: null,
-    operationId: `email-review-frontier:${commandId}`,
-    verdict: "ungraded",
-    authority: "system",
-    actorUserId: null,
-    intent: "history",
-    subject: z.json().parse(input.subject),
-    receipt: emailReviewFrontierReceipt.parse({
-      version: "email-review-frontier-v1",
-      commandFeedbackId: commandId,
-      frontier: await reviewFrontier(db, input),
-    }),
-    metadata: {
-      kind: "email_review_frontier",
-      commandFeedbackId: commandId,
-    },
-  });
 }

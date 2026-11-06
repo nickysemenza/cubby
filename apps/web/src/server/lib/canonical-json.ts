@@ -8,7 +8,7 @@ export const jsonSnapshot = z.preprocess(
   z.json(),
 );
 
-/** Stable object ordering for Assessment and mutation input fingerprints. */
+/** Stable object ordering for Suggestion and mutation input fingerprints. */
 export function canonicalJson(
   value: z.infer<ReturnType<typeof z.json>>,
 ): string {

@@ -27,12 +27,12 @@ import {
   storedVariantComparison,
 } from "~/server/domains/product/repo/match/product-pair-signals";
 import { type EntityKernelContext } from "~/server/entity-kernel";
-import { mergeReviewedProductPair } from "~/server/generic/assessment/repo/assessment-product";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { mergeReviewedProductPair } from "~/server/generic/suggestions/repo/suggestion-product";
 const BOTH_STOCKED_WARNING =
   "Both Products have stock. Identity merging combines quantities; any duplicate receiving requires a separate reviewed inventory correction.";
 
@@ -62,7 +62,7 @@ function candidate(
   signals: unknown,
   details: Pick<
     ProductMatchCandidate,
-    | "assessmentId"
+    | "suggestionId"
     | "fingerprint"
     | "identityConflict"
     | "actionable"
@@ -98,7 +98,7 @@ export async function getProductMatchQueue(
   input: {
     productId?: ProductShortcode;
     candidateId?: ProductShortcode;
-    assessmentIds?: readonly string[];
+    suggestionIds?: readonly string[];
   },
 ): Promise<ProductMatchQueueOut> {
   const focus = input.productId
@@ -110,9 +110,9 @@ export async function getProductMatchQueue(
   const rows = (
     await listProductMatchRows(db, focus, {
       reviewableOnly: true,
-      assessmentIds: input.assessmentIds,
+      suggestionIds: input.suggestionIds,
       candidateId: other,
-      limit: input.assessmentIds ? input.assessmentIds.length : 200,
+      limit: input.suggestionIds ? input.suggestionIds.length : 200,
     })
   ).sort((a, b) => Number(b.source === "agent") - Number(a.source === "agent"));
   const productIds = rows.flatMap((row) => [row.productAId, row.productBId]);
@@ -143,7 +143,7 @@ export async function getProductMatchQueue(
         ? [
             {
               ...candidate(row.source, a, b, row.signals, {
-                assessmentId: row.id,
+                suggestionId: row.id,
                 fingerprint: row.fingerprint,
                 identityConflict: row.conflict,
                 actionable: row.actionable,
@@ -157,7 +157,7 @@ export async function getProductMatchQueue(
                       : [],
               }),
               review: {
-                assessmentId: row.id,
+                suggestionId: row.id,
                 suppression: {
                   scope: "product_pair",
                   candidateKey: productPairKey(row.productAId, row.productBId),

@@ -1,11 +1,11 @@
 import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { seedProductPrerequisite } from "./fixtures/catalog";
-import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
-import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
+import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import type { Page } from "@playwright/test";
-import { assessmentReviewInput } from "@cubby/schemas/assessment";
+import { suggestionReviewInput } from "@cubby/schemas/suggestion";
 import {
   recordSourceTransactionRecordsOut,
   recordSourceTransactionRecordsInput,
@@ -26,7 +26,7 @@ import {
 } from "~/server/domains/connection/repo/entity-connections";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
@@ -156,7 +156,7 @@ test("Suggestions lists every family with named records and category pills, and 
   await generateStatementSuggestions(db, importId);
   await drainDerivedRefreshFrontier(db);
   const seedCategoryAdvice = async () =>
-    publishFieldAssessment(
+    seedFieldSuggestion(
       db,
       {
         runId,
@@ -486,7 +486,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   const attach = page.waitForRequest((request) =>
     dispatchesOperation(
       request,
-      "assessment.reviewBatch",
+      "suggestion.reviewBatch",
       (item) =>
         z
           .object({
@@ -594,48 +594,6 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
   ).toBeVisible();
 });
 
-// Failure modes: clean booking is hidden or cannot resume, and audit history
-// becomes a second disconnected workspace. Field fill remains a fixed policy.
-test("Suggestions contains automatic history and pausable statement spending", async ({
-  page,
-}) => {
-  await gotoAuthenticatedPage(page, "/suggestions");
-  await page.getByRole("tab", { name: "Automatic rules", exact: true }).click();
-  await expect(page).toHaveURL(/status=rules/);
-  const rules = page.getByRole("list", { name: "Automatic rules" });
-  await expect(
-    rules.getByRole("listitem", { name: "Field assignment" }),
-  ).toHaveCount(0);
-  const attach = rules.getByRole("listitem", { name: "Statement attach" });
-  await expect(
-    attach.getByRole("switch", { name: "Statement attach automatic rule" }),
-  ).toBeEnabled();
-  const spending = rules.getByRole("listitem", { name: "Statement spending" });
-  const toggle = spending.getByRole("switch", {
-    name: "Statement spending automatic rule",
-  });
-  await expect(toggle).toHaveAttribute("aria-checked", "true");
-  await toggle.click();
-  await page
-    .getByRole("alertdialog")
-    .getByRole("button", { name: "Turn off", exact: true })
-    .click();
-  await expect(toggle).toHaveAttribute("aria-checked", "false");
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-checked", "true");
-  await page
-    .getByRole("tab", { name: "Automation history", exact: true })
-    .click();
-  await expect(page).toHaveURL(/status=automatic/);
-  await expect(
-    page.getByRole("region", { name: "Automation history", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("tab", { name: "Pending", exact: true }).click();
-  await expect(suggestionsTable(page)).toBeVisible();
-  await gotoAuthenticatedPage(page, "/automatic-decisions");
-  await expect(page).toHaveURL(/suggestions\?status=automatic/);
-});
-
 // Acceptance must acknowledge the chosen value before the response arrives,
 // retain other pills throughout the write/refetch, and persist the real value.
 test("list pills accept immediately without unloading another row's suggestion", async ({
@@ -662,7 +620,7 @@ test("list pills accept immediately without unloading another row's suggestion",
   await drainDerivedRefreshFrontier(db);
   await Promise.all(
     recordIds.map(async (recordId) =>
-      publishFieldAssessment(
+      seedFieldSuggestion(
         db,
         {
           runId,
@@ -695,9 +653,9 @@ test("list pills accept immediately without unloading another row's suggestion",
     if (
       !dispatchesOperation(
         route.request(),
-        "assessment.review",
+        "suggestion.review",
         (item) =>
-          assessmentReviewInput.safeParse(item.input).data?.intent === "apply",
+          suggestionReviewInput.safeParse(item.input).data?.intent === "apply",
       )
     ) {
       await route.continue();
@@ -778,7 +736,7 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
       reason: "Restates brandName",
     },
   ];
-  const prediction = await publishAssessment(
+  const prediction = await publishSuggestion(
     db,
     {
       publicationKey: `synthetic:prune:${id}`,
@@ -811,7 +769,7 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
         data: fieldSuggestionsReply(route.request(), {
           suggestions: {
             tags: {
-              assessmentId: prediction.id,
+              suggestionId: prediction.id,
               value: "synthetic-brand",
               label: "Remove synthetic-brand",
               confidence: "high",

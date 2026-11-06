@@ -47,20 +47,6 @@ export async function recoverMissedWork(
 ) {
   const obligations = await Promise.allSettled([
     (async () => {
-      const { scheduleDerivedDiscovery } =
-        await import("~/server/domains/run/service/derived-discovery");
-      await scheduleDerivedDiscovery(db);
-    })(),
-    ...(daily
-      ? [
-          (async () => {
-            const { enrollQueueMaintenance } =
-              await import("~/server/workflows/job-maintenance");
-            await enrollQueueMaintenance(db);
-          })(),
-        ]
-      : []),
-    (async () => {
       const { reconcileWorkflowRuns } =
         await import("~/server/workflows/runs/lifecycle");
       // Every bounded page is owed; don't stop after the first hundred Runs.

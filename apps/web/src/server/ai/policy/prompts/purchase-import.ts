@@ -91,35 +91,6 @@ function purchaseRepairMessages(
   ];
 }
 
-const exampleInvalidExtraction: ImportExtractionOutcome = {
-  status: "ready",
-  candidate: {
-    orderId: "example-1",
-    orderedAt: null,
-    merchant: "Example Tools",
-    currency: "USD",
-    printedGrandTotal: 80,
-    lines: [
-      { title: "Cordless drill kit", amount: 79.95, lineKind: "principal" },
-    ],
-    payments: [],
-    shipments: [],
-  },
-};
-
-/**
- * An AI-only probe for the repair prompt, without an extraction write: the
- * smoke run and the routing eval send the exact repair turn production sends
- * after `previous` fails validation.
- */
-export function purchaseRepairRequest(
-  capture: BrowserCapture,
-  previous: ImportExtractionOutcome = exampleInvalidExtraction,
-) {
-  const request = purchaseExtractionPrompt(capture);
-  return purchaseRepairPrompt(request, [SUM_MISMATCH_ISSUE], previous, null);
-}
-
 export const orderMailRequest = (args: {
   sender: string;
   subject: string;

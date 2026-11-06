@@ -1,8 +1,8 @@
 # Durable Jobs
 
-The universal `Job` table owns execution state for background work: claims,
+The `Job` table owns one-off or resumable execution: claims,
 leases, generations, retries and waits. Domain rows keep their outcomes and
-evidence. [ADR 0015](adr/0015-unified-durable-work-coordination.md) records
+evidence. [ADR 0025](adr/0025-radical-simplification-of-background-work.md) records
 the decision; this page owns the runtime contract. Derived-data families are
 in [entities](entities.md#background-derived-data); Worker and database
 capacity in [infrastructure](infrastructure.md#postgresql-and-hyperdrive).
@@ -19,52 +19,34 @@ supplies the lane and internal-kind flag. Work shows on the Work page and throug
 
 A Job is a unit of execution, not a unit of household work. Work that fans out over many
 records is a **drain** over **items** held on the rows that owe them: `AiEvaluation`,
-`SearchDocument`, `EntityEmbedding` and `ImageProcessingJob` each supply a `DrainStore`
+`SearchDocument`, `EntityEmbedding` and `ImageProcessingJob` own their scheduling. The first three supply a `DrainStore`
 (`generic/jobs/drain-store.ts`). An item's ticket says which intent a page may settle, so a
 re-mark during a page takes a new ticket, and the page clears only what it claimed. The
 derived rebuild is a resumable pass with its own row, not items.
 
-`defineDrain` (`generic/jobs/service/drain.ts`) is the one claim → prepare →
-publish helper. It observes items by priority, readiness and ticket, keeps
-only the ordered prefix admitted by the adapter's preparation budget (the
-remaining observed tickets stay owed without consuming attempts unless the
-existing coverage mechanism settles their identical applied effect), and prepares
-it outside a transaction. It settles per-item preparation failures (backoff
-from the kind policy, or the drain's `exhaust` at `maxAttempts`); then
-publishes at most 25 weighted items per fenced transaction (SERIALIZABLE where
-the drain declares it). A drain's `lock` takes its domain locks first and may
-narrow the chunk: items it declines (a source row another writer holds) stay
-owed, untouched, for a later page. A chunk that fails on a target error or
-SQLSTATE class 22, 23 or 54 splits in halves until the failing item settles
-alone; its siblings publish. `publish` may `retain` items it could not apply
-(a derived target behind a newer fanout). `publish` may also report a bounded
-set of extra ready marks whose identical
-effect it already applied. `defineDrain` excludes the entire page's original
-claims, then locks only unchanged covered tickets in the same drain with
-`SKIP LOCKED` and clears them in the same fenced transaction. These covered
-scheduling marks add no domain computation; the adapter bounds their observation
-separately from weighted publication work. Newer or writer-held marks stay owed.
-The page reports those settlements as `covered`; `processed` and `published`
-keep counting the original page's claims.
-`published`, `failed` and `covered` count committed outcomes only: each fenced
-transaction returns its own counts, and the page adds them after it commits, so
-a rollback or SERIALIZABLE replay inflates nothing. The three do not overlap.
-`processed` also includes items a page declined or retained, which have no
-outcome yet.
-Busy fanouts stay owed. A direct-only prefix keeps the ordinary single pass.
-Neither pass finishes the Job independently;
-their counters combine and any processed work keeps the page unfinished.
-An item's `lastError` keeps each
-cause, capped so the database's own message survives. A drain with nothing
-ready runs its `idle` publication (derived clock expiry) and completes, or
-waits until its next item's `readyAt`. Backed-off items retain a parent Job
-deadline; no recurring enrollment is needed. Paid results that must survive a later publication
-failure are written through `ctx.fenced` before publication (an evaluation's
-`result_ready`). `postponeWork` waits without spending an attempt.
+`rowDrain` (`generic/background/drains.ts`) is the single claim → prepare →
+publish helper for embeddings and AI evaluation. It claims a bounded page,
+prepares outside transactions and publishes chunks of at most 25 weighted items.
+Domain locks precede item locks. An isolated publication error splits the chunk
+until only the failing item backs off or exhausts; committed siblings never replay.
+Adapters declare their own backoff and optional attempt limit. AI evaluation
+supplies real lease-checking transactions, including SERIALIZABLE publication;
+paid results survive publication failure on the evaluation row. No synthetic Job
+context or claim generation stands in for that ownership.
 
-Work that is one record and one interactive outcome stays a Job of one:
-`run.*`, `location-ai.*`, `image-metadata.extract`, calendar and connection
-discovery, statement paging and image processing.
+Published and failed counts record committed settlements, once each even
+when a serializable transaction replays. Retained items stay owed. Empty pages
+report their next due time; they have no idle publication or recurring Job.
+Connection discovery holds one AppSettings cursor and returns a two-minute
+continuation. Its retained legacy `runId` launches once after its pass finishes;
+retained member stops and terminal errors remain stopped. AI refresh no longer
+starts a separate automatic Sweep for connections.
+
+One-record work stays a Job: Run execution, Location AI, image metadata,
+calendar invalidation and purchase dispatch. Image processing owns its own row.
+Job `generation` remains the supersession fence and Run execution attempt number.
+Outcomes live on domain owners; Jobs retain no result JSON. `availableAt` is the
+only stored wait deadline. Completed Jobs remain until retention prunes them.
 
 ## Kinds and lanes
 
@@ -292,8 +274,9 @@ providers outside a transaction and returns an outcome with an optional
 `publish(tx)`. The executor (`generic/jobs/service/jobs.ts`, private) owns
 everything else:
 
-- **Lease.** Five minutes, renewed every 30 seconds. A refused renewal aborts
-  `ctx.signal` with `JobSupersededError`; provider calls take the signal.
+- **Lease.** Sixteen minutes, without renewal, longer than a Queue consumer can
+  execute. Token/generation fences and pre-provider checks still refuse stale work.
+  Device image lease renewal is unchanged.
 - **Fence.** `publish` runs in a transaction that takes the handler's domain
   locks first, then one `FOR UPDATE` on the Job just before commit, and
   commits only while the claim's token, generation and lease still hold.
@@ -316,7 +299,7 @@ everything else:
 Image processing owns its own execution on `ImageProcessingJob`, with no Job
 row: see [image processing](#image-processing). Producers use
 `repo/producer.ts`, member and Run controls `repo/operator.ts`, drains
-`defineDrain`, and readers `repo/job-reads.ts` (rows
+`rowDrain`, and readers `repo/job-reads.ts` (rows
 by identity, a Run's live lease, stopped Run executions). The queue core
 and selection (`repo/queue.ts`), `db/job-schema.ts` and the `Job` table object are private to
 `generic/jobs`, tests included: oxlint's `no-restricted-imports` and
@@ -331,15 +314,14 @@ A Job is due when it is queued or in backoff and its time has come, or when its 
 expired. A wake is only a Queue message that makes the drain look sooner (`wakeJobs`, `wakeAt`);
 it carries no durable state, and the hourly cron recovers a lost one. `enqueueJob({ invalidate:
 true })` is the only restart: it bumps the generation and clears the lease, so the old pass
-fails its fence. Catch-up (`repeatJob`) requeues a completed Job.
+fails its fence. Connection discovery repeats through its cursor; automatic work has no recurring Job.
 
 ## Retries
 
 Claiming is not an attempt; a failure is, and so is reclaiming an expired
 lease (the previous executor vanished mid-pass, and a crash loop must still
 exhaust). A failed Job backs off by its policy, `baseMs · 2^(failures - 1)` up
-to `maxMs`, and fails after `maxAttempts`; `maxAttempts: null` (drains, image
-processing, maintenance) never exhausts. `releaseJobClaim` hands a claim back without an
+to `maxMs`, and fails after `maxAttempts`; `maxAttempts: null` never exhausts. `releaseJobClaim` hands a claim back without an
 attempt, and deferrals never count. Drain items keep their own attempts and
 backoff.
 
@@ -362,7 +344,7 @@ pauses/cancellations and running leases keep their states.
 Retry now (`job.retryNow`, `retryJobsNow`) makes a filtered set due at once:
 backoff and provider waits clear, prior errors stay, failed and cancelled Jobs
 reopen with a fresh budget and generation, and running or member-paused Jobs
-are left alone. A Run cancel is one set-based statement (`cancelJobsWhere`);
+are left alone. A Run cancel is one set-based statement (`cancelRunJobs`);
 never-exhausting work belongs to its subject and survives a Run cancel.
 
 `run.funding-resume` is keyed by funding window, not Run: its one handler
@@ -492,26 +474,29 @@ recorded charged usage. Apple Activity hands the household queue off to
 `/work-queue` ([native Activity](../apps/apple/README.md#activity)).
 The web audit-log changes feed follows the queue.
 
-The `jobs.maintenance` Job (`workflows/job-maintenance.ts`) is admitted by daily
-recovery and completes after draining its pages. Each pass repairs image execution in bounded
-batches (retires moot work, gives open rows without a live execution one;
-failed image executions count as live) and keeps the device wake armed. Every
-six hours it also prunes Jobs and observed captures in bounded batches, continuing at
-once while a batch fills: completed after 8 days (past Work's seven-day failure lookback, where a later success
-suppresses an older failure), cancelled after 14 days, failed after 30 days, under the same pending-work, wake and identity safeguards. Domain evidence
-(image attempts, AI evaluations, Run history, audit) stays. A pruned row removes no
-guard: `launchWorkflowRun` reads the Run's own status, so a finished Run stays refused
-for automatic work and needs pending work to relaunch.
+The hourly cron calls `maintainJobs` directly: one bounded image-repair page and
+one retention page per tick. No maintenance Job or result timestamp is enrolled.
+Completed Jobs retain eight days, cancelled fourteen and failed thirty, under
+the existing pending-work and identity safeguards. Domain evidence stays.
 
-| Job kind                                                                         | Why a row                                         | Owner of the result           |
-| -------------------------------------------------------------------------------- | ------------------------------------------------- | ----------------------------- |
-| `run.execute`                                                                    | Lease, pause and retry for a Run                  | The Run                       |
-| `purchase.dispatch`                                                              | Durable handoff to the agent, deduped by event    | The Run and its agent session |
-| `run.funding-resume`                                                             | Waits for a funding window to end                 | The paused Runs               |
-| `image-metadata.extract`, `location-ai.*`                                        | One per record, replaced on re-admission          | The Image or Location         |
-| `calendar-feed.mark-dirty`, `maintenance.purchase-discovery`, `jobs.maintenance` | Keyed single passes                               | The feed, Vendor or queue     |
-| `discovery.connections`                                                          | Repeating pass with a cursor                      | Suggestions                   |
-| `derived.drain`, `derived.reconcile`                                             | Old identities, retired with the derived triggers | Derived snapshots             |
+`generic/jobs/repo/observation.ts` reads the real owners for Activity, maintenance,
+MCP and native clients. `job.activity.rebuild` replaces the standalone maintenance rebuild-status operation. Rebuild movement is its last committed page, independently
+of `finishedAt` and `cleanAt`. Failure totals name their units: failed work items, image-processing attempts
+or rebuild pages, never invented execution counts. Run ETA reads remain
+unchanged. Search repair reports committed record computations and failed pages;
+its unknown total stays indeterminate.
+
+A Queue batch runs one drain attempt, even on failure. All messages acknowledge
+or retry consistently. Job and row drains return continuation hints; their round
+owner coalesces the wake. Pre-execution recovery wakes remain armed.
+
+| Job kind                                                     | Why a row                                      | Owner of the result           |
+| ------------------------------------------------------------ | ---------------------------------------------- | ----------------------------- |
+| `run.execute`                                                | Lease, pause and retry for a Run               | The Run                       |
+| `purchase.dispatch`                                          | Durable handoff to the agent, deduped by event | The Run and its agent session |
+| `run.funding-resume`                                         | Waits for a funding window to end              | The paused Runs               |
+| `image-metadata.extract`, `location-ai.*`                    | One per record, replaced on re-admission       | The Image or Location         |
+| `calendar-feed.mark-dirty`, `maintenance.purchase-discovery` | Keyed single passes                            | The feed, Vendor or queue     |
 
 Everything else is a drain over its owner's rows and has no row here. AI refresh activation
 is a function of the cron tick. The table stays named `Job` because `Task` is the household
@@ -847,8 +832,8 @@ It takes the `run` and `workQueue` cache tags, not entity roots.
 `RUN_KINDS` owns Run purpose, triggers, effects and declared steps.
 `JOB_KIND_POLICY` in `packages/schemas/src/job.ts` co-locates each Job kind’s
 member explanation with its unchanged execution policy; the server kind-policy
-module re-exports that policy. `/runs/types` renders the static reference.
-Run and Job execution views link to these definitions, while actual outcomes,
+module re-exports that policy. Run and Job execution views show these definitions,
+while actual outcomes,
 waits, raw errors and retry controls remain on their existing records.
 Definitions are not evidence that execution happened. Retained unknown kinds
 keep their diagnostics and explicitly lack a current definition.

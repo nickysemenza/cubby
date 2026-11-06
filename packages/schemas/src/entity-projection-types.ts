@@ -94,6 +94,7 @@ export type GeneratedEntityFieldModel<E extends string = Entity> = {
     explanation: DeclaredField["explanation"];
     resolution: {
       reset: Readonly<Record<string, GeneratedEntityFieldResolutionValue>>;
+      resetSource?: NonNullable<DeclaredField["resolution"]>["resetSource"];
       none: Readonly<
         Record<string, GeneratedEntityFieldResolutionValue>
       > | null;
@@ -458,7 +459,6 @@ type EntityFilterDescriptorMetadata = {
     kind: "number" | "date";
     int: boolean;
     nonnegative: boolean;
-    finite: boolean;
     describe: { lower: string; upper: string } | null;
   } | null;
 

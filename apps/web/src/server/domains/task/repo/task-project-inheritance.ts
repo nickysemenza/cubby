@@ -65,9 +65,9 @@ type TaskAssignment = {
   trade: Trade | null;
 };
 
-const taskResolutionExtras = (alias: string) => ({
+const taskResolutionExtras = async (alias: string) => ({
   ...taskInheritanceReadExtras(alias),
-  fieldResolutions: inheritedFieldResolutionsSql("task", alias),
+  fieldResolutions: await inheritedFieldResolutionsSql("task", alias),
 });
 type ResolvedAssignment = {
   effectiveAssigneeId: LedgerPartyId | null;
@@ -139,7 +139,7 @@ export async function hydrateTaskInheritanceRows<
 >(db: Database, rows: readonly T[]) {
   if (!rows.length) return [];
   const extras = await getDb(db)
-    .select({ id: task.id, ...taskResolutionExtras("Task") })
+    .select({ id: task.id, ...(await taskResolutionExtras("Task")) })
     .from(task)
     .where(
       and(
@@ -217,7 +217,7 @@ export async function resolveDraftTaskFields(
       : null,
     trade: draft.trade ?? null,
   };
-  const extras = taskResolutionExtras("candidate");
+  const extras = await taskResolutionExtras("candidate");
   const selection = sql.join(
     Object.entries(extras).map(
       ([key, expression]) => sql`${expression} AS ${sql.identifier(key)}`,

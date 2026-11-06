@@ -31,7 +31,10 @@ const identifier = (value: string) =>
   `\`${value.replace(/[^A-Za-z0-9_]/gu, "_")}\``;
 
 /** A constrained Swift model emitter: unsupported wire shapes fail generation. */
-export function renderSwiftModels(contract: NativeContract): SwiftModels {
+export function renderSwiftModels(
+  contract: NativeContract,
+  callerNames: ReadonlySet<string> = new Set(),
+): SwiftModels {
   const declarations = new Map<string, string>();
   const declarationSchemas = new Map<string, string>();
   const claimDeclaration = (name: string, schema: Schema) => {
@@ -294,6 +297,22 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
     );
     return name;
   };
+  // Editors interpret the shared field envelope dynamically. Keep the entire
+  // subtree as JSON so stored/effective value schemas do not multiply models.
+  const isFieldEnvelope = (schema: Schema): boolean =>
+    Boolean(
+      schema.type === "object" &&
+      schema.properties?.current &&
+      schema.properties.result &&
+      schema.properties.work &&
+      Object.keys(schema.properties).length === 3 &&
+      schema.required?.includes("current") &&
+      schema.required.includes("result") &&
+      schema.required.includes("work") &&
+      resolve(schema.properties.current).properties?.assignment &&
+      resolve(schema.properties.current).properties?.controls,
+    );
+
   const emitNode = (raw: Schema | boolean, name: string): string => {
     if (raw === true) return "JSONValue";
     if (raw === false) throw new Error(`${name}: impossible schema`);
@@ -301,6 +320,7 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
     const { schema, nullable } = withoutNull(raw);
     if (nullable) return `${emit(schema, `${name}Value`)}?`;
     if (schema.$ref) return refType(schema.$ref);
+    if (isFieldEnvelope(schema)) return "JSONValue";
     if (Array.isArray(schema.type))
       return emit(
         {
@@ -494,6 +514,15 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
       `${name}: unsupported native schema ${JSON.stringify(schema)}`,
     );
   };
+  // A JSON envelope can hide a named schema still decoded explicitly by a
+  // consumer. Seed those callers before following operation dependencies.
+  for (const key of Object.keys(contract.models)) {
+    if (
+      !key.split("/").at(-1)?.startsWith("__") &&
+      callerNames.has(key.split("/").slice(1).map(pascal).join(""))
+    )
+      refType(`native://${key}`);
+  }
   for (const operation of contract.operations) {
     for (const key of [operation.body, operation.output])
       if (key) refType(`native://${key}`);

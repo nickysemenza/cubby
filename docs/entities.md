@@ -53,10 +53,17 @@ pass. It captures explicit overrides before deriving image sources and inverse
 relations, derives detail sections before validating data-quality placements,
 then validates the complete graph against entity and module child storage.
 Image routing names actual model fields; disabled create routes do not count as
-active alternatives. Counterfactual override comparisons use this same pass.
+active alternatives. Counterfactual comparisons use this same pass for named
+overrides.
 
 Compiler renderers use bootstrap-safe entity and identifier leaves, never their
-own generated catalogs. The lean Problem classification is emitted from the
+own generated catalogs. Shared Problem query and action declarations live in `@cubby/schemas` under
+`entity-definitions/problems`. The runtime compiler and registry validation live
+in `server/generic/problems/repo`; browser Problem modules own rendering and
+continuation loading. The shared filter compiler lives in schemas and URL keys
+come from the generated list fields, so server readers import no browser filters.
+
+The lean Problem classification is emitted from the
 canonical detector catalog after entity schema artifacts exist, so a clean
 checkout needs no prior generated output.
 
@@ -101,14 +108,14 @@ docked inspector region.
 
 A retention-managed read-only entity may omit `deletedAt`; generic readers apply
 liveness only where the table declares it. `listScaffold.population` receives the
-same request filters for rows, facets and selection. `populationFilters` names
+same request filters for rows, facets and selection. Explicit Run IDs bypass the default
+automatic-purpose list suppression, keeping historical Runs directly readable.
+Internal-ID readers resolve public codes before applying that same identity read. `populationFilters` names
 request options consumed by that predicate instead of compared with each row;
 Job uses it for its internal-kinds toggle.
 
-`identifiers.shortcodeLength` optionally overrides the minted and accepted body
-length for an entity. The bootstrap registry carries that declaration to shared
-schema validation and `generateShortcode`; omitted lengths keep the existing
-four/five-character validation and five-character generation.
+All entities mint five-character shortcode bodies. Validation also accepts
+legacy four-character bodies; lengths are not entity declaration options.
 
 ## Generic by default
 
@@ -211,13 +218,17 @@ identities across projections. These weak caches contain schemas only, never
 assignments, controls, results or other record data. Repeated nested reads must
 not rebuild the same validation graph for every list, detail and MCP occurrence.
 
+Reset previews use the field's declared `resolution.resetSource` or inheritance
+chain and apply its ordinary reset patch without writing. Expense Project uses
+the same draft resolver as an edit, preserving stored intent in other fields.
+
 One shared Why this value experience owns source stacks, assignment/reset,
 suggestion review and explanations across web and Apple. Image stacks use the
 same ordered source primitive with view-only thumbnail strips. Allocation
 contributors remain independent sources. Freshness and work are separate: failed
 refreshes can retain a usable result and its historical provenance, alongside the
 raw diagnostic. Current explanation evidence is not the historical chain that
-produced a cached result. Live comparison availability has its own discriminant.
+produced a cached result. Explanations do not recompute a live comparison.
 #3324 owns the complete client cutover; do not add a second read contract.
 
 Nested references carry only what their consumer needs. Recipe usage rows and
@@ -325,9 +336,16 @@ Inherited-field previews run the existing SQL source ladder with only the local
 assignment removed, inside the explanation snapshot. They preserve terminal
 source identity and distinguish an ancestor's explicit None from no decision;
 the bounded evidence display never limits the counterfactual. Lists and saves
-do not compute this preview. Specialist previews reuse the existing pricing,
-Recipe-yield, Expense classification/project, itemization-policy and Inventory
-ownership resolvers with only the selected assignment cleared. Blocked ownership
+do not compute this preview. A field may declare `resolution.resetSource` when
+its canonical SQL resolution can evaluate a typed counterfactual row. Explanation
+reads apply the entire declared reset patch with `jsonb_populate_record`, without
+writing, and run the same SQL used by ordinary reads. The source port preserves
+blocked/empty outcomes and normalizes both values and source identities. This
+currently covers Vendor, Purchase and FinancialTransaction itemization policy
+and Expense spending category. Bulk redundant-override reset uses declared redundancy eligibility and the exact
+preview, including fields whose source is declared with `resetSource` rather than
+an inheritance ladder. Domain-only resolvers without a declared SQL source have
+no exact reset preview; bulk redundant-override reset continues to skip them. Blocked ownership
 or category evidence stays a successful blocked outcome, not an invented fallback.
 Assignment facts load the declared governed storage columns in a page batch;
 reference identities normalize in one set lookup, without treating an effective
@@ -366,6 +384,8 @@ Principal Expense project reads preserve live explicit Project → live Purchase
 default → household food fallback. The canonical scalar SQL checks uncorrelated
 live-Project id sets, avoiding a Project scan per Expense while retaining null
 short-circuiting and soft-delete behavior.
+
+Lazy field evidence uses the field’s `explanation.evidence` strategy for specialist contributions and walks `resolution.inherit` directly for hierarchies and ordered reference paths. Strategies describe evidence semantics rather than entity callbacks.
 
 An inherited value has one implementation: the field's `resolution.inherit`
 declaration (`packages/schemas/src/entity-definitions/definition.ts`) and its
@@ -663,7 +683,7 @@ field roster, from the same generator helpers the inspector uses
 normal-update roster and the exclusions in the bulk edit contract below. Identity marks and empty states read this metadata. Plants, Plantings and GardenEntries belong to Garden; Purchases, Wishes, Shipments, Emails, Vendors and VendorAccounts belong to Purchases. `packages/schemas/src/sidebar-manifest.ts` owns `SIDEBAR_SECTIONS`, the single ordered navigation roster for desktop web, the mobile More sheet and generated Swift `SidebarManifest.sections`. Each section declares its id, label (empty for top), nullable domain, default fold state and ordered destinations; each destination declares its nav label, web route and either its browser-routed entity or a specialist SF Symbol. Page titles retain their full names.
 
 `presentation.detail`, `.list` and `.edit` are the one declaration both the
-web and the native renderers draw from. A `*Override` name is reserved for a
+web and the native renderers draw from. A differing presentation value declares a
 value that replaces a default the compiler computes; an additive or required
 declaration (`detail.sections`, `list.views`, `list.totals`,
 `route.list`, `route.detail`) takes a plain name. The generator compiles each
@@ -1235,8 +1255,8 @@ model: {
 ```
 
 Field defaults are non-nullable, a label derived from the camel-case key, and a
-read key equal to that key. Use `labelOverride` for a different label and
-`readKeyOverride: null` for fields without a scalar read
+read key equal to that key. Use `label` for a different label and
+`readKey: null` for fields without a scalar read
 projection. Missing controls expose no editor. Omitted display flags derive
 from each effective surface schema: the value or reference identity must exist
 and have a supported rendering strategy. A read key or reference declaration
@@ -1248,8 +1268,8 @@ helper projections do not become duplicate facts. Other deliberate omissions
 remain explicit. A reference defaults to one entity. A label defaults to the humanized key (a reference
 drops its `Id`; a `<field>Presence` filter field reads "<Field> present").
 Explicit labels, nullability, read keys, and renderers override these
-defaults. Declaration inputs use `display.columnIdOverride` and
-`listOrderOverride` when a rendered field needs a different identity or list
+defaults. Declaration inputs use `display.columnId` and
+`listOrder` when a rendered field needs a different identity or list
 order. The compiled manifest retains `columnId`, `detailOrder` (title first,
 then model order), and `listOrder`.
 
@@ -1333,7 +1353,14 @@ generic review surfaces render it as a removal proposal, never an auto-apply,
 and a form-mode `FieldSuggestionProvider` skips prune targets by default
 (record surfaces — list/detail — request them). Prune acceptance verifies the saved remaining array and records the same saved-field Feedback receipt as a set proposal; removed tokens are not compared with the remaining value.
 
-A Suggestion stores immutable typed subjects, judgments, evidence and nullable original producer metadata. Suggestion and decision child handles accept the full PostgreSQL GUID shape, including retained hash-derived identifiers with arbitrary UUID version/variant bits; readers, review commands and receipts preserve them exactly. Entity, Run and observation identifiers keep their own stricter contracts. Successful applications commit an immutable command-bound receipt in `decisions` with the domain write. Explicit single and batch finance Apply acknowledge each Assessment only after the finance writer saves; recording the saved default preserves any newer draft. An identical command replays its receipt before current status checks; conflicting operation reuse is rejected and another command cannot inherit a resolved application. Public operation IDs reserve internal receipt namespaces; replay validates the immutable receipt kind, exact command decision binding and recorded outcome. A decision records correct, wrong, uncertain and presentation-only dismissal separately, with an explicit correction-presence discriminator so corrected JSON null survives. The row's mutable columns hold current targets, field supersession, confirmed values and exactly scoped suppression. Merges and deletes change those columns, never subjects. Live field inference shares one immutable publication per subject, full evidence, exact proposal and served model/prompt policy, preserving the first actual producer and proposal across requesting Runs. Live and stored inference also share an internal review identity over the actual captured feature, prompt, model, policy dependencies, field subject, exact proposed value and operation kind. An exact wrong review remains resolved across either entry point until evidence, policy or candidate changes; unknown legacy evidence receives no invented identity. It stays inactive; only stored sweep advice enters the queue. A wrong review resolves that exact evidence and served policy without declaring universal value suppression; revised evidence or policy can be assessed again. Runs are nullable provenance references rather than history owners. The family registry validates current targets. Mail decisions live with their domain owners, never on a Suggestion.
+A Suggestion stores immutable typed subjects, judgments, evidence and nullable original producer metadata. Suggestion and decision child handles accept the full PostgreSQL GUID shape, including retained hash-derived identifiers with arbitrary UUID version/variant bits; readers, review commands and receipts preserve them exactly. Entity, Run and observation identifiers keep their own stricter contracts. Successful applications commit an immutable command-bound receipt in `decisions` with the domain write. Explicit single and batch finance Apply acknowledge each Assessment only after the finance writer saves; recording the saved default preserves any newer draft. An identical command replays its receipt before current status checks; conflicting operation reuse is rejected and another command cannot inherit a resolved application. Public operation IDs reserve internal receipt namespaces; replay validates the immutable receipt kind, exact command decision binding and recorded outcome. A decision records correct, wrong, uncertain and presentation-only dismissal separately, with an explicit correction-presence discriminator so corrected JSON null survives. The row's mutable columns hold current targets, field supersession and exactly scoped suppression. Merges and deletes change those columns, never subjects. Live field inference shares one immutable publication per subject, full evidence, exact proposal and served model/prompt policy, preserving the first actual producer and proposal across requesting Runs. Live and stored inference also share an internal review identity over the actual captured feature, prompt, model, policy dependencies, field subject, exact proposed value and operation kind. An exact wrong review remains resolved across either entry point until evidence, policy or candidate changes; unknown legacy evidence receives no invented identity. It stays inactive; only stored sweep advice enters the queue. A wrong review resolves that exact evidence and served policy without declaring universal value suppression; revised evidence or policy can be assessed again. Runs are nullable provenance references rather than history owners. The family registry validates current targets. Mail decisions live with their domain owners, never on a Suggestion.
+
+Statement and transfer-pair proposals share the canonical charge preview mapping.
+Stored-family outcome counts use one status query scoped by family and optional Run.
+Suggestion lists resolve record scope once through family discovery and pass matched
+Suggestion IDs to family readers. Review uses family subject and projection schemas,
+the common verdict set, and transaction-bound application by default; families
+retain explicit exceptions.
 
 Suggestion review identity and decision admission reads select only their
 required identity or served-status fields; immutable evidence is loaded only
@@ -1344,11 +1371,11 @@ object keys while preserving array order and JSON scalar encoding; it must not
 revalidate or clone each nested subtree. Normalize dates and optional values at
 the input boundary before serialization.
 
-These review families use this storage: fields, image descriptions, Product pairs, and generic recommendations. Mail decisions and findings have [domain owners](adr/0011-email-as-a-first-class-entity.md#decisions-and-reviews-have-email-owners). `assessment.review` and `assessment.reviewBatch` (MCP `suggestions.review` and `suggestions.review_batch`) settle immutable review independently of apply intent. Each batch item has its own outcome. Draft acceptance records history; saved application has a separate transaction-bound receipt. Current-evidence and domain-authority checks fence field writes, Email corrections and pair merges. Email link application revalidates its expected active Assessment and current target after Purchase, Original and Email locks, so a waiting review cannot replace newer authority. Relevance application requires an explicit domain-supported related or uncertain correction before recording Feedback; unrelated grading remains history-only. Unserved model trials stay outside member review.
+These review families use this storage: fields, Product pairs, and generic recommendations. Mail decisions and findings have [domain owners](adr/0011-email-as-a-first-class-entity.md#decisions-and-reviews-have-email-owners). `assessment.review` and `assessment.reviewBatch` (MCP `suggestions.review` and `suggestions.review_batch`) settle immutable review independently of apply intent. Each batch item has its own outcome. Draft acceptance records history; saved application has a separate transaction-bound receipt. Current-evidence and domain-authority checks fence field writes, Email corrections and pair merges. Email link application revalidates its expected active Assessment and current target after Purchase, Original and Email locks, so a waiting review cannot replace newer authority. Relevance application requires an explicit domain-supported related or uncertain correction before recording Feedback; unrelated grading remains history-only. Unserved model trials stay outside member review.
 
 A new bare wrong verdict is a Miss, without suppressing future evidence. It resolves the current Problem, and canonical publication of the same pair evidence and decision policy preserves that review. Relevant evidence or policy revisions may publish a fresh Assessment. Publication identity excludes requesting Run and execution IDs; the first actual producer and evidence snapshot remain immutable. Exact command retries replay the same receipt; conflicting operation-ID reuse is refused. Legacy ambiguous reject/dismiss outcomes remain ungraded, retaining their original field-value, pair, recommendation-group, relatedness or tag-preference suppression. Existing corrected values and explicit labels retain their recorded semantics. Field applications keep existing AuditLog receipts and distinguish automatic acceptance from explicit member acceptance. New evaluation-only Email grades never change routing; frozen sample rosters retain original predictions, strata and inclusion probabilities.
 
-Confirmed image descriptions remain authoritative in display, classification and search even without generated analysis. Image-analysis retries publish the first retained result for that exact analysis identity; a later response cannot replace immutable Assessment evidence or confirmed text. Live description authority disappears with the Image; history and inactive confirmation times survive. No trigger or revision ledger invalidates pending advice. Suggestion context fingerprints retain assignment, outcome and provenance kind, excluding refresh timing, work status and presentation controls. A pending field Assessment stores the snapshot of its target, declared basis, direct reference rows and latest audited write of that field; reads hide it and apply refuses it once the snapshot differs. A save that changes no value keeps it pending, while a restore after an intermediate write does not. Pending detector Product pairs are hidden the same way once either Product's identity snapshot changes, and their Assessment history remains. Historical byte hashes, model versions, provenance and actor intent are never reconstructed.
+Confirmed image descriptions remain authoritative in display, classification and search even without generated analysis. Image-analysis retries publish the first retained result for that exact analysis identity; a later response cannot replace retained analysis evidence or confirmed text. Confirmed text, content hash, confirmation time and owner provenance live on the Image row. `image.confirm_description` fences writes against that content hash under the Image row lock; a retry of the same operation returns its committed effect, and a write whose `expectedEffectId` no longer matches the current confirmation is refused. Inference retains its first result in `AiAnalysis` and never replaces confirmed text. The retired image-description Suggestion rows, including evidence and decisions, remain exact in `archive.Suggestion_image_description`; they have no live readers. Live description authority disappears with the Image. No trigger or revision ledger invalidates pending advice. Suggestion context fingerprints retain assignment, outcome and provenance kind, excluding refresh timing, work status and presentation controls. A pending field Assessment stores the snapshot of its target, declared basis, direct reference rows and latest audited write of that field; reads hide it and apply refuses it once the snapshot differs. A save that changes no value keeps it pending, while a restore after an intermediate write does not. Pending detector Product pairs are hidden the same way once either Product's identity snapshot changes, and their Assessment history remains. Historical byte hashes, model versions, provenance and actor intent are never reconstructed.
 
 Product identity retrieval and triage run through existing Run-backed AiEvaluation work, gated by AI refresh activation. A resumable cursor covers every live Product, with explicit miscellaneous exclusions counted as coverage. Exact identifier retrieval is independent of name/model gates; semantic similarity and model verdicts are candidate evidence. Reads use stored pair Assessments. Current nonnull model disagreements and retained historical identity conflicts block pair application, including weak recommendations. Equal current model strings or research notes do not verify identity or clear historical conflicts; uncertain variant matches remain pending review. An explicit merge can supersede historical advice only after identity inputs differ from every retained conflicting comparison, with current conflicts rechecked transactionally. Automatic matching remains blocked; notes do not unlock it. With exact identifier admission they become identity-conflict Problems. Raw receipt SKUs retain unknown variant granularity and remain ranking evidence even with matching size, color and pack; explicit ASINs can establish exact identity. Uncorroborated title text and partial selected variants remain ranking evidence. Connected pairs may share one Problem presentation, but each merge names exactly one independently assessed pair and rechecks its evidence. Merging and survivor image ordering commit together. Stock combines; duplicate receiving is a separate reviewed inventory correction.
 
@@ -1570,9 +1597,9 @@ Standard name and image columns are declared by `display.standard` on their
 fields; there is no second standard-column roster in the browser registry.
 
 Compiled `display.detailOrder` places the title first, then follows model order.
-`display.listOrderOverride` orders list columns independently (model order also
+`display.listOrder` orders list columns independently (model order also
 drives form fields); it must be a nonnegative integer differing from the default.
-`display.columnIdOverride` keeps a stable column ID when the field key differs — ids are saved layouts, filter bindings, sort ids and
+`display.columnId` keeps a stable column ID when the field key differs — ids are saved layouts, filter bindings, sort ids and
 saved-view keys, so a rename is never free.
 
 `display.columnGroup` declares the thematic header band for each list field;
@@ -1666,7 +1693,7 @@ field model. Default columns have no separate roster: set `listHidden` on a
 column that is near-constant in practice ("1 each", "Stock", "Needs data",
 an identifier or flag empty on most rows) so the informative ones (placement,
 owner, value, due date, status) lead after the title. Order them with
-`listOrderOverride` when model order puts them late, and keep a band's members
+`listOrder` when model order puts them late, and keep a band's members
 together: web paints a `columnGroup` at its first member's position, hidden or
 not, while native sorts by `listOrder` alone. Web tables, Mac tables and native
 rows all start from this state. `display.width` buckets a column as `xs`,
@@ -1705,8 +1732,7 @@ with the active search and filters rather than sorting the loaded page.
 
 `model.grouping` supplies the preferred ordered Group by choices, including
 explicit text fields and related paths. The compiler then infers eligible enum,
-reference, boolean, and calendar-date fields; `model.groupingOmit` removes
-choices. Generated choices carry their filter, no-value label,
+reference, boolean, and calendar-date fields. Generated choices carry their filter, no-value label,
 multivalue capability, ancestor levels, and supported date buckets. Unsupported
 SQL sources remain disabled with a reason; the kernel validates the same
 capabilities for every client.
@@ -2059,6 +2085,22 @@ its outer mutation supplies loading state and presentation only.
 
 ## List reads
 
+The scaffold compiles one filter plan for repository readers, with population,
+related scopes, result availability, joins and ordering under one owner. Declared
+rollups and result projections cannot be silently replaced by repository SQL.
+Only an explicit contextual `storedProjection` may replace its default stored
+path; its declaration still owns availability and provenance. Filter-only
+`fromResult` members use the same typed path SQL as visible stored fields.
+
+Work Problems project filter values, readiness and related predicates into a
+materialized facts relation per entity and request, then compute membership and
+shared label/authority columns once in its base. Expression reuse includes bound
+values so distinct prepared Problem contexts retain their own semantics. Compact
+reason arms only filter that base, with a shared lateral reason relation where
+routing is identical. Reason declarations still own actions and ordering;
+possible matches with missing publications contribute completeness warnings and
+never actionable rows. Preparation is shared only inside that request.
+
 Each repository supplies `listScaffold` as its read port to
 `defineRepository`. Its `read` declaration supplies columns and bindings;
 `{ scope: "detail" }` bindings default only on record reads; an explicit page projection can request them. `{ scope: "explicit" }` bindings load only when a projection names their keys, including record reads and write-response hydration. Use explicit scope for bounded verification bundles that require their own snapshot. `scaffold.get`
@@ -2074,9 +2116,12 @@ WHERE because allocation shares apply those filters themselves.
 Repository `read.title` owns computed SQL labels; otherwise the scaffold
 resolves the declared stored title field. Shortcode lookups, reference pickers
 and record graphs share that title, including Inventory's product and location.
-Repository initialization publishes title and field-context ports separately from
-the complete registry, so SQL compilers and public envelope readers use declared
-reads without importing repositories during their initialization.
+The existing generated kernel bindings compile stored titles from `titleField` and
+lazily import each repository for composed titles and field contexts. Missing ports
+throw; reads never depend on registration or repository initialization order.
+The annotated kernel read boundary also keeps the generated domain loaders out
+of the repository compiler program. Queue and scheduled entry points must retain
+their lazy repository boundary.
 Picker count and kind projections are declared by their repository, with counts
 compiled from the entity's declared rollup. The shortcode table registry stays
 independent of repositories so identity writers can use it without a cycle.
@@ -2759,6 +2804,14 @@ derived side so clearing an explicit override cannot reuse that old override.
 An unpublished rollup remains missing, rather than becoming a successful empty
 date. This avoids repeating the household Expense allocation on each page.
 
+Product `readFacts.workFacts` publishes accounted kit units, unknown acquisition,
+kit double-counting, disposal reconciliation, quantity gaps and price eligibility.
+Work and list predicates read those typed members, including negative filters;
+legacy payloads without the members remain unresolved until the hourly pass.
+The publisher reuses its loaded quantity ledger and pricing facts. Browsing never
+prepares a separate expected/on-hand quantity CTE or reruns kit ancestry for these
+predicates. Money and identity commands keep validating current evidence.
+
 The former ticket drain, dependency fan-out, publication fences and per-value
 clock admission are removed. Recipe invalidation only marks totals stale; USDA
 release activation and selected image descriptions converge through the same
@@ -2787,7 +2840,12 @@ round deadline. Product read facts, ownership, food and conversion coverage
 prepare at most 100 identities per page through their existing batched loaders.
 The recipe ingredient graph remains chunked at 20. Cursor-attempt shrinking still
 bounds a retry independently of these configured maxima. SQL-backed Product quantity adapters prepare 200 identities per
-page to amortize corpus-wide round trips. Publication and cursor advancement commit together. Claims record
+page to amortize corpus-wide round trips. Publication, cursor advancement, page counters and movement time commit together.
+The last three pass summaries retain processed-record and failed-page counts and
+whole-pass duration. `finishedAt` records completion even with errors; `cleanAt`
+advances only for a pass with no failures. Reading IDs and recording the page's
+attempt share one CTE that commits before compute. An enumeration error retries
+the unchanged cursor rather than skipping the target. Claims record
 attempts before compute, so isolate termination counts too: after three attempts
 the page halves, down to one record. Three failed attempts at one record skip it,
 retain its prior output and record a failure. A thrown compute or publication
@@ -2808,6 +2866,10 @@ completion, without record IDs or values, to correlate platform terminations. Dr
 purchase dispatch reconciliation. Search publication re-marks embeddings only for
 changed, embeddable documents, preserving unchanged documents' failure backoff.
 
+A member's Email link or dismissal republishes that Email's relationship snapshot
+inside the decision transaction, using the hourly pass's compute and publisher.
+Scoped list values and SQL predicates then agree with the saved decision immediately.
+
 Quality's 28 declared evaluators publish `QualitySnapshot` check states, rules
 version and publication time. Browse, gap-count ordering, filters and Work use
 the same snapshot. `DataException` owns waivers. SearchDocument, Recipe totals
@@ -2821,8 +2883,7 @@ read. In particular, a published empty Product price remains empty rather than
 falling back to an authored price; a missing publication still uses the declared
 field-resolution fallback.
 
-Per-value queued/running/failure observations are retired. Activity checks the
-coarse pass for two missed hourly periods or three consecutive failures; a 75-minute lag marks it behind without flapping at an hour. It
+Per-value queued/running/failure observations are retired. Activity checks committed cursor movement for two missed hourly periods or three failures; a 75-minute lag marks it behind without flapping at an hour. It
 never treats retained tickets as unfinished work. The maintenance rebuild command
 starts or resumes the same Worker pass, and its status query exposes aggregate
 progress and timings without triggering work. A manual request never resets an
@@ -2876,9 +2937,7 @@ folds a published result with current context. Its raw reader supplies a private
 constructor accepts the projected value only when that witness matches the
 loaded result's computation time; a concurrent publication leaves the value
 unavailable instead of attaching another revision's provenance. The witness is
-never part of public web, Apple or MCP reads. A `storedPath` supplies the default
-unscoped live comparison; contextual projections without one report that a
-standalone comparison is unavailable.
+never part of public web, Apple or MCP reads. A `storedPath` identifies the selected publication value.
 Embedded entity summaries carry the same private witness from their nested
 SELECT through raw mapping; Meal's Recipe totals must not omit it merely because
 the Recipe is rendered inside another record. Serialization removes the witness.
@@ -3038,12 +3097,10 @@ prices from the selected price, including when price is omitted from the public
 selection, without introducing a second physical-price cache. A cached result carries its deciding
 provenance, computation time and freshness; work status does not determine whether
 a usable result exists. Field explanations return that same envelope and add
-current source evidence and an optional live comparison for one record; they
-never publish it. Web and Apple explanations distinguish the published value
-from the live result, retain Updating and calculation failures, and show the
-publication time when known. Values use the field's formatter, with structured
-evidence retained for non-scalar results; an unavailable live computation stays
-explicit.
+source evidence for one record. They never recompute or publish a comparison.
+Web and Apple retain Updating and calculation failures, and show the publication
+time when known. Values use the field's formatter, with structured evidence
+retained for non-scalar results.
 
 Typed decision columns store outcome metadata and provenance beside the value
 in the same publication, without duplicating its payload. A compute may return
@@ -3268,6 +3325,10 @@ Declarations in `packages/schemas` own check identity, whether it counts toward
 assessment, and placement. A record's quality is the list of its unresolved
 checks; `data-quality-score.ts` owns the status derived from them.
 
+`qualityCheck.records(entity, table, columns)` owns ordinary loader identity,
+liveness, bounded IDs and display-image presence. Checks with joins, aggregates
+or additional queries keep their entity-specific loaders.
+
 Related-row facts are loaded once per ID page; soft-deleted Recipes,
 Ingredients, Products, Purchases, attachments and Images do not count. Cookbook covers, Vendor logos and
 Location description prerequisites use the shared displayability predicate.
@@ -3291,8 +3352,7 @@ queue population reads pass `"stored"`. A single-record Work strip evaluates
 that record's quality live and reuses it for gap admission, messages and counts,
 so a record page does not wait for a household-wide refresh pass. This does not
 publish or repair the stored snapshot. Lazy explanations read the displayed
-publication's captured facts; live comparison is an explicit diagnostic action
-and never publishes repairs. SQL predicates (`generic/data-quality/repo/sql.ts`)
+publication's captured facts and never publish repairs. SQL predicates (`generic/data-quality/repo/sql.ts`)
 are primary-key lookups on the published value; the status predicate derives
 the same status as the TypeScript core from those check states.
 
@@ -3336,7 +3396,9 @@ related Purchase rollups and Work queue research branches read the published
 `dataQuality` value. The Work queue no longer registers a
 Product price CTE. Non-quality price-presence views, including optional misc
 bucket valuations, retain live pricing semantics; quality applicability cannot
-stand in for price presence. Product, Expense, inventory, brand/vendor, category, kit link and
+stand in for price presence. Price presence reads the canonical price SQL and its
+result availability, rather than the background `readFacts.workFacts.priced`
+snapshot. Product, Expense, inventory, brand/vendor, category, kit link and
 attachment rows are declared inputs, and image integrity reaches attached
 Products through a join path; a kit's acquisition lines reach its components.
 Reads leave old publications intact until the drain republishes.
@@ -3588,11 +3650,7 @@ is not offered: a read-time projection cannot know when work appeared.
 filter into every branch, skips field-level suggestion groups and record-less
 diagnostics, and keeps the list's routing; the generic detail page and
 inspector render those rows as a compact Work queue strip and nothing when
-there are none. Pending image descriptions contribute one Work row per live
-Image, using the same served/pending/suppression admission as Suggestions. Its
-count does not establish application freshness or correction authority. The row
-uses the existing original-source image owner/shared routing and opens the
-Image's Suggestions, including held correction evidence; reads schedule nothing.
+there are none. Image descriptions are read and confirmed on the Image processing panel; they do not produce Suggestion Work rows.
 
 The browser reuses shared infinite loading, column controls, checkbox selection,
 Copy codes and responsive source-record inspection. Queue keys identify work
@@ -4474,17 +4532,51 @@ review.
 
 ### Shared proposal queue and automatic decisions
 
+ADR 0025 fixes automatic application policy: high-confidence eligible field additions
+and clean supported import spending always apply through their domain validation.
+Attaching an existing transaction requires review. There are no per-revision
+member switches or Rules tab. Automatic-decision history and its Wrong grade
+remain available; a Wrong decision prevents unchanged work from applying again.
+
+The review implementation and wire use Suggestion names (`suggestionId`,
+`suggestionIds`, `targetSuggestionId`). The generic owner is
+`generic/suggestions`; field-resolution evidence belongs to
+`generic/field-explanation`. Immutable publication keys and receipt kinds keep
+their original spelling so retries and existing decisions retain their identity.
+Apple writes require version 2.71.0 after this wire cutover.
+The native editor shares `ai.suggestFields` with web. Email review retains its
+transaction and protecting-intent checks without writing a frontier receipt.
+Transfer movement labels run only when weak movement is the sole blocker;
+structural conflicts remain for review without a model call.
+
+Correction serialization uses the affected domain rows. Suggestion review locks
+its Suggestion row; Image review locks its Image before the Suggestion. Email
+evidence writers retain serializable retries and their existing Email, Original
+and Purchase locks, without a household-wide CorrectionLock key. Sender address
+reservation still protects a new address that has no owning Vendor row yet.
+
+New Suggestion decisions use member, automatic or system authority. Retained
+historical decisions keep their evaluation or unknown authority unchanged. The uncertain member verdict remains written by
+Apple connection review; ungraded remains an internal review receipt. Draft
+intent remains supported. Statement and transfer-pair Suggestions share charge
+identity and metadata parsing.
+
 The `/suggestions` page lists actionable proposals from fields,
 statement transactions, connections and recommendations (including tag additions
-and placement moves), Product pairs, image descriptions and transfer pairs on one server-filtered table
+and placement moves), Product pairs and transfer pairs on one server-filtered table
 (`suggestions.list` over the family registry in
-`server/generic/assessment/repo/suggestion-families.ts`): family chips with counts, each family's own columns,
+`server/generic/suggestions/repo/suggestion-family-declarations.ts`): family chips with counts, each family's own columns,
 inline evidence, keyboard review (↑/↓, →, A, D), a confirmed "Accept N clean"
 that re-lists before each chunk, bulk Dismiss and Never suggest (no bulk
-Wrong), and Find suggestions, which estimates and starts a Sweep. A
-collapsible Automatic rules section lists each rule's state, measured
-precision and member switch (`suggestions_read.rules`/`setRule`; On only when
-eligible, Off after a confirm). Its `family`, `record` (`<kind>:<CODE>`) and `runId` params scope it.
+Wrong), and Find suggestions, which estimates and starts a Sweep.
+The Automatic decisions tab retains application history and Wrong grading.
+Each family owns presentation, affected-record discovery and review commands in
+one typed declaration; generic readers compose the same static declarations.
+The registry exposes live accessors because family implementations depend on
+generic review; eager object values can capture an unfinished circular import.
+Reference resolution, touching-record queries and Work tokens have separate
+runtimes.
+The page's `family`, `record` (`<kind>:<CODE>`) and `runId` params scope the queue.
 Every multiselect filter, including Clean, offers **is / is not** through the
 shared filter editor. Excluded column values use the shared `__not__:` state
 prefix and `<column>Exclude` URL parameter. Quick pickers edit included values
@@ -4529,12 +4621,8 @@ reads, not a new eligibility cache; any future stored projection must retain
 dynamic old/new memberships and complete invalidation.
 Non-actionable Product pairs remain ordinary history. A merge still requires
 explicit survivor and impact confirmation, and identity conflicts cannot merge.
-Tag proposals retain the source and every supporting Product's revision; listing,
-publication and confirmation recheck those revisions and the supporting tags.
-Older count-only and stale tag advice stays stored with its existing status and is
-excluded from the queue; a later Sweep may publish a proposal with a new basis.
-Project, placement and tag proposals appear after a Sweep publishes them; passive
-record reads never discover or publish new advice.
+Tag-propagation suggestions are retired. Project and placement proposals appear
+after a Sweep publishes them; passive record reads never discover or publish new advice.
 Similar-Product browsing stays informational; photo-import choices stay in their Run.
 
 Suggestions' **Automatic decisions** tab is the optional generic audit, newest
@@ -4596,10 +4684,11 @@ target; storage checks reject late attempts to recreate that retired work. The
 cutover deletes only those disposable snapshots and marks, retaining receipts,
 audit evidence, member decisions and unrelated durable work.
 
-A member's image description correction confirms that one Image. It is text-only,
+A member's image description correction confirms that one Image through
+`image.confirm_description` (web operation `imageProcessing.confirmDescription`), using
+`id`, `contentHash`, `description` and an operation UUID. It is text-only,
 bound to the Image's content hash, and does not replace an image analysis: claims,
-nutrition and cutout eligibility remain model outputs. An equal later model proposal
-is retired against the existing confirmation rather than taking ownership.
+nutrition and cutout eligibility remain model outputs. Later model analyses never write confirmation columns or acquire text authority.
 
 ### Automatic semantic classification
 
@@ -4610,8 +4699,7 @@ abstains without inventing a value; provider and malformed-response failures
 fail the operation. Classification is prepared before business publication,
 which rechecks the evidence and stronger assignments. These changes apply when
 workflows next run; existing classifications and cached lookups are not
-reclassified automatically. New features also register their production adapter
-in the AI smoke catalog so the generic `/ai` form can exercise them.
+reclassified automatically.
 Image source Decisions record `sourceEvidence` separately from capture evidence;
 they establish neither a photographer nor a capture time or location. Existing
 manual, strong sighting, import, and meaningful EXIF evidence retains precedence
@@ -4652,6 +4740,9 @@ Food feature transitions require a broader Project/Trade review and are refused
 by the spending-only workflow; identity normalization cannot substitute a target
 different from the reviewed one. Lazy field explanations return bounded hierarchy
 and fallback-source evidence so clients do not reconstruct these rules.
+
+Quality explanations render published check states with current durable exception
+controls. Keeping those controls does not recompute or compare a cached result.
 
 Web field explanations keep one compact hierarchy across quality, derived values,
 and inheritance: the result and interpretation lead, followed by applicable checks
@@ -4848,3 +4939,65 @@ priority-zero Entity and Suggestion fan-out. The shared `derived_mark` function
 returns before ticket/capture writes for those declared targets and indexed
 fan-out addresses. Existing tickets remain until the hourly pass has published
 the replacement target; stopping admission alone does not prove coverage.
+
+## Related records
+
+`extensions.relatednessSignals` is the static opt-in for the shared detail-page
+Related records rail and `relatedness.forEntity({ entity, id })` operation.
+Every entity with semantic search declares a same-entity semantic signal (label,
+weight and candidate limit). Product, Recipe and Location additionally declare
+stored tag overlaps as display-only evidence; popularity caps omit ubiquitous
+tag hubs. Generation rejects signals on entities without embeddings and overlap
+fields that are not stored text arrays. No entity-keyed runtime registry is needed.
+
+The generic semantic reader shares source readiness, current-vector validation
+and canonical hit hydration with explicit similarity search. Unavailable,
+uncomputed and stale indexes remain visible, rather than masquerading as an
+empty result. An explicit Index now action uses the existing embedding refresh
+operation and bounded readiness poll. Related records never publish suggestions,
+merge identities, or mutate records. Scalar-only candidates remain visible with
+zero score; semantic weights determine ranking. Evidence is merged once per
+public record, deterministically ranked, and images are batch-resolved for the
+visible rows. The rail is a shared indexed detail section, loaded on visibility.
+
+## Retired entity tools (ADR 0025)
+
+The entity explorer provides records, schema and integrity inspection, recipe and
+work dependency graphs, and cross-record exploration. Graph path search finds
+connections across records. Every entity that declares relatedness signals shows
+the related-records rail on its detail page.
+Ordinary record relations retain `connectedRecords`, `connectedRecordsPreview` and `connections`.
+Connection discovery still proposes inventory placement and expense/project links.
+Product-match review commands belong to the `productMatch` contract.
+
+`extensions.ports.reports` binds a domain's report dependencies. Generation emits
+the per-entity loaders into `entity-kernel-bindings.gen.ts`; the eager mutation and
+list assembly lives separately in `entity-kernel-runtime.gen.ts`. The generic report
+runner executes those dependencies and shares their request-scoped memo. Domain
+builders, including collection presentations, live with their domain; shared summary
+and record blocks stay generic. The same report binding owns record dependencies
+and optional collection builders.
+The override inventory compares remaining named overrides with inferred defaults.
+Field labels, read keys, display column ids and display order are plain options.
+
+Problems retains paged type reads, counts and maintenance actions. The full-report
+branch and its five group finders are gone. The coverage-meter denominator
+generator remains available for the declared quality checks.
+Record metadata and canonical edit validation remain necessary for ordinary record
+pages and live under `server/entity-kernel/metadata`.
+
+Numeric filter ranges use Zod numbers, which already reject nonfinite values.
+The redundant declaration-only `range.finite` option is removed.
+
+The Sweep roster's tag-discovery call remains until its assessment-lane cutover;
+the retired discovery bridge returns no proposals. It does not schedule or publish
+new tag suggestions. List relation traversal remains shared with live record reads.
+
+Search embedding text is read directly from SearchDocument. Declarations no longer
+carry the unused `ports.search.semanticText` reference.
+
+The retired `connection.readBatch` transport has no client callers. Single-record
+connection reads remain; internal batch hydration remains private to that reader.
+Field publication builds an entry for `publishSuggestions`, whose immutable-key
+replay check also owns the field Sweep write. Field review tests hydrate through
+the same key and row readers used by the live queue.

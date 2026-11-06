@@ -6,7 +6,7 @@ import { Session } from "node:inspector/promises";
 import { resolve } from "node:path";
 import { setImmediate } from "node:timers/promises";
 
-import { assessmentFamily } from "@cubby/schemas/assessment";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { buildActorContext } from "@cubby/schemas/context";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
@@ -447,7 +447,7 @@ it.each(sizes)(
         .execute(sql`SELECT count(*)::int AS active,
         count(*) FILTER (WHERE data->>'needsLabel' = 'true' OR data->>'applicationPending' = 'true')::int AS unfinished,
         count(*) FILTER (WHERE data->'labelCheckpoint'->>'revision' = ${STATEMENT_LABEL_REVISION})::int AS checkpoints
-        FROM "Suggestion" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active`);
+        FROM "Suggestion" WHERE family = ${suggestionFamily.enum.statement_transaction} AND active`);
       expect(durable.rows[0]).toEqual({
         active: size,
         unfinished: 0,

@@ -31,7 +31,7 @@ import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-req
 import type { Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { aiEvaluation } from "~/server/db/retained-tables";
-import type { DrainClaim, DrainStore } from "~/server/generic/jobs/drain-store";
+import type { DrainStore } from "~/server/generic/jobs/drain-store";
 import type { DrainItem } from "~/server/generic/jobs/drain-store";
 
 /** Items name evaluations; a page serves one feature. */
@@ -41,11 +41,6 @@ export const aiEvaluationPageKey = (feature: string) =>
 
 /** Longer than the 15 minutes a queue consumer can run. */
 const AI_EVALUATION_LEASE_MS = 16 * 60_000;
-
-/** An evaluation attempt is the lease of the page that claimed it. */
-export const aiEvaluationAttemptToken = (
-  claim: Pick<DrainClaim, "leaseToken">,
-) => claim.leaseToken;
 
 /** The attempt `token` still holds evaluation `id` under a live lease. */
 export const aiEvaluationAttemptLive = (

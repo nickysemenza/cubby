@@ -22,13 +22,13 @@ import {
   derivedSink,
   isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
-import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
 import {
   rebuildDerived,
   DerivedRebuildBusyError,
 } from "~/server/generic/derived/service/rebuild";
 import { claimJob, releaseJobClaim } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
+import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
@@ -63,15 +63,17 @@ const fixtureComputes: DerivedComputes = {
         ids.map((id) => parseEntityId("product", id)),
         fixtureUsda(),
       ),
-    publish: (tx, ids, prepared) => prepared.publish(tx, ids),
+    publish: async (tx, ids, prepared) => {
+      await prepared.publish(tx, ids);
+    },
   }),
   "recipe.totals": derivedSink({
     prepare: (db, ids) =>
       new RecipeCostingService(db, {
         findFoodsBatch: (lookups) => fixtureUsda().findFoodsBatch(lookups),
       }).computeStoredTotals(ids.map((id) => parseEntityId("recipe", id))),
-    publish: (tx, ids, totals) =>
-      commitRecipeTotals(tx, {
+    publish: async (tx, ids, totals) => {
+      await commitRecipeTotals(tx, {
         updates: ids.flatMap((id) => {
           const value = totals.get(id);
           return value
@@ -79,7 +81,8 @@ const fixtureComputes: DerivedComputes = {
             : [];
         }),
         freshOnlyIds: [],
-      }),
+      });
+    },
   }),
 };
 
@@ -218,7 +221,7 @@ export async function drainRecipeRefreshJobs(
         // SAFETY: the drain passes ids of `recipe.totals` marks only.
         return value ? [{ id: id as RecipeId, totals: value }] : [];
       });
-      return commitRecipeTotals(tx, { updates, freshOnlyIds: [] });
+      await commitRecipeTotals(tx, { updates, freshOnlyIds: [] });
     },
   });
   return drainStoredDerived(db, maxPages, {
@@ -292,7 +295,9 @@ export async function withJobFixtureExecution<T>(
   db: Database,
   input: import("@cubby/schemas/job").EnqueueJobInput,
   work: (
-    context: import("~/server/generic/jobs/service/drain").DrainContext,
+    context: ReturnType<
+      typeof import("~/server/generic/jobs/service/jobs").claimContext
+    >,
   ) => Promise<T>,
   options: { releaseClaim?: true } = {},
 ) {

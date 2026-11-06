@@ -87,9 +87,7 @@ describe("entity field provenance", () => {
       model: {
         ...purchaseDeclaration.model,
         fields: purchaseDeclaration.model.fields.map((field) =>
-          field.key === "vendorId"
-            ? { ...field, labelOverride: undefined }
-            : field,
+          field.key === "vendorId" ? { ...field, label: undefined } : field,
         ),
       },
     };

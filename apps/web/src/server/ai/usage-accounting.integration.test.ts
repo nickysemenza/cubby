@@ -570,11 +570,11 @@ describe("AiUsage accounting", () => {
   });
 
   it("pauses the Run for the next window when the paid rung has no key", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
-    await getDb(ctx.db)
-      .update(run)
-      .set({ purpose: "suggestion_sweep", status: "running", endedAt: null })
-      .where(eq(run.id, runId));
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_reclassify",
+      trigger: "manual",
+      status: "running",
+    });
     const faux = fauxProvider();
     const reason =
       "HTTP 400: Provider 'openai' has no BYOK credential named 'default'";

@@ -207,17 +207,6 @@ const softDeleteForTable = (tableName: string): boolean => {
   return entity === undefined ? false : entityManifest[entity].softDelete;
 };
 
-export const invertPath = (
-  steps: readonly RelationshipPathStep[],
-): readonly RelationshipPathStep[] =>
-  steps
-    .slice()
-    .reverse()
-    .map((step) => ({
-      ...step,
-      direction: step.direction === "incoming" ? "outgoing" : "incoming",
-    }));
-
 /** The inherited field an edge's foreign key stores, if any. */
 const inheritedEdge = (
   edge: EdgeSpec,

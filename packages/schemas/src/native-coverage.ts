@@ -355,7 +355,6 @@ export const nativeCoverage = {
       "product.ownership",
       "product.nutrition",
       "product.unit-mappings",
-      "product.fits-with",
       "product.runs",
       // Scaling and cooking are Rust; the pantry's coverage, the totals gaps (with the unscaled
       // weight a weight target measures against) and the AI walkthrough are server reports

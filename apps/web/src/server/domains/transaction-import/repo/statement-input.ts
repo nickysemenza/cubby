@@ -1,12 +1,14 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { assessmentFamily } from "@cubby/schemas/assessment";
 import {
+  type FinancialTransactionImportRow,
   financialTransactionKind,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
+import type { StatementSuggestionOut } from "@cubby/schemas/statement-suggestion";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -110,7 +112,7 @@ export const statementInputCharges = (
           AND (NOT EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" allocation
               WHERE allocation."transactionId" = ft.id AND ${notDeleted("allocation")})
             OR EXISTS (SELECT 1 FROM "Suggestion" existing
-              WHERE existing.family = ${assessmentFamily.enum.statement_transaction} AND existing.active
+              WHERE existing.family = ${suggestionFamily.enum.statement_transaction} AND existing.active
                 AND existing.status = ${suggestionStatus.enum.pending}
                 AND existing.data->>${"source"} = cs.source AND existing.data->>${"chargeKey"} = cs."chargeKey"
                 AND existing.data->>${"recommended"} = ${statementTransactionAction.enum.book}))))
@@ -185,3 +187,44 @@ export const statementHoldAccounts = async (
       WHERE ${notDeleted("ft")} AND ft.status = ${financialTransactionStatus.enum.pending}
     `)
   ).rows.map((row) => String(row.id));
+
+export type ChargeRef = Pick<StatementSuggestionOut, "source" | "chargeKey">;
+
+/** Stable statement identity shared by individual and transfer-pair proposals. */
+export const chargeId = (charge: ChargeRef): string =>
+  `${charge.source}:${charge.chargeKey}`;
+
+/** Shared preview input for a charge's canonical observation. */
+export const previewRowFor = (
+  charge: ChargeRef,
+  row: {
+    source: string;
+    accountDescriptor: string;
+    statementDate: string;
+    providerAmount: number;
+    merchant: string | null;
+    rawDescription: string;
+    sourceCategory: string | null;
+    providerNotes: string | null;
+    importFingerprint: string;
+    rowPosition: number | null;
+    providerTransactionId: string | null;
+    providerAccountId: string | null;
+    providerStatus: "posted" | "pending" | null;
+  },
+): FinancialTransactionImportRow => ({
+  key: chargeId(charge),
+  source: row.source,
+  account: row.accountDescriptor,
+  date: row.statementDate,
+  amount: row.providerAmount,
+  merchant: row.merchant,
+  originalStatement: row.rawDescription,
+  category: row.sourceCategory,
+  notes: row.providerNotes,
+  importFingerprint: row.importFingerprint,
+  ...(row.rowPosition === null ? {} : { rowPosition: row.rowPosition }),
+  providerTransactionId: row.providerTransactionId,
+  providerAccountId: row.providerAccountId,
+  ...(row.providerStatus ? { providerStatus: row.providerStatus } : {}),
+});

@@ -15,9 +15,6 @@ import { productPairFingerprint } from "~/server/domains/product/repo/match/prod
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { getActiveAssessmentSuppressionKeys } from "~/server/generic/assessment/repo/assessment-state";
-import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { getStoredEmbeddingHashes } from "~/server/generic/embedding/repo/entity-embedding-refresh";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
@@ -32,6 +29,9 @@ import {
   refreshSearchDocument,
   selectUnembeddedSearchDocumentRefs,
 } from "~/server/generic/search/repo/search-document";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
+import { getActiveSuggestionSuppressionKeys } from "~/server/generic/suggestions/repo/suggestion-state";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductFixture as createProduct,
@@ -140,15 +140,11 @@ describe("semantic search background tasks", () => {
       makeProductInput({ name: "Unembedded source" }),
       ctx.actor,
     );
-    const started: string[] = [];
     const result = await executeWorkflow(
       findSimilarEntitiesWorkflow.definition,
       {
         context: ctx.db,
         input: { pair: "product_to_product", sourceId: source.id, limit: 5 },
-        observer: (event) => {
-          if (event.state === "started") started.push(event.step);
-        },
       },
     );
     expect(result.source).toEqual({
@@ -157,9 +153,7 @@ describe("semantic search background tasks", () => {
     });
     expect(result.status).not.toBe("ready");
     expect(result.results).toEqual([]);
-    expect(started).toContain("readiness");
-    expect(started).not.toContain("candidates");
-    expect(started).not.toContain("hits");
+
     expect(JSON.stringify(result)).not.toContain(source.entityId);
   });
 
@@ -239,8 +233,8 @@ describe("semantic search background tasks", () => {
     ).items;
     if (!recommendation?.review?.suppression)
       throw new Error("Synthetic pair review missing");
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: recommendation.assessmentId,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: recommendation.suggestionId,
       expectedFingerprint: recommendation.fingerprint,
       suppression: recommendation.review.suppression,
       operationId: crypto.randomUUID(),
@@ -289,8 +283,8 @@ describe("semantic search background tasks", () => {
       ).items,
     ).toEqual([]);
     await expect(
-      reviewAssessment(ctx.db, kernelCtx(ctx), {
-        assessmentId: crypto.randomUUID(),
+      reviewSuggestion(ctx.db, kernelCtx(ctx), {
+        suggestionId: crypto.randomUUID(),
         operationId: crypto.randomUUID(),
         verdict: "dismissed",
         intent: "history",
@@ -300,13 +294,13 @@ describe("semantic search background tasks", () => {
           fingerprint: null,
         },
       }),
-    ).rejects.toThrow("Assessment not found");
+    ).rejects.toThrow("Suggestion not found");
     for (const suggestionKind of [
       "product.duplicate",
       "product.tag-propagation",
       "product.related",
     ]) {
-      const keys = await getActiveAssessmentSuppressionKeys(ctx.db, {
+      const keys = await getActiveSuggestionSuppressionKeys(ctx.db, {
         entityKind: "product",
         entityId: source.entityId,
         suggestionKind,

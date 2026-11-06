@@ -1,15 +1,15 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import {
-  assessmentChildHandle,
-  assessmentProducer,
-  type AssessmentProducer,
-} from "@cubby/schemas/assessment";
 import { dateTime } from "@cubby/schemas/codec";
 import {
   parseEntityId,
   productId,
   type ProductId,
 } from "@cubby/schemas/identifiers";
+import {
+  suggestionChildHandle,
+  suggestionProducer,
+  type SuggestionProducer,
+} from "@cubby/schemas/suggestion";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
@@ -36,13 +36,13 @@ import {
 } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import { variantVerification } from "~/server/domains/product/repo/product-variant-evidence";
-import { publishAssessments } from "~/server/generic/assessment/repo/assessment";
+import { publishSuggestions } from "~/server/generic/suggestions/repo/suggestion";
 import {
   suggestionRecordId,
-  transitionAssessmentState,
-  transitionAssessmentStateBatch,
-  type AssessmentStatePatch,
-} from "~/server/generic/assessment/repo/assessment-state";
+  transitionSuggestionState,
+  transitionSuggestionStateBatch,
+  type SuggestionStatePatch,
+} from "~/server/generic/suggestions/repo/suggestion-state";
 
 import { productIdentityEvidenceFences } from "./product-identity-fence";
 import {
@@ -64,7 +64,7 @@ const pairProjection = z.object({
   conflict: z.boolean().default(false),
 });
 const pairRow = z.object({
-  id: assessmentChildHandle,
+  id: suggestionChildHandle,
   productAId: productId,
   productBId: productId,
   source: z.enum(["agent", "detector"]),
@@ -85,7 +85,7 @@ const canonicalProductPair = (a: ProductId, b: ProductId) =>
   a < b ? { productAId: a, productBId: b } : { productAId: b, productBId: a };
 export const productPairKey = (a: string, b: string): string =>
   a < b ? `${a}|${b}` : `${b}|${a}`;
-export const currentProductPairPolicy = (producer: AssessmentProducer | null) =>
+export const currentProductPairPolicy = (producer: SuggestionProducer | null) =>
   !producer ||
   producer.kind === "agent" ||
   (producer.kind === "rule" &&
@@ -94,7 +94,7 @@ export const currentProductPairPolicy = (producer: AssessmentProducer | null) =>
     producer.revision === PRODUCT_IDENTITY_FEATURE.promptVersion);
 
 export const currentProductPairPolicySql = (producer: SQL) =>
-  sql`(${producer} IS NULL OR ${producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.agent} OR (${producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.rule} AND ${producer}->>'revision' = ${PRODUCT_IDENTITY_RULE_REVISION}) OR (${producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.model} AND ${producer}->>'revision' = ${PRODUCT_IDENTITY_FEATURE.promptVersion}))`;
+  sql`(${producer} IS NULL OR ${producer}->>${suggestionProducer.keyof().enum.kind} = ${suggestionProducer.shape.kind.enum.agent} OR (${producer}->>${suggestionProducer.keyof().enum.kind} = ${suggestionProducer.shape.kind.enum.rule} AND ${producer}->>'revision' = ${PRODUCT_IDENTITY_RULE_REVISION}) OR (${producer}->>${suggestionProducer.keyof().enum.kind} = ${suggestionProducer.shape.kind.enum.model} AND ${producer}->>'revision' = ${PRODUCT_IDENTITY_FEATURE.promptVersion}))`;
 
 export type ProductPairPublicationInput = {
   productIds: readonly [ProductId, ProductId];
@@ -105,7 +105,7 @@ export type ProductPairPublicationInput = {
   actionable?: boolean;
   conflict?: boolean;
   fingerprint?: string | null;
-  producer?: AssessmentProducer;
+  producer?: SuggestionProducer;
 };
 export type PreparedProductPairPublication = {
   key: string;
@@ -279,7 +279,7 @@ export async function publishProductPairPublications(
         .safeParse(data.signals).data?.decision.selectedIndex === 1;
     return { ...entry, data, prior, distinct };
   });
-  const predictions = await publishAssessments(
+  const predictions = await publishSuggestions(
     tx,
     entries.map(({ input, pair, data, prior, distinct, publicationKey }) => ({
       input: {
@@ -322,7 +322,7 @@ export async function publishProductPairPublications(
     }),
   );
   const priorByPair = new Map<string, { dismissed: boolean }>();
-  await transitionAssessmentStateBatch(
+  await transitionSuggestionStateBatch(
     tx,
     and(
       eq(suggestionTable.family, "product_pair"),
@@ -358,7 +358,7 @@ export async function publishProductPairPublications(
         );
         const current = byPair.get(key);
         if (!current) return [];
-        const patch: AssessmentStatePatch =
+        const patch: SuggestionStatePatch =
           row.id === current.prediction.id
             ? {
                 active: true,
@@ -438,30 +438,6 @@ export async function publishProductPair(
     return result.row;
   });
 }
-export async function prepareProductPairPublication(
-  db: Database,
-  input: ProductPairPublicationInput,
-) {
-  const prepared = await prepareProductPairPublications(db, [
-    { key: "target", input },
-  ]);
-  if (!prepared.length)
-    throw new Error("Product pair evidence changed during inference");
-  return (tx: Database) =>
-    withTransactionDatabase(
-      tx,
-      async (transactionDb) => {
-        const [result] = await publishProductPairPublications(
-          transactionDb,
-          prepared,
-        );
-        if (!result?.valid)
-          throw new Error("Product pair evidence changed during inference");
-        return result.row;
-      },
-      { isolationLevel: "serializable" },
-    );
-}
 /**
  * An agent proposal claims the two records are one item, not one snapshot of
  * them, so enrichment never retires it: it is fingerprinted live and a merge
@@ -512,7 +488,7 @@ export async function listProductMatchRows(
   options: {
     reviewableOnly?: boolean;
     actionableOnly?: boolean;
-    assessmentIds?: readonly string[];
+    suggestionIds?: readonly string[];
     candidateId?: ProductId;
     limit?: number;
   } = {},
@@ -524,10 +500,10 @@ export async function listProductMatchRows(
       and(
         eq(suggestionTable.family, "product_pair"),
         eq(suggestionTable.active, true),
-        eq(suggestionTable.served, true),
-        options.assessmentIds
+
+        options.suggestionIds
           ? sql`${suggestionTable.id} IN (${sql.join(
-              options.assessmentIds.map((id) => sql`${id}::uuid`),
+              options.suggestionIds.map((id) => sql`${id}::uuid`),
               sql`, `,
             )})`
           : undefined,
@@ -639,7 +615,7 @@ export async function repointProductMatchCandidatesTx(
       : parseEntityId("product", row.recordId);
     const b = loserIds.includes(data.otherId) ? keepId : data.otherId;
     const pair = a === b ? null : canonicalProductPair(a, b);
-    await transitionAssessmentState(
+    await transitionSuggestionState(
       tx,
       row.id,
       pair

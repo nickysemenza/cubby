@@ -16,8 +16,7 @@ import {
   type RelationDetail,
 } from "~/entity/platform/entity-schema-model";
 import { ENTITY_NATIVE_COVERAGE } from "~/lib/generated/entity-native-coverage.gen";
-
-import { immutableMetadataSchema } from "./immutable-slice";
+import { immutableMetadataSchema } from "~/server/entity-kernel/metadata/immutable-slice";
 
 type Relationship = EntityDescriptor["relationships"][number];
 

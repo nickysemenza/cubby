@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { runShortcode } from "./identifiers";
 import { dateTime } from "./codec";
 
 export const jobState = z.enum([
@@ -248,20 +249,14 @@ export type JobKindPolicy = {
   readonly backoff: JobBackoff;
 };
 
-const MAINTENANCE_BACKOFF = { baseMs: 60_000, maxMs: 15 * 60_000 };
+/** Unbounded model work waits longer between attempts than ordinary server Jobs. */
+const RECOVERABLE_BACKOFF = { baseMs: 60_000, maxMs: 15 * 60_000 };
 
 const SERVER: JobKindPolicy = {
   internal: false,
   lane: "server",
   maxAttempts: 3,
   backoff: { baseMs: 1_000, maxMs: 60_000 },
-};
-/** Self-arming pages and drains: a failure backs off, never stops the Job. */
-const MAINTENANCE: JobKindPolicy = {
-  ...SERVER,
-  internal: true,
-  maxAttempts: null,
-  backoff: MAINTENANCE_BACKOFF,
 };
 /**
  * The one registry of per-kind execution policy. A kind absent here runs on
@@ -283,53 +278,6 @@ export type JobKindDeclaration = JobKindPolicy & {
 };
 
 export const JOB_KIND_POLICY = {
-  "jobs.maintenance": {
-    ...MAINTENANCE,
-    label: "Internal queue upkeep",
-    purpose: "Repairs queue execution and prunes old completed queue records.",
-    trigger:
-      "Daily repair and retention; finishes when its backlog is drained.",
-    targets:
-      "Moot image work and old completed or cancelled Jobs eligible for retention cleanup.",
-    effects:
-      "Retires moot image work, rings for due device work, and prunes retained queue records in bounded daily pages.",
-    dependencies: "Database and queue execution.",
-    cost: "No AI call is made by queue upkeep.",
-    exclusions:
-      "Failed Jobs and domain evidence remain. This is part of daily background recovery.",
-  },
-  "derived.drain": {
-    stuck: {
-      title: "Totals and search results stopped updating",
-      failingTitle: "Some totals can't be calculated",
-      consequence:
-        "Records you entered are fine; calculated values may be out of date.",
-    },
-    ...MAINTENANCE,
-    // Each failed mark backs off on its own row; the Job itself never stops.
-    backoff: { baseMs: 30_000, maxMs: 15 * 60_000 },
-    label: "Update derived values",
-    purpose: "Recomputes outstanding declared derived fields.",
-    trigger: "Changes that invalidate derived values.",
-    targets: "Pending derived values selected by the generic derived runtime.",
-    effects: "Writes computed values and propagates declared dependencies.",
-    dependencies: "Source records and each field’s declared computation.",
-    cost: "Individual computations follow their declared service policy.",
-    exclusions:
-      "Explicit field values and eligibility follow the owning field-resolution policy.",
-  },
-  "derived.reconcile": {
-    ...MAINTENANCE,
-    label: "Reconcile derived work",
-    purpose:
-      "Reconciles outstanding derived work with declared computation policy.",
-    trigger: "Periodic derived reconciliation.",
-    targets: "Derived work covered by the reconciliation pass.",
-    effects: "Repairs derived scheduling through the existing runtime.",
-    dependencies: "Derived declarations and current record state.",
-    cost: "No blanket AI charge; individual downstream computations own cost.",
-    exclusions: "Does not introduce a second derived-value policy.",
-  },
   "purchase.dispatch": {
     stuck: { consequence: "New purchases won't import until this works." },
     activityLabel: "Purchase import",
@@ -372,25 +320,10 @@ export const JOB_KIND_POLICY = {
     exclusions:
       "Does not bypass funding eligibility or force a member-paused Run.",
   },
-  "discovery.connections": {
-    stuck: {
-      consequence: "New connections won't be suggested until this works.",
-    },
-    activityLabel: "Connection discovery",
-    ...SERVER,
-    label: "Discover connections",
-    purpose: "Admits connection evaluation for changed records.",
-    trigger: "Changed connection inputs.",
-    targets: "Records eligible under declared connection rules.",
-    effects: "Starts connection discovery work and eligible evaluations.",
-    dependencies: "Current connection evidence and configured models.",
-    cost: "Admitted AI evaluations use AI funding.",
-    exclusions: "Unchanged or ineligible inputs are excluded.",
-  },
   "location-ai.description.refresh": {
     ...SERVER,
     maxAttempts: null,
-    backoff: MAINTENANCE_BACKOFF,
+    backoff: RECOVERABLE_BACKOFF,
     label: "Describe a Location",
     purpose: "Refreshes the AI description for a Location.",
     trigger: "Location description refresh request.",
@@ -403,7 +336,7 @@ export const JOB_KIND_POLICY = {
   "location-ai.inventory.refresh": {
     ...SERVER,
     maxAttempts: null,
-    backoff: MAINTENANCE_BACKOFF,
+    backoff: RECOVERABLE_BACKOFF,
     label: "Analyze Location inventory",
     purpose: "Refreshes inventory analysis for a Location.",
     trigger: "Location inventory analysis request.",
@@ -459,3 +392,61 @@ export const jobKindDeclaration = (
 ): JobKindDeclaration | undefined => POLICY_BY_KIND.get(kind);
 export const jobKindPolicy = (kind: string): JobKindPolicy =>
   jobKindDeclaration(kind) ?? SERVER;
+
+/** Aggregate progress and the last three wall-clock rebuild durations, excluding AI/embedding regeneration. */
+const rebuildObservation = z.object({
+  running: z.boolean(),
+  target: z.string().nullable(),
+  startedAt: z.iso.datetime().nullable(),
+  finishedAt: z.iso.datetime().nullable(),
+  failures: z.int().nonnegative(),
+  error: z.string().nullable(),
+  durationsMs: z.array(z.number().nonnegative()),
+  lastMovementAt: z.iso.datetime().nullable(),
+  cleanAt: z.iso.datetime().nullable(),
+  pages: z.int().nonnegative(),
+  processedRecords: z.int().nonnegative(),
+  failedPages: z.int().nonnegative(),
+  history: z.array(
+    z.object({
+      startedAt: z.string(),
+      finishedAt: z.string(),
+      durationMs: z.number(),
+      pages: z.int(),
+      processedRecords: z.int(),
+      failedPages: z.int(),
+    }),
+  ),
+});
+
+/**
+ * One kind of work (a Job kind): what runs and
+ * waits now, recent completions and failures, and the active Runs it serves.
+ * `completedPerMinute` averages the pace window; it is a measurement, not a
+ * forecast, so a stream without recent completions reports 0.
+ */
+const workStream = z.object({
+  kind: z.string(),
+  running: z.number().int().nonnegative(),
+  due: z.number().int().nonnegative(),
+  backingOff: z.number().int().nonnegative(),
+  scheduled: z.number().int().nonnegative(),
+  paused: z.number().int().nonnegative(),
+  completedPerMinute: z.number().nonnegative(),
+  completed: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  lastCompletedAt: z.iso.datetime().nullable(),
+  oldestDueAt: z.iso.datetime().nullable(),
+  runIds: z.array(runShortcode),
+});
+export const workActivity = z.object({
+  rebuild: rebuildObservation,
+  measuredAt: z.iso.datetime(),
+  windows: z.object({
+    paceMinutes: z.number().int().positive(),
+    completedMinutes: z.number().int().positive(),
+    failedMinutes: z.number().int().positive(),
+  }),
+  streams: z.array(workStream),
+});
+export type WorkActivity = z.infer<typeof workActivity>;

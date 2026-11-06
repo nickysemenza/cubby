@@ -31,7 +31,6 @@ const RUN_PURPOSE_GLYPH = {
   product_enrichment: { phosphor: "Package", sfSymbol: "shippingbox" },
   photo_inventory: { phosphor: "Camera", sfSymbol: "camera" },
   ai_suggest: { phosphor: "Sparkle", sfSymbol: "sparkles" },
-  suggestion_sweep: { phosphor: "MagicWand", sfSymbol: "wand.and.stars" },
   ai_refresh: { phosphor: "ArrowClockwise", sfSymbol: "arrow.clockwise" },
   background: { phosphor: "Gear", sfSymbol: "gearshape" },
   file_import: { phosphor: "FileArrowUp", sfSymbol: "doc.badge.arrow.up" },
@@ -370,7 +369,6 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
-      links: [{ label: "Run types", path: "/runs/types" }],
       // Display images borrow from the vendor; they load as list media.
       tree: { toggle: true, defaultNested: false },
       savedViews: [
@@ -452,7 +450,7 @@ export const { definition, readSchemas } = defineEntityModel({
           sources: [{ label: "Recorded work samples and step counters" }],
         },
         kind: "json",
-        labelOverride: "Work",
+        label: "Work",
         display: {
           columnGroup: "Results",
           detail: false,
@@ -468,7 +466,7 @@ export const { definition, readSchemas } = defineEntityModel({
           sources: [{ label: "Latest progress, step update, or heartbeat" }],
         },
         kind: "timestamp",
-        labelOverride: "Activity",
+        label: "Activity",
         display: {
           columnGroup: "Execution",
           labelPath: "activityAt",
@@ -509,7 +507,7 @@ export const { definition, readSchemas } = defineEntityModel({
         // stored, filterable state.
         key: "displayStatus",
         kind: "enum",
-        labelOverride: "State",
+        label: "State",
         provenance: {
           kind: "derived",
           sources: [
@@ -845,7 +843,7 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       {
         key: "dispatchError",
-        labelOverride: "Failure details",
+        label: "Failure details",
         kind: "text",
         nullable: true,
         display: { list: false, renderer: { detail: "run-failure-details" } },
@@ -869,7 +867,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "predecessorRunId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Retry of",
+        label: "Retry of",
         reference: { entity: "run" },
         display: { list: false },
         validation: readOnly(runShortcode.nullable()),
@@ -878,7 +876,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "successorRunId",
         kind: "identifier",
         nullable: true,
-        labelOverride: "Retried as",
+        label: "Retried as",
         // Read from the newest Run whose `predecessorRunId` names this one.
         reference: { entity: "run" },
         explanation: {
@@ -1378,6 +1376,10 @@ export const { definition, readSchemas } = defineEntityModel({
   },
   extensions: {
     ports: {
+      reports: {
+        module: "~/server/domains/run/repo/report-bindings",
+        export: "reportBindings",
+      },
       repository: {
         module: "~/server/domains/run/repo/run",
         export: "runRepository",

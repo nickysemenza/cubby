@@ -1,11 +1,12 @@
+import { compileEntityDeclarations } from "./compile.ts";
+import { modulesChildren } from "@cubby/schemas/compiler/child-tables/modules";
 import type { GeneratedEntityFieldModel } from "@cubby/schemas/entity-projection-types";
 import type { CompiledEntityListFields } from "./list-fields.ts";
 import type { ChildTableMetadata } from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { compileEntityDeclarations } from "./compile.ts";
-import { modulesChildren } from "@cubby/schemas/compiler/child-tables/modules";
+
 import { validatePredicateBaseline } from "./predicate-baseline.ts";
 import type {
   CompiledEntityPresentation,
@@ -96,7 +97,6 @@ export type FilterDescriptor = Readonly<{
     kind: "number" | "date";
     int: boolean;
     nonnegative: boolean;
-    finite: boolean;
     describe: Readonly<{ lower: string; upper: string }> | null;
   }> | null;
   /** The Any value / No value request key (`presenceFilter`). */
@@ -178,6 +178,9 @@ export type EntityField = Readonly<
   Omit<ProjectedEntityField, "requiredOnCreate" | "resolution"> & {
     resolution: Readonly<{
       reset?: Readonly<Record<string, EntityFieldResolutionValue>>;
+      resetSource?: NonNullable<
+        ProjectedEntityField["resolution"]
+      >["resetSource"];
       none: Readonly<Record<string, EntityFieldResolutionValue>> | null;
       redundancy: "eligible" | "intentional";
       confirm: Readonly<Record<string, EntityFieldResolutionValue>> | null;
@@ -270,7 +273,6 @@ export type EntityFieldModel = Readonly<{
   hierarchy: Readonly<{ parentField: string; maxDepth: number }> | null;
   /** `model.grouping`: the Group by choices, compiled in `list-fields.ts`. */
   grouping: readonly string[];
-  groupingOmit?: readonly string[];
   intents: EntityEditIntents | null;
 }>;
 /** An operational column the table stores with no model field. */

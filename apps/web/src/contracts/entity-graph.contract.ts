@@ -18,14 +18,13 @@ import {
 import {
   entityGraphExploreInputSchema,
   entityGraphExploreOutputSchema,
+  entityGraphPathsInputSchema,
+  entityGraphPathsOutputSchema,
   entityGraphInputSchema,
   entityGraphOutputSchema,
   entityGraphRootSchema,
-  entityGraphPathsInputSchema,
-  entityGraphPathsOutputSchema,
 } from "@cubby/schemas/entity-graph";
 import { allEntities } from "@cubby/schemas/entity-roster";
-import { z } from "zod";
 
 import { ENTITY_ROOT_TAGS } from "~/contracts/cache-policy";
 import { defineContract, mutation, query } from "~/contracts/define";
@@ -120,20 +119,10 @@ export const connectionContract = defineContract(
         ],
       },
     }),
-    readBatch: query({
-      input: z.object({ sources: z.array(entityGraphRootSchema).max(250) }),
-      output: z.array(connectionDiscoveryOut),
-      cache: {
-        tags: [
-          ["connections"],
-          ...allEntities.map((entity) => [entity] as const),
-        ],
-      },
-    }),
     discover: mutation({
       exposure: "capability",
       description:
-        "Discover proposed relationships for an existing record using bounded typed matchers. Publishes Assessments, without accepting new links. Repeated purchases remain eligible. Review the exact proposed effect before acceptance.",
+        "Discover proposed relationships for an existing record using bounded typed matchers. Publishes Suggestions, without accepting new links. Repeated purchases remain eligible. Review the exact proposed effect before acceptance.",
       modelBacked: true,
       input: entityGraphRootSchema,
       output: connectionDiscoveryOut,

@@ -413,6 +413,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         resolution: {
           reset: { itemizationExpectation: null },
+          resetSource: "vendorEvidence",
           redundancy: "eligible",
           // Receipt-only or unrecorded evidence implies no policy, so the
           // Purchase ladder falls through to the spending category.
@@ -1495,7 +1496,14 @@ export const { definition, readSchemas } = defineEntityModel({
     },
   },
   extensions: {
+    relatednessSignals: [
+      { kind: "semantic", label: "Similar meaning", weight: 1, limit: 8 },
+    ],
     ports: {
+      reports: {
+        module: "~/server/domains/vendor/repo/report-bindings",
+        export: "reportBindings",
+      },
       repository: {
         module: "~/server/domains/vendor/repo/vendor.repository",
         export: "vendorRepository",

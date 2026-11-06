@@ -81,21 +81,15 @@ import {
   resumeAutomaticAi,
   stopAutomaticAi,
 } from "~/server/domains/run/repo/automatic-ai-stop";
-import {
-  pauseSuggestionSweep,
-  resumeSuggestionSweep,
-  startSuggestionSweep,
-} from "~/server/domains/run/service/suggestion-sweep";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
-import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
-import { memberRejectedSql } from "~/server/generic/assessment/repo/suggestion-decisions";
-import { latestSuggestionSweepStatus } from "~/server/generic/assessment/repo/suggestion-review";
 import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import {
   resolveAllOrThrow,
   resolveLiveShortcodes,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
+import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
@@ -239,7 +233,7 @@ export const backfillLocationDescriptionsWorkflow = bindCoordinatorStream(
   }),
 );
 /** AI reads are authoritative: suggestions must see the row just written. */
-export const inferFieldAssessments = async (
+export const inferFieldSuggestions = async (
   context: Pick<AuthenticatedOperationContext, "db" | "actorContext">,
   input: FieldSuggestionsInput,
   ports?: Parameters<typeof suggestFields>[3],
@@ -271,7 +265,7 @@ export const inferFieldAssessments = async (
           entity: input.entity,
           recordId,
           field,
-          assessmentIds: [],
+          suggestionIds: [],
         },
         { suggestPorts: ports },
       );
@@ -323,7 +317,7 @@ export const inferFieldAssessments = async (
         ELSE '{}'::jsonb END`,
       judgment: sql<unknown>`jsonb_build_object('outcome', ${suggestionTable.judgment}->'outcome')`,
     };
-    // A repeated question reuses its published assessment without opening the
+    // A repeated question reuses its published suggestion without opening the
     // locking transaction; the transaction below still rechecks under its lock.
     const [published] = await getDb(context.db)
       .select(publishedFields)
@@ -342,7 +336,7 @@ export const inferFieldAssessments = async (
           .where(eq(suggestionTable.publicationKey, publicationKey))
           .limit(1);
         if (existing) return existing;
-        return publishAssessment(
+        return publishSuggestion(
           transactionDb,
           {
             publicationKey,
@@ -455,7 +449,7 @@ export const inferFieldAssessments = async (
       if (output.outcomes)
         output.outcomes[field] = {
           ...outcome,
-          assessmentId: prediction.id,
+          suggestionId: prediction.id,
           reviewStatus: "rejected",
         };
       continue;
@@ -467,12 +461,12 @@ export const inferFieldAssessments = async (
       .object({ outcome: fieldSuggestionOutcomeSchema })
       .parse(prediction.judgment);
     output.suggestions[field] = original.proposal
-      ? { ...original.proposal, assessmentId: prediction.id }
+      ? { ...original.proposal, suggestionId: prediction.id }
       : null;
     if (output.outcomes)
       output.outcomes[field] =
         originalJudgment.outcome.kind === "evaluated"
-          ? { ...originalJudgment.outcome, assessmentId: prediction.id }
+          ? { ...originalJudgment.outcome, suggestionId: prediction.id }
           : originalJudgment.outcome;
   }
   // A pinned model replays one record for grading; only live answers settle
@@ -539,8 +533,8 @@ export const inferFieldAssessments = async (
 };
 
 /** A list's finite enrichment set shares setup, vocabularies and decision waves. */
-export async function inferFieldAssessmentsBatch(
-  context: Parameters<typeof inferFieldAssessments>[0],
+export async function inferFieldSuggestionsBatch(
+  context: Parameters<typeof inferFieldSuggestions>[0],
   input: z.output<typeof fieldSuggestionsBatchInput>,
   ports?: Parameters<typeof suggestFields>[3],
 ) {
@@ -564,7 +558,7 @@ export async function inferFieldAssessmentsBatch(
   const usages = new Map<string, AiSelectionUsage>();
   const results = await withFieldSuggestionBatch(() =>
     settleDecisionWorkItems(input.items, async (item) => {
-      return inferFieldAssessments(
+      return inferFieldSuggestions(
         context,
         item,
         {
@@ -715,19 +709,6 @@ export const aiHandlers = implementOperationDomain(aiContract, {
     const { decisionCatalog } = await import("~/server/ai/decision-catalog");
     return decisionCatalog(context.db);
   },
-  startSuggestionSweep: (context, input) =>
-    startSuggestionSweep(context.db, input, { context }),
-  pauseSuggestionSweep: async (context, input) => {
-    await pauseSuggestionSweep(context.db, parseEntityId("run", input.runId));
-    return { paused: true as const };
-  },
-  resumeSuggestionSweep: async (context, input) => {
-    const id = parseEntityId("run", input.runId);
-    await resumeSuggestionSweep(context.db, id);
-    return { id };
-  },
-  latestSuggestionSweepStatus: (context) =>
-    latestSuggestionSweepStatus(context.db),
   automaticWork: async (context) => ({
     stoppedAt: (await readAutomaticAiStop(context.db))?.stoppedAt ?? null,
   }),
@@ -741,22 +722,9 @@ export const aiHandlers = implementOperationDomain(aiContract, {
     return resumed;
   },
   // Both presentations share the page run grouping and authoritative inference.
-  suggestFields: (context, input) => inferFieldAssessments(context, input),
+  suggestFields: (context, input) => inferFieldSuggestions(context, input),
   suggestFieldsBatch: (context, input) =>
-    inferFieldAssessmentsBatch(context, input),
-  suggestFieldsReview: async (context, input) => {
-    const { suggestions, ...contextual } = await inferFieldAssessments(
-      context,
-      input,
-    );
-    return {
-      ...contextual,
-      suggestions: Object.entries(suggestions).map(([field, suggestion]) => ({
-        field,
-        suggestion,
-      })),
-    };
-  },
+    inferFieldSuggestionsBatch(context, input),
   suggestExternalIdKind: async (context, input) =>
     suggestExternalIdKind(input, {
       db: context.db,

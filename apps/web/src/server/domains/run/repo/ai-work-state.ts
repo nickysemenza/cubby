@@ -1,6 +1,6 @@
 import { aiRefreshProgress } from "@cubby/schemas/ai-evaluation";
 import { isMemberStartedRun } from "@cubby/schemas/run-fields";
-import { and, eq, inArray, lt, notExists, or, sql } from "drizzle-orm";
+import { and, eq, inArray, notExists, or, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { guardAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation";
@@ -125,17 +125,6 @@ export async function aiEvaluationsForRun(db: Database, runId: RunRow["id"]) {
     .where(eq(aiEvaluation.runId, runId));
 }
 
-export async function readAiEvaluation(
-  db: Database,
-  id: string,
-): Promise<AiEvaluationRow | undefined> {
-  const [row] = await getDb(db)
-    .select()
-    .from(aiEvaluation)
-    .where(eq(aiEvaluation.id, id));
-  return row;
-}
-
 export async function guardAiEvaluationAttempt(
   db: Database,
   id: string,
@@ -144,26 +133,6 @@ export async function guardAiEvaluationAttempt(
   await withTransactionDatabase(db, (tx) =>
     guardAiEvaluation(tx, id, attemptToken),
   );
-}
-
-/** Mail discovery a funding stop paused before `pausedBefore`. */
-export async function fundingPausedDiscoveryRuns(
-  db: Database,
-  pausedBefore: Date,
-) {
-  const rows = await getDb(db)
-    .select({ id: run.id })
-    .from(run)
-    .where(
-      and(
-        eq(run.purpose, "mail_discovery"),
-        eq(run.status, "paused_auth"),
-        eq(run.failureCode, "execution_limit"),
-        lt(run.updatedAt, pausedBefore),
-        notDeleted(run),
-      ),
-    );
-  return rows.map((row) => row.id);
 }
 
 /** Waits for the next budget window or a reconnected mailbox; recovery resumes it. */

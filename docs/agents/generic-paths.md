@@ -49,14 +49,14 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   work fans out as `ai.evaluation` Jobs owned or requested by the Run itself, never a
   child Run, queue chain or ad hoc counter.
 - Suggestion review: `suggestions_read.list`/`acceptClean` over the family registry
-  (`server/generic/assessment/repo/suggestion-families.ts`) and the Suggestions page; apply
+  (`server/generic/suggestions/repo/suggestion-families.ts`) and the Suggestions page; apply
   stays the family's `reviewAssessment` handler. `review-families.ts` declares affected
   records, actionability and automatic application. Web list badges and detail sections
   reuse `entity/suggestions/queue`; automatic history uses `suggestions.automaticDecisions`.
   Never a family-specific review list or a status-only pending count.
 - Suggestion publication: a family a Sweep step publishes per slot declares a
   `SuggestionFamily` and publishes through
-  `server/generic/assessment/repo/suggestion-publication.ts` (slot locks,
+  `server/generic/suggestions/repo/suggestion-publication.ts` (slot locks,
   suppression, unchanged match, retirement, batches of 32 with one-at-a-time
   fallback, label backlog reads). Family checks plug in as `precheck`/`prepare`
   hooks; never a second lock-and-retire writer.
@@ -78,7 +78,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `server/domains/spending-category/repo/classification-field-policy.ts` — never a feature literal at a
   call site. See [entities](../entities.md#classification-field-policies).
 - Detail pages: generic detail with declared slots (`features/*/slots.tsx`). Header cells belong to `presentation.detail.summary`: one ordered roster of fields, connected-record previews, concise report projections and charts, capped at eight applicable cells. Reuse the canonical field, relation and report readers instead of adding an entity-specific header query or renderer.
-- Slot reports: `entityReport.get` and `server/generic/entity-report/repo/` compose
+- Slot reports: `entityReport.get` loads domain builders through the generated
+  kernel report bindings; `server/generic/entity-report/repo/` executes and composes
   shared server-owned blocks; web `ReportBlocks` and native `ReportDetailSlot`
   render them. [Compiled entities](../entities.md#one-declaration-several-consumers)
   owns block/command/choice semantics. Add a builder rather than deriving figures
@@ -170,14 +171,14 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   Semantic artifact validation belongs to `findSimilarEntitiesPage` in
   `generic/embedding/repo/entity-embedding-search.ts`; similarity and identity
   consumers share its bounded seed/hit hydration and current-artifact checks.
-- Background execution: `server/generic/jobs/` owns durable scheduling, retries
-  and claims; `server/workflows/jobs.ts` composes production handlers. Runs retain
-  domain progress and history. Derived refresh records broad family Job intent
-  through `server/generic/changes/repo/change.ts` in the save transaction;
-  `derived-refresh/repo/process.ts` prepares bounded pages through injected ports.
-  Provider work happens before the transaction that checks current inputs and
-  saves the output. [Background derived data](../entities.md#background-derived-data)
-  owns freshness, recovery and discovery semantics.
+- Background execution: `server/generic/jobs/` owns one-off Job claims and retries;
+  `server/generic/background/drains.ts` owns row-drain paging. The hourly derived
+  pass owns one resumable cursor, with publication and progress committed together.
+  `server/workflows/jobs.ts` composes the round and coalesces continuation wakes.
+  Runs retain member/agent sessions and history. Provider work precedes the
+  transaction that checks current inputs and publishes. The read-only
+  `generic/jobs/repo/observation.ts` reports those owners without scheduling work.
+  [Background derived data](../entities.md#background-derived-data) owns freshness.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
 - Money: `cents`, `dollars`, `round2` (`@cubby/shared`); expense
   rollups select `expenseAggregateFields` (`server/db/computed/expense-aggregate-sql.ts`);
@@ -366,8 +367,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   labelled values under one header (inline labels below 40rem). Inline
   labelled values anywhere else: `Facts layout="inline"` (`ui/records/facts.tsx`);
   stacked label/value lists use `Facts layout="list"`. Detail-page connected records read
-  `entity.connectedRecordsPreview` once per record; `/connections` and
-  relation-table evidence page `entity.connectedRecords` per view. Audit
+  `entity.connectedRecordsPreview` once per record;
+  relation-table evidence pages use `entity.connectedRecords` per view. Audit
   bursts fold through `foldAuditEntries` (`entity/audit-log/audit-log-fold.ts`).
 - Errors and clipboard: `showErrorToast`, `ErrorDisplay`, `copyTextWithToast`.
 - Data: generated query catalog operations, `useActionMutation`,

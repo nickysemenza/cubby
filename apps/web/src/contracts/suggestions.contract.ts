@@ -5,11 +5,6 @@ import {
   suggestionRecordCountsOut,
 } from "@cubby/schemas/automatic-decision";
 import {
-  automaticRuleOut,
-  automaticRulesOut,
-  setAutomaticRuleInput,
-} from "@cubby/schemas/automatic-rule";
-import {
   acceptCleanSuggestionsInput,
   acceptCleanSuggestionsOut,
   suggestionCountsInput,
@@ -17,11 +12,10 @@ import {
   suggestionListInput,
   suggestionListOut,
 } from "@cubby/schemas/suggestion-list";
-import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
-/** Pending Suggestions of every family; review goes through `assessment.review(Batch)`. */
+/** Pending Suggestions of every family; review goes through `suggestion.review(Batch)`. */
 export const suggestionsContract = defineContract(
   "suggestions",
   {
@@ -86,24 +80,6 @@ export const suggestionsContract = defineContract(
         "financialTransaction",
         "settledSuggestions",
       ],
-    }),
-    /** Each Automatic rule with its switch and precision, computed on read. */
-    rules: query({
-      description:
-        "Automatic rules: named, versioned family rules that apply matching Suggestions without review (statement_transaction.attach; statement_transaction.book_spending). Each returns its declared revision and the member switch; attach applies only while a member has it on for that revision.",
-      input: z.object({}).strict(),
-      output: automaticRulesOut,
-      readPolicy: "strong",
-      cache: { profile: "stable", tags: [["suggestions"]] },
-    }),
-    /** A member's switch: on requires eligibility, off is always allowed. */
-    setRule: mutation({
-      description:
-        "Turn one Automatic rule on or off ({ruleKey, enabled}) on the member's instruction. On requires eligibility (read suggestions_read.rules) and refuses with the raw numbers otherwise; off is always allowed.",
-      command: { label: "Set automatic rule", confirmation: null },
-      input: setAutomaticRuleInput,
-      output: automaticRuleOut,
-      invalidates: ["suggestions"],
     }),
   },
   { exposure: "capability" },

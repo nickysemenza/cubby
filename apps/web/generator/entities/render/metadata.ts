@@ -229,7 +229,6 @@ export const renderEntityMetadataArtifacts = (
         rows: _rows,
         hierarchy: _hierarchy,
         grouping: _grouping,
-        groupingOmit: _groupingOmit,
         ...rest
       } = fieldModel;
       return [
@@ -847,7 +846,20 @@ export const renderEntityMetadataArtifacts = (
         {
           name: "generatedEntityListFields",
           value: Object.fromEntries(
-            entities.map(({ key, listFields }) => [key, listFields]),
+            entities.map((entity) => [
+              entity.key,
+              {
+                ...entity.listFields,
+                filterUrlKeys: [
+                  ...new Set([
+                    ...(resolvedPrimarySearch(entity)
+                      ? [resolvedPrimarySearch(entity)!.key]
+                      : []),
+                    ...entity.filterUrlKeys,
+                  ]),
+                ],
+              },
+            ]),
           ),
         },
         {
@@ -907,7 +919,7 @@ export const renderEntityMetadataArtifacts = (
         },
       ],
     }),
-    artifact("packages/schemas/src/generated/entity-inspector.gen.ts", {
+    artifact("packages/schemas/src/generated/entity-record-metadata.gen.ts", {
       imports: [typeImport(["MetadataEntityInspectorMetadata"])],
       consts: [
         {
@@ -966,10 +978,7 @@ export const renderEntityMetadataArtifacts = (
           name: "generatedEntityKernelContractCases",
           value: kernelContractCases,
         },
-        {
-          name: "generatedMcpEntityKernelContractCases",
-          value: mcpKernelContractCases,
-        },
+
         {
           name: "generatedMcpEntityActionEntities",
           value: Object.fromEntries(

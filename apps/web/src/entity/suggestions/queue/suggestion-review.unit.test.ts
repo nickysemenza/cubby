@@ -1,9 +1,9 @@
-import { assessmentReviewInput } from "@cubby/schemas/assessment";
 import { shortcode } from "@cubby/schemas/identifiers";
 import {
   statementSuggestionOut,
   type StatementSuggestionOut,
 } from "@cubby/schemas/statement-suggestion";
+import { suggestionReviewInput } from "@cubby/schemas/suggestion";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -31,7 +31,7 @@ const suggestion = (
   overrides: Partial<StatementSuggestionOut> = {},
 ): StatementSuggestionOut =>
   statementSuggestionOut.parse({
-    assessmentId: "00000000-0000-4000-8000-000000000001",
+    suggestionId: "00000000-0000-4000-8000-000000000001",
     fingerprint: "fp-1",
     source: "monarch",
     chargeKey: "charge-1",
@@ -102,7 +102,7 @@ describe("statement suggestion review items", () => {
     });
     // Feedback correction values cross a JSON boundary; cleared optional
     // choices must be absent while deliberate null choices survive.
-    expect(assessmentReviewInput.safeParse(item).success).toBe(true);
+    expect(suggestionReviewInput.safeParse(item).success).toBe(true);
     expect(item.application).toMatchObject({ booking: { purchaseId: null } });
     expect(item.verdict).toBe("wrong");
     expect(item.application).toMatchObject({

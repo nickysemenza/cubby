@@ -31,30 +31,29 @@ import {
   saveConnectionFieldGuard,
   type ConnectionFieldGuardTargets,
 } from "~/server/domains/connection/repo/field-connections";
+import {
+  getEntityRecommendations,
+  getExpenseRecommendationPage,
+} from "~/server/domains/connection/service/connection-recommendations";
 import { prepareExpenseProjectRecommendationContexts } from "~/server/domains/expense/repo/project-recommendations";
 import {
   prepareProductPairPublications,
   productPairKey,
   type PreparedProductPairPublication,
 } from "~/server/domains/product/repo/match/product-match-candidate";
-import {
-  getEntityRecommendations,
-  getExpenseRecommendationPage,
-} from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { jsonValue } from "~/server/domains/run/repo/suggestion-sweep-state";
 import { makeSweepSuggestion } from "~/server/domains/run/service/suggestion-sweep";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
-import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
-import { prepareTagSuggestions } from "~/server/generic/assessment/service/tag-suggestions";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import {
   lookupShortcodes,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { discoverAcquisitionCandidateScan } from "./acquisition-discovery";
@@ -157,15 +156,6 @@ export async function prepareEntityConnections(
   }
   await captureCandidates(candidates);
   if (source.entityKind === "product") {
-    publishers.push(
-      ...(
-        await stage("tagSuggestions", () =>
-          prepareTagSuggestions(db, source.entityId),
-        )
-      ).map((publish) => async (transactionDb: Database) => {
-        await publish(transactionDb);
-      }),
-    );
     const recordId = await resolveOrThrow(db, "product", source.entityId);
     productRecordId = recordId;
     const identity = await stage("productIdentity", async () =>

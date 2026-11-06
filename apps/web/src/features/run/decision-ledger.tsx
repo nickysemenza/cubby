@@ -104,7 +104,7 @@ function DecisionLedgerBody({
     row.status === "pending" &&
     (actionableRows
       ? actionableRows.some(
-          (item) => item.assessmentId === row.id && item.actions.length > 0,
+          (item) => item.suggestionId === row.id && item.actions.length > 0,
         )
       : presenter.facetOf(row).key === "ready_to_apply");
   const [admittedIds, setAdmittedIds] = useState(() => rows.map(decisionId));
@@ -231,7 +231,7 @@ function DecisionLedgerBody({
     row.active && row.status === "pending"
       ? actionableRows?.find(
           (item) =>
-            item.assessmentId === row.id &&
+            item.suggestionId === row.id &&
             item.clean &&
             item.actions.some(
               (action) => action.verb === "accept" && !action.ownerOnly,
@@ -255,7 +255,7 @@ function DecisionLedgerBody({
   const applyReady = async () => {
     if (!reviewReady || reviewing || !eligible || !readyScope.length) return;
     const snapshot = readyScope;
-    const actedIds = new Set(snapshot.map((row) => row.assessmentId));
+    const actedIds = new Set(snapshot.map((row) => row.suggestionId));
     setReviewing(true);
     try {
       const failures = await reviewReady(snapshot);
@@ -383,7 +383,7 @@ function DecisionLedgerBody({
               suggestion={
                 open.active && open.status === "pending"
                   ? actionableRows?.find(
-                      (item) => item.assessmentId === open.id,
+                      (item) => item.suggestionId === open.id,
                     )
                   : undefined
               }

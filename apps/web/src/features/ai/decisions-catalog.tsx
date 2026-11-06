@@ -1,18 +1,12 @@
-import { formatConfidence, type DecisionCatalogRow } from "@cubby/schemas/ai";
-import { aiSmokeRunOut } from "@cubby/schemas/ai-smoke";
+import type { DecisionCatalogRow } from "@cubby/schemas/ai";
 import { entityRoster } from "@cubby/schemas/entity-roster";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
-import { getErrorMessage, humanize } from "@cubby/shared";
-import { useQueryClient } from "@tanstack/react-query";
+import { humanize } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { z } from "zod";
 
 import { EntityIcon } from "~/entity/entities";
-import type { StandardEntity } from "~/entity/entity-contracts";
-import { entityDetailFor } from "~/entity/entity-detail";
-import { ensureEntityMetadata } from "~/entity/metadata";
 import RTable from "~/entity/table/table";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { formatCount } from "~/lib/number-format";
@@ -25,28 +19,15 @@ import {
 } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
-import { Panel, Row, Stack } from "~/ui/layout";
+import { Stack } from "~/ui/layout";
 import { SidePanel, SidePanelLayout } from "~/ui/overlays/side-panel";
-import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { Facts } from "~/ui/records/facts";
 import { Badge } from "~/ui/reui/badge";
 import { Description } from "~/ui/text/description";
 import { NoneValue } from "~/ui/text/none-value";
 
-import { fieldSuggestionBasisFromRecord } from "../../entity/suggestions/field-suggestion";
-import { suggestTargetsFor } from "../../entity/suggestions/suggestion-targets";
-
 const helper = createCubbyColumnHelper<DecisionCatalogRow>();
-const TRIAL_MODELS = ["typesafe/jev", "@cf/cloudflare/clef"] as const;
-type TrialModel = (typeof TRIAL_MODELS)[number];
-type TryResult = z.infer<typeof aiSmokeRunOut>;
-const fieldSuggestionsResultSchema = z
-  .object({
-    suggestions: z.record(z.string(), z.unknown()),
-  })
-  .passthrough();
-
 const decisionScope = (row: DecisionCatalogRow) =>
   row.entity ? entityRoster[row.entity].singular : "Feature";
 
@@ -263,211 +244,6 @@ function catalogColumns() {
   });
 }
 
-function TryOutcome({
-  model,
-  result,
-}: {
-  model: TrialModel;
-  result: TryResult;
-}) {
-  const parsed = fieldSuggestionsResultSchema.safeParse(result.result);
-  const suggestions = parsed.success
-    ? Object.values(parsed.data.suggestions)
-    : [];
-  const [first] = suggestions;
-  const suggestion = z
-    .object({
-      label: z.string().nullable(),
-      value: z.string().nullable(),
-      probability: z.number().nullable(),
-      confidence: z.enum(["high", "medium", "low"]),
-      alternatives: z.array(
-        z.object({ label: z.string(), probability: z.number() }).passthrough(),
-      ),
-    })
-    .passthrough()
-    .safeParse(first);
-  return (
-    <Panel
-      tone="default"
-      className="flex min-w-0 flex-1 flex-col gap-1 py-2 text-xs"
-    >
-      <span className="font-medium">{model}</span>
-      {result.error ? (
-        <Description size="xs" role="alert">
-          {result.error}
-        </Description>
-      ) : suggestion.success && suggestion.data.value !== null ? (
-        <>
-          <span className="text-primary">
-            {suggestion.data.label ?? suggestion.data.value} ·{" "}
-            {formatConfidence(
-              suggestion.data.probability,
-              suggestion.data.confidence,
-            )}
-          </span>
-          {suggestion.data.alternatives[0] ? (
-            <span className="text-muted-foreground">
-              Runner-up: {suggestion.data.alternatives[0].label} ·{" "}
-              {formatConfidence(suggestion.data.alternatives[0].probability)}
-            </span>
-          ) : null}
-        </>
-      ) : (
-        <span className="text-muted-foreground">
-          {result.status === "no_model_call"
-            ? "Not asked — the basis gave nothing to go on"
-            : "No suggestion"}
-        </span>
-      )}
-      <Link
-        to="/runs/$shortcode"
-        params={{ shortcode: result.runShortcode }}
-        className="text-muted-foreground underline-offset-2 hover:underline"
-      >
-        {result.runShortcode}
-      </Link>
-    </Panel>
-  );
-}
-
-/** Runs one record's basis through Jev and Clef with the smoke runner,
- * pinning each model through `decisionModel`. */
-function TryPanel({ row }: { row: DecisionCatalogRow }) {
-  const queryClient = useQueryClient();
-  const entity = row.entity;
-  const field = row.field;
-  const [recordId, setRecordId] = useState("");
-  const [basis, setBasis] = useState<Record<string, string>>({});
-  const [results, setResults] = useState<
-    Partial<Record<TrialModel, TryResult>>
-  >({});
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  if (!entity || !field) return null;
-  const loadRecord = async () => {
-    setError(null);
-    try {
-      const record = await entityDetailFor(
-        // SAFETY: catalog field rows name a generated manifest entity with
-        // a detail read (every `suggestFieldKeys` entity is browser-routed).
-        entity as StandardEntity,
-      ).readFresh(recordId.trim());
-      if (!record) throw new Error(`Record ${recordId} was not found.`);
-      await ensureEntityMetadata(queryClient, entity);
-      const loaded = fieldSuggestionBasisFromRecord(
-        queryClient,
-        entity,
-        suggestTargetsFor(queryClient, entity, [field]),
-        record,
-      );
-      setBasis(
-        Object.fromEntries(
-          Object.entries(loaded).flatMap(([key, value]) =>
-            value === null ? [] : [[key, value]],
-          ),
-        ),
-      );
-    } catch (failure) {
-      setError(getErrorMessage(failure));
-    }
-  };
-  const run = async () => {
-    setRunning(true);
-    setError(null);
-    try {
-      const { runAiSmokeCase } =
-        await import("~/features/ai/server-functions/ai-smoke");
-      const settled = await Promise.all(
-        TRIAL_MODELS.map(async (decisionModel) => {
-          const output = await runAiSmokeCase({
-            data: {
-              scenario: "fieldSuggestions",
-              input: {
-                entity,
-                targets: [field],
-                basisMode: "provided",
-                basis,
-                decisionModel,
-                ...(recordId.trim() ? { entityId: recordId.trim() } : {}),
-              },
-            },
-          });
-          return [decisionModel, aiSmokeRunOut.parse(output)] as const;
-        }),
-      );
-      setResults(Object.fromEntries(settled));
-    } catch (failure) {
-      setError(getErrorMessage(failure));
-    } finally {
-      setRunning(false);
-    }
-  };
-  return (
-    <Stack gap="sm">
-      <h3 className="text-sm font-medium">Try</h3>
-      <Row gap="xs" wrap align="center">
-        <Input
-          aria-label="Record code"
-          placeholder={`${entityRoster[entity].singular} code (optional)`}
-          className="w-48"
-          value={recordId}
-          onChange={(event) => setRecordId(event.target.value)}
-        />
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={!recordId.trim()}
-          onClick={() => void loadRecord()}
-        >
-          Load basis
-        </Button>
-      </Row>
-      {row.basis.map((item) => (
-        <label key={item.key} className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">{item.label}</span>
-          <Input
-            value={basis[item.key] ?? ""}
-            onChange={(event) =>
-              setBasis((previous) => ({
-                ...previous,
-                [item.key]: event.target.value,
-              }))
-            }
-          />
-        </label>
-      ))}
-      <Row gap="xs" align="center">
-        <Button
-          type="button"
-          size="sm"
-          disabled={running}
-          onClick={() => void run()}
-        >
-          {running ? "Running…" : "Run Jev and Clef"}
-        </Button>
-        <Description size="xs" className="text-muted-foreground">
-          Each run is a recorded Run with billed AI usage.
-        </Description>
-      </Row>
-      {error ? (
-        <Description size="xs" role="alert">
-          {error}
-        </Description>
-      ) : null}
-      <Row gap="sm" wrap>
-        {TRIAL_MODELS.map((model) => {
-          const result = results[model];
-          return result ? (
-            <TryOutcome key={model} model={model} result={result} />
-          ) : null;
-        })}
-      </Row>
-    </Stack>
-  );
-}
-
 function DecisionDetail({ row }: { row: DecisionCatalogRow }) {
   return (
     <Stack gap="md" className="text-sm">
@@ -546,7 +322,6 @@ function DecisionDetail({ row }: { row: DecisionCatalogRow }) {
           {JSON.stringify(row.prompt.input, null, 2)}
         </pre>
       </section>
-      {row.field ? <TryPanel row={row} /> : null}
     </Stack>
   );
 }
