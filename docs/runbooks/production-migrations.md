@@ -710,3 +710,11 @@ acceptance receipt, or applied/rejected status. It then rebuilds the three
 partial reference indexes without the obsolete flag and drops the column.
 Publication, evidence and decisions remain unchanged. The two connection scope
 indexes also drop their served predicate in desired-state DDL.
+
+## CorrectionLock retirement (ADR 0025 L2d)
+
+0112 removes the last CorrectionLock writers and drops its key-only table under
+an exclusive lock. Keys contain no member facts, money, evidence, decisions or
+unfinished work. Image intent uses its Image row, Suggestion review its Suggestion
+row, and Email mutations their existing domain rows and serializable retries.
+There is no household-wide Email evidence gate.

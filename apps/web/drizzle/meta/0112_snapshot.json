@@ -1,6 +1,6 @@
 {
-  "id": "a754eb67-59fc-4e45-8f31-c42d2dacf40e",
-  "prevId": "cb310e70-6b51-4452-a3bb-597caa8e9837",
+  "id": "bbee6d0e-479a-4881-a003-6ec202159006",
+  "prevId": "a754eb67-59fc-4e45-8f31-c42d2dacf40e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4858,25 +4858,6 @@
           ]
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.AssessmentCorrectionLock": {
-      "name": "AssessmentCorrectionLock",
-      "schema": "",
-      "columns": {
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

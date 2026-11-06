@@ -4928,3 +4928,9 @@ connection reads remain; internal batch hydration remains private to that reader
 Field publication builds an entry for `publishSuggestions`, whose immutable-key
 replay check also owns the field Sweep write. Field review tests hydrate through
 the same key and row readers used by the live queue.
+
+Correction serialization uses the affected domain rows. Suggestion review locks
+its Suggestion row; Image review locks its Image before the Suggestion. Email
+evidence writers retain serializable retries and their existing Email, Original
+and Purchase locks, without a household-wide CorrectionLock key. Sender address
+reservation still protects a new address that has no owning Vendor row yet.

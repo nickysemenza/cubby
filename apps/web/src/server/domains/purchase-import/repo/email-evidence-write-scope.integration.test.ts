@@ -1,8 +1,7 @@
-import { sql, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import { withConnection } from "~/server/db";
 import {
@@ -11,7 +10,7 @@ import {
   runAfterCommit,
   runBeforeCommitDatabase,
 } from "~/server/db/helpers";
-import { suggestionCorrectionLock, ledgerParty } from "~/server/db/schema";
+import { ledgerParty } from "~/server/db/schema";
 
 import {
   assertEmailEvidenceScope,
@@ -28,16 +27,12 @@ describe("Email evidence outer scope", () => {
     return { id: created.entityId };
   };
 
-  it("rejects a late root entry without writing a gate", async () => {
-    const before = await getDb(ctx.db).select().from(suggestionCorrectionLock);
+  it("rejects a late root entry", async () => {
     await withTransactionDatabase(ctx.db, async (db) => {
       await expect(
         withEmailEvidenceWrite(db, async () => undefined),
       ).rejects.toThrow("root Database");
     });
-    expect(await getDb(ctx.db).select().from(suggestionCorrectionLock)).toEqual(
-      before,
-    );
   });
 
   it("binds authority to the live transaction and its savepoints", async () => {
@@ -117,74 +112,6 @@ describe("Email evidence outer scope", () => {
         );
       });
     });
-  });
-
-  it("serializes roots before their domain work and refreshes a waiting snapshot", async () => {
-    const party = await marker();
-    await withEmailEvidenceWrite(ctx.db, async () => undefined);
-    const entered = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    const first = withEmailEvidenceWrite(ctx.db, async (db, scope) => {
-      assertEmailEvidenceScope(db, scope);
-      await getDb(db)
-        .update(ledgerParty)
-        .set({ name: "Synthetic scope committed" })
-        .where(eq(ledgerParty.id, party.id));
-      entered.resolve();
-      await release.promise;
-    });
-    await entered.promise;
-    const started = Promise.withResolvers<number>();
-    let secondCalls = 0;
-    const second = withConnection(ctx.db, async (connection) => {
-      const result = z
-        .object({ rows: z.array(z.object({ pid: z.number() })).min(1) })
-        .parse(
-          await getDb(connection).execute(sql`SELECT pg_backend_pid() AS pid`),
-        );
-      const row = result.rows[0];
-      if (!row) throw new Error("Synthetic connection PID missing");
-      started.resolve(row.pid);
-      return withEmailEvidenceWrite(connection, async (db, scope) => {
-        secondCalls += 1;
-        assertEmailEvidenceScope(db, scope);
-        expect(
-          (
-            await getDb(db)
-              .select()
-              .from(ledgerParty)
-              .where(eq(ledgerParty.id, party.id))
-          )[0]?.name,
-        ).toBe("Synthetic scope committed");
-      });
-    });
-    const pid = await started.promise;
-    try {
-      await expect
-        .poll(
-          async () => {
-            const result = z
-              .object({
-                rows: z.array(z.object({ waiting: z.boolean().nullable() })),
-              })
-              .parse(
-                await getDb(ctx.db).execute(
-                  sql`SELECT wait_event_type = 'Lock' AS waiting FROM pg_stat_activity WHERE pid = ${pid}`,
-                ),
-              );
-            return result.rows[0]?.waiting;
-          },
-          { timeout: 2000 },
-        )
-        .toBe(true);
-      expect(secondCalls).toBe(0);
-    } finally {
-      release.resolve();
-    }
-    const results = await Promise.allSettled([first, second]);
-    for (const result of results)
-      if (result.status === "rejected") throw result.reason;
-    expect(secondCalls).toBe(1);
   });
 
   it("does not replay a committed write when an after-commit effect fails", async () => {
