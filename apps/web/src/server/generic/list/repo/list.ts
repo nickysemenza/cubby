@@ -1429,13 +1429,14 @@ export function listScaffold<
       reader?: ListReader,
     ) {
       if (ids.length === 0) return { data: [] };
+      // Apply population once in get, with explicit identities rather than default list filters.
       const codes = await unwrapDb(db)
         .select({
           id: sql<string>`${table.id}`,
           code: sql<string>`${table.shortcode}`,
         })
         .from(listTable)
-        .where(and(inArray(table.id, [...ids]), scaffold.plan({}).where));
+        .where(inArray(table.id, [...ids]));
       const read = await scaffold.get(
         db,
         codes.map((row) => row.code),

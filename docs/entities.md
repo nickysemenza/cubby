@@ -108,7 +108,9 @@ docked inspector region.
 
 A retention-managed read-only entity may omit `deletedAt`; generic readers apply
 liveness only where the table declares it. `listScaffold.population` receives the
-same request filters for rows, facets and selection. `populationFilters` names
+same request filters for rows, facets and selection. Explicit Run IDs bypass the default
+automatic-purpose list suppression, keeping historical Runs directly readable.
+Internal-ID readers resolve public codes before applying that same identity read. `populationFilters` names
 request options consumed by that predicate instead of compared with each row;
 Job uses it for its internal-kinds toggle.
 
@@ -3386,7 +3388,9 @@ related Purchase rollups and Work queue research branches read the published
 `dataQuality` value. The Work queue no longer registers a
 Product price CTE. Non-quality price-presence views, including optional misc
 bucket valuations, retain live pricing semantics; quality applicability cannot
-stand in for price presence. Product, Expense, inventory, brand/vendor, category, kit link and
+stand in for price presence. Price presence reads the canonical price SQL and its
+result availability, rather than the background `readFacts.workFacts.priced`
+snapshot. Product, Expense, inventory, brand/vendor, category, kit link and
 attachment rows are declared inputs, and image integrity reaches attached
 Products through a join path; a kit's acquisition lines reach its components.
 Reads leave old publications intact until the drain republishes.

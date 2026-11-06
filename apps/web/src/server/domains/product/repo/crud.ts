@@ -209,6 +209,7 @@ import {
 } from "./pricing";
 import { storedEffectivePrice } from "./pricing";
 import { EMPTY_QUANTITY_LEDGER } from "./quantity-ledger";
+import { serviceCategorySql } from "./service-category";
 import { unitMappingColumns } from "./unit-mappings";
 import {
   assertNoCanonicalPriceMapping,
@@ -302,6 +303,8 @@ export const productScaffold = listScaffold<
     ),
     // Stored (ADR 0021): the kit walk per row made price sorts ~300 ms.
     price: productReadPriceSql,
+    priced: sql`CASE WHEN ${serviceCategorySql(sql`${product.categoryId}`)} THEN false
+      WHEN ${productReadPriceSql} IS NOT NULL THEN true END`,
     cost: productReadCostSql,
     primaryGtin: sql.raw(
       `(SELECT pei."externalId" FROM "EntityExternalId" pei ` +

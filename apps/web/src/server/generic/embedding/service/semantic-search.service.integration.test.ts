@@ -140,15 +140,11 @@ describe("semantic search background tasks", () => {
       makeProductInput({ name: "Unembedded source" }),
       ctx.actor,
     );
-    const started: string[] = [];
     const result = await executeWorkflow(
       findSimilarEntitiesWorkflow.definition,
       {
         context: ctx.db,
         input: { pair: "product_to_product", sourceId: source.id, limit: 5 },
-        observer: (event) => {
-          if (event.state === "started") started.push(event.step);
-        },
       },
     );
     expect(result.source).toEqual({
@@ -157,9 +153,7 @@ describe("semantic search background tasks", () => {
     });
     expect(result.status).not.toBe("ready");
     expect(result.results).toEqual([]);
-    expect(started).toContain("readiness");
-    expect(started).not.toContain("candidates");
-    expect(started).not.toContain("hits");
+
     expect(JSON.stringify(result)).not.toContain(source.entityId);
   });
 

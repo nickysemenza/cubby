@@ -2599,7 +2599,7 @@ Rules:
         },
         priced: {
           type: "boolean",
-          fromResult: { key: "readFacts", path: ["workFacts", "priced"] },
+          requiresResult: "price",
         },
         // Any of the product's barcodes, not only the primary its column shows.
         anyGtin: { via: "barcodes.externalId" },
