@@ -2569,15 +2569,36 @@ Rules:
         usdaKey: { type: "boolean" },
         image: { type: "boolean" },
         inventoryMultiplicity: { type: "boolean" },
-        kitAccounting: { type: "boolean" },
-        ownershipReconciliation: { type: "boolean" },
+        kitAccounting: {
+          type: "boolean",
+          fromResult: {
+            key: "readFacts",
+            path: ["workFacts", "kitAccounting"],
+          },
+        },
+        ownershipReconciliation: {
+          type: "boolean",
+          fromResult: {
+            key: "readFacts",
+            path: ["workFacts", "ownershipReconciliation"],
+          },
+        },
         conversionCoverage: { type: "boolean" },
         conversionTopology: { type: "boolean" },
         unitMappingQuality: { type: "boolean" },
         stockTrackedDecided: { type: "boolean" },
         miscBucket: { type: "boolean" },
-        unknownQuantityLines: { type: "boolean" },
-        priced: { type: "boolean", requiresResult: "price" },
+        unknownQuantityLines: {
+          type: "boolean",
+          fromResult: {
+            key: "readFacts",
+            path: ["workFacts", "unknownQuantityLines"],
+          },
+        },
+        priced: {
+          type: "boolean",
+          fromResult: { key: "readFacts", path: ["workFacts", "priced"] },
+        },
         // Any of the product's barcodes, not only the primary its column shows.
         anyGtin: { via: "barcodes.externalId" },
         effectiveOwner: {

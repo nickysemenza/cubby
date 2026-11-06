@@ -1,5 +1,5 @@
 import { financialTransactionFiltersSchema } from "@cubby/schemas/financial-transaction";
-import { and, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { outer } from "~/server/db/helpers/related";
 import { financialTransaction as table } from "~/server/db/schema";
@@ -8,43 +8,19 @@ import {
   financialTransactionWorkOwners,
   financialTransactionWorkFacts,
 } from "~/server/domains/financial-transaction/repo/work-facts";
-import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
-import {
-  entityProblemSources,
-  recordScope,
-} from "~/server/generic/work-queue/repo/work-declarations";
-import {
-  selectWorkCandidates,
-  type WorkSource,
-} from "~/server/generic/work-queue/repo/work-source";
+import { entityProblemSources } from "~/server/generic/work-queue/repo/work-declarations";
+import { type WorkSource } from "~/server/generic/work-queue/repo/work-source";
 
 export const financialTransactionWorkSources = (): WorkSource[] => [
-  ...entityProblemSources(
-    "financialTransaction",
-    async (db, source, scope, assembly) => {
-      const filters = compileProblemFilters("financialTransaction", assembly);
-      return {
-        query: selectWorkCandidates(db, source, {
-          entity: "financialTransaction",
-          id: sql`${table.shortcode}`,
-          name: sql`coalesce("FinancialTransaction".merchant, "FinancialTransaction"."rawDescription", 'Financial transaction')`,
-          owners: financialTransactionWorkOwners(outer(table.id)),
-          shared: false,
-          reason: source.reasons[0]!.label,
-          reasonKeys: [source.id],
-          ...financialTransactionWorkFacts(),
-        })
-          .from(table)
-          .where(
-            and(
-              await financialTransactionScaffold.prepareWhere(
-                db,
-                financialTransactionFiltersSchema.parse(filters),
-              ),
-              recordScope(scope, sql`${table.shortcode}`),
-            ),
-          ),
-      };
+  ...entityProblemSources("financialTransaction", {
+    table,
+    columns: {
+      name: sql`coalesce("FinancialTransaction".merchant, "FinancialTransaction"."rawDescription", 'Financial transaction')`,
+      owners: financialTransactionWorkOwners(outer(table.id)),
+      shared: false,
+      ...financialTransactionWorkFacts(),
     },
-  ),
+    scaffold: financialTransactionScaffold,
+    parseFilters: financialTransactionFiltersSchema.parse,
+  }),
 ];

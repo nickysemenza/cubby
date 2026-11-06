@@ -2062,6 +2062,19 @@ its outer mutation supplies loading state and presentation only.
 
 ## List reads
 
+The scaffold compiles one filter plan for repository readers, with population,
+related scopes, result availability, joins and ordering under one owner. Declared
+rollups and result projections cannot be silently replaced by repository SQL.
+Only an explicit contextual `storedProjection` may replace its default stored
+path; its declaration still owns availability and provenance. Filter-only
+`fromResult` members use the same typed path SQL as visible stored fields.
+
+Work Problems share one materialized base per entity in each request. Compact
+reason arms read its membership columns, with a shared lateral reason relation
+where routing is identical. Reason declarations still own actions and ordering;
+possible matches with missing publications contribute completeness warnings and
+never actionable rows. Preparation is shared only inside that request.
+
 Each repository supplies `listScaffold` as its read port to
 `defineRepository`. Its `read` declaration supplies columns and bindings;
 `{ scope: "detail" }` bindings default only on record reads; an explicit page projection can request them. `{ scope: "explicit" }` bindings load only when a projection names their keys, including record reads and write-response hydration. Use explicit scope for bounded verification bundles that require their own snapshot. `scaffold.get`
@@ -2751,6 +2764,14 @@ start is read directly from the Project; otherwise the view reuses the canonical
 derived side so clearing an explicit override cannot reuse that old override.
 An unpublished rollup remains missing, rather than becoming a successful empty
 date. This avoids repeating the household Expense allocation on each page.
+
+Product `readFacts.workFacts` publishes accounted kit units, unknown acquisition,
+kit double-counting, disposal reconciliation, quantity gaps and price eligibility.
+Work and list predicates read those typed members, including negative filters;
+legacy payloads without the members remain unresolved until the hourly pass.
+The publisher reuses its loaded quantity ledger and pricing facts. Browsing never
+prepares a separate expected/on-hand quantity CTE or reruns kit ancestry for these
+predicates. Money and identity commands keep validating current evidence.
 
 The former ticket drain, dependency fan-out, publication fences and per-value
 clock admission are removed. Recipe invalidation only marks totals stale; USDA

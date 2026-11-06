@@ -45,6 +45,8 @@ export interface WorkCte {
 /** One source's candidates: its Drizzle select plus any CTEs it reads. */
 export interface WorkCandidates {
   readonly query: SQLWrapper;
+  /** Several declarations may share one entity candidate relation. */
+  readonly relationKey?: string;
   /** Potential records whose published inputs are absent; never actionable rows. */
   readonly missingInputs?: SQLWrapper;
   /** Global non-count coverage warnings; the relation returns a message column. */
@@ -88,6 +90,7 @@ const literal = (value: Value, cast: string): SQL =>
     : sql`${value}${sql.raw(cast)}`;
 
 export interface WorkCandidateColumns {
+  readonly source?: SQL;
   readonly entity: ShortcodeEntity | SQL | null;
   readonly id: SQL | null;
   readonly name: SQL;
@@ -123,7 +126,9 @@ const workCandidateColumns = (
     );
   const id = columns.id === null ? sql`NULL` : columns.id;
   return {
-    source: sql<string>`${source.id}::text`.as("source"),
+    source: sql<string>`${columns.source ?? sql`${source.id}::text`}`.as(
+      "source",
+    ),
     entity: sql<string | null>`${literal(columns.entity, "::text")}`.as(
       "entity",
     ),

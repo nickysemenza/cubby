@@ -28,9 +28,6 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 import { productScaffold } from "./crud";
 import { attachProductComponents } from "./product-components";
 import {
-  hasUnknownQuantityLinesSql,
-  hasUnknownAcquisitionLinesSql,
-  unknownQuantityLinesReadSql,
   loadProductDetailQuantityLedgers,
   loadProductPlacementFacts,
   enrichProductRowsWithQuantityLedger,
@@ -71,7 +68,7 @@ describe("loadProductQuantityLedgers", () => {
 
   // A catalog filter must not restart the same kit graph scan for each Product.
   // The grouped path must still agree with signed, weighted ledger quantities.
-  it("filters catalog quantity ranges with one shared kit walk", async () => {
+  it("filters catalog quantity ranges from published ledger values", async () => {
     // These rows only supply identity and cardinality; preserve creation effects without detail hydration.
     const unrelatedIds: ProductId[] = [];
     for (let index = 0; index < 64; index++)
@@ -240,23 +237,7 @@ describe("loadProductQuantityLedgers", () => {
     ).get(part.entityId);
     expect(batch?.unknownAcquisitionLines).toBe(1);
     expect(detail).toEqual(batch);
-    const matches = await getDb(ctx.db).execute(
-      sql`SELECT "id" FROM "Product" WHERE "id"=${part.entityId} AND ${hasUnknownQuantityLinesSql(product.id)} AND ${hasUnknownAcquisitionLinesSql(product.id)}`,
-    );
-    expect(matches.rows).toHaveLength(1);
-    const excluded = await getDb(ctx.db).execute(
-      sql`SELECT "id" FROM "Product" WHERE "id"=${part.entityId} AND NOT ${hasUnknownQuantityLinesSql(product.id)}`,
-    );
-    expect(excluded.rows).toHaveLength(0);
-    const catalog = await getDb(ctx.db).execute(
-      sql`SELECT ${product.id}, gaps.value,
-        ${hasUnknownQuantityLinesSql(product.id)} AS scalar
-      FROM ${product}
-      JOIN (${unknownQuantityLinesReadSql()}) gaps ON gaps.id = ${product.id}
-      WHERE ${product.deletedAt} IS NULL`,
-    );
-    expect(catalog.rows.length).toBeGreaterThan(1);
-    for (const row of catalog.rows) expect(row.value).toBe(row.scalar);
+    await drainStoredDerived(ctx.db);
     const filter = await productWhere(ctx.db, {
       unknownQuantityLinesFilter: "has",
     });

@@ -70,7 +70,6 @@ import {
   unwrapDb,
 } from "~/server/db/helpers";
 import { executeListQueryWithoutCount } from "~/server/db/helpers/query";
-import { registerReadPorts } from "~/server/entity-kernel/repo/read-ports";
 import { ENTITY_LIST_READ_SCHEMAS } from "~/server/entity-reads/list-contracts";
 import { createAppError } from "~/server/errors/app-error";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
@@ -108,6 +107,7 @@ import {
 } from "./declared-filters";
 import {
   type DerivedSqlArg,
+  type AnyDerivedSql,
   derivedFieldsOf,
   derivedOrderBy,
   derivedPrepare,
@@ -116,7 +116,6 @@ import {
   declaredResultProjections,
   derivedSelectSql,
   derivedValueSql,
-  type AnyDerivedSql,
   groupSql,
   type ListGroupSql,
   listMetricSql,
@@ -417,6 +416,16 @@ type ListScaffoldArgs<E extends Entity, Row> = [
   ? [options?: ListScaffoldOptions<E, Row>]
   : [options: ListScaffoldOptions<E, Row>];
 
+type CompiledDerivedSql = {
+  -readonly [Key in keyof AnyDerivedSql]: AnyDerivedSql[Key];
+};
+
+interface ListFilterPlan {
+  where: SQL | undefined;
+  joins: ((query: PgSelect) => PgSelect) | undefined;
+  order: (sorts: SortParams[], opts?: ListOrderByOpts) => SQL[];
+}
+
 const scopeValue = listFilterValues.optional();
 
 /**
@@ -468,11 +477,36 @@ export function listScaffold<
 >(entity: E, table: T, ...[options]: ListScaffoldArgs<E, Row>) {
   // Declared rollups compile from the manifest; a repository supplies only
   // the remaining value and predicate SQL.
-  const derivedSql: AnyDerivedSql = {
-    ...declaredRollups(entity, table),
-    ...declaredResultProjections(entity, table.id),
-    ...options?.derived,
-  };
+  const rollups = declaredRollups(entity, table);
+  const projections = declaredResultProjections(entity, table.id);
+  const derivedSql: CompiledDerivedSql = { ...rollups };
+  const repositoryDerived: AnyDerivedSql = { ...options?.derived };
+  for (const [key, value] of Object.entries(projections)) {
+    if (key in derivedSql)
+      throw new Error(`${entity}.${key}: conflicting rollup and stored SQL`);
+    derivedSql[key] = value;
+  }
+  for (const [key, value] of Object.entries(repositoryDerived)) {
+    if (key in derivedSql) {
+      const field = fieldModelFor(entity)?.fields.find(
+        (field) => field.key === key,
+      );
+      // Explicit contextual projections own their SQL, with the declared stored
+      // result retaining availability and provenance. A storedPath alone does not.
+      if (
+        !(
+          key in projections &&
+          field &&
+          "storedProjection" in field &&
+          field.storedProjection
+        )
+      )
+        throw new Error(
+          `${entity}.${key}: conflicting declared and repository SQL`,
+        );
+    }
+    derivedSql[key] = value;
+  }
   const rowsSql: AnyRowsSql = options?.rows ?? {};
   const derivedFields = derivedFieldsOf(entity);
   const listFields = generatedEntityListFields[entity];
@@ -829,7 +863,7 @@ export function listScaffold<
      * declared scopes. A repository's join-implied population predicate is
      * shared here so identity readers and row readers cannot diverge.
      */
-    where<Filters extends object>(
+    plan<Filters extends object>(
       filters: Filters,
       {
         context = ListContext.empty,
@@ -840,14 +874,22 @@ export function listScaffold<
         readContext?: QualityReadContext;
         membership?: "certain" | "possible";
       } = {},
-    ): SQL | undefined {
+    ): ListFilterPlan {
       if (
         membership === undefined &&
         listResultMembershipCarrier.parse(filters).resultMembership ===
           "unresolved"
       )
-        return scaffold.unresolvedWhere(filters, context.withRead(readContext));
-      return buildSearchConditions(
+        return {
+          where: scaffold.unresolvedWhere(
+            filters,
+            context.withRead(readContext),
+          ),
+          joins: undefined,
+          order: (sorts, opts) =>
+            scaffold.orderBy(sorts, opts, filters, context),
+        };
+      const where = buildSearchConditions(
         table,
         [],
         [
@@ -909,6 +951,22 @@ export function listScaffold<
             : []),
         ],
       );
+      return {
+        where,
+        joins: undefined,
+        order: (sorts, opts) => scaffold.orderBy(sorts, opts, filters, context),
+      };
+    },
+
+    where<Filters extends object>(
+      filters: Filters,
+      options?: {
+        context?: ListContext;
+        readContext?: QualityReadContext;
+        membership?: "certain" | "possible";
+      },
+    ): SQL | undefined {
+      return scaffold.plan(filters, options).where;
     },
 
     /**
@@ -946,6 +1004,7 @@ export function listScaffold<
       filters: Filters,
       context: ListContext = ListContext.empty,
     ): SQL {
+      if (!scaffold.hasResultFilters(filters)) return sql`false`;
       const certain = scaffold.where(filters, {
         context,
         membership: "certain",
@@ -1317,10 +1376,7 @@ export function listScaffold<
           projection,
         })
       ).withReader(reader);
-      const where = and(
-        notDeleted(table),
-        shortcodeSetCondition(sql`${table.shortcode}`, [...codes]),
-      );
+      const where = scaffold.plan({ ids: [...codes] }, { context }).where;
       if (where === undefined) throw new Error("A read needs a WHERE");
       const selection = readRows(db, context);
       const rows = selection.load
@@ -1351,7 +1407,7 @@ export function listScaffold<
           code: sql<string>`${table.shortcode}`,
         })
         .from(listTable)
-        .where(and(inArray(table.id, [...ids]), notDeleted(table)));
+        .where(and(inArray(table.id, [...ids]), scaffold.plan({}).where));
       const read = await scaffold.get(
         db,
         codes.map((row) => row.code),
@@ -1536,10 +1592,8 @@ export function listScaffold<
         // SILENT: hydration awaits and surfaces this rejection; only a page
         // that fails or returns no rows first leaves it unread.
       });
-      const filtered =
-        "where" in spec
-          ? spec.where
-          : scaffold.where(request.filters, { context });
+      const filterPlan = scaffold.plan(request.filters, { context });
+      const filtered = "where" in spec ? spec.where : filterPlan.where;
       const nesting = listNestingFromFilters(request.filters);
       const parent = nesting.scope === "flat" ? null : treeParent();
       if (parent && spec.count)
@@ -1570,12 +1624,9 @@ export function listScaffold<
             : [
                 ...group.flatMap(groupOrderBy),
                 ...(spec.orderBy ??
-                  scaffold.orderBy(
-                    request.sorts,
-                    { tieBreaker: spec.tieBreaker },
-                    request.filters,
-                    context,
-                  )),
+                  filterPlan.order(request.sorts, {
+                    tieBreaker: spec.tieBreaker,
+                  })),
               ],
         limit: take,
         offset: skip,
@@ -1877,16 +1928,6 @@ export function listScaffold<
       return readPlan().fields;
     },
   };
-  // Query-only and aliased scaffolds do not own an entity's public read ports.
-  if (options?.read && getTableName(table) === entityManifest[entity].dbTable)
-    registerReadPorts(entity, {
-      title: result.title,
-      fieldReads: async (db, codes) => {
-        // SAFETY: the query boundary erases the schema, not the native handle.
-        const readDb = db as Database | DrizzleTransaction;
-        return (await result.get(readDb, codes, [])).fieldReads;
-      },
-    });
   return result;
 }
 

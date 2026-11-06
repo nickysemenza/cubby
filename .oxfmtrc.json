@@ -35,6 +35,7 @@
     "**/dist/**",
     "**/drizzle/**",
     "pnpm-lock.yaml",
+    "packages/schemas/src/generated/entity-list-fields.gen.ts",
     "**/node_modules/**",
     "apps/web/src/ui/reui/**",
     "apps/web/src/ui/primitives/**",

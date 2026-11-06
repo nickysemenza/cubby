@@ -3,9 +3,7 @@ import { and, getTableName, sql } from "drizzle-orm";
 
 import { product as table } from "~/server/db/schema";
 import { productScaffold } from "~/server/domains/product/repo/crud";
-import { productWorkReadContext } from "~/server/domains/product/repo/work-read-context";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
-import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import {
   entityProblemSources,
   gapDeclaration,
@@ -23,12 +21,10 @@ const gapSource: WorkSource = {
   candidates: async (db, scope) => {
     const readGap = gapPublicationRead({ scope, entity: "product" });
     if (!readGap) return null;
-    const read = productWorkReadContext(scope);
     const where = await productScaffold.prepareWhere(
       db,
       productFiltersSchema.parse(readGap.filters),
       [],
-      read.context,
     );
     const candidates = (missingInputs: boolean) =>
       selectWorkCandidates(db, gaps, {
@@ -52,38 +48,19 @@ const gapSource: WorkSource = {
     return {
       query: candidates(false),
       missingInputs: candidates(true),
-      ctes: read.ctes,
     };
   },
 };
 export const productWorkSources = (): WorkSource[] => [
   gapSource,
-  ...entityProblemSources("product", async (db, source, scope, assembly) => {
-    const filters = compileProblemFilters("product", assembly);
-    const read = productWorkReadContext(scope);
-    return {
-      query: selectWorkCandidates(db, source, {
-        entity: "product",
-        id: sql`${table.shortcode}`,
-        name: labelSql("product", `"${getTableName(table)}"`),
-        owners: sql`ARRAY[]::uuid[]`,
-        shared: true,
-        reason: source.reasons[0]!.label,
-        reasonKeys: [source.id],
-      })
-        .from(table)
-        .where(
-          and(
-            await productScaffold.prepareWhere(
-              db,
-              productFiltersSchema.parse(filters),
-              [],
-              read.context,
-            ),
-            recordScope(scope, sql`${table.shortcode}`),
-          ),
-        ),
-      ctes: read.ctes,
-    };
+  ...entityProblemSources("product", {
+    table,
+    columns: {
+      name: labelSql("product", `"${getTableName(table)}"`),
+      owners: sql`ARRAY[]::uuid[]`,
+      shared: true,
+    },
+    scaffold: productScaffold,
+    parseFilters: productFiltersSchema.parse,
   }),
 ];

@@ -14,7 +14,6 @@ import {
   workPurchaseOwners,
   workPurchaseSourceOwners,
 } from "~/server/domains/purchase/repo/work-owners";
-import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import {
   entityProblemSources,
   gapDeclaration,
@@ -62,16 +61,14 @@ const gapSource: WorkSource = {
 export const purchaseWorkSources = (): WorkSource[] =>
   [
     gapSource,
-    ...entityProblemSources("purchase", async (db, source, scope, assembly) => {
-      const filters = compileProblemFilters("purchase", assembly);
-      const deferred =
-        source.id === "purchaseFinancialSettlementMismatches"
-          ? awaitingPostingSql(purchasePostingStartSql(quotedTable(table)))
-          : null;
-      return {
-        query: selectWorkCandidates(db, source, {
-          entity: "purchase",
-          id: sql`${table.shortcode}`,
+    ...entityProblemSources("purchase", {
+      table,
+      columns: (source: WorkSource) => {
+        const deferred =
+          source.id === "purchaseFinancialSettlementMismatches"
+            ? awaitingPostingSql(purchasePostingStartSql(quotedTable(table)))
+            : null;
+        return {
           name: sql`coalesce("Purchase"."displayLabel", "Purchase"."orderId", 'Purchase')`,
           owners: workPurchaseOwners(outer(table.id)),
           shared: false,
@@ -85,18 +82,10 @@ export const purchaseWorkSources = (): WorkSource[] =>
             ? sql`ARRAY[CASE WHEN ${deferred} THEN ${"awaiting_posting:" + source.id} ELSE ${source.id} END]`
             : [source.id],
           ...purchaseWorkFacts(),
-        })
-          .from(table)
-          .where(
-            and(
-              await purchaseScaffold.prepareWhere(
-                db,
-                purchaseFiltersSchema.parse(filters),
-              ),
-              recordScope(scope, sql`${table.shortcode}`),
-            ),
-          ),
-      };
+        };
+      },
+      scaffold: purchaseScaffold,
+      parseFilters: purchaseFiltersSchema.parse,
     }),
   ].map((source) =>
     source.id === "purchaseFinancialSettlementMismatches"

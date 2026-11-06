@@ -1,42 +1,21 @@
 import { ingredientFiltersSchema } from "@cubby/schemas/ingredient";
-import { and, getTableName, sql } from "drizzle-orm";
+import { getTableName, sql } from "drizzle-orm";
 
 import { ingredient as table } from "~/server/db/schema";
 import { ingredientScaffold } from "~/server/domains/ingredient/repo/search";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
-import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
-import {
-  entityProblemSources,
-  recordScope,
-} from "~/server/generic/work-queue/repo/work-declarations";
-import {
-  selectWorkCandidates,
-  type WorkSource,
-} from "~/server/generic/work-queue/repo/work-source";
+import { entityProblemSources } from "~/server/generic/work-queue/repo/work-declarations";
+import { type WorkSource } from "~/server/generic/work-queue/repo/work-source";
 
 export const ingredientWorkSources = (): WorkSource[] => [
-  ...entityProblemSources("ingredient", async (db, source, scope, assembly) => {
-    const filters = compileProblemFilters("ingredient", assembly);
-    return {
-      query: selectWorkCandidates(db, source, {
-        entity: "ingredient",
-        id: sql`${table.shortcode}`,
-        name: labelSql("ingredient", `"${getTableName(table)}"`),
-        owners: sql`ARRAY[]::uuid[]`,
-        shared: true,
-        reason: source.reasons[0]!.label,
-        reasonKeys: [source.id],
-      })
-        .from(table)
-        .where(
-          and(
-            await ingredientScaffold.prepareWhere(
-              db,
-              ingredientFiltersSchema.parse(filters),
-            ),
-            recordScope(scope, sql`${table.shortcode}`),
-          ),
-        ),
-    };
+  ...entityProblemSources("ingredient", {
+    table,
+    columns: {
+      name: labelSql("ingredient", `"${getTableName(table)}"`),
+      owners: sql`ARRAY[]::uuid[]`,
+      shared: true,
+    },
+    scaffold: ingredientScaffold,
+    parseFilters: ingredientFiltersSchema.parse,
   }),
 ];

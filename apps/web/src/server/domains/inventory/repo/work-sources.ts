@@ -1,44 +1,21 @@
 import { inventoryFiltersSchema } from "@cubby/schemas/inventory";
-import { and, eq, getTableName, sql } from "drizzle-orm";
+import { getTableName, sql } from "drizzle-orm";
 
-import { inventoryEntry as table, product, location } from "~/server/db/schema";
+import { inventoryEntry as table } from "~/server/db/schema";
 import { inventoryScaffold } from "~/server/domains/inventory/repo/crud";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
-import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
-import {
-  entityProblemSources,
-  recordScope,
-} from "~/server/generic/work-queue/repo/work-declarations";
-import {
-  selectWorkCandidates,
-  type WorkSource,
-} from "~/server/generic/work-queue/repo/work-source";
+import { entityProblemSources } from "~/server/generic/work-queue/repo/work-declarations";
+import { type WorkSource } from "~/server/generic/work-queue/repo/work-source";
 
 export const inventoryWorkSources = (): WorkSource[] => [
-  ...entityProblemSources("inventory", async (db, source, scope, assembly) => {
-    const filters = compileProblemFilters("inventory", assembly);
-    return {
-      query: selectWorkCandidates(db, source, {
-        entity: "inventory",
-        id: sql`${table.shortcode}`,
-        name: labelSql("inventory", `"${getTableName(table)}"`),
-        owners: sql`ARRAY[]::uuid[]`,
-        shared: true,
-        reason: source.reasons[0]!.label,
-        reasonKeys: [source.id],
-      })
-        .from(table)
-        .innerJoin(product, eq(product.id, table.productId))
-        .innerJoin(location, eq(location.id, table.locationId))
-        .where(
-          and(
-            await inventoryScaffold.prepareWhere(
-              db,
-              inventoryFiltersSchema.parse(filters),
-            ),
-            recordScope(scope, sql`${table.shortcode}`),
-          ),
-        ),
-    };
+  ...entityProblemSources("inventory", {
+    table,
+    columns: {
+      name: labelSql("inventory", `"${getTableName(table)}"`),
+      owners: sql`ARRAY[]::uuid[]`,
+      shared: true,
+    },
+    scaffold: inventoryScaffold,
+    parseFilters: inventoryFiltersSchema.parse,
   }),
 ];

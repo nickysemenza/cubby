@@ -155,6 +155,16 @@ export const productDisplayFactsState = z.object({
   stale: z.boolean(),
 });
 export const productReadFacts = z.object({
+  workFacts: z
+    .object({
+      priced: z.boolean(),
+      accountedKits: z.number().nullable(),
+      unknownAcquisition: z.boolean(),
+      kitAccounting: z.boolean(),
+      ownershipReconciliation: z.boolean(),
+      unknownQuantityLines: z.boolean(),
+    })
+    .optional(),
   ...productQuantityFields,
   pricing: productPricingOut,
   ownershipEvidence: productOwnershipEvidenceOut,
