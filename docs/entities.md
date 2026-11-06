@@ -533,6 +533,15 @@ precision and use the event id to break ties. Data-only web consumers use
 
 ## Declaration contracts
 
+Native presentation declarations can name up to two `list.rail` entries with a
+readable `field`, optional readable `sub`, and optional numeric `total: "sum"`.
+`list.rowCommand` names a list verb; `list.swipe` overrides leading and trailing
+verb IDs, or `false` removes swipes. `detail.quickFields` names editable fields;
+`detail.heroMedia` selects `tile` (default) or `banner`. `display.inlineEdit:
+false` opts a field out of inline editing. An option can declare `quiet: true`;
+at most one option in a field roster may do so. These are presentation facts;
+server reads own availability and aggregate figures.
+
 Detail sections are authored for reading (`detail.sections` below); nothing is
 derived from edit groups. A section keeps its declared `workspace`, else a
 timeline joins Evidence and a relation Work. Web detail renders sections in declaration order after any declared `detail.lead`

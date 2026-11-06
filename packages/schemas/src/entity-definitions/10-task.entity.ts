@@ -136,6 +136,7 @@ export const { definition, readSchemas } = defineEntityModel({
         extraActions: ["complete", "bulkEdit", "delete"],
       },
       quickActions: ["complete"],
+      quickFields: ["status", "assigneeId"],
       lead: ["overview"],
       pairs: [["schedule", "dependencies"]],
       sections: [
@@ -255,6 +256,7 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
       extraActions: ["complete"],
       quickActions: ["complete"],
+      rowCommand: "complete",
       timeline: {
         fields: ["due.start", "due.end"],
         lifecycle: {
@@ -285,7 +287,14 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "status",
         kind: "enum",
-        control: { kind: "select", options: selectControlOptions.taskStatus },
+        control: {
+          kind: "select",
+          options: selectControlOptions.taskStatus.map((option) =>
+            option.value === "not_started"
+              ? { ...option, quiet: true as const }
+              : option,
+          ),
+        },
         display: {
           columnGroup: "Work",
           mobile: { slot: "subtitle", priority: 10 },

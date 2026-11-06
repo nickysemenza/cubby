@@ -990,6 +990,32 @@ export const compilePresentation = (
     list: list.quickActions,
     listActions: list.actions,
   });
+  for (const key of detail.quickFields) {
+    const field = lookup.edit(key, "detail.quickFields");
+    if (field.validation.update === null)
+      throw new EntityDeclarationError(
+        `${lookup.context}.detail.quickFields ${key} is not updatable.`,
+      );
+  }
+  for (const item of list.rail) {
+    const field = lookup.read(item.field, "list.rail");
+    if (item.total && field.kind !== "number")
+      throw new EntityDeclarationError(
+        `${lookup.context}.list.rail total requires a numeric field.`,
+      );
+    if (item.sub) lookup.read(item.sub, "list.rail.sub");
+  }
+  for (const verb of [
+    list.rowCommand,
+    ...(list.swipe
+      ? [...(list.swipe.leading ?? []), ...(list.swipe.trailing ?? [])]
+      : []),
+  ]) {
+    if (verb !== null && !list.actions.includes(verb))
+      throw new EntityDeclarationError(
+        `${lookup.context}.list action ${verb} is not in list.extraActions.`,
+      );
+  }
   const summaryIds = new Set<string>();
   for (const slot of detail.summary) {
     if (summaryIds.has(slot.id))
@@ -1094,6 +1120,8 @@ export const compilePresentation = (
         ],
       },
       quickActions: detail.quickActions,
+      quickFields: detail.quickFields,
+      heroMedia: detail.heroMedia,
       sections: sections.map((section) => ({
         ...section,
         overview: detailSectionInOverview(detail.overviewSections, section.id),
@@ -1137,6 +1165,9 @@ export const compilePresentation = (
         ),
       ],
       quickActions: list.quickActions,
+      rail: list.rail,
+      rowCommand: list.rowCommand,
+      swipe: list.swipe,
       links: list.links,
       timeline:
         list.timeline === null

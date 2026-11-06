@@ -218,18 +218,20 @@ const options = (
         label: string;
         color?: string;
         role?: "status" | "category";
+        quiet?: true;
         glyph?: { phosphor: string; sfSymbol: string };
       }[]
     | null,
 ) =>
   values === null
     ? null
-    : values.map(({ value, label, color, role, glyph }) => ({
+    : values.map(({ value, label, color, role, glyph, quiet }) => ({
         value,
         label,
         color,
         role,
         glyph,
+        quiet,
       }));
 
 const filterJSON = (
@@ -678,6 +680,8 @@ const presentationJSON = (
     detailQuickActions: detail.quickActions.length
       ? [...detail.quickActions]
       : undefined,
+    detailQuickFields: detail.quickFields,
+    detailHeroMedia: detail.heroMedia,
     activityRelations: detail.activityRelations.map((entry) => ({
       relation: entry.relation,
       dateField: entry.dateField,
@@ -706,6 +710,10 @@ const presentationJSON = (
     listQuickActions: list.quickActions.length
       ? [...list.quickActions]
       : undefined,
+    listRail: list.rail,
+    listRowCommand: list.rowCommand ?? undefined,
+    listSwipe: list.swipe || undefined,
+    listSwipeDisabled: list.swipe === false || undefined,
     timelineFields: [...(list.timeline?.fields ?? [])],
     lifecycle:
       list.timeline?.lifecycle == null

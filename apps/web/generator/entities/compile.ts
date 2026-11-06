@@ -522,6 +522,12 @@ const validateEnumField = (
   field: EntityFieldModelMetadata["fields"][number],
   fieldContext: string,
 ): void => {
+  for (const options of [field.control?.options, field.display.valueOptions]) {
+    if ((options?.filter((option) => option.quiet).length ?? 0) > 1)
+      throw new EntityDeclarationError(
+        `${fieldContext}: at most one option can be quiet.`,
+      );
+  }
   if (
     field.kind === "enum" &&
     (field.validation.read !== null ||

@@ -363,6 +363,7 @@ const buildMetadataSchemas = () => {
               glyph: enumOptionIconSchema.optional(),
               /** Explicit option role, otherwise the declared roster role. */
               role: z.enum(enumRoles).optional(),
+              quiet: z.literal(true).optional(),
             })
             .strict(),
         ),
@@ -542,6 +543,7 @@ const buildMetadataSchemas = () => {
        */
       referencePreviewLimit: orNull(z.number().int().positive()),
       listHidden: flag(false),
+      inlineEdit: z.literal(false).nullable().optional().default(null),
       /**
        * A table header's short form when the label is longer than its
        * column's values ("Itemized" for "Itemization coverage"). The label
@@ -569,6 +571,7 @@ const buildMetadataSchemas = () => {
               glyph: enumOptionIconSchema.optional(),
               /** Explicit option role, otherwise the declared roster role. */
               role: z.enum(enumRoles).optional(),
+              quiet: z.literal(true).optional(),
             })
             .strict(),
         ),
@@ -1607,10 +1610,12 @@ const buildMetadataSchemas = () => {
             actions: extraActions,
           })),
         /**
-         * One or two `hero.extraActions` verbs every client offers as the
+         * Up to four `hero.extraActions` verbs every client offers as the
          * record's leading buttons, ahead of the More menu.
          */
-        quickActions: z.array(actionKey).max(2).optional().default([]),
+        quickActions: z.array(actionKey).max(4).optional().default([]),
+        quickFields: z.array(fieldKey).optional().default([]),
+        heroMedia: z.enum(["tile", "banner"]).optional().default("tile"),
         /** Only these relations contribute dated records to merged activity. */
         activityRelations: z
           .array(
@@ -1693,12 +1698,16 @@ const buildMetadataSchemas = () => {
           variantOverride,
           hero,
           quickActions,
+          quickFields,
+          heroMedia,
           omitRelations,
         }) => ({
           variant: variantOverride,
           summary,
           hero,
           quickActions,
+          quickFields,
+          heroMedia,
           sections,
           activityRelations,
           overviewSections,
@@ -1922,6 +1931,29 @@ const buildMetadataSchemas = () => {
          * swipe and the first row-menu items.
          */
         quickActions: z.array(actionKey).max(2).optional().default([]),
+        rail: z
+          .array(
+            z.strictObject({
+              field: fieldKey,
+              sub: fieldKey.optional(),
+              total: z.literal("sum").optional(),
+            }),
+          )
+          .max(2)
+          .optional()
+          .default([]),
+        rowCommand: actionKey.nullable().optional().default(null),
+        swipe: z
+          .union([
+            z.literal(false),
+            z.strictObject({
+              leading: z.array(actionKey).optional(),
+              trailing: z.array(actionKey).optional(),
+            }),
+          ])
+          .nullable()
+          .optional()
+          .default(null),
         links: z
           .array(
             z
@@ -1963,6 +1995,9 @@ const buildMetadataSchemas = () => {
         ({
           extraActions,
           quickActions,
+          rail,
+          rowCommand,
+          swipe,
           views,
           viewAliases,
           totals,
@@ -1994,6 +2029,9 @@ const buildMetadataSchemas = () => {
           tree,
           actions: extraActions,
           quickActions,
+          rail,
+          rowCommand,
+          swipe,
           links,
           timeline,
         }),

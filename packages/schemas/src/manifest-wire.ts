@@ -27,6 +27,7 @@ export const fieldDisplayWire = {
   emptyLabel: "string~",
   detailLabelPath: "string~",
   itemsPath: "string~",
+  inlineEdit: "boolean~",
 } as const;
 
 const codable = ["Codable", "Sendable"] as const;
@@ -68,8 +69,9 @@ export const manifestWire = {
       color: "string?",
       role: "string?",
       glyph: "EnumOptionIcon?",
+      quiet: "boolean?",
     },
-    { defaults: { color: "nil", role: "nil", glyph: "nil" } },
+    { defaults: { color: "nil", role: "nil", glyph: "nil", quiet: "nil" } },
   ),
   EnumOptionIcon: record({ phosphor: "string", sfSymbol: "string" }),
   FieldReference: record({
@@ -316,6 +318,8 @@ export const manifestWire = {
     chart: { viewKey: "string" },
   }),
   ActivityRelation: record({ relation: "string", dateField: "string" }),
+  ListRail: record({ field: "string", sub: "string?", total: "string?" }),
+  ListSwipe: record({ leading: "[string]?", trailing: "[string]?" }),
   EntityPresentation: record({
     detailVariant: "DetailVariant",
     heroChip: "string~",
@@ -325,6 +329,8 @@ export const manifestWire = {
     heroImages: "boolean",
     heroActions: "[EntityHeroActionID]",
     detailQuickActions: "[EntityHeroActionID]?",
+    detailQuickFields: "[string]?",
+    detailHeroMedia: "string?",
     activityRelations: "[ActivityRelation]",
     detailSections: "[DetailSection]",
     connectedViews: "[ConnectedViewSpec]",
@@ -334,6 +340,10 @@ export const manifestWire = {
     titleSubtitle: "boolean",
     listActions: "[string]",
     listQuickActions: "[string]?",
+    listRail: "[ListRail]?",
+    listRowCommand: "string?",
+    listSwipe: "ListSwipe?",
+    listSwipeDisabled: "boolean?",
     timelineFields: "[string]",
     lifecycle: "TimelineLifecycle~",
     editSections: "[EditSection]",
