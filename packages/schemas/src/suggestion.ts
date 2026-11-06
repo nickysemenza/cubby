@@ -256,8 +256,17 @@ export const suggestionPublication = z
     ({ family, subject }) => family === subject.kind,
     "Suggestion family must match subject",
   );
-/** `system` records capture receipts only; it never grades or suppresses. */
-export const feedbackAuthority = z.enum(["member", "automatic", "system"]);
+/**
+ * `system` records capture receipts only; it never grades or suppresses.
+ * `evaluation` and `unknown` survive only on retained historical decisions.
+ */
+export const feedbackAuthority = z.enum([
+  "member",
+  "evaluation",
+  "automatic",
+  "unknown",
+  "system",
+]);
 const reviewIntent = z.enum(["history", "draft", "apply"]);
 export const feedbackEvent = z.object({
   suggestionId: suggestionChildHandle,

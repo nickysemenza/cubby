@@ -165,6 +165,7 @@ describe("retained classification evidence", () => {
         imageId: label.id,
         contentHash: "a".repeat(64),
         operationId: crypto.randomUUID(),
+        expectedEffectId: null,
         description: "Label confirms 100% cotton",
       },
       ctx.actor.userId,

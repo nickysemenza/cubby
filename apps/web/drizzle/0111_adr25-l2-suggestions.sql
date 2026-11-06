@@ -1,6 +1,7 @@
--- Review wire cutover. Only declared review-reference fields change; frozen
--- input snapshots, archive ledgers, publication keys, and decisions remain exact.
-LOCK TABLE "AiEvaluation", "Suggestion" IN ACCESS EXCLUSIVE MODE;
+-- Review wire cutover. Only declared review-reference keys change, including
+-- those inside saved answers and decision receipts; frozen input snapshots,
+-- archive ledgers, publication keys and every other decision field remain exact.
+LOCK TABLE "AiEvaluation", "Suggestion", "AiAnalysis" IN ACCESS EXCLUSIVE MODE;
 --> statement-breakpoint
 CREATE FUNCTION pg_temp.rename_review_reference(value jsonb, reverse boolean DEFAULT false)
 RETURNS jsonb LANGUAGE plpgsql AS $$
@@ -79,6 +80,59 @@ BEGIN
       SELECT * INTO actual FROM "Suggestion" WHERE id=original.id;
       IF to_jsonb(actual) IS DISTINCT FROM (to_jsonb(original) || jsonb_build_object('evidence',changed,'judgment',changed_result))
       THEN RAISE EXCEPTION 'Field publication read-back failed for %', original.id; END IF;
+    END IF;
+  END LOOP;
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION pg_temp.rename_saved_answer(value jsonb, reverse boolean DEFAULT false)
+RETURNS jsonb LANGUAGE plpgsql AS $$
+DECLARE path text[];
+BEGIN
+  IF jsonb_typeof(value) IS DISTINCT FROM 'object' THEN RETURN value; END IF;
+  FOREACH path SLICE 1 IN ARRAY ARRAY[ARRAY['outcome', ''], ARRAY['preview', 'outcome'], ARRAY['preview', 'suggestion']] LOOP
+    IF path[2] = '' THEN
+      IF jsonb_typeof(value->path[1]) = 'object' THEN
+        value := jsonb_set(value, ARRAY[path[1]], pg_temp.rename_review_reference(value->path[1], reverse));
+      END IF;
+    ELSIF jsonb_typeof(value->path[1]->path[2]) = 'object' THEN
+      value := jsonb_set(value, path, pg_temp.rename_review_reference(value->path[1]->path[2], reverse));
+    END IF;
+  END LOOP;
+  RETURN value;
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION pg_temp.rename_decision_receipts(value jsonb, reverse boolean DEFAULT false)
+RETURNS jsonb LANGUAGE sql AS $$
+  SELECT CASE WHEN jsonb_typeof(value) IS DISTINCT FROM 'array' THEN value ELSE coalesce((
+    SELECT jsonb_agg(CASE WHEN jsonb_typeof(decision->'receipt') = 'object'
+      THEN jsonb_set(decision, '{receipt}', pg_temp.rename_review_reference(decision->'receipt', reverse))
+      ELSE decision END ORDER BY position)
+    FROM jsonb_array_elements(value) WITH ORDINALITY AS item(decision, position)), '[]'::jsonb) END
+$$;
+--> statement-breakpoint
+DO $$
+DECLARE original record; changed jsonb; actual record;
+BEGIN
+  FOR original IN SELECT * FROM "AiAnalysis" WHERE result IS NOT NULL LOOP
+    changed := pg_temp.rename_saved_answer(original.result);
+    IF changed IS DISTINCT FROM original.result THEN
+      IF pg_temp.rename_saved_answer(changed, true) IS DISTINCT FROM original.result
+      THEN RAISE EXCEPTION 'Saved answer reference preservation failed for %', original.id; END IF;
+      UPDATE "AiAnalysis" SET result=changed WHERE id=original.id;
+      SELECT * INTO actual FROM "AiAnalysis" WHERE id=original.id;
+      IF to_jsonb(actual) IS DISTINCT FROM (to_jsonb(original) || jsonb_build_object('result',changed))
+      THEN RAISE EXCEPTION 'Saved answer read-back failed for %', original.id; END IF;
+    END IF;
+  END LOOP;
+  FOR original IN SELECT * FROM "Suggestion" LOOP
+    changed := pg_temp.rename_decision_receipts(original.decisions);
+    IF changed IS DISTINCT FROM original.decisions THEN
+      IF pg_temp.rename_decision_receipts(changed, true) IS DISTINCT FROM original.decisions
+      THEN RAISE EXCEPTION 'Decision receipt preservation failed for %', original.id; END IF;
+      UPDATE "Suggestion" SET decisions=changed WHERE id=original.id;
+      SELECT * INTO actual FROM "Suggestion" WHERE id=original.id;
+      IF to_jsonb(actual) IS DISTINCT FROM (to_jsonb(original) || jsonb_build_object('decisions',changed))
+      THEN RAISE EXCEPTION 'Decision receipt read-back failed for %', original.id; END IF;
     END IF;
   END LOOP;
 END $$;

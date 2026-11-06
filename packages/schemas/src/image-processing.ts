@@ -329,6 +329,8 @@ export const confirmImageDescriptionInput = z.object({
   contentHash: z.string().min(1),
   description: z.string().trim().min(1).max(4000),
   operationId: z.uuid(),
+  /** Effect of the confirmation the member saw; null when none existed. */
+  expectedEffectId: z.uuid().nullable(),
 });
 
 export const imageDescriptionCorrection = z.object({

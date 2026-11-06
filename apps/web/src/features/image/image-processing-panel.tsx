@@ -331,6 +331,8 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
               id,
               contentHash: image.sha256 ?? "",
               operationId: crypto.randomUUID(),
+              expectedEffectId:
+                status.data?.correction?.owner?.effectId ?? null,
               description: correction.trim(),
             })
           }

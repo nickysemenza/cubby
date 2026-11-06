@@ -19,6 +19,7 @@ export async function confirmImageDescription(
     contentHash: string;
     description: string;
     operationId: string;
+    expectedEffectId: string | null;
   },
   actorUserId: string,
 ) {
@@ -30,6 +31,23 @@ export async function confirmImageDescription(
       .for("update");
     if (!source || source.sha256 !== input.contentHash)
       throw new Error("Image evidence changed before confirmation");
+    const current = imageDescriptionConfirmationOwner
+      .nullable()
+      .parse(source.descriptionConfirmationOwner);
+    // A retried operation returns its own committed effect; a retry that lost
+    // the race to a newer confirmation must not overwrite it.
+    if (
+      current?.effectId === input.operationId &&
+      source.confirmedDescription !== null &&
+      source.descriptionConfirmedAt
+    )
+      return {
+        description: source.confirmedDescription,
+        confirmedAt: source.descriptionConfirmedAt.toISOString(),
+        owner: current,
+      };
+    if ((current?.effectId ?? null) !== input.expectedEffectId)
+      throw new Error("Image description changed before confirmation");
     const owner = imageDescriptionConfirmationOwner.parse({
       kind: "member",
       effectId: input.operationId,

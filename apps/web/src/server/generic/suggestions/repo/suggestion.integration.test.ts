@@ -228,16 +228,28 @@ describe("shared Suggestion history", () => {
       contentType: "image/jpeg",
       sha256: "a".repeat(64),
     });
+    const first = {
+      imageId: picture.id,
+      contentHash: "a".repeat(64),
+      description: "Superseded description",
+      operationId: crypto.randomUUID(),
+      expectedEffectId: null,
+    };
+    await confirmImageDescription(ctx.db, first, ctx.actor.userId);
     await confirmImageDescription(
       ctx.db,
       {
-        imageId: picture.id,
-        contentHash: "a".repeat(64),
+        ...first,
         description: "Confirmed description",
         operationId: crypto.randomUUID(),
+        expectedEffectId: first.operationId,
       },
       ctx.actor.userId,
     );
+    // A lost-response retry of the first confirmation must not overwrite the newer one.
+    await expect(
+      confirmImageDescription(ctx.db, first, ctx.actor.userId),
+    ).rejects.toThrow(/description changed/);
     const readDirect = () =>
       readConfirmedDescription(ctx.db, parseEntityId("image", picture.id));
     const readBatch = async () =>
@@ -265,6 +277,7 @@ describe("shared Suggestion history", () => {
           contentHash: "a".repeat(64),
           description: "Stale correction",
           operationId: crypto.randomUUID(),
+          expectedEffectId: null,
         },
         ctx.actor.userId,
       ),
