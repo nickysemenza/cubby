@@ -417,34 +417,34 @@ export async function recordEmbeddingUploadReceipts(
   const current = receipts.filter(({ entry }) => held.has(entry.item));
   const superseded = receipts.filter(({ entry }) => !held.has(entry.item));
   const receivedAt = new Date();
-  for (const { entry, submissionId, vectorHash } of current) {
-    await getDb(tx)
-      .update(entityEmbedding)
-      .set({
-        artifactState: "submitted",
-        artifactHash: entry.hash,
-        vectorHash,
+  const rows = [
+    ...current.map((receipt) => ({ ...receipt, stale: false })),
+    ...superseded.map((receipt) => ({ ...receipt, stale: true })),
+  ];
+  for (let offset = 0; offset < rows.length; offset += 200) {
+    const page = rows
+      .slice(offset, offset + 200)
+      .map(({ entry, submissionId, vectorHash, stale }) => ({
+        id: entry.artifactId,
+        hash: entry.hash,
         submissionId,
-        observedAt: receivedAt,
-      })
-      .where(eq(entityEmbedding.id, entry.artifactId!));
+        vectorHash,
+        stale,
+      }));
+    await getDb(tx).execute(sql`
+      UPDATE "EntityEmbedding" e SET
+        "artifactState" = CASE WHEN r.stale THEN ${embeddingArtifactState.enum.failed} ELSE ${embeddingArtifactState.enum.submitted} END,
+        "artifactHash" = r.hash, "vectorHash" = r."vectorHash", "submissionId" = r."submissionId",
+        "observedAt" = ${receivedAt.toISOString()}::timestamp, "deletedAt" = CASE WHEN r.stale THEN ${receivedAt.toISOString()}::timestamp ELSE e."deletedAt" END
+      FROM jsonb_to_recordset(${JSON.stringify(page)}::jsonb) AS r(id uuid, hash text, "vectorHash" text, "submissionId" text, stale boolean)
+      WHERE e.id = r.id`);
+  }
+  for (const { entry, submissionId, vectorHash } of current) {
     entry.vectorHash = vectorHash;
     entry.submissionId = submissionId;
     entry.status = "poll";
     entry.pollUntil = new Date(Date.now() + 5_000);
   }
-  for (const { entry, submissionId, vectorHash } of superseded)
-    await getDb(tx)
-      .update(entityEmbedding)
-      .set({
-        artifactState: "failed",
-        artifactHash: entry.hash,
-        vectorHash,
-        submissionId,
-        observedAt: receivedAt,
-        deletedAt: receivedAt,
-      })
-      .where(eq(entityEmbedding.id, entry.artifactId!));
 }
 
 async function lockPublicationSources(
@@ -537,6 +537,7 @@ export async function publishEmbeddingDrainSelections(
     ),
   );
   const selected: EmbeddingDrainEntry[] = [];
+  const refresh: string[] = [];
   for (const entry of entries) {
     const ref = entry.ref!;
     const key = entityRefKey(ref.entityKind, ref.entityId);
@@ -554,11 +555,12 @@ export async function publishEmbeddingDrainSelections(
             text: normalizeSearchText(body),
           });
     if (currentHash !== entry.hash) {
-      await markEmbeddingRefresh(tx, [entry.item.ref]);
+      refresh.push(entry.item.ref);
       continue;
     }
     selected.push(entry);
   }
+  if (refresh.length) await markEmbeddingRefresh(tx, refresh);
   if (!selected.length) return;
   const now = new Date();
   await getDb(tx)

@@ -22,7 +22,6 @@ type WaitingFacts = Pick<
   | "attempts"
   | "error"
   | "waitReason"
-  | "waitUntil"
   | "availableAt"
   | "leaseExpiresAt"
   | "lastClaimedAt"
@@ -67,7 +66,7 @@ function deriveJobWaitingOn(
     return {
       reason: "waiting_funding",
       lane,
-      until: job.waitUntil ? at(job.waitUntil) : null,
+      until: at(job.availableAt),
     };
   const later = job.availableAt.getTime() > context.now.getTime();
   if (job.waitReason === jobWaitReason.enum.device && later)

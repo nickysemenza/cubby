@@ -96,12 +96,12 @@ import {
 } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
+import type { DrainContext } from "~/server/generic/background/drains";
 import {
   SemanticCoverageIncomplete,
   semanticCoveragePending,
 } from "~/server/generic/embedding/repo/entity-embedding";
 import { withJobPhase } from "~/server/generic/jobs/context";
-import type { DrainContext } from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
 import {
   lookupShortcodes,
@@ -123,10 +123,7 @@ import {
   type FieldRefreshCursor,
 } from "../repo/ai-refresh-state";
 import { guardAiEvaluationAttempt } from "../repo/ai-work-state";
-import {
-  connectionSourceFingerprintsOrMissing,
-  countConnectionSweepSources,
-} from "../repo/connection-refresh";
+import { connectionSourceFingerprintsOrMissing } from "../repo/connection-refresh";
 import { systemActor } from "../repo/ensure-run";
 import {
   makeSweepSuggestion,
@@ -399,30 +396,6 @@ const fieldCursorFor = (pending: readonly FieldRefreshCursor[]) =>
 const emailCursorFor = (rows: readonly { item: { id: string } }[]) =>
   rows.length === EMAIL_RECLASSIFY_LIMIT * 2 ? rows.at(-1)!.item.id : null;
 
-/**
- * Connection coverage is one routine Sweep per discovery generation: a
- * visible Run with its own step, instead of one Run per record. Sources
- * already evaluated under their current fingerprint are skipped by it.
- */
-async function scheduleConnectionDiscovery(
-  db: Database,
-  cursor: Awaited<ReturnType<typeof readAiDiscoveryCursor>>,
-) {
-  if (cursor.connectionDone || !(await countConnectionSweepSources(db)))
-    return { done: true, cursor: null };
-  try {
-    const { startRoutineSweep } = await import("./sweep");
-    await startRoutineSweep(db, "recommendation");
-  } catch (error) {
-    // Still done: a pending connection pass would hold the generation open
-    // and stall field and product rediscovery. The next generation retries.
-    log.error("Connection discovery Sweep failed to start", {
-      error: scrubErrorMessage(String(error)),
-    });
-  }
-  return { done: true, cursor: null };
-}
-
 /** Preparation enumerates evidence using live renderers; no model calls happen here. */
 // oxlint-disable-next-line complexity -- Independent discovery streams checkpoint their capacity deferrals together.
 export async function discoverAiRefresh(
@@ -688,7 +661,6 @@ export async function discoverAiRefresh(
     activation,
     cursor,
   );
-  const connectionDiscovery = await scheduleConnectionDiscovery(db, cursor);
   const nextCursor = {
     revision: activation.revision,
     productDone: productDiscovery.productDone,
@@ -701,8 +673,8 @@ export async function discoverAiRefresh(
       (cursor.emailDone || candidates.length < EMAIL_RECLASSIFY_LIMIT * 2),
     field: fieldDeferred ? cursor.field : fieldCursorFor(pending),
     email: emailDeferred ? cursor.email : emailCursorFor(candidates),
-    connectionDone: connectionDiscovery.done,
-    connection: connectionDiscovery.cursor,
+    connectionDone: true,
+    connection: null,
   };
   const complete =
     nextCursor.fieldDone &&
@@ -934,7 +906,7 @@ function inEvaluationContext<T>(
   return withWorkflowExecution(
     {
       runId: target.evaluation.runId,
-      attempt: context.claim.generation,
+      attempt: target.item.attempts + 1,
       database: db,
       job: context,
     },

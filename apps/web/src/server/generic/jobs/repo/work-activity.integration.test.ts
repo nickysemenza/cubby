@@ -12,13 +12,13 @@ import {
   insertEntityFixtures,
 } from "~/server/testing/repo.fixtures";
 
+import { readWorkActivity } from "./observation";
 import { enqueueJob } from "./producer";
-import { readWorkActivity } from "./work-activity";
 
 describe("work activity", () => {
   const ctx = withTestDb();
 
-  it("reports recent Job activity by kind and hides internal maintenance", async () => {
+  it("reports recent Job activity by kind", async () => {
     const now = new Date();
     const runId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "maintenance",
@@ -55,11 +55,6 @@ describe("work activity", () => {
         })
         .where(eq(job.key, `synthetic.activity.${key}`));
     }
-    await enqueueJob(ctx.db, {
-      key: "synthetic.activity.maintenance",
-      kind: "jobs.maintenance",
-      input: {},
-    });
 
     const activity = await readWorkActivity(
       ctx.db,

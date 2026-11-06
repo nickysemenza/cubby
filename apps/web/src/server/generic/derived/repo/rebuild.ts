@@ -1,4 +1,3 @@
-import { derivedRebuildStatusSchema } from "@cubby/schemas/maintenance";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -7,7 +6,6 @@ import {
   entityStoredDerivedDeclarations,
   type EntityStoredDerivedDeclaration,
 } from "~/server/db/derived-declarations";
-import { derivedRebuild } from "~/server/db/derived-rebuild-schema";
 import {
   DERIVED_REBUILD_KEY,
   DERIVED_REBUILD_LEASE_SECONDS,
@@ -85,6 +83,9 @@ export async function claimRebuild(
       "startedAt" = CASE WHEN ${restart} THEN EXCLUDED."startedAt" ELSE "DerivedRebuild"."startedAt" END,
       "cursorAttempts" = CASE WHEN ${restart} THEN 1 ELSE "DerivedRebuild"."cursorAttempts" + 1 END,
       "passFailures" = CASE WHEN ${restart} THEN 0 ELSE "DerivedRebuild"."passFailures" END,
+      pages = CASE WHEN ${restart} THEN 0 ELSE "DerivedRebuild".pages END,
+      "processedRecords" = CASE WHEN ${restart} THEN 0 ELSE "DerivedRebuild"."processedRecords" END,
+      "failedPages" = CASE WHEN ${restart} THEN 0 ELSE "DerivedRebuild"."failedPages" END,
       error = CASE WHEN ${restart} THEN NULL ELSE "DerivedRebuild".error END,
       token = EXCLUDED.token, "leaseExpiresAt" = EXCLUDED."leaseExpiresAt"
     WHERE ("DerivedRebuild"."leaseExpiresAt" IS NULL OR "DerivedRebuild"."leaseExpiresAt" < now() AT TIME ZONE 'UTC' OR ("DerivedRebuild".token IS NULL AND ${force}))
@@ -94,36 +95,38 @@ export async function claimRebuild(
   return row ? { ...row, token } : null;
 }
 
-/** Additional pages in one invocation count attempts before reading or computing. */
+/** Record an attempt and enumerate its bounded population in one committed statement. */
 export async function beginRebuildPage(
   db: Database,
   token: string,
-): Promise<number | null> {
-  const result = await getDb(db)
-    .execute(sql`UPDATE "DerivedRebuild" SET "cursorAttempts" = "cursorAttempts" + 1
-    WHERE key = ${DERIVED_REBUILD_KEY} AND token = ${token}::uuid RETURNING "cursorAttempts"`);
-  return (
-    z
-      .array(z.object({ cursorAttempts: z.number().int() }))
-      .parse(result.rows)[0]?.cursorAttempts ?? null
-  );
-}
-
-export async function rebuildIds(
-  db: Database,
   declaration: EntityStoredDerivedDeclaration,
   afterId: string | null,
-  limit: number,
-): Promise<string[]> {
+  configured: number,
+  first: boolean,
+): Promise<{ ids: string[]; attempts: number; limit: number } | null> {
   const result = await getDb(db).execute(sql`
-    SELECT source.id FROM ${sql.identifier(declaration.table)} AS source
-    JOIN "Entity" identity ON identity.id = source.id AND identity.kind = ${declaration.entity}
-    WHERE ${notDeleted("identity")} ${afterId ? sql`AND source.id > ${afterId}::uuid` : sql``}
-    ORDER BY source.id LIMIT ${limit}`);
-  return z
-    .array(z.object({ id: z.uuid() }))
-    .parse(result.rows)
-    .map((row) => row.id);
+    WITH attempt AS (
+      UPDATE "DerivedRebuild" SET "cursorAttempts" = "cursorAttempts" + ${first ? 0 : 1}
+      WHERE key = ${DERIVED_REBUILD_KEY} AND token = ${token}::uuid
+      RETURNING "cursorAttempts" AS attempts
+    ), page AS (
+      SELECT source.id FROM ${sql.identifier(declaration.table)} AS source
+      JOIN "Entity" identity ON identity.id = source.id AND identity.kind = ${declaration.entity}
+      WHERE ${notDeleted("identity")} ${afterId ? sql`AND source.id > ${afterId}::uuid` : sql``}
+      ORDER BY source.id LIMIT (SELECT greatest(1, floor(${configured} / power(2, floor((attempts - 1) / 3.0))))::int FROM attempt)
+    ) SELECT attempts, greatest(1, floor(${configured} / power(2, floor((attempts - 1) / 3.0))))::int AS limit,
+      coalesce((SELECT jsonb_agg(id ORDER BY id) FROM page), '[]'::jsonb) AS ids FROM attempt`);
+  return (
+    z
+      .array(
+        z.object({
+          attempts: z.number().int(),
+          limit: z.number().int(),
+          ids: z.array(z.uuid()),
+        }),
+      )
+      .parse(result.rows)[0] ?? null
+  );
 }
 
 /** Only the coarse pass cursor is locked. Source writes need no fence or generation. */
@@ -133,6 +136,7 @@ export async function commitRebuildPage(
   next: { target: string; afterId: string | null } | null,
   publish: (tx: Database) => Promise<void>,
   problem?: string,
+  processedRecords = 0,
 ): Promise<boolean> {
   return repositoryTransactionDatabase(db, async (tx) => {
     const held = await getDb(tx).execute(
@@ -140,26 +144,30 @@ export async function commitRebuildPage(
     );
     if (!held.rows.length) return false;
     await publish(tx);
-    if (problem)
-      await getDb(tx)
-        .execute(sql`UPDATE "DerivedRebuild" SET failures = failures + 1,
-      "passFailures" = "passFailures" + 1, error = ${problem} WHERE key = ${DERIVED_REBUILD_KEY}`);
-    if (next) {
-      await getDb(tx)
-        .execute(sql`UPDATE "DerivedRebuild" SET target = ${next.target}, "afterId" = ${next.afterId}::uuid, "cursorAttempts" = 0,
-        "leaseExpiresAt" = (now() AT TIME ZONE 'UTC') + interval '1 second' * ${DERIVED_REBUILD_LEASE_SECONDS}
-        WHERE key = ${DERIVED_REBUILD_KEY}`);
-    } else {
-      await getDb(tx)
-        .execute(sql`UPDATE "DerivedRebuild" SET running = false, target = NULL, "afterId" = NULL,
-        token = NULL, "cursorAttempts" = 0,
-        "leaseExpiresAt" = NULL,
-        failures = CASE WHEN "passFailures" = 0 THEN 0 ELSE failures END,
-        error = CASE WHEN "passFailures" = 0 THEN NULL ELSE error END,
-        "finishedAt" = now() AT TIME ZONE 'UTC',
-        "durationsMs" = ("durationsMs" || ARRAY[extract(epoch FROM ((now() AT TIME ZONE 'UTC') - "startedAt"))::double precision * 1000])[greatest(cardinality("durationsMs") - 1, 1):]
-        WHERE key = ${DERIVED_REBUILD_KEY}`);
-    }
+    await getDb(tx).execute(sql`
+      UPDATE "DerivedRebuild" SET
+        pages = pages + 1,
+        "processedRecords" = "processedRecords" + ${processedRecords},
+        "failedPages" = "failedPages" + ${problem ? 1 : 0},
+        failures = CASE WHEN ${next === null} AND "passFailures" = 0 AND NOT ${!!problem} THEN 0 ELSE failures + ${problem ? 1 : 0} END,
+        "passFailures" = "passFailures" + ${problem ? 1 : 0},
+        error = CASE WHEN ${!!problem} THEN ${problem ?? null} WHEN ${next === null} AND "passFailures" = 0 THEN NULL ELSE error END,
+        "lastMovementAt" = now() AT TIME ZONE 'UTC',
+        "cleanAt" = CASE WHEN ${next === null} AND "passFailures" = 0 AND NOT ${!!problem} THEN now() AT TIME ZONE 'UTC' ELSE "cleanAt" END,
+        running = ${next !== null}, target = ${next?.target ?? null}, "afterId" = ${next?.afterId ?? null}::uuid,
+        "cursorAttempts" = 0,
+        token = CASE WHEN ${next === null} THEN NULL ELSE token END,
+        "leaseExpiresAt" = CASE WHEN ${next === null} THEN NULL ELSE (now() AT TIME ZONE 'UTC') + interval '1 second' * ${DERIVED_REBUILD_LEASE_SECONDS} END,
+        "finishedAt" = CASE WHEN ${next === null} THEN now() AT TIME ZONE 'UTC' ELSE "finishedAt" END,
+        "durationsMs" = CASE WHEN ${next === null} THEN ("durationsMs" || ARRAY[extract(epoch FROM ((now() AT TIME ZONE 'UTC') - "startedAt"))::double precision * 1000])[greatest(cardinality("durationsMs") - 1, 1):] ELSE "durationsMs" END,
+        history = CASE WHEN ${next === null} THEN
+          (SELECT coalesce(jsonb_agg(entry ORDER BY ordinal), '[]'::jsonb) FROM jsonb_array_elements(history || jsonb_build_array(jsonb_build_object(
+            'startedAt', "startedAt", 'finishedAt', now() AT TIME ZONE 'UTC',
+            'durationMs', extract(epoch FROM ((now() AT TIME ZONE 'UTC') - "startedAt"))::double precision * 1000,
+            'pages', pages + 1, 'processedRecords', "processedRecords" + ${processedRecords}, 'failedPages', "failedPages" + ${problem ? 1 : 0}
+          ))) WITH ORDINALITY AS recent(entry, ordinal) WHERE ordinal > jsonb_array_length(history) - 2)
+          ELSE history END
+      WHERE key = ${DERIVED_REBUILD_KEY}`);
     return true;
   });
 }
@@ -252,21 +260,6 @@ export async function rebuildActive(db: Database): Promise<boolean> {
     sql`SELECT 1 FROM "DerivedRebuild" WHERE key = ${DERIVED_REBUILD_KEY} AND running`,
   );
   return result.rows.length > 0;
-}
-
-export async function readDerivedRebuildStatus(
-  db: Database,
-): Promise<z.infer<typeof derivedRebuildStatusSchema>> {
-  const [row] = await getDb(db).select().from(derivedRebuild);
-  return {
-    running: row?.running ?? false,
-    target: row?.target ?? null,
-    startedAt: row?.startedAt?.toISOString() ?? null,
-    finishedAt: row?.finishedAt?.toISOString() ?? null,
-    failures: row?.failures ?? 0,
-    error: row?.error ?? null,
-    durationsMs: row?.durationsMs ?? [],
-  };
 }
 
 /** A member repair joins active work instead of creating per-value tickets. */

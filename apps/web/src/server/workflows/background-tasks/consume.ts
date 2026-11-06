@@ -54,23 +54,16 @@ export async function handleBackgroundQueueBatch(
   batch: BackgroundQueueBatch,
   ports: BackgroundQueueConsumerPorts,
 ) {
-  let succeeded = false;
+  if (!batch.messages.length) return;
   const ring = batch.messages.some(
     (message) => backgroundTaskMessageSchema.safeParse(message.body).data?.ring,
   );
-  // One wake drains a bounded fair budget; duplicate wake messages need no second drain.
-  for (const message of batch.messages) {
-    if (succeeded) {
-      message.ack();
-      continue;
-    }
-    const outcome = await handleBackgroundQueueMessage(
-      db,
-      message,
-      ports,
-      ring,
-    );
-    succeeded ||= outcome === "succeeded" || outcome === "unreadable";
+  // Every message in a batch shares one attempt, including transport failures.
+  const first = batch.messages[0]!;
+  const outcome = await handleBackgroundQueueMessage(db, first, ports, ring);
+  for (const message of batch.messages.slice(1)) {
+    if (outcome === "failed") message.retry({ delaySeconds: 30 });
+    else message.ack();
   }
-  if (succeeded) await ports.afterSuccess?.();
+  if (outcome !== "failed") await ports.afterSuccess?.();
 }

@@ -40,10 +40,8 @@ export const job = pgTable(
       .$type<RunId>()
       .references((): AnyPgColumn => run.id, { onDelete: "set null" }),
     waitReason: text("waitReason").$type<JobWaitReason>(),
-    waitUntil: timestamp("waitUntil", { mode: "date" }),
     input: jsonb("input").$type<JobPayload>().notNull(),
     cursor: jsonb("cursor").$type<JobPayload>(),
-    result: jsonb("result").$type<JobPayload>(),
     generation: integer("generation").notNull().default(1),
     priority: integer("priority").notNull().default(0),
     attempts: integer("attempts").notNull().default(0),
@@ -75,7 +73,7 @@ export const job = pgTable(
     ),
     check(
       "Job_kind_retired_check",
-      sql`${table.kind} NOT IN ('image.cloud', 'image.device', 'image.device.wake', 'embedding.refresh', 'embedding.cleanup', 'ai.evaluation', 'assessment.correction', 'ai-refresh.activate')`,
+      sql`${table.kind} NOT IN ('image.cloud', 'image.device', 'image.device.wake', 'embedding.refresh', 'embedding.cleanup', 'ai.evaluation', 'assessment.correction', 'ai-refresh.activate', 'derived.drain', 'derived.reconcile', 'jobs.maintenance', 'discovery.connections')`,
     ),
     check(
       "Job_waitReason_check",

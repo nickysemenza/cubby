@@ -214,9 +214,7 @@ describe("search source selection", () => {
     try {
       const publish = () =>
         repositoryTransactionDatabase(ctx.db, (tx) =>
-          adapter.publish(tx, [first.source.entityId], changed, {
-            notify: () => {},
-          }),
+          adapter.publish(tx, [first.source.entityId], changed),
         );
       await publish();
       await unwrapDb(ctx.db).execute(

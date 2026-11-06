@@ -68,11 +68,9 @@ export async function enqueueJob(
           generation: sql`${job.generation} + 1`,
           state: jobState.enum.queued,
           cursor: null,
-          result: null,
           attempts: 0,
           error: null,
           waitReason: null,
-          waitUntil: null,
           leaseToken: null,
           leaseExpiresAt: null,
           updatedAt: new Date(),
@@ -146,35 +144,4 @@ export async function enqueueJobs(
       throw new Error("Job key belongs to a different kind");
     return rows;
   });
-}
-
-/** Routine passes can repeat completed work, but never revive a member control or exhausted failure. */
-export async function repeatJob(
-  db: RepositoryQueryInput,
-  input: EnqueueJobInput,
-  intervalMs = 0,
-) {
-  const row = await enqueueJob(db, input);
-  if (
-    row.state !== "completed" ||
-    Date.now() - row.updatedAt.getTime() < intervalMs
-  )
-    return row;
-  const [repeated] = await repositoryQueries(db)
-    .update(job)
-    .set({
-      state: "queued",
-      generation: sql`${job.generation} + 1`,
-      cursor: null,
-      result: null,
-      attempts: 0,
-      input: input.input,
-      waitReason: null,
-      waitUntil: null,
-      availableAt: input.availableAt ?? new Date(),
-      updatedAt: new Date(),
-    })
-    .where(and(eq(job.id, row.id), eq(job.state, "completed")))
-    .returning();
-  return repeated ?? row;
 }

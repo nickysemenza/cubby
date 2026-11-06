@@ -107,12 +107,11 @@ describe("durable Job selection", () => {
         1,
       );
       const [stored] = await getDb(ctx.db)
-        .select({ state: job.state, result: job.result })
+        .select({ state: job.state })
         .from(job)
         .where(eq(job.id, busy.id));
       expect(stored).toEqual({
         state: "completed",
-        result: { outcome: "synthetic published result" },
       });
     } finally {
       release.resolve();

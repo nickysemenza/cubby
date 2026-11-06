@@ -8,8 +8,8 @@ import {
 import { getDb } from "~/server/db/helpers";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 
+import { readBackgroundWorkStatus } from "./observation";
 import { enqueueJob } from "./producer";
-import { readBackgroundWorkStatus } from "./work-status";
 
 const minutesAgo = (minutes: number, now: Date) =>
   new Date(now.getTime() - minutes * 60_000);
@@ -31,6 +31,7 @@ describe("background work status", () => {
         target: "product.price",
         startedAt: minutesAgo(finishedMinutes + 60, now),
         finishedAt: minutesAgo(finishedMinutes, now),
+        lastMovementAt: minutesAgo(finishedMinutes, now),
         failures,
         error: failures ? "Synthetic rebuild failure" : null,
       });
@@ -50,7 +51,7 @@ describe("background work status", () => {
     const status = await readBackgroundWorkStatus(ctx.db, now);
     expect(status.stuck).toEqual([
       expect.objectContaining({
-        key: "derived.drain",
+        key: "derived-rebuild",
         title: "Totals and search results stopped updating",
         action: { type: "none" },
       }),
@@ -62,7 +63,7 @@ describe("background work status", () => {
     await seedRebuild(now, 3, 3);
     const status = await readBackgroundWorkStatus(ctx.db, now);
     expect(status.stuck.map((item) => item.key)).toEqual([
-      "derived.drain:failing",
+      "derived-rebuild:failing",
     ]);
   });
 

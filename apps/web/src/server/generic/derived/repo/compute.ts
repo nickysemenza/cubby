@@ -2,7 +2,6 @@ import {
   storedFieldDecision,
   type StoredFieldDecision,
 } from "@cubby/schemas/derived-value";
-import type { Entity } from "@cubby/schemas/entity";
 import { storedResultSchemas } from "@cubby/schemas/entity-stored-derived";
 
 /**
@@ -79,22 +78,6 @@ export const sharedDerivedPreparation =
   async (db: Database, ids: readonly string[]) =>
     project(await prepare(db, ids), ids);
 
-/** One sink publication's reader notification, committed with its transaction. */
-interface DerivedSinkPublication {
-  /**
-   * Ring these entity records through the drain's bounded publication. An
-   * internal record's refs are not entity ids, so its sink names the old and
-   * new entities each change affected.
-   */
-  notify(entity: Entity, ids: readonly string[]): void;
-}
-
-/** Staging may commit while its original source work stays owed without an attempt. */
-interface DerivedSinkContinuation {
-  readonly changed: readonly string[];
-  readonly retain: readonly string[];
-}
-
 /**
  * An adapter whose output lives in its own table (search documents, recipe
  * totals, conversion coverage) rather than `DerivedValue`. `prepare` runs
@@ -105,20 +88,12 @@ export interface DerivedSink<Prepared = unknown> {
   readonly kind: "sink";
   readonly preparationBatchSize?: number;
   prepare(db: Database, ids: readonly string[]): Promise<Prepared>;
-  /**
-   * Refs `prepare` could not prepare, with their errors. Each settles like a
-   * failed target's item while its siblings publish. A ref outside the claimed
-   * page fails the whole target. A missing input is an error here, never an
-   * empty output.
-   */
-  preparationFailures?(prepared: Prepared): ReadonlyMap<string, unknown>;
   /** `tx` is the publication transaction's repository handle. */
   publish(
     tx: Database,
     ids: readonly string[],
     prepared: Prepared,
-    publication: DerivedSinkPublication,
-  ): Promise<readonly string[] | DerivedSinkContinuation>;
+  ): Promise<void>;
 }
 
 export type DerivedAdapter = DerivedCompute | DerivedSink;
@@ -131,13 +106,8 @@ export const derivedSink = <Prepared>(
     kind: "sink",
     preparationBatchSize: sink.preparationBatchSize,
     prepare: sink.prepare,
-    // SAFETY: the drain hands `preparationFailures` and `publish` exactly the
-    // value this sink's own `prepare` returned for the same page.
-    preparationFailures: (prepared) =>
-      sink.preparationFailures?.(prepared as Prepared) ?? new Map(),
     // SAFETY: publish receives this sink's own preparation result for the same page.
-    publish: (tx, ids, prepared, publication) =>
-      sink.publish(tx, ids, prepared as Prepared, publication),
+    publish: (tx, ids, prepared) => sink.publish(tx, ids, prepared as Prepared),
   };
 };
 

@@ -1,5 +1,4 @@
 import type { JobBackoff } from "@cubby/schemas/job";
-import type { SQL } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 
@@ -12,30 +11,14 @@ export type DrainItem = {
   attempts: number;
 };
 
-/** The identity a page reads: a drain Job's claim, or a domain row drain's page. */
-export type DrainClaim = {
-  key: string;
-  kind?: string;
-  generation: number;
-  leaseToken: string;
-};
-
 /**
  * Where a drain's owed items live: the domain's own rows are the debt
  * (`generic/background/drains.ts`). `lock` returns the same item objects it was given,
  * narrowed to those still current.
  */
 export type DrainStore = {
-  claim(
-    db: Database,
-    limit: number,
-    eligible?: (target: SQL) => SQL,
-  ): Promise<DrainItem[]>;
-  lock(
-    tx: Database,
-    items: readonly DrainItem[],
-    options?: { drain?: string },
-  ): Promise<DrainItem[]>;
+  claim(db: Database, limit: number): Promise<DrainItem[]>;
+  lock(tx: Database, items: readonly DrainItem[]): Promise<DrainItem[]>;
   clear(tx: Database, items: readonly DrainItem[]): Promise<void>;
   defer(
     tx: Database,

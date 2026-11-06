@@ -32,7 +32,7 @@ export const runAiEvaluationExecution = (
     withWorkflowExecution(
       {
         runId: claimed.runId,
-        attempt: context.claim.generation,
+        attempt: claimed.attempts + 1,
         database: db,
         job: context,
       },

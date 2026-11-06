@@ -2,7 +2,6 @@ import { z } from "zod";
 import { runShortcode } from "./identifier-fields";
 import { runStatus, runTrigger } from "./run-fields";
 import { runStepState } from "./run-step";
-import { searchableEntitySchema } from "./search";
 
 /** `maintenance.run`: the pass it started, or the one already active. */
 export const maintenanceRunOutSchema = z.object({
@@ -144,71 +143,22 @@ export type ClassifyImageProvenanceOut = z.infer<
   typeof classifyImageProvenanceOutSchema
 >;
 
-/**
- * Counters for one search-index repair run. These describe what that run
- * found and did — findings and outcomes — not a live assertion that the index
- * is healthy now. `published` is embedding work handed to the queue, which
- * finishes on its own.
- */
-export const searchIndexRepairCountersSchema = z.object({
-  scanned: z.number().int().nonnegative(),
-  orphaned: z.number().int().nonnegative(),
-  missing: z.number().int().nonnegative(),
-  stale: z.number().int().nonnegative(),
-  retired: z.number().int().nonnegative(),
-  rebuilt: z.number().int().nonnegative(),
-  published: z.number().int().nonnegative(),
+/** Committed computations across the shared pass; no estimated population or fabricated repair counts. */
+export const searchRebuildResultSchema = z.object({
+  processedRecords: z.int().nonnegative(),
+  failedPages: z.int().nonnegative(),
+  finishedAt: z.iso.datetime().nullable(),
+  cleanAt: z.iso.datetime().nullable(),
 });
-export type SearchIndexRepairCounters = z.infer<
-  typeof searchIndexRepairCountersSchema
->;
-
-export const searchIndexRepairPhases = ["orphans", "sources"] as const;
-
-/** A committed page's resume point; selection, mutation and publication stay together. */
-export const searchRepairCheckpoint = z.object({
-  phase: z.enum(searchIndexRepairPhases),
-  cursor: z
-    .object({ entityKind: searchableEntitySchema, entityId: z.string() })
-    .nullable(),
-  counters: searchIndexRepairCountersSchema,
-});
-export type SearchRepairCheckpoint = z.infer<typeof searchRepairCheckpoint>;
-export const searchRepairContinuation = z.object({
-  nextInstanceId: z.string().min(1),
-});
-export type SearchRepairContinuation = z.infer<typeof searchRepairContinuation>;
-
-/**
- * Progress in the shared bulk-stream shape (`done`/`total`) so the existing
- * streaming button renders it. The total is not known up front — the scan is
- * keyset-paged — so `total` is what has been scanned plus one more page while
- * a cursor remains; it converges on `done` at the end.
- */
+export type SearchRebuildResult = z.infer<typeof searchRebuildResultSchema>;
 export const searchIndexRepairEventSchema = z.discriminatedUnion("type", [
   z.object({
-    type: z.literal("progress"),
-    done: z.number().int().nonnegative(),
-    total: z.number().int().nonnegative(),
-    phase: z.enum(searchIndexRepairPhases),
-    counters: searchIndexRepairCountersSchema,
+    type: z.literal("status"),
+    target: z.string().nullable(),
+    result: searchRebuildResultSchema,
   }),
-  z.object({
-    type: z.literal("done"),
-    result: searchIndexRepairCountersSchema,
-  }),
+  z.object({ type: z.literal("done"), result: searchRebuildResultSchema }),
 ]);
 export type SearchIndexRepairEvent = z.infer<
   typeof searchIndexRepairEventSchema
 >;
-
-/** Aggregate progress and the last three wall-clock rebuild durations, excluding AI/embedding regeneration. */
-export const derivedRebuildStatusSchema = z.object({
-  running: z.boolean(),
-  target: z.string().nullable(),
-  startedAt: z.iso.datetime().nullable(),
-  finishedAt: z.iso.datetime().nullable(),
-  failures: z.int().nonnegative(),
-  error: z.string().nullable(),
-  durationsMs: z.array(z.number().nonnegative()),
-});

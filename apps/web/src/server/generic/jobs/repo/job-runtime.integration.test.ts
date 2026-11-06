@@ -88,7 +88,6 @@ describe("Job retry policy", () => {
       state: "queued",
       attempts: 0,
       waitReason: "provider_capacity",
-      waitUntil: until,
       availableAt: until,
     });
   });

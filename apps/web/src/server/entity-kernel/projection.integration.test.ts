@@ -9,7 +9,7 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
 
-import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
+import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
 import {
   captureBackgroundQueue,
   drainDerivedRefreshFrontier,

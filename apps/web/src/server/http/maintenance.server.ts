@@ -6,7 +6,6 @@ import {
   launchMaintenanceRun,
   readMaintenanceStatus,
 } from "~/server/domains/maintenance/service/maintenance.service";
-import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
 import { requestDerivedRebuild } from "~/server/generic/derived/repo/rebuild";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { wakeAt } from "~/server/workflows/background-tasks/publish";
@@ -19,7 +18,6 @@ export const maintenanceHandlers = implementOperationDomain(
     run: (context) =>
       launchMaintenanceRun(context.db, context.actorContext, "manual"),
     status: (context) => readMaintenanceStatus(context.db),
-    derivedRebuildStatus: (context) => readDerivedRebuildStatus(context.db),
     rebuildDerived: async (context) => {
       const receipt = await requestDerivedRebuild(context.db);
       await wakeAt(new Date(), { source: "manual-derived-rebuild" });

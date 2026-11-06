@@ -1,6 +1,6 @@
 import type { Database } from "~/server/db/database";
 import {
-  storeDrain,
+  rowDrain,
   type BackgroundDrain,
 } from "~/server/generic/background/drains";
 import { vectorPayloadHash } from "~/server/generic/embedding/repo/embedding-artifact";
@@ -24,7 +24,6 @@ import {
   JobRetryableError,
   JobSupersededError,
 } from "~/server/generic/jobs/errors";
-import { defineDrain } from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
 import {
   productionEmbeddingRefreshPort,
@@ -82,7 +81,7 @@ async function prepareRefreshPage(
   store: EmbeddingRefreshStore,
   db: Database,
   items: readonly DrainItem[],
-  context: JobContext,
+  context: Pick<JobContext, "signal" | "fenced">,
 ) {
   const config = port.config();
   const page = await prepareEmbeddingDrainPage(db, items, config);
@@ -224,34 +223,34 @@ export function embeddingRefreshDrain(
     async page(db, round) {
       if (!port.configured()) return { more: false, nextAt: null };
       const store = embeddingRefreshStore(crypto.randomUUID());
-      return storeDrain({
+      return rowDrain<RefreshPage>({
         name: "embedding.refresh",
         store,
-        handler: defineDrain<RefreshPage>({
-          store,
-          backoff: EMBEDDING_BACKOFF,
-          limit: PAGE_LIMIT,
-          prepare: (pageDb, items, context) =>
-            prepareRefreshPage(port, store, pageDb, items, context),
-          lock: async (tx, items, prepared) => {
-            await lockEmbeddingDrainSources(tx, items, prepared);
-          },
-          publish: async (tx, items, prepared) => {
-            const postponed = items.filter(
-              (item) => prepared.byItem.get(item)?.status === "poll",
-            );
-            for (const item of postponed)
-              await postponeEmbeddingRefresh(
-                tx,
-                store,
-                [item],
-                prepared.byItem.get(item)!.pollUntil ??
-                  new Date(Date.now() + VISIBILITY_POLL_MS),
-              );
-            await publishEmbeddingDrainSelections(tx, store, items, prepared);
-            return { retain: postponed };
-          },
-        }),
+        backoff: EMBEDDING_BACKOFF,
+        limit: PAGE_LIMIT,
+        prepare: (pageDb, items, context) =>
+          prepareRefreshPage(port, store, pageDb, items, context),
+        lock: async (tx, items, prepared) => {
+          await lockEmbeddingDrainSources(tx, items, prepared);
+        },
+        publish: async (tx, items, prepared) => {
+          const postponed = items.filter(
+            (item) => prepared.byItem.get(item)?.status === "poll",
+          );
+          const groups = new Map<number, DrainItem[]>();
+          for (const item of postponed) {
+            const until =
+              prepared.byItem.get(item)!.pollUntil?.getTime() ??
+              Date.now() + VISIBILITY_POLL_MS;
+            const group = groups.get(until) ?? [];
+            group.push(item);
+            groups.set(until, group);
+          }
+          for (const [until, group] of groups)
+            await postponeEmbeddingRefresh(tx, store, group, new Date(until));
+          await publishEmbeddingDrainSelections(tx, store, items, prepared);
+          return { retain: postponed };
+        },
       }).page(db, round);
     },
   };

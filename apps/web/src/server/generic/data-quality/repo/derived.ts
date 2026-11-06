@@ -15,7 +15,7 @@ export const qualityDerivedComputes: Record<string, DerivedAdapter> =
           prepare: (db, ids) => prepareQualityPublications(db, kind, ids),
           publish: async (tx, ids, rows) => {
             const keep = new Set(ids);
-            return publishQualitySnapshots(tx, {
+            await publishQualitySnapshots(tx, {
               kind,
               ids,
               rows: rows.filter((row) => keep.has(row.entityId)),

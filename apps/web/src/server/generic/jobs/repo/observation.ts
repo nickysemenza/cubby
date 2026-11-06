@@ -5,15 +5,23 @@ import {
   imageProcessingAttemptState,
   imageProcessingJobState,
 } from "@cubby/schemas/image-processing";
+import {
+  JOB_NEEDS_ATTENTION_ATTEMPTS,
+  jobKindDeclaration,
+} from "@cubby/schemas/job";
 import { jobState } from "@cubby/schemas/job";
+import type { WorkActivity } from "@cubby/schemas/job";
+import type { WorkStuckItem } from "@cubby/schemas/work-status";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
+import { countLabel } from "@cubby/shared/pluralize";
 import { sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import type { WorkActivity } from "~/contracts/job.contract";
-import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import { run } from "~/server/db/schema";
+import type { Database } from "~/server/db/database";
+import { derivedRebuild } from "~/server/db/derived-rebuild-schema";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { run } from "~/server/db/retained-tables";
 import { INTERNAL_JOB_KINDS } from "~/server/generic/jobs/kind-policy";
 import { jobDue } from "~/server/generic/jobs/repo/queue";
 
@@ -33,6 +41,8 @@ type StreamRow = {
   completed: number;
   failed: number;
   lastCompletedAt: string | null;
+  lastFailedAt?: string | null;
+  diagnostic?: string | null;
   oldestDueAt: string | null;
   runs: string[] | null;
 };
@@ -205,11 +215,15 @@ export async function readWorkActivity(
   const rows = await getDb(db).execute<StreamRow>(sql`
     WITH activity_jobs AS MATERIALIZED (
       SELECT "Job".* FROM "Job"
-      WHERE (${live} OR "Job"."lastClaimedAt" > ${since(RECENT_MINUTES.failed)})
-        AND "Job".kind NOT IN (${sql.join(
-          INTERNAL_JOB_KINDS.map((kind) => sql`${kind}`),
-          sql`, `,
-        )})
+      WHERE (${live} OR "Job"."updatedAt" > ${since(RECENT_MINUTES.failed)})
+        ${
+          INTERNAL_JOB_KINDS.length
+            ? sql`AND "Job".kind NOT IN (${sql.join(
+                INTERNAL_JOB_KINDS.map((kind) => sql`${kind}`),
+                sql`, `,
+              )})`
+            : sql``
+        }
     )
     SELECT "Job".kind,
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.running} AND "Job"."leaseExpiresAt" > ${at})::int AS "running",
@@ -219,7 +233,8 @@ export async function readWorkActivity(
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.paused})::int AS "paused",
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.completed} AND "Job"."updatedAt" > ${since(RECENT_MINUTES.pace)})::int AS "completedPace",
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.completed} AND "Job"."updatedAt" > ${since(RECENT_MINUTES.completed)})::int AS "completed",
-      count(*) FILTER (WHERE "Job".state = ${jobState.enum.failed} AND "Job"."updatedAt" > ${since(RECENT_MINUTES.failed)})::int AS "failed",
+      count(*) FILTER (WHERE "Job".state = ${jobState.enum.failed} AND "Job"."updatedAt" > ${since(RECENT_MINUTES.failed)}
+        AND "Job"."updatedAt" > coalesce((SELECT max(done."updatedAt") FROM activity_jobs done WHERE done.kind = "Job".kind AND done.state = ${jobState.enum.completed}), '-infinity'::timestamp))::int AS "failed",
       max("Job"."updatedAt") FILTER (WHERE "Job".state = ${jobState.enum.completed}) AS "lastCompletedAt",
       min(CASE WHEN "Job".state = ${jobState.enum.running} THEN "Job"."leaseExpiresAt" ELSE "Job"."availableAt" END)
         FILTER (WHERE ${waiting}) AS "oldestDueAt",
@@ -240,6 +255,7 @@ export async function readWorkActivity(
   const iso = (value: string | null) =>
     value === null ? null : new Date(`${value}Z`).toISOString();
   return {
+    rebuild: await readRebuildObservation(db),
     measuredAt: now.toISOString(),
     windows: {
       paceMinutes: RECENT_MINUTES.pace,
@@ -279,4 +295,181 @@ export async function readWorkActivity(
           0,
       ),
   };
+}
+
+/**
+ * Due work with no completion for this long is stuck. A drain sleeps between
+ * bursts and its pages finish within minutes, so half an hour of silence is not
+ * a pause; it is also half the one-hour lag members were promised, so the alarm
+ * shows before that promise breaks.
+ */
+export const STUCK_WINDOW_MINUTES = 30;
+/** Due work this old that is still finishing reads as catching up, not stuck. */
+const BEHIND_MINUTES = 15;
+const MINUTE_MS = 60_000;
+
+const minutesAgo = (now: Date, minutes: number) =>
+  new Date(now.getTime() - minutes * MINUTE_MS);
+/** Raw `execute` rows keep `timestamp` columns as text without a zone; they are UTC. */
+const latest = (...values: readonly (Date | null)[]) =>
+  values.reduce<Date | null>(
+    (best, value) => (value && (!best || value > best) ? value : best),
+    null,
+  );
+
+/** "45 minutes", "12 hours", "3 days". */
+function formatStuckAge(ms: number) {
+  const minutes = Math.max(1, Math.round(ms / MINUTE_MS));
+  if (minutes < 90) return countLabel(minutes, "minute");
+  if (minutes < 48 * 60) return countLabel(Math.round(minutes / 60), "hour");
+  return countLabel(Math.round(minutes / (24 * 60)), "day");
+}
+
+const workAction = (
+  kind: string,
+  needsAttention = false,
+): WorkStuckItem["action"] =>
+  kind.startsWith("image.")
+    ? { type: "link", label: "View photos", href: "/image-jobs?state=pending" }
+    : kind.startsWith("embedding.") || kind.startsWith("ai.evaluation")
+      ? { type: "none" }
+      : {
+          type: "retry",
+          kinds: [kind],
+          ...(needsAttention ? { needsAttention: true } : {}),
+        };
+
+const kindLabel = (kind: string) => {
+  if (kind === "image.cloud") return "Photo processing in the cloud";
+  if (kind === "image.device") return "Photo processing on Apple devices";
+  if (kind.startsWith("embedding.")) return "Search embeddings";
+  if (kind.startsWith("ai.evaluation")) return "AI evaluations";
+  const declared = jobKindDeclaration(kind);
+  return declared?.activityLabel ?? declared?.label ?? kind;
+};
+
+const stoppedItem = (
+  kind: string,
+  stoppedAt: Date,
+  now: Date,
+  diagnostic: string | null,
+): WorkStuckItem => {
+  const declared = jobKindDeclaration(kind)?.stuck;
+  return {
+    key: kind,
+    title: declared?.title ?? `${kindLabel(kind)} stopped`,
+    body: [
+      `Nothing has finished for ${formatStuckAge(now.getTime() - stoppedAt.getTime())}.`,
+      declared?.consequence,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    since: stoppedAt.toISOString(),
+    action: workAction(kind),
+    diagnostic,
+  };
+};
+
+/** Rebuild observations read committed movement, never a prior pass's finish as a heartbeat. */
+export async function readRebuildObservation(db: Database) {
+  const [row] = await getDb(db).select().from(derivedRebuild);
+  return {
+    running: row?.running ?? false,
+    target: row?.target ?? null,
+    startedAt: row?.startedAt?.toISOString() ?? null,
+    finishedAt: row?.finishedAt?.toISOString() ?? null,
+    lastMovementAt: row?.lastMovementAt?.toISOString() ?? null,
+    cleanAt: row?.cleanAt?.toISOString() ?? null,
+    failures: row?.failures ?? 0,
+    error: row?.error ?? null,
+    durationsMs: row?.durationsMs ?? [],
+    pages: row?.pages ?? 0,
+    processedRecords: row?.processedRecords ?? 0,
+    failedPages: row?.failedPages ?? 0,
+    history: [...(row?.history ?? [])],
+  };
+}
+
+async function readFailedWork(db: Database, now: Date) {
+  const since = new Date(now.getTime() - 7 * 24 * 60 * 60_000).toISOString();
+  const rows = await getDb(db).execute<{
+    kind: string;
+    count: number;
+    since: string;
+    diagnostic: string | null;
+  }>(sql`
+    WITH failed AS (
+      SELECT kind, "updatedAt" AS at, error FROM "Job" j
+      WHERE (state = ${jobState.enum.failed} AND "updatedAt" > ${since}::timestamp
+        AND NOT EXISTS (SELECT 1 FROM "Job" done WHERE done.kind = j.kind AND done.state = ${jobState.enum.completed} AND done."updatedAt" > j."updatedAt"))
+        OR (state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}) AND attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS})
+      UNION ALL SELECT 'ai.evaluation:' || feature, "updatedAt", error FROM "AiEvaluation"
+        WHERE (state = ${aiEvaluationState.enum.failed} AND "updatedAt" > ${since}::timestamp)
+          OR ("runAt" IS NOT NULL AND attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS})
+      UNION ALL SELECT 'image.' || lane, "updatedAt", "lastError" FROM "ImageProcessingJob"
+        WHERE state = ${imageProcessingJobState.enum.pending} AND failures >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
+      UNION ALL SELECT 'embedding.refresh', "updatedAt", "embeddingError" FROM "SearchDocument"
+        WHERE "embeddingDueAt" IS NOT NULL AND "embeddingAttempts" >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
+          AND ${notDeleted("SearchDocument")}
+    ) SELECT kind, count(*)::int AS count, max(at) AS since,
+      (array_agg(error ORDER BY at DESC))[1] AS diagnostic FROM failed GROUP BY kind`);
+  return rows.rows.map((row): WorkStuckItem => ({
+    key: `${row.kind}:failing`,
+    title: `${kindLabel(row.kind)} has failed work`,
+    body: `${countLabel(row.count, "work item")} ${row.count === 1 ? "needs" : "need"} attention after failures.`,
+    since: new Date(`${row.since}Z`).toISOString(),
+    diagnostic: row.diagnostic,
+    action: workAction(row.kind, true),
+  }));
+}
+
+export async function readBackgroundWorkStatus(db: Database, now = new Date()) {
+  const [activity, failures] = await Promise.all([
+    readWorkActivity(db, now),
+    readFailedWork(db, now),
+  ]);
+  const rebuild = activity.rebuild;
+  const stuck: WorkStuckItem[] = [...failures];
+  let behind = false;
+  let deviceDueSince: Date | null = null;
+  let lastFinishedAt = rebuild.finishedAt ? new Date(rebuild.finishedAt) : null;
+  const movement = rebuild.lastMovementAt ?? rebuild.startedAt;
+  const since = movement ? new Date(movement) : null;
+  if (since && (rebuild.failures >= 3 || since <= minutesAgo(now, 120))) {
+    stuck.push({
+      key:
+        rebuild.failures >= 3 ? "derived-rebuild:failing" : "derived-rebuild",
+      title:
+        rebuild.failures >= 3
+          ? "Totals and search rebuild keeps failing"
+          : "Totals and search results stopped updating",
+      body:
+        rebuild.failures >= 3
+          ? `${rebuild.failures} rebuild failures were recorded; ${rebuild.failedPages} pages failed in this pass.`
+          : "The rebuild has made no committed progress for two hours.",
+      since: since.toISOString(),
+      action: { type: "none" },
+      diagnostic: rebuild.error,
+    });
+  } else if (since && since <= minutesAgo(now, 75)) behind = true;
+  for (const stream of activity.streams) {
+    const completed = stream.lastCompletedAt
+      ? new Date(stream.lastCompletedAt)
+      : null;
+    const due = stream.oldestDueAt ? new Date(stream.oldestDueAt) : null;
+    lastFinishedAt = latest(lastFinishedAt, completed);
+    if (stream.kind === "image.device") {
+      deviceDueSince = due;
+      continue;
+    }
+    if (stuck.some((item) => item.key === `${stream.kind}:failing`)) continue;
+    if (
+      due &&
+      due <= minutesAgo(now, STUCK_WINDOW_MINUTES) &&
+      (!completed || completed <= minutesAgo(now, STUCK_WINDOW_MINUTES))
+    ) {
+      stuck.push(stoppedItem(stream.kind, due, now, null));
+    } else if (due && due <= minutesAgo(now, BEHIND_MINUTES)) behind = true;
+  }
+  return { stuck, behind, lastFinishedAt, deviceDueSince };
 }

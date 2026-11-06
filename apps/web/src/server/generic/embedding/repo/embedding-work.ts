@@ -91,11 +91,14 @@ export async function postponeEmbeddingRefresh(
   items: readonly DrainItem[],
   until: Date,
 ) {
-  for (const entry of items)
-    await getDb(tx)
-      .update(searchDocument)
-      .set({ embeddingDueAt: until })
-      .where(store.current(entry));
+  for (let offset = 0; offset < items.length; offset += 200) {
+    const page = items.slice(offset, offset + 200);
+    await getDb(tx).execute(sql`
+      UPDATE "SearchDocument" SET "embeddingDueAt" = ${until.toISOString()}::timestamp
+      FROM jsonb_to_recordset(${JSON.stringify(page.map((item) => ({ ref: item.ref, ticket: item.ticket })))}::jsonb) AS owed(ref uuid, ticket int)
+      WHERE "SearchDocument"."entityId" = owed.ref AND "SearchDocument"."embeddingGeneration" = owed.ticket
+        AND (${or(...page.map((item) => store.current(item)))})`);
+  }
 }
 
 export type EmbeddingRefreshStore = DrainStore & {

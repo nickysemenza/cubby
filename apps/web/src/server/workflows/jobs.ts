@@ -18,13 +18,11 @@ import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { aiRefreshDiscoveryDrain } from "~/server/domains/run/service/ai-refresh";
-import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
+import { connectionDiscoveryDrain } from "~/server/domains/run/service/derived-discovery";
 import {
   runDrains,
   type BackgroundDrain,
 } from "~/server/generic/background/drains";
-import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild";
-import { derivedReconcileHandler } from "~/server/generic/derived/service/drain-job";
 import {
   rebuildDerived,
   DerivedRebuildBusyError,
@@ -32,6 +30,7 @@ import {
 import { embeddingCleanupDrain } from "~/server/generic/embedding/service/embedding-cleanup";
 import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
 import { JOB_DRAIN } from "~/server/generic/jobs/limits";
+import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
 import {
   defineJobHandler,
   drainDueJobs,
@@ -42,7 +41,6 @@ import { withJobFence } from "~/server/workflows/runs/execution";
 import { runJobHandler } from "~/server/workflows/runs/job-execution";
 
 import { derivedComputes } from "./derived-computes";
-import { jobMaintenanceHandler } from "./job-maintenance";
 
 /** Standalone provider Jobs check their lease before each paid request and fence their publications. */
 const providerFenced = (handler: JobHandler): JobHandler => ({
@@ -80,11 +78,7 @@ const backgroundHandlers = {
 
 export const productionJobHandlers: JobHandlers = {
   ...backgroundHandlers,
-  "derived.drain": derivedReconcileHandler,
-  "derived.reconcile": derivedReconcileHandler,
-  "discovery.connections": connectionDiscoveryJobHandler,
   "run.execute": runJobHandler,
-  "jobs.maintenance": jobMaintenanceHandler,
   "purchase.dispatch": defineJobHandler(
     purchaseAgentEvent,
     async (_db, _claim, event) => {
@@ -163,6 +157,7 @@ const productionDrains = (): readonly BackgroundDrain[] => [
   aiEvaluationDrain(runAiEvaluationExecution()),
   derivedRebuildDrain,
   aiRefreshDiscoveryDrain,
+  connectionDiscoveryDrain,
 ];
 
 export async function drainProductionJobs(
@@ -175,7 +170,17 @@ export async function drainProductionJobs(
   ]);
   if (jobs.status === "rejected") throw jobs.reason;
   if (drains.status === "rejected") throw drains.reason;
-  const outcomes = jobs.value;
+  const pages = [jobs.value, drains.value];
+  const { wakeAt, wakeJobs } =
+    await import("~/server/workflows/background-tasks/publish");
+  const next = pages
+    .flatMap((page) => (page.nextAt ? [page.nextAt.getTime()] : []))
+    .sort((a, b) => a - b)[0];
+  if (pages.some((page) => page.more))
+    await wakeJobs({ source: "background.more" });
+  else if (next !== undefined)
+    await wakeAt(new Date(next), { source: "background.next-due" });
+  const outcomes = jobs.value.outcomes;
   await (
     await import("~/server/domains/purchase-import/repo/dispatch")
   ).reconcilePurchaseDispatches(db);
