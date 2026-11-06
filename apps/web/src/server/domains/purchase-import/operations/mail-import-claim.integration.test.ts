@@ -106,7 +106,7 @@ describe("Mail import claim", () => {
         .from(purchase)
         .where(eq(purchase.id, created.entityId));
       if (!row) throw new Error("Synthetic Purchase fixture missing");
-      return row;
+      return { ...row, shortcode: created.output.id };
     };
     const retain = async (
       messageId: string,
