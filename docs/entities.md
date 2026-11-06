@@ -198,6 +198,11 @@ end that ownership immediately.
 `FieldEnvelopePresentation.swift` are the client twin owners of empty and missing
 labels and assignment-action rules.
 
+Current page facts merge selected projections with physical assignment columns
+before normalizing declared reference identities in one set lookup. Physical
+assignments take precedence; projected references remain readable current facts
+without becoming stored intent.
+
 Envelope validation graphs are shared by their stored and effective schema
 identities across projections. These weak caches contain schemas only, never
 assignments, controls, results or other record data. Repeated nested reads must

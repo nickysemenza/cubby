@@ -361,3 +361,93 @@ it("promotes only proven occurrence identity and retains unresolved history with
     ).rejects.toThrow("SourceOccurrence_head_membership_fk");
   });
 });
+
+it("gives unproven bank records one held owner without changing evidence or financial decisions", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle(client);
+    await migrateDatabase(db, {
+      through: "0106_transaction_amount_minor_units",
+    });
+    await client.query(
+      `INSERT INTO "ExternalSource" (slug,label) VALUES ('monarch','Synthetic bank')`,
+    );
+    await client.query(`INSERT INTO "Entity" (id,kind,shortcode) VALUES
+      ('00000000-0000-4000-8000-000000000801','transactionImport','TIM-ZZZZZ'),
+      ('00000000-0000-4000-8000-000000000802','sourceTransactionRecord','STR-ZZZZZ')`);
+    await client.query(`INSERT INTO "TransactionImport" (id,shortcode,source,label,fingerprint)
+      VALUES ('00000000-0000-4000-8000-000000000801','TIM-ZZZZZ','monarch','Synthetic collection','synthetic-unproven')`);
+    await client.query(`INSERT INTO "SourceTransactionRecord" (id,shortcode,"batchId",source,"factFingerprint","accountDescriptor","statementDate","amountMinor","providerAmountMinor","rawDescription")
+      VALUES ('00000000-0000-4000-8000-000000000802','STR-ZZZZZ','00000000-0000-4000-8000-000000000801','monarch',repeat('a',64),'Synthetic card','2026-05-04',1001,-1001,'SYNTHETIC BANK RECORD')`);
+    await client.query(`INSERT INTO "SourceObservationAnnotation" ("observationId",disposition,"dispositionReason","dispositionNote",notes)
+      VALUES ('00000000-0000-4000-8000-000000000802','ignored','not_modeled','Explicit financial decision','Original local note')`);
+    await client.query(`INSERT INTO "TransactionImportRecord" ("importId","statementRowId") VALUES
+      ('00000000-0000-4000-8000-000000000801','00000000-0000-4000-8000-000000000802')`);
+    const annotations = (
+      await client.query(`SELECT * FROM "SourceObservationAnnotation"`)
+    ).rows;
+    await client.query(`INSERT INTO "Suggestion" ("publicationKey",family,subject,judgment,entity,"recordId",active,status,fingerprint,suppression,data)
+      VALUES ('synthetic-current-dismissal','statement_transaction','{}','{}','sourceTransactionRecord','00000000-0000-4000-8000-000000000802',true,'resolved',repeat('b',64),'{"scope":"statement_transaction","candidateKey":"synthetic-current","fingerprint":null}','{}'),
+      ('synthetic-retired-dismissal','transfer_pair','{}','{}','sourceTransactionRecord','00000000-0000-4000-8000-000000000802',false,'resolved',repeat('c',64),'{"scope":"transfer_pair","candidateKey":"synthetic-retired","fingerprint":null}','{}')`);
+    const memberships = (
+      await client.query(`SELECT * FROM "TransactionImportRecord"`)
+    ).rows;
+    await migrateDatabase(db, {
+      through: "0107_source_judgment_owner_cutover",
+    });
+    const { rows: owners } =
+      await client.query(`SELECT o.shortcode,o."identityKind",o."reviewState",o.disposition,o."dispositionNote",o."acceptedTransactionId"
+      FROM "SourceTransactionRecord" r JOIN "SourceOccurrence" o ON o.id=r."occurrenceId"`);
+    expect(
+      (
+        await client.query(
+          `SELECT "publicationKey",suppression FROM "Suggestion" ORDER BY "publicationKey"`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        publicationKey: "synthetic-current-dismissal",
+        suppression: {
+          scope: "statement_transaction",
+          candidateKey: "synthetic-current",
+          fingerprint: "b".repeat(64),
+        },
+      },
+      { publicationKey: "synthetic-retired-dismissal", suppression: null },
+    ]);
+    expect(owners).toEqual([
+      expect.objectContaining({
+        identityKind: "unproven",
+        reviewState: "unproven",
+        disposition: "ignored",
+        dispositionNote: "Explicit financial decision",
+        acceptedTransactionId: null,
+        shortcode: expect.stringMatching(
+          /^SOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{5}$/,
+        ),
+      }),
+    ]);
+    expect(
+      (await client.query(`SELECT * FROM "SourceObservationAnnotation"`)).rows,
+    ).toEqual(annotations);
+    expect(
+      (await client.query(`SELECT * FROM "TransactionImportRecord"`)).rows,
+    ).toEqual(memberships);
+    expect(
+      (await client.query(`SELECT count(*)::int n FROM "FinancialTransaction"`))
+        .rows,
+    ).toEqual([{ n: 0 }]);
+    await expect(
+      client.query(`UPDATE "SourceOccurrence" SET "reviewState"='ready'`),
+    ).rejects.toThrow(/SourceOccurrence_unproven_check/);
+    await expect(
+      client.query(`UPDATE "SourceTransactionRecord" SET "occurrenceId"=NULL`),
+    ).rejects.toThrow(/not-null/);
+    await migrateDatabase(db, {
+      through: "0107_source_judgment_owner_cutover",
+    });
+    expect(
+      (await client.query(`SELECT count(*)::int n FROM "SourceOccurrence"`))
+        .rows,
+    ).toEqual([{ n: 1 }]);
+  });
+});

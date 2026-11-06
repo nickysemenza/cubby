@@ -28,6 +28,7 @@ import {
 } from "~/server/db/helpers";
 import {
   sourceOccurrence,
+  financialAccount,
   sourceObservationAnnotation,
   sourceTransactionRecord,
   transactionImportRecord,
@@ -176,7 +177,7 @@ describe("statement row ledger", () => {
     ).toBe(true);
     expect(closure.sets.occurrences).toHaveLength(2);
     expect(closure.sets.observations).toHaveLength(2);
-    expect(closure.sets.judgments).toHaveLength(2);
+    expect(closure.sets.judgments).toEqual([]);
     expect(closure.sets.memberships).toHaveLength(2);
     expect(closure.sets.collections).toHaveLength(1);
     expect(closure.sets.transactions).toEqual([]);
@@ -310,19 +311,20 @@ describe("statement row ledger", () => {
       .set({ currentObservationId: null });
     await getDb(ctx.db)
       .update(sourceTransactionRecord)
-      .set({ occurrenceId: null, rowPosition: null });
+      .set({ rowPosition: null });
     await getDb(ctx.db)
       .update(transactionImportRecord)
       .set({ rowPosition: null, requestFingerprint: null });
-    await getDb(ctx.db).update(sourceObservationAnnotation).set({
+    await getDb(ctx.db).update(sourceOccurrence).set({
+      identityKind: "unproven",
+      reviewState: "unproven",
+      physicalImportId: null,
+      physicalPosition: null,
       disposition: "ignored",
       dispositionReason: "not_modeled",
       dispositionNote: "Explicit synthetic member ignore",
     });
-    await getDb(ctx.db)
-      .update(financialEvidenceAlias)
-      .set({ occurrenceId: null });
-    await getDb(ctx.db).delete(sourceOccurrence);
+    const ignoredOwners = await getDb(ctx.db).select().from(sourceOccurrence);
     const ignoredEvidence = await getDb(ctx.db)
       .select()
       .from(sourceTransactionRecord);
@@ -376,7 +378,9 @@ describe("statement row ledger", () => {
     expect(
       await getDb(ctx.db).select().from(sourceObservationAnnotation),
     ).toEqual(ignoredJudgments);
-    expect(await getDb(ctx.db).select().from(sourceOccurrence)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(sourceOccurrence)).toEqual(
+      ignoredOwners,
+    );
     expect(
       (
         await getDb(ctx.db).execute(
@@ -397,11 +401,15 @@ describe("statement row ledger", () => {
       amount: 128.5,
       sourceRefs: [],
     });
+    const unresolvedOwner = ignoredOwners.find(
+      (owner) => owner.shortcode === unresolved.chargeKey,
+    );
+    if (!unresolvedOwner) throw new Error("Synthetic unresolved owner missing");
     const review = {
       decision: "accept_existing",
       expectedDisposition: "ignored",
       expectedFactFingerprint: unresolved.factFingerprint,
-      expectedOccurrenceVersion: null,
+      expectedOccurrenceVersion: unresolvedOwner.version,
       expectedAcceptedTransactionId: null,
       historicalTransactionIds: [],
       accountId: account.output.id,
@@ -457,7 +465,9 @@ describe("statement row ledger", () => {
         { index: 1, status: "succeeded" },
       ],
     });
-    const [acceptedOwner] = await getDb(ctx.db).select().from(sourceOccurrence);
+    const acceptedOwner = (
+      await getDb(ctx.db).select().from(sourceOccurrence)
+    ).find((owner) => owner.acceptedTransactionId === target.entityId);
     if (!acceptedOwner) throw new Error("Synthetic accepted owner missing");
     await expect(
       updateThroughKernel(
@@ -479,9 +489,11 @@ describe("statement row ledger", () => {
           }),
         },
       ),
-    ).rejects.toThrow(/account or disposition differs/);
+    ).rejects.toThrow(/Consolidate only|conflicting account/);
     expect(
-      (await getDb(ctx.db).select().from(sourceOccurrence))[0],
+      (await getDb(ctx.db).select().from(sourceOccurrence)).find(
+        (owner) => owner.acceptedTransactionId === target.entityId,
+      ),
     ).toMatchObject({
       identityKind: "reviewed",
       disposition: "ignored",
@@ -547,7 +559,7 @@ describe("statement row ledger", () => {
     const retainedJudgments = await getDb(ctx.db)
       .select()
       .from(sourceObservationAnnotation);
-    expect(retainedJudgments).toHaveLength(ignoredJudgments.length + 1);
+    expect(retainedJudgments).toHaveLength(ignoredJudgments.length);
     expect(
       retainedJudgments.filter((item) =>
         ignoredJudgments.some(
@@ -1269,5 +1281,439 @@ describe("statement row ledger", () => {
     await expect(
       getDb(ctx.db).execute(sql`UPDATE "SourceTransactionRecord" SET amount=1`),
     ).rejects.toMatchObject({ cause: { code: "42703" } });
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic projected account",
+    });
+    const successor = (
+      await listSourceTransactionRecords(ctx.db, {})
+    ).data.find((candidate) => candidate.id !== row.id);
+    if (!successor) throw new Error("Synthetic projected successor missing");
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "sourceTransactionRecord",
+      row.id,
+      {
+        accountId: account.output.id,
+        supersededByRowId: successor.id,
+      },
+    );
+    const kernel = buildKernelContext(ctx.db, ctx.actor.userId);
+    const publicRead = await callMcpTool(
+      createMcpServer(),
+      "entity_read",
+      {
+        action: "get",
+        entity: "sourceTransactionRecord",
+        id: row.id,
+        fields: ["fields.accountId", "fields.supersededByRowId"],
+      },
+      kernelRequestContext(kernel),
+      { entityKernel: kernel },
+    );
+    expect(publicRead.isError).not.toBe(true);
+    expect(publicRead.structuredContent).toMatchObject({
+      item: {
+        fields: {
+          accountId: { current: { assignment: { value: account.output.id } } },
+          supersededByRowId: {
+            current: { assignment: { value: successor.id } },
+          },
+        },
+      },
+    });
+  });
+  it("consolidates reviewed legacy evidence into its provider event and replays the retired reservation", async () => {
+    const legacyInput = inputFor(
+      [
+        rowInput({
+          providerTransactionId: "synthetic-event",
+          providerAccountId: "synthetic-account",
+          providerData: { note: "Retained without raw identity proof" },
+        }),
+      ],
+      {
+        fingerprint: "synthetic-consolidate-legacy",
+        observedAt: "2026-06-05T00:00:00Z",
+      },
+    );
+    await recordSourceTransactionRecords(ctx.db, legacyInput, ctx.actor);
+    const [legacy] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!legacy) throw new Error("Synthetic legacy record missing");
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic consolidation account",
+    });
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "sourceTransactionRecord",
+      legacy.id,
+      { accountId: account.output.id },
+    );
+    const money = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-05-04",
+      amount: 128.5,
+      sourceRefs: [],
+    });
+    const [legacyOwner] = await getDb(ctx.db).select().from(sourceOccurrence);
+    if (!legacyOwner) throw new Error("Synthetic legacy owner missing");
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "sourceTransactionRecord",
+      legacy.id,
+      {
+        identityResolution: {
+          decision: "accept_existing",
+          expectedDisposition: "open",
+          expectedFactFingerprint: legacy.factFingerprint,
+          expectedOccurrenceVersion: legacyOwner.version,
+          expectedAcceptedTransactionId: null,
+          historicalTransactionIds: [],
+          accountId: account.output.id,
+          transactionId: money.output.id,
+          note: "Reviewed existing synthetic transaction",
+          judgment: { disposition: "open" },
+        },
+      },
+    );
+    await record([providerRow()], {
+      fingerprint: "synthetic-consolidate-provider",
+      observedAt: "2026-06-04T00:00:00Z",
+    });
+    const provider = (await listSourceTransactionRecords(ctx.db, {})).data.find(
+      (row) => row.id !== legacy.id,
+    );
+    if (!provider) throw new Error("Synthetic provider record missing");
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "sourceTransactionRecord",
+      provider.id,
+      { accountId: account.output.id },
+    );
+    const owners = await getDb(ctx.db).select().from(sourceOccurrence);
+    const original = owners.find(
+      (owner) => owner.shortcode === legacy.chargeKey,
+    );
+    const target = owners.find(
+      (owner) => owner.shortcode === provider.chargeKey,
+    );
+    if (!original || !target)
+      throw new Error("Synthetic reviewed owners missing");
+    expect(target.reviewState).toBe("identity_conflict");
+    const beforeMoney = (
+      await getDb(ctx.db).execute(
+        sql`SELECT to_jsonb(money) value FROM "FinancialTransaction" money`,
+      )
+    ).rows;
+    const review = {
+      decision: "assign",
+      expectedDisposition: "open",
+      expectedFactFingerprint: legacy.factFingerprint,
+      expectedOccurrenceVersion: original.version,
+      expectedAcceptedTransactionId: money.output.id,
+      historicalTransactionIds: [],
+      accountId: account.output.id,
+      occurrenceId: parseShortcodeFor("sourceOccurrence", target.shortcode),
+      expectedTargetVersion: target.version,
+      note: "Reviewed same synthetic bank event",
+      judgment: { disposition: "open" },
+    } satisfies SourceIdentityResolution;
+    await expect(
+      updateThroughKernel(
+        ctx.db,
+        ctx.actor,
+        "sourceTransactionRecord",
+        legacy.id,
+        {
+          identityResolution: {
+            ...review,
+            expectedTargetVersion: target.version + 1,
+          },
+        },
+      ),
+    ).rejects.toThrow(/Consolidate only/);
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "sourceTransactionRecord",
+      legacy.id,
+      { identityResolution: review },
+    );
+    const after = await getDb(ctx.db).select().from(sourceOccurrence);
+    expect(after.find((owner) => owner.id === target.id)).toMatchObject({
+      currentObservationId: target.currentObservationId,
+      acceptedTransactionId: money.entityId,
+      reviewState: "ready",
+    });
+    expect(after.find((owner) => owner.id === original.id)).toMatchObject({
+      currentObservationId: null,
+      acceptedTransactionId: null,
+      supersededByOccurrenceId: target.id,
+      accountId: null,
+    });
+    const recordsBeforeReplay = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    expect(
+      recordsBeforeReplay.every((row) => row.occurrenceId === target.id),
+    ).toBe(true);
+    const aliasesBeforeReplay = await getDb(ctx.db)
+      .select()
+      .from(financialEvidenceAlias);
+    expect(aliasesBeforeReplay).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: original.shortcode,
+          historicalTransactionId: money.entityId,
+          deletedAt: expect.any(Date),
+        }),
+      ]),
+    );
+    expect(
+      after.find((owner) => owner.id === target.id)?.lastObservedAt,
+    ).toEqual(original.lastObservedAt);
+    const laterReceipt = await record([providerRow()], {
+      fingerprint: "synthetic-consolidate-next",
+      observedAt: "2026-06-06T00:00:00Z",
+    });
+    const laterMembers = await getDb(ctx.db)
+      .select()
+      .from(transactionImportRecord)
+      .where(eq(transactionImportRecord.importId, laterReceipt.batchId!));
+    expect(laterMembers.map((member) => member.statementRowId)).toEqual([
+      target.currentObservationId,
+    ]);
+    await recordSourceTransactionRecords(ctx.db, legacyInput, ctx.actor);
+    expect(await getDb(ctx.db).select().from(sourceTransactionRecord)).toEqual(
+      recordsBeforeReplay,
+    );
+    expect(await getDb(ctx.db).select().from(financialEvidenceAlias)).toEqual(
+      aliasesBeforeReplay,
+    );
+    expect(
+      (
+        await getDb(ctx.db).execute(
+          sql`SELECT to_jsonb(money) value FROM "FinancialTransaction" money`,
+        )
+      ).rows,
+    ).toEqual(beforeMoney);
+    await expect(
+      updateThroughKernel(
+        ctx.db,
+        ctx.actor,
+        "sourceTransactionRecord",
+        legacy.id,
+        { identityResolution: review },
+      ),
+    ).rejects.toThrow(/ownership changed|Consolidate only/);
+  });
+  it("retires a deleted unproven reservation without losing its financial decision or blocking account removal", async () => {
+    await record([rowInput()]);
+    const [bankRecord] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    const [owner] = await getDb(ctx.db).select().from(sourceOccurrence);
+    if (!bankRecord || !owner)
+      throw new Error("Synthetic unproven fixture missing");
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic removable account",
+    });
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "sourceTransactionRecord",
+      bankRecord.id,
+      {
+        accountId: account.output.id,
+        disposition: "ignored",
+        dispositionReason: "not_modeled",
+        dispositionNote: "Keep this explicit financial decision",
+      },
+    );
+    // A historical unproven row cannot be created by modern intake.
+    await getDb(ctx.db)
+      .update(sourceOccurrence)
+      .set({
+        identityKind: "unproven",
+        reviewState: "unproven",
+        physicalImportId: null,
+        physicalPosition: null,
+      })
+      .where(eq(sourceOccurrence.id, owner.id));
+    await deleteThroughKernel(ctx.db, ctx.actor, "sourceTransactionRecord", [
+      bankRecord.id,
+    ]);
+    const [retired] = await getDb(ctx.db).select().from(sourceOccurrence);
+    expect(retired).toMatchObject({
+      deletedAt: expect.any(Date),
+      accountId: account.entityId,
+      disposition: "ignored",
+      dispositionNote: "Keep this explicit financial decision",
+    });
+    await deleteThroughKernel(ctx.db, ctx.actor, "financialAccount", [
+      account.output.id,
+    ]);
+    const [deletedAccount] = await getDb(ctx.db)
+      .select()
+      .from(financialAccount)
+      .where(eq(financialAccount.id, account.entityId));
+    expect(deletedAccount?.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it("keeps provider authority held while a replaced legacy owner retains accepted money", async () => {
+    await record([
+      rowInput({ providerTransactionId: "synthetic-overlap" }),
+      rowInput({ providerTransactionId: "synthetic-overlap" }),
+    ]);
+    const legacy = (await listSourceTransactionRecords(ctx.db, {})).data;
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic overlap account",
+    });
+    const money = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-05-04",
+      amount: 128.5,
+      sourceRefs: [],
+    });
+    await record(
+      [
+        providerRow({
+          providerTransactionId: "synthetic-overlap",
+          providerData: {
+            id: "synthetic-overlap",
+            account_id: "synthetic-account",
+          },
+        }),
+      ],
+      { fingerprint: "synthetic-overlap-provider" },
+    );
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: { filter: { source: "monarch" } },
+        data: { accountId: account.output.id },
+      },
+      ctx.actor,
+    );
+    const owners = await getDb(ctx.db).select().from(sourceOccurrence);
+    const target = owners.find((owner) => owner.identityKind === "provider");
+    const source = owners.find(
+      (owner) => owner.shortcode === legacy[0]?.chargeKey,
+    );
+    const other = owners.find(
+      (owner) => owner.shortcode === legacy[1]?.chargeKey,
+    );
+    if (!target?.currentObservationId || !source || !other || !legacy[0])
+      throw new Error("Synthetic reviewed overlap missing");
+    // Retained replacement history can still have an accepted reservation; it must fence readiness.
+    await getDb(ctx.db)
+      .update(sourceOccurrence)
+      .set({
+        acceptedTransactionId: money.entityId,
+        supersededByOccurrenceId: target.id,
+        replacementObservationId: target.currentObservationId,
+      })
+      .where(eq(sourceOccurrence.id, other.id));
+    await updateThroughKernel(
+      ctx.db,
+      ctx.actor,
+      "sourceTransactionRecord",
+      legacy[0].id,
+      {
+        identityResolution: {
+          decision: "assign",
+          expectedDisposition: "open",
+          expectedFactFingerprint: legacy[0].factFingerprint,
+          expectedOccurrenceVersion: source.version,
+          expectedAcceptedTransactionId: null,
+          historicalTransactionIds: [],
+          accountId: account.output.id,
+          occurrenceId: parseShortcodeFor("sourceOccurrence", target.shortcode),
+          expectedTargetVersion: target.version,
+          note: "Consolidate one reviewed legacy group only",
+          judgment: { disposition: "open" },
+        },
+      },
+    );
+    const after = await getDb(ctx.db).select().from(sourceOccurrence);
+    expect(after.find((owner) => owner.id === target.id)).toMatchObject({
+      reviewState: "identity_conflict",
+      acceptedTransactionId: null,
+      currentObservationId: target.currentObservationId,
+    });
+    expect(after.find((owner) => owner.id === other.id)).toMatchObject({
+      acceptedTransactionId: money.entityId,
+    });
+    expect(await getSourceTransactionRecordSummary(ctx.db, {})).toMatchObject({
+      matched: 0,
+      unmatched: 0,
+    });
+  });
+
+  it("refuses consolidation when retained raw provider claims contradict normalized identity", async () => {
+    await record([
+      rowInput({
+        providerTransactionId: "synthetic-event",
+        providerAccountId: "synthetic-account",
+        providerData: {
+          id: "synthetic-other-event",
+          account_id: "synthetic-other-account",
+        },
+      }),
+    ]);
+    const [legacy] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    await record([providerRow()], {
+      fingerprint: "synthetic-raw-identity-provider",
+    });
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic raw identity account",
+    });
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: { filter: { source: "monarch" } },
+        data: { accountId: account.output.id },
+      },
+      ctx.actor,
+    );
+    const owners = await getDb(ctx.db).select().from(sourceOccurrence);
+    const source = owners.find(
+      (owner) => owner.shortcode === legacy?.chargeKey,
+    );
+    const target = owners.find((owner) => owner.identityKind === "provider");
+    if (!legacy || !source || !target)
+      throw new Error("Synthetic raw identity evidence missing");
+    await expect(
+      updateThroughKernel(
+        ctx.db,
+        ctx.actor,
+        "sourceTransactionRecord",
+        legacy.id,
+        {
+          identityResolution: {
+            decision: "assign",
+            expectedDisposition: "open",
+            expectedFactFingerprint: legacy.factFingerprint,
+            expectedOccurrenceVersion: source.version,
+            expectedAcceptedTransactionId: null,
+            historicalTransactionIds: [],
+            accountId: account.output.id,
+            occurrenceId: parseShortcodeFor(
+              "sourceOccurrence",
+              target.shortcode,
+            ),
+            expectedTargetVersion: target.version,
+            note: "Contradictory raw IDs cannot be overwritten by a decision note",
+            judgment: { disposition: "open" },
+          },
+        },
+      ),
+    ).rejects.toThrow(/compatible provider identity/);
+    expect(await getDb(ctx.db).select().from(sourceOccurrence)).toEqual(owners);
   });
 });

@@ -43,7 +43,14 @@ export async function withPageFields<Row>(
     started ?? loadPageStoredMeta(db, entity, ids),
     startedOwnership ?? loadCurrentFieldOwnership(db, entity, ids),
     shortcodeEntity.success
-      ? loadCurrentAssignmentFacts(db, shortcodeEntity.data, ids)
+      ? loadCurrentAssignmentFacts(
+          db,
+          shortcodeEntity.data,
+          ids,
+          new Map(
+            identities.map((identity) => [identity.internalId, identity.raw]),
+          ),
+        )
       : Promise.resolve(new Map<string, CurrentReadFacts>()),
   ]);
   let stored = storedRows;

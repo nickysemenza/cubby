@@ -1,5 +1,3 @@
-import { assessmentFamily } from "@cubby/schemas/assessment";
-import { financialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
 import type {
   FinancialAccountId,
   SourceTransactionRecordId,
@@ -38,24 +36,23 @@ export const sourceObservationFacts = sql`(
     r."amountMinor"::numeric / 100 AS amount, r."providerAmountMinor"::numeric / 100 AS "providerAmount", r.merchant,
     r."rawDescription", r."sourceCategory", r."providerStatus", r."providerNotes", r."createdAt", r."deletedAt",
     own.value AS "externalId", legacy.value AS "legacyExternalId", reference.value AS "legacyReference",
-    COALESCE(o.shortcode, r.shortcode) AS "chargeKey",
-    CASE WHEN r."occurrenceId" IS NULL THEN a.current ELSE COALESCE(o."currentObservationId" = r.id, false) END AS current,
-    CASE WHEN r."occurrenceId" IS NULL THEN a."accountId" ELSE o."accountId" END AS "accountId",
-    CASE WHEN r."occurrenceId" IS NULL THEN a.disposition ELSE o.disposition END AS disposition,
-    CASE WHEN r."occurrenceId" IS NULL THEN a."dispositionReason" ELSE o."dispositionReason" END AS "dispositionReason",
-    CASE WHEN r."occurrenceId" IS NULL THEN a."dispositionNote" ELSE o."dispositionNote" END AS "dispositionNote",
-    CASE WHEN r."occurrenceId" IS NULL THEN a."supersededByObservationId"
-      WHEN o."replacementObservationId" IS NOT NULL THEN o."replacementObservationId"
+    o.shortcode AS "chargeKey",
+    COALESCE(o."currentObservationId" = r.id, false) AS current,
+    o."accountId" AS "accountId",
+    o.disposition AS disposition,
+    o."dispositionReason" AS "dispositionReason",
+    o."dispositionNote" AS "dispositionNote",
+    CASE WHEN o."replacementObservationId" IS NOT NULL THEN o."replacementObservationId"
       WHEN r.id <> o."currentObservationId" AND a."supersededByObservationId" = o."currentObservationId" THEN a."supersededByObservationId"
       ELSE NULL END AS "supersededByRowId",
-    CASE WHEN r."occurrenceId" IS NULL THEN a."withdrawnAt" ELSE o."withdrawnAt" END AS "withdrawnAt",
-    CASE WHEN r."occurrenceId" IS NULL THEN a."withdrawalImportId" ELSE o."withdrawalImportId" END AS "withdrawalImportId",
-    CASE WHEN r."occurrenceId" IS NULL THEN a."lastObservedAt" ELSE o."lastObservedAt" END AS "lastObservedAt",
-    CASE WHEN r."occurrenceId" IS NULL THEN a."updatedAt" ELSE greatest(a."updatedAt", o."updatedAt") END AS "updatedAt",
+    o."withdrawnAt" AS "withdrawnAt",
+    o."withdrawalImportId" AS "withdrawalImportId",
+    o."lastObservedAt" AS "lastObservedAt",
+    greatest(a."updatedAt", o."updatedAt") AS "updatedAt",
     a.notes, o."reviewState" AS "storedReviewState", o.version AS "occurrenceVersion", o."acceptedTransactionId",
     ft.shortcode AS "transactionShortcode"
   FROM "SourceTransactionRecord" r
-  LEFT JOIN "SourceOccurrence" o ON o.id = r."occurrenceId"
+  JOIN "SourceOccurrence" o ON o.id = r."occurrenceId"
   LEFT JOIN "SourceObservationAnnotation" a ON a."observationId" = r.id
   LEFT JOIN "FinancialTransaction" ft ON ft.id = o."acceptedTransactionId" AND ${notDeleted("ft")}
   LEFT JOIN "FinancialEvidenceAlias" own ON own."observationId" = r.id AND own.kind = 'externalId'
@@ -66,17 +63,14 @@ export const sourceObservationFacts = sql`(
 /** Identity and immutable facts only: no annotation, alias-history or accepted-money projection. */
 export const sourceObservationIdentities = sql`(
   -- includes-deleted: physical memberships and reserved identities retain tombstone evidence.
-  -- Disjoint branches preserve COALESCE identity while letting charge-key probes use the owner/record indexes.
   SELECT r.*, o.shortcode AS "chargeKey"
   FROM "SourceTransactionRecord" r JOIN "SourceOccurrence" o ON o.id=r."occurrenceId"
-  UNION ALL
-  SELECT r.*, r.shortcode AS "chargeKey" FROM "SourceTransactionRecord" r WHERE r."occurrenceId" IS NULL
 )`;
 
 export const sourceObservations = sql`(SELECT observation.*,
   CASE WHEN observation.disposition = ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} THEN ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}
     WHEN observation."supersededByRowId" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.superseded}
-    WHEN observation."transactionShortcode" IS NULL AND (observation."occurrenceId" IS NULL OR observation."reviewState" <> ${sourceOccurrenceReviewState.enum.ready} OR cardinality(observation."historicalTransactionIds") > 0 OR observation."acceptedTransactionId" IS NOT NULL) THEN ${sourceTransactionRecordMatchState.enum.held}
+    WHEN observation."transactionShortcode" IS NULL AND (observation."reviewState" <> ${sourceOccurrenceReviewState.enum.ready} OR cardinality(observation."historicalTransactionIds") > 0 OR observation."acceptedTransactionId" IS NOT NULL) THEN ${sourceTransactionRecordMatchState.enum.held}
     WHEN observation."transactionShortcode" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.matched} ELSE ${sourceTransactionRecordMatchState.enum.unmatched} END AS "matchState"
   FROM (
     SELECT facts.*,
@@ -103,12 +97,6 @@ export const sourceOccurrenceStates = sql`(
   LEFT JOIN ${sourceOccurrencesWithUnresolvedHistory} unresolved ON unresolved.id=o.id
   LEFT JOIN "FinancialTransaction" ft ON ft.id = o."acceptedTransactionId" AND ${notDeleted("ft")}
   WHERE ${notDeleted("o")}
-  UNION ALL
-  SELECT r.source, r.shortcode, NULL::uuid, NULL::text, NULL::integer, NULL::uuid,
-    a.disposition = ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}, a."supersededByObservationId" IS NOT NULL, NULL::text
-  FROM "SourceTransactionRecord" r
-  JOIN "SourceObservationAnnotation" a ON a."observationId" = r.id
-  WHERE r."occurrenceId" IS NULL AND ${notDeleted("r")}
 )`;
 
 const projected = <Value>(key: string) =>
@@ -194,24 +182,6 @@ export const sourceObservationField = (
   }
   return sql`(SELECT observed.${sql.identifier(key)} FROM ${key === "historicalTransactionIds" ? sourceObservations : sourceObservationFacts} observed WHERE observed.id=${id})`;
 };
-
-/** Prior member suppression is a negative fence, never proof of source or accepted identity. */
-export const sourceOccurrenceSuppressed = (id: SQL) => sql`${id} IN (
-  -- includes-deleted: retired aliases and occurrence reservations never release member suppression.
-  WITH held_sources AS MATERIALIZED (
-    SELECT held.data->>${financialTransactionSourceRef.keyof().enum.source} AS source,held.data->>'chargeKey' AS key
-    FROM "Suggestion" held WHERE held.suppression IS NOT NULL AND held.family=${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.statement_transaction)}
-    UNION
-    SELECT leg.source,leg.key FROM "Suggestion" held
-    CROSS JOIN LATERAL (VALUES (held.judgment#>>'{outflow,charge,source}',held.judgment#>>'{outflow,charge,chargeKey}'),
-      (held.judgment#>>'{inflow,charge,source}',held.judgment#>>'{inflow,charge,chargeKey}')) leg(source,key)
-    WHERE held.suppression IS NOT NULL AND held.family=${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.transfer_pair)}
-  )
-  SELECT alias."occurrenceId" FROM held_sources held JOIN "FinancialEvidenceAlias" alias
-    ON alias.source=held.source AND alias.value=held.key AND alias."observationId" IS NOT NULL WHERE alias."occurrenceId" IS NOT NULL
-  UNION
-  SELECT owner.id FROM held_sources held JOIN "SourceOccurrence" owner ON owner.source=held.source AND owner.shortcode=held.key
-)`;
 
 export const SOURCE_HELD_REASON =
   "Source identity or historical ownership needs an explicit review. Retained advice and member decisions are unchanged; money stays unchanged until reviewed.";

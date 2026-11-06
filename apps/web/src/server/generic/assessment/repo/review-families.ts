@@ -10,7 +10,6 @@ import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-famil
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { financialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import {
   statementTransactionAction,
@@ -38,8 +37,6 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { outer, type RelatedColumns } from "~/server/db/helpers/related";
 import { suggestionTable, run } from "~/server/db/schema";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
-import { sourceObservationIdentities } from "~/server/domains/transaction-import/repo/source-observation-state";
-import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import {
   recommendationScopes,
@@ -155,17 +152,22 @@ const leg = (end: "outflow" | "inflow") => sql`jsonb_build_array(
   ${ref(sql`${entities.financialTransaction}`, sql`s.judgment->${end}->>'transactionId'`)},
   ${ref(sql`${entities.ledgerParty}`, sql`s.judgment->${end}->'owner'->>'id'`)})`;
 
-const statementSettlementRelation = sql`${financialSourceReferenceRows} evidence
-  JOIN "FinancialTransaction" settled ON settled.id=evidence.owner AND ${notDeleted("settled")}
+const statementSettlementRelation = sql`"FinancialTransaction" settled
   JOIN "FinancialAccount" account ON account.id=settled."accountId"
   LEFT JOIN "FinancialTransactionAllocation" allocation ON allocation."transactionId"=settled.id AND ${notDeleted("allocation")}
   LEFT JOIN "Purchase" booked ON booked.id=allocation."purchaseId" AND ${notDeleted("booked")}
   LEFT JOIN "Expense" line ON line."purchaseId"=booked.id AND ${notDeleted("line")}`;
-const statementSettlementFrom = sql`FROM ${statementSettlementRelation}`;
-const statementSettlementEligibility = sql`true`;
+const statementSettlementEligibility = notDeleted("settled");
+const statementSettlementFrom = sql`FROM ${statementSettlementRelation}
+  JOIN ${financialSourceReferenceRows} evidence ON evidence.owner=settled.id`;
 const statementSettlementScope = sql`${statementSettlementEligibility}
   AND evidence.source=s.judgment #>> '{create,sourceRef,source}'
   AND evidence."externalId"=s.judgment #>> '{create,sourceRef,externalId}'`;
+// Consolidation retires an old SOC handle; the primary record still reaches its accepted survivor.
+const statementAcceptedSettlementFrom = sql`FROM "SourceTransactionRecord" anchor
+  JOIN "SourceOccurrence" owner ON owner.id=anchor."occurrenceId"
+  JOIN (${statementSettlementRelation}) ON settled.id=owner."acceptedTransactionId"`;
+const statementAcceptedSettlementScope = sql`anchor.id=s."recordId" AND ${statementSettlementEligibility}`;
 const statementSettlementRefs = [
   { entity: entities.financialTransaction, id: sql<string>`settled.id` },
   { entity: entities.purchase, id: sql<string>`booked.id` },
@@ -185,17 +187,22 @@ function statementRecordParts(
     if (includes(entity))
       parts.push(sql`jsonb_build_array(${ref(sql`${entity}`, id)})`);
   };
-  // A proposal belongs to the charge, including retained predecessors and later memberships.
-  const sourceScope = sql`observed.source = s.data->>${financialTransactionSourceRef.keyof().enum.source}
-    AND ${chargeKeyOf("observed")} = s.data->>'chargeKey' AND ${notDeleted("observed")}`;
+  // recordId remains authoritative when retained advice still stores a legacy charge key.
+  const sourceFrom = sql`FROM "SourceTransactionRecord" anchor
+    JOIN "SourceTransactionRecord" observed ON observed."occurrenceId" = anchor."occurrenceId"
+    WHERE anchor.id = s."recordId" AND ${notDeleted("observed")}`;
   if (includes(entities.sourceTransactionRecord))
     parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.sourceTransactionRecord}`, sql`observed.id::text`)})
-      FROM ${sourceObservationIdentities} observed WHERE ${sourceScope}), '[]'::jsonb)`);
+      ${sourceFrom}), '[]'::jsonb)`);
+  if (includes(entities.sourceOccurrence))
+    parts.push(sql`COALESCE((SELECT jsonb_build_array(${ref(sql`${entities.sourceOccurrence}`, sql`anchor."occurrenceId"::text`)})
+      FROM "SourceTransactionRecord" anchor WHERE anchor.id = s."recordId"), '[]'::jsonb)`);
   if (includes(entities.transactionImport))
     parts.push(sql`COALESCE((SELECT jsonb_agg(DISTINCT ${ref(sql`${entities.transactionImport}`, sql`member."importId"::text`)})
-      FROM ${sourceObservationIdentities} observed
+      FROM "SourceTransactionRecord" anchor
+      JOIN "SourceTransactionRecord" observed ON observed."occurrenceId" = anchor."occurrenceId"
       JOIN ${transactionImportMembers} member ON member."statementRowId" = observed.id
-      WHERE ${sourceScope}), '[]'::jsonb)`);
+      WHERE anchor.id = s."recordId" AND ${notDeleted("observed")}), '[]'::jsonb)`);
   add(entities.financialAccount, sql`s.data->>'accountId'`);
   add(
     entities.financialTransaction,
@@ -217,7 +224,7 @@ function statementRecordParts(
   const related = statementSettlementRefs.filter(
     ({ entity }) => withSettlements && includes(entity),
   );
-  if (related.length)
+  if (related.length) {
     parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`related.kind`, sql`related.id`)})
         ${statementSettlementFrom}
         CROSS JOIN LATERAL (VALUES ${sql.join(
@@ -226,6 +233,15 @@ function statementRecordParts(
         )}) related(kind,id)
         WHERE ${statementSettlementScope}
           AND related.id IS NOT NULL), '[]'::jsonb)`);
+    parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`related.kind`, sql`related.id`)})
+        ${statementAcceptedSettlementFrom}
+        CROSS JOIN LATERAL (VALUES ${sql.join(
+          related.map(({ entity, id }) => sql`(${entity},${id})`),
+          sql`, `,
+        )}) related(kind,id)
+        WHERE ${statementAcceptedSettlementScope}
+          AND related.id IS NOT NULL), '[]'::jsonb)`);
+  }
   if (includes(entities.purchase))
     parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.purchase}`, sql`p.id::text`)})
         FROM jsonb_array_elements(COALESCE(s.judgment->${statementTransactionJudgment.keyof().enum.spending}->'candidates','[]'::jsonb)) candidate
@@ -264,13 +280,56 @@ function statementSettlementMatch(scope: AssessmentRecordScope) {
   return or(...settled);
 }
 
-function statementReferenceMatch(scope: AssessmentRecordScope) {
+/** Reverse collection reach starts with physical membership, never every suggestion's observation projection. */
+function statementSourceMatch(scope: AssessmentRecordScope) {
+  const branches = [
+    entities.sourceTransactionRecord,
+    entities.sourceOccurrence,
+    entities.transactionImport,
+  ].flatMap((entity) => {
+    if (scope.entity && scope.entity !== entity) return [];
+    const records = scope.records?.filter((record) => record.entity === entity);
+    if (records?.length === 0) return [];
+    const id =
+      entity === entities.transactionImport
+        ? sql`member."importId"`
+        : entity === entities.sourceOccurrence
+          ? sql`seed."occurrenceId"`
+          : sql`seed.id`;
+    const match = records
+      ? sql`${id} = ANY(${uuidArrayParam(records.map((record) => record.id))})`
+      : sql`${id} IS NOT NULL`;
+    return [
+      sql`s."recordId" IN (
+      SELECT sibling.id FROM ${entity === entities.transactionImport ? sql`${transactionImportMembers} member JOIN "SourceTransactionRecord" seed ON seed.id = member."statementRowId"` : sql`"SourceTransactionRecord" seed`}
+      JOIN "SourceTransactionRecord" sibling ON sibling."occurrenceId" = seed."occurrenceId"
+      WHERE ${match} AND ${notDeleted("seed")})`,
+    ];
+  });
+  return branches;
+}
+
+function statementReferenceMatch(
+  scope: AssessmentRecordScope,
+  withSettlements = true,
+) {
+  const sourceEntities: readonly string[] = [
+    entities.sourceTransactionRecord,
+    entities.sourceOccurrence,
+    entities.transactionImport,
+  ];
   const requested = scope.entity
     ? [scope.entity]
     : scope.records?.map((r) => r.entity);
-  const direct = statementRecordParts(requested, false);
-  const settled = statementSettlementMatch(scope);
-  return or(
+  const direct = statementRecordParts(
+    (requested ?? shortcodeEntities).filter(
+      (entity) => !sourceEntities.includes(entity),
+    ),
+    false,
+  );
+  const settled = withSettlements ? statementSettlementMatch(scope) : undefined;
+  return [
+    ...statementSourceMatch(scope),
     direct.length
       ? recordRefsMatch(scope, sql.join(direct, sql` || `))
       : undefined,
@@ -278,7 +337,11 @@ function statementReferenceMatch(scope: AssessmentRecordScope) {
       ? sql`EXISTS (SELECT 1 ${statementSettlementFrom}
           WHERE ${statementSettlementScope} AND ${settled})`
       : undefined,
-  );
+    settled
+      ? sql`EXISTS (SELECT 1 ${statementAcceptedSettlementFrom}
+      WHERE ${statementAcceptedSettlementScope} AND ${settled})`
+      : undefined,
+  ];
 }
 
 /**
@@ -296,13 +359,45 @@ export const isReviewFamily = (
   Object.hasOwn(assessmentReviewFamilies, family) &&
   !mailDecisionFamily.safeParse(family).success;
 
-/** Subject expansion and row admission belong to families; surfaces only intersect records. */
+/** Family declarations own affected roles and both directions of record discovery. */
+function declareAffectedRecords(spec: {
+  roles: readonly string[];
+  forward: (requested?: readonly string[]) => SQL;
+  reverse: (scope: AssessmentRecordScope) => readonly (SQL | undefined)[];
+}) {
+  return {
+    affectedRecords: spec,
+    records: spec.forward(),
+  };
+}
+
+function primaryRecordMatch(scope: AssessmentRecordScope) {
+  return and(
+    scope.entity ? eq(reviewState.entity, scope.entity) : undefined,
+    scope.records
+      ? or(
+          ...scope.records.map((record) =>
+            and(
+              eq(reviewState.entity, record.entity),
+              eq(reviewState.recordId, record.id),
+            ),
+          ),
+        )
+      : sql`true`,
+  );
+}
+
 export const reviewFamilyDeclarations = {
   field: {
     ...assessmentReviewFamilies.field,
-    records: fieldRecords(),
-    recordsFor: fieldRecords,
-    matchesRelatedRecords: fieldReferenceMatch,
+    ...declareAffectedRecords({
+      roles: ["subject", "current", "proposed"],
+      forward: fieldRecords,
+      reverse: (scope) => [
+        primaryRecordMatch(scope),
+        fieldReferenceMatch(scope),
+      ],
+    }),
     actionable: sql`true`,
     summarize: (value: unknown) =>
       `Set field to ${JSON.stringify(assessmentJudgments.field.parse(value).value)}`,
@@ -310,81 +405,119 @@ export const reviewFamilyDeclarations = {
   recommendation: {
     ...assessmentReviewFamilies.recommendation,
     scopes: recommendationScopes,
-    // State holds the source and target, so a record badge never detoasts the
-    // connection evidence. Rows published before connectionTarget still read it.
-    records: sql`${one} || CASE WHEN jsonb_typeof(s.data->'connectionTarget') = 'object'
-      THEN jsonb_build_array(${ref(sql`s.data #>> '{connectionTarget,entityKind}'`, sql`s.data #>> '{connectionTarget,entityId}'`)})
-      WHEN ${recommendationScopes.connection}
+    ...declareAffectedRecords({
+      roles: ["subject", "source", "target", "retained"],
+      forward: () => sql`${one} || CASE WHEN ${recommendationScopes.connection}
       THEN jsonb_build_array(${endpoint("source")}, ${endpoint("target")})
       ELSE COALESCE(s.evidence->'records', '[]'::jsonb) END`,
-    matchesRelatedRecords: (scope: AssessmentRecordScope) => {
-      let retained: SQL | undefined;
-      if (scope.records?.length) {
-        const indexed = alias(suggestionTable, "retained_indexed");
-        const requestedName = sql.identifier("retained_requested");
-        const valueName = sql.identifier("value");
-        const membershipName = sql.identifier("retained_membership");
-        const needles = scope.records.flatMap((record) =>
-          [record.id, record.code].map(
-            (id) =>
-              sql`${JSON.stringify([{ entity: record.entity, id }])}::jsonb`,
-          ),
-        );
-        const pointQuery = reviewQueryBuilder
-          .select({ id: indexed.id })
-          .from(indexed)
-          .where(
-            and(
-              indexed.served,
-              sql`${indexed.evidence}->'records' @> ${requestedName}.${valueName}`,
+      reverse: (scope) => {
+        let retained: SQL | undefined;
+        if (scope.records?.length) {
+          const indexed = alias(suggestionTable, "retained_indexed");
+          const requestedName = sql.identifier("retained_requested");
+          const valueName = sql.identifier("value");
+          const membershipName = sql.identifier("retained_membership");
+          const needles = scope.records.flatMap((record) =>
+            [record.id, record.code].map(
+              (id) =>
+                sql`${JSON.stringify([{ entity: record.entity, id }])}::jsonb`,
             ),
           );
-        // One fenced GIN probe per reference avoids scanning every pending
-        // recommendation's evidence when the combined OR is estimated broadly.
-        const membershipIds = reviewQueryBuilder
-          .select({
-            id: sql<string>`${membershipName}.${sql.identifier("id")}`,
-          })
-          .from(
-            sql`unnest(ARRAY[${sql.join(needles, sql`, `)}]::jsonb[]) AS ${requestedName}(${valueName})`,
-          )
-          .innerJoinLateral(
-            sql`(${pointQuery.getSQL()} OFFSET 0) AS ${membershipName}`,
-            sql`true`,
-          );
-        retained = inArray(reviewAssessment.id, membershipIds);
-      } else if (!scope.records) {
-        retained = sql`EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(s.evidence->'records', '[]'::jsonb)) r
+          const pointQuery = reviewQueryBuilder
+            .select({ id: indexed.id })
+            .from(indexed)
+            .where(
+              and(
+                indexed.served,
+                sql`${indexed.evidence}->'records' @> ${requestedName}.${valueName}`,
+              ),
+            );
+          // One fenced GIN probe per reference avoids scanning every pending
+          // recommendation's evidence when the combined OR is estimated broadly.
+          const membershipIds = reviewQueryBuilder
+            .select({
+              id: sql<string>`${membershipName}.${sql.identifier("id")}`,
+            })
+            .from(
+              sql`unnest(ARRAY[${sql.join(needles, sql`, `)}]::jsonb[]) AS ${requestedName}(${valueName})`,
+            )
+            .innerJoinLateral(
+              sql`(${pointQuery.getSQL()} OFFSET 0) AS ${membershipName}`,
+              sql`true`,
+            );
+          retained = inArray(reviewAssessment.id, membershipIds);
+        } else if (!scope.records) {
+          retained = sql`EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(s.evidence->'records', '[]'::jsonb)) r
             WHERE ${relatedRecordMatch(scope, sql`r->>'entity'`, sql<string>`r->>'id'`)})`;
-      }
-      return retained
-        ? and(sql`(${recommendationScopes.connection}) IS NOT TRUE`, retained)
-        : undefined;
-    },
+        }
+        return [
+          primaryRecordMatch(scope),
+          ...[
+            {
+              entity: sql<string>`s.evidence #>> '{candidate,source,entityKind}'`,
+              id: sql<string>`s.evidence #>> '{candidate,source,entityId}'`,
+            },
+            {
+              entity: sql<string>`s.evidence #>> '{candidate,target,entityKind}'`,
+              id: sql<string>`s.evidence #>> '{candidate,target,entityId}'`,
+            },
+          ].map(({ entity, id }) =>
+            and(
+              recommendationScopes.connection,
+              relatedRecordMatch(scope, entity, id),
+            ),
+          ),
+          retained
+            ? and(
+                sql`(${recommendationScopes.connection}) IS NOT TRUE`,
+                retained,
+              )
+            : undefined,
+        ];
+      },
+    }),
     actionable: sql`(${sql.join(Object.values(recommendationScopes), sql` OR `)})`,
   },
   product_pair: {
     ...assessmentReviewFamilies.product_pair,
-    records: sql`${one} || jsonb_build_array(${ref(sql`${entities.product}`, sql`s.data->>'otherId'`)})`,
-    matchesRelatedRecords: (scope: AssessmentRecordScope) =>
-      relatedRecordMatch(
-        scope,
-        entities.product,
-        sql<string>`s.data->>'otherId'`,
-      ),
+    ...declareAffectedRecords({
+      roles: ["subject", "other"],
+      forward: () =>
+        sql`${one} || jsonb_build_array(${ref(sql`${entities.product}`, sql`s.data->>'otherId'`)})`,
+      reverse: (scope) => [
+        primaryRecordMatch(scope),
+        relatedRecordMatch(
+          scope,
+          entities.product,
+          sql<string>`s.data->>'otherId'`,
+        ),
+      ],
+    }),
     actionable: sql`s.judgment->'actionable' = 'true'::jsonb`,
   },
   image_description: {
     ...assessmentReviewFamilies.image_description,
-    records: one,
-    primaryOnly: true,
+    ...declareAffectedRecords({
+      roles: ["subject"],
+      forward: () => one,
+      reverse: (scope) => [primaryRecordMatch(scope)],
+    }),
     actionable: sql`jsonb_typeof(s.judgment) = 'string' AND ${hasTextSql(sql`s.judgment #>> '{}'`)}`,
   },
   statement_transaction: {
     ...assessmentReviewFamilies.statement_transaction,
-    records: statementRecords(),
-    recordsFor: statementRecords,
-    matchesRelatedRecords: statementReferenceMatch,
+    ...declareAffectedRecords({
+      roles: [
+        "source",
+        "occurrence",
+        "import",
+        "account",
+        "candidate",
+        "settlement",
+      ],
+      forward: statementRecords,
+      reverse: statementReferenceMatch,
+    }),
     actionable: sql`true`,
     summarize: (value: unknown) => {
       const decision = assessmentJudgments.statement_transaction.parse(value);
@@ -393,29 +526,28 @@ export const reviewFamilyDeclarations = {
   },
   transfer_pair: {
     ...assessmentReviewFamilies.transfer_pair,
-    records: sql`${leg("outflow")} || ${leg("inflow")}`,
-    matchesRelatedRecords: (scope: AssessmentRecordScope) =>
-      or(
-        ...(["outflow", "inflow"] as const)
-          .flatMap((end) => [
-            relatedRecordMatch(
-              scope,
-              entities.financialAccount,
-              sql<string>`s.judgment->${end}->>'accountId'`,
-            ),
-            relatedRecordMatch(
-              scope,
-              entities.financialTransaction,
-              sql<string>`s.judgment->${end}->>'transactionId'`,
-            ),
-            relatedRecordMatch(
-              scope,
-              entities.ledgerParty,
-              sql<string>`s.judgment->${end}->'owner'->>'id'`,
-            ),
-          ])
-          .filter((match) => match !== undefined),
-      ),
+    ...declareAffectedRecords({
+      roles: ["outflow", "inflow", "account", "transaction", "owner"],
+      forward: () => sql`${leg("outflow")} || ${leg("inflow")}`,
+      reverse: (scope) =>
+        (["outflow", "inflow"] as const).flatMap((end) => [
+          relatedRecordMatch(
+            scope,
+            entities.financialAccount,
+            sql<string>`s.judgment->${end}->>'accountId'`,
+          ),
+          relatedRecordMatch(
+            scope,
+            entities.financialTransaction,
+            sql<string>`s.judgment->${end}->>'transactionId'`,
+          ),
+          relatedRecordMatch(
+            scope,
+            entities.ledgerParty,
+            sql<string>`s.judgment->${end}->'owner'->>'id'`,
+          ),
+        ]),
+    }),
     actionable: sql`true`,
   },
 } satisfies Record<
@@ -423,10 +555,8 @@ export const reviewFamilyDeclarations = {
   {
     kind: "proposal" | "automatic_decision";
     label: string;
+    affectedRecords: Parameters<typeof declareAffectedRecords>[0];
     records: SQL;
-    primaryOnly?: boolean;
-    recordsFor?: (entities: readonly string[]) => SQL;
-    matchesRelatedRecords?: (scope: AssessmentRecordScope) => SQL | undefined;
     actionable: SQL;
     scopes?: typeof recommendationScopes;
     summarize?: (value: DecisionValue) => string;
@@ -454,7 +584,7 @@ const assessmentRecordsSql = (
   sql`CASE ${sql.join(
     Object.entries(reviewFamilyDeclarations).map(
       ([family, spec]) =>
-        sql`WHEN ${familyColumn} = ${family} THEN ${entities && "recordsFor" in spec ? spec.recordsFor(entities) : spec.records}`,
+        sql`WHEN ${familyColumn} = ${family} THEN ${spec.affectedRecords.forward(entities)}`,
     ),
     sql` `,
   )} ELSE '[]'::jsonb END`;
@@ -512,6 +642,7 @@ const storedRef = z.object({
 export async function readAssessmentRecordRefs(
   db: Database,
   ids: readonly string[],
+  entities?: readonly string[],
 ) {
   if (!ids.length)
     return new Map<string, z.infer<typeof suggestionRecordRef>[]>();
@@ -519,7 +650,7 @@ export async function readAssessmentRecordRefs(
     id: string;
     refs: unknown;
   }>(sql`
-    SELECT s.id, ${assessmentRecordsSql()} AS refs FROM "Suggestion" s
+    SELECT s.id, ${assessmentRecordsSql(entities)} AS refs FROM "Suggestion" s
     WHERE s.id = ANY(${uuidArrayParam(ids)})`);
   return resolveStoredRecordRefs(db, rows);
 }
@@ -628,76 +759,9 @@ function assessmentStateAdmission(
   );
 }
 
-function assessmentRecordMatches(
-  scope: AssessmentRecordScope,
-): { match: SQL; stateFirst: boolean }[] {
-  const primaryFamilies = Object.entries(reviewFamilyDeclarations).flatMap(
-    ([family]) =>
-      family !== assessmentFamily.enum.statement_transaction &&
-      family !== assessmentFamily.enum.transfer_pair
-        ? [assessmentFamily.parse(family)]
-        : [],
-  );
-  const primaryMatch = and(
-    inArray(reviewState.family, primaryFamilies),
-    scope.entity ? eq(reviewState.entity, scope.entity) : undefined,
-    scope.records
-      ? or(
-          ...scope.records.map((r) =>
-            and(
-              eq(reviewState.entity, r.entity),
-              eq(reviewState.recordId, r.id),
-            ),
-          ),
-        )
-      : undefined,
-  );
-  // Fixed JSON paths and the literal predicate also match generic-plan indexes.
-  // Immutable endpoints remain independent of the mutable primary reference.
-  const connectionMatches = [
-    {
-      entity: sql<string>`s.evidence #>> '{candidate,source,entityKind}'`,
-      id: sql<string>`s.evidence #>> '{candidate,source,entityId}'`,
-    },
-    {
-      entity: sql<string>`s.evidence #>> '{candidate,target,entityKind}'`,
-      id: sql<string>`s.evidence #>> '{candidate,target,entityId}'`,
-    },
-  ].map(
-    ({ entity, id }) =>
-      sql`${and(
-        eq(reviewState.family, assessmentFamily.enum.recommendation),
-        recommendationScopes.connection,
-        relatedRecordMatch(scope, entity, id),
-      )}`,
-  );
-  const secondary = Object.entries(reviewFamilyDeclarations).flatMap(
-    ([family, spec]) => {
-      if ("primaryOnly" in spec) return [];
-      const match = spec.matchesRelatedRecords(scope);
-      return match ? [{ family: assessmentFamily.parse(family), match }] : [];
-    },
-  );
-  // Separate branches let Postgres narrow state identities/families before
-  // joining immutable evidence. One CASE across families scanned every served
-  // Assessment and spilled the pending-state join during ordinary list reads.
-  return [
-    { match: sql`${primaryMatch}`, stateFirst: false },
-    ...connectionMatches.map((match) => ({ match, stateFirst: false })),
-    ...secondary.map(({ family, match }) => ({
-      match: sql`${and(eq(reviewState.family, family), match)}`,
-      stateFirst: family === assessmentFamily.enum.statement_transaction,
-    })),
-  ];
-}
-
 /** Settlement-only scopes can discover immutable identities from the graph first. */
 function settlementAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   if (!scope.records?.length) return undefined;
-  const requested = scope.entity
-    ? [scope.entity]
-    : scope.records.map((r) => r.entity);
-  if (statementRecordParts(requested, false).length) return undefined;
   const match = statementSettlementMatch(scope);
   if (!match) return undefined;
   const keys = reviewQueryBuilder
@@ -706,6 +770,10 @@ function settlementAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
       externalId: sql<string>`evidence."externalId"`.as("externalId"),
     })
     .from(statementSettlementRelation)
+    .innerJoin(
+      sql`${financialSourceReferenceRows} evidence`,
+      sql`evidence.owner=settled.id`,
+    )
     .where(and(statementSettlementEligibility, match));
   const keyName = sql.identifier("settlement_keys");
   const keySource = sql<string>`${keyName}.${sql.identifier("source")}`;
@@ -742,7 +810,7 @@ function settlementAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
     );
   const matched = sql.identifier("settlement_matched");
   const column = (name: string) => sql`${matched}.${sql.identifier(name)}`;
-  return unwrapDb(db)
+  const retained = unwrapDb(db)
     .select({
       id: sql<string>`${column("id")}`.as("id"),
       family: sql<AssessmentFamily>`${column("family")}`.as("family"),
@@ -757,42 +825,68 @@ function settlementAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
       sql`true`,
     )
     .getSQL();
+  const acceptedKeys = reviewQueryBuilder
+    .selectDistinct({
+      transactionId: sql<string>`settled.id`.as("transactionId"),
+    })
+    .from(statementSettlementRelation)
+    .where(and(statementSettlementEligibility, match));
+  const accepted = sql`SELECT s.id,s.family,s.family AS "immutableFamily",s.status
+    FROM (${acceptedKeys.getSQL()}) accepted_keys
+    JOIN "SourceOccurrence" owner ON owner."acceptedTransactionId"=accepted_keys."transactionId"
+    JOIN "SourceTransactionRecord" anchor ON anchor."occurrenceId"=owner.id
+    JOIN "Suggestion" s ON s."recordId"=anchor.id
+    WHERE s.served AND s.family=${assessmentFamily.enum.statement_transaction}
+      AND ${assessmentStateAdmission(db, scope.eligibility)}`;
+  // Both arms start at the requested settlement graph and keep their own lookup indexes.
+  return sql`${retained} UNION ALL ${accepted}`;
 }
 
 /** Scope identities before expensive automatic receipts; retain a statement-local barrier. */
 function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   const client = unwrapDb(db);
   const s = reviewState;
-  const branches = assessmentRecordMatches(scope);
+  const families =
+    scope.eligibility.kind === "suggestions"
+      ? scope.eligibility.families
+      : scope.eligibility.family
+        ? [scope.eligibility.family]
+        : Object.keys(reviewFamilyDeclarations)
+            .map((family) => assessmentFamily.parse(family))
+            .filter(isReviewFamily);
   const stateAdmission = assessmentStateAdmission(db, scope.eligibility);
-  const admission = and(s.served, stateAdmission);
-  const matched = sql.join(
-    branches.map(({ match, stateFirst }) => {
-      const selection = {
-        id: s.id,
-        family: scope.eligibility.kind === "suggestions" ? s.family : s.family,
-        immutableFamily: sql<AssessmentFamily>`${s.family}`.as(
-          "immutableFamily",
-        ),
-        status: s.status,
-      };
-      if (stateFirst) {
-        const settlement = settlementAssessmentQuery(db, scope);
-        if (settlement) return settlement;
-        return client
-          .select(selection)
-          .from(s)
-          .where(and(s.served, stateAdmission, match))
-          .getSQL();
-      }
-      return client
-        .select(selection)
-        .from(s)
-        .where(and(admission, match))
-        .getSQL();
-    }),
-    sql` UNION ALL `,
-  );
+  const branches = families.flatMap((family) => {
+    const settlement =
+      family === assessmentFamily.enum.statement_transaction
+        ? settlementAssessmentQuery(db, scope)
+        : undefined;
+    // Candidate/direct reach remains independent when settlement discovery starts at requested FTXs.
+    const matches = settlement
+      ? statementReferenceMatch(scope, false)
+      : reviewFamilyDeclarations[family].affectedRecords.reverse(scope);
+    const direct = matches.flatMap((match) =>
+      match
+        ? [
+            client
+              .select({
+                id: s.id,
+                family: s.family,
+                immutableFamily: sql<AssessmentFamily>`${s.family}`.as(
+                  "immutableFamily",
+                ),
+                status: s.status,
+              })
+              .from(s)
+              .where(and(s.served, stateAdmission, eq(s.family, family), match))
+              .getSQL(),
+          ]
+        : [],
+    );
+    return settlement ? [...direct, settlement] : direct;
+  });
+  const matched = branches.length
+    ? sql.join(branches, sql` UNION ALL `)
+    : sql`SELECT NULL::uuid AS id, NULL::text AS family, NULL::text AS "immutableFamily", NULL::text AS status WHERE false`;
   if (scope.eligibility.kind === "suggestions") return matched;
   // Keep receipt validation outside identity discovery. Reading the scoped
   // family/status directly prevents the planner from scanning Assessment again

@@ -671,3 +671,21 @@ merge, then apply this contraction through Actions. Record zero legacy-decision
 and catalog-dependency counts, live view coverage and preservation read-back.
 Keep the typed table and authored dates. This separate column contraction does
 not authorize a table or retained-work drop.
+
+## Source judgment-owner cutover
+
+`0107_source_judgment_owner_cutover` gives each previously ownerless bank record a
+singleton `unproven` owner, copies its original financial decisions and lifecycle,
+and makes occurrence membership mandatory. It uses the retained financial RunStep
+gate and locks copy sources/destinations before transformation. Independent full-row
+checks preserve bank records, aliases, original annotations, existing owners,
+collection membership and money. No records are accepted or spending created.
+Old annotation financial columns remain historical evidence; active writes go only
+to the owner. Notes and exact reviewed replacement selections remain local.
+
+Inactive or unmappable financial presentation suppressions are cleared; an active
+fingerprinted recommendation keeps its exact-revision dismissal. Explicit ignore,
+account, accepted-money and attribution decisions remain unchanged. New MCP input
+states require a reconnect because tools/list is cached per session. A local
+migration fixture does not establish deployment, connector refresh or reconciliation
+completion. Production application and readback require separate authorization.

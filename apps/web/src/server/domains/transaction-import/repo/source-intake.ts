@@ -13,7 +13,6 @@ import {
   sourceTransactionRecord,
   transactionImport,
   transactionImportRecord,
-  sourceObservationAnnotation,
   financialEvidenceAlias,
 } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
@@ -22,7 +21,10 @@ import {
   sourceObservationColumns,
   sourceObservationFrom,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
-import { sourceTransactionRecordExternalId } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
+import {
+  sourceTransactionRecordExternalId,
+  providerIdentityClaims,
+} from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
   insertPayloadsWithIdentities,
   isEntityShortcodeCollision,
@@ -38,14 +40,7 @@ import { auditEvidenceRows } from "./intake-audit";
 const refuse = (message: string): never => {
   throw createAppError("CONSTRAINT_VIOLATION", message);
 };
-const rawProviderIds = z.object({
-  id: z.string().optional(),
-  account_id: z.string().optional(),
-  transaction: z
-    .object({ id: z.string(), account_id: z.string().optional() })
-    .optional(),
-  account: z.union([z.object({ id: z.string() }), z.string()]).optional(),
-});
+const consolidatedProof = z.object({ kind: z.literal("consolidated") });
 
 type Identity = {
   kind: "provider" | "positioned";
@@ -82,19 +77,7 @@ function provenIdentity(
   fingerprint: string,
   row: RecordSourceTransactionRecordsInput["rows"][number],
 ): Identity | null {
-  const raw = rawProviderIds.safeParse(row.providerData);
-  const accounts = raw.success
-    ? [
-        raw.data.account_id,
-        typeof raw.data.account === "string"
-          ? raw.data.account
-          : raw.data.account?.id,
-        raw.data.transaction?.account_id,
-      ].filter((id) => id !== undefined)
-    : [];
-  const providerIds = raw.success
-    ? [raw.data.id, raw.data.transaction?.id].filter((id) => id !== undefined)
-    : [];
+  const { accounts, providerIds } = providerIdentityClaims(row.providerData);
   if (
     source === "monarch" &&
     row.providerTransactionId &&
@@ -335,6 +318,19 @@ export async function recordSourceTransactionRecords(
             ) ?? sql`false`,
           ),
         );
+      const redirectIds = possibleOwners.flatMap((owner) =>
+        consolidatedProof.safeParse(owner.identityProof).success &&
+        owner.supersededByOccurrenceId
+          ? [owner.supersededByOccurrenceId]
+          : [],
+      );
+      if (redirectIds.length)
+        possibleOwners.push(
+          ...(await query
+            .select()
+            .from(sourceOccurrence)
+            .where(inArray(sourceOccurrence.id, redirectIds))),
+        );
       const byKey = new Map(
         possibleOwners.map((owner) => [
           identityKey(storedIdentity(owner)),
@@ -346,7 +342,8 @@ export async function recordSourceTransactionRecords(
           prepared.some(
             (row) => row.key === identityKey(storedIdentity(owner)),
           ) ||
-          input.confirmedWithdrawals.includes(owner.providerIdentity ?? ""),
+          input.confirmedWithdrawals.includes(owner.providerIdentity ?? "") ||
+          redirectIds.includes(owner.id),
       );
       await lockFinancialEvidenceKeys(
         tx,
@@ -395,6 +392,20 @@ export async function recordSourceTransactionRecords(
           );
         if (owner.source === source)
           byKey.set(identityKey(storedIdentity(owner)), owner);
+      }
+      for (const reservation of locked) {
+        if (consolidatedProof.safeParse(reservation.identityProof).success) {
+          const survivor = locked.find(
+            (owner) => owner.id === reservation.supersededByOccurrenceId,
+          );
+          if (!survivor)
+            return refuse("A consolidated source reservation has no survivor.");
+          if (survivor.deletedAt || survivor.source !== reservation.source)
+            refuse(
+              "A consolidated source reservation has no current survivor.",
+            );
+          byKey.set(identityKey(storedIdentity(reservation)), survivor);
+        }
       }
       if (existingBatch)
         await query
@@ -493,14 +504,28 @@ export async function recordSourceTransactionRecords(
           );
         if (member)
           return { incoming, owner, observation: member.observation, member };
-        const observation = owner
+        if (owner?.supersededByOccurrenceId)
+          refuse(
+            "New collection evidence cannot revive a replaced source occurrence.",
+          );
+        const current = owner
           ? retained.find(
               (saved) =>
-                saved.occurrenceId === owner.id &&
+                saved.id === owner.currentObservationId &&
                 saved.factFingerprint === incoming.factFingerprint &&
                 saved.deletedAt === null,
             )
           : undefined;
+        const observation =
+          current ??
+          (owner
+            ? retained.find(
+                (saved) =>
+                  saved.occurrenceId === owner.id &&
+                  saved.factFingerprint === incoming.factFingerprint &&
+                  saved.deletedAt === null,
+              )
+            : undefined);
         if (
           owner?.identityKind === "positioned" &&
           retained.some(
@@ -611,13 +636,6 @@ export async function recordSourceTransactionRecords(
           providerAmount: moneyToMinor(incoming.row.providerAmount),
         })),
       );
-      if (createdObservations.length)
-        await query.insert(sourceObservationAnnotation).values(
-          createdObservations.map((row) => ({
-            observationId: row.id,
-            lastObservedAt: observedAt,
-          })),
-        );
       if (createdObservations.length)
         await query.insert(financialEvidenceAlias).values(
           createdObservations.flatMap((observation) => {

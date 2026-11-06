@@ -13,10 +13,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
-import {
-  sourceOccurrenceSuppressed,
-  sourceObservations,
-} from "~/server/domains/transaction-import/repo/source-observation-state";
+import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   CHARGE_STATE,
   chargeKeyOf,
@@ -51,7 +48,7 @@ export const scopedStatementChargeKeys = (scope: StatementSuggestionScope) => {
   ];
 
   return sql`SELECT seen.source, ${chargeKeyOf("seen")} AS "chargeKey" FROM ${sourceObservations} seen
-    WHERE NOT ${sourceOccurrenceSuppressed(sql`seen."occurrenceId"`)} AND seen."occurrenceId" IS NOT NULL AND seen."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND ${notDeleted("seen")} ${filters.length ? sql`AND ${sql.join(filters, sql` AND `)}` : sql``}`;
+    WHERE seen."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND ${notDeleted("seen")} ${filters.length ? sql`AND ${sql.join(filters, sql` AND `)}` : sql``}`;
 };
 
 /** Bounded identities first; eligibility still aggregates every live observation of each key. */
@@ -93,7 +90,7 @@ export const statementInputCharges = (
     : CHARGE_STATE;
   return sql`
     SELECT cs.source, cs."chargeKey" FROM ${state} cs
-    WHERE NOT ${sourceOccurrenceSuppressed(sql`cs."occurrenceId"`)} AND cs."occurrenceId" IS NOT NULL AND cs."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND NOT cs.ignored AND NOT cs.superseded
+    WHERE cs."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND NOT cs.ignored AND NOT cs.superseded
       AND (cs."acceptedTransactionId" IS NULL OR cs.shortcode IS NOT NULL)
       AND ((cs.shortcode IS NULL AND EXISTS (SELECT 1 FROM ${sourceObservations} head
         WHERE head.source=cs.source AND head."chargeKey"=cs."chargeKey" AND head.current

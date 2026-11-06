@@ -65,7 +65,6 @@ import {
   findTransferPairsForCharges,
   transferPairSourceCharges,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
-import { sourceOccurrenceSuppressed } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   sourceObservations,
   sourceObservationIdentities,
@@ -844,11 +843,9 @@ async function providerIdentityFacts(
           reviewState: string;
           currentObservationId: string | null;
           acceptedTransactionId: string | null;
-          suppressed: boolean;
         }>(sql`
-    -- includes-deleted: reserved identities and retained member suppression remain negative fences.
-    SELECT owner.id,owner.version,owner."reviewState",owner."currentObservationId",owner."acceptedTransactionId",
-      ${sourceOccurrenceSuppressed(sql`owner.id`)} AS suppressed FROM "SourceOccurrence" owner
+    -- includes-deleted: reserved identities and financial judgments remain binding after tombstoning.
+    SELECT owner.id,owner.version,owner."reviewState",owner."currentObservationId",owner."acceptedTransactionId" FROM "SourceOccurrence" owner
     WHERE owner.id IN (${sql.join(
       ids.map((id) => sql`${id}::uuid`),
       sql`, `,
@@ -858,7 +855,7 @@ async function providerIdentityFacts(
   for (const { charge, canonical } of inputs) {
     const owner = owners.find((owner) => owner.id === canonical.occurrenceId);
     result.set(chargeId(charge), {
-      unresolved: !owner || owner.reviewState !== "ready" || owner.suppressed,
+      unresolved: !owner || owner.reviewState !== "ready",
       fingerprint: await sha256Hex(
         canonicalJson(jsonSnapshot.parse(owner ?? null)),
       ),
@@ -2136,7 +2133,7 @@ function statementOutcome(
 /**
  * Publish one charge's proposal. The charge's current suggestions are locked
  * first, so a member reviewing one serializes with its replacement: a
- * dismissal (suppression) holds forever, an unchanged fingerprint is left
+ * dismissal holds for its current evidence revision, an unchanged fingerprint is left
  * alone, and anything else is retired before the new one takes the charge.
  */
 export async function publishChargeProposal(
@@ -2315,7 +2312,15 @@ async function publishCompleteLabelBatch(
         throw new Error(
           "Complete statement publication requires its complete label checkpoint",
         );
-      if (history.some((row) => row.suppression !== null)) {
+      if (
+        history.some(
+          (row) =>
+            row.active &&
+            row.suppression !== null &&
+            (row.fingerprint === proposal.fingerprint ||
+              row.evidenceFingerprint === proposal.evidenceFingerprint),
+        )
+      ) {
         outcomes.set(id, { kind: "resolved", reason: "suppressed" });
         continue;
       }
@@ -2678,7 +2683,7 @@ export async function retryStatementGenerationRefs(
         held: boolean;
       }>(sql`
         SELECT DISTINCT observation.source,observation."chargeKey",
-          (observation."occurrenceId" IS NULL OR observation."reviewState"<>${sourceOccurrenceReviewState.enum.ready}) AS held
+          (observation."reviewState"<>${sourceOccurrenceReviewState.enum.ready}) AS held
         FROM ${sourceObservations} observation
         WHERE observation.source=${original.source} AND ${notDeleted("observation")}
           AND (observation."chargeKey"=${original.chargeKey} OR
@@ -3130,12 +3135,6 @@ export async function recordStatementLabelCheckpoint(
       return "saved";
     }
     const { rows: settled } = await unwrapDb(tx).execute(sql`
-    SELECT 1 FROM "Suggestion" s
-    WHERE s.family = ${assessmentFamily.enum.statement_transaction}
-      AND ${suggestionField("source")} = ${input.charge.source}
-      AND ${suggestionField("chargeKey")} = ${input.charge.chargeKey}
-      AND s.suppression IS NOT NULL
-    UNION ALL
     SELECT 1 FROM ${chargeStateOf(sql`r.source = ${input.charge.source} AND ${chargeKeyOf("r")} = ${input.charge.chargeKey}`)} cs
     WHERE ${checkpoint.judgment.recommended !== statementTransactionAction.enum.void}
       AND (cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${checkpoint.judgment.recommended !== "book"}))

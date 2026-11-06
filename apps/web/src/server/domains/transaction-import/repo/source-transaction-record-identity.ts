@@ -1,5 +1,7 @@
+import type { SourceTransactionRecordInput } from "@cubby/schemas/source-transaction-record";
 import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
+import { z } from "zod";
 
 /** Frozen legacy aliases explain retained evidence; they never establish event identity or accepted ownership. */
 /**
@@ -72,3 +74,45 @@ export async function sourceTransactionRecordOccurrenceId(
 
 export const PROVIDER_IDENTITY_REVIEW =
   "This provider identity has ambiguous historical account evidence; resolve its charge identity before continuing.";
+
+const rawProviderIds = z.object({
+  id: z.string().optional(),
+  account_id: z.string().optional(),
+  transaction: z
+    .object({ id: z.string(), account_id: z.string().optional() })
+    .optional(),
+  account: z.union([z.object({ id: z.string() }), z.string()]).optional(),
+});
+
+type ProviderIdentityClaims = {
+  accounts: string[];
+  providerIds: string[];
+  malformed: boolean;
+};
+
+/** All retained string claims participate in proof and contradiction checks. Missing claims never prove identity. */
+export function providerIdentityClaims(
+  data: SourceTransactionRecordInput["providerData"],
+): ProviderIdentityClaims {
+  const raw = rawProviderIds.safeParse(data);
+  if (!raw.success)
+    return {
+      accounts: [],
+      providerIds: [],
+      malformed:
+        data !== null && typeof data === "object" && !Array.isArray(data),
+    };
+  return {
+    malformed: false,
+    accounts: [
+      raw.data.account_id,
+      typeof raw.data.account === "string"
+        ? raw.data.account
+        : raw.data.account?.id,
+      raw.data.transaction?.account_id,
+    ].filter((id) => id !== undefined),
+    providerIds: [raw.data.id, raw.data.transaction?.id].filter(
+      (id) => id !== undefined,
+    ),
+  };
+}

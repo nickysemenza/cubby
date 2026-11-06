@@ -73,7 +73,6 @@ export const sourceObservationHistoricalLinks = sql`(
     FROM "SourceTransactionRecord" record
     JOIN "FinancialEvidenceAlias" observed ON observed."occurrenceId"=record."occurrenceId"
     JOIN key_history history ON history.source=observed.source AND history.value=observed.value
-    WHERE record."occurrenceId" IS NOT NULL
   )
   SELECT "observationId", array_agg(code ORDER BY code) AS codes
   FROM history GROUP BY "observationId"

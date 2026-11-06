@@ -321,10 +321,17 @@ describe("cross-family Suggestion list", () => {
       family: "statement_transaction",
     });
     expect(unscoped.items).toHaveLength(1);
-    for (const id of [
+    const affected = [
       account.id,
       ...candidates.map((candidate) => candidate.id),
-    ]) {
+    ];
+    expect(
+      (await suggestionRecordCounts(ctx.db, { recordIds: affected })).records,
+    ).toEqual(affected.map((id) => ({ id, pending: 1 })));
+    for (const id of affected) {
+      expect(
+        (await suggestionRecordCounts(ctx.db, { recordIds: [id] })).records,
+      ).toEqual([{ id, pending: 1 }]);
       expect(
         (
           await listSuggestionPage(ctx.db, {
@@ -390,7 +397,7 @@ describe("cross-family Suggestion list", () => {
       },
       ctx.actor,
     );
-    await createRepoEntity(ctx, "financialTransaction", {
+    const settled = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.id,
       kind: "purchase",
       status: "posted",
@@ -451,6 +458,83 @@ describe("cross-family Suggestion list", () => {
     expect(
       await touchingAssessmentIds(ctx.db, { entity: "expense", eligibility }),
     ).toContain(proposal.assessmentId);
+
+    // Retained advice keeps its old SOC handle after the primary record moves to a survivor.
+    await record(
+      ctx,
+      [rowInput({ providerTransactionId: "synthetic-surviving-charge" })],
+      { fingerprint: "fp-scope-survivor" },
+    );
+    const [survivor] = await getDb(ctx.db)
+      .select(sourceObservationColumns)
+      .from(sourceObservationFrom)
+      .where(
+        eq(
+          sourceTransactionRecord.providerTransactionId,
+          "synthetic-surviving-charge",
+        ),
+      );
+    if (!survivor?.occurrenceId || !source.occurrenceId)
+      throw new Error("Synthetic source owner missing");
+    const settledId = await resolveOrThrow(
+      ctx.db,
+      "financialTransaction",
+      settled.output.id,
+    );
+    await getDb(ctx.db)
+      .update(sourceOccurrence)
+      .set({
+        currentObservationId: null,
+        acceptedTransactionId: null,
+        supersededByOccurrenceId: survivor.occurrenceId,
+      })
+      .where(eq(sourceOccurrence.id, source.occurrenceId));
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ occurrenceId: survivor.occurrenceId })
+      .where(eq(sourceTransactionRecord.id, source.id));
+    await getDb(ctx.db)
+      .update(sourceOccurrence)
+      .set({ acceptedTransactionId: settledId })
+      .where(eq(sourceOccurrence.id, survivor.occurrenceId));
+    const settlementRefs = [
+      {
+        entity: "financialTransaction",
+        id: settledId,
+        code: settled.output.id,
+      },
+      {
+        entity: "purchase",
+        id: await resolveOrThrow(ctx.db, "purchase", purchase.output.id),
+        code: purchase.output.id,
+      },
+      expenseRef,
+    ];
+    for (const ref of settlementRefs) {
+      expect(await scoped([ref])).toContain(proposal.assessmentId);
+      expect(await scoped([ref, unrelatedRef])).toContain(
+        proposal.assessmentId,
+      );
+      expect(
+        (await suggestionRecordCounts(ctx.db, { recordIds: [ref.code] }))
+          .records,
+      ).toEqual([{ id: ref.code, pending: 1 }]);
+    }
+    const expanded = await readAssessmentRecordRefs(ctx.db, [
+      proposal.assessmentId,
+    ]);
+    expect(expanded.get(proposal.assessmentId)).toEqual(
+      expect.arrayContaining(
+        settlementRefs.map(({ entity, code }) => ({ entity, id: code })),
+      ),
+    );
+    expect(
+      (
+        await suggestionRecordCounts(ctx.db, {
+          recordIds: settlementRefs.map((ref) => ref.code),
+        })
+      ).records,
+    ).toEqual(settlementRefs.map((ref) => ({ id: ref.code, pending: 1 })));
 
     const purchaseId = await resolveOrThrow(
       ctx.db,
@@ -1157,6 +1241,9 @@ describe("cross-family Suggestion list", () => {
         providerId: sourceTransactionRecord.providerTransactionId,
       })
       .from(sourceTransactionRecord);
+    const occurrences = await getDb(ctx.db)
+      .select({ code: sourceOccurrence.shortcode, id: sourceOccurrence.id })
+      .from(sourceOccurrence);
     const collections = await getDb(ctx.db)
       .select({
         code: transactionImport.shortcode,
@@ -1175,18 +1262,34 @@ describe("cross-family Suggestion list", () => {
         row.evidence.rawDescription === "EXAMPLE GROCER REVISED",
     );
     expect(current).toBeDefined();
-    for (const ref of [
+    const affected = [
       ...observations.map((row) => ({
         entity: "sourceTransactionRecord" as const,
         code: row.code,
         relevant: row.providerId !== null,
+      })),
+      ...occurrences.map((row) => ({
+        entity: "sourceOccurrence" as const,
+        code: row.code,
+        relevant: row.id === selectedRevision.occurrenceId,
       })),
       ...collections.map((row) => ({
         entity: "transactionImport" as const,
         code: row.code,
         relevant: row.fingerprint !== "fp-list-unrelated",
       })),
-    ]) {
+    ];
+    const batched = await suggestionRecordCounts(ctx.db, {
+      recordIds: affected.map((ref) => ref.code),
+    });
+    expect(batched.records).toEqual(
+      affected.map((ref) => ({ id: ref.code, pending: 1 })),
+    );
+    for (const ref of affected) {
+      expect(
+        (await suggestionRecordCounts(ctx.db, { recordIds: [ref.code] }))
+          .records,
+      ).toEqual([{ id: ref.code, pending: 1 }]);
       const filters = {
         family: "statement_transaction" as const,
         recordEntity: ref.entity,
@@ -1210,6 +1313,21 @@ describe("cross-family Suggestion list", () => {
         .map((row) => row.code),
     });
     expect(combined.items.map((row) => row.id)).toEqual([current?.id]);
+    if (!current) throw new Error("Synthetic source proposal missing");
+    // Old publications can retain an STR charge key after occurrence ownership was backfilled.
+    await getDb(ctx.db)
+      .update(suggestionTable)
+      .set({
+        data: sql`jsonb_set(${suggestionTable.data}, '{chargeKey}', to_jsonb(${previous.shortcode}::text))`,
+      })
+      .where(eq(suggestionTable.id, current.assessmentId));
+    expect(
+      (
+        await suggestionRecordCounts(ctx.db, {
+          recordIds: affected.map((ref) => ref.code),
+        })
+      ).records,
+    ).toEqual(batched.records);
   });
 
   // Failure mode: counts read one family, so the page's chips undercount.

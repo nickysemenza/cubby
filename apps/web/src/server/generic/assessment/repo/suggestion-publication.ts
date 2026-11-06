@@ -284,8 +284,24 @@ async function publishLocked<
   }[] = [];
   for (const [index, candidate] of candidates.entries()) {
     const rows = history[index]!;
-    // A dismissal holds over every later publication, active or not.
-    if (rows.some((row) => row.suppression !== null)) {
+    const financial =
+      family.family === "statement_transaction" ||
+      family.family === "transfer_pair";
+    const fingerprint = financial ? await family.fingerprint(candidate) : null;
+    const evidenceFingerprint = financial
+      ? await family.evidenceFingerprint(candidate)
+      : null;
+    // Financial feedback dismisses this revision, not every later bank event or proposal.
+    if (
+      rows.some(
+        (row) =>
+          row.suppression !== null &&
+          (!financial ||
+            (row.active &&
+              (row.fingerprint === fingerprint ||
+                row.evidenceFingerprint === evidenceFingerprint))),
+      )
+    ) {
       outcomes[index] = { outcome: "suppressed" };
       continue;
     }
