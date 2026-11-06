@@ -110,7 +110,7 @@ const source: WorkSource = {
         .filter((entity) => !scope.record || scope.record.entity === entity)
         .map(async (entity) => {
           const table = SHORTCODE_TABLE[entity];
-          return selectWorkCandidates(db, source, {
+          const query = selectWorkCandidates(db, source, {
             entity,
             id: sql`${table.shortcode}`,
             name: await labelSql(entity, `"${getTableName(table)}"`),
@@ -130,6 +130,7 @@ const source: WorkSource = {
                 recordScope(scope, sql`${table.shortcode}`),
               ),
             );
+          return sql`${query}`;
         }),
     );
     return {

@@ -20,7 +20,7 @@
     "./compiler/entity-definitions/relationship-shape": "./src/entity-definitions/relationship-shape.ts",
     "./compiler/entity-definitions/data-quality-image": "./src/entity-definitions/data-quality-image.ts",
     "./compiler/generated/entity-field-model.gen": "./src/generated/entity-field-model.gen.ts",
-    "./compiler/generated/entity-inspector.gen": "./src/generated/entity-inspector.gen.ts",
+    "./compiler/generated/entity-record-metadata.gen": "./src/generated/entity-record-metadata.gen.ts",
     "./compiler/image-field-keys": "./src/image-field-keys.ts",
     "./compiler/manifest-wire": "./src/manifest-wire.ts",
     "./compiler/native-coverage": "./src/native-coverage.ts",
