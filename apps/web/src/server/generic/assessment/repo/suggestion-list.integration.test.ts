@@ -492,6 +492,12 @@ describe("cross-family Suggestion list", () => {
         })
       ).items.map((row) => row.id);
     expect(await history([expense.output.id])).toContain(proposal.assessmentId);
+    // The panel's default view has no family, so it unions the mail branches.
+    expect(
+      (
+        await listAutomaticDecisions(ctx.db, { recordIds: [expense.output.id] })
+      ).items.map((row) => row.id),
+    ).toContain(proposal.assessmentId);
     expect(await history([unrelated.output.id])).not.toContain(
       proposal.assessmentId,
     );

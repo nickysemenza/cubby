@@ -218,6 +218,13 @@ describe("prepared connection bases", () => {
     );
     expect(prepared).toBeInstanceOf(Error);
     const ready = await prepareConnectionBases(ctx.db, candidates);
+    // Evidence and fingerprints hold dollars, whatever unit the column stores.
+    expect([...ready.records.values()].map(({ row }) => row)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ amount: 40 }),
+        expect.objectContaining({ statedTotal: 40 }),
+      ]),
+    );
     for (const raw of candidates)
       expect(
         canonicalJson(await captureConnectionBasis(ctx.db, raw, false, ready)),

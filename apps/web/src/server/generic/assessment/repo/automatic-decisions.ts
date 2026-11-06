@@ -86,7 +86,7 @@ export async function listAutomaticDecisions(
     branches.push({
       page: sql`SELECT s.id, s.family::text AS family, s.judgment, s."createdAt", s.fingerprint,
         ${rule} AS "automaticRule", true AS "applicationVerified", latest.verdict,
-        latest."createdAt" AS "reviewedAt", s.active, s.status,
+        (latest."createdAt"::timestamptz AT TIME ZONE 'UTC') AS "reviewedAt", s.active, s.status,
         s."createdAt" AS "sortAt", NULL::jsonb AS refs
         ${from} WHERE ${admission} ${reviewFilter}`,
       count: sql`SELECT count(*)::int AS count ${from} WHERE ${admission} ${reviewFilter}`,
