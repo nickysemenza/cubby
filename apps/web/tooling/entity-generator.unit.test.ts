@@ -126,12 +126,12 @@ const base = {
     mcp: [],
   },
   extensions: {
-    relatednessSignals: null,
+    relatednessSignals: [],
     ports: {
       repository: null,
       references: { label: null, resolver: null },
       filters: null,
-      search: { projection: null, semanticText: null },
+      search: { projection: null },
     },
   },
 };
@@ -189,7 +189,7 @@ describe("typed entity compiler", () => {
               output: false,
               key: "name",
               kind: "text",
-              labelOverride: "Title",
+              label: "Title",
               nullable: true,
             },
           ],

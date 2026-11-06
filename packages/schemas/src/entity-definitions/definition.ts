@@ -1,3 +1,4 @@
+import { relatedRecordSignalSchema } from "../related-record-signals";
 import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { storedProjectionVersionsSchema } from "../field-envelope";
 import {
@@ -2840,6 +2841,7 @@ const buildMetadataSchemas = () => {
   };
 
   const entityExtensionsMetadataSchema = z.strictObject({
+    relatednessSignals: z.array(relatedRecordSignalSchema).default([]),
     ports: z
       .object({
         repository: orNull(sourceRefMetadataSchema),

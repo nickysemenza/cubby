@@ -71,3 +71,5 @@ export { usdaFoodContract } from "./usda.contract";
 export { vendorContract } from "./vendor.contract";
 
 export { fieldExplanationContract } from "./field-explanation.contract";
+
+export { relatednessContract } from "./relatedness.contract";

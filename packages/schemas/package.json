@@ -92,6 +92,7 @@
     "./entity-recommendations": "./src/entity-recommendations.ts",
     "./related-view": "./src/related-view.ts",
     "./relatedness": "./src/relatedness.ts",
+    "./related-record-signals": "./src/related-record-signals.ts",
     "./recommendations": "./src/recommendations.ts",
     "./identifiers": "./src/identifiers.ts",
     "./money": "./src/money.ts",

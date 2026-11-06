@@ -3804,6 +3804,16 @@ Rules:
       },
     },
     extensions: {
+      relatednessSignals: [
+        { kind: "semantic", label: "Similar meaning", weight: 1, limit: 8 },
+        {
+          kind: "scalarOverlap",
+          label: "Shared tag",
+          field: "tags",
+          popularityCap: 24,
+          scoring: "displayOnly",
+        },
+      ],
       ports: {
         reports: {
           module: "~/server/domains/product/repo/report-bindings",

@@ -14,6 +14,7 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
 export const repositoryOwners = [
+  "src/server/generic/relatedness/repo/scalar-overlap.ts",
   "src/server/generic/problems/repo/problem-filter-semantics.ts",
   "src/server/generic/problems/repo/problem-registry-validation.ts",
   "src/server/wasm.ts",
