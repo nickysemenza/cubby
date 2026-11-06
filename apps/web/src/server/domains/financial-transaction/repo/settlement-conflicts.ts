@@ -240,7 +240,7 @@ export const purchaseRefundAccountIdsSql = (purchaseAlias: string) => {
     FROM (
       SELECT ${evidenceAccountSql(sql.raw("refund_evidence"), purchase)} AS account_id
       FROM "PurchasePaymentEvidence" refund_evidence
-      WHERE refund_evidence."purchaseId" = ${purchase}.id AND refund_evidence.amount < 0
+      WHERE refund_evidence."purchaseId" = ${purchase}.id AND refund_evidence."amountMinor" < 0
     ) resolved
     HAVING bool_and(resolved.account_id IS NOT NULL)
   )`;

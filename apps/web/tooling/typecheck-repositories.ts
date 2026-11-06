@@ -221,6 +221,7 @@ export const repositoryOwners = [
   "src/server/domains/purchase-import/repo/source-claim-family.ts",
   "src/server/domains/purchase-import/repo/source-order-key.ts",
   "src/server/domains/purchase-import/repo/writer-policy.ts",
+  "src/server/domains/purchase-import/repo/payment-evidence.ts",
   "src/server/domains/purchase/repo/purchase-link-draft.ts",
   "src/server/domains/purchase/repo/purchase-settlement-allocation.ts",
   "src/server/domains/purchase/repo/purchase-settlement-review.ts",

@@ -20,7 +20,7 @@ import {
   type ProposedImportFix,
   type AcceptedSourceOrder,
 } from "@cubby/schemas/purchase-import";
-import { cents } from "@cubby/shared";
+import { cents, minorToMoney } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
@@ -53,6 +53,7 @@ import {
   effectiveExpenseTradeSql,
   validateExpenseInheritance,
 } from "~/server/domains/expense/repo/expense-inheritance";
+import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import {
   externalIdKey,
@@ -279,7 +280,7 @@ async function recordLearnedTender(
     if (row.tender !== "unknown") continue;
     const tender = learned.get(
       factKey({
-        amount: row.amount,
+        amount: minorToMoney(row.amountMinor),
         chargedAt: row.chargedAt?.toISOString() ?? null,
         cardLastFour: row.cardLastFour,
       }),
@@ -1355,7 +1356,7 @@ export async function importVendorOrder(
       const retainedFacts = sourceFinancialFacts({
         ...candidate,
         payments: retainedPayments.map((payment) => ({
-          amount: payment.amount,
+          amount: minorToMoney(payment.amountMinor),
           chargedAt: payment.chargedAt?.toISOString(),
           cardLastFour: payment.cardLastFour ?? undefined,
         })),
@@ -1581,7 +1582,7 @@ export async function importVendorOrder(
         payments: retainedPayments
           .filter((row) => row.sourceClaimId === firstClaim)
           .map((row) => ({
-            amount: row.amount,
+            amount: minorToMoney(row.amountMinor),
             chargedAt: row.chargedAt?.toISOString(),
             cardLastFour: row.cardLastFour ?? undefined,
           })),
@@ -2164,7 +2165,7 @@ export async function importVendorOrder(
         await tx.insert(purchasePaymentEvidence).values({
           purchaseId,
           sourceClaimId,
-          amount: payment.amount,
+          amountMinor: financialEvidenceAmountMinor(payment.amount),
           chargedAt: payment.chargedAt ? new Date(payment.chargedAt) : null,
           cardLastFour: payment.cardLastFour,
           tender: payment.tender ?? "unknown",

@@ -41,6 +41,8 @@ export const childTableMetadataSchema = z
               "date",
               "jsonb",
             ]),
+            /** Money storage selects bigint explicitly; existing role weights retain their number boundary. */
+            bigintMode: z.enum(["number", "bigint"]).optional(),
             notNull: z.literal(true).optional(),
             primaryKey: z.literal(true).optional(),
             array: z.literal(true).optional(),

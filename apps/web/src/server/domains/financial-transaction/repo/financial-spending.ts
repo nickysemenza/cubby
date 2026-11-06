@@ -50,6 +50,7 @@ import {
   financialSourceRefsIncluding,
 } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { paymentEvidenceDollars } from "~/server/domains/purchase-import/repo/payment-evidence";
 import {
   planPurchaseRetainedSettlement,
   prepareRetainedSettlementDiscovery,
@@ -240,9 +241,9 @@ export async function prepareFinancialSpendingPage(
       ? (
           await getDb(db).execute<PaymentCandidate>(sql`
         SELECT p.id,p.shortcode,p."displayLabel",p.date,
-          round(payment.amount * 100)::text AS "amountKey", payment."chargedAt"::date::text AS "chargedDate"
+          payment."amountMinor"::text AS "amountKey", payment."chargedAt"::date::text AS "chargedDate"
         FROM "PurchasePaymentEvidence" payment JOIN "Purchase" p ON p.id=payment."purchaseId" AND ${notDeleted("p")}
-        WHERE round(payment.amount * 100) IN (${sql.join(
+        WHERE payment."amountMinor" IN (${sql.join(
           amounts.map((amount) => sql`${amount}`),
           sql`, `,
         )})
@@ -803,14 +804,19 @@ export function resolveFinancialSpendingVendors(
 }
 
 async function purchasePayments(db: Database, purchaseIds: readonly string[]) {
+  if (!purchaseIds.length) return [];
   return (
-    await getDb(db).execute<typeof purchasePaymentEvidence.$inferSelect>(
-      sql`SELECT * FROM "PurchasePaymentEvidence" WHERE "purchaseId" IN (${sql.join(
-        purchaseIds.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )}) ORDER BY id`,
-    )
-  ).rows;
+    await getDb(db)
+      .select()
+      .from(purchasePaymentEvidence)
+      .where(
+        inArray(
+          purchasePaymentEvidence.purchaseId,
+          purchaseIds.map((id) => parseEntityId("purchase", id)),
+        ),
+      )
+      .orderBy(purchasePaymentEvidence.id)
+  ).map(paymentEvidenceDollars);
 }
 
 async function prepareSpendingPayments(
@@ -872,7 +878,7 @@ async function spendingCandidates(
         AND abs(p.date - ${input.date}::date) <= 14)
       OR EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" payment
         WHERE payment."purchaseId" = p.id
-          AND round(payment.amount * 100) = ${input.amount}
+          AND payment."amountMinor" = ${input.amount}
           AND abs(payment."chargedAt"::date - ${input.date}::date) <= 3))`;
     return (
       await getDb(db)

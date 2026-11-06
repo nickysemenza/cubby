@@ -560,9 +560,9 @@ Financial cutover gates recognize only done steps or an ended failed Run with fa
 
 ## Ledger-transfer minor units
 
-`0097_ledger_transfer_minor_units` follows the source-claim migration in this
-unmerged stack; the release owner renumbers the stack against the actual main
-prefix. Hold it for the terminal financial refresh and independent money review.
+`0097_ledger_transfer_minor_units` follows the source-claim migration. Each
+money cutover releases separately after terminal financial refresh and independent
+money review; the applied migration prefix is immutable.
 It preserves original transfer rows under `archive.LedgerTransfer_dollar_preimage`
 and compares full-row hash multisets against exactly `amount` → `amountMinor`
 and dollars × 100, including parties, notes, dates and tombstones. Money
@@ -582,11 +582,26 @@ transfer edits preserve omitted evidence; fresh or changed evidence must reject
 noisy amounts through the financial constraint boundary. Migration completion is not
 historical financial acceptance. No transfer is reclassified as Expense spend.
 
-## Source occurrence ownership (provisional 0098)
+## Receipt-payment evidence minor units
+
+The receipt-payment cutover follows reviewed source/booking/closure contracts;
+the parent assigns its number at the front of the migration queue. It takes the
+same Run/Job/RunStep terminal gate and locks PurchasePaymentEvidence before copying
+its full dollar preimage to archive and renaming the public amount column.
+Independent IEEE equality by ID and complete equality of every other field must
+pass. Negative and zero lines, source ownership, timestamps and PK/FKs survive.
+A two-second lock timeout rolls back; the release owner retries after contention.
+
+After deployment verify the archived-dollar/current-cent mapping, catalog parity,
+source relationships, dollar-shaped audit and review outputs, retained reconciliation
+fingerprints and refusal of old-column writes. Preserve original receipt payloads
+and successful operation receipts. This migration does not convert Expense costs,
+reclassify issuer credits, finish historical reconciliation or enable recurrence.
+
+## Source occurrence ownership (0098)
 
 `0098_source_occurrence_ownership` follows both minor-unit money migrations.
-The parent assigns its release number. It is a direct cutover, with the same
-RunStep gate: all retained financial refresh steps must be terminal.
+It is a direct cutover, with the same RunStep gate: all retained financial refresh steps must be terminal.
 
 Retain `archive.SourceTransactionRecord_occurrence_preimage`,
 `archive.TransactionImportRecord_occurrence_preimage` and

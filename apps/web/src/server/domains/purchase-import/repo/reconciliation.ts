@@ -42,6 +42,7 @@ import {
 } from "~/server/db/schema";
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
 import { refreshAutomaticBookingFingerprint } from "~/server/domains/financial-transaction/repo/financial-convergence";
+import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   loadExpenseAllocations,
   type ExpenseAllocationRow,
@@ -1241,7 +1242,7 @@ export async function commitSourceOrderReconciliation(
       (row) => row.evidenceIndex === evidenceIndex,
     );
     const values = {
-      amount: payment.amount,
+      amountMinor: financialEvidenceAmountMinor(payment.amount),
       chargedAt: payment.chargedAt ? new Date(payment.chargedAt) : null,
       cardLastFour: payment.cardLastFour ?? null,
       tender: payment.tender ?? "unknown",
@@ -1250,7 +1251,7 @@ export async function commitSourceOrderReconciliation(
     if (old) {
       // Cosmetic description changes do not replace an accepted payment row.
       if (
-        cents(old.amount) !== cents(values.amount) ||
+        financialEvidenceAmountMinor(old.amount) !== values.amountMinor ||
         old.chargedAt?.toISOString() !== values.chargedAt?.toISOString() ||
         old.cardLastFour !== values.cardLastFour ||
         old.tender !== values.tender

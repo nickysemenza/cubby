@@ -4,7 +4,14 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { auditLog, expense, run, user } from "~/server/db/schema";
+import {
+  auditLog,
+  expense,
+  run,
+  user,
+  importSourceClaim,
+  purchasePaymentEvidence,
+} from "~/server/db/schema";
 import { auditImportBatch } from "~/server/domains/purchase-import/operations/run-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
@@ -42,8 +49,29 @@ describe("purchase audit restart recovery", () => {
       .update(expense)
       .set({ productId: null, productQuantity: null, costType: "services" })
       .where(eq(expense.purchaseId, f.order.id));
+    const [claim] = await getDb(ctx.db)
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: f.party.id,
+        kind: "mail_message",
+        externalKey: "synthetic-audit-payment",
+        checksum: "a".repeat(64),
+        firstRunId: f.parent.id,
+        lastRunId: f.parent.id,
+      })
+      .returning();
+    if (!claim) throw new Error("Synthetic payment source missing");
+    await getDb(ctx.db).insert(purchasePaymentEvidence).values({
+      purchaseId: f.order.id,
+      sourceClaimId: claim.id,
+      evidenceIndex: 0,
+      amountMinor: 2401n,
+    });
     const batch = await loadPurchaseAuditBatch(ctx.db, successor.id);
     expect(batch.map((row) => row.id)).toEqual([f.order.id]);
+    expect(batch[0]?.paymentEvidence).toMatchObject([
+      { amount: 24.01, tender: "unknown" },
+    ]);
     expect(batch[0]?.expenses).toHaveLength(1);
     expect(batch[0]?.expenses[0]?.amount).toBe(24);
     expect(batch[0]?.expenses[0]).toMatchObject({

@@ -377,7 +377,7 @@ describe("settlement from retained order evidence", () => {
       .where(
         and(
           eq(purchasePaymentEvidence.purchaseId, purchaseId),
-          eq(purchasePaymentEvidence.amount, 20),
+          eq(purchasePaymentEvidence.amountMinor, 2000n),
         ),
       );
     // A mixed dated/undated payment set can match completely, but expanding
@@ -417,7 +417,7 @@ describe("settlement from retained order evidence", () => {
       .where(
         and(
           eq(purchasePaymentEvidence.purchaseId, purchaseId),
-          eq(purchasePaymentEvidence.amount, 20),
+          eq(purchasePaymentEvidence.amountMinor, 2000n),
         ),
       );
     const plan = await previewFinancialSpending(
@@ -518,7 +518,7 @@ describe("settlement from retained order evidence", () => {
         purchaseId,
         sourceClaimId: retained.sourceClaimId,
         evidenceIndex: retained.evidenceIndex + 1,
-        amount: -15,
+        amountMinor: -1500n,
         chargedAt: new Date("2026-09-03T12:00:00.000Z"),
         tender: retained.tender,
         cardLastFour: retained.cardLastFour,
@@ -604,7 +604,7 @@ describe("settlement from retained order evidence", () => {
         purchaseId,
         sourceClaimId: retained.sourceClaimId,
         evidenceIndex: retained.evidenceIndex + 2,
-        amount: -5,
+        amountMinor: -500n,
         chargedAt: new Date("2026-09-10T12:00:00.000Z"),
         tender: retained.tender,
         cardLastFour: retained.cardLastFour,
@@ -737,7 +737,7 @@ describe("settlement from retained order evidence", () => {
         purchaseId,
         sourceClaimId: original.sourceClaimId,
         evidenceIndex: original.evidenceIndex + 1,
-        amount: -15,
+        amountMinor: -1500n,
         chargedAt: new Date("2026-09-03T12:00:00.000Z"),
         tender: "stored_value",
       });
@@ -839,15 +839,15 @@ describe("settlement from retained order evidence", () => {
     expect(
       await getDb(ctx.db)
         .select({
-          amount: purchasePaymentEvidence.amount,
+          amountMinor: purchasePaymentEvidence.amountMinor,
           tender: purchasePaymentEvidence.tender,
         })
         .from(purchasePaymentEvidence)
         .where(eq(purchasePaymentEvidence.purchaseId, split))
-        .orderBy(purchasePaymentEvidence.amount),
+        .orderBy(purchasePaymentEvidence.amountMinor),
     ).toEqual([
-      { amount: 5, tender: "stored_value" },
-      { amount: 8.59, tender: "card" },
+      { amountMinor: 500n, tender: "stored_value" },
+      { amountMinor: 859n, tender: "card" },
     ]);
     // Identical lines where only one is named stay ambiguous.
     const twins = await importOrder(run, {
@@ -945,7 +945,7 @@ describe("settlement from retained order evidence", () => {
         purchaseId: conflicting,
         sourceClaimId: exportClaim.id,
         evidenceIndex: 0,
-        amount: 40,
+        amountMinor: 4000n,
         chargedAt: new Date("2026-09-02T12:00:00.000Z"),
         tender: "stored_value",
       })
@@ -957,8 +957,8 @@ describe("settlement from retained order evidence", () => {
       ]);
       // Two identical retained lines must not collapse into one payment.
       expect(discovery.get(twins)?.payments).toMatchObject([
-        { amount: 5, tender: "card" },
-        { amount: 5, tender: "card" },
+        { amountMinor: 500n, tender: "card" },
+        { amountMinor: 500n, tender: "card" },
       ]);
       const input = {
         purchaseId: twins,

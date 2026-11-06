@@ -130,7 +130,7 @@ describe("accepted source financial reconciliation", () => {
       .from(purchasePaymentEvidence)
       .where(eq(purchasePaymentEvidence.purchaseId, recorded.id));
     expect(payments).toHaveLength(1);
-    expect(payments[0]?.amount).toBe(196.57);
+    expect(payments[0]?.amountMinor).toBe(19657n);
   });
 
   async function world(
@@ -750,7 +750,7 @@ describe("accepted source financial reconciliation", () => {
     const { initial, accepted, database, state } = await world();
     const order = initial.orders[0]!;
     const claim = initial.source[0]!;
-    await database.update(purchasePaymentEvidence).set({ amount: 39 });
+    await database.update(purchasePaymentEvidence).set({ amountMinor: 3900n });
     const fix = storedImportFix.parse({
       kind: "reconcile_source_order",
       purchaseId: accepted.id,
@@ -796,7 +796,7 @@ describe("accepted source financial reconciliation", () => {
       );
     });
     const after = await state();
-    expect(after.payments[0]?.amount).toBe(40);
+    expect(after.payments[0]?.amountMinor).toBe(4000n);
     expect(after.expenses).toEqual(initial.expenses);
     expect(after.allocations).toEqual(initial.allocations);
   });

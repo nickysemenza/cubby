@@ -2129,7 +2129,7 @@ describe("reviewed accepted source Product association", () => {
       purchaseId: w.association.purchaseId,
       sourceClaimId: cashback.claim.id,
       evidenceIndex: 0,
-      amount: -2,
+      amountMinor: -200n,
       chargedAt: new Date("2026-09-03T18:00:00Z"),
     });
     const siblings = async () => ({

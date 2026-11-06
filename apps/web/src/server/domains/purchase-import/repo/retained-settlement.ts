@@ -20,7 +20,7 @@ import {
   paymentTender,
   type PaymentTender,
 } from "@cubby/schemas/purchase-import";
-import { cents } from "@cubby/shared";
+import { cents, minorToMoney } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { and, asc, between, eq, inArray, sql } from "drizzle-orm";
 
@@ -39,6 +39,7 @@ import {
   purchase,
   purchasePaymentEvidence,
 } from "~/server/db/schema";
+import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   applyAllocationChanges,
   assertAllocationSetValid,
@@ -86,13 +87,13 @@ export async function lockPartySettlement(
 type RetainedPayment = Readonly<
   Pick<
     typeof purchasePaymentEvidence.$inferSelect,
-    "amount" | "chargedAt" | "cardLastFour" | "tender"
+    "amountMinor" | "chargedAt" | "cardLastFour" | "tender"
   >
 >;
 
 const retainedPaymentFields = {
   sourceClaimId: purchasePaymentEvidence.sourceClaimId,
-  amount: purchasePaymentEvidence.amount,
+  amountMinor: purchasePaymentEvidence.amountMinor,
   chargedAt: purchasePaymentEvidence.chargedAt,
   cardLastFour: purchasePaymentEvidence.cardLastFour,
   tender: purchasePaymentEvidence.tender,
@@ -131,7 +132,7 @@ export type RetainedSettlementOutcome =
 // timestamps, and the deferred-settlement SQL compares `chargedAt::date`.
 const paymentKey = (payment: RetainedPayment) =>
   // oxlint-disable-next-line cubby/no-ad-hoc-calendar-day -- same UTC day as the SQL side
-  `${cents(payment.amount)}|${payment.chargedAt?.toISOString().slice(0, 10) ?? ""}`;
+  `${payment.amountMinor}|${payment.chargedAt?.toISOString().slice(0, 10) ?? ""}`;
 
 /**
  * One order's payment set. A Purchase seen through several sources (a browser
@@ -358,7 +359,7 @@ async function settleableCharges(
     ? await tx
         .select({
           ids: sql<string[] | null>`${
-            input.payments.every((payment) => payment.amount < 0)
+            input.payments.every((payment) => payment.amountMinor < 0n)
               ? purchaseRefundAccountIdsSql(quotedTable(purchase))
               : purchasePayingAccountIdsSql(quotedTable(purchase))
           }`,
@@ -407,7 +408,7 @@ async function settleableCharges(
 
 const toPolicyPayments = (payments: RetainedPayment[]) =>
   payments.map((payment) => ({
-    amount: payment.amount,
+    amount: minorToMoney(payment.amountMinor),
     chargedAt: payment.chargedAt?.toISOString(),
     cardLastFour: payment.cardLastFour ?? undefined,
     tender: payment.tender,
@@ -456,7 +457,10 @@ async function competingClaimants(
     .where(
       and(
         sql`${purchasePaymentEvidence.purchaseId} <> ${excludePurchaseId}::uuid`,
-        sql`round(${purchasePaymentEvidence.amount} * 100) = ${cents(charge.amount)}`,
+        eq(
+          purchasePaymentEvidence.amountMinor,
+          financialEvidenceAmountMinor(charge.amount),
+        ),
         // Both sides as UTC epochs, independent of the session time zone.
         sql`(${purchasePaymentEvidence.chargedAt} IS NULL
           OR abs(extract(epoch FROM ${purchasePaymentEvidence.chargedAt}) - ${epoch}) <= ${POSTING_WINDOW_DAYS * 86_400})`,
@@ -478,9 +482,9 @@ async function competingClaimants(
             AND ${notDeleted("fta")}
             AND sign(fta.amount) = sign(${charge.amount}::numeric)
         ), 0)) < abs((
-          SELECT sum(ppe."amount") FROM "PurchasePaymentEvidence" ppe
+          SELECT sum(ppe."amountMinor")::numeric / 100 FROM "PurchasePaymentEvidence" ppe
           WHERE ppe."purchaseId" = "PurchasePaymentEvidence"."purchaseId"
-            AND sign(ppe.amount) = sign(${charge.amount}::numeric)
+            AND sign(ppe."amountMinor") = sign(${charge.amount}::numeric)
         ))`,
       ),
     );
@@ -575,7 +579,10 @@ async function namesOnlyThisCharge(
   if (claim?.ledgerPartyId !== input.ledgerPartyId) return false;
   const payments = await loadPaymentSet(tx, row.id);
   if (payments === "conflicting_sources" || payments.length !== 1) return false;
-  if (cents(payments[0]?.amount ?? 0) !== cents(input.charge.amount))
+  if (
+    (payments[0]?.amountMinor ?? 0n) !==
+    financialEvidenceAmountMinor(input.charge.amount)
+  )
     return false;
   const own = matchCompletePaymentSet(
     toPolicyPayments(payments),
@@ -700,9 +707,9 @@ export async function planPurchaseRetainedSettlement(
     preloaded?.payments ?? (await loadPaymentSet(tx, input.purchaseId));
   if (retained === "conflicting_sources") return retained;
   const payments = retained.filter((payment) =>
-    refund ? payment.amount < 0 : payment.amount > 0,
+    refund ? payment.amountMinor < 0n : payment.amountMinor > 0n,
   );
-  if (refund && !retained.some((payment) => payment.amount > 0))
+  if (refund && !retained.some((payment) => payment.amountMinor > 0n))
     return "no_evidence";
   const ownerIds =
     preloaded?.ownerIds ??
@@ -739,15 +746,15 @@ export async function planPurchaseRetainedSettlement(
   // charge: this order alone may never absorb it. Without a printed total the
   // live Expense lines stand in; with neither, the paid amount is unproven.
   const orderTotal = refund
-    ? payments.reduce((sum, payment) => sum + cents(payment.amount), 0)
+    ? payments.reduce((sum, payment) => sum + payment.amountMinor, 0n)
     : target.statedTotal !== null
-      ? cents(target.statedTotal)
-      : await liveExpenseTotalCents(tx, input.purchaseId);
+      ? financialEvidenceAmountMinor(target.statedTotal)
+      : await liveExpenseTotalCents(tx, input.purchaseId).then((total) =>
+          // Expense still uses legacy dollar rounding; an unsafe cent anchor cannot authorize settlement.
+          total === null || !Number.isSafeInteger(total) ? null : BigInt(total),
+        );
   if (orderTotal === null) return "incomplete";
-  const paid = payments.reduce(
-    (sum, payment) => sum + cents(payment.amount),
-    0,
-  );
+  const paid = payments.reduce((sum, payment) => sum + payment.amountMinor, 0n);
   const sharesCharge = !refund && paid > orderTotal;
   if (paid < orderTotal) return "incomplete";
   const plan: PlannedAllocation[] = [];
@@ -923,7 +930,7 @@ export async function settleRetainedPaymentEvidence(
           WHERE fa."ledgerPartyId" = ${importSourceClaim.ledgerPartyId}
             AND ${notDeleted("ft")}
             AND ft."status" IN (${financialTransactionStatus.enum.observed}, ${financialTransactionStatus.enum.pending}, ${financialTransactionStatus.enum.posted})
-            AND round(ft."amount" * 100) = round(${purchasePaymentEvidence.amount} * 100)
+            AND round(ft."amount" * 100) = ${purchasePaymentEvidence.amountMinor}
             AND abs(coalesce(ft."transactionDate", ft."postedDate") - (${purchasePaymentEvidence.chargedAt})::date) <= ${POSTING_WINDOW_DAYS}
             AND NOT EXISTS (
               SELECT 1 FROM "FinancialTransactionAllocation" ofta
