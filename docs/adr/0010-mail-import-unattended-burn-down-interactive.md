@@ -84,7 +84,7 @@ before Worker teardown on both completion and failure; timeouts retain observed
 successful-call models while their outcome remains unavailable rather than
 counting as parity.
 
-Production runs Luna as the primary and Opus as the escalation model. A graded
+Production runs Luna as the primary and Opus as the preferred escalation model. A graded
 replay of 20 held-out import Emails matched Opus on every total Luna imported
 (differences were line names, $0 shipping lines, and split rather than netted
 discounts), and 9 of 10 unresolved Emails agreed. Linking to existing Purchases
@@ -104,11 +104,20 @@ supply authority. Source-specific gaps settle without stopping unrelated work.
 
 A claim returning another Email returns to the primary; re-claiming the same
 unsettled Email keeps its escalation. While escalation funding refuses, the
-primary handles the Email; that funding decision is recorded once per Email.
+primary handles the Email unless the existing Sol alternative can use free
+funding. A known Claude credit refusal selects funded Sol before transmission
+instead of spending a failed Claude call to reach the provider ladder's same
+alternative. The funding decision and selected model are retained per Email.
 Model transitions retain a pending/applied configuration receipt. Recovery
 reconciles the desired model before accepting a replayed escalation or next-Email
 reset. Pending transitions reapply idempotently because a failed configuration
 may already have taken effect. Existing stored escalation decisions survive the
-policy cutover. The bounded extraction/repair pipeline must enforce its persisted
-attempt budget before production cutover; prompt instructions alone are not a
-mechanical limit.
+policy cutover. The coordinator mechanically bounds extraction submissions by
+source checksum: initial extraction plus one repair on the primary and one
+escalated submission. Invalid tool arguments count too; replaying the same call
+does not. Exhaustion publishes a gap through the ordinary checksum-bound writer.
+The bundled ordinary tool owns stable preparation/commit identities and returns
+the next durable claim after known publication. New retained source bytes or
+accepted evidence of the exact own-account order may reopen an untouched
+automatic gap through discovery, preserving earlier rosters, outcomes and member
+intent. Unchanged source/evidence fingerprints never schedule another attempt.
