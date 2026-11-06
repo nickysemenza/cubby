@@ -36,6 +36,7 @@ import {
 } from "~/server/db/schema";
 import {
   sourceObservations,
+  sourceObservationReviews,
   sourceObservationField,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
@@ -493,7 +494,8 @@ describe("statement row ledger", () => {
         SELECT count(*)::int AS differences
         FROM "SourceTransactionRecord" r LEFT JOIN "SourceOccurrence" o ON o.id=r."occurrenceId"
         JOIN ${sourceObservations} projection ON projection.id=r.id
-        WHERE projection."historicalTransactionIds" IS DISTINCT FROM ARRAY(
+        JOIN ${sourceObservationReviews} review ON review.id=r.id
+        WHERE projection."reviewState" IS DISTINCT FROM review."reviewState" OR projection."historicalTransactionIds" IS DISTINCT FROM ARRAY(
           SELECT history.code FROM (${sourceHistoricalTransactionRows(sql`r.id`, sql`ARRAY[r."occurrenceId"]::uuid[]`)}) history ORDER BY history.code
         ) OR projection."reviewState" IS DISTINCT FROM CASE
           WHEN o."reviewState"=${sourceOccurrenceReviewState.enum.ready} AND ${sourceOccurrenceHasUnresolvedHistory(sql`o.id`, sql`o."acceptedTransactionId"`)}

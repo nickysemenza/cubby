@@ -63,8 +63,8 @@ import { acceptFinancialTransferPair } from "~/server/domains/financial-transact
 import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo";
 import {
   sourceOccurrenceSuppressed,
-  sourceObservations,
-  sourceObservationFrom,
+  sourceObservationReviews,
+  sourceObservationFacts,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
@@ -473,7 +473,7 @@ async function loadStatementLegs(
   // A scope selects whole charges; their state still reads every observation.
   const state = conditions.length
     ? chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (
-        SELECT seen.source, ${chargeKeyOf("seen")} FROM ${sourceObservations} seen
+        SELECT seen.source, ${chargeKeyOf("seen")} FROM ${sourceObservationFacts} seen
         WHERE ${notDeleted("seen")} AND ${sql.join(conditions, sql` AND `)}
       )`)
     : CHARGE_STATE;
@@ -488,7 +488,7 @@ async function loadStatementLegs(
       r."accountId"::text AS "accountId", si.fingerprint AS "importFingerprint",
       ARRAY(SELECT m."importId"::text FROM ${transactionImportMembers} m WHERE m."statementRowId" = r.id) AS "importIds"
     FROM ${state} cs
-    JOIN ${sourceObservations} r ON r.source = cs.source AND ${chargeKeyOf("r")} = cs."chargeKey"
+    JOIN ${sourceObservationReviews} r ON r.source = cs.source AND ${chargeKeyOf("r")} = cs."chargeKey"
       AND ${notDeleted("r")}
     JOIN "TransactionImport" si ON si.id = r."batchId"
     WHERE NOT ${sourceOccurrenceSuppressed(sql`cs."occurrenceId"`)} AND NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NULL
@@ -991,7 +991,7 @@ async function potentialTransferSeeds(db: Database, keys: readonly string[]) {
       ? [
           sql`SELECT 'stmt:' || r.source || ':' || r."chargeKey" AS key,
           -r."providerAmount" AS amount, NULL::text AS "recordedKind", r."sourceCategory"
-        FROM ${sourceObservations} r
+        FROM ${sourceObservationFacts} r
         WHERE r.current AND ${notDeleted("r")}
           AND (r.source, r."chargeKey") IN (${sql.join(
             charges.map(
@@ -1640,7 +1640,7 @@ export async function generateTransferPairSuggestionsPage(
         s.data->>'pairKey' AS "pairKey", s.active, s.status,
         (s.decisions <> '[]'::jsonb OR s.judgment#>>'{outflow,charge,chargeKey}' NOT LIKE 'SOC-%'
           OR s.judgment#>>'{inflow,charge,chargeKey}' NOT LIKE 'SOC-%'
-          OR EXISTS(SELECT 1 FROM ${sourceObservations} observed WHERE observed.source IN (s.judgment#>>'{outflow,charge,source}',s.judgment#>>'{inflow,charge,source}')
+          OR EXISTS(SELECT 1 FROM ${sourceObservationReviews} observed WHERE observed.source IN (s.judgment#>>'{outflow,charge,source}',s.judgment#>>'{inflow,charge,source}')
             AND observed."chargeKey" IN (s.judgment#>>'{outflow,charge,chargeKey}',s.judgment#>>'{inflow,charge,chargeKey}')
             AND observed."reviewState" IS DISTINCT FROM ${sourceOccurrenceReviewState.enum.ready})) AS "retainReview"
       FROM "Suggestion" s
@@ -2093,7 +2093,7 @@ async function currentStatementStatus(db: Database, leg: TransferPairLeg) {
       "A new transfer leg requires retained source identity.",
     );
   const { rows } = await unwrapDb(db).execute<{ providerStatus: unknown }>(sql`
-    SELECT "providerStatus" FROM ${sourceObservationFrom} WHERE source=${leg.charge.source}
+    SELECT "providerStatus" FROM ${sourceObservationFacts} "SourceTransactionRecord" WHERE source=${leg.charge.source}
       AND "chargeKey"=${leg.charge.chargeKey} AND current AND "withdrawnAt" IS NULL AND ${notDeleted("SourceTransactionRecord")}
   `);
   if (rows.length !== 1)

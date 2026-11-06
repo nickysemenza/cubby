@@ -30,7 +30,7 @@ import { sourceTransactionRecord } from "~/server/db/retained-tables";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 
 /** Read projection only. Observation facts never inherit another observation's decisions. */
-const sourceObservationFacts = sql`(
+export const sourceObservationFacts = sql`(
   -- includes-deleted: immutable observations and original aliases retain tombstone evidence.
   SELECT r.id, r.shortcode, r."batchId", r.source, r."occurrenceId", r."factFingerprint",
     r."rowPosition", r."providerTransactionId", r."providerAccountId", r."providerData",
@@ -63,6 +63,16 @@ const sourceObservationFacts = sql`(
   LEFT JOIN "FinancialEvidenceAlias" reference ON reference."observationId" = r.id AND reference.kind = 'legacyReference'
 )`;
 
+/** Identity and immutable facts only: no annotation, alias-history or accepted-money projection. */
+export const sourceObservationIdentities = sql`(
+  -- includes-deleted: physical memberships and reserved identities retain tombstone evidence.
+  -- Disjoint branches preserve COALESCE identity while letting charge-key probes use the owner/record indexes.
+  SELECT r.*, o.shortcode AS "chargeKey"
+  FROM "SourceTransactionRecord" r JOIN "SourceOccurrence" o ON o.id=r."occurrenceId"
+  UNION ALL
+  SELECT r.*, r.shortcode AS "chargeKey" FROM "SourceTransactionRecord" r WHERE r."occurrenceId" IS NULL
+)`;
+
 export const sourceObservations = sql`(SELECT observation.*,
   CASE WHEN observation.disposition = ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} THEN ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}
     WHEN observation."supersededByRowId" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.superseded}
@@ -77,6 +87,19 @@ export const sourceObservations = sql`(SELECT observation.*,
     LEFT JOIN ${sourceOccurrencesWithUnresolvedHistory} unresolved ON unresolved.id=facts."occurrenceId"
     LEFT JOIN ${sourceObservationHistoricalLinks} history ON history."observationId"=facts.id
   ) observation)`;
+
+/** Hash the complete negative fence once; never re-run history closure for each suggestion. */
+export const sourceReadyOccurrenceIds = sql`-- includes-deleted: reserved ownership and stored review state remain binding after tombstoning.
+  SELECT ready.id FROM "SourceOccurrence" ready
+  WHERE ready."reviewState"=${sourceOccurrenceReviewState.enum.ready}
+    AND ready.id NOT IN (SELECT id FROM ${sourceOccurrencesWithUnresolvedHistory} unresolved)`;
+
+/** Review eligibility needs the negative fence, not every historical transaction code. */
+export const sourceObservationReviews = sql`(SELECT facts.*,
+  CASE WHEN facts."storedReviewState"=${sourceOccurrenceReviewState.enum.ready}
+    AND facts."occurrenceId" NOT IN (${sourceReadyOccurrenceIds})
+    THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE facts."storedReviewState" END AS "reviewState"
+  FROM ${sourceObservationFacts} facts)`;
 
 /** One row per explicit owner; there is no alias lookup or observation-state fold. */
 export const sourceOccurrenceStates = sql`(
@@ -202,9 +225,9 @@ export const SOURCE_HELD_REASON =
 
 /** Held advice can be dismissed, but cannot suppress a later proven occurrence. */
 export const statementSuggestionSourceHeld = (alias: string) => sql`NOT EXISTS (
-  SELECT 1 FROM ${sourceObservations} reviewed
+  SELECT 1 FROM ${sourceObservationFacts} reviewed
   WHERE reviewed.id=${sql.identifier(alias)}."recordId" AND reviewed."occurrenceId" IS NOT NULL
-    AND reviewed.current AND reviewed."reviewState"=${sourceOccurrenceReviewState.enum.ready}
+    AND reviewed.current AND reviewed."occurrenceId" IN (${sourceReadyOccurrenceIds})
     AND reviewed."withdrawnAt" IS NULL AND reviewed."supersededByRowId" IS NULL
     AND reviewed."chargeKey"=${sql.identifier(alias)}.data->>'chargeKey'
 )`;

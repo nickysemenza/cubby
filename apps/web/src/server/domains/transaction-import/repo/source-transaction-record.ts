@@ -21,6 +21,7 @@ import { financialAccount, sourceTransactionRecord } from "~/server/db/schema";
 import {
   sourceObservationColumns,
   sourceObservationFrom,
+  sourceObservationFacts,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
@@ -238,7 +239,7 @@ export async function findSourceTransactionRecordDrift(
   }>(sql`
     WITH eligible AS (
       SELECT id, source, "chargeKey", "accountDescriptor", "statementDate", "providerAmount", "createdAt"
-      FROM ${sourceObservationFrom} WHERE ${where}
+      FROM ${sourceObservationFacts} "SourceTransactionRecord" WHERE ${where}
     ), drifted AS (
       SELECT a.source, a."accountDescriptor", a."statementDate", a."providerAmount",
              min(least(a."createdAt", b."createdAt")) AS "firstSeen",
@@ -264,7 +265,7 @@ export async function findSourceTransactionRecordDrift(
            "SourceTransactionRecord"."disposition",
            ${importFingerprint} AS "importFingerprint",
            "SourceTransactionRecord"."createdAt"
-    FROM ${sourceObservationFrom}
+    FROM ${sourceObservationFacts} "SourceTransactionRecord"
     JOIN drifted d
       ON d."source" = "SourceTransactionRecord"."source"
      AND d."accountDescriptor" = "SourceTransactionRecord"."accountDescriptor"

@@ -9,8 +9,7 @@ import { sourceTransactionRecord as searchTablesourceTransactionRecord } from "~
 import { sourceTransactionRecord } from "~/server/db/schema";
 import {
   sourceObservationColumns,
-  sourceObservationFrom,
-  sourceObservations,
+  sourceObservationFacts,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import type {
   EmbeddingLoadOptions,
@@ -32,7 +31,7 @@ async function loadEmbeddingText(
       sourceCategory: sourceObservationColumns.sourceCategory,
       notes: sourceObservationColumns.notes,
     })
-    .from(sourceObservationFrom)
+    .from(sql`${sourceObservationFacts} "SourceTransactionRecord"`)
     .where(
       and(
         notDeleted(sourceTransactionRecord),
@@ -71,6 +70,6 @@ export const sourceTransactionRecordSearch = {
       SELECT 'sourceTransactionRecord', r.id::text, r.shortcode,
         COALESCE(NULLIF(r."rawDescription", ''), r.merchant, r."accountDescriptor"), r."accountDescriptor",
         r.source, ARRAY[r."externalId"]::text[], ARRAY[r.merchant, r."sourceCategory", r.notes]::text[]
-      FROM ${sourceObservations} r WHERE ${notDeleted(alias(searchTablesourceTransactionRecord, "r"))} AND 'sourceTransactionRecord' IN (${types}) AND ${requested(sql`r.id`)} AND ${bounded(sql`r."createdAt"`)}`,
+      FROM ${sourceObservationFacts} r WHERE ${notDeleted(alias(searchTablesourceTransactionRecord, "r"))} AND 'sourceTransactionRecord' IN (${types}) AND ${requested(sql`r.id`)} AND ${bounded(sql`r."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

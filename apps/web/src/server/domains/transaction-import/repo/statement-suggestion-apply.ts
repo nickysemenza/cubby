@@ -30,7 +30,7 @@ import {
   createFinancialTransaction,
   updateFinancialTransaction,
 } from "~/server/domains/financial-transaction/repo/financial-transaction";
-import { sourceObservationFrom } from "~/server/domains/transaction-import/repo/source-observation-state";
+import { sourceObservationFacts } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
   type ChargeProposal,
@@ -332,7 +332,7 @@ async function applySupersede(
     source: string;
     externalId: string;
   }>(sql`
-    SELECT source, "externalId" FROM ${sourceObservationFrom}
+    SELECT source, "externalId" FROM ${sourceObservationFacts} "SourceTransactionRecord"
     WHERE id IN (${sql.join(
       supersede.pendingRowIds.map((id) => sql`${id}::uuid`),
       sql`, `,

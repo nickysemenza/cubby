@@ -1,6 +1,5 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily } from "@cubby/schemas/assessment";
-import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { type SQL, sql } from "drizzle-orm";
@@ -8,7 +7,9 @@ import { type SQL, sql } from "drizzle-orm";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
-  sourceObservations,
+  sourceReadyOccurrenceIds,
+  sourceObservationFacts,
+  sourceObservationIdentities,
   sourceOccurrenceStates,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 
@@ -29,7 +30,7 @@ export const chargeKeyOf = (alias: string) => sql.raw(`${alias}."chargeKey"`);
 /** Scoped direct state, with one row per owner and no observation-state aggregation. */
 export const chargeStateOf = (scope: SQL) => sql`(
   SELECT state.* FROM ${sourceOccurrenceStates} state
-  WHERE EXISTS (SELECT 1 FROM ${sourceObservations} r
+  WHERE EXISTS (SELECT 1 FROM ${sourceObservationIdentities} r
     WHERE r.source = state.source AND r."chargeKey" = state."chargeKey"
       AND ${notDeleted("r")} AND (${scope}))
 )`;
@@ -77,7 +78,7 @@ export const pendingSuggestion = (alias = "s") =>
   sql`${sql.raw(`"${alias}"`)}.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.statement_transaction)}
     AND ${sql.raw(`"${alias}"`)}.active
     AND ${sql.raw(`"${alias}"`)}.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
-    AND EXISTS (SELECT 1 FROM ${sourceObservations} observation
+    AND EXISTS (SELECT 1 FROM ${sourceObservationFacts} observation
       WHERE observation.id=${sql.raw(`"${alias}"`)}."recordId" AND ${notDeleted("observation")}
         AND observation.disposition <> ${sourceTransactionRecordDisposition.enum.ignored}
         AND observation."supersededByRowId" IS NULL
@@ -88,9 +89,9 @@ export const sourceSuggestionAutomaticEligible = (
   alias = "s",
   allowRetainedCorrection = false,
 ) => sql`EXISTS (
-  SELECT 1 FROM ${sourceObservations} observed
+  SELECT 1 FROM ${sourceObservationFacts} observed
   WHERE observed.id=${sql.identifier(alias)}."recordId" AND ${notDeleted("observed")}
-    AND observed."occurrenceId" IS NOT NULL AND observed."reviewState"=${sourceOccurrenceReviewState.enum.ready}
+    AND observed."occurrenceId" IS NOT NULL AND observed."occurrenceId" IN (${sourceReadyOccurrenceIds})
     AND observed.current AND observed.disposition <> ${sourceTransactionRecordDisposition.enum.ignored} AND observed."supersededByRowId" IS NULL
     AND observed."chargeKey"=${sql.identifier(alias)}.data->>'chargeKey'
     AND (observed."withdrawnAt" IS NULL OR ${allowRetainedCorrection ? sql`${sql.identifier(alias)}.data->>'reviewReason' IS NOT NULL` : sql`${sql.identifier(alias)}.data->>'recommended'=${statementTransactionAction.enum.void}`})
