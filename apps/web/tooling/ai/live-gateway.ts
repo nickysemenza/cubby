@@ -5,6 +5,7 @@ import {
 } from "@cubby/shared/ai/gateway-metadata";
 import {
   gatewayProviderUrl,
+  isInferenceFundingRefusal,
   strippedHeaders,
   workersAiModel,
   workersAiRunRequest,
@@ -36,9 +37,8 @@ type Env = {
    * `subscriber-credit` key), so Claude attempts stay on credit.
    */
   PLAN_AS_PAID?: string;
-  /** Opt-in replay guard: catalog-derived full-window reservations, never rates. */
-  EVAL_BUDGET_USD?: string;
-  EVAL_QUOTES?: string;
+  /** Shared host-owned physical-call allowance. */
+  EVAL_BUDGET_URL?: string;
 };
 
 type RouteUsage = {
@@ -49,17 +49,96 @@ type RouteUsage = {
   models: Record<string, number>;
 };
 let usage: Record<string, RouteUsage> = {};
-let reservedUsd = 0;
-let budgetStopped = false;
-let receipts: { id: string; model: string }[] = [];
-const quoteSchema = z.array(
-  z.object({
-    model: z.string(),
-    route: z.enum(["openai", "anthropic", "workers-ai"]),
-    maxCostUsd: z.number().finite().nonnegative(),
-  }),
-);
 const decisionBody = z.object({ questions: z.record(z.string(), z.unknown()) });
+const reservation = z.object({ id: z.string() });
+
+async function reserveEvaluation(
+  env: Env,
+  request: Request,
+  route: string,
+  body: ArrayBuffer | undefined,
+  model: string | undefined,
+) {
+  if (!env.EVAL_BUDGET_URL) return undefined;
+  const frontier = route === "openai" || route === "anthropic";
+  if (
+    env.PLAN_AS_PAID === "1" ||
+    request.headers.get("x-cubby-inference-funding") === "paid" ||
+    (frontier &&
+      (request.headers.get("cf-aig-byok-alias") !== "subscriber-credit" ||
+        request.headers.get("cf-aig-no-wholesale") !== "true"))
+  )
+    return Response.json(
+      {
+        error: {
+          code: "evaluation_funding_refused",
+          message: "Replay requires credit-only frontier routing",
+        },
+      },
+      { status: 403 },
+    );
+  const questions =
+    route === "workers-ai" && body
+      ? decisionBody.safeParse(JSON.parse(new TextDecoder().decode(body)))
+      : null;
+  if (route === "workers-ai" && !questions?.success)
+    return new Response("Unquotable decision input", { status: 403 });
+  const response = await fetch(env.EVAL_BUDGET_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      action: "reserve",
+      model:
+        route === "workers-ai"
+          ? workersAiModel(
+              new URL(request.url).pathname.slice("/workers-ai/".length),
+            )
+          : model,
+      route,
+      count: questions?.success
+        ? Object.keys(questions.data.questions).length
+        : 1,
+    }),
+  });
+  if (!response.ok)
+    return Response.json(
+      {
+        error: {
+          code: "evaluation_budget_stopped",
+          message: (await response.text()).slice(0, 800),
+        },
+      },
+      { status: response.status },
+    );
+  return reservation.parse(await response.json());
+}
+
+async function reportEvaluationFailure(
+  env: Env,
+  id: string,
+  upstream?: Response,
+  route?: string,
+) {
+  if (!env.EVAL_BUDGET_URL) throw new Error("Missing replay allowance");
+  // Unknown failures keep their complete reservation. A fully read credit
+  // refusal is only a zero-cost candidate; the host also requires the exact
+  // failed receipt with no usage before releasing it.
+  let refused = false;
+  try {
+    if (upstream && (route === "openai" || route === "anthropic"))
+      refused = isInferenceFundingRefusal(
+        upstream.status,
+        await upstream.clone().text(),
+        route === "openai" ? "openai_credit" : "subscriber_credit",
+      );
+  } finally {
+    await fetch(env.EVAL_BUDGET_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: refused ? "refused" : "failed", id }),
+    });
+  }
+}
 
 const bodyModel = z.looseObject({ model: z.string() });
 
@@ -136,22 +215,10 @@ export default {
           })
         : fetch(request);
     if (url.pathname === "/usage") return Response.json(usage);
-    if (url.pathname === "/budget")
-      return Response.json({
-        reservedUsd,
-        stopped: budgetStopped,
-        usage,
-        receipts,
-      });
     if (url.pathname === "/reset") {
-      if (env.EVAL_BUDGET_USD)
-        return new Response("A guarded replay budget cannot reset", {
-          status: 409,
-        });
+      if (env.EVAL_BUDGET_URL)
+        return new Response("A guarded replay cannot reset", { status: 409 });
       usage = {};
-      reservedUsd = 0;
-      budgetStopped = false;
-      receipts = [];
       return new Response(null, { status: 204 });
     }
     // This Worker has only a Unified Billing token, never a ChatGPT session.
@@ -187,58 +254,8 @@ export default {
       body = new TextEncoder().encode(JSON.stringify(swapped)).buffer;
     }
     const model = body && wireModel(body);
-    if (env.EVAL_BUDGET_USD) {
-      const limit = Number(env.EVAL_BUDGET_USD);
-      const quotes = quoteSchema.safeParse(
-        JSON.parse(env.EVAL_QUOTES ?? "null"),
-      );
-      const frontier = route === "openai" || route === "anthropic";
-      const routeModel =
-        route === "workers-ai"
-          ? workersAiModel(url.pathname.slice("/workers-ai/".length))
-          : model;
-      const quote = quotes.success
-        ? quotes.data.find(
-            (entry) => entry.route === route && entry.model === routeModel,
-          )
-        : undefined;
-      const questions =
-        route === "workers-ai" && body
-          ? decisionBody.safeParse(JSON.parse(new TextDecoder().decode(body)))
-          : null;
-      const count = questions?.success
-        ? Object.keys(questions.data.questions).length
-        : 1;
-      const cost = quote ? quote.maxCostUsd * count : NaN;
-      // Reserve synchronously before fetch: overlapping calls cannot spend the
-      // same capacity. Failed/unknown transmissions keep their full reservation.
-      if (
-        budgetStopped ||
-        env.PLAN_AS_PAID === "1" ||
-        request.headers.get("x-cubby-inference-funding") === "paid" ||
-        (frontier &&
-          (request.headers.get("cf-aig-byok-alias") !== "subscriber-credit" ||
-            request.headers.get("cf-aig-no-wholesale") !== "true")) ||
-        !Number.isFinite(limit) ||
-        limit <= 0 ||
-        !Number.isFinite(cost) ||
-        count < 1 ||
-        (route === "workers-ai" && !questions?.success) ||
-        reservedUsd + cost > limit
-      ) {
-        budgetStopped = true;
-        return Response.json(
-          {
-            error: {
-              code: "evaluation_budget_stopped",
-              message: "Credit-only replay reservation refused",
-            },
-          },
-          { status: 403 },
-        );
-      }
-      reservedUsd += cost;
-    }
+    const admission = await reserveEvaluation(env, request, route, body, model);
+    if (admission instanceof Response) return admission;
     const metadata = proxiedAiGatewayMetadata(
       request.headers.get("cf-aig-metadata"),
       env.GATEWAY_ENVIRONMENT,
@@ -262,22 +279,18 @@ export default {
       upstream = await forward(request, url, route, body, metadata, env);
     } catch (error) {
       entry.failed += 1;
-      if (env.EVAL_BUDGET_USD) budgetStopped = true;
+      if (admission) await reportEvaluationFailure(env, admission.id);
       throw error;
     }
     if (!upstream.ok) {
       entry.failed += 1;
       entry.failedStatuses.push(upstream.status);
-      if (env.EVAL_BUDGET_USD) budgetStopped = true;
+      if (admission)
+        await reportEvaluationFailure(env, admission.id, upstream, route);
     }
-    if (env.EVAL_BUDGET_USD && upstream.ok) {
-      // Synthetic peer receipts correlate physical requests with stored usage;
-      // equal model counts alone could mistake an application-cache row for a
-      // missing physical-call row. No production response is rewritten here.
-      const id = `synthetic-eval:${crypto.randomUUID()}`;
-      receipts.push({ id, model: z.string().parse(countedModel) });
+    if (admission) {
       const headers = new Headers(upstream.headers);
-      headers.set("cf-aig-log-id", id);
+      headers.set("cf-aig-log-id", admission.id);
       return new Response(upstream.body, {
         status: upstream.status,
         statusText: upstream.statusText,

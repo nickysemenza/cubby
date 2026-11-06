@@ -260,12 +260,16 @@ until a session itemizes it.
 Live `eval:mail-replay` requires `MAIL_REPLAY_PRICING_FILE` (an official
 models.dev `?type=all` snapshot) and `MAIL_REPLAY_BUDGET_FILE` (an exclusive
 JSON ledger with `limitUsd`, `accountedUsd`, `outstandingUsd` and `stopped`).
-The launcher reserves the remaining allowance before starting each case;
-each peer reserves full catalog window bounds before every physical call.
+One loopback admission server serializes full catalog-window reservations for
+both peers before every physical call. It reconciles exact stored receipts
+between requests, so sequential calls can reuse unused capacity without
+partitioning the allowance between coordinator and other features.
 Frontier requests require the subscriber-credit alias and no-wholesale flag;
 paid forwarding is disabled. Uncertain calls retain their reservations and
 stop further evaluation. Only exact reconciliation of successful physical
-requests with priced stored usage releases unused capacity. The ledger spans
+requests with priced stored usage releases unused capacity. A fully read
+credit refusal also requires its exact failed receipt with no token usage
+before its reservation is released. Unknown failures remain reserved. The ledger spans
 fresh databases, peer isolates and launcher invocations. A stale lock or
 outstanding reservation requires reconciliation before another launch.
 

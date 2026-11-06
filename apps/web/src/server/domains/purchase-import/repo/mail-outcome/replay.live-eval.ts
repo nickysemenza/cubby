@@ -191,8 +191,8 @@ const unavailable = (caseNumber: number, failure: string) => ({
 // ledger writes; comparison publishes grades; a missing outcome counts as parity.
 describe("isolated Mail coordinator replay", () => {
   const ctx = withTestDb(); // A fresh throwaway database for each case.
-  afterAll(() => {
-    evaluationBudget?.close();
+  afterAll(async () => {
+    await evaluationBudget?.close();
     for (const [index] of cases.entries()) {
       if (!reports.some((report) => report.case === index + 1))
         reports.push(
@@ -540,7 +540,21 @@ describe("isolated Mail coordinator replay", () => {
             };
             if (!evaluationBudget)
               throw new Error("Live replay requires guarded admission");
-            const allowances = evaluationBudget.begin();
+            const allowances = evaluationBudget.begin(async () =>
+              getDb(ctx.db)
+                .select({
+                  gatewayLogId: aiUsage.gatewayLogId,
+                  model: aiUsage.model,
+                  status: aiUsage.status,
+                  standardCost: aiUsage.standardCost,
+                  inputTokens: aiUsage.inputTokens,
+                  outputTokens: aiUsage.outputTokens,
+                  cacheReadTokens: aiUsage.cacheReadTokens,
+                  cacheWriteTokens: aiUsage.cacheWriteTokens,
+                })
+                .from(aiUsage)
+                .where(eq(aiUsage.runId, runId)),
+            );
             await withWorkerdRuntime(
               {
                 profile: "purchase-agent",
@@ -594,23 +608,7 @@ describe("isolated Mail coordinator replay", () => {
                     await waitForSettlement();
                   });
                 } finally {
-                  const budgets = await Promise.all(
-                    ["cubby-test-model", "cubby-test-gateway"].map(
-                      async (name) => {
-                        const response = await harness
-                          .getWorker(name)
-                          .fetch("https://model.test/budget");
-                        if (!response.ok)
-                          throw new Error("Replay budget read-back failed");
-                        return response.json();
-                      },
-                    ),
-                  );
-                  evaluationBudget.finish(
-                    budgets,
-                    reports.find((report) => report.case === index + 1)
-                      ?.usage ?? [],
-                  );
+                  await evaluationBudget.finish();
                 }
               },
             );
