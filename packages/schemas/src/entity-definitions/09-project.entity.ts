@@ -1907,6 +1907,9 @@ Rules:
     },
   },
   extensions: {
+    relatednessSignals: [
+      { kind: "semantic", label: "Similar meaning", weight: 1, limit: 8 },
+    ],
     ports: {
       reports: {
         module: "~/server/domains/project/repo/report-bindings",

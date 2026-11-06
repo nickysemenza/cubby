@@ -852,6 +852,9 @@ export const { definition, readSchemas } = defineEntityModel({
     },
   },
   extensions: {
+    relatednessSignals: [
+      { kind: "semantic", label: "Similar meaning", weight: 1, limit: 8 },
+    ],
     ports: {
       reports: {
         module: "~/server/domains/financial-account/repo/report-bindings",

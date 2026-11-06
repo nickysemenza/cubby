@@ -1137,6 +1137,9 @@ export const { definition, readSchemas } = defineEntityModel(
       },
     },
     extensions: {
+      relatednessSignals: [
+        { kind: "semantic", label: "Similar meaning", weight: 1, limit: 8 },
+      ],
       ports: {
         repository: {
           module: "~/server/domains/inventory/repo/repository",
