@@ -1,6 +1,5 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import {
-  type FinancialTransactionImportRow,
   type FinancialTransactionKind,
   financialTransactionCreateInput,
   financialTransactionKind,
@@ -85,6 +84,7 @@ import {
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   chargeId,
+  previewRowFor,
   type ChargeRef,
 } from "~/server/domains/transaction-import/repo/statement-input";
 import { statementTransactionKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
@@ -93,6 +93,7 @@ import { type EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
+import { outcomes } from "~/server/generic/suggestions/repo/suggestion-outcomes";
 import {
   suggestionIdScope,
   verbs,
@@ -431,27 +432,6 @@ const observationRow = z.object({
   importIds: z.array(z.string()),
 });
 type ObservationRow = z.infer<typeof observationRow>;
-
-/** The statement family's charge-to-preview mapping, one row per charge. */
-const previewRowFor = (
-  charge: ChargeRef,
-  row: ObservationRow,
-): FinancialTransactionImportRow => ({
-  key: chargeId(charge),
-  source: row.source,
-  account: row.accountDescriptor,
-  date: row.statementDate,
-  amount: row.providerAmount,
-  merchant: row.merchant,
-  originalStatement: row.rawDescription,
-  category: row.sourceCategory,
-  notes: row.providerNotes,
-  importFingerprint: row.importFingerprint,
-  ...(row.rowPosition === null ? {} : { rowPosition: row.rowPosition }),
-  providerTransactionId: row.providerTransactionId,
-  providerAccountId: row.providerAccountId,
-  ...(row.providerStatus ? { providerStatus: row.providerStatus } : {}),
-});
 
 /**
  * Current unmatched statement charges whose account resolves as the
@@ -1465,26 +1445,7 @@ export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair
       }),
     );
   },
-  outcomes: async (db, filters) => {
-    const { rows } = await unwrapDb(db).execute<{
-      status: string;
-      count: number;
-    }>(sql`
-      SELECT status, count(*)::int AS count FROM "Suggestion"
-      WHERE family = ${suggestionFamily.enum.transfer_pair}
-        ${filters.runId ? sql`AND "runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}
-      GROUP BY status
-    `);
-    const count = (status: string) =>
-      rows.find((row) => row.status === status)?.count ?? 0;
-    return {
-      applied: count("applied"),
-      rejected: count("rejected"),
-      superseded: count("superseded"),
-      resolved: count("resolved"),
-      fields: [],
-    };
-  },
+  outcomes: outcomes("transfer_pair"),
   acceptAsIs: (row) =>
     row.evidence.clean
       ? {
@@ -1528,8 +1489,6 @@ export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair
   transactionBound: true,
   lockForApply: async (db, prediction) => {
     const subject = suggestionSubjects.transfer_pair.parse(prediction.subject);
-    const { lockTransferPairLegs } =
-      await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
     await lockTransferPairLegs(db, subject.pairKey);
   },
   actions: ["correct", "wrong", "uncertain", "dismissed"],
@@ -1543,8 +1502,6 @@ export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair
       throw new Error(
         "Transfer pairing requires member acceptance of the current pair.",
       );
-    const { applyTransferPairSuggestion } =
-      await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
     await applyTransferPairSuggestion(db, context, state, input);
   },
 };
@@ -2458,7 +2415,7 @@ export async function applyTransferPair(
 }
 
 /** The `transfer_pair` family's review apply: the member accepts the published pair. */
-export async function applyTransferPairSuggestion(
+async function applyTransferPairSuggestion(
   db: Database,
   context: EntityKernelContext,
   state: SuggestionStateRow,

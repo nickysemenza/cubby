@@ -3,7 +3,6 @@ import { financialAccountSourceAliases } from "@cubby/schemas/financial-account"
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import {
   FINANCIAL_STATEMENT_IMPORT_MAX_ROWS,
-  type FinancialTransactionImportRow,
   financialTransactionKind,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
@@ -86,6 +85,7 @@ import {
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   chargeId,
+  previewRowFor,
   type ChargeRef,
 } from "~/server/domains/transaction-import/repo/statement-input";
 import {
@@ -97,7 +97,6 @@ import {
   readStatementSuggestions,
   statementSuggestionFacts,
   statementSuggestionKeys,
-  statementSuggestionStatusCounts,
 } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import {
   kindAgreed,
@@ -120,6 +119,7 @@ import {
   matchedRulesOf,
 } from "~/server/generic/suggestions/repo/suggestion";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
+import { outcomes } from "~/server/generic/suggestions/repo/suggestion-outcomes";
 import {
   stamps,
   verbs,
@@ -363,26 +363,6 @@ async function loadObservations(
 
 /** The newest observation with a physical position names the charge's settlement ref. */
 const canonicalObservation = (observations: Observation[]) => observations[0]!;
-
-const previewRowFor = (
-  charge: ChargeRef,
-  row: Observation,
-): FinancialTransactionImportRow => ({
-  key: chargeId(charge),
-  source: row.source,
-  account: row.accountDescriptor,
-  date: row.statementDate,
-  amount: row.providerAmount,
-  merchant: row.merchant,
-  originalStatement: row.rawDescription,
-  category: row.sourceCategory,
-  notes: row.providerNotes,
-  importFingerprint: row.importFingerprint,
-  ...(row.rowPosition === null ? {} : { rowPosition: row.rowPosition }),
-  providerTransactionId: row.providerTransactionId,
-  providerAccountId: row.providerAccountId,
-  ...(row.providerStatus ? { providerStatus: row.providerStatus } : {}),
-});
 
 type PendingTransaction = {
   id: string;
@@ -2195,18 +2175,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       }),
     );
   },
-  outcomes: async (db, filters) => {
-    const rows = await statementSuggestionStatusCounts(db, filters.runId);
-    const of = (status: string) =>
-      rows.find((row) => row.status === status)?.count ?? 0;
-    return {
-      applied: of("applied"),
-      rejected: of("rejected"),
-      superseded: of("superseded"),
-      resolved: of("resolved"),
-      fields: [],
-    };
-  },
+  outcomes: outcomes("statement_transaction"),
   acceptAsIs: (row) => {
     // Labels ride on top of the evidence fingerprint, so a create labelled
     // clean under an earlier rule still passes the apply-time check.

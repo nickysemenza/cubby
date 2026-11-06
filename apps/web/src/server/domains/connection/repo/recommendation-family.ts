@@ -22,6 +22,7 @@ import { readStoredConnectionProposals } from "~/server/domains/connection/repo/
 import { recommendationScopes } from "~/server/generic/suggestions/repo/pending-admission";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
+import { outcomes } from "~/server/generic/suggestions/repo/suggestion-outcomes";
 import {
   suggestionIdScope,
   keyBase,
@@ -197,27 +198,7 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
       addProposal(proposal);
     return found;
   },
-  outcomes: async (db, filters) => {
-    const { rows } = await unwrapDb(db).execute<{
-      status: string;
-      count: number;
-    }>(sql`
-      SELECT s.status, count(*)::int AS count
-      FROM "Suggestion" s
-      WHERE s.family = ${suggestionFamily.enum.recommendation}
-        ${filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}
-      GROUP BY s.status
-    `);
-    const of = (status: string) =>
-      rows.find((row) => row.status === status)?.count ?? 0;
-    return {
-      applied: of("applied"),
-      rejected: of("rejected"),
-      superseded: of("superseded"),
-      resolved: of("resolved"),
-      fields: [],
-    };
-  },
+  outcomes: outcomes("recommendation"),
   acceptAsIs: () => null,
   ...suggestionReviewFamilies.recommendation,
   scopes: recommendationScopes,
