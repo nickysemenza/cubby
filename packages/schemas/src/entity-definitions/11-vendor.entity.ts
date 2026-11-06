@@ -1478,6 +1478,7 @@ export const { definition, readSchemas } = defineEntityModel({
           facet: "provenance",
           label: "Logo",
           message: "No logo is recorded for this vendor.",
+          coverage: "vendors",
         },
         {
           id: "vendor_website",

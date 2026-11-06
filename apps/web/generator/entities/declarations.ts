@@ -481,7 +481,7 @@ export const declarationModules = new Map<
   }
 >();
 
-const compileLoadedEntityDeclarations = (
+export const compileLoadedEntityDeclarations = (
   loaded: readonly DeclarationObject[],
 ): CompiledEntity[] => {
   return compileEntityDeclarations(loaded, modulesChildren);

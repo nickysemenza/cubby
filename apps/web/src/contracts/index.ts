@@ -24,6 +24,11 @@ export {
   connectionContract,
   entityGraphContract,
 } from "./entity-graph.contract";
+export { entityInspectorHealthContract } from "./entity-inspector-health.contract";
+export {
+  entityIntegrityContract,
+  integrityProblemsContract,
+} from "./entity-integrity.contract";
 export { entityListContract } from "./entity-list.contract";
 export { entityMediaContract } from "./entity-media.contract";
 export { entityReportContract } from "./entity-report.contract";

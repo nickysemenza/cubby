@@ -53,7 +53,8 @@ pass. It captures explicit overrides before deriving image sources and inverse
 relations, derives detail sections before validating data-quality placements,
 then validates the complete graph against entity and module child storage.
 Image routing names actual model fields; disabled create routes do not count as
-active alternatives.
+active alternatives. Counterfactual comparisons use this same pass for named
+overrides.
 
 Compiler renderers use bootstrap-safe entity and identifier leaves, never their
 own generated catalogs. Shared Problem query and action declarations live in `@cubby/schemas` under
@@ -4920,9 +4921,10 @@ the replacement target; stopping admission alone does not prove coverage.
 
 ## Retired entity tools (ADR 0025)
 
-The entity explorer, schema spreadsheet and inspector, integrity catalog, graph
-explorer and path search, and similar-products rail are retired. Ordinary record
-relations retain `connectedRecords`, `connectedRecordsPreview` and `connections`.
+The entity explorer provides records, schema and integrity inspection, recipe and
+work dependency graphs, and cross-record exploration. Graph path search finds
+connections across records. The similar-products rail is retired.
+Ordinary record relations retain `connectedRecords`, `connectedRecordsPreview` and `connections`.
 Connection discovery still proposes inventory placement and expense/project links.
 Product-match review commands belong to the `productMatch` contract.
 
@@ -4933,11 +4935,12 @@ runner executes those dependencies and shares their request-scoped memo. Domain
 builders, including collection presentations, live with their domain; shared summary
 and record blocks stay generic. The same report binding owns record dependencies
 and optional collection builders.
-The declaration no longer records override-comparison provenance for field labels,
-read keys, display column ids or display order: these are plain options.
+The override inventory compares remaining named overrides with inferred defaults.
+Field labels, read keys, display column ids and display order are plain options.
 
 Problems retains paged type reads, counts and maintenance actions. The full-report
-branch, its five group finders and the coverage-meter denominator query are gone.
+branch and its five group finders are gone. The coverage-meter denominator
+generator remains available for the declared quality checks.
 Record metadata and canonical edit validation remain necessary for ordinary record
 pages and live under `server/entity-kernel/metadata`.
 

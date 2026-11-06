@@ -106,6 +106,8 @@ const main = async () => {
     await import("./entities/child-table-boundary.ts");
   const { loadEntityDeclarationBundle } =
     await import("./entities/declarations.ts");
+  const { renderOverrideComparisonArtifact } =
+    await import("./entities/override-comparisons.ts");
   const { renderAgentPromptArtifact } = await import("./agent-prompts.ts");
   const { renderPlaybookArtifact } = await import("./playbooks.ts");
   const { renderBrowserRouteArtifacts } =
@@ -129,7 +131,7 @@ const main = async () => {
     await readFile(resolve(ROOT, "apps/web/src/server/db/schema.ts"), "utf8"),
     new Set(retainedTableExports),
   );
-  const { entities } = await loadEntityDeclarationBundle();
+  const { entities, declarations } = await loadEntityDeclarationBundle();
   validateConnectedViews(entities);
   await settle([
     await renderAgentPromptArtifact(ROOT),
@@ -137,6 +139,7 @@ const main = async () => {
   ]);
   await settle([
     ...renderEntityArtifacts(entities, modulesChildren),
+    renderOverrideComparisonArtifact(declarations, entities),
     ...renderRelationArtifacts(entities),
     ...renderKernelBindingsArtifacts(entities),
     ...renderFilterArtifacts(entities),

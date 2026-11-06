@@ -5,6 +5,7 @@
   "files": [
     "src/server/entity-kernel/read.boundary.ts",
     "src/server/entity-kernel/metadata/read.boundary.ts",
+    "src/server/entity-metadata/read.boundary.ts",
     "src/server/generic/changes/repo/change.ts",
     "src/server/operation-runtime/browser-operation-dispatch.ts",
     "src/server/operation-runtime/middleware/native-workspace.ts",

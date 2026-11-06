@@ -191,9 +191,12 @@ export function RelationSectionActions({
         nativeButton={false}
         render={
           <Link
-            to="/$shortcode"
-            params={{ shortcode: recordId }}
-            hash="relationships"
+            to="/connections"
+            search={{
+              source: plan.source,
+              id: recordId,
+              view: `relation:${plan.relation}`,
+            }}
             aria-label={`Open all ${title.toLocaleLowerCase()}`}
           />
         }
@@ -693,9 +696,12 @@ function LiveEntityRelationTable({
           <Description size="xs">
             Showing {plan.limit} of {list.totalCount} ·{" "}
             <Link
-              to="/$shortcode"
-              params={{ shortcode: recordId }}
-              hash="relationships"
+              to="/connections"
+              search={{
+                source: plan.source,
+                id: recordId,
+                view: `relation:${plan.relation}`,
+              }}
             >
               Open all
             </Link>

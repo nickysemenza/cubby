@@ -170,7 +170,7 @@ function EntityWorkbenchInspectorContent({
       relations={
         hasRelations ? (
           <div className="px-4 py-3">
-            <EntityRelations entity={entity} sourceId={id} />
+            <EntityRelations entity={entity} sourceId={id} placement="detail" />
           </div>
         ) : undefined
       }
