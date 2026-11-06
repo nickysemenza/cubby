@@ -291,6 +291,22 @@ until a session itemizes it.
 | Pi host and services                       | `agent-host.ts`, `agent-services.ts`, `server/domains/purchase-agent/` |
 | Findings and their fixes                   | `findings.ts`                                                          |
 
+## Measured Email comparison
+
+On 2026-11-06, the six synthetic originals in
+`apps/web/tooling/ai/mail-import-comparison.json` were replayed serially through
+legacy coordinator bdfcf91179 and candidate abaef5a166, with identical current
+writers, Luna primary/Sol escalation and credit-only all-feature accounting.
+Standard cost fell from $0.149689794 to $0.035178209; summed processing time
+fell from 188s to 167s (median36s to28s), excluding runtime startup. Both arms
+matched the four itemized imports and retained two explicit gaps; their common
+unavailable-Gmail gap category differed from the missing-source expectation.
+Every priced report total reconciled with the allowance ledger. One observation
+per case, rounded timings, cache effects and serial order limit generalization;
+two cases were slower. No additional cache or concurrency machinery is justified.
+Use the existing `eval:mail-replay:stdin` with this JSON and the documented
+pricing/allowance environment; live replay requires explicit spending authority.
+
 ## Hidden dependencies
 
 Live `eval:mail-replay` requires `MAIL_REPLAY_PRICING_FILE` (an official
