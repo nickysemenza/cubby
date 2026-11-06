@@ -722,6 +722,13 @@
       "when": 1793927281637,
       "tag": "0102_drop_retired_project_start_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1793928230292,
+      "tag": "0103_drop_workitem_capture_evidence",
+      "breakpoints": true
     }
   ]
 }

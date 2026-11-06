@@ -230,21 +230,13 @@ describe("Gmail ingestion and attachment storage", () => {
           sql`SELECT key, generation, xmin::text AS xmin FROM "Job" WHERE kind = 'derived.drain' ORDER BY key`,
         )
       ).rows;
-    const invalidations = async () =>
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT key, id, observed, "capturedAt" FROM "JobInvalidationCapture" ORDER BY key, id`,
-        )
-      ).rows;
     await saveMailboxMetadata(ctx.db, metadata);
     const originalEmail = await readEmail(ctx.db, identity);
     expect(originalEmail).not.toBeNull();
     const originalJobs = await jobs();
-    const originalInvalidations = await invalidations();
     await saveMailboxMetadata(ctx.db, metadata);
     expect(await readEmail(ctx.db, identity)).toEqual(originalEmail);
     expect(await jobs()).toEqual(originalJobs);
-    expect(await invalidations()).toEqual(originalInvalidations);
 
     await saveMailboxMetadata(ctx.db, {
       ...metadata,

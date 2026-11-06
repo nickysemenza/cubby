@@ -1096,7 +1096,9 @@ describe("mail decision owners migration", () => {
           `UPDATE "Email" SET status = 'completed' WHERE id = $1`,
           [id(10)],
         );
-        const migrating = migrateDatabase(db);
+        const migrating = migrateDatabase(db, {
+          through: "0074_mail_decision_owners",
+        });
         await blockedOn(settlement, "Email");
         await settledOutcome(settlement, 93, {
           kind: "unresolved",
@@ -1128,6 +1130,7 @@ describe("mail decision owners migration", () => {
           reason: "Synthetic crossing writer",
         });
         const migrating = migrateDatabase(db, {
+          through: "0074_mail_decision_owners",
           lockRetryDelayMs: 0,
         });
         await blockedOn(writer, "Assessment");

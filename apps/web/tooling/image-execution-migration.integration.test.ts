@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client } from "pg";
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { migrateDatabase } from "./db-migrate";
 import { withMigrationDatabase } from "./test-database-lease";
@@ -630,5 +630,192 @@ it("drops Job's unread columns and keeps paused work and its attempts", async ()
         )
       ).rows,
     ).toEqual([{ state: "paused", attempts: 2 }]);
+  });
+});
+
+describe("dropping WorkItem, JobInvalidationCapture and PhotoGroupSourceEvidence", () => {
+  const PREDECESSOR = "0102_drop_retired_project_start_snapshot";
+  const DROP = "0103_drop_workitem_capture_evidence";
+  const UNDECLARED =
+    "WorkItem holds a ticket for a target that is not declared";
+  const RETIRED = [
+    "WorkItem",
+    "JobInvalidationCapture",
+    "PhotoGroupSourceEvidence",
+  ];
+  const refused = (client: Client, message: string) =>
+    expect(migrateDatabase(drizzle(client), { through: DROP })).rejects.toThrow(
+      expect.objectContaining({
+        cause: expect.objectContaining({
+          message: expect.stringContaining(message),
+        }),
+      }),
+    );
+  const present = async (client: Client) => {
+    const found: string[] = [];
+    for (const table of RETIRED)
+      if (
+        (
+          await client.query(`SELECT to_regclass($1) IS NOT NULL AS kept`, [
+            `public."${table}"`,
+          ])
+        ).rows[0].kept
+      )
+        found.push(table);
+    return found;
+  };
+  const allKept = async (client: Client) =>
+    (await present(client)).length === RETIRED.length;
+  const allGone = async (client: Client) =>
+    (await present(client)).length === 0 &&
+    (
+      await client.query(
+        `SELECT to_regclass('public."WorkTicket"') IS NULL AS gone`,
+      )
+    ).rows[0].gone;
+  const ticket = (client: Client, target: string, drain = "derived:drain") =>
+    client.query(
+      `INSERT INTO "WorkItem" (drain, target, ref, priority)
+       VALUES ($1, $2, gen_random_uuid(), 0)`,
+      [drain, target],
+    );
+  const populated = async (client: Client) => {
+    await migrateDatabase(drizzle(client), { through: PREDECESSOR });
+    await ticket(client, "product.dataQuality");
+    await ticket(client, "product.dataQuality@4");
+  };
+
+  it("drops all three with only declared tickets, keeping paused work", async () => {
+    await withMigrationDatabase(async (client) => {
+      await populated(client);
+      await client.query(
+        `INSERT INTO "Job" (key, kind, state, input, attempts)
+         VALUES ('synthetic:paused', 'run.execute', 'paused', '{}', 2)`,
+      );
+      await migrateDatabase(drizzle(client), { through: DROP });
+      expect(await allGone(client)).toBe(true);
+      expect(
+        (
+          await client.query(
+            `SELECT state, attempts FROM "Job" WHERE key = 'synthetic:paused'`,
+          )
+        ).rows,
+      ).toEqual([{ state: "paused", attempts: 2 }]);
+    });
+  });
+
+  it("drops a new database's own seeded tickets", async () => {
+    await withMigrationDatabase(async (client) => {
+      await migrateDatabase(drizzle(client), { through: PREDECESSOR });
+      expect(
+        (await client.query(`SELECT count(*)::int AS n FROM "WorkItem"`))
+          .rows[0].n,
+      ).toBeGreaterThan(0);
+      await migrateDatabase(drizzle(client), { through: DROP });
+      expect(await allGone(client)).toBe(true);
+    });
+  });
+
+  it("checks a ticket a writer commits while the migration waits for its lock", async () => {
+    await withMigrationDatabase(async (client, databaseUrl) => {
+      await populated(client);
+      const writer = new Client({ connectionString: databaseUrl });
+      await writer.connect();
+      try {
+        await writer.query("BEGIN");
+        await ticket(writer, "synthetic.undeclared");
+        const outcome = migrateDatabase(drizzle(client), {
+          through: DROP,
+        }).catch((error: unknown) => error);
+        // Long enough for the migration to be waiting on this writer's lock.
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        await writer.query("COMMIT");
+        expect(await outcome).toMatchObject({
+          cause: { message: expect.stringContaining(UNDECLARED) },
+        });
+      } finally {
+        await writer.end();
+      }
+      expect(await allKept(client)).toBe(true);
+    });
+  });
+
+  it("rolls every drop back when a later one fails, then succeeds on retry", async () => {
+    await withMigrationDatabase(async (client) => {
+      await populated(client);
+      await client.query(
+        `CREATE VIEW synthetic_blocker AS SELECT target FROM "WorkItem"`,
+      );
+      await expect(
+        migrateDatabase(drizzle(client), { through: DROP }),
+      ).rejects.toThrow("Failed query");
+      expect(await allKept(client)).toBe(true);
+      await client.query(`DROP VIEW synthetic_blocker`);
+      await migrateDatabase(drizzle(client), { through: DROP });
+      expect(await allGone(client)).toBe(true);
+    });
+  });
+
+  it("is a no-op on a rerun after a commit whose receipt was lost", async () => {
+    await withMigrationDatabase(async (client) => {
+      await populated(client);
+      await migrateDatabase(drizzle(client), { through: DROP });
+      await client.query(
+        `DELETE FROM drizzle.__drizzle_migrations
+         WHERE created_at = (SELECT max(created_at) FROM drizzle.__drizzle_migrations)`,
+      );
+      await migrateDatabase(drizzle(client), { through: DROP });
+      expect(await allGone(client)).toBe(true);
+    });
+  });
+
+  it("still checks tickets when another retired table is already gone", async () => {
+    await withMigrationDatabase(async (client) => {
+      await populated(client);
+      await ticket(client, "synthetic.undeclared");
+      await client.query(`DROP TABLE "JobInvalidationCapture"`);
+      await refused(client, UNDECLARED);
+      expect((await present(client)).includes("WorkItem")).toBe(true);
+    });
+  });
+
+  it.each([
+    [
+      "an undeclared target",
+      UNDECLARED,
+      `INSERT INTO "WorkItem" (drain, target, ref) VALUES ('derived:drain', 'synthetic.undeclared', gen_random_uuid())`,
+    ],
+    [
+      "another drain's work",
+      "WorkItem holds rows of another drain",
+      `INSERT INTO "WorkItem" (drain, target, ref) VALUES ('synthetic:other', 'product.price', gen_random_uuid())`,
+    ],
+    [
+      "another Job's wake",
+      "JobInvalidationCapture holds rows of another Job",
+      `INSERT INTO "JobInvalidationCapture" (key, "capturedAt") VALUES ('synthetic:other', now())`,
+    ],
+  ])("refuses to drop %s", async (_name, message, seed) => {
+    await withMigrationDatabase(async (client) => {
+      await populated(client);
+      await client.query(seed);
+      await refused(client, message);
+      expect(await allKept(client)).toBe(true);
+    });
+  });
+
+  it("refuses to drop photo source evidence that holds a row", async () => {
+    await withMigrationDatabase(async (client) => {
+      await populated(client);
+      await client.query(
+        `ALTER TABLE "PhotoGroupSourceEvidence" DROP CONSTRAINT "PhotoGroupSourceEvidence_runId_Run_id_fk"`,
+      );
+      await client.query(
+        `INSERT INTO "PhotoGroupSourceEvidence" ("runId", "groupKey", "sourceManufacturer")
+         VALUES (gen_random_uuid(), 'synthetic', 'Synthetic brand')`,
+      );
+      await refused(client, "PhotoGroupSourceEvidence holds rows");
+      expect(await allKept(client)).toBe(true);
+    });
   });
 });

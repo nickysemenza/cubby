@@ -757,7 +757,7 @@ describe("durable image representations", () => {
       authority: "automatic",
       actorUserId: null,
     });
-    const review = await reviewAssessment(ctx.db, kernelCtx(ctx), {
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
       standalone: { kind: "image_description", id: row.shortcode },
       operationId: crypto.randomUUID(),
       verdict: "correct",
@@ -767,16 +767,6 @@ describe("durable image representations", () => {
       },
       intent: "apply",
     });
-    // Unrelated writes and member Feedback add no search marks; this member
-    // correction reaches the owner below through its State transition alone.
-    const captured = await getDb(ctx.db).execute(sql`
-      SELECT target FROM "WorkItem"
-      WHERE (target = 'image.searchDocument' AND ref = ${owner.entityId}::uuid)
-        OR (target LIKE '%.searchDocument@6'
-          AND ref IN (${unrelated.id}::uuid, ${review.assessmentId}::uuid))
-    `);
-    expect(captured.rows).toEqual([]);
-
     await drainDerivedRefreshFrontier(ctx.db);
     const before = await getDb(ctx.db)
       .select()

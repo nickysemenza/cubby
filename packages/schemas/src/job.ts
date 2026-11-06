@@ -22,8 +22,7 @@ export const jobWaitReason = z.enum(jobWaitReasons);
 export type JobWaitReason = z.infer<typeof jobWaitReason>;
 
 /**
- * Why a WorkItem is explicitly waiting without spending an attempt. It stays on
- * the item: a typed Job wait would stop wakes for the drain's healthy siblings.
+ * Why a derived value's stored refresh metadata reports an attempt-free wait.
  */
 export const workWaitCauses = ["search_coverage"] as const;
 export const workWaitCause = z.enum(workWaitCauses);

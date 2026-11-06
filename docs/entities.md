@@ -3161,8 +3161,8 @@ Photo review's selected-Product evidence read supplies canonical notes, tags,
 category and structured external identifiers alongside purchase and image
 evidence. Comparison panels share that read instead of loading Product detail
 independently; category summaries are bounded to the selected Products.
-RunApproval and PhotoGroupSourceEvidence keep their rows as historical storage;
-they have no producer, reader or answer UI.
+RunApproval keeps its rows as historical storage; it has no producer, reader or
+answer UI.
 
 A column's `generated` SQL uses the same placeholders and emits a stored
 PostgreSQL generated column; it cannot also declare a default or update callback.
@@ -4289,9 +4289,7 @@ following Vendor merge and delete policy. A null edit placeholder preserves an
 explicit clear; an omitted Brand edit remains no change. Original descriptive
 manufacturer evidence remains in the proposal’s read-only `sourceManufacturer`
 column, independent of draft edits or switching between create and existing
-Product choices. Splitting or merging groups archives each removed proposal's
-exact manufacturer text in Run-owned `PhotoGroupSourceEvidence` rows in the
-same transaction, before deleting the predecessor proposals.
+Product choices.
 Proposal persistence locks selected live Brands against concurrent Vendor
 merge/delete; unresolved non-null references fail rather than becoming unknown.
 
