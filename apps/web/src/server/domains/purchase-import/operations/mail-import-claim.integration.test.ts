@@ -12,6 +12,7 @@
  * with its package held for review.
  */
 import type { ActorContext } from "@cubby/schemas/context";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import type { PurchaseId, RunId } from "@cubby/schemas/identifiers";
 import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
@@ -19,9 +20,11 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb } from "~/server/db/helpers";
+import { run } from "~/server/db/schema";
 import {
   emailClassificationObservation,
   email as emailTable,
@@ -33,9 +36,11 @@ import {
   shipment,
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 
+import { recordMailAttempt } from "../repo/mail-attempts";
 import { MAIL_IMPORT_RULE_REVISION } from "../service/mail-import-rule";
 import { claimMailImportWork } from "./mail-import-claim";
 import { resolveMail } from "./mail-tool";
@@ -461,5 +466,147 @@ describe("Mail import claim", () => {
       ),
     ).toEqual(before);
     expect(recipient).toHaveBeenCalledTimes(1);
+  });
+  it("carries unchanged-evidence budgets into successor Runs and preserves replay at the limit", async () => {
+    const { party, retain } = await world();
+    const source = await retain(
+      "attempt-budget",
+      "Synthetic order evidence",
+      "Incomplete synthetic order evidence",
+    );
+    const first = await admit(party, [source]);
+    async function claim(owner: typeof first.owner) {
+      await getDb(ctx.db)
+        .update(run)
+        .set({ dispatchEventId: `synthetic-generation:${owner.id}` })
+        .where(eq(run.id, owner.id));
+      const result = await claimMailImportWork(ctx.db, owner.id);
+      const parsed = z.object({ evidenceVersion: z.string() }).parse(result);
+      await insertOperation(getDb(ctx.db), {
+        runId: runEntityId.parse(owner.id),
+        operationId: "synthetic-claim",
+        kind: "claim_next_work",
+        inputFingerprint: "synthetic",
+        state: "completed",
+        result,
+      });
+      return {
+        mailboxId,
+        messageId: source.messageId,
+        checksum: source.rawChecksum,
+        evidenceVersion: parsed.evidenceVersion,
+      };
+    }
+    const evidence = await claim(first.owner);
+    const request = {
+      source: evidence,
+      generation: `synthetic-generation:${first.owner.id}`,
+      stage: "primary" as const,
+      action: "admit" as const,
+      identity: "initial",
+      invocation: "initial-call",
+      publicationPossible: false,
+    };
+    expect(await recordMailAttempt(ctx.db, first.owner.id, request)).toEqual({
+      kind: "admitted",
+    });
+    await recordMailAttempt(ctx.db, first.owner.id, {
+      ...request,
+      action: "exempt",
+    });
+    expect(
+      await recordMailAttempt(ctx.db, first.owner.id, {
+        ...request,
+        invocation: "transport-retry",
+      }),
+    ).toEqual({ kind: "admitted" });
+
+    expect(
+      await recordMailAttempt(ctx.db, first.owner.id, {
+        ...request,
+        identity: "repair",
+      }),
+    ).toEqual({ kind: "admitted" });
+    expect(
+      await recordMailAttempt(ctx.db, first.owner.id, {
+        ...request,
+        identity: "repair",
+        action: "pending",
+      }),
+    ).toEqual({ kind: "admitted" });
+    expect(
+      await recordMailAttempt(ctx.db, first.owner.id, {
+        ...request,
+        identity: "repair",
+      }),
+    ).toEqual({ kind: "admitted" });
+    expect(
+      await recordMailAttempt(ctx.db, first.owner.id, {
+        ...request,
+        identity: "changed",
+      }),
+    ).toEqual({ kind: "pending" });
+    await recordMailAttempt(ctx.db, first.owner.id, {
+      ...request,
+      identity: "repair",
+      action: "complete",
+    });
+    const malformed = {
+      ...request,
+      identity: "malformed",
+      invocation: "malformed-1",
+      stage: "escalation" as const,
+    };
+    expect(await recordMailAttempt(ctx.db, first.owner.id, malformed)).toEqual({
+      kind: "admitted",
+    });
+    await recordMailAttempt(ctx.db, first.owner.id, {
+      ...malformed,
+      action: "invalid",
+    });
+    expect(
+      await recordMailAttempt(ctx.db, first.owner.id, {
+        ...malformed,
+        invocation: "malformed-2",
+      }),
+    ).toEqual({ kind: "exhausted" });
+    const successor = await admit(party, [source]);
+    expect(await claim(successor.owner)).toEqual(evidence);
+    expect(
+      await recordMailAttempt(ctx.db, successor.owner.id, {
+        ...request,
+        generation: `synthetic-generation:${successor.owner.id}`,
+        identity: "successor",
+      }),
+    ).toEqual({ kind: "exhausted" });
+  });
+  it("does not resolve a completed source unresolved on exhaustion", async () => {
+    const { party, retain } = await world();
+    const source = await retain(
+      "completed-attempt",
+      "Synthetic order",
+      "Synthetic retained original",
+    );
+    const { pi } = await admit(party, [source]);
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ status: "completed" })
+      .where(eq(emailTable.orderMailId, source.id));
+    await expect(
+      resolveMail(
+        ctx.db,
+        {
+          mailboxId,
+          messageId: source.messageId,
+          checksum: source.rawChecksum,
+          disposition: {
+            kind: "unresolved",
+            reason: "Synthetic attempt exhaustion",
+          },
+        },
+        pi,
+      ),
+    ).rejects.toThrow("researching");
+    expect(await emailOf(source)).toMatchObject({ status: "completed" });
   });
 });

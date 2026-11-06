@@ -42,7 +42,13 @@ const extraction = {
   products: [{ kind: "new" }],
 };
 
-function writerPeer(options: { candidate?: boolean; conflict?: boolean } = {}) {
+function writerPeer(
+  options: {
+    candidate?: boolean;
+    conflict?: boolean;
+    unknownCommit?: boolean;
+  } = {},
+) {
   const effects: { action: string; operation: string }[] = [];
   const commits: string[] = [];
   const claims: string[] = [];
@@ -118,6 +124,11 @@ function writerPeer(options: { candidate?: boolean; conflict?: boolean } = {}) {
         operation: parsed._runExecution.operationId,
       });
       commits.push(parsed.prepareOperationId);
+      if (options.unknownCommit && commits.length === 1)
+        return fromPartial({
+          isError: true,
+          diagnostics: [{ message: "Synthetic response lost after commit" }],
+        });
       return fromPartial({
         isError: false,
         diagnostics: [],
@@ -172,6 +183,25 @@ describe("ordinary Email extraction", () => {
       expect(peer.claims).toHaveLength(conflict ? 0 : 2);
     },
   );
+
+  it("recovers an unknown commit by exact writer replay before advancing", async () => {
+    const peer = writerPeer({ unknownCommit: true });
+    const result = await importExtractedOrderTool(runId, () => mail).execute(
+      extraction,
+      peer.api,
+      BACKGROUND_CONTEXT,
+    );
+    expect(result.structuredOutput).toMatchObject({
+      kind: "commit_result",
+      result: { items: [{ outcome: "created" }] },
+    });
+    expect(
+      peer.effects
+        .filter((effect) => effect.action === "commit")
+        .map((effect) => effect.operation),
+    ).toEqual([peer.effects[1]?.operation, peer.effects[1]?.operation]);
+    expect(peer.claims).toHaveLength(1);
+  });
 
   it("does not create a new Product before reviewing preparation candidates", async () => {
     const peer = writerPeer({ candidate: true });

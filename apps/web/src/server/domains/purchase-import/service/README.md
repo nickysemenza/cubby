@@ -118,9 +118,14 @@ pending: nothing here starts Product research.
    checks Sol's free funding before selecting it directly; it does not spend a
    failed Claude request to reach the existing provider-ladder alternative.
    The selected model is retained in the escalation receipt across recovery.
-   The coordinator's SQLite also owns evidence-keyed extraction budgets: two
+   The RunOperation ledger owns claim-evidence extraction budgets across Runs: two
    primary submissions (initial plus repair) and one escalation submission.
-   Replays do not consume another attempt; repeated claims retain the budget.
+   Identical extraction replay does not consume another attempt; repeated claims
+   and successor Runs retain the budget. The claim binds the original checksum,
+   sender proof and accepted order-source context. Held sources and known
+   transport refusals are exempt; unknown writes remain pending until receipt
+   recovery through an exact writer replay. Generation response hooks only
+   account for submissions; they never publish dispositions.
    Exhaustion records an unresolved gap through the delegated mail-resolve writer,
    using a stable operation ID and the issuing generation fence.
    `import_extracted_order` handles complete, admitted, attachment-free Email.

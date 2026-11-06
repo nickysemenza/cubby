@@ -736,6 +736,17 @@ export async function settleMail(
         "MAIL_EVIDENCE_STALE",
         "Email assignment changed before settlement.",
       );
+    // Exhaustion must never replace a committed result or a member decision.
+    if (
+      input.importRunId &&
+      input.status === "blocked" &&
+      (originalEmail.status !== "researching" ||
+        originalEmail.checksum !== input.mail.rawChecksum)
+    )
+      throw createAppError(
+        "MAIL_EVIDENCE_STALE",
+        "Only the unchanged researching Email can be resolved unresolved.",
+      );
     if (
       !input.mail.id &&
       (originalEmail.checksum !== input.mail.rawChecksum ||

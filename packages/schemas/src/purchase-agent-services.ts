@@ -16,6 +16,24 @@ export const purchaseAgentOperationRef = z.object({
   operationId: z.string().min(1).max(256),
 });
 
+export const mailAttemptInput = z.object({
+  generation: z.string().min(1),
+  source: z.object({
+    mailboxId: z.string(),
+    messageId: z.string(),
+    checksum: z.string(),
+    evidenceVersion: z.string(),
+  }),
+  identity: z.string().min(1).max(256),
+  invocation: z.string().min(1).max(256),
+  publicationPossible: z.boolean(),
+  stage: z.enum(["primary", "escalation"]),
+  action: z.enum(["admit", "exempt", "pending", "complete", "invalid"]),
+});
+export const mailAttemptResult = z.object({
+  kind: z.enum(["admitted", "exhausted", "pending"]),
+});
+
 export const purchaseAgentEventRef = z.object({
   eventId: z.string().min(1).max(256),
 });

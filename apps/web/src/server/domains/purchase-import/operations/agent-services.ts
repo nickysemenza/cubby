@@ -10,6 +10,7 @@ import {
   type AgentImportRunPurpose,
 } from "@cubby/schemas/import-run-agent";
 import {
+  mailAttemptInput,
   agentProgressReport,
   agentUsageEvent,
   markRunFailedInput,
@@ -277,6 +278,16 @@ export function runServicesFor(
       });
     },
 
+    mailAttempt: (input) => {
+      const parsed = mailAttemptInput.parse(input);
+      return withAgentDatabase(async (db) =>
+        (await import("../repo/mail-attempts")).recordMailAttempt(
+          db,
+          runId,
+          parsed,
+        ),
+      );
+    },
     claimNextWork: (input) => {
       const ref = purchaseAgentOperationRef.parse(input);
       return withAgentDatabase(async (db, service, operation) => {

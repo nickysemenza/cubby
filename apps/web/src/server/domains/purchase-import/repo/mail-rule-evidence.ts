@@ -38,6 +38,7 @@ export type MailRuleCandidate = {
   ownAccount: boolean;
   /** An import already accepted a source for it, so a confirmation adds no lines. */
   importedSource: boolean;
+  acceptedSourceFingerprint?: string;
 };
 
 /** A candidate as the claim also shows it to the coordinator. */
@@ -77,21 +78,23 @@ export async function readMailRuleCandidates(
       ),
     )
     .where(and(inArray(purchase.orderId, orderIds), notDeleted(purchase)));
-  const imported = rows.length
-    ? new Set(
-        (
-          await getDb(db)
-            .select({ purchaseId: importSourceOrder.purchaseId })
-            .from(importSourceOrder)
-            .where(
-              inArray(
-                importSourceOrder.purchaseId,
-                rows.map((row) => row.id),
-              ),
-            )
-        ).map((row) => row.purchaseId),
-      )
-    : new Set<string>();
+  const accepted = rows.length
+    ? await getDb(db)
+        .select({
+          purchaseId: importSourceOrder.purchaseId,
+          checksum: importSourceOrder.checksum,
+          sourceClaimId: importSourceOrder.sourceClaimId,
+          orderKey: importSourceOrder.orderKey,
+        })
+        .from(importSourceOrder)
+        .where(
+          inArray(
+            importSourceOrder.purchaseId,
+            rows.map((row) => row.id),
+          ),
+        )
+    : [];
+  const imported = new Set(accepted.map((row) => row.purchaseId));
   return rows.flatMap(
     ({
       id,
@@ -114,6 +117,14 @@ export async function readMailRuleCandidates(
                 account.accountPartyId === input.ledgerPartyId &&
                 account.accountVendorId === vendorId,
               importedSource: imported.has(id),
+              acceptedSourceFingerprint: JSON.stringify(
+                accepted
+                  .filter((row) => row.purchaseId === id)
+                  .map((row) => [row.sourceClaimId, row.orderKey, row.checksum])
+                  .sort((a, b) =>
+                    JSON.stringify(a).localeCompare(JSON.stringify(b)),
+                  ),
+              ),
             },
           ]
         : [],

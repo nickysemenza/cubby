@@ -22,7 +22,7 @@ import { z } from "zod";
 import type { MailAttemptEvidence } from "./mail-attempts";
 
 const orderFields = preparePurchaseImportInput.shape.orders.element.shape;
-const input = z
+export const extractedOrderInput = z
   .object({
     mail: mailMessageRef.extend({ checksum: orderFields.evidenceChecksum }),
     vendorId: orderFields.vendorId,
@@ -85,10 +85,13 @@ export function importExtractedOrderTool(
   runId: string,
   ordinaryEvidence: () => MailAttemptEvidence | undefined,
 ) {
-  const { $schema: _inputDialect, ...parameters } = z.toJSONSchema(input, {
-    target: "draft-7",
-    io: "input",
-  });
+  const { $schema: _inputDialect, ...parameters } = z.toJSONSchema(
+    extractedOrderInput,
+    {
+      target: "draft-7",
+      io: "input",
+    },
+  );
   const { $schema: _outputDialect, ...resultSchema } = z.toJSONSchema(output, {
     target: "draft-7",
   });
@@ -104,7 +107,7 @@ export function importExtractedOrderTool(
       maxLines: 10_000,
     },
     execute: async (raw, api, context) => {
-      const args = input.parse(raw);
+      const args = extractedOrderInput.parse(raw);
       const finish = (value: z.infer<typeof output>) => ({
         output: [{ type: "text" as const, text: JSON.stringify(value) }],
         structuredOutput: z.json().parse(value),
@@ -166,7 +169,7 @@ export function importExtractedOrderTool(
         ],
       });
       const { _runExecution, ...prepareInput } = preparation;
-      const preparedResult = await api.executeTool(
+      let preparedResult = await api.executeTool(
         "mcp__cubby__purchase_import",
         z.record(z.string(), z.json()).parse(
           JSON.parse(
@@ -180,6 +183,21 @@ export function importExtractedOrderTool(
         context,
         { key: "prepare" },
       );
+      if (preparedResult.isError)
+        preparedResult = await api.executeTool(
+          "mcp__cubby__purchase_import",
+          z.record(z.string(), z.json()).parse(
+            JSON.parse(
+              JSON.stringify({
+                action: "prepare",
+                input: prepareInput,
+                _runExecution,
+              }),
+            ),
+          ),
+          context,
+          { key: "prepare-receipt-recovery" },
+        );
       const prepared = nestedValue(preparedResult, preparePurchaseImportOut);
       if (preparedResult.isError || !prepared.success)
         return finish({
@@ -229,7 +247,7 @@ export function importExtractedOrderTool(
         ...defaults,
       });
       const { _runExecution: commitExecution, ...commitInput } = commit;
-      const committedResult = await api.executeTool(
+      let committedResult = await api.executeTool(
         "mcp__cubby__purchase_import",
         z.record(z.string(), z.json()).parse(
           JSON.parse(
@@ -243,6 +261,21 @@ export function importExtractedOrderTool(
         context,
         { key: "commit" },
       );
+      if (committedResult.isError)
+        committedResult = await api.executeTool(
+          "mcp__cubby__purchase_import",
+          z.record(z.string(), z.json()).parse(
+            JSON.parse(
+              JSON.stringify({
+                action: "commit",
+                input: commitInput,
+                _runExecution: commitExecution,
+              }),
+            ),
+          ),
+          context,
+          { key: "commit-receipt-recovery" },
+        );
       const committed = nestedValue(committedResult, commitPurchaseImportOut);
       if (committedResult.isError || !committed.success)
         return finish({

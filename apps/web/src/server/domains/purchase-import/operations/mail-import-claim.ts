@@ -20,6 +20,7 @@ import {
   mailReadAgentText,
   mailReadOut,
 } from "@cubby/schemas/mailbox-research";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
@@ -167,7 +168,9 @@ async function settleByRule(
   source: MailRunSource,
   actor: ActorContext,
   memberSelected: boolean,
-): Promise<"settled" | { known: KnownForEmail | null }> {
+): Promise<
+  "settled" | { known: KnownForEmail | null; attemptContext?: string }
+> {
   const [mail] = await readRetainedMail(db, {
     ledgerPartyIds: [source.email.ledgerPartyId],
     orderMailIds: [source.orderMailId],
@@ -196,7 +199,18 @@ async function settleByRule(
   };
   // A later page or omitted evidence may reverse an apparent lifecycle notice.
   // The coordinator can page the read; a deterministic link cannot assume it.
-  if (content.truncated || content.nextOffset !== null) return { known };
+  if (content.truncated || content.nextOffset !== null)
+    return {
+      known,
+      attemptContext: JSON.stringify(
+        candidates
+          .map((candidate) => [
+            candidate.purchaseId,
+            candidate.acceptedSourceFingerprint,
+          ])
+          .sort(),
+      ),
+    };
   const decision = decideMailByRule({
     subject: mail.subject,
     text,
@@ -218,7 +232,18 @@ async function settleByRule(
         : null,
     }),
   });
-  if (decision.kind === "coordinator") return { known };
+  if (decision.kind === "coordinator")
+    return {
+      known,
+      attemptContext: JSON.stringify(
+        candidates
+          .map((candidate) => [
+            candidate.purchaseId,
+            candidate.acceptedSourceFingerprint,
+          ])
+          .sort(),
+      ),
+    };
   const ref = {
     mailboxId: mail.mailboxId,
     messageId: mail.messageId,
@@ -248,7 +273,18 @@ async function settleByRule(
     );
   } catch (error) {
     // SILENT: a refusal `purchase_import.mail_resolve` would give the coordinator (a member's dismissal, another Purchase's link, changed evidence) hands it the Email instead.
-    if (error instanceof AppError) return { known };
+    if (error instanceof AppError)
+      return {
+        known,
+        attemptContext: JSON.stringify(
+          candidates
+            .map((candidate) => [
+              candidate.purchaseId,
+              candidate.acceptedSourceFingerprint,
+            ])
+            .sort(),
+        ),
+      };
     throw error;
   }
   return "settled";
@@ -308,6 +344,14 @@ export async function claimMailImportWork(db: Database, runId: string) {
     const ref = { mailboxId: email.mailboxId, messageId: email.messageId };
     return {
       kind: "email" as const,
+      evidenceVersion: await sha256Hex(
+        JSON.stringify({
+          checksum: email.checksum,
+          sender: email.sender,
+          known: ruled.known,
+          acceptedSources: ruled.attemptContext,
+        }),
+      ),
       runId: current.shortcode,
       remaining: pending.length - index,
       email: {

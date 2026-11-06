@@ -93,7 +93,9 @@ export async function settleMailAttemptLimit(input: {
         arguments: {
           action: "mail_resolve",
           input: {
-            ...input.source,
+            mailboxId: input.source.mailboxId,
+            messageId: input.source.messageId,
+            checksum: input.source.checksum,
             disposition: {
               kind: "unresolved",
               reason:
@@ -111,9 +113,7 @@ export async function settleMailAttemptLimit(input: {
     );
     const parsed = callResult.parse(outcome);
     if (parsed.isError)
-      throw new Error(
-        "Mail attempt-limit resolution was refused; preserve the source and inspect its durable operation before retrying.",
-      );
+      return { kind: "refused" as const, diagnostic: JSON.stringify(outcome) };
     const text = parsed.content
       .map((part) => textBlock.safeParse(part).data?.text)
       .find((part) => part !== undefined);
@@ -128,6 +128,7 @@ export async function settleMailAttemptLimit(input: {
       throw new Error(
         "Mail attempt-limit result did not confirm this source's unresolved outcome.",
       );
+    return { kind: "settled" as const };
   } finally {
     await client.close();
   }
