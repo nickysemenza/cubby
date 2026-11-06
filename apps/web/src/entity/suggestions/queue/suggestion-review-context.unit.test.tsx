@@ -30,6 +30,7 @@ it("does not publish an old review failure into a new scope", async () => {
   const item: ReviewItem = {
     ...suggestionReviewInput.parse({
       operationId: "synthetic-review",
+      suggestionId: id,
       verdict: "dismissed",
       intent: "history",
     }),

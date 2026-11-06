@@ -1,6 +1,5 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
-import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import {
   fieldEnvelopeFor,
   type ReadableFieldEnvelope,
@@ -36,7 +35,6 @@ function redundantResetCandidates(
   return entityMetadata(queryClient, entity).fields.fields.filter((field) => {
     const envelope = fieldEnvelopeFor(record, field.readKey ?? field.key);
     return (
-      Object.hasOwn(generatedEntityListFields[entity].inherit, field.key) &&
       field.resolution?.redundancy === "eligible" &&
       envelope?.current.assignment?.kind === "value" &&
       envelope.current.controls.kind === "editable" &&

@@ -41,7 +41,6 @@ export type RippleKey =
   | "calendarFeed"
   | "calendarCredential"
   | "calendar"
-  | "relatednessProduct"
   | "projectOnly"
   | "runOnly"
   | "vendorAccountOnly"

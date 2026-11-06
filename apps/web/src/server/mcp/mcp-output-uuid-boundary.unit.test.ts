@@ -42,21 +42,6 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "nutrition.recipes[].id",
   "nutrition.mealRecipeId",
   "nutrition_read.preparations[].mealRecipeId",
-  // Import findings are internal review proposals. Their own id is the write
-  // handle for apply/dismiss, while proposed fixes retain the exact internal
-  // rows the audited transaction would mutate; neither is an entity link.
-  "activity_read.runFindings[].id",
-  "activity_read.runFindings[].proposedFix.expenseId",
-  "activity_read.runFindings[].proposedFix.productId",
-  "activity_read.runFindings[].proposedFix.purchaseId",
-  // Nullable row handles in the reviewed replacement snapshot participate in
-  // the approval fingerprint and attribution comparison in applyFix.
-  "activity_read.runFindings[].proposedFix.reviewedLineIdentities[].productId",
-  "activity_read.runFindings[].proposedFix.reviewedLineIdentities[].distinctFrom[].productId",
-  "activity_read.runFindings[].proposedFix.reviewedLineAttributions[].partyId",
-  // The source observation a reconcile_source_order proposal was built from;
-  // applyFix commits exactly that observation, never a newer one.
-  "activity_read.runFindings[].proposedFix.observationId",
   // purchase_import.prepare_reconciliation echoes the finding id it reviewed
   // (the same row handle as activity.runFindings[].id) or the accepted source
   // order it reviewed, and its commits take those handles back. An accepted
@@ -64,9 +49,6 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // can prepare that order's reconciliation.
   "purchase_import.id",
   "purchase_import.sourceOrderId",
-  // Review proposals and feedback use child-row handles with no shortcodes.
-  "activity_read.duplicateProductIdentities[].suggestionId",
-  "activity_read.duplicateProductIdentities[].pairs[].suggestionId",
   // Shipment evidence child rows have no shortcodes. These handles preserve
   // capture membership, timeline provenance and explicit source reassignment;
   // Shipment, Purchase, Email and Vendor entity references remain shortcodes.
@@ -75,8 +57,6 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // handles consumed by their matching follow-up actions. Entity references
   // in these outputs remain shortcodes.
   "activity.id",
-  "ai_read.latestRunId",
-  "ai.id",
   "entity_graph.proposals[].review.suggestionId",
   "image.deletedIds[]",
   "inventory.items[].product.externalIds[].id",
@@ -116,6 +96,14 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "shipments_read.observations[].supersededByObservationId",
   // Correction provenance names immutable Feedback/Suggestion children and effect
   // receipts; these are audit handles, not externally addressable entity IDs.
+  // Image description confirmation returns the same correction audit handles.
+  "image.owner.effectId",
+  "image.owner.commandFeedbackId",
+  "image.owner.sourceFeedbackId",
+  "image.owner.sourceApplicationFeedbackId",
+  "image.owner.targetSuggestionId",
+  "image.owner.originalApplicationFeedbackId",
+  "image.owner.priorCorrectionApplicationFeedbackId",
   "image_read.correction.owner.effectId",
   "image_read.correction.owner.commandFeedbackId",
   "image_read.correction.owner.sourceFeedbackId",

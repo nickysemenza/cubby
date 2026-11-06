@@ -64,6 +64,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/pantry-view",
   "/privacy",
   "/recipes/compare",
+  "/recipes/graph",
   "/recipes/import",
   "/recipes/new",
   "/recommendations/workbench",

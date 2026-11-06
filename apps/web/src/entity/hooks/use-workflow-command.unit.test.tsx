@@ -47,7 +47,13 @@ it("serializes scoped operations while publishing their exact bodies and metadat
     },
   );
   const body = suggestionReviewBatchInput.parse({
-    items: [{ operationId: "synthetic-receipt", verdict: "dismissed" }],
+    items: [
+      {
+        operationId: "synthetic-receipt",
+        suggestionId: "11111111-1111-4111-8111-111111111111",
+        verdict: "dismissed",
+      },
+    ],
   });
   const pending: Promise<unknown>[] = [];
   act(() => {
@@ -142,7 +148,13 @@ it("patches before catalog invalidation and finishes while refresh is pending", 
           kind: "operation",
           operation: "suggestion.reviewBatch",
           body: {
-            items: [{ operationId: "synthetic-refresh", verdict: "dismissed" }],
+            items: [
+              {
+                operationId: "synthetic-refresh",
+                suggestionId: "11111111-1111-4111-8111-111111111111",
+                verdict: "dismissed",
+              },
+            ],
           },
         })
         .then(() => {

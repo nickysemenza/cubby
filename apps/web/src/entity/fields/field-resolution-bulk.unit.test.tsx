@@ -15,7 +15,7 @@ it.each([true, false])(
   "loads a current preview before bulk reset (matching=%s)",
   async (matches) => {
     const harness = createEditorBrowserTestHarness();
-    const value = testShortcode("project", "synthetic-bulk-project");
+    const value = testShortcode("spendingCategory", "synthetic-bulk-project");
     const envelope: ReadableFieldEnvelope = {
       current: {
         assignment: { kind: "value", value, ownership: { kind: "record" } },
@@ -37,7 +37,7 @@ it.each([true, false])(
     };
     const record = {
       id: testShortcode("expense", "synthetic-bulk-expense"),
-      fields: { projectId: envelope },
+      fields: { spendingCategoryId: envelope },
     };
     const dispatch = vi.fn<Parameters<typeof overrideOperationDispatch>[0]>(
       async () => ({
@@ -46,7 +46,7 @@ it.each([true, false])(
           action: "update",
           entity: "expense",
           item: { id: record.id },
-          appliedFields: ["projectId"],
+          appliedFields: ["spendingCategoryId"],
           sideEffects: {},
         },
       }),
@@ -73,7 +73,10 @@ it.each([true, false])(
                       kind: "value",
                       value: matches
                         ? value
-                        : testShortcode("project", "different-bulk-project"),
+                        : testShortcode(
+                            "spendingCategory",
+                            "different-bulk-project",
+                          ),
                     },
                     provenance: null,
                   },
@@ -102,7 +105,7 @@ it.each([true, false])(
       const accepted = expect.objectContaining({
         action: "update",
         id: record.id,
-        data: { projectId: null },
+        data: { spendingCategoryId: null },
       });
       expect(dispatch.mock.calls.map((call) => call[1])).toEqual(
         matches ? [accepted] : [],

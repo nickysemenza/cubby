@@ -336,9 +336,10 @@ reads apply the entire declared reset patch with `jsonb_populate_record`, withou
 writing, and run the same SQL used by ordinary reads. The source port preserves
 blocked/empty outcomes and normalizes both values and source identities. This
 currently covers Vendor, Purchase and FinancialTransaction itemization policy
-and Expense spending category. Domain-only resolvers without a declared SQL
-source have no exact reset preview; bulk redundant-override reset continues to
-skip them. Blocked ownership
+and Expense spending category. Bulk redundant-override reset uses declared redundancy eligibility and the exact
+preview, including fields whose source is declared with `resetSource` rather than
+an inheritance ladder. Domain-only resolvers without a declared SQL source have
+no exact reset preview; bulk redundant-override reset continues to skip them. Blocked ownership
 or category evidence stays a successful blocked outcome, not an invented fallback.
 Assignment facts load the declared governed storage columns in a page batch;
 reference identities normalize in one set lookup, without treating an effective

@@ -200,7 +200,6 @@ export const ripple = {
   calendarFeed: exactRippleTags([["calendar", "feed"]]),
   calendarCredential: exactRippleTags([["calendar", "credential"]]),
   calendar: exactRippleTags([["calendar"]]),
-  relatednessProduct: exactRippleTags([["relatedness", "product"]]),
   projectOnly: exactRippleTags([["project"]]),
   /** The Run record the generic run detail page reads (`run.detail`). */
   email: rippleTags([["email"], ["run"], ["dashboard"]]),
