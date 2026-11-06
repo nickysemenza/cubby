@@ -185,7 +185,7 @@ private struct ImageChainEntry: ViewModifier {
 
 #Preview("Entity hero") {
     List {
-        EntityHeroView(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow) {
+        EntityHeroView(descriptor: EntityCatalog[.product], row: EntityScreenFixture.product.detailRow) {
             EmptyView()
         }
     }
@@ -195,7 +195,7 @@ private struct ImageChainEntry: ViewModifier {
 
 #Preview("Entity hero · accessibility") {
     Form {
-        EntityHeroView(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow) {
+        EntityHeroView(descriptor: EntityCatalog[.task], row: EntityScreenFixture.task.detailRow) {
             EmptyView()
         }
     }
@@ -205,7 +205,7 @@ private struct ImageChainEntry: ViewModifier {
 
 #Preview("Entity hero · wide") {
     Form {
-        EntityHeroView(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow) {
+        EntityHeroView(descriptor: EntityCatalog[.expense], row: EntityScreenFixture.expense.detailRow) {
             EmptyView()
         }
     }

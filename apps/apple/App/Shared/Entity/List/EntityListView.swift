@@ -1703,7 +1703,7 @@ private struct RelativeDateDisplay: View {
     List {
         EntityRowView(
             key: .product,
-            row: PreviewFixtures.sampleRows[0],
+            row: EntityScreenFixture.product.listPage.items[4],
             previewImage: Image(decorative: PreviewFixtures.sampleProbeImage, scale: 1))
     }
     .listStyle(.plain)
@@ -1713,7 +1713,7 @@ private struct RelativeDateDisplay: View {
 #Preview("Rows", traits: .modifier(SignedInPreview())) {
     NavigationStack {
         List {
-            ForEach(PreviewFixtures.sampleRows) { row in
+            ForEach(EntityScreenFixture.product.listPage.items) { row in
                 NavigationLink(value: Route.entityDetail(.product, id: row.id)) {
                     EntityRowView(key: .product, row: row)
                 }
@@ -1756,23 +1756,24 @@ private struct EntityTablePreviewHost: View {
 
     init() {
         let appModel = PreviewFixtures.signedInModel()
-        let rows = [
-            PreviewFixtures.sampleDetailRow,
-            EntityRow(
-                id: "PRD-9999", title: "Carbon Steel Wok", subtitle: nil, imageURL: nil,
-                raw: [
-                    "id": "PRD-9999", "name": "Carbon Steel Wok",
-                    "brandId": "VEN-2345", "brandName": "Sample Maker", "categoryId": "CAT-4444",
-                    "category": ["id": "CAT-4444", "name": "Cookware"],
-                    "owners": [
-                        [
-                            "label": "Alex", "ref": ["entityKind": "ledgerParty", "entityId": "LPY-4K7M"],
-                            "inherited": true,
+        let rows =
+            EntityScreenFixture.product.listPage.items + [
+                EntityRow(
+                    id: "PRD-9999", title: "Carbon Steel Wok", subtitle: nil, imageURL: nil,
+                    raw: [
+                        "id": "PRD-9999", "name": "Carbon Steel Wok",
+                        "brandId": "VEN-2345", "brandName": "Sample Maker", "categoryId": "CAT-4444",
+                        "category": ["id": "CAT-4444", "name": "Cookware"],
+                        "owners": [
+                            [
+                                "label": "Alex",
+                                "ref": ["entityKind": "ledgerParty", "entityId": "LPY-4K7M"],
+                                "inherited": true,
+                            ],
+                            ["label": "Household", "ref": .null, "inherited": false],
                         ],
-                        ["label": "Household", "ref": .null, "inherited": false],
-                    ],
-                ]),
-        ]
+                    ])
+            ]
         let source = EntityListPageSource(id: "synthetic-table-preview") { page in
             ListPage(
                 items: rows,

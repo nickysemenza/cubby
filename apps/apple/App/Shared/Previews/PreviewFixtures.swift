@@ -2,6 +2,7 @@ import CoreGraphics
 import CubbyKit
 import Foundation
 import SwiftUI
+import Synchronization
 
 /// Models and sample data for `#Preview` blocks. Nothing here touches the Keychain or the
 /// network: the token store is in-memory and the base URL points at a host that does not exist.
@@ -48,8 +49,8 @@ enum PreviewFixtures {
         EntityRow(id: "PRD-3456", title: "Another Product", subtitle: nil, imageURL: nil, raw: .object([:])),
     ]
 
-    /// A product-shaped detail row for `EntityDetailView`'s preview: enough fields to exercise
-    /// every `EntityFieldValue.text` branch (string, date, boolean, array) without a network call.
+    /// A product-shaped detail row covering every `EntityFieldValue.text` branch (string, date,
+    /// boolean, array) for value-formatting tests. Screen previews use `EntityScreenFixture`.
     static let sampleDetailRow = EntityRow(
         id: "PRD-2345",
         title: "Cast Iron Skillet",
@@ -169,14 +170,93 @@ private struct PreviewSession<Content: View>: View {
     var body: some View { content.environment(model) }
 }
 
-/// No mutable state is shared across requests; URLProtocol calls are answered synchronously.
+/// Requests are answered synchronously: a read registered in `PreviewOperationResponses` gets its
+/// `{ok: true, data}` envelope, and everything else fails locally.
 nonisolated private final class PreviewNetworkResponse: URLProtocol, @unchecked Sendable {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
-        client?.urlProtocol(self, didFailWithError: URLError(.resourceUnavailable))
+        guard let url = request.url,
+            let data = PreviewOperationResponses.response(
+                operation: url.lastPathComponent, body: Self.body(of: request)),
+            let response = HTTPURLResponse(
+                url: url, statusCode: 200, httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"])
+        else {
+            client?.urlProtocol(self, didFailWithError: URLError(.resourceUnavailable))
+            return
+        }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}
+
+    /// URLSession may hand a protocol the body as a stream instead of `httpBody`.
+    private static func body(of request: URLRequest) -> JSONValue? {
+        var data = request.httpBody
+        if data == nil, let stream = request.httpBodyStream {
+            stream.open()
+            defer { stream.close() }
+            var buffer = Data()
+            var chunk = [UInt8](repeating: 0, count: 4096)
+            while stream.hasBytesAvailable {
+                let count = stream.read(&chunk, maxLength: chunk.count)
+                guard count > 0 else { break }
+                buffer.append(chunk, count: count)
+            }
+            data = buffer
+        }
+        return data.flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) }
+    }
+}
+
+/// Generated secondary reads for preview records (`<entity>DetailReads.json`), keyed by the record
+/// id each request names, so a detail preview's reports and summary records render synthetic data.
+nonisolated enum PreviewOperationResponses {
+    private struct Reads: Decodable {
+        let operations: [String: JSONValue]
+        let connectedRecords: [String: JSONValue]
+    }
+
+    private static let registered = Mutex<[String: Reads]>([:])
+
+    static func register(fixture name: String, recordID: String) {
+        let reads: Reads = PreviewFixtures.screenFixture(name)
+        registered.withLock { $0[recordID] = reads }
+    }
+
+    static func response(operation: String, body: JSONValue?) -> Data? {
+        let input = body?["input"] ?? body
+        // A read names its record under a different key per operation (`id`, `source.entityId`,
+        // `scope.id`, timeline filters), so match any registered id the input mentions.
+        let all = registered.withLock { $0 }
+        let reads = input.flatMap { strings(in: $0).compactMap { all[$0] }.first }
+        guard let reads else { return nil }
+        let data: JSONValue?
+        switch operation {
+        case "entity.connectedRecords":
+            data = input?["viewKey"]?.stringValue.flatMap { reads.connectedRecords[$0] }
+        case "entityReport.get":
+            let slot = input?["slot"]?.stringValue
+            data =
+                reads.operations["entityReport.getMany"]?["reports"]?.arrayValue?
+                .first { $0["slot"]?.stringValue == slot }?["report"]
+        default:
+            data = reads.operations[operation]
+        }
+        guard let data else { return nil }
+        return try? JSONEncoder().encode(JSONValue.object(["ok": .bool(true), "data": data]))
+    }
+
+    private static func strings(in value: JSONValue) -> [String] {
+        switch value {
+        case .string(let string): [string]
+        case .array(let items): items.flatMap(strings(in:))
+        case .object(let fields): fields.values.flatMap(strings(in:))
+        default: []
+        }
+    }
 }
 
 /// Unseeded preview reads fail locally instead of resolving a dummy hostname or using credentials.
