@@ -1,5 +1,11 @@
 import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
@@ -139,5 +145,7 @@ it("defers folded execution evidence and opens it through the section index", as
       await screen.findByRole("navigation", { name: "Section index" }),
     ).getByRole("link", { name: /^Execution log$/ }),
   );
-  expect(await screen.findByText("Recorded execution evidence")).toBeVisible();
+  await waitFor(() =>
+    expect(screen.getByText("Recorded execution evidence")).toBeVisible(),
+  );
 });

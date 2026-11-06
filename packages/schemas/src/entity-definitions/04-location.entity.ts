@@ -114,13 +114,20 @@ export const { definition, readSchemas } = defineEntityModel(
           ingredients:
             "Derived through inventory, then product, then ingredient; the Contents table already lists what is stocked here.",
         },
-        // The generic "No locations yet." reads oddly under "Sub-locations" —
-        // a self-relation whose target label doesn't match the section title.
         hero: {
           breadcrumb: "parentId",
         },
-        lead: ["overview"],
+        lead: ["children", "overview"],
         sections: [
+          {
+            kind: "relation",
+            id: "children",
+            title: "Child locations",
+            relation: "children",
+            createLabel: "Add child location",
+            filter: { descriptor: "parent" },
+            empty: "No child locations yet.",
+          },
           {
             kind: "fields",
             id: "overview",
@@ -1164,7 +1171,7 @@ export default defineEntity(
       .path("location", "many", [
         { edge: "Location.parentId", direction: "incoming" },
       ])
-      .named("children", "Sub-locations", { empty: "No sub-locations yet." }),
+      .named("children", "Child locations"),
     r
       .path("inventory", "many", [
         { edge: "InventoryEntry.locationId", direction: "incoming" },

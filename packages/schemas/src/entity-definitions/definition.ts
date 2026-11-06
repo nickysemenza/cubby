@@ -1404,6 +1404,8 @@ const buildMetadataSchemas = () => {
       /** Scalar context displayed above this relation table. */
       contextFields: z.array(fieldKey).optional().default([]),
       relation: nonEmptyString("must name a declared relation"),
+      /** Web section-header label for the existing scoped create action. */
+      createLabel: nonEmptyString().optional(),
       filter: z.object({ descriptor: nonEmptyString() }).strict(),
       columns: orNull(z.array(nonEmptyString()).min(1)),
       /** Explicit create-field prefill for relation sections whose target

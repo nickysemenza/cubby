@@ -104,6 +104,14 @@ Address buttons stay within their table cell; the scalar accessor and inspector 
 The inspector exposes complete, selectable sender addresses,
 queries, counts and Run links. Discovery retains its Details disclosure.
 
+Record-summary previews always offer their collection count/link when populated,
+even for one or two records. A matching web relation table is the destination:
+full pages jump to its compiled section id, and inspectors open the full record
+at that section. Views without a table keep Connections. Empty lead relations
+retain a zero-count link and their table's creation affordance. Location leads
+with Child locations, showing direct children and Add child location with the
+parent prefilled; the table remains visible when empty.
+
 ## Elevation & Depth
 
 Resting page and detail sections are open and flat, separated by 1px hairlines and whitespace. Section headings are plain semibold text; no gray bands and no cards around resting content. Rounded, shadowed containers are reserved for things that float: the inspector, popovers, menus and dialogs. Floating primitives share `popoverElevationClassName` and `--brand-elevation-popover`; the responsive schema inspector uses the same token only while floating. `cubby/no-shadow-utility` rejects sized and arbitrary shadow utilities; these floating surfaces carry explicit lint exceptions. Resting surfaces and table boundaries use flat hairlines. Motion marks arrival and consequence, and the keyboard outruns it. It respects reduced motion and uses only the shared tokens (`--brand-motion-exit` 100ms, `-fast` 120ms, `-standard` 180ms, `-slow` 240ms; `--brand-ease-cozy` for entrances and exits, `--brand-ease-move` for on-screen travel; shifts of 4, 8 and 16px). J/K, Enter, Esc, typing, search results, scrolling and cell focus stay instant. Hover and selection change color in at most 120ms. Pointer-opened popovers and menus rise from their transform origin in 180ms; dialogs take 240ms and sheets 180ms; every exit takes 100ms. Only opacity and transform animate. Images fade in over 120ms. Do not add page-load choreography, staggered or entering virtualized rows, sort reordering, height or width animation, skeleton shimmer, hover zoom or transition-all.

@@ -450,6 +450,13 @@ value is omitted and its field stays in the field sections. Keep fields whose
 renderer is a workflow form (Financial Transaction allocations' booking review)
 out of the web summary with `surfaces: ["native"]`.
 
+Web record-summary cells retain their bounded record previews and always show
+a collection count/link when populated, including one or two records. A relation
+with a matching web detail section links to that section's compiled id; from an
+inspector it opens the full record at that section. Other views keep Connections
+as their destination. Empty lead relations retain their count/link, matching the
+table's visible empty state. Unknown or failed reads never claim an empty count.
+
 Summary slots and detail sections accept an optional `surfaces: ["web"]` or
 `["native"]` that limits the entry to one client; omitted, both render it. The
 native manifest drops the other surface's entries at generation and web filters
@@ -458,8 +465,8 @@ them at render, so the shared declaration keeps one order. Entries have stable
 
 - `fields` groups one to four readable field keys, using the same effective
   field values and renderers as the rest of the record.
-- `records` names a declared connected view or `relation:<key>`, showing up to
-  three linked targets, the complete count, and witnessed paths.
+- `records` names a declared connected view or `relation:<key>`, showing bounded
+  linked targets (two on web), the complete count, and witnessed paths.
 - `report` names an existing report owner and presents concise informational
   figures, records, progress or charts. Workflow forms and commands stay in
   their owning detail section.
@@ -503,6 +510,10 @@ derived from edit groups. A section keeps its declared `workspace`, else a
 timeline joins Evidence and a relation Work. Web detail renders sections in declaration order after any declared `detail.lead`
 sections, full width unless `detail.pairs` sets two side by side; pairs stack below
 1000px of workspace, relation tables cannot pair, and there is no supporting rail.
+Relation sections may declare a web `createLabel` for the existing scoped create
+action; its compiled seed still owns the prefilled reference. Location leads with
+its direct Child locations table, retains it when empty, and offers Add child
+location with the current Location prefilled as parent.
 Native ignores `lead` and `pairs`: `detailSectionJSON` omits them. A board list view
 marked `webOnly` is likewise omitted from generated Swift. A section's
 `placement` is `primary` (shares a ruled plane with its neighbors) or `full`

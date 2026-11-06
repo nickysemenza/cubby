@@ -249,7 +249,10 @@ function declaredSections<E extends GenericDetailEntity>(
         const plan = planRelationSection(queryClient, entity, section);
         const contextFields = unsummarized(section.contextFields);
         const createLabel =
-          detail.variant === "journal" ? verbDef("logEntry").label : undefined;
+          section.createLabel ??
+          (detail.variant === "journal"
+            ? verbDef("logEntry").label
+            : undefined);
         return [
           {
             ...base,

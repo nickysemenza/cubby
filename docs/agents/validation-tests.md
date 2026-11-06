@@ -4,6 +4,9 @@ Browser preview discovery stays under `src/`. Workspace package symlinks in
 `node_modules` can lead back to the repository and old agent worktrees; they
 must not become duplicate test entries or import stale component contracts.
 
+Disclosure previews wait for visible content after opening, not just DOM
+insertion: the body mounts before its entrance opacity transition finishes.
+
 [Validation policy](validation.md) owns test selection, failure-first evidence,
 retention, delivery, and delegated check results. This page owns runtime traps.
 Auth configuration tests await each constructed instance's `$context` inside
