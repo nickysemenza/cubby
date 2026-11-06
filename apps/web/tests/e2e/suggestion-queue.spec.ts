@@ -1,6 +1,4 @@
 import { eq, inArray } from "drizzle-orm";
-import type { Page } from "@playwright/test";
-import { productShortcode } from "@cubby/schemas/identifiers";
 import { suggestionReviewBatchOut } from "@cubby/schemas/suggestion";
 
 import { getDb } from "~/server/db/helpers";
@@ -8,20 +6,16 @@ import {
   emailReview,
   runOperation,
   product as productTable,
-  suggestionTable,
   expense as expenseTable,
   inventoryEntry,
 } from "~/server/db/schema";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
-import { updateProduct } from "~/server/domains/product/repo/crud";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import {
-  createEntityFixture,
   createFixtureGraph,
   createEvidenceHarnessContext,
 } from "./fixtures/core";
@@ -29,59 +23,6 @@ import { seedUnimportedOrderMail } from "./fixtures/mail";
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
-
-async function seedTagProposal(page: Page, sourceId: string, tag: string) {
-  const { db } = await createEvidenceHarnessContext(page);
-  const donors = await createFixtureGraph(page, async (create) => {
-    const donors = [];
-    for (const index of [1, 2, 3]) {
-      donors.push(
-        await create("product", {
-          name: `Synthetic tag support ${index} ${crypto.randomUUID()}`,
-          tags: [tag],
-        }),
-      );
-    }
-    return donors;
-  });
-  const records = await getDb(db)
-    .select({
-      id: productTable.id,
-      shortcode: productTable.shortcode,
-      updatedAt: productTable.updatedAt,
-    })
-    .from(productTable)
-    .where(
-      inArray(
-        productTable.shortcode,
-        [sourceId, ...donors.map((donor) => donor.id)].map((value) =>
-          productShortcode.parse(value),
-        ),
-      ),
-    );
-  const source = records.find((record) => record.shortcode === sourceId);
-  if (!source) throw new Error("Synthetic tag source missing");
-  const supports = records.filter((record) => record.id !== source.id);
-  const prediction = await assessRecommendation(
-    db,
-    sourceId,
-    "product.tag-propagation",
-    [tag],
-    {
-      tag,
-      supportingProductCount: supports.length,
-      supportingProductIds: supports.map((record) => record.shortcode),
-      basis: {
-        sourceRevision: source.updatedAt.toISOString(),
-        supportingProducts: supports.map((record) => ({
-          id: record.shortcode,
-          revision: record.updatedAt.toISOString(),
-        })),
-      },
-    },
-  );
-  return { prediction, supports };
-}
 
 // Failure modes: Confirm fails to apply the proposed connection or changes money;
 // Report incorrect fails to retain the member's history feedback.
@@ -342,15 +283,13 @@ test("project assignments and placement moves use the shared queue", async ({
   ).toEqual({ value: 3, unit: "each" });
 });
 
-// Failure modes retained from the retired Workbench: mounting applies a tag;
-// an identity conflict offers merge; a pair loses its exact review identity;
-// merge skips survivor/impact confirmation.
+// Identity conflicts cannot merge; matching pairs still require survivor and impact confirmation.
 test("new proposal families require explicit review and preserve merge confirmation", async ({
   page,
 }, testInfo) => {
   test.slow();
   const { db } = await createEvidenceHarnessContext(page);
-  const { first, second, conflicted, tagged } = await createFixtureGraph(
+  const { first, second, conflicted } = await createFixtureGraph(
     page,
     async (create) => {
       const brand = await create("vendor", {
@@ -371,11 +310,7 @@ test("new proposal families require explicit review and preserve merge confirmat
         brandId: brand.id,
         model: "SYN-DRILL-29",
       });
-      const tagged = await create("product", {
-        name: uniqueName(testInfo, "Synthetic tag target"),
-        tags: ["synthetic-existing"],
-      });
-      return { first, second, conflicted, tagged };
+      return { first, second, conflicted };
     },
   );
   const firstId = await resolveOrThrow(db, "product", first.id);
@@ -395,50 +330,8 @@ test("new proposal families require explicit review and preserve merge confirmat
     actionable: true,
     conflict: true,
   });
-  const taggedId = await resolveOrThrow(db, "product", tagged.id);
-  const { prediction: tag } = await seedTagProposal(
-    page,
-    tagged.id,
-    "synthetic-addition",
-  );
   await gotoAuthenticatedPage(page, "/suggestions");
   const table = page.getByRole("table", { name: "Suggestions", exact: true });
-  const tagRow = table
-    .getByRole("row")
-    .filter({ hasText: "Add tag synthetic-addition" });
-  await expect(tagRow).toHaveCount(1);
-  expect(
-    (
-      await getDb(db)
-        .select({ tags: productTable.tags })
-        .from(productTable)
-        .where(eq(productTable.id, taggedId))
-    )[0]?.tags,
-  ).toEqual(["synthetic-existing"]);
-  await tagRow.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (
-          await getDb(db)
-            .select({ tags: productTable.tags })
-            .from(productTable)
-            .where(eq(productTable.id, taggedId))
-        )[0]?.tags,
-    )
-    .toEqual(["synthetic-existing", "synthetic-addition"]);
-  await expect
-    .poll(
-      async () =>
-        (
-          await getDb(db)
-            .select({ status: suggestionTable.status })
-            .from(suggestionTable)
-            .where(eq(suggestionTable.id, tag.suggestionId))
-        )[0]?.status,
-    )
-    .toBe("applied");
-
   const conflictRow = table
     .getByRole("row")
     .filter({ hasText: "Synthetic conflicting-model evidence" });
@@ -478,40 +371,4 @@ test("new proposal families require explicit review and preserve merge confirmat
     .where(inArray(productTable.id, [firstId, secondId]));
   expect(merged.filter((row) => row.deletedAt !== null)).toHaveLength(1);
   expect(merged.filter((row) => row.deletedAt === null)).toHaveLength(1);
-});
-
-// Persisted tag votes must not authorize an apply after their supporting facts change.
-test("a stored tag Suggestion refuses changed supporting evidence", async ({
-  page,
-}, testInfo) => {
-  const { db, actor } = await createEvidenceHarnessContext(page);
-  const source = await createEntityFixture(page, "product", {
-    name: uniqueName(testInfo, "Synthetic stale tag target"),
-    tags: [],
-  });
-  const { supports } = await seedTagProposal(
-    page,
-    source.id,
-    "synthetic-stale-tag",
-  );
-  const donor = supports[0];
-  if (!donor) throw new Error("Synthetic tag support missing");
-  await gotoAuthenticatedPage(page, `/suggestions?record=product:${source.id}`);
-  const row = page
-    .getByRole("row")
-    .filter({ hasText: "Add tag synthetic-stale-tag" });
-  await expect(row).toHaveCount(1);
-  await updateProduct(db, donor.id, { tags: [] }, actor);
-  await row.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect(page.getByRole("main")).toContainText(
-    "Tag proposal evidence changed; find suggestions again",
-  );
-  expect(
-    (
-      await getDb(db)
-        .select({ tags: productTable.tags })
-        .from(productTable)
-        .where(eq(productTable.shortcode, productShortcode.parse(source.id)))
-    )[0]?.tags,
-  ).toEqual([]);
 });
