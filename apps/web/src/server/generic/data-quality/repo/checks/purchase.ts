@@ -124,10 +124,10 @@ async function loadPurchaseQualityRecords(
   const settlements = sql`(SELECT qa."purchaseId",
     coalesce(bool_or(${settles}), false) AS "hasSettlement",
     (CASE WHEN bool_or(qft.kind IN (${kinds}) AND qft.status IN (${financialTransactionStatus.enum.expected}, ${financialTransactionStatus.enum.pending}))
-      THEN coalesce(sum(qa.amount) FILTER (WHERE ${settles}), 0)
-      ELSE coalesce(sum(qa.amount) FILTER (WHERE qft.kind IN (${kinds}) AND qft.status = ${financialTransactionStatus.enum.posted}), 0)
+      THEN coalesce(sum((qa."amountMinor"::numeric / 100)) FILTER (WHERE ${settles}), 0)
+      ELSE coalesce(sum((qa."amountMinor"::numeric / 100)) FILTER (WHERE qft.kind IN (${kinds}) AND qft.status = ${financialTransactionStatus.enum.posted}), 0)
     END)::double precision AS "comparisonTotal",
-    coalesce(sum(qa.amount) FILTER (WHERE ${sql.raw(postedRefundPredicate("qft"))}), 0)::double precision AS "postedRefundTotal",
+    coalesce(sum((qa."amountMinor"::numeric / 100)) FILTER (WHERE ${sql.raw(postedRefundPredicate("qft"))}), 0)::double precision AS "postedRefundTotal",
     coalesce(bool_or(qfa.id IS NOT NULL AND ${sql.raw(settlementReferencePredicate("qft", "qfa"))}), false) AS "hasSettlementReference",
     coalesce(bool_or(${settlementConflictSql("party", aliases)}) FILTER (WHERE ${settles}), false) AS "partyConflict",
     coalesce(bool_or(${settlementConflictSql("tender", aliases)}) FILTER (WHERE ${settles}), false) AS "tenderConflict"

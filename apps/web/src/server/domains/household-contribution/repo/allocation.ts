@@ -164,10 +164,10 @@ const expenseAllocationSeedsSql = (
         e."expenseId",
         party_source.role,
         party_source.owner_party_id,
-        coalesce(sum(round(fta.amount::numeric * 100))
-          FILTER (WHERE fta.amount > 0), 0)::bigint AS gross_cents,
-        coalesce(sum(round(-fta.amount::numeric * 100))
-          FILTER (WHERE fta.amount < 0), 0)::bigint AS inflow_cents
+        coalesce(sum(fta."amountMinor")
+          FILTER (WHERE fta."amountMinor" > 0), 0)::bigint AS gross_cents,
+        coalesce(sum(-fta."amountMinor")
+          FILTER (WHERE fta."amountMinor" < 0), 0)::bigint AS inflow_cents
       FROM scoped_expense e
       JOIN ${financialTransactionAllocation} fta
         ON fta."purchaseId" = e."purchaseId" AND ${notDeleted("fta")}

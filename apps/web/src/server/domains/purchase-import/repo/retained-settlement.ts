@@ -223,7 +223,7 @@ export async function prepareRetainedSettlementDiscovery(
     const allocations = await tx
       .select({
         purchaseId: financialTransactionAllocation.purchaseId,
-        hasNegative: sql<boolean>`bool_or(${financialTransactionAllocation.amount} < 0)`,
+        hasNegative: sql<boolean>`bool_or(${sql`(${financialTransactionAllocation.amountMinor}::numeric / 100)`} < 0)`,
       })
       .from(financialTransactionAllocation)
       .where(
@@ -347,7 +347,7 @@ async function settleableCharges(
             AND ${notDeleted("fta")}
         ) OR (${input.allocatedPurchaseId ?? null}::uuid IS NOT NULL AND (
           SELECT count(*) = 1 AND bool_and(fta."purchaseId" = ${input.allocatedPurchaseId ?? null}::uuid
-            AND round(fta.amount * 100) = round("FinancialTransaction".amount * 100))
+            AND round((fta."amountMinor"::numeric / 100) * 100) = round("FinancialTransaction".amount * 100))
           FROM "FinancialTransactionAllocation" fta
           WHERE fta."transactionId" = "FinancialTransaction".id AND ${notDeleted("fta")}
         )))`,
@@ -481,10 +481,10 @@ async function competingClaimants(
         // A Purchase whose allocations already cover its payment lines makes
         // no further claim; a partly settled one still does.
         sql`abs(coalesce((
-          SELECT sum(fta."amount") FROM "FinancialTransactionAllocation" fta
+          SELECT sum((fta."amountMinor"::numeric / 100)) FROM "FinancialTransactionAllocation" fta
           WHERE fta."purchaseId" = "PurchasePaymentEvidence"."purchaseId"
             AND ${notDeleted("fta")}
-            AND sign(fta.amount) = sign(${charge.amount}::numeric)
+            AND sign((fta."amountMinor"::numeric / 100)) = sign(${charge.amount}::numeric)
         ), 0)) < abs((
           SELECT sum(ppe."amountMinor")::numeric / 100 FROM "PurchasePaymentEvidence" ppe
           WHERE ppe."purchaseId" = "PurchasePaymentEvidence"."purchaseId"
@@ -706,7 +706,7 @@ export async function planPurchaseRetainedSettlement(
               eq(financialTransactionAllocation.purchaseId, input.purchaseId),
               notDeleted(financialTransactionAllocation),
               refund
-                ? sql`${financialTransactionAllocation.amount} < 0`
+                ? sql`${sql`(${financialTransactionAllocation.amountMinor}::numeric / 100)`} < 0`
                 : undefined,
             ),
           )
@@ -776,7 +776,10 @@ export async function planPurchaseRetainedSettlement(
       const allocated = await tx
         .select({
           purchaseId: financialTransactionAllocation.purchaseId,
-          amount: financialTransactionAllocation.amount,
+          amount:
+            sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
+              Number,
+            ),
         })
         .from(financialTransactionAllocation)
         .where(

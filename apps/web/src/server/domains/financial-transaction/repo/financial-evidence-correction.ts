@@ -26,6 +26,7 @@ import {
   deleteExpenses,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
+import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   lockFinancialSourceOccurrences,
@@ -323,13 +324,14 @@ export async function reconcileFinancialEvidenceCorrection(
         txDb,
         input.transactionId,
       );
-      const allocations =
-        await tx.query.financialTransactionAllocation.findMany({
+      const allocations = await tx.query.financialTransactionAllocation
+        .findMany({
           where: and(
             eq(financialTransactionAllocation.transactionId, row.id),
             notDeleted(financialTransactionAllocation),
           ),
-        });
+        })
+        .then((rows) => rows.map(allocationDollars));
       const allocatedPurchase = allocations[0];
       if (allocatedPurchase) {
         const target = await tx.query.purchase.findFirst({

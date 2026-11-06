@@ -28,12 +28,12 @@ test("preserves residual allocations and saves a reviewed split without booking 
     postedDate: "2026-10-20",
   });
   await getDb(db).execute(sql`
-    INSERT INTO "FinancialTransactionAllocation" ("transactionId", "purchaseId", amount)
-    VALUES (${partial.id}, ${seed.second.id}, 15)
+    INSERT INTO "FinancialTransactionAllocation" ("transactionId", "purchaseId", "amountMinor")
+    VALUES (${partial.id}, ${seed.second.id}, 1500)
   `);
   const acceptedAllocations = () =>
     getDb(db).execute(sql`
-    SELECT "transactionId", "purchaseId", amount FROM "FinancialTransactionAllocation"
+    SELECT "transactionId", "purchaseId", ("amountMinor"::numeric/100)::float8 AS amount FROM "FinancialTransactionAllocation"
     WHERE "transactionId" IN (${partial.id}) AND "deletedAt" IS NULL
     ORDER BY "transactionId", "purchaseId"
   `);
@@ -132,7 +132,7 @@ test("preserves residual allocations and saves a reviewed split without booking 
   await dialog.getByRole("button", { name: "Save allocation" }).click();
   await expect(dialog).toHaveCount(0);
   const reviewedAllocations = await getDb(db).execute(sql`
-    SELECT "purchaseId", amount FROM "FinancialTransactionAllocation"
+    SELECT "purchaseId", ("amountMinor"::numeric/100)::float8 AS amount FROM "FinancialTransactionAllocation"
     WHERE "transactionId" = ${seed.transaction.id} AND "deletedAt" IS NULL
     ORDER BY amount
   `);

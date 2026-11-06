@@ -4,6 +4,7 @@ import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
+import { moneyToMinor } from "@cubby/shared";
 import { eq, getTableColumns, getTableName, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -1619,7 +1620,7 @@ const SOURCE_FACTORIES = {
     return insertAndReturn(db, financialTransactionAllocation, {
       transactionId: txn.id,
       purchaseId: parseEntityId("purchase", targetId),
-      amount: 1,
+      amountMinor: moneyToMinor(1),
     });
   },
 
@@ -1628,7 +1629,7 @@ const SOURCE_FACTORIES = {
     return insertAndReturn(db, financialTransactionAllocation, {
       transactionId: parseEntityId("financialTransaction", targetId),
       purchaseId: purch.id,
-      amount: 1,
+      amountMinor: moneyToMinor(1),
     });
   },
 

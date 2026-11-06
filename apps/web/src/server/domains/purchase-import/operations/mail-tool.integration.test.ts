@@ -19,6 +19,7 @@ import { mailResearchRunInput } from "@cubby/schemas/run-fields";
  * promotes printable labels to Purchase documents or discards its cost evidence.
  */
 import { shipmentEvidence } from "@cubby/schemas/shipment-evidence";
+import { moneyToMinor } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { fromAny, fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray } from "drizzle-orm";
@@ -586,11 +587,13 @@ describe("public mail tool", () => {
       transactionDate: "2026-10-08",
       postedDate: "2026-10-08",
     });
-    await getDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: refund.id,
-      purchaseId: purchases[0]!.id,
-      amount: -4,
-    });
+    await getDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: refund.id,
+        purchaseId: purchases[0]!.id,
+        amountMinor: moneyToMinor(-4),
+      });
     const settlement = {
       refundAmount: -4,
       associations: [
@@ -793,7 +796,7 @@ describe("public mail tool", () => {
           return {
             transactionId: row.id,
             purchaseId: purchased.id,
-            amount: row.amount,
+            amountMinor: moneyToMinor(row.amount),
           };
         }),
       );

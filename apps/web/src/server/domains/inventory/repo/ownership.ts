@@ -419,7 +419,10 @@ const loadPaymentDefaults = async (
       accountShortcode: financialAccount.shortcode,
       transactionId: financialTransaction.id,
       transactionShortcode: financialTransaction.shortcode,
-      allocationAmount: financialTransactionAllocation.amount,
+      allocationAmount:
+        sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
+          Number,
+        ),
     })
     .from(financialTransactionAllocation)
     .innerJoin(
@@ -444,7 +447,7 @@ const loadPaymentDefaults = async (
         inArray(financialTransactionAllocation.purchaseId, purchaseIds),
         notDeleted(financialTransactionAllocation),
         sql`${financialTransaction.amount} > 0`,
-        sql`${financialTransactionAllocation.amount} > 0`,
+        sql`${sql`(${financialTransactionAllocation.amountMinor}::numeric / 100)`} > 0`,
       ),
     );
 };

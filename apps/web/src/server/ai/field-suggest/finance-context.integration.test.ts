@@ -2,6 +2,7 @@ import {
   fieldSuggestionsInput,
   financeCategoryApplyInput,
 } from "@cubby/schemas/ai";
+import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -93,7 +94,7 @@ describe("reviewed linked finance category suggestions", () => {
       .values({
         transactionId: charge.id,
         purchaseId: purchase.id,
-        amount: 29.99,
+        amountMinor: moneyToMinor(29.99),
       })
       .returning();
     if (!allocation) throw new Error("Missing fixture allocation");

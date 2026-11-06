@@ -243,7 +243,10 @@ const loadAllocations = (
       purchaseId: financialTransactionAllocation.purchaseId,
       shortcode: financialTransaction.shortcode,
       kind: financialTransaction.kind,
-      amount: financialTransactionAllocation.amount,
+      amount:
+        sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
+          Number,
+        ),
       transactionDate: financialTransaction.transactionDate,
       postedDate: financialTransaction.postedDate,
     })

@@ -4,6 +4,7 @@ import {
   storedImportFix,
   type ImportWriterInput,
 } from "@cubby/schemas/purchase-import";
+import { moneyToMinor } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -210,12 +211,14 @@ describe("incomplete itemized purchase identity", () => {
         postedDate: "2032-02-28",
         merchant: "Example variant maker",
       });
-      await getDb(ctx.db).insert(financialTransactionAllocation).values({
-        transactionId: charge.id,
-        purchaseId,
-        amount: 61,
-        confirmsMerchant: true,
-      });
+      await getDb(ctx.db)
+        .insert(financialTransactionAllocation)
+        .values({
+          transactionId: charge.id,
+          purchaseId,
+          amountMinor: moneyToMinor(61),
+          confirmsMerchant: true,
+        });
       await getDb(ctx.db)
         .update(expense)
         .set({ bookingTransactionCode: charge.shortcode })

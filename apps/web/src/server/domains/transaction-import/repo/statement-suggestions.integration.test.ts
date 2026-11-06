@@ -1841,7 +1841,12 @@ describe("statement Transaction suggestions", () => {
     ).toEqual([{ cost: 40 }]);
     expect(
       await getDb(ctx.db)
-        .select({ amount: financialTransactionAllocation.amount })
+        .select({
+          amount:
+            sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
+              Number,
+            ),
+        })
         .from(financialTransactionAllocation)
         .where(notDeleted(financialTransactionAllocation)),
     ).toEqual([{ amount: 40 }]);

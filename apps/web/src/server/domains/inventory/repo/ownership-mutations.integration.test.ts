@@ -6,6 +6,7 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import { moneyToMinor } from "@cubby/shared";
 import { OWNER_FILTER_HOUSEHOLD, OWNER_FILTER_UNKNOWN } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
@@ -439,7 +440,7 @@ describe("inventory ownership mutations", () => {
       await dbc.insert(financialTransactionAllocation).values({
         transactionId: payment.id,
         purchaseId: acquired.purchase.id,
-        amount: 200,
+        amountMinor: moneyToMinor(200),
       });
       const before = await Promise.all(
         acquired.expenses.map((row) => readExpenseById(ctx.db, row.entityId)),

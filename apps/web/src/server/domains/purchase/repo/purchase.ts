@@ -1866,7 +1866,7 @@ const moveChargeAllocations = async (
       columns: {
         id: true,
         transactionId: true,
-        amount: true,
+        amountMinor: true,
         confirmsMerchant: true,
       },
     });
@@ -1879,7 +1879,7 @@ const moveChargeAllocations = async (
       columns: {
         id: true,
         transactionId: true,
-        amount: true,
+        amountMinor: true,
         confirmsMerchant: true,
       },
     });
@@ -1896,7 +1896,7 @@ const moveChargeAllocations = async (
       await tx
         .update(financialTransactionAllocation)
         .set({
-          amount: Number(collision.amount) + Number(moving.amount),
+          amountMinor: collision.amountMinor + moving.amountMinor,
           confirmsMerchant:
             collision.confirmsMerchant || moving.confirmsMerchant,
           updatedAt: new Date(),

@@ -23,6 +23,7 @@ import {
   deleteExpenses,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
+import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   readLedgerTransfer,
@@ -140,12 +141,12 @@ export async function previewFinancialBookingCorrection(
     return fail(
       "The original booking was edited. Review its Expense changes before correcting settlement.",
     );
-  const allocations = await getDb(
-    db,
-  ).query.financialTransactionAllocation.findMany({
-    where: (allocation, { eq }) =>
-      and(eq(allocation.transactionId, id), notDeleted(allocation)),
-  });
+  const allocations = await getDb(db)
+    .query.financialTransactionAllocation.findMany({
+      where: (allocation, { eq }) =>
+        and(eq(allocation.transactionId, id), notDeleted(allocation)),
+    })
+    .then((rows) => rows.map(allocationDollars));
   if (
     allocations.length !== 1 ||
     lineage.lines.some((line) => line.purchaseId !== allocations[0]?.purchaseId)

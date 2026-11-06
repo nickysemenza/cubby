@@ -58,7 +58,7 @@ it("preserves a saved multi-purchase policy until draft link intent explicitly c
     "financialTransaction",
   );
   await unwrapDb(ctx.db).execute(
-    sql`INSERT INTO "FinancialTransactionAllocation" ("transactionId","purchaseId",amount) VALUES (${id},${required.id},6),(${id},${optional.id},6)`,
+    sql`INSERT INTO "FinancialTransactionAllocation" ("transactionId","purchaseId","amountMinor") VALUES (${id},${required.id},600),(${id},${optional.id},600)`,
   );
   const resolve = async (purchaseId: string | null, fields: string[]) =>
     fieldResolutionsSchema.parse(
@@ -565,7 +565,7 @@ it("shows disabled account parties, payment agreement, and enabled unusable vend
       postedDate: "2026-09-01",
     });
     await unwrapDb(ctx.db).execute(
-      sql`INSERT INTO "FinancialTransactionAllocation" ("transactionId","purchaseId",amount) VALUES (${transaction.entityId},${purchase.id},5)`,
+      sql`INSERT INTO "FinancialTransactionAllocation" ("transactionId","purchaseId","amountMinor") VALUES (${transaction.entityId},${purchase.id},500)`,
     );
   }
   const evidence = async () =>

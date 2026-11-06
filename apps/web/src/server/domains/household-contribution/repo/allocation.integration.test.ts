@@ -6,6 +6,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";
+import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
@@ -354,11 +355,13 @@ describe("loadExpenseAllocations derived funders", () => {
         postedDate: split.postedDate ?? "2026-08-10",
         amount: split.amount,
       });
-      await unwrapDb(ctx.db).insert(financialTransactionAllocation).values({
-        transactionId: txn.id,
-        purchaseId: purchase.id,
-        amount: split.amount,
-      });
+      await unwrapDb(ctx.db)
+        .insert(financialTransactionAllocation)
+        .values({
+          transactionId: txn.id,
+          purchaseId: purchase.id,
+          amountMinor: moneyToMinor(split.amount),
+        });
     }
     return expense;
   };
@@ -754,11 +757,13 @@ describe("loadExpenseAllocations derived funders", () => {
       postedDate: "2026-08-10",
       amount: 30,
     });
-    await unwrapDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: txn.id,
-      purchaseId: purchase.id,
-      amount: 30,
-    });
+    await unwrapDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: txn.id,
+        purchaseId: purchase.id,
+        amountMinor: moneyToMinor(30),
+      });
     const lines = await Promise.all(
       [10, 20].map((cost) =>
         insertWithShortcode(ctx.db, "expense", {

@@ -1,4 +1,5 @@
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
+import { minorToMoney } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -169,7 +170,7 @@ describe("generated booking evidence corrections", () => {
         status: stored?.status,
         allocations: stored?.allocations
           .filter((row) => row.deletedAt === null)
-          .map((row) => row.amount),
+          .map((row) => minorToMoney(row.amountMinor)),
         expenses: (await lineage()).lines.map((row) => row.cost),
       };
     };

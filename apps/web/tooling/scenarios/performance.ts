@@ -1,3 +1,4 @@
+import { moneyToMinor } from "@cubby/shared";
 import { randomUUID, createHash } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -413,7 +414,7 @@ export async function seedPerformanceCorpus(
       allocations.push({
         transactionId: row.id,
         purchaseId: order.id,
-        amount: charge.amount,
+        amountMinor: moneyToMinor(charge.amount),
       });
     }
     for (let message = 0; message < 8; message++) {

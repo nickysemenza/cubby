@@ -1,4 +1,6 @@
 import { SETTLEMENT_CANDIDATE_LIMIT } from "@cubby/schemas/financial-transaction";
+import { moneyToMinor } from "@cubby/shared";
+import { sql } from "drizzle-orm";
 import { and, eq, inArray } from "drizzle-orm";
 import { createRepoEntity, createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -54,11 +56,13 @@ describe("settlement candidate graph preservation", () => {
     });
     // A partially attached legacy graph is read evidence, never authority to
     // replace its already accepted allocation while completing the remainder.
-    await getDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: transaction.entityId,
-      purchaseId: prior.entityId,
-      amount: 70,
-    });
+    await getDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: transaction.entityId,
+        purchaseId: prior.entityId,
+        amountMinor: moneyToMinor(70),
+      });
     const candidates = await listPurchaseSettlementCandidates(
       ctx.db,
       target.output.id,
@@ -181,11 +185,13 @@ describe("settlement candidate graph preservation", () => {
       postedDate: "2026-09-03",
       merchant: "Synthetic processor",
     });
-    await getDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: partial.entityId,
-      purchaseId: prior.entityId,
-      amount: 70,
-    });
+    await getDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: partial.entityId,
+        purchaseId: prior.entityId,
+        amountMinor: moneyToMinor(70),
+      });
     const candidates = await listPurchaseSettlementCandidates(
       ctx.db,
       target.output.id,
@@ -301,7 +307,10 @@ describe("settlement candidate graph preservation", () => {
     const saved = await getDb(ctx.db)
       .select({
         purchaseId: financialTransactionAllocation.purchaseId,
-        amount: financialTransactionAllocation.amount,
+        amount:
+          sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
+            Number,
+          ),
       })
       .from(financialTransactionAllocation)
       .where(
