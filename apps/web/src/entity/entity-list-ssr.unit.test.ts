@@ -17,7 +17,7 @@ import { installEntityMetadataTransport } from "~/entity/metadata-transport";
 import { entityListDefaultSort } from "~/entity/sortable-fields";
 import { productListReadProjection } from "~/features/product/list-read";
 import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
-import { loadEntityMetadata } from "~/server/entity-metadata/loader.server";
+import { loadEntityMetadata } from "~/server/entity-kernel/metadata/loader.server";
 
 import {
   ensureEntityListSsr,

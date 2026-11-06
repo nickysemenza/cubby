@@ -567,7 +567,7 @@ export const { definition, readSchemas } = defineEntityModel({
         control: { kind: "dateRange" },
         display: {
           columnGroup: "Schedule",
-          columnIdOverride: "dueDate",
+          columnId: "dueDate",
           mobile: { slot: "meta", priority: 40, interactive: true },
         },
         validation: {

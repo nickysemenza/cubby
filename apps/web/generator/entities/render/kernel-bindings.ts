@@ -92,7 +92,7 @@ export const renderKernelBindingsArtifacts = (
         `${entity.key}: default repository cannot read undeclared stored projections (${unsupported.join(", ")}); declare a read implementation.`,
       );
   }
-  const factoryEntities = kernelEntities.filter(
+  const factoryEntities = defaultEntities.filter(
     (entity) =>
       entity.table &&
       entity.contract &&
@@ -207,6 +207,13 @@ export const renderKernelBindingsArtifacts = (
         `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
     )
     .join("\n");
+  const reportBindings = kernelEntities
+    .filter((e) => e.ports.reports)
+    .map(
+      (e) =>
+        `  ${JSON.stringify(e.key)}: () => import(${JSON.stringify(e.ports.reports!.module)}).then(m => m.${e.ports.reports!.export}),`,
+    )
+    .join("\n");
   const runtimeBindings = kernelEntities
     .map((entity) => `  ${JSON.stringify(entity.key)}: ${adapterName(entity)},`)
     .join("\n");
@@ -248,6 +255,7 @@ export const renderKernelBindingsArtifacts = (
         const { ports } = entity;
         const refs = [
           ports.repository,
+          ports.reports,
           ports.fieldEnvelope,
           ports.references.label,
           ports.references.resolver,
@@ -304,11 +312,19 @@ export const renderKernelBindingsArtifacts = (
     };
   };
   return [
+    {
+      relativePath:
+        "apps/web/src/server/generated/entity-kernel-bindings.gen.ts",
+      source: rawSource(
+        generatedHeader +
+          `export const ENTITY_REPORT_BINDINGS = {\n${reportBindings}\n};\n`,
+      ),
+    },
     portChecks(false),
     portChecks(true),
     {
       relativePath:
-        "apps/web/src/server/generated/entity-kernel-bindings.gen.ts",
+        "apps/web/src/server/generated/entity-kernel-runtime.gen.ts",
       source: rawSource(
         generatedHeader +
           'import type { EntityKernelCoreBinding } from "~/server/entity-kernel/adapter";\n' +

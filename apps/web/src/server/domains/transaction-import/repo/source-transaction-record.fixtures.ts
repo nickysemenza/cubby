@@ -14,7 +14,7 @@ import { TEST_ACTOR } from "tooling/test-setup";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { sourceTransactionRecord, transactionImport } from "~/server/db/schema";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 
 import { sourceTransactionRecordScaffold } from "./entity-repositories";
 import { recordSourceTransactionRecords } from "./source-transaction-record";

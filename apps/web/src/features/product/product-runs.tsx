@@ -7,7 +7,6 @@ import { Link } from "@tanstack/react-router";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { entityListFor } from "~/entity/entity-list";
-import { ProductRelatednessActions } from "~/entity/relatedness/relatedness-rail";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { Stack } from "~/ui/layout";
 import { RecordDot, RecordList, RecordRow } from "~/ui/records/record-list";
@@ -154,12 +153,4 @@ export const ProductOwnershipEvidence: DetailSlotComponent<"product"> = ({
 /** Research history uses the same server-owned records report as Purchases. */
 export const ProductRuns: DetailSlotComponent<"product"> = ({ record }) => (
   <EntityReportSlot slot="product.runs" id={record.id} record={record} />
-);
-
-export const ProductDetailActions: DetailSlotComponent<"product"> = ({
-  record,
-}) => (
-  <ProductRelatednessActions
-    productId={parseShortcodeFor("product", record.id)}
-  />
 );

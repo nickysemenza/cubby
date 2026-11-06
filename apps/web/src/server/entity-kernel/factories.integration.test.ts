@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { inventoryEntry, location, productCategory } from "~/server/db/schema";
-import { createLedgerPartyDefaultRepository } from "~/server/generated/entity-kernel-bindings.gen";
+import { createLedgerPartyDefaultRepository } from "~/server/generated/entity-kernel-runtime.gen";
 
 describe("factories against the entity kernel", () => {
   const ctx = withTestDb();

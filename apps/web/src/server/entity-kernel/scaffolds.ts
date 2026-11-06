@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 import type { EntityListScaffold } from "~/server/generic/list/repo/list";
 
 /**

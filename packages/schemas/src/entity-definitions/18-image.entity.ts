@@ -621,11 +621,11 @@ export const { definition, readSchemas } = defineEntityModel(
           output: false,
           key: "images",
           kind: "json",
-          labelOverride: "Image",
+          label: "Image",
           // A row IS an image: the thumbnail renders once its file is uploaded.
           display: {
             standard: "image",
-            listOrderOverride: 0,
+            listOrder: 0,
             renderer: { list: "uploaded-image" },
             readFields: ["url", "status", "filename"],
           },
@@ -1041,6 +1041,10 @@ export const { definition, readSchemas } = defineEntityModel(
     },
     extensions: {
       ports: {
+        reports: {
+          module: "~/server/domains/image/repo/report-bindings",
+          export: "reportBindings",
+        },
         repository: {
           module: "~/server/domains/image/repo/image.repository",
           export: "imageRepository",

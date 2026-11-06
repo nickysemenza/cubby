@@ -462,7 +462,7 @@ export const { definition, readSchemas } = defineEntityModel(
         {
           key: "spendingCategorySummary",
           kind: "json",
-          labelOverride: "Expense categories",
+          label: "Expense categories",
           provenance: {
             kind: "derived",
             sources: [{ label: "Live Expense category allocations" }],
@@ -629,7 +629,7 @@ export const { definition, readSchemas } = defineEntityModel(
           // linked to a purchase, read from the mirror column above.
           key: "purchasePresence",
           kind: "boolean",
-          labelOverride: "Linked",
+          label: "Linked",
           display: {
             columnGroup: "Booking",
             detail: false,
@@ -2005,6 +2005,10 @@ export const { definition, readSchemas } = defineEntityModel(
     },
     extensions: {
       ports: {
+        reports: {
+          module: "~/server/domains/financial-transaction/repo/report-bindings",
+          export: "reportBindings",
+        },
         repository: {
           module:
             "~/server/domains/financial-transaction/repo/financial-transaction",

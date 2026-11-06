@@ -597,9 +597,6 @@ const headerActions: HeaderActionTable = {
   expense: headerAction<"expense">(() =>
     named(import("~/entity/entity-detail/report-slot"), "ExpenseDetailActions"),
   ),
-  product: headerAction<"product">(() =>
-    named(import("~/features/product/product-runs"), "ProductDetailActions"),
-  ),
   image: headerAction<"image">(() =>
     named(
       import("~/features/image/image-processing-panel"),

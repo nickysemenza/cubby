@@ -6,7 +6,7 @@ import {
   type TimelineEntity,
 } from "~/entity/generated/entity-timelines.gen";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { ENTITY_TIMELINE_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { ENTITY_TIMELINE_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 
 import { defaultTimeline } from "../repo/default-timeline";
 import type { EntityTimelineImplementation } from "./contracts";

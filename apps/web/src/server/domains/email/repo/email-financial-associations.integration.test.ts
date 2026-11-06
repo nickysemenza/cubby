@@ -17,10 +17,10 @@ import {
   readEmailAssociations,
 } from "~/server/domains/email/repo/email";
 import { readEmailFinancialAssociations } from "~/server/domains/email/repo/email-financial-associations";
+import { emailReviewReport } from "~/server/domains/email/repo/report-email";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { clearUnrelatedOriginal } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
-import { emailReviewReport } from "~/server/generic/entity-report/repo/email";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // Persisted-read failures: target deletion erases reviewed history/protection;

@@ -334,7 +334,6 @@ export const { definition, readSchemas } = defineEntityModel(
             title: "Nutrition",
             fields: ["growsPlantId"],
           },
-          { kind: "slot", id: "fits-with", title: "Similar products" },
           { kind: "slot", id: "cookbooks", title: "Cookbooks" },
           {
             kind: "slot",
@@ -876,7 +875,7 @@ export const { definition, readSchemas } = defineEntityModel(
             // Near-constant (Unclassified or Purchased) on most rows; ordered
             // after price so the Purchasing band does not lead the table.
             listHidden: true,
-            listOrderOverride: 22,
+            listOrder: 22,
             optionRole: "category",
             optionColor: "domain-pantry",
             optionGlyph: { phosphor: "Package", sfSymbol: "shippingbox" },
@@ -925,7 +924,7 @@ export const { definition, readSchemas } = defineEntityModel(
           storedPath: ["primaryPlacement"],
           kind: "json",
           nullable: true,
-          labelOverride: "Where",
+          label: "Where",
           provenance: {
             kind: "derived",
             sources: [{ entity: "inventory" }, { entity: "location" }],
@@ -998,7 +997,7 @@ Rules:
           output: false,
           audit: false,
           key: "barcode",
-          labelOverride: "Primary barcode",
+          label: "Primary barcode",
           description:
             "Barcode or ISBN. Selects the primary barcode while preserving other identifiers; clear to remove only the current primary.",
           semanticRole: "externalIdentifier",
@@ -1177,7 +1176,7 @@ Rules:
           kind: "text",
           nullable: true,
           validation: readOnly(productCategoryFeature.nullable()),
-          labelOverride: "Category family",
+          label: "Category family",
           // Saved views expose this column; use the inherited family matched by its filter.
           display: {
             columnGroup: "Catalog",
@@ -1256,7 +1255,7 @@ Rules:
           kind: "number",
           nullable: true,
           // The detail distinguishes effective valuation from an entered price.
-          labelOverride: "Valuation price",
+          label: "Valuation price",
           control: { kind: "number", renderer: "money", width: "half" },
           display: {
             columnGroup: "Purchasing",
@@ -1687,7 +1686,7 @@ Rules:
           storedKey: "food",
           kind: "json",
           nullable: true,
-          labelOverride: "USDA Food",
+          label: "USDA Food",
           display: {
             columnGroup: "Food",
             detail: false,
@@ -1829,12 +1828,12 @@ Rules:
           storedKey: "ownership",
           storedPath: ["owners"],
           kind: "json",
-          labelOverride: "Owner",
+          label: "Owner",
           display: {
             columnGroup: "Stock",
             columnLabel: "Owner",
             // Owner follows Where, ahead of catalog and price columns.
-            listOrderOverride: 4,
+            listOrder: 4,
             width: "md",
             format: "resolvedList",
             emptyLabel: "Owner unknown",
@@ -2000,7 +1999,7 @@ Rules:
           storedKey: "readFacts",
           storedPath: ["stockStatus"],
           kind: "text",
-          labelOverride: "Inventory status",
+          label: "Inventory status",
           display: { columnGroup: "Stock", listHidden: true, width: "md" },
           provenance: {
             kind: "derived",
@@ -3728,7 +3727,6 @@ Rules:
             facet: "provenance",
             label: "No image (stocked)",
             message: "No product image is attached.",
-            coverage: "productsWithNoImages",
           },
           {
             id: "amazon_asin",
@@ -3783,24 +3781,11 @@ Rules:
       },
     },
     extensions: {
-      relatednessSignals: [
-        {
-          kind: "semantic",
-          label: "Similar meaning",
-          pair: "product_to_product",
-          weight: 1,
-          limit: 8,
-        },
-        {
-          kind: "scalarOverlap",
-          label: "Shared tag",
-          pair: "product_to_product",
-          column: "Product.tags",
-          popularityCap: 24,
-          scoring: "displayOnly",
-        },
-      ],
       ports: {
+        reports: {
+          module: "~/server/domains/product/repo/report-bindings",
+          export: "reportBindings",
+        },
         fieldEnvelope: {
           module: "~/server/domains/product/repo/field-envelope",
           export: "projectProductFieldEnvelopes",

@@ -16,7 +16,7 @@ import { loadBrowserEntityMetadata } from "~/entity/metadata-loader";
 const readEntityMetadata = createIsomorphicFn()
   .server(async (entity: Entity) => {
     const { loadEntityMetadata } =
-      await import("~/server/entity-metadata/read.boundary");
+      await import("~/server/entity-kernel/metadata/read.boundary");
     return loadEntityMetadata(entity);
   })
   .client(loadBrowserEntityMetadata);

@@ -64,7 +64,7 @@ import {
   generatedMcpEntityRelationCommandSchema,
   generatedMcpEntityRelationPreviewInputSchema,
 } from "~/server/generated/entity-relation-contracts.gen";
-import { previewOperation } from "~/server/generic/integrity/operations/entity-integrity-preview.server";
+import { previewOperation } from "~/server/generic/removal/repo/relation-preview";
 import type { Principal } from "~/server/http/authenticate";
 
 import {

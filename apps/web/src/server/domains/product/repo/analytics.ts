@@ -4,7 +4,7 @@ import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
  * Category distribution, duplicate detection, and backfill operations.
  */
 import type { RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
-import { and, arrayOverlaps, eq, isNull, ne, type SQL, sql } from "drizzle-orm";
+import { and, eq, isNull, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -175,65 +175,6 @@ export const getProductExternalIdSourceOptions = async (
       sql`count(distinct ${entityExternalId.entityId}) DESC`,
       entityExternalId.source,
     );
-
-/**
- * Every other product sharing at least one tag with `id` — the "fits with this"
- * roster on the product detail page.
- *
- * Returns each sibling's full `tags` so the caller can group by the shared tag
- * without a second round trip. Intersecting in the component rather than
- * pivoting in SQL keeps this a single flat query.
- *
- * Ecosystem tags ARE tiny (`M18` is 6 products), but provenance tags are not —
- * `home-depot-import` is 536 and `amazon` 324, so this is a few hundred scalar
- * rows on the widest tag, not the handful an ecosystem tag suggests. Still one
- * indexed scan and no pivot; sizing decisions here should use the provenance
- * numbers rather than the ecosystem ones.
- *
- * Empty tags short-circuits: `arrayOverlaps` against `'{}'` matches nothing, so
- * the query would be a guaranteed-empty scan.
- */
-export const getProductsSharingTags = async (
-  db: Database,
-  id: ProductId,
-): Promise<
-  Array<{
-    id: ProductId;
-    shortcode: string;
-    name: string;
-    brandName: string | null;
-    category: RawProductCategorySummary | null;
-    tags: string[];
-  }>
-> => {
-  const source = await getDb(db)
-    .select({ tags: product.tags })
-    .from(product)
-    .where(and(eq(product.id, id), notDeleted(product)))
-    .limit(1);
-
-  const tags = source[0]?.tags ?? [];
-  if (tags.length === 0) return [];
-
-  return await getDb(db)
-    .select({
-      id: product.id,
-      shortcode: product.shortcode,
-      name: product.name,
-      brandName: productBrandNameSql(product.brandId),
-      category: categorySummarySql(sql`${product.categoryId}`),
-      tags: product.tags,
-    })
-    .from(product)
-    .where(
-      and(
-        notDeleted(product),
-        ne(product.id, id),
-        arrayOverlaps(product.tags, tags),
-      ),
-    )
-    .orderBy(product.name);
-};
 
 export const getCategoryDistribution = async (
   db: Database,

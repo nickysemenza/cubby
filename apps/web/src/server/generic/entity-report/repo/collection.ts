@@ -10,9 +10,8 @@ import { z } from "zod";
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import { projectPortfolioAnalytics } from "~/server/domains/project/repo/portfolio-analytics";
+import { taskBriefingReport } from "~/server/domains/task/repo/report-task";
 import { getTaskTodayBriefing } from "~/server/domains/task/repo/today-briefing";
-
-import { taskBriefingReport } from "./task";
 
 /** Scoped reports validate their own supported filters instead of ignoring a wider list scope. */
 export async function buildCollectionReport(

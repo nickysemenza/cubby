@@ -978,10 +978,7 @@ export const renderEntityMetadataArtifacts = (
           name: "generatedEntityKernelContractCases",
           value: kernelContractCases,
         },
-        {
-          name: "generatedMcpEntityKernelContractCases",
-          value: mcpKernelContractCases,
-        },
+
         {
           name: "generatedMcpEntityActionEntities",
           value: Object.fromEntries(

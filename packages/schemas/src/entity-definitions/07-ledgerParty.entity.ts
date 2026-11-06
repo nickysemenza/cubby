@@ -344,6 +344,10 @@ export const { definition, readSchemas } = defineEntityModel({
   },
   extensions: {
     ports: {
+      reports: {
+        module: "~/server/domains/ledger-party/repo/report-bindings",
+        export: "reportBindings",
+      },
       repository: {
         module: "~/server/domains/ledger-party/repo/ledger-party.repository",
         export: "ledgerPartyRepository",

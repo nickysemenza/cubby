@@ -59,7 +59,7 @@ import {
   resolveEntityDisplayImageChain,
 } from "~/server/entity-kernel/repo/entity-display-image";
 import type { EntitySchemaBindingEntity } from "~/server/generated/entity-bindings.gen";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 import {
   buildQualityBreakdown,
   loadQualityBreakdown,

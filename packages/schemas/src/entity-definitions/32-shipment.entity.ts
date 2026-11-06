@@ -273,7 +273,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "firstEventDate",
         kind: "date",
         nullable: true,
-        labelOverride: "First event",
+        label: "First event",
         display: { columnGroup: "Events", format: "plainDate" },
         provenance: {
           kind: "derived",
@@ -285,7 +285,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "lastEventDate",
         kind: "date",
         nullable: true,
-        labelOverride: "Last event",
+        label: "Last event",
         display: { columnGroup: "Events", format: "plainDate" },
         provenance: {
           kind: "derived",
@@ -297,7 +297,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "eventSpanHours",
         kind: "number",
         nullable: true,
-        labelOverride: "Event span",
+        label: "Event span",
         display: {
           columnGroup: "Events",
           labelPath: "eventSpanLabel",
@@ -323,7 +323,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "eventCount",
         kind: "number",
         nullable: true,
-        labelOverride: "Events",
+        label: "Events",
         display: { columnGroup: "Events", format: "count" },
         provenance: {
           kind: "derived",
@@ -600,6 +600,10 @@ export const { definition, readSchemas } = defineEntityModel({
   },
   extensions: {
     ports: {
+      reports: {
+        module: "~/server/domains/shipment/repo/report-bindings",
+        export: "reportBindings",
+      },
       repository: {
         module: "~/server/domains/shipment/repo/entity-repository",
         export: "shipmentRepository",

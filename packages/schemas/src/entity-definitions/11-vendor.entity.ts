@@ -1478,7 +1478,6 @@ export const { definition, readSchemas } = defineEntityModel({
           facet: "provenance",
           label: "Logo",
           message: "No logo is recorded for this vendor.",
-          coverage: "vendors",
         },
         {
           id: "vendor_website",
@@ -1496,6 +1495,10 @@ export const { definition, readSchemas } = defineEntityModel({
   },
   extensions: {
     ports: {
+      reports: {
+        module: "~/server/domains/vendor/repo/report-bindings",
+        export: "reportBindings",
+      },
       repository: {
         module: "~/server/domains/vendor/repo/vendor.repository",
         export: "vendorRepository",

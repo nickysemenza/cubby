@@ -8,7 +8,7 @@ import type { RunDetail } from "~/contracts/run.contract";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
-import { importReportBlocks } from "~/server/generic/entity-report/repo/run";
+import { importReportBlocks } from "~/server/domains/run/repo/report-run";
 
 import {
   RunAgentActions,

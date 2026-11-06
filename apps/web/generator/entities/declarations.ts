@@ -1,11 +1,12 @@
+import { compileEntityDeclarations } from "./compile.ts";
+import { modulesChildren } from "@cubby/schemas/compiler/child-tables/modules";
 import type { GeneratedEntityFieldModel } from "@cubby/schemas/entity-projection-types";
 import type { CompiledEntityListFields } from "./list-fields.ts";
 import type { ChildTableMetadata } from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import { readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { compileEntityDeclarations } from "./compile.ts";
-import { modulesChildren } from "@cubby/schemas/compiler/child-tables/modules";
+
 import { validatePredicateBaseline } from "./predicate-baseline.ts";
 import type {
   CompiledEntityPresentation,
@@ -481,7 +482,7 @@ export const declarationModules = new Map<
   }
 >();
 
-export const compileLoadedEntityDeclarations = (
+const compileLoadedEntityDeclarations = (
   loaded: readonly DeclarationObject[],
 ): CompiledEntity[] => {
   return compileEntityDeclarations(loaded, modulesChildren);

@@ -70,7 +70,7 @@ import {
   SHORTCODE_PATTERN,
   SKIPPED_ENTITIES,
 } from "~/server/entity-kernel/reference-universe.fixtures";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 /**

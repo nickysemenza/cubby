@@ -406,7 +406,7 @@ export const { definition, readSchemas } = defineEntityModel(
           storedPath: ["effectiveOwnerId"],
           kind: "identifier",
           nullable: true,
-          labelOverride: "Owner",
+          label: "Owner",
           reference: {
             entity: "ledgerParty",
             filters: [{ field: "kind", values: ["member", "guest"] }],
@@ -415,7 +415,7 @@ export const { definition, readSchemas } = defineEntityModel(
           display: {
             columnGroup: "Ownership",
             // Owner leads; the Stock band (valuation, verified) follows it.
-            listOrderOverride: 2,
+            listOrder: 2,
             columnLabel: "Owner",
             width: "md",
             labelPath: "effectiveOwnership.effectiveOwner.name",
@@ -1134,7 +1134,6 @@ export const { definition, readSchemas } = defineEntityModel(
             facet: "provenance",
             label: "Verified",
             message: "This stock entry has never been verified.",
-            coverage: "neverVerifiedInventory",
           },
         ],
       },

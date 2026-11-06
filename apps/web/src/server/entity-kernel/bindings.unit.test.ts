@@ -11,12 +11,12 @@ import {
   generatedMcpEntityCreateCommandSchema,
   generatedMcpEntityUpdateCommandSchema,
 } from "~/server/generated/entity-bindings.gen";
+import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
+import { generatedMcpEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
 import {
   ENTITY_KERNEL_BINDINGS,
   ENTITY_KERNEL_OPERATIONS,
-} from "~/server/generated/entity-kernel-bindings.gen";
-import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
-import { generatedMcpEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
+} from "~/server/generated/entity-kernel-runtime.gen";
 
 import {
   ENTITY_KERNEL_ENTITIES,

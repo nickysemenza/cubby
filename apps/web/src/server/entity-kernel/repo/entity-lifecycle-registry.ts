@@ -3,8 +3,8 @@ import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 
 import { effectiveIncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { generatedEntityKernelEntities } from "~/server/generated/entity-kernel-entities.gen";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 
 export interface EntityLifecycleRegistryEntry {
   entity: Entity;

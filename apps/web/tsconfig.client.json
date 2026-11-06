@@ -18,8 +18,8 @@
     "paths": {
       "~/*": ["./src/*"],
       "tooling/*": ["./tooling/*"],
-      "~/server/entity-metadata/read.boundary": [
-        "./artifacts/server-contracts/server/entity-metadata/read.boundary"
+      "~/server/entity-kernel/metadata/read.boundary": [
+        "./artifacts/server-contracts/server/entity-kernel/metadata/read.boundary"
       ],
       "~/server/http/routes/*": [
         "./artifacts/server-contracts/server/http/routes/*"

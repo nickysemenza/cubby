@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { generatedEntityKernelEntities } from "~/server/generated/entity-kernel-entities.gen";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 
 import { calculateAffectedDeleteEdges } from "./delete-effects";
 

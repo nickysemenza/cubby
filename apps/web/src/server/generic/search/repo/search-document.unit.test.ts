@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DrizzleTransaction } from "~/server/db";
 // Repository initialization belongs to suite startup, as it does in the server.
-import "~/server/generated/entity-kernel-bindings.gen";
+import "~/server/generated/entity-kernel-runtime.gen";
 
 import { countSearchDocumentSources } from "./search-document";
 

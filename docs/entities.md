@@ -53,7 +53,7 @@ pass. It captures explicit overrides before deriving image sources and inverse
 relations, derives detail sections before validating data-quality placements,
 then validates the complete graph against entity and module child storage.
 Image routing names actual model fields; disabled create routes do not count as
-active alternatives. Counterfactual override comparisons use this same pass.
+active alternatives.
 
 Compiler renderers use bootstrap-safe entity and identifier leaves, never their
 own generated catalogs. Shared Problem query and action declarations live in `@cubby/schemas` under
@@ -667,7 +667,7 @@ field roster, from the same generator helpers the inspector uses
 normal-update roster and the exclusions in the bulk edit contract below. Identity marks and empty states read this metadata. Plants, Plantings and GardenEntries belong to Garden; Purchases, Wishes, Shipments, Emails, Vendors and VendorAccounts belong to Purchases. `packages/schemas/src/sidebar-manifest.ts` owns `SIDEBAR_SECTIONS`, the single ordered navigation roster for desktop web, the mobile More sheet and generated Swift `SidebarManifest.sections`. Each section declares its id, label (empty for top), nullable domain, default fold state and ordered destinations; each destination declares its nav label, web route and either its browser-routed entity or a specialist SF Symbol. Page titles retain their full names.
 
 `presentation.detail`, `.list` and `.edit` are the one declaration both the
-web and the native renderers draw from. A `*Override` name is reserved for a
+web and the native renderers draw from. A differing presentation value declares a
 value that replaces a default the compiler computes; an additive or required
 declaration (`detail.sections`, `list.views`, `list.totals`,
 `route.list`, `route.detail`) takes a plain name. The generator compiles each
@@ -1239,8 +1239,8 @@ model: {
 ```
 
 Field defaults are non-nullable, a label derived from the camel-case key, and a
-read key equal to that key. Use `labelOverride` for a different label and
-`readKeyOverride: null` for fields without a scalar read
+read key equal to that key. Use `label` for a different label and
+`readKey: null` for fields without a scalar read
 projection. Missing controls expose no editor. Omitted display flags derive
 from each effective surface schema: the value or reference identity must exist
 and have a supported rendering strategy. A read key or reference declaration
@@ -1252,8 +1252,8 @@ helper projections do not become duplicate facts. Other deliberate omissions
 remain explicit. A reference defaults to one entity. A label defaults to the humanized key (a reference
 drops its `Id`; a `<field>Presence` filter field reads "<Field> present").
 Explicit labels, nullability, read keys, and renderers override these
-defaults. Declaration inputs use `display.columnIdOverride` and
-`listOrderOverride` when a rendered field needs a different identity or list
+defaults. Declaration inputs use `display.columnId` and
+`listOrder` when a rendered field needs a different identity or list
 order. The compiled manifest retains `columnId`, `detailOrder` (title first,
 then model order), and `listOrder`.
 
@@ -1574,9 +1574,9 @@ Standard name and image columns are declared by `display.standard` on their
 fields; there is no second standard-column roster in the browser registry.
 
 Compiled `display.detailOrder` places the title first, then follows model order.
-`display.listOrderOverride` orders list columns independently (model order also
+`display.listOrder` orders list columns independently (model order also
 drives form fields); it must be a nonnegative integer differing from the default.
-`display.columnIdOverride` keeps a stable column ID when the field key differs — ids are saved layouts, filter bindings, sort ids and
+`display.columnId` keeps a stable column ID when the field key differs — ids are saved layouts, filter bindings, sort ids and
 saved-view keys, so a rename is never free.
 
 `display.columnGroup` declares the thematic header band for each list field;
@@ -1670,7 +1670,7 @@ field model. Default columns have no separate roster: set `listHidden` on a
 column that is near-constant in practice ("1 each", "Stock", "Needs data",
 an identifier or flag empty on most rows) so the informative ones (placement,
 owner, value, due date, status) lead after the title. Order them with
-`listOrderOverride` when model order puts them late, and keep a band's members
+`listOrder` when model order puts them late, and keep a band's members
 together: web paints a `columnGroup` at its first member's position, hidden or
 not, while native sorts by `listOrder` alone. Web tables, Mac tables and native
 rows all start from this state. `display.width` buckets a column as `xs`,
@@ -4848,3 +4848,27 @@ priority-zero Entity and Suggestion fan-out. The shared `derived_mark` function
 returns before ticket/capture writes for those declared targets and indexed
 fan-out addresses. Existing tickets remain until the hourly pass has published
 the replacement target; stopping admission alone does not prove coverage.
+
+## Retired entity tools (ADR 0025)
+
+The entity explorer, schema spreadsheet and inspector, integrity catalog, graph
+explorer and path search, and similar-products rail are retired. Ordinary record
+relations retain `connectedRecords`, `connectedRecordsPreview` and `connections`.
+Connection discovery still proposes inventory placement and expense/project links.
+Product-match review commands belong to the `productMatch` contract.
+
+`extensions.ports.reports` binds a domain's report dependencies. Generation emits
+the per-entity loaders into `entity-kernel-bindings.gen.ts`; the generic report
+runner executes those dependencies and shares their request-scoped memo. Domain
+builders live with their domain; shared summary and record blocks stay generic.
+The declaration no longer records override-comparison provenance for field labels,
+read keys, display column ids or display order: these are plain options.
+
+Problems retains paged type reads, counts and maintenance actions. The full-report
+branch, its five group finders and the coverage-meter denominator query are gone.
+Record metadata and canonical edit validation remain necessary for ordinary record
+pages and live under `server/entity-kernel/metadata`.
+
+Generated search output remains ignored. Commit 7022da36e first tracked its entire
+1,275-line output; the increase was artifact tracking, not duplicated Problem
+emission. Its emitter already reads canonical filter URL keys from list fields.

@@ -313,6 +313,10 @@ export const { definition, readSchemas } = defineEntityModel({
   },
   extensions: {
     ports: {
+      reports: {
+        module: "~/server/domains/transaction-import/repo/report-bindings",
+        export: "reportBindings",
+      },
       // Preserve statement source/fingerprint search presentation without a repository wrapper.
       search: {
         read: {

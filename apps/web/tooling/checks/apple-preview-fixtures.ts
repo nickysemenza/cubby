@@ -44,7 +44,7 @@ import { nutritionEstimate } from "@cubby/schemas/nutrition";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { taskTodayBriefingItemOut } from "@cubby/schemas/project";
 import { completeTaskCommand } from "../../src/server/domains/task/repo/briefing-commands";
-import { taskBriefingReport } from "../../src/server/generic/entity-report/repo/task";
+import { taskBriefingReport } from "../../src/server/domains/task/repo/report-task";
 
 import { mock } from "../../src/lib/test/mock-schema";
 

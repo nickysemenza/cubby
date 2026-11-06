@@ -298,7 +298,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "stockTracked",
         kind: "boolean",
         nullable: true,
-        labelOverride: "Stock tracking",
+        label: "Stock tracking",
         control: { kind: "checkbox" },
         display: { list: false },
         resolution: {

@@ -4,7 +4,7 @@ import {
   entitySelectionIdsInputSchema,
   entitySelectionIdsOutputSchema,
 } from "~/contracts/entity-list.contract";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 
 import type { EntityKernelContext } from "./adapter";
 import { resolveFilterTokens } from "./filter-tokens";

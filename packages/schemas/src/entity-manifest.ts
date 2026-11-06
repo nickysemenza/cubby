@@ -51,7 +51,6 @@ export type {
   ControlRendererId,
 } from "./generated/entity-field-model.gen";
 export type { DetailSlotId, ListSlotId } from "./generated/entity-summary.gen";
-import { relatednessSignalSchema } from "./relatedness";
 import {
   type EntityRelationship,
   entityLifecycleSchema,
@@ -147,7 +146,6 @@ export const entityDescriptor = z.object({
   embeddable: z.boolean(),
   countable: z.boolean(),
   relationships: z.array(entityRelationshipSchema).readonly(),
-  relatednessSignals: z.array(relatednessSignalSchema).readonly().optional(),
   lifecycle: entityLifecycleSchema,
   mcp: z.array(mcpOp).readonly(),
 });

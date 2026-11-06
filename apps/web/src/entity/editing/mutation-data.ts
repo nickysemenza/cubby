@@ -23,14 +23,14 @@ const validateCanonicalEdit = createServerFn({
   .validator(canonicalEditRequest)
   .handler(async ({ data }) => {
     const { validateEntityEditInput } =
-      await import("~/server/entity-metadata/read.boundary");
+      await import("~/server/entity-kernel/metadata/read.boundary");
     return validateEntityEditInput(data);
   });
 
 const validateEdit = createIsomorphicFn()
   .server(async (data: z.output<typeof canonicalEditRequest>) => {
     const { validateEntityEditInput } =
-      await import("~/server/entity-metadata/read.boundary");
+      await import("~/server/entity-kernel/metadata/read.boundary");
     return validateEntityEditInput(data);
   })
   .client((data) => validateCanonicalEdit({ data }));

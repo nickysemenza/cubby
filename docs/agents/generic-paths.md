@@ -78,7 +78,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `server/domains/spending-category/repo/classification-field-policy.ts` — never a feature literal at a
   call site. See [entities](../entities.md#classification-field-policies).
 - Detail pages: generic detail with declared slots (`features/*/slots.tsx`). Header cells belong to `presentation.detail.summary`: one ordered roster of fields, connected-record previews, concise report projections and charts, capped at eight applicable cells. Reuse the canonical field, relation and report readers instead of adding an entity-specific header query or renderer.
-- Slot reports: `entityReport.get` and `server/generic/entity-report/repo/` compose
+- Slot reports: `entityReport.get` loads domain builders through the generated
+  kernel report bindings; `server/generic/entity-report/repo/` executes and composes
   shared server-owned blocks; web `ReportBlocks` and native `ReportDetailSlot`
   render them. [Compiled entities](../entities.md#one-declaration-several-consumers)
   owns block/command/choice semantics. Add a builder rather than deriving figures
@@ -366,8 +367,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   labelled values under one header (inline labels below 40rem). Inline
   labelled values anywhere else: `Facts layout="inline"` (`ui/records/facts.tsx`);
   stacked label/value lists use `Facts layout="list"`. Detail-page connected records read
-  `entity.connectedRecordsPreview` once per record; `/connections` and
-  relation-table evidence page `entity.connectedRecords` per view. Audit
+  `entity.connectedRecordsPreview` once per record;
+  relation-table evidence pages use `entity.connectedRecords` per view. Audit
   bursts fold through `foldAuditEntries` (`entity/audit-log/audit-log-fold.ts`).
 - Errors and clipboard: `showErrorToast`, `ErrorDisplay`, `copyTextWithToast`.
 - Data: generated query catalog operations, `useActionMutation`,

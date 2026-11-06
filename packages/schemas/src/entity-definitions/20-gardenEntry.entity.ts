@@ -195,7 +195,7 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "notes",
         // Stored and sent as `notes`; a garden entry still reads as one "Note".
-        labelOverride: "Note",
+        label: "Note",
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },

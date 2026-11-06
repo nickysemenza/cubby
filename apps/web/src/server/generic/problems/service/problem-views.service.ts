@@ -9,20 +9,10 @@ import {
   problemQuery,
   problemQueryDeclarations,
 } from "@cubby/schemas/entity-definitions/problems/problem-registry";
-import {
-  type ViewProblemDeclaration,
-  viewProblemDeclarations,
-} from "@cubby/schemas/entity-definitions/problems/view-problems";
 import type { SortParams } from "@cubby/schemas/pagination";
-import type {
-  ProblemKey,
-  ProblemsViewsOut,
-  SectionTotals,
-  ProblemItem,
-} from "@cubby/schemas/problems-raw-read";
+import type { ProblemKey, ProblemItem } from "@cubby/schemas/problems-raw-read";
 import {
   emptyLocationSchema,
-  problemsViewsSchema,
   productWithoutMappingsSchema,
 } from "@cubby/schemas/problems-raw-read";
 import { getMiscDisplayName } from "@cubby/shared";
@@ -48,7 +38,6 @@ import { compileProblemFilters } from "~/server/generic/problems/repo/problem-fi
 import { validateCompleteProblemRegistry } from "~/server/generic/problems/repo/problem-registry-validation";
 import { diagnosticAdapters } from "~/server/generic/problems/service/problem-diagnostics.service";
 import {
-  executeProblem,
   PROBLEM_SAMPLE_SIZE as SAMPLE_SIZE,
   type ListRow,
   type ProblemRunOptions,
@@ -64,7 +53,6 @@ import {
   recordBadge,
   selectedProblemCard,
 } from "~/server/generic/problems/service/problem-rows";
-import { traceAllBounded } from "~/server/observability/tracing";
 
 /**
  * The Problems sections that are backed by a saved view rather than a bespoke
@@ -504,55 +492,6 @@ const toIngredientWithoutProduct = (
     field("Recipes", String(r.ownRecipeCount)),
     field("Product", "None", "warning"),
   ]);
-};
-
-type ViewProblemResults = Record<
-  string,
-  { data: ListRow[]; count: number } | undefined
->;
-
-const viewProblemSectionTotals = (
-  declarations: ViewProblemDeclaration[],
-  results: ViewProblemResults,
-): SectionTotals => {
-  const totals: SectionTotals = {};
-  for (const { problem } of declarations) {
-    totals[problem.key] = results[problem.key]?.count ?? 0;
-  }
-  return totals;
-};
-
-export const findViewProblems = async (
-  db: Database,
-): Promise<ProblemsViewsOut> => {
-  const declarations = viewProblemDeclarations();
-
-  const results = await traceAllBounded(
-    Object.fromEntries(
-      declarations.map((declaration) => [
-        declaration.problem.key,
-        async () => {
-          const key = declaration.problem.key;
-          return executeProblem(db, key, {
-            fields: hasRowPresenter(key)
-              ? PROBLEM_ROW_PRESENTERS[key].fields
-              : undefined,
-          });
-        },
-      ]),
-    ),
-    4,
-  );
-
-  return problemsViewsSchema.parse({
-    ...Object.fromEntries(
-      declarations.map(({ problem }) => [
-        problem.key,
-        results[problem.key]?.items ?? [],
-      ]),
-    ),
-    sectionTotals: viewProblemSectionTotals(declarations, results),
-  });
 };
 
 /**

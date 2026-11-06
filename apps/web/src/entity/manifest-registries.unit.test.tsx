@@ -7,7 +7,6 @@ import { actionVerbs } from "~/entity/actions/action-verbs";
 import { entityActionCatalogDescriptors } from "~/entity/actions/entity-actions";
 import type { GenericDetailEntity } from "~/entity/entity-detail/detail-record";
 import { featureRegistry } from "~/entity/feature-registry";
-import { entityOverrideComparisons } from "~/entity/generated/entity-override-comparisons.gen";
 import { detailEntities } from "~/entity/model/detail-contracts";
 import { installFeatures } from "~/features/registry";
 
@@ -108,14 +107,6 @@ describe("manifest registries", () => {
 
     expect(missing).toEqual([]);
     expect(unsupportedWithoutReason).toEqual([]);
-  });
-
-  it("explains invalid relation defaults", () => {
-    const comparison = entityOverrideComparisons.product.find(
-      (item) => item.path === "presentation.detail.relationFilterOverrides",
-    );
-    expect(comparison).toMatchObject({ status: "invalid", without: null });
-    expect(comparison?.reason).toContain("renders no detail table");
   });
 
   it("names only registered verbs in every detail hero and list action roster", () => {

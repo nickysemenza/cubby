@@ -3,8 +3,8 @@ import { withTestDb, TEST_HOME_ID } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
+import { locationContentsValuationReport } from "~/server/domains/location/repo/report-location";
 import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
-import { locationContentsValuationReport } from "~/server/generic/entity-report/repo/location";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createLocationFixture,

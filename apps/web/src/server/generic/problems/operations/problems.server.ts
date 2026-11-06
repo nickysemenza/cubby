@@ -1,12 +1,6 @@
 import { problemsTypeSliceOut } from "@cubby/schemas/mcp";
-import {
-  allProblemsMcpSchema,
-  referentialLivenessViolationsMcpOut,
-} from "@cubby/schemas/problems";
-import { assembleAllProblems } from "@cubby/schemas/problems-raw-read";
 import { z } from "zod";
 
-import { integrityProblemsContract } from "~/contracts/entity-integrity.contract";
 import {
   problemReportWantsCounts,
   problemsContract,
@@ -17,7 +11,7 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
 
-import { publicProblemGroups, publicProblemSlice } from "./problem-public-read";
+import { publicProblemSlice } from "./problem-public-read";
 
 // Load detector groups only for the operations that need them.
 const problemWorkflows = () =>
@@ -56,7 +50,8 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
       context.actorContext,
     ),
   report: async (context, input) => {
-    if (problemReportWantsCounts(input)) return readProblemCounts(context);
+    if (problemReportWantsCounts(input) || input.type === undefined)
+      return readProblemCounts(context);
     if (input.type !== undefined) {
       const { expectedProblemKeys, problemQuery } =
         await import("@cubby/schemas/entity-definitions/problems/problem-registry");
@@ -90,21 +85,6 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
         },
       };
     }
-    const detectors = await problemDetectors();
-    const [fast, coverage, upc, tracker, views] = await Promise.all([
-      detectors.findFastProblems(context.db),
-      detectors.findCoverageProblems(context.db, context.usdaClient),
-      detectors.findUpcProblems(context.db, context.upcLookupClient),
-      detectors.findTrackerProblems(context.db),
-      import("~/server/generic/problems/service/problem-views.service").then(
-        (views) => views.findViewProblems(context.db),
-      ),
-    ]);
-    return publicProblemGroups(
-      context.db,
-      assembleAllProblems({ fast, coverage, upc, tracker, views }),
-      allProblemsMcpSchema,
-    );
   },
 });
 
@@ -121,26 +101,6 @@ export function projectProblemTypeSlice(
       return slice;
   }
 }
-
-export const integrityProblemsHandlers = implementOperationDomain(
-  integrityProblemsContract,
-  {
-    getByType: async (context, input) =>
-      integrityProblemsContract.ops.getByType.output.parse(
-        await publicProblemSlice(
-          context.db,
-          await (
-            await problemExecution()
-          ).findProblemByType(
-            context.db,
-            input.key,
-            context.upcLookupClient,
-            context.usdaClient,
-          ),
-        ),
-      ),
-  },
-);
 
 export const problemsStreamHandlers = implementSubscriptionDomain(
   problemsStreamsContract,
