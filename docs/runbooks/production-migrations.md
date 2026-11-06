@@ -689,3 +689,15 @@ account, accepted-money and attribution decisions remain unchanged. New MCP inpu
 states require a reconnect because tools/list is cached per session. A local
 migration fixture does not establish deployment, connector refresh or reconciliation
 completion. Production application and readback require separate authorization.
+
+## Suggestion review wire cutover (ADR 0025 L2)
+
+`0109_adr25-l2-suggestions` changes declared review-reference keys on
+`AiEvaluation.target`, paid field-result outputs, publication receipts, and field
+Suggestion proposal/outcome envelopes. It locks both owners before reading,
+checks each transformed value by reversing the rename, and compares each full
+row after writing. Conflicting old/new keys abort. Input snapshots and provenance
+fingerprints, immutable archive ledgers, member decisions, publication identities
+and queued/paid work remain unchanged. The migration does not traverse arbitrary
+member values or frozen source evidence. Apple writes require 2.71.0, matching the
+new review inputs. The parent renumbers the migration during integration.

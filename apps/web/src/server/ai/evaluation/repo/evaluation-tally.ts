@@ -37,7 +37,7 @@ const connectionTarget = () => {
     AND jsonb_typeof(${field("entity")}) = 'string'
     AND ${uuidString(field("recordId"))}
     AND jsonb_typeof(${field("field")}) = 'null'
-    AND ${field("assessmentIds")} = '[]'::jsonb)`;
+    AND ${field("suggestionIds")} = '[]'::jsonb)`;
 };
 
 /** A cancelled request hides a falsy receipt; otherwise its own receipt wins over the shared one. */

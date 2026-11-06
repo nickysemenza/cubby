@@ -12,9 +12,9 @@ import { notDeleted, unwrapDb, isTransaction } from "~/server/db/helpers";
 import { databaseForTransaction } from "~/server/db/helpers";
 import { vendor } from "~/server/db/retained-tables";
 import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
-import { lockCorrectionKey } from "~/server/generic/assessment/repo/correction-lock";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { lockCorrectionKey } from "~/server/generic/suggestions/repo/correction-lock";
 type Db = Database | DrizzleTransaction;
 
 /** Acquire in address order before Vendor locks; late receipt learning must never wait on a merger. */

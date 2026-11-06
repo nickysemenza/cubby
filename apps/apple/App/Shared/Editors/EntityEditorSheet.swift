@@ -377,9 +377,9 @@ struct EntityEditorSheet: View {
     private func suggestionReview(for model: GenericEntityEditModel) -> FieldSuggestionReviewModel {
         let client = appModel.client
         return FieldSuggestionReviewModel(
-            editor: model, fetch: { try await client.suggestFieldsReview($0) },
+            editor: model, fetch: { try await client.suggestFields($0) },
             saveCategory: { try await client.applyFinanceCategorySuggestion($0) },
-            reviewAssessment: { try await client.reviewAssessment($0) })
+            reviewSuggestion: { try await client.reviewSuggestion($0) })
     }
 
     /// Names the server projected beside reference ids (`<stem>Name` / `<stem>.name`), so an

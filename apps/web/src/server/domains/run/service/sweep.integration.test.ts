@@ -1,11 +1,11 @@
 import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
-import {
-  assessmentFamily,
-  assessmentSubjects,
-} from "@cubby/schemas/assessment";
 import { sweepRunInput } from "@cubby/schemas/run-fields";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import type { SourceTransactionRecordInput } from "@cubby/schemas/source-transaction-record";
+import {
+  suggestionFamily,
+  suggestionSubjects,
+} from "@cubby/schemas/suggestion";
 import { sweepStartInput } from "@cubby/schemas/sweep";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -331,15 +331,15 @@ describe("Sweeps", () => {
       const excludedKeys = observations
         .filter((item) => !selectedIds.has(item.providerTransactionId!))
         .map((item) => item.chargeKey);
-      const excludedAssessments = () =>
+      const excludedSuggestions = () =>
         getDb(ctx.db).execute(sql`
-      SELECT * FROM "Suggestion" WHERE family = ${assessmentFamily.enum.statement_transaction}
+      SELECT * FROM "Suggestion" WHERE family = ${suggestionFamily.enum.statement_transaction}
         AND data->>${"chargeKey"} IN (${sql.join(
           excludedKeys.map((key) => sql`${key}`),
           sql`, `,
         )}) ORDER BY id
     `);
-      const before = await excludedAssessments();
+      const before = await excludedSuggestions();
       const collections = await getDb(
         ctx.db,
       ).query.transactionImport.findMany();
@@ -363,7 +363,7 @@ describe("Sweeps", () => {
         ],
       });
       expect(await drive(runId)).toBe("finished");
-      expect((await excludedAssessments()).rows).toEqual(before.rows);
+      expect((await excludedSuggestions()).rows).toEqual(before.rows);
       expect(
         (await readRunSteps(ctx.db, runId)).find(
           (step) => step.key === "statement_holds",
@@ -379,7 +379,7 @@ describe("Sweeps", () => {
         id: string;
       }>(sql`
       SELECT data->>${"chargeKey"} AS id FROM "Suggestion"
-      WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
+      WHERE family = ${suggestionFamily.enum.statement_transaction} AND active
         AND data->>${"recommended"} = ${"void"}
     `);
       expect(proposed.map((item) => item.id).sort()).toEqual(
@@ -533,7 +533,7 @@ describe("Sweeps", () => {
       meta: { input: { mode: "count" } },
     });
     const { rows } = await getDb(ctx.db).execute<{ count: number }>(
-      sql`SELECT count(*)::int AS count FROM "Suggestion" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active`,
+      sql`SELECT count(*)::int AS count FROM "Suggestion" WHERE family = ${suggestionFamily.enum.statement_transaction} AND active`,
     );
     expect(rows[0]?.count).toBe(3);
   });
@@ -579,7 +579,7 @@ describe("Sweeps", () => {
       meta: { retryRefs: [], retriedFailures: 1 },
     });
     const { rows: counts } = await getDb(ctx.db).execute<{ count: number }>(sql`
-      SELECT count(*)::int AS count FROM "Suggestion" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
+      SELECT count(*)::int AS count FROM "Suggestion" WHERE family = ${suggestionFamily.enum.statement_transaction} AND active
     `);
     expect(counts[0]?.count).toBe(3);
     await recordRunStepPage(ctx.db, runId, "statement_label", {
@@ -660,7 +660,7 @@ describe("Sweeps", () => {
     });
     await drive(runId);
     const { rows: waiting } = await getDb(ctx.db).execute<{ id: string }>(
-      sql`SELECT id FROM "Suggestion" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active AND (data->>'needsLabel')::boolean ORDER BY "createdAt", id`,
+      sql`SELECT id FROM "Suggestion" WHERE family = ${suggestionFamily.enum.statement_transaction} AND active AND (data->>'needsLabel')::boolean ORDER BY "createdAt", id`,
     );
     expect(waiting).toHaveLength(2);
     // The oldest suggestion's evidence moved after publication.
@@ -725,7 +725,7 @@ describe("Sweeps", () => {
       port: firstChoice,
       runId: labelRun,
       retryCharges: retained.map((row) =>
-        assessmentSubjects.statement_transaction.parse(row.subject),
+        suggestionSubjects.statement_transaction.parse(row.subject),
       ),
     });
     expect(second.failed).toEqual([]);

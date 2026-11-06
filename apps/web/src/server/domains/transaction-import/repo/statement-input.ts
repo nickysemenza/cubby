@@ -1,5 +1,4 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { assessmentFamily } from "@cubby/schemas/assessment";
 import {
   financialTransactionKind,
   financialTransactionStatus,
@@ -7,6 +6,7 @@ import {
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -110,7 +110,7 @@ export const statementInputCharges = (
           AND (NOT EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" allocation
               WHERE allocation."transactionId" = ft.id AND ${notDeleted("allocation")})
             OR EXISTS (SELECT 1 FROM "Suggestion" existing
-              WHERE existing.family = ${assessmentFamily.enum.statement_transaction} AND existing.active
+              WHERE existing.family = ${suggestionFamily.enum.statement_transaction} AND existing.active
                 AND existing.status = ${suggestionStatus.enum.pending}
                 AND existing.data->>${"source"} = cs.source AND existing.data->>${"chargeKey"} = cs."chargeKey"
                 AND existing.data->>${"recommended"} = ${statementTransactionAction.enum.book}))))

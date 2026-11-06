@@ -1,4 +1,3 @@
-import { assessmentFamily, feedbackAuthority } from "@cubby/schemas/assessment";
 import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 /**
  * Mail import admission: classified Emails become one Pi Run's targets. The
@@ -29,6 +28,7 @@ import {
   runTrigger,
   mailResearchRunInput,
 } from "@cubby/schemas/run-fields";
+import { suggestionFamily, feedbackAuthority } from "@cubby/schemas/suggestion";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
@@ -166,7 +166,7 @@ const untouchedAutomaticUnresolved = () => sql`EXISTS (
         AND newer."completedAt" > outcome."completedAt")
 ) AND NOT EXISTS (
   SELECT 1 FROM "EmailReview" reviewed
-  WHERE reviewed.family = ${assessmentFamily.enum.mail_import_outcome}
+  WHERE reviewed.family = ${suggestionFamily.enum.mail_import_outcome}
     AND reviewed."emailId" = ${emailTable.id} AND reviewed.authority = ${feedbackAuthority.enum.member}
 ) AND NOT ${emailHasProtectingIntentSql(sql`${emailTable.id}`, sql`${emailTable.orderMailId}`)}`;
 

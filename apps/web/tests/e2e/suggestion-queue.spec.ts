@@ -1,7 +1,7 @@
 import { eq, inArray } from "drizzle-orm";
 import type { Page } from "@playwright/test";
 import { productShortcode } from "@cubby/schemas/identifiers";
-import { assessmentReviewBatchOut } from "@cubby/schemas/assessment";
+import { suggestionReviewBatchOut } from "@cubby/schemas/suggestion";
 
 import { getDb } from "~/server/db/helpers";
 import {
@@ -17,8 +17,8 @@ import { publishEntityConnection } from "~/server/domains/connection/repo/entity
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { updateProduct } from "~/server/domains/product/repo/crud";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
-import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
+import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
@@ -176,22 +176,22 @@ test("one queue confirms proposals and records automatic-history feedback", asyn
   // Feedback precedes the application transaction; only its response proves commit.
   const [application] = await Promise.all([
     page.waitForResponse((response) =>
-      dispatchesOperation(response.request(), "assessment.reviewBatch"),
+      dispatchesOperation(response.request(), "suggestion.reviewBatch"),
     ),
     proposal.getByRole("button", { name: "Confirm", exact: true }).click(),
   ]);
   expect(
     await operationResult(
       application,
-      "assessment.reviewBatch",
-      assessmentReviewBatchOut,
+      "suggestion.reviewBatch",
+      suggestionReviewBatchOut,
     ),
   ).toMatchObject([
-    { ok: true, assessmentId: connection.review.assessmentId, applied: true },
+    { ok: true, suggestionId: connection.review.suggestionId, applied: true },
   ]);
   await expect
     .poll(async () =>
-      (await readSuggestionDecisions(db, connection.review.assessmentId)).some(
+      (await readSuggestionDecisions(db, connection.review.suggestionId)).some(
         (row) => row.verdict === "correct" && row.intent === "apply",
       ),
     )
@@ -415,7 +415,7 @@ test("new proposal families require explicit review and preserve merge confirmat
     .from(imageTable)
     .where(eq(imageTable.shortcode, picture.id));
   if (!image) throw new Error("Synthetic Image missing");
-  const description = await publishAssessment(
+  const description = await publishSuggestion(
     db,
     {
       publicationKey: `synthetic-description:${image.id}`,
@@ -467,7 +467,7 @@ test("new proposal families require explicit review and preserve merge confirmat
           await getDb(db)
             .select({ status: suggestionTable.status })
             .from(suggestionTable)
-            .where(eq(suggestionTable.id, tag.assessmentId))
+            .where(eq(suggestionTable.id, tag.suggestionId))
         )[0]?.status,
     )
     .toBe("applied");

@@ -5,7 +5,7 @@ import {
   imageShortcode,
   runShortcode,
 } from "./identifier-fields";
-import { assessmentChildHandle } from "./assessment-reference";
+import { suggestionChildHandle } from "./suggestion-reference";
 import { z } from "zod";
 import {
   imageProcessingJobKind,
@@ -300,12 +300,12 @@ export const imageDescriptionAnalysis = z.object({
 export const imageDescriptionCorrectionOwner = z.object({
   kind: z.literal("correction"),
   effectId: z.uuid(),
-  sourceFeedbackId: assessmentChildHandle,
-  sourceApplicationFeedbackId: assessmentChildHandle,
+  sourceFeedbackId: suggestionChildHandle,
+  sourceApplicationFeedbackId: suggestionChildHandle,
   sourceActorUserId: z.string().min(1),
-  targetAssessmentId: assessmentChildHandle,
-  originalApplicationFeedbackId: assessmentChildHandle.nullable(),
-  priorCorrectionApplicationFeedbackId: assessmentChildHandle.nullable(),
+  targetSuggestionId: suggestionChildHandle,
+  originalApplicationFeedbackId: suggestionChildHandle.nullable(),
+  priorCorrectionApplicationFeedbackId: suggestionChildHandle.nullable(),
 });
 
 /** Ownership of one selected text effect; model analyses remain separate evidence. */
@@ -313,7 +313,7 @@ export const imageDescriptionConfirmationOwner = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("member"),
     effectId: z.uuid(),
-    commandFeedbackId: assessmentChildHandle,
+    commandFeedbackId: suggestionChildHandle,
     actorUserId: z.string().min(1),
   }),
   // Never written now that propagation is gone; the native codec still decodes it.

@@ -87,13 +87,6 @@ import { scheduleAutomaticEvaluations } from "~/server/domains/run/repo/ai-refre
 import { readAutomaticAiStop } from "~/server/domains/run/repo/automatic-ai-stop";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
-import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
-import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
-import {
-  fieldInputFingerprint,
-  fenceFieldInputsAtCommit,
-  fieldInputFingerprintIfLive,
-} from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
 import type { DrainContext } from "~/server/generic/background/drains";
@@ -107,12 +100,19 @@ import {
   lookupShortcodes,
   resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
+import {
+  fieldInputFingerprint,
+  fenceFieldInputsAtCommit,
+  fieldInputFingerprintIfLive,
+} from "~/server/generic/suggestions/repo/field-input-fence";
+import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
 import {
-  assessmentStatesById,
+  suggestionStatesById,
   emailClassificationObservations,
   fieldRefreshHistory,
   liveProductIdsAfter,
@@ -360,7 +360,7 @@ async function scheduleProductIdentityDiscovery(
           entity: "product",
           recordId: item.id,
           field: null,
-          assessmentIds: [],
+          suggestionIds: [],
         }),
         provenance: aiProvenance.parse({
           dependencies: dependencyStamps(activation.manifest, [
@@ -458,7 +458,7 @@ export async function discoverAiRefresh(
         entity: first.entity,
         recordId: first.recordId,
         field: first.field,
-        assessmentIds: rows.map((row) => row.id),
+        suggestionIds: rows.map((row) => row.id),
       });
       if (target.kind !== "field") continue;
       const applied =
@@ -601,7 +601,7 @@ export async function discoverAiRefresh(
               entity: "email",
               recordId: item.id,
               field: null,
-              assessmentIds: [],
+              suggestionIds: [],
             }),
             provenance: aiProvenance.parse({
               dependencies,
@@ -741,9 +741,9 @@ export async function executeAiRefreshTarget(
     prepared.provenance.inputFingerprint !== claimed.provenance.inputFingerprint
   )
     throw new Error("AI evaluation target changed during inference");
-  const previous = await assessmentStatesById(db, target.assessmentIds);
+  const previous = await suggestionStatesById(db, target.suggestionIds);
   if (
-    previous.length !== target.assessmentIds.length ||
+    previous.length !== target.suggestionIds.length ||
     previous.some(
       (row) =>
         row.acceptanceReceipt === null &&
@@ -836,7 +836,7 @@ export async function executeAiRefreshTarget(
         recordId: target.recordId,
         currentValue: snapshot.currentValue,
         fieldDecisionId: snapshot.fieldDecisionId,
-        predecessorIds: target.assessmentIds,
+        predecessorIds: target.suggestionIds,
         evaluationId: id,
         provenance: saved.provenance,
       },
@@ -853,7 +853,7 @@ export async function executeAiRefreshTarget(
       kernel(tx, ports, claimed.runId),
       (error) => applicationFailures.push(scrubErrorMessage(String(error))),
     );
-    const [predecessorId] = target.assessmentIds;
+    const [predecessorId] = target.suggestionIds;
     if (outcome === "settled" && predecessorId) {
       await settleAppliedFieldRefresh(
         tx,
@@ -1342,7 +1342,7 @@ async function stageProductEnrollment(
                   recordId: pair.productIds[0],
                   otherId: pair.productIds[1],
                   field: null,
-                  assessmentIds: [],
+                  suggestionIds: [],
                 }),
                 provenance,
                 snapshot: jsonSnapshot(pair),

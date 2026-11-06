@@ -58,7 +58,7 @@ export const qualityBreakdown = z.object({
   status: dataQualityStatus,
   weightedScore: z.number().nullable(),
   scoreCap: z.number().nullable(),
-  /** Applicable checks that count toward assessment, and those not currently gaps. */
+  /** Applicable checks that count toward suggestion, and those not currently gaps. */
   expectedWeight: z.number(),
   satisfiedWeight: z.number(),
   /** What is missing, as display text; clients render it verbatim. */
@@ -69,7 +69,7 @@ export const qualityBreakdown = z.object({
       label: z.string(),
       facet: z.string(),
       kind: z.enum(["missing", "defect"]),
-      /** 1 when the check counts toward assessment, 0 for a diagnostic. */
+      /** 1 when the check counts toward suggestion, 0 for a diagnostic. */
       weight: z.number(),
       /** Always 100; kept for shipped native builds. */
       scoreCap: z.number(),

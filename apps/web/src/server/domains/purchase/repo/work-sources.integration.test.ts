@@ -10,9 +10,9 @@ import {
   readRecordWorkQueue,
   readWorkQueue,
 } from "~/server/domains/work/service/work-queue-read";
-import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 
@@ -89,7 +89,7 @@ describe("financial Work sources", () => {
       }),
     );
     for (const target of [order, empty])
-      await publishFieldAssessment(
+      await publishFieldSuggestion(
         ctx.db,
         {
           entity: "purchase",

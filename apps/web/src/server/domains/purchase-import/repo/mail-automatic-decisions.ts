@@ -1,9 +1,9 @@
 import {
-  assessmentJudgments,
+  suggestionJudgments,
   feedbackAuthority,
   mailDecisionFamily,
   type MailDecisionFamily,
-} from "@cubby/schemas/assessment";
+} from "@cubby/schemas/suggestion";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
@@ -16,7 +16,7 @@ type DecisionValue = z.infer<ReturnType<typeof z.json>>;
 export const mailDecisionPresentation = {
   email_relevance: {
     summarize: (value: DecisionValue) =>
-      `Classified ${assessmentJudgments.email_relevance.parse(value).classification}`,
+      `Classified ${suggestionJudgments.email_relevance.parse(value).classification}`,
     correction: {
       label: "Correct relevance",
       options: [
@@ -28,7 +28,7 @@ export const mailDecisionPresentation = {
   },
   email_link: {
     summarize: (value: DecisionValue) =>
-      `Email link ${assessmentJudgments.email_link.parse(value).decision}`,
+      `Email link ${suggestionJudgments.email_link.parse(value).decision}`,
     correction: {
       label: "Correct link decision",
       options: [
@@ -39,7 +39,7 @@ export const mailDecisionPresentation = {
   },
   mail_import_outcome: {
     summarize: (value: DecisionValue) => {
-      const outcome = assessmentJudgments.mail_import_outcome.parse(value);
+      const outcome = suggestionJudgments.mail_import_outcome.parse(value);
       return outcome.kind === "imported"
         ? `Imported ${outcome.lines.map((line) => line.name).join(", ")}`
         : outcome.kind === "linked"
@@ -109,7 +109,7 @@ function linkBranch(scope: MailDecisionScope, reviewFilter: SQL) {
   const mail = sql`COALESCE(d."emailId", ${liveMailOf(sql`d."originalId"`)})`;
   return sql`
     SELECT d.id, ${"email_link"}::text AS family,
-      jsonb_build_object(${assessmentJudgments.email_link.keyof().enum.decision}::text, d.decision) AS judgment,
+      jsonb_build_object(${suggestionJudgments.email_link.keyof().enum.decision}::text, d.decision) AS judgment,
       d."createdAt", d."evidenceChecksum" AS fingerprint, NULL::text AS "automaticRule",
       true AS "applicationVerified",
       latest.verdict, latest."createdAt" AS "reviewedAt", d.active, d.status,
@@ -159,7 +159,7 @@ function outcomeBranch(scope: MailDecisionScope, reviewFilter: SQL) {
       ${reviewFilter}`;
 }
 
-/** One SELECT per included mail family, columns matching the Assessment branch. */
+/** One SELECT per included mail family, columns matching the Suggestion branch. */
 export function mailAutomaticDecisionBranches(input: {
   family?: MailDecisionFamily;
   scope: MailDecisionScope;

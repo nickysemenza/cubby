@@ -12,18 +12,18 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { run as runTable, suggestionTable } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
-import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
-import {
-  suggestionStateColumns,
-  transitionAssessmentStates,
-} from "~/server/generic/assessment/repo/assessment-state";
-import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { JobTargetError } from "~/server/generic/jobs/errors";
+import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
-} from "~/server/generic/assessment/repo/field-input-fence";
-import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import { JobTargetError } from "~/server/generic/jobs/errors";
+} from "~/server/generic/suggestions/repo/field-input-fence";
+import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import {
+  suggestionStateColumns,
+  transitionSuggestionStates,
+} from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 export type SuggestionValue =
@@ -292,7 +292,7 @@ export async function saveSweepSuggestions(
           (input.predecessorIds && !input.predecessorIds.includes(previous.id))
         )
           continue;
-        await transitionAssessmentStates(
+        await transitionSuggestionStates(
           tx,
           and(
             eq(suggestionTable.id, previous.id),
@@ -310,7 +310,7 @@ export async function saveSweepSuggestions(
       }
       const created: string[] = [];
       for (const entry of admissible) {
-        const row = await publishFieldAssessment(
+        const row = await publishFieldSuggestion(
           tx,
           {
             runId,

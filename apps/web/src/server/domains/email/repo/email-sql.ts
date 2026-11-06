@@ -1,10 +1,10 @@
-import { feedbackAuthority } from "@cubby/schemas/assessment";
 import { emailPurchaseLinkState } from "@cubby/schemas/email-fields";
 import {
   mailboxClassificationStage,
   type MailboxClassification,
 } from "@cubby/schemas/mailbox-research";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
+import { feedbackAuthority } from "@cubby/schemas/suggestion";
 import { sql, type SQL } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";

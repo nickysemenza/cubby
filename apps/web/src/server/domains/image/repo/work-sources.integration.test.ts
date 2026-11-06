@@ -10,10 +10,10 @@ import {
   readRecordWorkQueue,
   readWorkQueue,
 } from "~/server/domains/work/service/work-queue-read";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
-import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { insertEntityAttachments } from "~/server/testing/repo.fixtures";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
@@ -37,7 +37,7 @@ describe("image Suggestions in Work", () => {
     served = true,
     description = "Synthetic image description",
   ) {
-    return publishAssessment(ctx.db, {
+    return publishSuggestion(ctx.db, {
       publicationKey: `synthetic:image-work:${name}`,
       served,
       family: "image_description",

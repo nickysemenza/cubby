@@ -1,4 +1,4 @@
-import { assessmentChildren } from "./assessment.js";
+import { suggestionChildren } from "./suggestion.js";
 import { emailObservationChildren } from "./email-observations.js";
 import { mailDecisionChildren } from "./mail-decisions.js";
 import { emailFinancialAssociationChildren } from "./email-financial-associations.js";
@@ -9,7 +9,7 @@ import { financialEvidenceChildren } from "./financial-evidence";
 
 export const modulesChildren = [
   ...financialEvidenceChildren,
-  ...assessmentChildren,
+  ...suggestionChildren,
   ...importObservationChildren,
   ...emailObservationChildren,
   ...mailDecisionChildren,

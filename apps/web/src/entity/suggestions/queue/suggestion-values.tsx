@@ -1,4 +1,3 @@
-import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-family";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entityRoster } from "@cubby/schemas/entity-roster";
 import type { StatementSuggestionOut } from "@cubby/schemas/statement-suggestion";
@@ -10,6 +9,7 @@ import type {
   SuggestionRecordRef,
   SuggestionStrength,
 } from "@cubby/schemas/suggestion-list";
+import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import type { TransferPairJudgment } from "@cubby/schemas/transfer-pair-suggestion";
 import { humanize, mapRecord } from "@cubby/shared";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
@@ -37,13 +37,13 @@ export const providerCategories = (
 
 export const FAMILY_LABEL = mapRecord(
   suggestionListFamily.options,
-  (family) => assessmentReviewFamilies[family].label,
+  (family) => suggestionReviewFamilies[family].label,
 );
 
 /** Chip order on the page: the family most often bulk-reviewed first. */
 export const FAMILY_CHIPS = suggestionListFamily.options.map((family) => ({
   family,
-  label: assessmentReviewFamilies[family].label,
+  label: suggestionReviewFamilies[family].label,
 }));
 
 const STRENGTH_BARS = { strong: 3, medium: 2, weak: 1 } as const;

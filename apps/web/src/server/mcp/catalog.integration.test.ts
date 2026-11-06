@@ -22,9 +22,9 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { requireActor } from "~/server/http/request-context";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
@@ -160,7 +160,7 @@ describe("MCP catalog", () => {
       (
         await getDb(ctx.db).execute(sql`
       SELECT (SELECT count(*) FROM "Run") AS runs, (SELECT count(*) FROM "Job") AS jobs,
-        (SELECT count(*) FROM "Suggestion") AS assessments,
+        (SELECT count(*) FROM "Suggestion") AS suggestions,
         (SELECT coalesce(sum(cost),0) FROM "Expense" WHERE "deletedAt" IS NULL) AS money
     `)
       ).rows;
@@ -900,7 +900,7 @@ describe("MCP catalog", () => {
       trigger: "manual",
       status: "completed",
     });
-    await publishFieldAssessment(
+    await publishFieldSuggestion(
       ctx.db,
       {
         runId,

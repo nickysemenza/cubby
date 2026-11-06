@@ -40,7 +40,7 @@ const connection = () => ({
   entity: "email",
   recordId: uuid(),
   field: null,
-  assessmentIds: [],
+  suggestionIds: [],
 });
 /** Everything the row filters could see: edge shapes are the point, so none is written by product code. */
 const TARGETS: (() => object)[] = [
@@ -48,19 +48,19 @@ const TARGETS: (() => object)[] = [
   () => ({ ...connection(), field: "not-null" }),
   () => ({ ...connection(), recordId: "not-a-uuid" }),
   () => ({ ...connection(), entity: 7 }),
-  () => ({ ...connection(), assessmentIds: [uuid()] }),
+  () => ({ ...connection(), suggestionIds: [uuid()] }),
   () => ({
     kind: "connection",
     entity: "email",
     recordId: uuid(),
-    assessmentIds: [],
+    suggestionIds: [],
   }),
   () => ({
     kind: "email",
     entity: "email",
     recordId: uuid(),
     field: null,
-    assessmentIds: [],
+    suggestionIds: [],
   }),
 ];
 const diagnostic = (reason: string) => ({

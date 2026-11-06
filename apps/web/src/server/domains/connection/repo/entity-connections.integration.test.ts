@@ -1,4 +1,4 @@
-import { assessmentJudgments } from "@cubby/schemas/assessment";
+import { suggestionJudgments } from "@cubby/schemas/suggestion";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -15,12 +15,12 @@ import {
 import { discoverAcquisitionCandidates } from "~/server/domains/connection/service/acquisition-discovery";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import {
-  publishAssessment,
-  recordFeedback,
-} from "~/server/generic/assessment/repo/assessment";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import {
+  publishSuggestion,
+  recordFeedback,
+} from "~/server/generic/suggestions/repo/suggestion";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { measureDatabaseTransfer } from "~/server/testing/database-transfer.fixtures";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
@@ -40,7 +40,7 @@ import {
   readEntityConnectionsBatch,
   applyEntityConnection,
 } from "./entity-connections";
-import { readConnectionEdgeAssessmentIds } from "./existing-assessments";
+import { readConnectionEdgeSuggestionIds } from "./existing-suggestions";
 import { assertConnectionFieldFresh } from "./field-connections";
 
 // Failure modes: reverse reads miss a candidate; bare Wrong suppresses future
@@ -119,13 +119,13 @@ describe("stored connection evidence", () => {
       ctx.db,
       prepared,
     );
-    expect(first?.review.assessmentId).toBe(proposal.review.assessmentId);
+    expect(first?.review.suggestionId).toBe(proposal.review.suggestionId);
     expect(last).toBeDefined();
     expect(
       (await readEntityConnections(ctx.db, candidate.source)).map(
-        (entry) => entry.review.assessmentId,
+        (entry) => entry.review.suggestionId,
       ),
-    ).toEqual([last?.review.assessmentId]);
+    ).toEqual([last?.review.suggestionId]);
     const unrelated = await createRepoEntity(ctx, "expense", {
       name: "Synthetic unrelated connection charge",
       cost: 7,
@@ -139,10 +139,10 @@ describe("stored connection evidence", () => {
     const bounded = await readEntityConnectionsBatch(
       ctx.db,
       [candidate.source],
-      [last!.review.assessmentId, last!.review.assessmentId],
+      [last!.review.suggestionId, last!.review.suggestionId],
     );
-    expect(bounded[0]?.map((entry) => entry.review.assessmentId)).toEqual([
-      last?.review.assessmentId,
+    expect(bounded[0]?.map((entry) => entry.review.suggestionId)).toEqual([
+      last?.review.suggestionId,
     ]);
     expect(
       await readEntityConnectionsBatch(ctx.db, [candidate.source], []),
@@ -151,16 +151,16 @@ describe("stored connection evidence", () => {
     const [current] = await getDb(ctx.db)
       .select()
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, last.review.assessmentId));
-    if (!current) throw new Error("Synthetic Assessment is missing");
+      .where(eq(suggestionTable.id, last.review.suggestionId));
+    if (!current) throw new Error("Synthetic Suggestion is missing");
     const compete = (publicationKey: string, fingerprint: string) =>
-      publishAssessment(
+      publishSuggestion(
         ctx.db,
         {
           publicationKey,
           family: "recommendation",
           subject: current.subject,
-          judgment: assessmentJudgments.recommendation.parse(current.judgment),
+          judgment: suggestionJudgments.recommendation.parse(current.judgment),
           producer: null,
           fingerprint,
           evidence: { version: 1, candidate: changed, basis: {} },
@@ -171,11 +171,11 @@ describe("stored connection evidence", () => {
       "synthetic-newer-stale-edge",
       "synthetic-stale-edge-fingerprint",
     );
-    const peers = await readConnectionEdgeAssessmentIds(ctx.db, [candidate]);
+    const peers = await readConnectionEdgeSuggestionIds(ctx.db, [candidate]);
     expect(peers).toEqual(
-      expect.arrayContaining([last.review.assessmentId, staleNewer.id]),
+      expect.arrayContaining([last.review.suggestionId, staleNewer.id]),
     );
-    expect(peers).not.toContain(unrelatedEdge.review.assessmentId);
+    expect(peers).not.toContain(unrelatedEdge.review.suggestionId);
     // A newer stale competitor cannot hide the edge's older fresh survivor.
     const observed = new Set<string>();
     expect(
@@ -188,10 +188,10 @@ describe("stored connection evidence", () => {
             observed.add(id);
           },
         )
-      )[0]?.map((entry) => entry.review.assessmentId),
-    ).toEqual([last.review.assessmentId]);
+      )[0]?.map((entry) => entry.review.suggestionId),
+    ).toEqual([last.review.suggestionId]);
     expect(observed).toEqual(
-      new Set([staleNewer.id, last.review.assessmentId]),
+      new Set([staleNewer.id, last.review.suggestionId]),
     );
     const newest = await compete(
       "synthetic-newest-fresh-edge",
@@ -199,15 +199,15 @@ describe("stored connection evidence", () => {
     );
     const full = await readEntityConnections(ctx.db, candidate.source);
     // The full reader keeps an edge where its oldest fresh candidate sorted.
-    expect(full.map((entry) => entry.review.assessmentId)).toEqual([
+    expect(full.map((entry) => entry.review.suggestionId)).toEqual([
       newest.id,
-      unrelatedEdge.review.assessmentId,
+      unrelatedEdge.review.suggestionId,
     ]);
     // Selection admits the same winners without proving that older candidate.
     const selected = await readEntityConnectionsBatch(
       ctx.db,
       [candidate.source],
-      full.map((entry) => entry.review.assessmentId),
+      full.map((entry) => entry.review.suggestionId),
     );
     expect(selected[0]).toHaveLength(full.length);
     expect(selected[0]).toEqual(expect.arrayContaining(full));
@@ -220,15 +220,15 @@ describe("stored connection evidence", () => {
     const [original] = await getDb(ctx.db)
       .select()
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, proposal.review.assessmentId));
-    if (!original) throw new Error("Synthetic Assessment is missing");
-    const oversized = await publishAssessment(
+      .where(eq(suggestionTable.id, proposal.review.suggestionId));
+    if (!original) throw new Error("Synthetic Suggestion is missing");
+    const oversized = await publishSuggestion(
       ctx.db,
       {
         publicationKey: "synthetic-oversized-connection-basis",
         family: "recommendation",
         subject: original.subject,
-        judgment: assessmentJudgments.recommendation.parse(original.judgment),
+        judgment: suggestionJudgments.recommendation.parse(original.judgment),
         producer: null,
         fingerprint: proposal.fingerprint,
         evidence: {
@@ -243,7 +243,7 @@ describe("stored connection evidence", () => {
       ctx.databaseUrl,
       async (db) => {
         const fresh = await readEntityConnections(db, candidate.source);
-        expect(fresh.map((entry) => entry.review.assessmentId)).toContain(
+        expect(fresh.map((entry) => entry.review.suggestionId)).toContain(
           oversized.id,
         );
         await getDb(ctx.db)
@@ -251,8 +251,8 @@ describe("stored connection evidence", () => {
           .set({ name: "Synthetic changed connection evidence" })
           .where(eq(product.id, item.entityId));
         expect(await readEntityConnections(db, candidate.source)).toEqual([]);
-        await reviewAssessment(db, kernelCtx({ ...ctx, db }), {
-          assessmentId: oversized.id,
+        await reviewSuggestion(db, kernelCtx({ ...ctx, db }), {
+          suggestionId: oversized.id,
           operationId: "synthetic-oversized-history-review",
           verdict: "dismissed",
           intent: "history",
@@ -267,7 +267,7 @@ describe("stored connection evidence", () => {
   it("filters existing field connections without downloading their stored snapshots", async () => {
     const { candidate, charge, item, proposal } = await fixture();
     const basis = await captureConnectionBasis(ctx.db, candidate);
-    const stored = await publishAssessment(
+    const stored = await publishSuggestion(
       ctx.db,
       {
         publicationKey: "synthetic-field-connection-transfer",
@@ -294,13 +294,13 @@ describe("stored connection evidence", () => {
     const measured = await measureDatabaseTransfer(
       ctx.databaseUrl,
       async (db) => {
-        const peerIds = () => readConnectionEdgeAssessmentIds(db, [candidate]);
+        const peerIds = () => readConnectionEdgeSuggestionIds(db, [candidate]);
         expect(new Set(await peerIds())).toEqual(
-          new Set([proposal.review.assessmentId, stored.id]),
+          new Set([proposal.review.suggestionId, stored.id]),
         );
         expect(
           (await readEntityConnections(db, candidate.source)).map(
-            (row) => row.review.assessmentId,
+            (row) => row.review.suggestionId,
           ),
         ).toContain(stored.id);
         const selectedOnEdge = async () =>
@@ -308,9 +308,9 @@ describe("stored connection evidence", () => {
             await readEntityConnectionsBatch(
               db,
               [candidate.source],
-              [proposal.review.assessmentId],
+              [proposal.review.suggestionId],
             )
-          )[0]?.map((row) => row.review.assessmentId);
+          )[0]?.map((row) => row.review.suggestionId);
         // A current existing proposal replaces its edge's fresh recommendation.
         expect(await selectedOnEdge()).toEqual([stored.id]);
         await withTransactionDatabase(db, (transactionDb) =>
@@ -330,15 +330,15 @@ describe("stored connection evidence", () => {
           .where(eq(suggestionTable.id, stored.id));
         expect(
           (await readEntityConnections(db, candidate.source)).map(
-            (row) => row.review.assessmentId,
+            (row) => row.review.suggestionId,
           ),
         ).not.toContain(stored.id);
         // Once its own guard fails, it stops shadowing and the recommendation wins.
-        expect(await selectedOnEdge()).toEqual([proposal.review.assessmentId]);
+        expect(await selectedOnEdge()).toEqual([proposal.review.suggestionId]);
         // Discovery retains the stale field peer so atomic publication can
         // release its old winner even though current evidence rejects it.
         expect(new Set(await peerIds())).toEqual(
-          new Set([proposal.review.assessmentId, stored.id]),
+          new Set([proposal.review.suggestionId, stored.id]),
         );
         await expect(
           withTransactionDatabase(db, (transactionDb) =>
@@ -388,19 +388,19 @@ describe("stored connection evidence", () => {
     const [original] = await getDb(ctx.db)
       .select()
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, proposal.review.assessmentId));
-    if (!original) throw new Error("Synthetic original Assessment is missing");
+      .where(eq(suggestionTable.id, proposal.review.suggestionId));
+    if (!original) throw new Error("Synthetic original Suggestion is missing");
     const evidence = {
       version: 1,
       candidate,
       basis: await captureConnectionBasis(ctx.db, candidate),
     };
     const fingerprint = await sha256Hex(canonicalJson(evidence));
-    const forged = await publishAssessment(ctx.db, {
+    const forged = await publishSuggestion(ctx.db, {
       publicationKey: "synthetic-owned-expense-proposal",
       family: "recommendation",
       subject: original.subject,
-      judgment: assessmentJudgments.recommendation.parse(original.judgment),
+      judgment: suggestionJudgments.recommendation.parse(original.judgment),
       producer: null,
       evidence,
       fingerprint,
@@ -450,9 +450,9 @@ describe("stored connection evidence", () => {
     const [purchasePrediction] = await getDb(ctx.db)
       .select()
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, pending.review.assessmentId));
+      .where(eq(suggestionTable.id, pending.review.suggestionId));
     if (!purchasePrediction)
-      throw new Error("Synthetic purchase Assessment is missing");
+      throw new Error("Synthetic purchase Suggestion is missing");
     const confirmedEvidence = {
       version: 1,
       candidate: acquisition,
@@ -461,11 +461,11 @@ describe("stored connection evidence", () => {
     const confirmedFingerprint = await sha256Hex(
       canonicalJson(confirmedEvidence),
     );
-    const confirmedForgery = await publishAssessment(ctx.db, {
+    const confirmedForgery = await publishSuggestion(ctx.db, {
       publicationKey: "synthetic-confirmed-purchase-proposal",
       family: "recommendation",
       subject: purchasePrediction.subject,
-      judgment: assessmentJudgments.recommendation.parse(
+      judgment: suggestionJudgments.recommendation.parse(
         purchasePrediction.judgment,
       ),
       producer: null,
@@ -507,28 +507,28 @@ describe("stored connection evidence", () => {
     const fresh = await publishEntityConnection(ctx.db, candidate);
     expect(
       (await readEntityConnections(ctx.db, candidate.source)).map(
-        (proposal) => proposal.review.assessmentId,
+        (proposal) => proposal.review.suggestionId,
       ),
-    ).toEqual([fresh.review.assessmentId]);
+    ).toEqual([fresh.review.suggestionId]);
     expect(
       (await readEntityConnections(ctx.db, candidate.target)).map(
-        (proposal) => proposal.review.assessmentId,
+        (proposal) => proposal.review.suggestionId,
       ),
-    ).toEqual([fresh.review.assessmentId]);
+    ).toEqual([fresh.review.suggestionId]);
   });
 
   it("reads either endpoint and keeps Wrong event-specific across changed evidence", async () => {
     const { candidate, proposal, item } = await fixture();
     expect(
       (await readEntityConnections(ctx.db, candidate.target)).map(
-        (p) => p.review.assessmentId,
+        (p) => p.review.suggestionId,
       ),
-    ).toContain(proposal.review.assessmentId);
+    ).toContain(proposal.review.suggestionId);
     expect(
-      (await publishEntityConnection(ctx.db, candidate)).review.assessmentId,
-    ).toBe(proposal.review.assessmentId);
+      (await publishEntityConnection(ctx.db, candidate)).review.suggestionId,
+    ).toBe(proposal.review.suggestionId);
     await recordFeedback(ctx.db, {
-      assessmentId: proposal.review.assessmentId,
+      suggestionId: proposal.review.suggestionId,
       operationId: "synthetic-wrong",
       verdict: "wrong",
       authority: "member",
@@ -540,17 +540,17 @@ describe("stored connection evidence", () => {
       .set({ name: "Synthetic corrected drill" })
       .where(eq(product.id, item.entityId));
     const changed = await publishEntityConnection(ctx.db, candidate);
-    expect(changed.review.assessmentId).not.toBe(proposal.review.assessmentId);
+    expect(changed.review.suggestionId).not.toBe(proposal.review.suggestionId);
     const [retired] = await getDb(ctx.db)
       .select()
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.suggestionId));
     expect(retired).toMatchObject({ active: false, status: "superseded" });
     expect(
       (await readEntityConnections(ctx.db, candidate.source)).map(
-        (p) => p.review.assessmentId,
+        (p) => p.review.suggestionId,
       ),
-    ).toContain(changed.review.assessmentId);
+    ).toContain(changed.review.suggestionId);
   });
 
   it("refuses changed endpoints before applying", async () => {
@@ -558,8 +558,8 @@ describe("stored connection evidence", () => {
     const [state] = await getDb(ctx.db)
       .select()
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, proposal.review.assessmentId));
-    if (!state) throw new Error("Missing synthetic Assessment");
+      .where(eq(suggestionTable.id, proposal.review.suggestionId));
+    if (!state) throw new Error("Missing synthetic Suggestion");
     await deleteThroughKernel(ctx.db, ctx.actor, "product", [item.id]);
     await expect(
       withTransactionDatabase(ctx.db, async (db) =>
@@ -585,9 +585,9 @@ describe("stored connection evidence", () => {
       .where(eq(product.id, item.entityId));
     expect(
       (await readEntityConnections(ctx.db, candidate.source)).map(
-        (p) => p.review.assessmentId,
+        (p) => p.review.suggestionId,
       ),
-    ).toContain(proposal.review.assessmentId);
+    ).toContain(proposal.review.suggestionId);
     const input = {
       verdict: "correct" as const,
       expectedFingerprint: proposal.fingerprint,
@@ -598,7 +598,7 @@ describe("stored connection evidence", () => {
         await applyEntityConnection(
           db,
           kernelCtx(ctx),
-          { id: proposal.review.assessmentId },
+          { id: proposal.review.suggestionId },
           input,
         );
         throw new Error("synthetic rollback");
@@ -612,7 +612,7 @@ describe("stored connection evidence", () => {
     await applyEntityConnection(
       ctx.db,
       kernelCtx(ctx),
-      { id: proposal.review.assessmentId },
+      { id: proposal.review.suggestionId },
       input,
     );
     const [changed] = await getDb(ctx.db)
@@ -654,16 +654,16 @@ describe("stored connection evidence", () => {
       candidates.find((c) => c.target.entityId === order.output.id)!,
     );
     const command = {
-      assessmentId: proposed.review.assessmentId,
+      suggestionId: proposed.review.suggestionId,
       operationId: "synthetic-acquisition-accept",
       intent: "apply" as const,
       verdict: "correct" as const,
       expectedFingerprint: proposed.fingerprint,
       correction: { present: false as const },
     };
-    const receipt = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
+    const receipt = await reviewSuggestion(ctx.db, kernelCtx(ctx), command);
     expect(receipt.applied).toBe(true);
-    expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
+    expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), command)).toEqual(
       receipt,
     );
     expect(await getDb(ctx.db).select().from(entityLink)).toMatchObject([
@@ -676,8 +676,8 @@ describe("stored connection evidence", () => {
     const { candidate, proposal, item } = await fixture();
     if (!proposal.review.suppression)
       throw new Error("Expected declared recommendation suppression");
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: proposal.review.assessmentId,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: proposal.review.suggestionId,
       operationId: "synthetic-suppress",
       verdict: "dismissed",
       intent: "history",
@@ -693,7 +693,7 @@ describe("stored connection evidence", () => {
     const [preference] = await getDb(ctx.db)
       .select()
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, proposal.review.assessmentId));
+      .where(eq(suggestionTable.id, proposal.review.suggestionId));
     expect(preference?.active).toBe(true);
   });
 });

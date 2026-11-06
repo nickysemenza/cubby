@@ -6,12 +6,12 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { suggestionTable, image } from "~/server/db/schema";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   suggestionRecordId,
-  transitionAssessmentState,
-  transitionAssessmentStates,
-} from "~/server/generic/assessment/repo/assessment-state";
-import { recordChange } from "~/server/generic/changes/repo/change";
+  transitionSuggestionState,
+  transitionSuggestionStates,
+} from "~/server/generic/suggestions/repo/suggestion-state";
 
 /** Caller holds content, record-intent, Image and target projection locks in that order. */
 export async function writeImageDescriptionConfirmation(
@@ -36,7 +36,7 @@ export async function writeImageDescriptionConfirmation(
     .limit(1);
   if (!source || state.fingerprint !== source.hash)
     throw new Error("Image evidence changed before confirmation");
-  await transitionAssessmentStates(
+  await transitionSuggestionStates(
     db,
     and(
       eq(suggestionTable.family, "image_description"),
@@ -45,7 +45,7 @@ export async function writeImageDescriptionConfirmation(
     ),
     { confirmedValue: null },
   );
-  await transitionAssessmentState(db, state.id, {
+  await transitionSuggestionState(db, state.id, {
     confirmedValue: { present: true, value: description },
     status: "applied",
     data: {

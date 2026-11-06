@@ -1,9 +1,9 @@
-import {
-  assessmentSubjects,
-  assessmentJudgments,
-} from "@cubby/schemas/assessment";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import type { PhotoGroupReview } from "@cubby/schemas/photo-import-run";
+import {
+  suggestionSubjects,
+  suggestionJudgments,
+} from "@cubby/schemas/suggestion";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -12,9 +12,9 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { product, suggestionTable } from "~/server/db/schema";
 import { loadImageAnalysisEvidence } from "~/server/domains/image/repo/image-analysis-summary";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
-import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
+import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 async function photoReviewEvidence(db: Database, imageIds: string[]) {
@@ -99,7 +99,7 @@ export async function photoProductSuggestions(
       }),
     );
     const currentValue = z.json().parse(currentFields[field] ?? null);
-    const saved = await publishAssessment(
+    const saved = await publishSuggestion(
       db,
       {
         publicationKey: `photo-field:${key}`,
@@ -181,8 +181,8 @@ export async function assertPhotoProductReviewCurrent(
       throw new Error(
         "A selected Product correction was already reviewed; revise the photo draft before approval",
       );
-    const subject = assessmentSubjects.field.parse(saved.prediction.subject);
-    const judgment = assessmentJudgments.field.parse(saved.prediction.judgment);
+    const subject = suggestionSubjects.field.parse(saved.prediction.subject);
+    const judgment = suggestionJudgments.field.parse(saved.prediction.judgment);
     if (
       subject.entity !== "product" ||
       subject.recordId !== id ||
@@ -190,7 +190,7 @@ export async function assertPhotoProductReviewCurrent(
       canonicalJson(judgment.value) !== canonicalJson(value)
     )
       throw new Error(
-        "Saved Product correction differs from its retained Assessment",
+        "Saved Product correction differs from its retained Suggestion",
       );
     if (
       saved.prediction.fingerprint !==

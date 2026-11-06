@@ -65,8 +65,8 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "purchase_import.id",
   "purchase_import.sourceOrderId",
   // Review proposals and feedback use child-row handles with no shortcodes.
-  "activity_read.duplicateProductIdentities[].assessmentId",
-  "activity_read.duplicateProductIdentities[].pairs[].assessmentId",
+  "activity_read.duplicateProductIdentities[].suggestionId",
+  "activity_read.duplicateProductIdentities[].pairs[].suggestionId",
   // Shipment evidence child rows have no shortcodes. These handles preserve
   // capture membership, timeline provenance and explicit source reassignment;
   // Shipment, Purchase, Email and Vendor entity references remain shortcodes.
@@ -77,7 +77,7 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "activity.id",
   "ai_read.latestRunId",
   "ai.id",
-  "entity_graph.proposals[].review.assessmentId",
+  "entity_graph.proposals[].review.suggestionId",
   "image.deletedIds[]",
   "inventory.items[].product.externalIds[].id",
   "inventory.items[].product.unitMappings[].id",
@@ -88,14 +88,14 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "maintenance_read.items[].sourceId",
   "maintenance_read.entries[].id",
   "nutrition.id",
-  // Photo approval retains shared Assessment child handles for review provenance.
+  // Photo approval retains shared Suggestion child handles for review provenance.
   // These are not Product/Vendor/Image identities or entity lookup selectors.
   "photo_run.proposals[].review.fieldSuggestions[].id",
   "photo_run.fieldSuggestions[].id",
   "photo_run_read.proposals[].review.fieldSuggestions[].id",
   "photo_run_read.candidates[].purchaseLines[].acceptedSourceLines[].sourceOrderId",
   "product_enrichment.product.externalIds[].id",
-  "purchase_import_read.items[].assessmentId",
+  "purchase_import_read.items[].suggestionId",
   "purchase_import_read.items[].producer.evaluationId",
   "purchase_import_read.acceptedSourceOrders[].sourceOrderId",
   "run_read.entries[].commandId",
@@ -114,25 +114,25 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // evidence rows above; they are readback lineage, not entity identifiers.
   "shipments_read.observations[].captureSources[].captureId",
   "shipments_read.observations[].supersededByObservationId",
-  // Correction provenance names immutable Feedback/Assessment children and effect
+  // Correction provenance names immutable Feedback/Suggestion children and effect
   // receipts; these are audit handles, not externally addressable entity IDs.
   "image_read.correction.owner.effectId",
   "image_read.correction.owner.commandFeedbackId",
   "image_read.correction.owner.sourceFeedbackId",
   "image_read.correction.owner.sourceApplicationFeedbackId",
-  "image_read.correction.owner.targetAssessmentId",
+  "image_read.correction.owner.targetSuggestionId",
   "image_read.correction.owner.originalApplicationFeedbackId",
   "image_read.correction.owner.priorCorrectionApplicationFeedbackId",
   "suggestions_read.items[].id",
-  "suggestions_read.items[].assessmentId",
-  "suggestions_read.items[].evidence.assessmentId",
+  "suggestions_read.items[].suggestionId",
+  "suggestions_read.items[].evidence.suggestionId",
   "suggestions_read.items[].evidence.acceptanceReceipt.auditIds[]",
   "suggestions_read.items[].evidence.id",
-  "suggestions_read.items[].evidence.review.assessmentId",
-  // A draft preview echoes the same Assessment child-row handle for explicit review.
-  "finance_read.assessmentId",
-  "suggestions.assessmentId",
-  "suggestions.items[].assessmentId",
+  "suggestions_read.items[].evidence.review.suggestionId",
+  // A draft preview echoes the same Suggestion child-row handle for explicit review.
+  "finance_read.suggestionId",
+  "suggestions.suggestionId",
+  "suggestions.items[].suggestionId",
   // Historical enrollment advances over opaque Feedback rows, not entities.
   "suggestions.feedbackId",
   "suggestions.items[].feedbackId",

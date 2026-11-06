@@ -22,7 +22,7 @@ import {
   isSuggestionReviewable,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
-import { acceptSuggestion } from "~/server/generic/assessment/repo/suggestion-review";
+import { acceptSuggestion } from "~/server/generic/suggestions/repo/suggestion-review";
 import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 
 // Failure modes: scalar acceptance drops an identity sibling; a stale full-form

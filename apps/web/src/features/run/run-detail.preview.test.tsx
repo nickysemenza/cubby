@@ -374,7 +374,7 @@ it("keeps earlier decision families available inside the Run", async () => {
   await userEvent.click(picker);
   await userEvent.click(
     await screen.findByRole("option", {
-      name: /statement.*transaction.*assessments/i,
+      name: /statement.*transaction.*suggestions/i,
     }),
   );
   await waitFor(() =>

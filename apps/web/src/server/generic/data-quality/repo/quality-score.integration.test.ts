@@ -38,7 +38,7 @@ const cases = (): QualityTerm[][] => {
 /**
  * Stored status comes from the TS core. The `dataStatus` filter and
  * `entity.records` derive status in SQL from published check states, so it
- * must agree with the TS core on every combination of assessment, kind and
+ * must agree with the TS core on every combination of suggestion, kind and
  * state.
  */
 describe("quality status: TS and SQL agree", () => {

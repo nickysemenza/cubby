@@ -19,7 +19,7 @@ import {
   isCurrentPreferredImageDescription,
   parseImageDescriptionInputFingerprint,
 } from "~/server/domains/image-processing/repo/description-policy";
-import { readImageDescriptionConfirmations } from "~/server/generic/assessment/repo/assessment-image";
+import { readImageDescriptionConfirmations } from "~/server/generic/suggestions/repo/suggestion-image";
 
 /** Source-fenced descriptions and confirmed corrections are loaded in batches. */
 export async function loadSelectedDescriptionEvidence(

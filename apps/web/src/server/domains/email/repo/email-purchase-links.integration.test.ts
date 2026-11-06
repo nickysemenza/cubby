@@ -11,7 +11,7 @@ import { moneyToMinor } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
+import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 /**
  * Email↔Purchase failure modes (ADR 0011: links are derived, never stored as
  * a second graph): accepted sources, reviewed links and live suggestions must
@@ -59,11 +59,11 @@ import {
   mergePurchases,
 } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { createMcpServer } from "~/server/mcp/server";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
@@ -1131,7 +1131,7 @@ describe("Email Purchase links", () => {
         proposedBy: "agent",
       });
       const command = {
-        assessmentId: prediction.id,
+        suggestionId: prediction.id,
         operationId: "synthetic-link-review",
         verdict: correction ? ("wrong" as const) : ("correct" as const),
         intent: "apply" as const,
@@ -1139,9 +1139,9 @@ describe("Email Purchase links", () => {
           ? { present: true as const, value: { decision: correction } }
           : { present: false as const },
       };
-      const first = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
+      const first = await reviewSuggestion(ctx.db, kernelCtx(ctx), command);
       const history = await getDb(ctx.db).select().from(emailReview);
-      expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
+      expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), command)).toEqual(
         first,
       );
       expect(await getDb(ctx.db).select().from(emailReview)).toEqual(history);
@@ -1188,8 +1188,8 @@ describe("Email Purchase links", () => {
     const before = (
       await getDb(ctx.db).select().from(emailPurchaseDecision)
     ).filter((row) => row.eventId === b!.id);
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: a.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: a.id,
       operationId: "synthetic-event-a-review",
       verdict: "correct",
       intent: "apply",
@@ -1241,8 +1241,8 @@ describe("Email Purchase links", () => {
           );
         }),
       loser: () =>
-        reviewAssessment(ctx.db, kernelCtx(ctx), {
-          assessmentId: prediction.id,
+        reviewSuggestion(ctx.db, kernelCtx(ctx), {
+          suggestionId: prediction.id,
           operationId: "synthetic-waiting-link",
           verdict: "correct",
           intent: "apply",
@@ -1257,7 +1257,7 @@ describe("Email Purchase links", () => {
     expect(raced.winner.state).toBe("dismissed");
     expect(raced.loser).toEqual({
       ok: false,
-      message: expect.stringMatching(/Assessment.*stale/),
+      message: expect.stringMatching(/Suggestion.*stale/),
     });
     const links = await getDb(ctx.db)
       .select()
@@ -1295,8 +1295,8 @@ describe("Email Purchase links", () => {
       { keepId: keeper.shortcode, mergeIds: [f.purchase.shortcode] },
       ctx.actor,
     );
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: prediction.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: prediction.id,
       operationId: "synthetic-repointed-link-review",
       verdict: "correct",
       intent: "apply",
@@ -1338,7 +1338,7 @@ describe("Email Purchase links", () => {
       "suggestions",
       {
         action: "review",
-        assessmentId: prediction.id,
+        suggestionId: prediction.id,
         operationId: "synthetic-relevance-review",
         verdict: "wrong",
         intent: "history",
@@ -1412,7 +1412,7 @@ describe("Email Purchase links", () => {
         "suggestions",
         {
           action: "review",
-          assessmentId: prediction.id,
+          suggestionId: prediction.id,
           operationId: `synthetic-invalid-relevance-${index}`,
           verdict: "correct",
           intent: "apply",

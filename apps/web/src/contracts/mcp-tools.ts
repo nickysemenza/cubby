@@ -48,7 +48,7 @@ import {
 } from "~/contracts/usda.contract";
 import { workQueueContract } from "~/contracts/work-queue.contract";
 
-import { assessmentContract } from "./assessment.contract";
+import { suggestionContract } from "./suggestion.contract";
 
 const usdaFoodLookupOut = z.object({ food: usdaFoodMcpOut });
 const usdaFood = (output: {
@@ -166,11 +166,11 @@ export const MCP_TOOL_DESCRIPTIONS = {
 } as const;
 
 export const MCP_ACTION_OVERRIDES = {
-  "assessment.reviewBatch": mcpActionOverride(
-    assessmentContract.ops.reviewBatch,
+  "suggestion.reviewBatch": mcpActionOverride(
+    suggestionContract.ops.reviewBatch,
     {
       project: (items) => ({ items }),
-      output: mcpItemsEnvelope(assessmentContract.ops.reviewBatch.output),
+      output: mcpItemsEnvelope(suggestionContract.ops.reviewBatch.output),
     },
   ),
   "expense.analytics": mcpActionOverride(expenseContract.ops.analytics, {

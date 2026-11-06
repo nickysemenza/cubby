@@ -209,8 +209,8 @@ afterEach(() => {
 const id = testShortcode("product", "first");
 const emptyStoredSuggestionOperations: StoredSuggestionOperations = {
   list: async () => ({ items: [] }),
-  review: async ({ assessmentId, intent }) => ({
-    assessmentId,
+  review: async ({ suggestionId, intent }) => ({
+    suggestionId,
     feedbackId: crypto.randomUUID(),
     status: "recorded",
     applied: intent === "apply",
@@ -241,7 +241,7 @@ const settledBy = (
     })),
   }));
 const food = {
-  assessmentId: "00000000-0000-4000-8000-000000000001",
+  suggestionId: "00000000-0000-4000-8000-000000000001",
   value: "CAT-2222",
   label: "Food",
   confidence: "high" as const,
@@ -477,7 +477,7 @@ describe("record suggestions", () => {
   it("loads hidden suggest fields for bulk acceptance and skips live queries for stored pairs", async () => {
     const recordId = "11111111-1111-4111-8111-111111111111";
     const storedRow = suggestionReviewRowSchema.parse({
-      assessmentId: "00000000-0000-4000-8000-000000000001",
+      suggestionId: "00000000-0000-4000-8000-000000000001",
       id: "22222222-2222-4222-8222-222222222222",
       runId: "RUN-3333",
       entity: "product",
@@ -508,8 +508,8 @@ describe("record suggestions", () => {
           });
         },
       ),
-      review: vi.fn(async ({ assessmentId, intent }) => ({
-        assessmentId,
+      review: vi.fn(async ({ suggestionId, intent }) => ({
+        suggestionId,
         feedbackId: "55555555-5555-4555-8555-555555555555",
         status: "recorded",
         applied: intent === "apply",
@@ -518,8 +518,8 @@ describe("record suggestions", () => {
         async ({
           items,
         }: Parameters<StoredSuggestionOperations["reviewBatch"]>[0]) =>
-          items.map(({ assessmentId }) => ({
-            assessmentId,
+          items.map(({ suggestionId }) => ({
+            suggestionId,
             feedbackId: "55555555-5555-4555-8555-555555555555",
             status: "applied",
             applied: true,
@@ -599,7 +599,7 @@ describe("record suggestions", () => {
       expect(stored.reviewBatch).toHaveBeenCalledWith({
         items: [
           expect.objectContaining({
-            assessmentId: "00000000-0000-4000-8000-000000000001",
+            suggestionId: "00000000-0000-4000-8000-000000000001",
             verdict: "correct",
             intent: "apply",
             correction: { present: false },
@@ -974,7 +974,7 @@ describe("record suggestions", () => {
       answer: "pick" as const,
       confidence: "high" as const,
       probability,
-      assessmentId: food.assessmentId,
+      suggestionId: food.suggestionId,
       alternatives: [],
     });
     const previewing = (probability: number) =>
@@ -1389,7 +1389,7 @@ describe("record suggestions", () => {
       tags: ["jacquemus", "ecosystem", "mount"],
     });
     const removeSuggestion = {
-      assessmentId: "00000000-0000-4000-8000-000000000002",
+      suggestionId: "00000000-0000-4000-8000-000000000002",
       value: "jacquemus",
       label: "Remove jacquemus",
       confidence: "high" as const,
@@ -1500,7 +1500,7 @@ describe("record suggestions", () => {
       tags: ["jacquemus", "mount"],
     });
     const removeSuggestion = {
-      assessmentId: "00000000-0000-4000-8000-000000000003",
+      suggestionId: "00000000-0000-4000-8000-000000000003",
       value: "jacquemus",
       label: "Remove jacquemus",
       confidence: "high" as const,

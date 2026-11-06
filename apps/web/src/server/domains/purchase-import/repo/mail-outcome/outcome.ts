@@ -1,12 +1,12 @@
-import {
-  mailImportOutcome,
-  type AssessmentProducer,
-} from "@cubby/schemas/assessment";
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
   mailOutcomeSnapshot,
   type MailOutcomeSnapshot,
 } from "@cubby/schemas/mail-import-outcome";
+import {
+  mailImportOutcome,
+  type SuggestionProducer,
+} from "@cubby/schemas/suggestion";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
@@ -74,7 +74,7 @@ export async function mailOutcomeSnapshotFor(input: {
   ruleRevision?: string;
   createdAt: Date;
 }): Promise<MailOutcomeSnapshot> {
-  const producer: AssessmentProducer = {
+  const producer: SuggestionProducer = {
     kind: input.ruleRevision ? "rule" : "agent",
     model: null,
     revision: input.ruleRevision ?? null,

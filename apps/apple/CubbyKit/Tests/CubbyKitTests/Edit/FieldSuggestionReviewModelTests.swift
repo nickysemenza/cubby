@@ -7,11 +7,11 @@ import Testing
 @Suite("Field suggestion review model", .timeLimit(.minutes(1)))
 @MainActor
 struct FieldSuggestionReviewModelTests {
-    private func reviewOut() throws -> AssessmentReviewOut {
+    private func reviewOut() throws -> SuggestionReviewOut {
         try JSONDecoder().decode(
-            AssessmentReviewOut.self,
+            SuggestionReviewOut.self,
             from: Data(
-                #"{"assessmentId":"00000000-0000-4000-8000-000000000001","feedbackId":"00000000-0000-4000-8000-000000000002","status":"applied","applied":true}"#
+                #"{"suggestionId":"00000000-0000-4000-8000-000000000001","feedbackId":"00000000-0000-4000-8000-000000000002","status":"applied","applied":true}"#
                     .utf8))
     }
     private static let applied = FinanceCategoryApplyOut(
@@ -30,16 +30,16 @@ struct FieldSuggestionReviewModelTests {
             original: .object(original))
     }
 
-    private func response(finance: Bool = true) throws -> FieldSuggestionsReviewOut {
+    private func response(finance: Bool = true) throws -> FieldSuggestionsOut {
         let fingerprint = String(repeating: "a", count: 64)
         let review =
             finance
             ? #", "financeReview":{"entity":"expense","entityId":"EXP-4K7M","fingerprint":"\#(fingerprint)"}"#
             : ""
         return try JSONDecoder().decode(
-            FieldSuggestionsReviewOut.self,
+            FieldSuggestionsOut.self,
             from: Data(
-                #"{"suggestions":[{"field":"spendingCategoryId","suggestion":{"assessmentId":"00000000-0000-4000-8000-000000000003","value":"SPC-4K7M","label":"Fixture clothing","detail":null,"confidence":"high","probability":0.96,"reasoning":"Saved linked shirt","alternatives":[],"operation":"set","removals":[]\#(review)}},{"field":"itemizationExpectation","suggestion":{"assessmentId":"00000000-0000-4000-8000-000000000004","value":"not_expected","label":"Not expected","detail":null,"confidence":"high","probability":0.96,"reasoning":"Fixture restaurant","alternatives":[],"operation":"set","removals":[]}},{"field":"productExpectation","suggestion":null}]}"#
+                #"{"suggestions":{"spendingCategoryId":{"suggestionId":"00000000-0000-4000-8000-000000000003","value":"SPC-4K7M","label":"Fixture clothing","detail":null,"confidence":"high","probability":0.96,"reasoning":"Saved linked shirt","alternatives":[],"operation":"set","removals":[]\#(review)},"itemizationExpectation":{"suggestionId":"00000000-0000-4000-8000-000000000004","value":"not_expected","label":"Not expected","detail":null,"confidence":"high","probability":0.96,"reasoning":"Fixture restaurant","alternatives":[],"operation":"set","removals":[]},"productExpectation":null}}"#
                     .utf8))
     }
 
@@ -47,14 +47,14 @@ struct FieldSuggestionReviewModelTests {
         let editor = editor(.purchase)
         let response = try response(finance: false)
         let initial = editor.draft
-        var reviews: [AssessmentReviewInput] = []
+        var reviews: [SuggestionReviewInput] = []
         let review = FieldSuggestionReviewModel(
             editor: editor, fetch: { _ in response },
             saveCategory: { _ in
                 Issue.record("Policy acceptance must use ordinary editor Save")
                 throw CancellationError()
             },
-            reviewAssessment: { input in
+            reviewSuggestion: { input in
                 reviews.append(input); return try self.reviewOut()
             })
         try await review.request()
@@ -71,14 +71,14 @@ struct FieldSuggestionReviewModelTests {
         let editor = editor()
         let response = try response()
         let gate = Gate()
-        var reviews: [AssessmentReviewInput] = []
+        var reviews: [SuggestionReviewInput] = []
         let review = FieldSuggestionReviewModel(
             editor: editor, fetch: { _ in response },
             saveCategory: { _ in
                 await gate.hold()
                 return Self.applied
             },
-            reviewAssessment: { input in
+            reviewSuggestion: { input in
                 reviews.append(input); return try self.reviewOut()
             })
         try await review.request()
@@ -106,7 +106,7 @@ struct FieldSuggestionReviewModelTests {
             saveCategory: { _ in
                 await gate.hold()
                 return Self.applied
-            }, reviewAssessment: { _ in try self.reviewOut() })
+            }, reviewSuggestion: { _ in try self.reviewOut() })
         try await review.request()
         _ = try #require(review.proposal("spendingCategoryId"))
         let apply = Task { try await review.apply("spendingCategoryId") }
@@ -118,7 +118,7 @@ struct FieldSuggestionReviewModelTests {
 
         let stale = FieldSuggestionReviewModel(
             editor: editor, fetch: { _ in response }, saveCategory: { _ in throw CancellationError() },
-            reviewAssessment: { _ in try self.reviewOut() })
+            reviewSuggestion: { _ in try self.reviewOut() })
         try await stale.request()
         await #expect(throws: CancellationError.self) { try await stale.apply("spendingCategoryId") }
         #expect(stale.proposal("spendingCategoryId") == nil)
@@ -152,7 +152,7 @@ struct FieldSuggestionReviewModelTests {
                     return response
                 },
                 saveCategory: { _ in throw CancellationError() },
-                reviewAssessment: { _ in try self.reviewOut() })
+                reviewSuggestion: { _ in try self.reviewOut() })
             try await review.request()
             #expect(review.proposal("itemizationExpectation") != nil)
             editor.draft["purchaseId"] = .string("PUR-9K7M")

@@ -1,14 +1,14 @@
 import { z } from "zod";
-import { assessmentChildHandle } from "./assessment-reference";
+import { suggestionChildHandle } from "./suggestion-reference";
 import { productShortcode } from "./identifier-fields";
 
 export const duplicateProductIdentitySchema = z.object({
-  assessmentId: assessmentChildHandle,
+  suggestionId: suggestionChildHandle,
   fingerprint: z.string().nullable(),
   identityConflict: z.boolean(),
   pairs: z.array(
     z.object({
-      assessmentId: assessmentChildHandle,
+      suggestionId: suggestionChildHandle,
       fingerprint: z.string().nullable(),
       identityConflict: z.boolean(),
       productIds: z.tuple([productShortcode, productShortcode]),

@@ -1,8 +1,3 @@
-import {
-  assessmentSubjects,
-  assessmentFamily,
-  assessmentProducer,
-} from "@cubby/schemas/assessment";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import {
@@ -15,6 +10,11 @@ import {
   type StatementSuggestionOut,
   type StatementTransactionApplication,
 } from "@cubby/schemas/statement-suggestion";
+import {
+  suggestionSubjects,
+  suggestionFamily,
+  suggestionProducer,
+} from "@cubby/schemas/suggestion";
 import { workQueueInput } from "@cubby/schemas/work-queue";
 import { DECISION_MODEL } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -60,22 +60,22 @@ import {
   readWorkQueue,
   readRecordWorkQueue,
 } from "~/server/domains/work/service/work-queue-read";
-import * as assessmentRepo from "~/server/generic/assessment/repo/assessment";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
-import * as assessmentStateRepo from "~/server/generic/assessment/repo/assessment-state";
-import * as automaticRuleRuntime from "~/server/generic/assessment/repo/automatic-rule-runtime";
-import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
-import { ruleBase } from "~/server/generic/assessment/repo/automatic-rules";
-import {
-  acceptCleanSuggestions,
-  listSuggestionPage,
-} from "~/server/generic/assessment/repo/suggestion-list";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { renewJob } from "~/server/generic/jobs/jobs.fixtures";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-rule-runtime";
+import { setAutomaticRule } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
+import { ruleBase } from "~/server/generic/suggestions/repo/automatic-rules";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import * as suggestionRepo from "~/server/generic/suggestions/repo/suggestion";
+import {
+  acceptCleanSuggestions,
+  listSuggestionPage,
+} from "~/server/generic/suggestions/repo/suggestion-list";
+import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
+import * as suggestionStateRepo from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   captureBackgroundQueue,
@@ -294,7 +294,7 @@ const readPendingStatements = async (ctx: Ctx) => {
     .sort(
       (a, b) =>
         b.statementDate.localeCompare(a.statementDate) ||
-        a.assessmentId.localeCompare(b.assessmentId),
+        a.suggestionId.localeCompare(b.suggestionId),
     );
 };
 
@@ -336,8 +336,8 @@ const accept = async (
     ...(booking && { booking }),
     ...overrides,
   };
-  return reviewAssessment(ctx.db, kernelCtx(ctx), {
-    assessmentId: suggestion.assessmentId,
+  return reviewSuggestion(ctx.db, kernelCtx(ctx), {
+    suggestionId: suggestion.suggestionId,
     operationId: crypto.randomUUID(),
     verdict: corrected ? "wrong" : "correct",
     correction: corrected
@@ -349,10 +349,10 @@ const accept = async (
   });
 };
 
-const stateOf = async (ctx: Ctx, assessmentId: string) =>
+const stateOf = async (ctx: Ctx, suggestionId: string) =>
   (
     await getDb(ctx.db).execute<{ status: string; active: boolean }>(
-      sql`SELECT status, active FROM "Suggestion" WHERE id = ${assessmentId}::uuid`,
+      sql`SELECT status, active FROM "Suggestion" WHERE id = ${suggestionId}::uuid`,
     )
   ).rows[0];
 
@@ -415,7 +415,7 @@ async function completeLabelPublications(ctx: Ctx) {
     100,
   );
   const subjects = pending.map((row) =>
-    assessmentSubjects.statement_transaction.parse(row.subject),
+    suggestionSubjects.statement_transaction.parse(row.subject),
   );
   const proposals = await buildChargeProposals(
     ctx.db,
@@ -738,12 +738,12 @@ describe("statement Transaction suggestions", () => {
       if (!source)
         throw new Error("Synthetic receipt completion source missing");
       let before: typeof suggestionTable.$inferSelect | undefined;
-      const move = async (assessmentId: string) => {
+      const move = async (suggestionId: string) => {
         if (before) return;
         [before] = await getDb(ctx.db)
           .select()
           .from(suggestionTable)
-          .where(eq(suggestionTable.id, assessmentId));
+          .where(eq(suggestionTable.id, suggestionId));
         await updateSourceTransactionRecords(
           ctx.db,
           {
@@ -763,7 +763,7 @@ describe("statement Transaction suggestions", () => {
         .spyOn(statementSuggestionsRepo, "completeNoActionStatementPrefix")
         .mockImplementation(async (...args) => {
           const [entry] = args[1];
-          if (shortcut && entry) await move(entry.assessmentId);
+          if (shortcut && entry) await move(entry.suggestionId);
           return prefix(...args);
         });
       const completeSpy = vi
@@ -849,7 +849,7 @@ describe("statement Transaction suggestions", () => {
     // are arranged to put a long excluded suffix behind 32 admitted rows.
     await getDb(ctx.db).execute(sql`UPDATE "Suggestion" SET "createdAt" =
       '2026-01-01'::timestamp + ((data->>'amount')::int - 100) * interval '1 second'
-      WHERE family = ${assessmentFamily.enum.statement_transaction}`);
+      WHERE family = ${suggestionFamily.enum.statement_transaction}`);
     const scope = {
       accountIds: [
         await resolveOrThrow(ctx.db, "financialAccount", account.id),
@@ -943,7 +943,7 @@ describe("statement Transaction suggestions", () => {
       const checkpoint =
         statementSuggestionsRepo.recordStatementLabelCheckpoint;
       const publish = statementSuggestionsRepo.publishCompleteStatementLabels;
-      const publishAssessments = assessmentRepo.publishAssessments;
+      const publishSuggestions = suggestionRepo.publishSuggestions;
       const checkpointSpy = vi
         .spyOn(statementSuggestionsRepo, "recordStatementLabelCheckpoint")
         .mockImplementation(async (...args) => {
@@ -957,13 +957,13 @@ describe("statement Transaction suggestions", () => {
           return publish(...args);
         });
       const batchSpy = vi
-        .spyOn(assessmentRepo, "publishAssessments")
+        .spyOn(suggestionRepo, "publishSuggestions")
         .mockImplementation(async (...args) => {
           if (phase === "publication fallback" && !moved) {
             await move();
             throw new Error("Synthetic batch failure before scoped fallback");
           }
-          return publishAssessments(...args);
+          return publishSuggestions(...args);
         });
       try {
         const result = await labelStatementSuggestions(ctx.db, {
@@ -992,7 +992,7 @@ describe("statement Transaction suggestions", () => {
             .select({ id: suggestionTable.id })
             .from(suggestionTable)
             .where(
-              sql`${suggestionTable.producer}->>${"kind"} = ${assessmentProducer.shape.kind.enum.model}`,
+              sql`${suggestionTable.producer}->>${"kind"} = ${suggestionProducer.shape.kind.enum.model}`,
             ),
         ).toEqual([]);
       } finally {
@@ -1033,7 +1033,7 @@ describe("statement Transaction suggestions", () => {
     const before = await getDb(ctx.db)
       .select()
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, receipt.receipt.assessmentId));
+      .where(eq(suggestionTable.id, receipt.receipt.suggestionId));
     await updateSourceTransactionRecords(
       ctx.db,
       {
@@ -1061,7 +1061,7 @@ describe("statement Transaction suggestions", () => {
       await getDb(ctx.db)
         .select()
         .from(suggestionTable)
-        .where(eq(suggestionTable.id, receipt.receipt.assessmentId)),
+        .where(eq(suggestionTable.id, receipt.receipt.suggestionId)),
     ).toEqual(before);
   });
 
@@ -1595,7 +1595,7 @@ describe("statement Transaction suggestions", () => {
     expect(
       (await readPendingStatements(ctx)).map((row) => row.merchant),
     ).toEqual(["Example Grocer"]);
-    expect(await stateOf(ctx, first!.assessmentId)).toMatchObject({
+    expect(await stateOf(ctx, first!.suggestionId)).toMatchObject({
       status: "pending",
       active: true,
     });
@@ -1707,7 +1707,7 @@ describe("statement Transaction suggestions", () => {
     const [suggestion] = await readPendingStatements(ctx);
     const outcome = await accept(ctx, suggestion!);
     expect(outcome).toMatchObject({ status: "applied", applied: true });
-    expect(await stateOf(ctx, suggestion!.assessmentId)).toMatchObject({
+    expect(await stateOf(ctx, suggestion!.suggestionId)).toMatchObject({
       status: "applied",
       active: true,
     });
@@ -1777,7 +1777,7 @@ describe("statement Transaction suggestions", () => {
       sourceRefs: [],
     });
     await expect(accept(ctx, suggestion!)).rejects.toThrow(/evidence changed/);
-    expect(await stateOf(ctx, suggestion!.assessmentId)).toMatchObject({
+    expect(await stateOf(ctx, suggestion!.suggestionId)).toMatchObject({
       status: "pending",
     });
   });
@@ -1996,7 +1996,7 @@ describe("statement Transaction suggestions", () => {
     await getDb(ctx.db)
       .update(suggestionTable)
       .set({ active: true, status: "pending" })
-      .where(eq(suggestionTable.id, pending.assessmentId));
+      .where(eq(suggestionTable.id, pending.suggestionId));
     const charge = {
       source: observation.source,
       chargeKey: observation.chargeKey,
@@ -2026,7 +2026,7 @@ describe("statement Transaction suggestions", () => {
       await getDb(ctx.db)
         .select({ active: suggestionTable.active })
         .from(suggestionTable)
-        .where(eq(suggestionTable.id, pending.assessmentId)),
+        .where(eq(suggestionTable.id, pending.suggestionId)),
     ).toEqual([{ active: true }]);
     expect(
       await retryStatementGenerationRefs(ctx.db, {
@@ -2041,7 +2041,7 @@ describe("statement Transaction suggestions", () => {
           status: suggestionTable.status,
         })
         .from(suggestionTable)
-        .where(eq(suggestionTable.id, pending.assessmentId)),
+        .where(eq(suggestionTable.id, pending.suggestionId)),
     ).toEqual([{ active: false, status: "superseded" }]);
     expect(
       await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
@@ -2128,7 +2128,7 @@ describe("statement Transaction suggestions", () => {
     if (!held?.reviewReason) throw new Error("Missing source lifecycle hold");
     await expect(
       previewStatementSuggestion(ctx.db, {
-        assessmentId: held.assessmentId,
+        suggestionId: held.suggestionId,
         expectedFingerprint: held.fingerprint,
         application: { kind: "statement_transaction", action: "book" },
       }),
@@ -2284,7 +2284,7 @@ describe("statement Transaction suggestions", () => {
       candidates: [{ label: { same: "same", confidence: "high" } }],
     });
     expect(labelled!.model).not.toBeNull();
-    expect(await stateOf(ctx, rule!.assessmentId)).toMatchObject({
+    expect(await stateOf(ctx, rule!.suggestionId)).toMatchObject({
       active: false,
     });
     // A rule pass over unchanged evidence keeps the labels.
@@ -2355,7 +2355,7 @@ describe("statement Transaction suggestions", () => {
           1,
         );
         const checkpoint = saved!.checkpoint!;
-        const subject = assessmentSubjects.statement_transaction.parse(
+        const subject = suggestionSubjects.statement_transaction.parse(
           saved!.subject,
         );
         const stale = structuredClone(checkpoint);
@@ -2411,7 +2411,7 @@ describe("statement Transaction suggestions", () => {
     );
     expect(pending).toHaveLength(2);
     const [counted] = pending.map((row) =>
-      assessmentSubjects.statement_transaction.parse(row.subject),
+      suggestionSubjects.statement_transaction.parse(row.subject),
     );
     const result = await runStatementLabels(ctx.db, {
       runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
@@ -2764,9 +2764,9 @@ describe("statement Transaction suggestions", () => {
     const [bankRecord] = (await listSourceTransactionRecords(ctx.db, {})).data;
     if (!current || !bankRecord)
       throw new Error("Synthetic current financial recommendation missing");
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
       operationId: "synthetic-current-dismissal",
-      assessmentId: current.assessmentId,
+      suggestionId: current.suggestionId,
       verdict: "dismissed",
       intent: "history",
       suppression: {
@@ -2779,14 +2779,14 @@ describe("statement Transaction suggestions", () => {
     const [dismissed] = await getDb(ctx.db)
       .select()
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, current.assessmentId));
+      .where(eq(suggestionTable.id, current.suggestionId));
     expect(dismissed?.suppression?.fingerprint).toBe(dismissed?.fingerprint);
     await generate(ctx);
     expect(await readPendingStatements(ctx)).toEqual([]);
     const [retainedDismissal] = await getDb(ctx.db)
       .select()
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, current.assessmentId));
+      .where(eq(suggestionTable.id, current.suggestionId));
     expect(retainedDismissal).toMatchObject({
       active: true,
       status: "resolved",
@@ -2798,7 +2798,7 @@ describe("statement Transaction suggestions", () => {
       .set({
         producer: sql`jsonb_set(${suggestionTable.producer},'{revision}',to_jsonb(${"synthetic-old-label-revision"}::text))`,
       })
-      .where(eq(suggestionTable.id, current.assessmentId));
+      .where(eq(suggestionTable.id, current.suggestionId));
     await generate(ctx);
     expect(await readPendingStatements(ctx)).toEqual([]);
     await record(
@@ -2817,7 +2817,7 @@ describe("statement Transaction suggestions", () => {
     await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
     const pending = await readPendingStatements(ctx);
     expect(pending).toHaveLength(1);
-    expect(pending[0]?.assessmentId).not.toBe(current.assessmentId);
+    expect(pending[0]?.suggestionId).not.toBe(current.suggestionId);
     expect(
       (await listSourceTransactionRecords(ctx.db, {})).data.every(
         (row) => row.disposition === "open",
@@ -2849,7 +2849,7 @@ describe("statement Transaction suggestions", () => {
       throw new Error("Synthetic retained alias missing");
     const legacyKey = original.legacyExternalId;
     await getDb(ctx.db).execute(
-      sql`UPDATE "Suggestion" SET data=jsonb_set(data,'{chargeKey}',to_jsonb(${legacyKey}::text)), subject=jsonb_set(subject,'{chargeKey}',to_jsonb(${legacyKey}::text)) WHERE id=${before!.assessmentId}::uuid`,
+      sql`UPDATE "Suggestion" SET data=jsonb_set(data,'{chargeKey}',to_jsonb(${legacyKey}::text)), subject=jsonb_set(subject,'{chargeKey}',to_jsonb(${legacyKey}::text)) WHERE id=${before!.suggestionId}::uuid`,
     );
     await expect(accept(ctx, before!)).rejects.toThrow(/explicit review/);
     await record(
@@ -2881,13 +2881,13 @@ describe("statement Transaction suggestions", () => {
       },
       model: before!.model,
     });
-    expect(await stateOf(ctx, before!.assessmentId)).toMatchObject({
+    expect(await stateOf(ctx, before!.suggestionId)).toMatchObject({
       active: false,
       status: "superseded",
     });
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
       operationId: "synthetic-obsolete-dismissal",
-      assessmentId: before!.assessmentId,
+      suggestionId: before!.suggestionId,
       verdict: "dismissed",
       intent: "history",
       suppression: {
@@ -2900,7 +2900,7 @@ describe("statement Transaction suggestions", () => {
     const [obsolete] = await getDb(ctx.db)
       .select({ suppression: suggestionTable.suppression })
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, before!.assessmentId));
+      .where(eq(suggestionTable.id, before!.suggestionId));
     expect(obsolete?.suppression).toBeNull();
     expect(await readPendingStatements(ctx)).toHaveLength(1);
     await accept(ctx, after!);
@@ -3267,7 +3267,7 @@ describe("statement Transaction suggestions", () => {
     let modelPeak = 0;
     let publishActive = 0;
     let publishPeak = 0;
-    const publish = assessmentRepo.publishAssessments;
+    const publish = suggestionRepo.publishSuggestions;
     const releasePublications = Promise.withResolvers<void>();
     let publicationDb: Parameters<typeof publish>[0] | undefined;
     let claim:
@@ -3278,7 +3278,7 @@ describe("statement Transaction suggestions", () => {
     let publicationsAfterQueue = 0;
     const batchSizes: number[] = [];
     const spy = vi
-      .spyOn(assessmentRepo, "publishAssessments")
+      .spyOn(suggestionRepo, "publishSuggestions")
       .mockImplementation(async (...args) => {
         publishPeak = Math.max(publishPeak, ++publishActive);
         batchSizes.push(args[1].length);
@@ -3568,7 +3568,7 @@ describe("statement Transaction suggestions", () => {
           const [retained] = await getDb(ctx.db)
             .select()
             .from(suggestionTable)
-            .where(eq(suggestionTable.id, old.assessmentId));
+            .where(eq(suggestionTable.id, old.suggestionId));
           if (retained?.active)
             throw new Error("Expected the old suffix receipt to be retired");
         }
@@ -3641,25 +3641,25 @@ describe("statement Transaction suggestions", () => {
       if (result?.kind !== "ready")
         throw new Error("Expected retained synthetic receipt");
       return {
-        assessmentId: result.receipt.assessmentId,
+        suggestionId: result.receipt.suggestionId,
         charge: entry.proposal.charge,
         evidenceFingerprint: result.receipt.evidenceFingerprint,
       };
     });
-    const ids = targets.map((entry) => entry.assessmentId);
+    const ids = targets.map((entry) => entry.suggestionId);
     await databaseHelpers.withTransactionDatabase(ctx.db, async (tx) => {
-      await transitionAssessmentStates(
+      await transitionSuggestionStates(
         tx,
         inArray(suggestionTable.id, ids),
         (row) => ({
           data: {
             ...z.record(z.string(), z.json()).parse(row.data),
             matchedRules:
-              row.id === targets[2]!.assessmentId
+              row.id === targets[2]!.suggestionId
                 ? ["statement_transaction.attach@synthetic"]
-                : row.id === targets[1]!.assessmentId
+                : row.id === targets[1]!.suggestionId
                   ? [ruleBase("statement_transaction.book_spending")]
-                  : row.id === targets[3]!.assessmentId
+                  : row.id === targets[3]!.suggestionId
                     ? ["statement_transaction.book_spending@synthetic-obsolete"]
                     : [],
           },
@@ -3705,7 +3705,7 @@ describe("statement Transaction suggestions", () => {
     ).toBe(2);
     const after = await read();
     for (const [index, target] of targets.entries()) {
-      const row = after.find((row) => row.id === target.assessmentId)!;
+      const row = after.find((row) => row.id === target.suggestionId)!;
       expect(
         z.record(z.string(), z.json()).parse(row.data).applicationPending,
       ).toBe(index < 2 ? undefined : true);
@@ -3753,7 +3753,7 @@ describe("statement Transaction suggestions", () => {
         throw new Error("Expected synthetic pending receipt");
       const targets = [
         {
-          assessmentId: outcome.receipt.assessmentId,
+          suggestionId: outcome.receipt.suggestionId,
           charge: entry.proposal.charge,
           evidenceFingerprint: outcome.receipt.evidenceFingerprint,
         },
@@ -3761,11 +3761,11 @@ describe("statement Transaction suggestions", () => {
       const before = await getDb(ctx.db)
         .select()
         .from(suggestionTable)
-        .where(eq(suggestionTable.id, targets[0]!.assessmentId));
+        .where(eq(suggestionTable.id, targets[0]!.suggestionId));
       const beforeEvents = await readSuggestionDecisions(ctx.db);
-      const transition = assessmentStateRepo.transitionAssessmentStates;
+      const transition = suggestionStateRepo.transitionSuggestionStates;
       const writes = vi
-        .spyOn(assessmentStateRepo, "transitionAssessmentStates")
+        .spyOn(suggestionStateRepo, "transitionSuggestionStates")
         .mockImplementation(async (...args) => {
           const changed = await transition(...args);
           const owner = currentJobExecution();
@@ -3804,7 +3804,7 @@ describe("statement Transaction suggestions", () => {
           await getDb(ctx.db)
             .select()
             .from(suggestionTable)
-            .where(eq(suggestionTable.id, targets[0]!.assessmentId)),
+            .where(eq(suggestionTable.id, targets[0]!.suggestionId)),
         ).toEqual(before);
         expect(await readSuggestionDecisions(ctx.db)).toEqual(beforeEvents);
       } finally {
@@ -3852,7 +3852,7 @@ describe("statement Transaction suggestions", () => {
           return work(committed);
         }),
       );
-    const publication = vi.spyOn(assessmentRepo, "publishAssessments");
+    const publication = vi.spyOn(suggestionRepo, "publishSuggestions");
     try {
       const first =
         await statementSuggestionsRepo.publishCompleteStatementLabels(
@@ -3874,7 +3874,7 @@ describe("statement Transaction suggestions", () => {
         ctx.db,
         10,
       );
-      expect(pending!.id).toBe(receipt.receipt.assessmentId);
+      expect(pending!.id).toBe(receipt.receipt.suggestionId);
       expect(pending!.checkpoint).toEqual(entries[0]!.checkpoint);
       expect(pending!.applicationPending).toBe(true);
       expect(
@@ -3930,7 +3930,7 @@ describe("statement Transaction suggestions", () => {
           throw new Error("Synthetic unavailable retirement connection");
         }),
       );
-    const publication = vi.spyOn(assessmentRepo, "publishAssessments");
+    const publication = vi.spyOn(suggestionRepo, "publishSuggestions");
     try {
       const first =
         await statementSuggestionsRepo.publishCompleteStatementLabels(
@@ -3971,7 +3971,7 @@ describe("statement Transaction suggestions", () => {
         expect(repair).toHaveBeenCalledWith(
           ctx.db,
           pending.map((row, index) => ({
-            assessmentId: row.id,
+            suggestionId: row.id,
             charge: entries[index]!.proposal.charge,
           })),
         );
@@ -4005,9 +4005,9 @@ describe("statement Transaction suggestions", () => {
         10,
       );
       const entries = await completeLabelPublications(ctx);
-      const publish = assessmentRepo.publishAssessments;
+      const publish = suggestionRepo.publishSuggestions;
       const publication = vi
-        .spyOn(assessmentRepo, "publishAssessments")
+        .spyOn(suggestionRepo, "publishSuggestions")
         .mockImplementation(async (...args) => {
           const result = await publish(...args);
           const owner = currentJobExecution();
@@ -4431,7 +4431,7 @@ describe("statement Transaction suggestions", () => {
       2,
     );
     const saved = before[1]!;
-    const charge = assessmentSubjects.statement_transaction.parse(
+    const charge = suggestionSubjects.statement_transaction.parse(
       saved.subject,
     );
     const [proposal] = await buildChargeProposals(ctx.db, [charge]);
@@ -4501,7 +4501,7 @@ describe("statement Transaction suggestions", () => {
     expect(overflowing).toBeDefined();
     if (!overflowing) return;
     await statementSuggestionsRepo.recordStatementLabelCheckpoint(ctx.db, {
-      charge: assessmentSubjects.statement_transaction.parse(
+      charge: suggestionSubjects.statement_transaction.parse(
         overflowing.subject,
       ),
       evidenceFingerprint: overflowing.evidenceFingerprint,
@@ -4949,7 +4949,7 @@ describe("statement Transaction suggestions", () => {
       rawDescription: "EXAMPLE GROCER 0001",
       sourceRefs: [{ source: "monarch", externalId: row!.chargeKey }],
     });
-    expect(await stateOf(ctx, suggestion!.assessmentId)).toMatchObject({
+    expect(await stateOf(ctx, suggestion!.suggestionId)).toMatchObject({
       status: "pending",
       active: true,
     });
@@ -4959,7 +4959,7 @@ describe("statement Transaction suggestions", () => {
     );
     // Republication, not a scanner, replaces the stale advice.
     expect(await generate(ctx)).toBe(1);
-    expect(await stateOf(ctx, suggestion!.assessmentId)).toMatchObject({
+    expect(await stateOf(ctx, suggestion!.suggestionId)).toMatchObject({
       status: "superseded",
       active: false,
     });
@@ -5290,7 +5290,7 @@ describe("statement Transaction suggestions", () => {
     // Reproduce an older successful publication's clean selection operands.
     // The action must recheck current advice even when bulk selects this row.
     await getDb(ctx.db).execute(
-      sql`UPDATE "Suggestion" SET data = jsonb_set(data, '{clean}', 'true') WHERE id = ${payment!.assessmentId}::uuid`,
+      sql`UPDATE "Suggestion" SET data = jsonb_set(data, '{clean}', 'true') WHERE id = ${payment!.suggestionId}::uuid`,
     );
     // Refused with a reason, so the page skips it instead of stopping.
     expect(
@@ -5300,18 +5300,18 @@ describe("statement Transaction suggestions", () => {
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          assessmentId: payment!.assessmentId,
+          suggestionId: payment!.suggestionId,
           ok: false,
           error: expect.stringContaining("No longer clean"),
         }),
         expect.objectContaining({
-          assessmentId: attach!.assessmentId,
+          suggestionId: attach!.suggestionId,
           ok: true,
           applied: true,
         }),
       ]),
     );
-    expect(await stateOf(ctx, payment!.assessmentId)).toMatchObject({
+    expect(await stateOf(ctx, payment!.suggestionId)).toMatchObject({
       status: "pending",
     });
   });

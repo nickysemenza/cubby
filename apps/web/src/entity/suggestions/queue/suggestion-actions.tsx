@@ -1,4 +1,4 @@
-import { assessmentReviewInput } from "@cubby/schemas/assessment";
+import { suggestionReviewInput } from "@cubby/schemas/suggestion";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
@@ -166,7 +166,7 @@ export function SuggestionActions({
             disabled: !correctionValue.trim(),
             onClick: async () => {
               const failures = await review([suggestion], (target) => ({
-                assessmentId: target.assessmentId,
+                suggestionId: target.suggestionId,
                 operationId: crypto.randomUUID(),
                 verdict: "wrong",
                 intent: "apply",
@@ -200,8 +200,8 @@ export function SuggestionActions({
             const mergeId = aliasIds[0];
             if (!mergeId) return;
             const failures = await review([suggestion], (target) =>
-              assessmentReviewInput.parse({
-                assessmentId: target.assessmentId,
+              suggestionReviewInput.parse({
+                suggestionId: target.suggestionId,
                 operationId: crypto.randomUUID(),
                 verdict: "correct",
                 intent: "apply",

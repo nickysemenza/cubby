@@ -96,7 +96,7 @@ export async function scheduleConnectionRefresh(
     entity: source.entityKind,
     recordId: record.id,
     field: null,
-    assessmentIds: [],
+    suggestionIds: [],
   });
   const key = await sha256Hex(JSON.stringify([target, provenance]));
   const scheduled = await scheduleEvaluationRun(
@@ -180,7 +180,7 @@ async function connectionRosterTargets(db: Database, input: RosterInput) {
         entity: record.source.entityKind,
         recordId: record.id,
         field: null,
-        assessmentIds: [],
+        suggestionIds: [],
       }),
       provenance: aiProvenance.parse({
         dependencies: dependencyStamps(activation.manifest, [

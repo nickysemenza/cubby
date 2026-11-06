@@ -15,7 +15,7 @@ import {
   driveAiWork,
   reclassifyForTest as reclassifyEmails,
 } from "tooling/ai-work";
-import { seedEmailClassificationFeedback } from "tooling/shared-assessment-fixtures";
+import { seedEmailClassificationFeedback } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 

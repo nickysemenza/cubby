@@ -11,7 +11,7 @@ import {
   runAfterCommit,
   runBeforeCommitDatabase,
 } from "~/server/db/helpers";
-import { assessmentCorrectionLock, ledgerParty } from "~/server/db/schema";
+import { suggestionCorrectionLock, ledgerParty } from "~/server/db/schema";
 
 import {
   assertEmailEvidenceScope,
@@ -29,13 +29,13 @@ describe("Email evidence outer scope", () => {
   };
 
   it("rejects a late root entry without writing a gate", async () => {
-    const before = await getDb(ctx.db).select().from(assessmentCorrectionLock);
+    const before = await getDb(ctx.db).select().from(suggestionCorrectionLock);
     await withTransactionDatabase(ctx.db, async (db) => {
       await expect(
         withEmailEvidenceWrite(db, async () => undefined),
       ).rejects.toThrow("root Database");
     });
-    expect(await getDb(ctx.db).select().from(assessmentCorrectionLock)).toEqual(
+    expect(await getDb(ctx.db).select().from(suggestionCorrectionLock)).toEqual(
       before,
     );
   });

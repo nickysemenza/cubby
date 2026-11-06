@@ -1,4 +1,4 @@
-import { assessmentSubjects } from "@cubby/schemas/assessment";
+import { suggestionSubjects } from "@cubby/schemas/suggestion";
 import { and, or, sql } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -15,8 +15,8 @@ export function currentImageDescriptionConfirmation() {
     sql`"Suggestion"."active" = true`,
     sql`${notDeleted("Image")}`,
     sql`"Suggestion"."fingerprint" = "Image"."sha256"`,
-    sql`"Suggestion"."subject"->>${assessmentSubjects.image_description.keyof().enum.contentHash} = "Image"."sha256"`,
-    sql`"Suggestion"."subject"->>${assessmentSubjects.image_description.keyof().enum.recordId} = "Image"."id"::text`,
+    sql`"Suggestion"."subject"->>${suggestionSubjects.image_description.keyof().enum.contentHash} = "Image"."sha256"`,
+    sql`"Suggestion"."subject"->>${suggestionSubjects.image_description.keyof().enum.recordId} = "Image"."id"::text`,
     sql`"Suggestion"."confirmedValue" @> ${JSON.stringify({ present: true })}::jsonb`,
     sql`jsonb_typeof("Suggestion"."confirmedValue"->${"value"}) = ${"string"}`,
     or(

@@ -33,7 +33,7 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { aiAnalysis, suggestionTable } from "~/server/db/schema";
 import { AUTOMATIC_AI_CALL } from "~/server/domains/run/repo/ai-call-owner";
-import { memberRejectedSql } from "~/server/generic/assessment/repo/suggestion-decisions";
+import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { settleBatch } from "~/server/workflows/settle-batch";
 
@@ -287,7 +287,7 @@ export async function readSettledQuestions(
       missId: sql<string | null>`(
         SELECT miss.id FROM "Suggestion" answer
         CROSS JOIN LATERAL jsonb_to_recordset(answer.decisions) miss(id text, authority text, verdict text, "createdAt" text)
-        WHERE answer.id::text = ${aiAnalysis.result}->'outcome'->>'assessmentId'
+        WHERE answer.id::text = ${aiAnalysis.result}->'outcome'->>'suggestionId'
           AND miss.authority = ${"member"} AND miss.verdict = ${"wrong"}
         ORDER BY miss."createdAt" DESC, miss.id DESC
         LIMIT 1
@@ -392,15 +392,15 @@ async function readSavedAnswerPreviews(
     ...new Set(keys.filter((key): key is string => key !== null)),
   ];
   const preview = sql`${aiAnalysis.result}->${"preview"}::text`;
-  const answerAssessmentText = sql`coalesce(
-    ${preview}->${"outcome"}::text->>${"assessmentId"}::text,
-    ${preview}->${"suggestion"}::text->>${"assessmentId"}::text
+  const answerSuggestionText = sql`coalesce(
+    ${preview}->${"outcome"}::text->>${"suggestionId"}::text,
+    ${preview}->${"suggestion"}::text->>${"suggestionId"}::text
   )`;
-  // Stored legacy previews may lack a valid assessment handle. Cast the
+  // Stored legacy previews may lack a valid suggestion handle. Cast the
   // lookup value, preserving the UUID index on Suggestion.
-  const answerAssessment = sql`CASE
-    WHEN ${answerAssessmentText} ~ ${"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}
-    THEN (${answerAssessmentText})::uuid
+  const answerSuggestion = sql`CASE
+    WHEN ${answerSuggestionText} ~ ${"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}
+    THEN (${answerSuggestionText})::uuid
     ELSE NULL
   END`;
   const { rejected, superseded } = suggestionStatus.enum;
@@ -412,7 +412,7 @@ async function readSavedAnswerPreviews(
           withheld: sql<boolean>`(
             EXISTS (
               SELECT 1 FROM ${suggestionTable} AS "answer"
-              WHERE "answer"."id" = ${answerAssessment}
+              WHERE "answer"."id" = ${answerSuggestion}
                 AND (
                   "answer"."status" IN (${rejected}, ${superseded})
                   OR EXISTS (
@@ -426,7 +426,7 @@ async function readSavedAnswerPreviews(
             )
             OR EXISTS (
               SELECT 1 FROM ${suggestionTable} AS "reviewed"
-              WHERE "reviewed"."id" = ${answerAssessment}
+              WHERE "reviewed"."id" = ${answerSuggestion}
                 AND ${memberRejectedSql(sql`"reviewed"."decisions"`, { dismissed: false })}
             )
           )`,

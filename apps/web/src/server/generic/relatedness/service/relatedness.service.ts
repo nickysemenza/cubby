@@ -12,12 +12,12 @@ import type { SimilarEntitiesOut } from "@cubby/schemas/search";
 import type { Database } from "~/server/db";
 import { getProductsSharingTags } from "~/server/domains/product/repo/analytics";
 import { productScaffold } from "~/server/domains/product/repo/crud";
-import {
-  getActiveAssessmentSuppressionKeys,
-  assessmentCandidateKey,
-} from "~/server/generic/assessment/repo/assessment-state";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  getActiveSuggestionSuppressionKeys,
+  suggestionCandidateKey,
+} from "~/server/generic/suggestions/repo/suggestion-state";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 
 import { buildProductRelatednessLedger } from "./relatedness-ledger";
@@ -42,9 +42,9 @@ export interface RelatednessDependencies {
   ) => Promise<Array<{ id: string; tags: string[] }>>;
   getActiveDismissalKeys: (
     db: Database,
-    input: Parameters<typeof getActiveAssessmentSuppressionKeys>[1],
+    input: Parameters<typeof getActiveSuggestionSuppressionKeys>[1],
   ) => Promise<Set<string>>;
-  makeCandidateKey: typeof assessmentCandidateKey;
+  makeCandidateKey: typeof suggestionCandidateKey;
 }
 
 const productTagEvidence = rawProductDetail.pick({ id: true, tags: true });
@@ -60,8 +60,8 @@ const productionRelatednessDependencies: RelatednessDependencies = {
     );
     return data.map((row) => productTagEvidence.parse(row));
   },
-  getActiveDismissalKeys: getActiveAssessmentSuppressionKeys,
-  makeCandidateKey: assessmentCandidateKey,
+  getActiveDismissalKeys: getActiveSuggestionSuppressionKeys,
+  makeCandidateKey: suggestionCandidateKey,
 };
 
 /**

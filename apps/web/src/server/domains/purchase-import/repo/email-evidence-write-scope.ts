@@ -6,7 +6,7 @@ import {
   repositoryQueries,
   repositorySnapshotWriteDatabase,
 } from "~/server/db/repository-access.boundary";
-import { lockCorrectionKey } from "~/server/generic/assessment/repo/correction-lock";
+import { lockCorrectionKey } from "~/server/generic/suggestions/repo/correction-lock";
 
 class EmailEvidenceScope {
   declare private readonly scopeIdentity: void;

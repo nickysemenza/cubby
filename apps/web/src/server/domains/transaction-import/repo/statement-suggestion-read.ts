@@ -1,5 +1,4 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { FinancialSpendingPlan } from "@cubby/schemas/financial-booking";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -9,6 +8,7 @@ import {
   statementTransactionJudgment,
   type StatementSuggestionOut,
 } from "@cubby/schemas/statement-suggestion";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { sql, type SQL } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -27,11 +27,11 @@ import {
   chargeStateOf,
   LIVE_REFS,
 } from "~/server/domains/transaction-import/repo/statement-charge";
+import { reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/review-families";
 import {
   automaticApplicationRule,
   matchedRulesOf,
-} from "~/server/generic/assessment/repo/assessment";
-import { reviewFamilyDeclarations } from "~/server/generic/assessment/repo/review-families";
+} from "~/server/generic/suggestions/repo/suggestion";
 
 import { isClean } from "./statement-suggestions";
 
@@ -41,7 +41,7 @@ const currentClean = sql`${sourceSuggestionAutomaticEligible()} AND coalesce((co
 
 /** Record-level scope the cross-family list pushes into SQL. */
 export type StatementSuggestionScope = {
-  assessmentIds?: readonly string[];
+  suggestionIds?: readonly string[];
   /** FinancialAccount or candidate/hold FinancialTransaction ids. */
   recordUuids?: readonly string[];
   runCode?: string;
@@ -51,13 +51,13 @@ export type StatementSuggestionScope = {
 
 const inStatus = (status: StatementSuggestionScope["status"]) =>
   status === "applied"
-    ? sql`s.family = ${assessmentFamily.enum.statement_transaction} AND s.status = ${status}`
+    ? sql`s.family = ${suggestionFamily.enum.statement_transaction} AND s.status = ${status}`
     : pendingSuggestion();
 
 const conditions = (filters: StatementSuggestionScope): SQL => {
   const where: SQL[] = [inStatus(filters.status)];
-  if (filters.assessmentIds)
-    where.push(sql`s.id = ANY(${uuidArrayParam(filters.assessmentIds)})`);
+  if (filters.suggestionIds)
+    where.push(sql`s.id = ANY(${uuidArrayParam(filters.suggestionIds)})`);
   if (filters.runCode)
     where.push(
       sql`s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runCode})`,
@@ -101,12 +101,12 @@ export function statementSuggestionFacts(
   const firstCandidate = has("candidate", "modelLabel");
   const stateFilters: SQL[] = [
     filters.status === "applied"
-      ? sql`s.family = ${assessmentFamily.enum.statement_transaction} AND s.status = ${filters.status}`
-      : sql`s.family = ${assessmentFamily.enum.statement_transaction} AND s.active AND s.status = ${suggestionStatus.enum.pending}`,
+      ? sql`s.family = ${suggestionFamily.enum.statement_transaction} AND s.status = ${filters.status}`
+      : sql`s.family = ${suggestionFamily.enum.statement_transaction} AND s.active AND s.status = ${suggestionStatus.enum.pending}`,
   ];
-  if (filters.assessmentIds)
+  if (filters.suggestionIds)
     stateFilters.push(
-      sql`s.id = ANY(${uuidArrayParam(filters.assessmentIds)})`,
+      sql`s.id = ANY(${uuidArrayParam(filters.suggestionIds)})`,
     );
   if (filters.runCode)
     stateFilters.push(
@@ -347,7 +347,7 @@ export async function readStatementSuggestions(
       sourceRef: null,
     };
     return statementSuggestionOut.parse({
-      assessmentId: row.id,
+      suggestionId: row.id,
       fingerprint: row.fingerprint,
       source: row.data.source,
       chargeKey: row.data.chargeKey,
@@ -407,7 +407,7 @@ export async function statementSuggestionStatusCounts(
     count: number;
   }>(sql`
     SELECT s.status, count(*)::int AS count FROM "Suggestion" s
-    WHERE s.family = ${assessmentFamily.enum.statement_transaction}
+    WHERE s.family = ${suggestionFamily.enum.statement_transaction}
       ${runCode ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runCode})` : sql``}
     GROUP BY s.status
   `);

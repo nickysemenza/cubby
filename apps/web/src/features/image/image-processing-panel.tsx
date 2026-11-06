@@ -21,9 +21,9 @@ import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
-import { assessment } from "~/integrations/tanstack-query/generated/domains/assessment.gen";
 import { image as imageOperations } from "~/integrations/tanstack-query/generated/domains/image.gen";
 import { imageProcessing } from "~/integrations/tanstack-query/generated/domains/imageProcessing.gen";
+import { suggestion as suggestionApi } from "~/integrations/tanstack-query/generated/domains/suggestion.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatInstant } from "~/lib/date-format";
 import { EmptyState } from "~/ui/feedback/empty-state";
@@ -272,7 +272,7 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
   }, [id, queryClient, status.data]);
   const [correction, setCorrection] = useState("");
   const save = useActionMutation({
-    mutationFn: assessment.review.mutationOptions,
+    mutationFn: suggestionApi.review.mutationOptions,
     success: "Description correction saved",
   });
   if (image.status !== "UPLOADED") return null;

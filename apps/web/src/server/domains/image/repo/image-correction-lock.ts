@@ -1,4 +1,4 @@
-import { assessmentSubjects } from "@cubby/schemas/assessment";
+import { suggestionSubjects } from "@cubby/schemas/suggestion";
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 
@@ -9,7 +9,7 @@ import {
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { image } from "~/server/db/schema";
-import { lockCorrectionKey } from "~/server/generic/assessment/repo/correction-lock";
+import { lockCorrectionKey } from "~/server/generic/suggestions/repo/correction-lock";
 
 /** Shared content fence precedes every Image and Suggestion lock. */
 async function lockImageCorrectionContent(db: Database, contentHash: string) {
@@ -17,7 +17,7 @@ async function lockImageCorrectionContent(db: Database, contentHash: string) {
 }
 
 type ImageDescriptionSubject = Pick<
-  z.infer<typeof assessmentSubjects.image_description>,
+  z.infer<typeof suggestionSubjects.image_description>,
   "recordId" | "contentHash"
 >;
 

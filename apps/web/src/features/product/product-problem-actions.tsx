@@ -111,7 +111,7 @@ export function DuplicateProductMergeFix({
         mutation.mutate({
           keepId,
           mergeId,
-          assessmentId: pair.assessmentId,
+          suggestionId: pair.suggestionId,
           expectedFingerprint: pair.fingerprint,
         });
       }}

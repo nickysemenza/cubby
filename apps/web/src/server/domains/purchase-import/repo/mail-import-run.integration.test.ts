@@ -33,9 +33,9 @@ import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { paidRunPreflight } from "~/server/domains/run/service/execution-transport";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { createMcpServer } from "~/server/mcp/server";
 import {
   callMcpTool,
@@ -625,8 +625,8 @@ describe("mail research admission", () => {
       reason: "Synthetic retained prediction",
       classificationVersion: "synthetic-v1",
     });
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: prediction.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: prediction.id,
       operationId: crypto.randomUUID(),
       verdict: "wrong",
       intent: "history",
@@ -848,7 +848,7 @@ describe("mail research admission", () => {
         producer: { kind: "rule", model: null, revision: "synthetic-rule-v1" },
       },
     ]);
-    const prediction = { id: history.items[0]!.assessmentId };
+    const prediction = { id: history.items[0]!.suggestionId };
     expect(history.nextOffset).toBeNull();
     expect(history.items[0]?.producer?.runId).toMatch(/^RUN-/);
     await expect(
@@ -861,12 +861,12 @@ describe("mail research admission", () => {
         ctx.actor,
       ),
     ).rejects.toMatchObject({ code: "NOT_FOUND", reason: "EMAIL_NOT_FOUND" });
-    const { reviewAssessment } =
-      await import("~/server/generic/assessment/repo/assessment-review");
+    const { reviewSuggestion } =
+      await import("~/server/generic/suggestions/repo/review");
     const { kernelCtx } =
       await import("~/server/domains/run/service/suggestion-sweep.fixtures");
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: prediction.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: prediction.id,
       operationId: "synthetic-member-grade",
       verdict: "wrong",
       intent: "history",
@@ -877,8 +877,8 @@ describe("mail research admission", () => {
       },
     });
     await expect(
-      reviewAssessment(ctx.db, kernelCtx(ctx), {
-        assessmentId: prediction.id,
+      reviewSuggestion(ctx.db, kernelCtx(ctx), {
+        suggestionId: prediction.id,
         operationId: "synthetic-apply-refused",
         verdict: "correct",
         intent: "apply",

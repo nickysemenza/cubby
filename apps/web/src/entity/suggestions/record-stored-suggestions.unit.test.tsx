@@ -107,7 +107,7 @@ const suggestion = (overrides: Partial<SuggestionReviewRow> = {}) =>
     correctValue: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
-    assessmentId: overrides.assessmentId ?? overrides.id ?? rowId,
+    suggestionId: overrides.suggestionId ?? overrides.id ?? rowId,
   }) satisfies SuggestionReviewRow;
 
 function shortcodeSuggestion(recordId: string) {
@@ -140,22 +140,22 @@ function validatedStoredOperations(stored: SuggestionReviewRow[]) {
     ),
     review: vi.fn(
       async ({
-        assessmentId,
+        suggestionId,
         intent,
       }: {
-        assessmentId: string;
+        suggestionId: string;
         intent: string;
       }) => ({
-        assessmentId,
+        suggestionId,
         feedbackId: "55555555-5555-4555-8555-555555555555",
         status: "recorded",
         applied: intent === "apply",
       }),
     ),
     reviewBatch: vi.fn(
-      async ({ items }: { items: { assessmentId: string }[] }) =>
-        items.map(({ assessmentId }) => ({
-          assessmentId,
+      async ({ items }: { items: { suggestionId: string }[] }) =>
+        items.map(({ suggestionId }) => ({
+          suggestionId,
           feedbackId: "55555555-5555-4555-8555-555555555555",
           status: "applied",
           applied: true,
@@ -174,8 +174,8 @@ function validatedStoredOperations(stored: SuggestionReviewRow[]) {
 function setup(
   stored: SuggestionReviewRow[],
   mutations: Pick<StoredSuggestionOperations, "review" | "reviewBatch"> = {
-    review: vi.fn(async ({ assessmentId, intent }) => ({
-      assessmentId,
+    review: vi.fn(async ({ suggestionId, intent }) => ({
+      suggestionId,
       feedbackId: "55555555-5555-4555-8555-555555555555",
       status: "recorded",
       applied: intent === "apply",
@@ -464,8 +464,8 @@ describe("stored suggestions in generic list cells", () => {
   it("edits only the suggested field and commits through the correction operation", async () => {
     const harness = createBrowserTestHarness();
     const review = vi.fn(
-      async ({ assessmentId }: { assessmentId: string }) => ({
-        assessmentId,
+      async ({ suggestionId }: { suggestionId: string }) => ({
+        suggestionId,
         feedbackId: "55555555-5555-4555-8555-555555555555",
         status: "applied",
         applied: true,
@@ -518,7 +518,7 @@ describe("stored suggestions in generic list cells", () => {
     await waitFor(() =>
       expect(review).toHaveBeenCalledWith(
         expect.objectContaining({
-          assessmentId: rowId,
+          suggestionId: rowId,
           verdict: "wrong",
           correction: { present: true, value: "services" },
           intent: "apply",
@@ -546,8 +546,8 @@ describe("stored suggestions in generic list cells", () => {
       }),
     ]);
     const review = vi.fn(
-      async ({ assessmentId }: { assessmentId: string }) => ({
-        assessmentId,
+      async ({ suggestionId }: { suggestionId: string }) => ({
+        suggestionId,
         feedbackId: "55555555-5555-4555-8555-555555555555",
         status: "applied",
         applied: true,
@@ -584,7 +584,7 @@ describe("stored suggestions in generic list cells", () => {
     await waitFor(() =>
       expect(review).toHaveBeenCalledWith(
         expect.objectContaining({
-          assessmentId: rowId,
+          suggestionId: rowId,
           verdict: "wrong",
           correction: { present: true, value: "room" },
           intent: "apply",
@@ -612,8 +612,8 @@ describe("stored suggestions in generic list cells", () => {
       }),
     ]);
     const review = vi.fn(
-      async ({ assessmentId }: { assessmentId: string }) => ({
-        assessmentId,
+      async ({ suggestionId }: { suggestionId: string }) => ({
+        suggestionId,
         feedbackId: "55555555-5555-4555-8555-555555555555",
         status: "applied",
         applied: true,
@@ -656,7 +656,7 @@ describe("stored suggestions in generic list cells", () => {
     await waitFor(() =>
       expect(review).toHaveBeenCalledWith(
         expect.objectContaining({
-          assessmentId: rowId,
+          suggestionId: rowId,
           verdict: "wrong",
           correction: { present: true, value: "required" },
           intent: "apply",
@@ -745,7 +745,7 @@ describe("stored suggestions in generic list cells", () => {
       expect(operations.reviewBatch).toHaveBeenCalledWith({
         items: [
           expect.objectContaining({
-            assessmentId: rowId,
+            suggestionId: rowId,
             verdict: "correct",
             intent: "apply",
             correction: { present: false },
@@ -807,7 +807,7 @@ describe("stored suggestions in generic list cells", () => {
     await waitFor(() =>
       expect(operations.review).toHaveBeenCalledWith(
         expect.objectContaining({
-          assessmentId: rowId,
+          suggestionId: rowId,
           verdict: "correct",
           intent: "apply",
           correction: { present: false },
@@ -989,7 +989,7 @@ describe("stored suggestions in generic list cells", () => {
     await waitFor(() =>
       expect(operations.review).toHaveBeenCalledWith(
         expect.objectContaining({
-          assessmentId: rowId,
+          suggestionId: rowId,
           verdict: "correct",
           intent: "apply",
         }),
@@ -1007,7 +1007,7 @@ describe("stored suggestions in generic list cells", () => {
     await waitFor(() =>
       expect(operations.review).toHaveBeenCalledWith(
         expect.objectContaining({
-          assessmentId: rowId,
+          suggestionId: rowId,
           verdict: "wrong",
           intent: "history",
         }),
@@ -1031,12 +1031,12 @@ describe("stored suggestions in generic list cells", () => {
       expect(operations.reviewBatch).toHaveBeenCalledExactlyOnceWith({
         items: expect.arrayContaining([
           expect.objectContaining({
-            assessmentId: rowId,
+            suggestionId: rowId,
             verdict: "correct",
             intent: "apply",
           }),
           expect.objectContaining({
-            assessmentId: second.id,
+            suggestionId: second.id,
             verdict: "correct",
             intent: "apply",
           }),

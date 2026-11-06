@@ -74,7 +74,6 @@ import { registerReadPorts } from "~/server/entity-kernel/repo/read-ports";
 import { ENTITY_LIST_READ_SCHEMAS } from "~/server/entity-reads/list-contracts";
 import { createAppError } from "~/server/errors/app-error";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
-import { loadCurrentFieldOwnership } from "~/server/generic/assessment/repo/automatic-fields";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   dataQualityFilterPredicates,
@@ -95,6 +94,7 @@ import {
   lexicalRelevance,
 } from "~/server/generic/search/repo/search-lexical";
 import type { SearchReadPort } from "~/server/generic/search/repo/search-read-port";
+import { loadCurrentFieldOwnership } from "~/server/generic/suggestions/repo/automatic-fields";
 import {
   traceListPageWithCount,
   withListReadTracing,

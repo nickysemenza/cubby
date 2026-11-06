@@ -20,7 +20,6 @@ import {
   fieldSuggestionsOut,
   fieldSuggestionsBatchInput,
   fieldSuggestionsBatchOut,
-  fieldSuggestionsReviewOut,
   settledSuggestionQuestionsInput,
   settledSuggestionQuestionsOut,
   decisionCatalogOut,
@@ -145,13 +144,6 @@ export const aiContract = defineContract(
       readPolicy: "strong",
       input: fieldSuggestionsBatchInput,
       output: fieldSuggestionsBatchOut,
-      cache: { profile: "stable" },
-    }),
-    suggestFieldsReview: query({
-      note: "The same suggestions as a list for Swift",
-      readPolicy: "strong",
-      input: fieldSuggestionsInput,
-      output: fieldSuggestionsReviewOut,
       cache: { profile: "stable" },
     }),
     settledSuggestionQuestions: query({

@@ -1,4 +1,4 @@
-export { assessmentContract } from "./assessment.contract";
+export { suggestionContract } from "./suggestion.contract";
 export { shipmentContract } from "./shipment.contract";
 export { chatgptContract } from "./chatgpt.contract";
 export { workQueueContract } from "./work-queue.contract";

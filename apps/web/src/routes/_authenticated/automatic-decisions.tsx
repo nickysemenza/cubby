@@ -1,4 +1,4 @@
-import { assessmentFamily } from "@cubby/schemas/assessment";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { parseShortcode } from "@cubby/shared";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { z } from "zod";
@@ -6,7 +6,7 @@ import { z } from "zod";
 export const Route = createFileRoute("/_authenticated/automatic-decisions")({
   validateSearch: z.object({
     record: z.string().optional(),
-    family: assessmentFamily.optional(),
+    family: suggestionFamily.optional(),
   }),
   beforeLoad: ({ search }) => {
     const record = search.record ? parseShortcode(search.record) : null;

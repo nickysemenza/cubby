@@ -136,7 +136,7 @@ export const purchaseImportContract = defineContract(
     }),
     mailImportOutcomes: query({
       description:
-        "Read bounded immutable import outcomes for one owned Email, newest first. Read purchase_import_read.mail_read and lock a blind grade before revealing these predictions. Includes Assessment handles, imported lines/total or linked/unrelated/unresolved disposition and rule/model producer. Grade member-confirmed outcomes through suggestions.review_batch with intent history; grades never change the ledger.",
+        "Read bounded immutable import outcomes for one owned Email, newest first. Read purchase_import_read.mail_read and lock a blind grade before revealing these predictions. Includes Suggestion handles, imported lines/total or linked/unrelated/unresolved disposition and rule/model producer. Grade member-confirmed outcomes through suggestions.review_batch with intent history; grades never change the ledger.",
       input: mailImportOutcomesInput,
       output: mailImportOutcomesOut,
       readPolicy: "strong",

@@ -14,7 +14,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { moneyToMinor } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
+import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 

@@ -21,7 +21,7 @@ import {
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
-import { mergeReviewedProductPair } from "~/server/generic/assessment/repo/assessment-product";
+import { mergeReviewedProductPair } from "~/server/generic/suggestions/repo/suggestion-product";
 import {
   createLocationFixture,
   makeLocationInput,
@@ -201,7 +201,7 @@ describe("retained Product identity conflict guards", () => {
         mergeReviewedProductPair(kernelCtx(ctx), {
           keepId: first.id,
           mergeId: second.id,
-          assessmentId: proposal.id,
+          suggestionId: proposal.id,
           expectedFingerprint: proposal.fingerprint!,
         }),
       ).rejects.toThrow(/identity conflict|evidence changed/);
@@ -327,7 +327,7 @@ describe("retained Product identity conflict guards", () => {
         mergeReviewedProductPair(kernelCtx(ctx), {
           keepId: keeper.id,
           mergeId: second.id,
-          assessmentId: proposal.id,
+          suggestionId: proposal.id,
           expectedFingerprint: proposal.fingerprint!,
         }),
       ).rejects.toThrow(/identity conflict|evidence changed/);

@@ -18,7 +18,7 @@ import { financialSourceRefsFor } from "~/server/domains/financial-transaction/r
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
-import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { setAutomaticRule } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
 
 import { digestValue, loadFinancialBookingLineage } from "./financial-booking";
 import { acceptedAutomaticFacts } from "./financial-convergence";

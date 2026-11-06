@@ -19,8 +19,8 @@ import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/
 import { connectionSourceFingerprint } from "~/server/domains/run/repo/connection-refresh";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 // Failure modes: discovery grants operational link authority; inverse discovery
 // misses retained events; subject similarity invents identity; a changed checksum
 // or superseded event applies; foreign members/agents bypass purchase_import.mail_resolve;
@@ -119,9 +119,9 @@ describe("fresh retained Email connection recommendations", () => {
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
     expect(
       (await readEntityConnections(ctx.db, f.target)).map(
-        (p) => p.review.assessmentId,
+        (p) => p.review.suggestionId,
       ),
-    ).toContain(proposal.review.assessmentId);
+    ).toContain(proposal.review.suggestionId);
   });
 
   it("hides retained recommendations when event or checksum evidence changes", async () => {
@@ -293,8 +293,8 @@ describe("fresh retained Email connection recommendations", () => {
           .where(eq(orderMailEvent.id, f.event.id));
       expect(await readEntityConnections(ctx.db, f.source)).toEqual([]);
       await expect(
-        reviewAssessment(ctx.db, kernelCtx(ctx), {
-          assessmentId: proposal.review.assessmentId,
+        reviewSuggestion(ctx.db, kernelCtx(ctx), {
+          suggestionId: proposal.review.suggestionId,
           operationId: "synthetic-stale-email",
           intent: "apply",
           verdict: "correct",
@@ -313,7 +313,7 @@ describe("fresh retained Email connection recommendations", () => {
     if (!candidate) throw new Error("Missing synthetic candidate");
     const proposal = await publishEntityConnection(ctx.db, candidate);
     const command = {
-      assessmentId: proposal.review.assessmentId,
+      suggestionId: proposal.review.suggestionId,
       operationId: "synthetic-email-accept",
       intent: "apply" as const,
       verdict: "correct" as const,
@@ -321,7 +321,7 @@ describe("fresh retained Email connection recommendations", () => {
     };
     await expect(
       withEmailEvidenceWrite(ctx.db, async (db, scope) => {
-        await reviewAssessment(
+        await reviewSuggestion(
           db,
           { ...kernelCtx(ctx), db },
           command,
@@ -334,9 +334,9 @@ describe("fresh retained Email connection recommendations", () => {
     expect(
       await getDb(ctx.db).select().from(activeEmailPurchaseDecision),
     ).toEqual([]);
-    const receipt = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
+    const receipt = await reviewSuggestion(ctx.db, kernelCtx(ctx), command);
     expect(receipt.applied).toBe(true);
-    expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
+    expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), command)).toEqual(
       receipt,
     );
     expect(
@@ -358,7 +358,7 @@ describe("fresh retained Email connection recommendations", () => {
       }),
     };
     const command = {
-      assessmentId: proposal.review.assessmentId,
+      suggestionId: proposal.review.suggestionId,
       operationId: "synthetic-agent-email",
       intent: "apply" as const,
       verdict: "correct" as const,
@@ -366,7 +366,7 @@ describe("fresh retained Email connection recommendations", () => {
     };
     const context = kernelCtx(ctx);
     await expect(
-      reviewAssessment(
+      reviewSuggestion(
         ctx.db,
         { ...context, actorContext: { ...ctx.actor, runId: run.id } },
         command,
@@ -386,9 +386,9 @@ describe("fresh retained Email connection recommendations", () => {
       .where(eq(orderMail.id, f.original.id));
     const foreignProposal = await publishEntityConnection(ctx.db, candidate);
     await expect(
-      reviewAssessment(ctx.db, context, {
+      reviewSuggestion(ctx.db, context, {
         ...command,
-        assessmentId: foreignProposal.review.assessmentId,
+        suggestionId: foreignProposal.review.suggestionId,
         expectedFingerprint: foreignProposal.fingerprint,
         operationId: "synthetic-foreign-email",
       }),
@@ -432,8 +432,8 @@ describe("fresh retained Email connection recommendations", () => {
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toEqual([]);
     expect(await readEntityConnections(ctx.db, f.target)).toEqual([]);
     await expect(
-      reviewAssessment(ctx.db, kernelCtx(ctx), {
-        assessmentId: proposal.review.assessmentId,
+      reviewSuggestion(ctx.db, kernelCtx(ctx), {
+        suggestionId: proposal.review.suggestionId,
         operationId: "synthetic-accepted-stale",
         intent: "apply",
         verdict: "correct",
@@ -494,8 +494,8 @@ describe("fresh retained Email connection recommendations", () => {
       `Acceptance replaces this event's reviewed link to ${previous.shortcode}`,
     );
     const proposal = await publishEntityConnection(ctx.db, candidate);
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: proposal.review.assessmentId,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: proposal.review.suggestionId,
       operationId: "synthetic-replace-email",
       intent: "apply",
       verdict: "correct",

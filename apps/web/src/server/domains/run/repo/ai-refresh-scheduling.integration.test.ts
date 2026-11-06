@@ -43,7 +43,7 @@ describe("AI refresh scheduling admission", () => {
       entity: "email",
       recordId,
       field: null,
-      assessmentIds: [],
+      suggestionIds: [],
     }),
     provenance: aiProvenance.parse({
       dependencies: [],
@@ -258,7 +258,7 @@ describe("AI refresh scheduling admission", () => {
         entity: "product",
         recordId,
         field: null,
-        assessmentIds: [],
+        suggestionIds: [],
       }),
       provenance: aiProvenance.parse({
         dependencies: [],
@@ -327,7 +327,7 @@ describe("AI refresh scheduling admission", () => {
         recordId,
         otherId: crypto.randomUUID(),
         field: null,
-        assessmentIds: [],
+        suggestionIds: [],
       }),
       provenance,
       snapshot: {},
@@ -339,7 +339,7 @@ describe("AI refresh scheduling admission", () => {
           entity: "product",
           recordId,
           field: null,
-          assessmentIds: [],
+          suggestionIds: [],
         }),
         provenance: { ...provenance, inputFingerprint: "synthetic-catalog" },
         snapshot: {},
@@ -361,7 +361,7 @@ describe("AI refresh scheduling admission", () => {
         entity: "product",
         recordId,
         field: null,
-        assessmentIds: [],
+        suggestionIds: [],
       }),
       provenance: aiProvenance.parse({
         dependencies: [],
@@ -517,7 +517,7 @@ describe("AI refresh scheduling admission", () => {
         entity: "product",
         recordId: crypto.randomUUID(),
         field: "synthetic:café",
-        assessmentIds: [],
+        suggestionIds: [],
       }),
     };
     await insertEvaluationTargets(ctx.db, owner, [item]);
@@ -567,7 +567,7 @@ describe("AI refresh scheduling admission", () => {
         entity: "product",
         recordId: crypto.randomUUID(),
         field: null,
-        assessmentIds: [],
+        suggestionIds: [],
       }),
     });
     const prior = await scheduleEvaluationRun(
@@ -604,7 +604,7 @@ describe("AI refresh scheduling admission", () => {
         entity: "product",
         recordId: crypto.randomUUID(),
         field: null,
-        assessmentIds: [],
+        suggestionIds: [],
       }),
     };
     const prior = await scheduleEvaluationRun(

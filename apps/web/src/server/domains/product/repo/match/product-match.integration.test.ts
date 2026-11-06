@@ -36,9 +36,9 @@ import {
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { createMcpServer } from "~/server/mcp/server";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import {
@@ -335,7 +335,7 @@ describe("product match queue", () => {
       sourceUrls: [],
     });
     const command = {
-      assessmentId: pair.id,
+      suggestionId: pair.id,
       operationId: "synthetic-merge-command",
       verdict: "correct" as const,
       intent: "apply" as const,
@@ -346,13 +346,13 @@ describe("product match queue", () => {
         mergeId: photo.id,
       },
     };
-    const applied = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
+    const applied = await reviewSuggestion(ctx.db, kernelCtx(ctx), command);
     const appliedHistory = await readSuggestionDecisions(ctx.db, pair.id);
-    expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
+    expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), command)).toEqual(
       applied,
     );
     await expect(
-      reviewAssessment(ctx.db, kernelCtx(ctx), {
+      reviewSuggestion(ctx.db, kernelCtx(ctx), {
         ...command,
         application: {
           ...command.application,
@@ -367,7 +367,7 @@ describe("product match queue", () => {
         {
           keepId: bought.id,
           mergeId: photo.id,
-          assessmentId: pair.id,
+          suggestionId: pair.id,
           expectedFingerprint: pair.fingerprint!,
         },
       ),
@@ -552,8 +552,8 @@ describe("product_enrichment.propose_product_match", () => {
     expect(row).toMatchObject({ id: pair.id, source: "agent" });
     expect(row?.fingerprint).toEqual(expect.any(String));
     expect(row?.fingerprint).not.toBe(pair.fingerprint);
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: pair.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: pair.id,
       operationId: "synthetic-enriched-merge",
       verdict: "correct",
       intent: "apply",
@@ -567,8 +567,8 @@ describe("product_enrichment.propose_product_match", () => {
       () => expect.fail("A stale fingerprint must not merge"),
       (error: Error) => expect(error.message).toMatch(/fingerprint changed/),
     );
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: pair.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: pair.id,
       operationId: "synthetic-enriched-merge-current",
       verdict: "correct",
       intent: "apply",
@@ -658,8 +658,8 @@ describe("product match review surfaces", () => {
       actionable: true,
       conflict: false,
     });
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: wrong.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: wrong.id,
       operationId: crypto.randomUUID(),
       verdict: "wrong",
       intent: "history",
@@ -720,7 +720,7 @@ describe("product match review surfaces", () => {
           entityKind: "product",
           entityId: primaryProduct.id,
         })
-      ).map((proposal) => proposal.review.assessmentId),
+      ).map((proposal) => proposal.review.suggestionId),
     ).not.toContain(weakPublication.id);
   });
 
@@ -772,7 +772,7 @@ describe("product match review surfaces", () => {
 async function dismissPair(
   db: Parameters<typeof proposeProductMatch>[0],
   input: { productIds: readonly [ProductShortcode, ProductShortcode] },
-  context: Parameters<typeof reviewAssessment>[1],
+  context: Parameters<typeof reviewSuggestion>[1],
 ) {
   const ids = await Promise.all(
     input.productIds.map((id) => resolveOrThrow(db, "product", id)),
@@ -782,8 +782,8 @@ async function dismissPair(
     evidence: "Synthetic hide preference",
     sourceUrls: [],
   });
-  return reviewAssessment(db, context, {
-    assessmentId: pair.id,
+  return reviewSuggestion(db, context, {
+    suggestionId: pair.id,
     operationId: crypto.randomUUID(),
     verdict: "dismissed",
     suppression: {

@@ -158,7 +158,7 @@ export type StatementTransactionJudgment = z.infer<
   typeof statementTransactionJudgment
 >;
 
-/** Unpublished model work owned by one pending assessment, fenced by its inputs. */
+/** Unpublished model work owned by one pending suggestion, fenced by its inputs. */
 export const statementLabelCheckpoint = z.object({
   revision: z.string(),
   /** One producer only when all retained decision answers used that model. */
@@ -197,16 +197,16 @@ export type StatementTransactionApplication = z.infer<
 >;
 
 export const statementSuggestionPreviewInput = z.strictObject({
-  assessmentId: z
+  suggestionId: z
     .uuid()
     .describe(
-      "Opaque Assessment review handle from suggestions_read.list; not a household entity shortcode.",
+      "Opaque Suggestion review handle from suggestions_read.list; not a household entity shortcode.",
     ),
   expectedFingerprint: z.string().min(1),
   application: statementTransactionApplication,
 });
 export const statementSuggestionPreviewOut = z.object({
-  assessmentId: statementSuggestionPreviewInput.shape.assessmentId,
+  suggestionId: statementSuggestionPreviewInput.shape.suggestionId,
   fingerprint: z.string(),
   action: statementTransactionAction,
   kind: kind.nullable(),
@@ -240,7 +240,7 @@ const publicCandidate = statementTransactionCandidate
   .extend({ transactionId: financialTransactionShortcode });
 
 export const statementSuggestionOut = z.object({
-  assessmentId: z.string(),
+  suggestionId: z.string(),
   fingerprint: z.string().nullable(),
   source: z.string(),
   chargeKey: z.string(),

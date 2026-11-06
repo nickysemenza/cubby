@@ -131,7 +131,7 @@ struct NativeCodecTests {
             "sourceFeedbackId": "00000000-0000-4000-8000-000000000002",
             "sourceApplicationFeedbackId": "00000000-0000-4000-8000-000000000003",
             "sourceActorUserId": "synthetic-member",
-            "targetAssessmentId": "00000000-0000-4000-8000-000000000004",
+            "targetSuggestionId": "00000000-0000-4000-8000-000000000004",
             "originalApplicationFeedbackId": .null,
             "priorCorrectionApplicationFeedbackId": .null,
         ]
@@ -158,18 +158,18 @@ struct NativeCodecTests {
 
     @Test func optionalNullableRoundTripPreservesAllThreeStates() throws {
         let base: JSONValue = ["operationId": "synthetic-operation", "verdict": "accept"]
-        let absent: AssessmentReviewInput = try base.decoded()
+        let absent: SuggestionReviewInput = try base.decoded()
         #expect(absent.reason == .absent)
         #expect(try JSONValue(encoding: absent)["reason"] == nil)
 
         var null = try #require(base.objectValue)
         null["reason"] = .null
-        let cleared: AssessmentReviewInput = try JSONValue.object(null).decoded()
+        let cleared: SuggestionReviewInput = try JSONValue.object(null).decoded()
         #expect(cleared.reason == .value(nil))
         #expect(try JSONValue(encoding: cleared)["reason"] == .null)
 
         null["reason"] = "Synthetic explanation"
-        let value: AssessmentReviewInput = try JSONValue.object(null).decoded()
+        let value: SuggestionReviewInput = try JSONValue.object(null).decoded()
         #expect(value.reason == .value("Synthetic explanation"))
         #expect(try JSONValue(encoding: value)["reason"] == "Synthetic explanation")
     }
@@ -196,7 +196,7 @@ struct NativeCodecTests {
     @Test func optionalNonNullableRejectsExplicitNull() {
         let input: JSONValue = ["operationId": "synthetic-operation", "verdict": "accept", "intent": .null]
         #expect(throws: DecodingError.self) {
-            let _: AssessmentReviewInput = try input.decoded()
+            let _: SuggestionReviewInput = try input.decoded()
         }
     }
 
@@ -248,7 +248,7 @@ struct NativeCodecTests {
 
     @Test func malformedKnownBooleanTaggedVariantIsADecodingFailure() {
         #expect(throws: DecodingError.self) {
-            let _: AssessmentReviewBatchOut = try JSONValue.array([
+            let _: SuggestionReviewBatchOut = try JSONValue.array([
                 ["ok": false, "error": "Synthetic failure"]
             ]).decoded()
         }

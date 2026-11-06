@@ -1,13 +1,13 @@
-import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-family";
 import { automaticDecisionFamily } from "@cubby/schemas/automatic-decision";
 import type { AutomaticDecisionRow } from "@cubby/schemas/automatic-decision";
+import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { humanize } from "@cubby/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { usePageCount } from "~/entity/page/page";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { assessment } from "~/integrations/tanstack-query/generated/domains/assessment.gen";
+import { suggestion as suggestionApi } from "~/integrations/tanstack-query/generated/domains/suggestion.gen";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { Picker } from "~/ui/combobox/picker";
@@ -28,7 +28,7 @@ const FAMILY_OPTIONS = [
   { value: "all", label: "All families" },
   ...automaticDecisionFamily.options.map((family) => ({
     value: family,
-    label: assessmentReviewFamilies[family].label,
+    label: suggestionReviewFamilies[family].label,
   })),
 ];
 const REVIEW_OPTIONS = [
@@ -141,7 +141,7 @@ export function AutomaticDecisions({
 export function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
   const queryClient = useQueryClient();
   const review = useMutation(
-    assessment.review.mutationOptions({
+    suggestionApi.review.mutationOptions({
       onSuccess: () => invalidateOperationTags(queryClient, ripple.suggestions),
     }),
   );
@@ -149,7 +149,7 @@ export function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
     <RecordRow
       primary={
         <Row gap="sm" className="flex-wrap">
-          <span>{assessmentReviewFamilies[row.family].label}</span>
+          <span>{suggestionReviewFamilies[row.family].label}</span>
           {row.records.map((record) => (
             <RecordLink key={`${record.entity}:${record.id}`} record={record} />
           ))}
@@ -182,7 +182,7 @@ export function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
             disabled={review.isPending || row.verdict === "wrong"}
             onClick={() =>
               review.mutate({
-                assessmentId: row.id,
+                suggestionId: row.id,
                 operationId: crypto.randomUUID(),
                 verdict: "wrong",
                 intent: "history",
@@ -213,7 +213,7 @@ export function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
           </Disclosure>
           {row.verdict === "wrong" ? (
             <Description size="xs">
-              Feedback recorded for reassessment where supported on the next
+              Feedback recorded for resuggestion where supported on the next
               suggestion run. Applied records stay as they are; open an affected
               record above if it needs editing. Automation remains unchanged.
             </Description>
