@@ -128,10 +128,6 @@ export const projectReadSnapshot = pgTable(
   {
     entityId: uuid("entityId").primaryKey(),
     kind: text("kind").$type<Entity>().notNull().default("project"),
-    startDate: text("startDate"),
-    startDateDecision: jsonb("startDateDecision").$type<StoredFieldDecision>(),
-    startDateComputedAt: timestamp("startDateComputedAt", { mode: "date" }),
-    startDateSort: timestamp("startDateSort"),
     completionYear: text("completionYear"),
     completionYearDecision: jsonb(
       "completionYearDecision",

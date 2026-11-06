@@ -642,3 +642,21 @@ relationship conservation, inert archives, and every retired alias/folding calle
 After deploy, read back counts and full-row preservation aggregates and verify
 representative member reads/writes before historical booking or a Monarch pull.
 Do not run the SQL manually. Native installation remains unverified.
+
+## Contracting the old Project start-date snapshot
+
+ProjectStartDateView reads the live Project override or the retained
+rollups.dateWindow.derivedStart. Its four predecessor startDate columns in
+ProjectReadSnapshot have no remaining read or writer. Keep the typed table,
+rollups, completion year, diagnostics and the authored Project.startDate.
+
+The live reader has already moved to ProjectStartDateView. The generic publisher
+writes only each declaration's explicit columns and skips view declarations; it
+never selects or returns this table's full schema. No runtime caller imports the
+ProjectReadSnapshot Drizzle table. Removing the four unused schema declarations
+therefore adds no reader cutover or migration pin. Verify the deployed view and
+zero old-column readers/writers, take a named manual snapshot immediately before
+merge, then apply this contraction through Actions. Record zero legacy-decision
+and catalog-dependency counts, live view coverage and preservation read-back.
+Keep the typed table and authored dates. This separate column contraction does
+not authorize a table or retained-work drop.

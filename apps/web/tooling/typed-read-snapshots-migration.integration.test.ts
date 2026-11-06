@@ -159,3 +159,59 @@ it("refuses legacy derived decisions and drops only the retired cache on replay"
     expect(await retained()).toEqual(before);
   });
 });
+
+it("contracts only the old Project start-date cache while rollups and current overrides keep serving the view", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle(client);
+    await migrateDatabase(db, { through: "0101_drop_legacy_derived_values" });
+    const project = "00000000-0000-4000-8000-000000000092";
+    await client.query(
+      `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'project','PRJ-SYNTHDROP')`,
+      [project],
+    );
+    await client.query(
+      `INSERT INTO "Project" (id,shortcode,name,"startDate") VALUES ($1,'PRJ-SYNTHDROP','Synthetic retained date','2026-06-01')`,
+      [project],
+    );
+    await client.query(
+      `INSERT INTO "ProjectReadSnapshot" ("entityId",kind,"startDate","startDateDecision","startDateComputedAt",rollups,"rollupsComputedAt")
+      VALUES ($1,'project','1999-01-01','{"outcome":{"kind":"value"},"provenance":{"kind":"computed"}}',now(),'{"dateWindow":{"derivedStart":"2026-01-02"}}',now())`,
+      [project],
+    );
+    const retained = async () =>
+      (
+        await client.query(
+          `SELECT jsonb_build_object(
+      'source',(SELECT to_jsonb(p) FROM "Project" p WHERE id=$1),
+      'snapshot',(SELECT to_jsonb(s) - ARRAY['startDate','startDateDecision','startDateComputedAt','startDateSort'] FROM "ProjectReadSnapshot" s WHERE "entityId"=$1)
+    ) AS value`,
+          [project],
+        )
+      ).rows;
+    const value = async () =>
+      (
+        await client.query(
+          `SELECT value FROM "ProjectStartDateView" WHERE "entityId"=$1`,
+          [project],
+        )
+      ).rows;
+    const before = await retained();
+    expect(await value()).toEqual([{ value: "2026-06-01" }]);
+    await migrateDatabase(db, {
+      through: "0102_drop_retired_project_start_snapshot",
+    });
+    expect(await retained()).toEqual(before);
+    expect(await value()).toEqual([{ value: "2026-06-01" }]);
+    await client.query(`UPDATE "Project" SET "startDate"=NULL WHERE id=$1`, [
+      project,
+    ]);
+    expect(await value()).toEqual([{ value: "2026-01-02" }]);
+    await client.query(
+      `DELETE FROM drizzle.__drizzle_migrations WHERE created_at=(SELECT max(created_at) FROM drizzle.__drizzle_migrations)`,
+    );
+    await migrateDatabase(db, {
+      through: "0102_drop_retired_project_start_snapshot",
+    });
+    expect(await value()).toEqual([{ value: "2026-01-02" }]);
+  });
+});
