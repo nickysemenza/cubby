@@ -51,7 +51,7 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
     const has = (...names: string[]) => names.some((name) => needs.has(name));
     const target = (key: "entityKind" | "entityId") =>
       sql`s.data->'connectionTarget'->>${key}`;
-    const { recordEntity, runId } = query.filters;
+    const { runId } = query.filters;
     const reasons = sql`s.evidence#>'{candidate,evidence,reasons}'`;
     const retrieved = sql`EXISTS (SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(${reasons}) = 'array' THEN ${reasons} ELSE '[]'::jsonb END) reason(value)
       WHERE starts_with(reason.value, ${RETRIEVED_REASON}))`;
@@ -84,24 +84,12 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
       where: sql`s.family = ${suggestionFamily.enum.recommendation} AND s.active
         AND s.status = ${suggestionStatus.enum.pending}
         AND ${suggestionIdScope(query.suggestionIds, sql`s.id`)}
-        ${recordEntity ? sql`AND (s.entity = ${recordEntity} OR ${target("entityKind")} = ${recordEntity})` : sql``}
         ${runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runId})` : sql``}`,
     };
   },
   keys: async (db, query) => {
-    const { filters, records } = query;
+    const { filters } = query;
     if (filters.status !== "pending") return [];
-    if (records?.length === 0) return [];
-    const side = (end: "source" | "target", key: "entityKind" | "entityId") =>
-      sql`(s.evidence->'candidate'->${end}->>${key})`;
-    const endpoint = (end: "source" | "target") =>
-      sql`${side(end, "entityKind")} || ':' || ${side(end, "entityId")}`;
-    const roster = records
-      ? sql.join(
-          records.map((record) => sql`${`${record.entity}:${record.code}`}`),
-          sql`, `,
-        )
-      : null;
     const run = query.filters.runId;
     // Mirrors readEntityConnectionsBatch's selection; hydration rechecks evidence.
     const { rows } = await unwrapDb(db).execute<{
@@ -117,8 +105,6 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
         AND s.status = ${suggestionStatus.enum.pending}
         AND ${reviewFamilyDeclarations.recommendation.scopes.connection}
         AND ${pendingRecommendationEligibility()}
-        ${roster ? sql`AND (${endpoint("source")} IN (${roster}) OR ${endpoint("target")} IN (${roster}))` : sql``}
-        ${filters.recordEntity ? sql`AND (${side("source", "entityKind")} = ${filters.recordEntity} OR ${side("target", "entityKind")} = ${filters.recordEntity})` : sql``}
         ${run ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${run})` : sql``}
     `);
     const connectionKeys = rows.flatMap((row) => {

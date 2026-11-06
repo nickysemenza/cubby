@@ -35,13 +35,9 @@ import {
 export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
   family: "field",
   keys: async (db, query) => {
-    const { filters, records } = query;
-    // Pushed into SQL: the record roster, entity and Run. Column filters
-    // apply to every family's keys in the generic list.
+    const { filters } = query;
     const rows = await fieldSuggestionKeys(db, {
       status: filters.status,
-      entities: filters.recordEntity ? [filters.recordEntity] : undefined,
-      recordUuids: records?.map((record) => record.id),
       runId: query.filters.runId,
       suggestionIds: query.suggestionIds,
     });
