@@ -514,6 +514,9 @@ Relation sections may declare a web `createLabel` for the existing scoped create
 action; its compiled seed still owns the prefilled reference. Location leads with
 its direct Child locations table, retains it when empty, and offers Add child
 location with the current Location prefilled as parent.
+Lead relation tables and the first remaining relation stream immediately; later
+relations wait for counts. This keeps group-fragment destinations mounted while
+counts load, even when a relation is promoted into the lead.
 Native ignores `lead` and `pairs`: `detailSectionJSON` omits them. A board list view
 marked `webOnly` is likewise omitted from generated Swift. A section's
 `placement` is `primary` (shares a ruled plane with its neighbors) or `full`
