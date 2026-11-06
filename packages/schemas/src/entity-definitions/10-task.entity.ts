@@ -1667,6 +1667,10 @@ export const { definition, readSchemas } = defineEntityModel({
   },
   extensions: {
     ports: {
+      reports: {
+        module: "~/server/domains/task/repo/report-bindings",
+        export: "reportBindings",
+      },
       repository: {
         module: "~/server/domains/task/repo/repository",
         export: "taskRepository",

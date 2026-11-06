@@ -2823,10 +2823,6 @@ const buildMetadataSchemas = () => {
       module: "~/server/generic/search/repo/search-document",
       export: "refreshSearchDocument",
     },
-    semanticText: {
-      module: "~/server/generic/search/repo/search-document",
-      export: "getSearchDocumentEmbeddingText",
-    },
   };
 
   const entityExtensionsMetadataSchema = z.strictObject({
@@ -2861,7 +2857,6 @@ const buildMetadataSchemas = () => {
               .object({
                 read: orNull(sourceRefMetadataSchema),
                 projection: sourceRefMetadataSchema.nullable(),
-                semanticText: sourceRefMetadataSchema.nullable(),
               })
               .strict(),
           ])
@@ -2869,7 +2864,6 @@ const buildMetadataSchemas = () => {
           .default({
             read: null,
             projection: null,
-            semanticText: null,
           }),
         /** `(context, input) => EntityTimelineOut` for `capabilities.timeline: "custom"`. */
         timeline: orNull(sourceRefMetadataSchema),

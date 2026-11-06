@@ -81,6 +81,7 @@ async function reportFor(
   )?.[1];
   const builder =
     load && Object.entries(await load()).find(([key]) => key === slot)?.[1];
-  if (!builder) throw new Error(`No report builder for ${slot}`);
+  if (!builder || !("load" in builder))
+    throw new Error(`No report builder for ${slot}`);
   return builder;
 }

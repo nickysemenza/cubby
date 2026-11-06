@@ -1,3 +1,6 @@
+import type { EntityReportInput } from "@cubby/schemas/entity-report";
+
+import type { Database } from "~/server/db";
 import {
   projectAnalyticsReport,
   projectBudgetReport,
@@ -12,6 +15,12 @@ import {
 import { reportDependency } from "~/server/generic/entity-report/repo/dependency";
 
 export const reportBindings = {
+  collection: {
+    "project.analytics": async (db: Database, input: EntityReportInput) =>
+      (
+        await import("~/server/domains/project/repo/report-portfolio")
+      ).projectPortfolioReport(db, input),
+  },
   "project.budget": reportDependency(async (execution) => ({
     blocks: await projectBudgetReport(
       await execution.read(projectContext),

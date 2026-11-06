@@ -4861,7 +4861,9 @@ Product-match review commands belong to the `productMatch` contract.
 the per-entity loaders into `entity-kernel-bindings.gen.ts`; the eager mutation and
 list assembly lives separately in `entity-kernel-runtime.gen.ts`. The generic report
 runner executes those dependencies and shares their request-scoped memo. Domain
-builders live with their domain; shared summary and record blocks stay generic.
+builders, including collection presentations, live with their domain; shared summary
+and record blocks stay generic. The same report binding owns record dependencies
+and optional collection builders.
 The declaration no longer records override-comparison provenance for field labels,
 read keys, display column ids or display order: these are plain options.
 
@@ -4876,3 +4878,10 @@ emission. Its emitter already reads canonical filter URL keys from list fields.
 
 Numeric filter ranges use Zod numbers, which already reject nonfinite values.
 The redundant declaration-only `range.finite` option is removed.
+
+The Sweep roster's tag-discovery call remains until its assessment-lane cutover;
+the retired discovery bridge returns no proposals. It does not schedule or publish
+new tag suggestions. List relation traversal remains shared with live record reads.
+
+Search embedding text is read directly from SearchDocument. Declarations no longer
+carry the unused `ports.search.semanticText` reference.

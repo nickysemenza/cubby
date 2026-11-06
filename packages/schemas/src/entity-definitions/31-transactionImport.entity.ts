@@ -325,7 +325,6 @@ export const { definition, readSchemas } = defineEntityModel({
           export: "transactionImportSearch",
         },
         projection: null,
-        semanticText: null,
       },
     },
   },

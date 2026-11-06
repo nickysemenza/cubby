@@ -1,7 +1,12 @@
-import type { EntityReportOut } from "@cubby/schemas/entity-report";
+import type {
+  EntityReportInput,
+  EntityReportOut,
+} from "@cubby/schemas/entity-report";
 import type { TaskTodayBriefingOut } from "@cubby/schemas/project";
+import { z } from "zod";
 
 import { effectiveTaskDueDate } from "~/lib/task-dates";
+import type { Database } from "~/server/db";
 
 /** Presentation consumes the bounded SQL projection without fetching an actionable graph. */
 export function taskBriefingReport(
@@ -52,4 +57,17 @@ export function taskBriefingReport(
       },
     ],
   };
+}
+
+export async function taskCollectionReport(
+  db: Database,
+  input: EntityReportInput,
+): Promise<EntityReportOut> {
+  const { scope } = input;
+  if (scope.kind !== "list" || scope.entity !== "task")
+    throw new Error("Expected a Task list report scope.");
+  z.strictObject({}).parse(scope.filters);
+  const { getTaskTodayBriefing } =
+    await import("~/server/domains/task/repo/today-briefing");
+  return taskBriefingReport(await getTaskTodayBriefing(db));
 }
