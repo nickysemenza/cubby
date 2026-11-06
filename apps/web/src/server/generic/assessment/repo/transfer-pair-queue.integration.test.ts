@@ -224,7 +224,7 @@ describe("transfer pairs in the global queue", () => {
     expect(result.filter((item) => item.ok && item.applied)).toHaveLength(1);
     const legs = await getDb(ctx.db).select().from(financialTransaction);
     expect(legs.map((leg) => Number(leg.amount)).sort((a, b) => a - b)).toEqual(
-      [-180, 180],
+      [-18_000, 18_000],
     );
     expect(legs[0]?.ledgerTransferId).toBeTruthy();
     expect(legs[1]?.ledgerTransferId).toBe(legs[0]?.ledgerTransferId);

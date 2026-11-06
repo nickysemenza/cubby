@@ -1712,7 +1712,7 @@ describe("financial repositories — critical invariants", () => {
     // catches it. That is a real reduction in enforcement, and this asserts the
     // replacement actually fires rather than quietly assuming it does.
     await getDb(ctx.db).execute(
-      sql`UPDATE "FinancialTransaction" SET "amount" = 140.22 WHERE "shortcode" = ${payout.id}`,
+      sql`UPDATE "FinancialTransaction" SET "amountMinor" = 14022 WHERE "shortcode" = ${payout.id}`,
     );
     const defects = await findFinancialTransactionAllocationDefects(ctx.db);
     expect(

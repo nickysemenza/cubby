@@ -2201,7 +2201,7 @@ describe("statement Transaction suggestions", () => {
         })
         .from(financialTransaction)
         .where(notDeleted(financialTransaction)),
-    ).toEqual([{ status: "pending", amount: 300 }]);
+    ).toEqual([{ status: "pending", amount: 30_000n }]);
     expect(
       await getDb(ctx.db)
         .select({ cost: expense.cost })
@@ -3510,7 +3510,7 @@ describe("statement Transaction suggestions", () => {
         .select({ amount: financialTransaction.amount })
         .from(financialTransaction)
         .orderBy(financialTransaction.amount);
-      expect(booked).toEqual([{ amount: 21 }, { amount: 25 }]);
+      expect(booked).toEqual([{ amount: 2_100n }, { amount: 2_500n }]);
       expect(
         await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
       ).toBe(0);
