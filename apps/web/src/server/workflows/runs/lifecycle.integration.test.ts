@@ -1,3 +1,4 @@
+import { aiRefreshProgress } from "@cubby/schemas/ai-evaluation";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -6,17 +7,108 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { run, runStep } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { withJobExecution } from "~/server/generic/jobs/context";
-import { claimJob, publishJobPage } from "~/server/generic/jobs/jobs.fixtures";
+import { JobRetryableError } from "~/server/generic/jobs/errors";
+import {
+  claimJob,
+  publishJobPage,
+  updateJobs,
+} from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { pauseJob } from "~/server/generic/jobs/repo/operator";
+import { pauseJob, retryJob } from "~/server/generic/jobs/repo/operator";
 import { claimContext } from "~/server/generic/jobs/service/jobs";
 
 import { controlWorkflowRun } from "./control";
 import { withWorkflowExecution } from "./execution";
-import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
+import {
+  launchWorkflowRun,
+  recordRunProgress,
+  resumeClaimedWorkflowRun,
+  claimWorkflowRun,
+} from "./lifecycle";
 
 describe("Run Job admission", () => {
   const ctx = withTestDb();
+  // A generic Job retry must restore its reconciled Run too. Admission waits
+  // for a competing pass, and member stops still win over an old lease.
+  it("restores a recovered Run only under its live Job claim and available admission slot", async () => {
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "maintenance",
+      trigger: "manual",
+      status: "running",
+    });
+    await launchWorkflowRun(ctx.db, {
+      runId: id,
+      purpose: "maintenance",
+      automatic: true,
+    });
+    const [execution] = await readJobs(ctx.db, { key: `run:${id}` });
+    if (!execution) throw new Error("Synthetic Run execution missing");
+    const progress = aiRefreshProgress.parse({ selected: 7, completed: 2 });
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        status: "failed",
+        failureCode: "job_failed",
+        endedAt: new Date(),
+        progress,
+      })
+      .where(eq(run.id, id));
+    await updateJobs(
+      ctx.db,
+      { id: execution.id },
+      { state: "failed", attempts: 3 },
+    );
+    await retryJob(ctx.db, execution.id);
+    const competing = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "maintenance",
+      trigger: "manual",
+      status: "running",
+    });
+    const claim = await claimJob(ctx.db, execution.id);
+    if (!claim) throw new Error("Synthetic recovered Job missing");
+    const owned = <T>(work: () => Promise<T>) =>
+      withJobExecution(ctx.db, claim, () =>
+        withWorkflowExecution(
+          {
+            runId: id,
+            attempt: claim.generation,
+            job: claimContext(ctx.db, claim),
+          },
+          work,
+        ),
+      );
+    const params = { runId: id, attempt: claim.generation };
+    await expect(
+      owned(() => resumeClaimedWorkflowRun(ctx.db, params)),
+    ).rejects.toBeInstanceOf(JobRetryableError);
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0]?.status,
+    ).toBe("failed");
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "completed", endedAt: new Date() })
+      .where(eq(run.id, competing));
+    await owned(() => resumeClaimedWorkflowRun(ctx.db, params));
+    expect(await owned(() => claimWorkflowRun(ctx.db, params))).toMatchObject({
+      id,
+      status: "running",
+      failureCode: null,
+      endedAt: null,
+      progress: { ...progress, attempt: claim.generation },
+    });
+    await pauseJob(ctx.db, execution.id);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "job_failed" })
+      .where(eq(run.id, id));
+    await expect(
+      owned(() => resumeClaimedWorkflowRun(ctx.db, params)),
+    ).rejects.toThrow(/obsolete/);
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0]?.status,
+    ).toBe("failed");
+  });
+
   it("refuses a finished Run whose pruned Job no longer does", async () => {
     const id = await ensureRun(ctx.db, ctx.actor, {
       purpose: "maintenance",

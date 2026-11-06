@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { DEFAULT_EMBEDDING_MODEL } from "@cubby/shared/ai/models";
 import * as externalFetch from "@cubby/shared/external-fetch";
@@ -22,6 +24,7 @@ import * as cfEnv from "~/server/cf-env";
 import { createDatabase } from "~/server/db/database-runtime";
 import { withJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { classifyJobFailure } from "~/server/generic/jobs/failure";
 
 import {
   PURCHASE_IMPORT_REPAIR_FEATURE,
@@ -177,9 +180,12 @@ it("keys a structured answer by its output schema", async () => {
 });
 
 // Regression: an external image changed behind the same URL replayed the
-// answer to its old bytes. Our bucket's write-unique keys need no download.
-it("keys external media by its bytes and our bucket's media by URL", async () => {
+// answer to its old bytes. Bucket originals can select retained JPEGs, so their
+// application cache identity also follows the admitted bytes.
+it("keys external and bucket media by their admitted bytes", async () => {
   const bodies = [
+    syntheticPng,
+    syntheticPng,
     Buffer.concat([syntheticPng, Buffer.from("one")]),
     Buffer.concat([syntheticPng, Buffer.from("two")]),
   ];
@@ -213,10 +219,10 @@ it("keys external media by its bytes and our bucket's media by URL", async () =>
   try {
     const bucket = "http://localhost:9000/synthetic/images/shelf.jpg";
     expect(await key(bucket)).toBe(await key(bucket));
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(2);
     const external = "https://example.com/shelf.jpg";
     expect(await key(external)).not.toBe(await key(external));
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
   } finally {
     fetch.mockRestore();
   }
@@ -497,10 +503,21 @@ describe("runStructuredFeature", () => {
   it.each([
     ["invalid", "image/png"],
     ["image/avif", "image/png", "http://localhost:9000/synthetic/source.avif"],
+    [
+      "image/avif",
+      "image/png",
+      "http://localhost:9000/cdn-cgi/image/width=128,format=auto/synthetic/source.avif",
+      "http://localhost:9000/synthetic/source.avif",
+    ],
     ["image/png; charset=utf-8", "image/png"],
   ])(
     "uses image bytes instead of upstream content type %s",
-    async (contentType, mimeType, url = "https://example.com/image") => {
+    async (
+      contentType,
+      mimeType,
+      url = "https://example.com/image",
+      fetchUrl = url,
+    ) => {
       const fetch = vi
         .spyOn(externalFetch, "fetchExternalResponse")
         .mockResolvedValue(
@@ -534,16 +551,65 @@ describe("runStructuredFeature", () => {
         expect(calls[0]?.context.messages[0]?.content).toEqual([
           expect.objectContaining({ mimeType }),
         ]);
-        expect(fetch).toHaveBeenCalledWith(
-          url.startsWith("http://localhost:9000")
-            ? "http://localhost:9000/cdn-cgi/image/width=2048,height=2048,fit=scale-down,format=jpeg/synthetic/source.avif"
-            : url,
-        );
+        expect(fetch).toHaveBeenCalledWith(fetchUrl);
+        expect(calls[0]?.context.messages[0]?.content).toEqual([
+          {
+            type: "image",
+            data: syntheticPng.toString("base64"),
+            mimeType: "image/png",
+          },
+        ]);
       } finally {
         fetch.mockRestore();
       }
     },
   );
+
+  it("waits for device normalization of a bucket AVIF without calling the model", async () => {
+    const avif = readFileSync(
+      new URL(
+        "../../../tests/e2e/fixtures/synthetic-white.avif",
+        import.meta.url,
+      ),
+    );
+    const fetch = vi
+      .spyOn(externalFetch, "fetchExternalResponse")
+      .mockResolvedValue(new Response(avif));
+    const { calls, ports } = fakePorts([]);
+    try {
+      await expect(
+        runStructuredFeature(
+          LOCATION_DESCRIPTION_FEATURE,
+          {
+            systemPrompts: ["Describe the synthetic location."],
+            messages: [
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "image",
+                    source: {
+                      type: "url",
+                      value: "http://localhost:9000/synthetic/source.avif",
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          { operation: "locationDescription" },
+          ports,
+        ),
+      ).rejects.toSatisfy((error: unknown) => {
+        const failure = classifyJobFailure(error);
+        return failure.kind === "deferred" && failure.reason === "device";
+      });
+      expect(calls).toEqual([]);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      fetch.mockRestore();
+    }
+  });
 
   it("passes transient inline receipt bytes to the provider without fetching a URL", async () => {
     const { calls, ports } = fakePorts([
@@ -828,7 +894,7 @@ it("budgets oversized embedding inputs before provider submission", async () => 
   const result = await runEmbeddingFeature(
     { feature: "synthetic-budget", model: DEFAULT_EMBEDDING_MODEL },
     {
-      texts: [original, "small", original],
+      texts: [original, "small", original + "tail edit"],
       dimensions: 1,
       cache: false,
       embed: async (texts) => {

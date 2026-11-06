@@ -98,6 +98,21 @@ describe("semantic hash", () => {
     expect(a).toBe(b);
   });
 
+  // SQL freshness compares full source text. An omitted-tail edit must still
+  // select a fresh artifact, even though the model cache reuses the prefix vector.
+  it("changes for source edits beyond the model input prefix", async () => {
+    const base = {
+      entityKind: "product",
+      provider: "openai",
+      model: "text-embedding-3-small",
+      dimensions: 1536,
+    } satisfies Omit<Parameters<typeof embeddingTextHash>[0], "text">;
+    const prefix = "Synthetic cabinet " + "notes ".repeat(10000);
+    expect(
+      await embeddingTextHash({ ...base, text: prefix + "old tail" }),
+    ).not.toBe(await embeddingTextHash({ ...base, text: prefix + "new tail" }));
+  });
+
   it("changes when provider changes", async () => {
     const base = {
       entityKind: "product",

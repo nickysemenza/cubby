@@ -2304,8 +2304,9 @@ their own `locationPath` string.
 Semantic embedding inputs use the model's token limit before provider submission
 and application-cache identity. Builders put identifying fields ahead of free-form
 notes; exceptionally long inputs keep a bounded prefix for one-vector retrieval.
-Source text and lexical search stay complete. Artifact hashes use the same prepared
-input, while retained source text continues to identify the source evidence. Short
+Source text and lexical search stay complete. Artifact hashes include the full source text and, when truncated, the prepared
+input. Tail edits therefore refresh the selected artifact and source-freshness
+projection, while the model cache can reuse the unchanged prefix vector. Short
 inputs keep their previous identity. Tokenizer work is bounded to the first four
 times the token limit in UTF-16 code units; literal special-token strings are ordinary
 text. No multi-vector or chunk-averaging retrieval is implied.

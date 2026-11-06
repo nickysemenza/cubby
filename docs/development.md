@@ -44,11 +44,13 @@ must use aliases.
 ## Architecture
 
 The shared AI runner admits image bytes by detected format, not transport or
-caller-supplied MIME labels. Bucket image inputs use full-frame, 2048-pixel JPEG
-renditions (including already-negotiated UI URLs), preserving original attachments
-and avoiding the purchase-evidence compression profile. External and inline images
-must contain provider-supported JPEG, PNG, GIF or WebP bytes; unsupported or invalid
-bytes retain a diagnostic failure. PDF document parts stay documents.
+caller-supplied MIME labels. Provider-supported bytes are preserved exactly,
+including fingerprinted server-owned analysis snapshots. Unsupported bucket originals
+reuse a verified JPEG from the existing image pipeline when available. AVIF waits
+for device JPEG normalization; other unsupported bucket formats can use a full-frame,
+2048-pixel edge JPEG. Originals are never replaced. External/inline unsupported or
+invalid bytes retain diagnostics. PDF parts stay documents. Application-cache keys
+hash the actual admitted media bytes, including a selected normalized rendition.
 
 ```
 TanStack Start  →  Entity Kernel  →  Repo  →  Database

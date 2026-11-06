@@ -62,7 +62,7 @@ import { getDb, notDeleted } from "~/server/db/helpers";
 import { aiUsage, image, run as runTable } from "~/server/db/schema";
 import { decideExpenseLineRole } from "~/server/domains/expense/service/expense-line-role";
 import { getUploadedImageProcessingSource } from "~/server/domains/image-processing/repo/image-processing";
-import { getVerifiedImageRenditionKey } from "~/server/domains/image/repo/image-identification";
+import { getVerifiedImageRendition } from "~/server/domains/image/repo/image-identification";
 import { imageAnalysisRenditionUrl } from "~/server/domains/image/service/image-description.service";
 import { readImageIdentificationRendition } from "~/server/domains/image/service/image-identification.service";
 import { readLocationById } from "~/server/domains/location/repo/crud";
@@ -368,14 +368,14 @@ async function runCase(
         throw new Error(
           "Select an uploaded image that passed integrity checks.",
         );
-      const normalizedKey =
+      const normalizedRendition =
         source.contentType === "image/avif"
-          ? await getVerifiedImageRenditionKey(db, id)
+          ? await getVerifiedImageRendition(db, id)
           : null;
-      if (source.contentType === "image/avif" && !normalizedKey)
+      if (source.contentType === "image/avif" && !normalizedRendition)
         throw new Error("Waiting for verified Apple JPEG normalization");
       const { media } = await readImageIdentificationRendition(
-        getR2PublicUrl(normalizedKey ?? source.key),
+        getR2PublicUrl(normalizedRendition?.key ?? source.key),
       );
       return {
         result: await runDecisionChoice({

@@ -390,6 +390,7 @@ export const JOB_KIND_POLICY = {
   "location-ai.description.refresh": {
     ...SERVER,
     maxAttempts: null,
+    backoff: MAINTENANCE_BACKOFF,
     label: "Describe a Location",
     purpose: "Refreshes the AI description for a Location.",
     trigger: "Location description refresh request.",
@@ -402,6 +403,7 @@ export const JOB_KIND_POLICY = {
   "location-ai.inventory.refresh": {
     ...SERVER,
     maxAttempts: null,
+    backoff: MAINTENANCE_BACKOFF,
     label: "Analyze Location inventory",
     purpose: "Refreshes inventory analysis for a Location.",
     trigger: "Location inventory analysis request.",

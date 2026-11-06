@@ -19,6 +19,7 @@ import {
 } from "~/server/db/schema";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { discoverAiRefreshNow } from "~/server/domains/run/service/ai-refresh.fixtures";
+import { isSerializationFailure } from "~/server/errors/db-errors";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
@@ -95,7 +96,7 @@ describe("Email prompt refresh publication", () => {
           },
         ),
       ),
-    ).rejects.toMatchObject({ cause: { code: "40001" } });
+    ).rejects.toSatisfy(isSerializationFailure);
     expect(
       (await getDb(ctx.db).select().from(email).where(eq(email.id, item.id)))[0]
         ?.classificationReason,
