@@ -31,7 +31,10 @@ const identifier = (value: string) =>
   `\`${value.replace(/[^A-Za-z0-9_]/gu, "_")}\``;
 
 /** A constrained Swift model emitter: unsupported wire shapes fail generation. */
-export function renderSwiftModels(contract: NativeContract): SwiftModels {
+export function renderSwiftModels(
+  contract: NativeContract,
+  callerNames: ReadonlySet<string> = new Set(),
+): SwiftModels {
   const declarations = new Map<string, string>();
   const declarationSchemas = new Map<string, string>();
   const claimDeclaration = (name: string, schema: Schema) => {
@@ -511,6 +514,15 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
       `${name}: unsupported native schema ${JSON.stringify(schema)}`,
     );
   };
+  // A JSON envelope can hide a named schema still decoded explicitly by a
+  // consumer. Seed those callers before following operation dependencies.
+  for (const key of Object.keys(contract.models)) {
+    if (
+      !key.split("/").at(-1)?.startsWith("__") &&
+      callerNames.has(key.split("/").slice(1).map(pascal).join(""))
+    )
+      refType(`native://${key}`);
+  }
   for (const operation of contract.operations) {
     for (const key of [operation.body, operation.output])
       if (key) refType(`native://${key}`);

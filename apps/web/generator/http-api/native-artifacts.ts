@@ -99,7 +99,7 @@ export async function renderDirectNativeArtifacts(
       (passthrough[id] !== undefined &&
         callers.tokens.has(passthrough[id].method)),
   );
-  const fullModels = renderSwiftModels(contract);
+  const fullModels = renderSwiftModels(contract, callers.tokens);
   const modelOf = (reference: string) =>
     fullModels.types.get(`native://${reference}`);
   // Roots: what kept operations reach, record roots, and any model named
