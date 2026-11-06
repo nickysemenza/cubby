@@ -36,6 +36,9 @@ type Env = {
    * `subscriber-credit` key), so Claude attempts stay on credit.
    */
   PLAN_AS_PAID?: string;
+  /** Opt-in replay guard: catalog-derived full-window reservations, never rates. */
+  EVAL_BUDGET_USD?: string;
+  EVAL_QUOTES?: string;
 };
 
 type RouteUsage = {
@@ -46,6 +49,16 @@ type RouteUsage = {
   models: Record<string, number>;
 };
 let usage: Record<string, RouteUsage> = {};
+let reservedUsd = 0;
+let budgetStopped = false;
+const quoteSchema = z.array(
+  z.object({
+    model: z.string(),
+    route: z.enum(["openai", "anthropic", "workers-ai"]),
+    maxCostUsd: z.number().finite().nonnegative(),
+  }),
+);
+const decisionBody = z.object({ questions: z.record(z.string(), z.unknown()) });
 
 const bodyModel = z.looseObject({ model: z.string() });
 
@@ -122,8 +135,16 @@ export default {
           })
         : fetch(request);
     if (url.pathname === "/usage") return Response.json(usage);
+    if (url.pathname === "/budget")
+      return Response.json({ reservedUsd, stopped: budgetStopped, usage });
     if (url.pathname === "/reset") {
+      if (env.EVAL_BUDGET_USD)
+        return new Response("A guarded replay budget cannot reset", {
+          status: 409,
+        });
       usage = {};
+      reservedUsd = 0;
+      budgetStopped = false;
       return new Response(null, { status: 204 });
     }
     // This Worker has only a Unified Billing token, never a ChatGPT session.
@@ -159,12 +180,63 @@ export default {
       body = new TextEncoder().encode(JSON.stringify(swapped)).buffer;
     }
     const model = body && wireModel(body);
+    if (env.EVAL_BUDGET_USD) {
+      const limit = Number(env.EVAL_BUDGET_USD);
+      const quotes = quoteSchema.safeParse(
+        JSON.parse(env.EVAL_QUOTES ?? "null"),
+      );
+      const frontier = route === "openai" || route === "anthropic";
+      const routeModel =
+        route === "workers-ai"
+          ? workersAiModel(url.pathname.slice("/workers-ai/".length))
+          : model;
+      const quote = quotes.success
+        ? quotes.data.find(
+            (entry) => entry.route === route && entry.model === routeModel,
+          )
+        : undefined;
+      const questions =
+        route === "workers-ai" && body
+          ? decisionBody.safeParse(JSON.parse(new TextDecoder().decode(body)))
+          : null;
+      const count = questions?.success
+        ? Object.keys(questions.data.questions).length
+        : 1;
+      const cost = quote ? quote.maxCostUsd * count : NaN;
+      // Reserve synchronously before fetch: overlapping calls cannot spend the
+      // same capacity. Failed/unknown transmissions keep their full reservation.
+      if (
+        budgetStopped ||
+        env.PLAN_AS_PAID === "1" ||
+        request.headers.get("x-cubby-inference-funding") === "paid" ||
+        (frontier &&
+          (request.headers.get("cf-aig-byok-alias") !== "subscriber-credit" ||
+            request.headers.get("cf-aig-no-wholesale") !== "true")) ||
+        !Number.isFinite(limit) ||
+        limit <= 0 ||
+        !Number.isFinite(cost) ||
+        count < 1 ||
+        (route === "workers-ai" && !questions?.success) ||
+        reservedUsd + cost > limit
+      ) {
+        budgetStopped = true;
+        return Response.json(
+          {
+            error: {
+              code: "evaluation_budget_stopped",
+              message: "Credit-only replay reservation refused",
+            },
+          },
+          { status: 403 },
+        );
+      }
+      reservedUsd += cost;
+    }
     const metadata = proxiedAiGatewayMetadata(
       request.headers.get("cf-aig-metadata"),
       env.GATEWAY_ENVIRONMENT,
       PROXY_CALL,
     );
-    const upstream = await forward(request, url, route, body, metadata, env);
     const entry = (usage[route] ??= {
       requests: 0,
       failed: 0,
@@ -172,10 +244,24 @@ export default {
       models: {},
     });
     entry.requests += 1;
-    if (model) entry.models[model] = (entry.models[model] ?? 0) + 1;
+    const countedModel =
+      route === "workers-ai"
+        ? workersAiModel(url.pathname.slice("/workers-ai/".length))
+        : model;
+    if (countedModel)
+      entry.models[countedModel] = (entry.models[countedModel] ?? 0) + 1;
+    let upstream: Response;
+    try {
+      upstream = await forward(request, url, route, body, metadata, env);
+    } catch (error) {
+      entry.failed += 1;
+      if (env.EVAL_BUDGET_USD) budgetStopped = true;
+      throw error;
+    }
     if (!upstream.ok) {
       entry.failed += 1;
       entry.failedStatuses.push(upstream.status);
+      if (env.EVAL_BUDGET_USD) budgetStopped = true;
     }
     return upstream;
   },

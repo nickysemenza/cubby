@@ -55,7 +55,7 @@ import {
   cubbyAgentModel,
   cubbyAgentProviders,
 } from "./cubby-ai-provider";
-import { cubbyMcpExtension } from "./cubby-mcp";
+import { cubbyMcpExtension, settleMailAttemptLimit } from "./cubby-mcp";
 import type {
   DispatchInput,
   PurchaseAgentEnvironment,
@@ -67,7 +67,9 @@ import {
   coordinatorModelsFor,
   type CoordinatorEscalation,
 } from "./escalation";
+import { importExtractedOrderTool } from "./import-order-tool";
 import { workflowForRun } from "./import-run-workflows";
+import { mailAttempts, isMailExtractionCall } from "./mail-attempts";
 import { readPiModelUsage } from "./model-usage";
 import { RunSettlement, SETTLEMENT_POLL_MS } from "./run-settlement";
 import { renderSignal } from "./signals";
@@ -229,13 +231,21 @@ export class PurchaseImportRunAgent
 
   /** The dispatch generation of the request that issued a tool call. */
   private async toolGeneration(
-    api: ToolExecutionApi,
+    api: Pick<ToolExecutionApi, "taskId">,
     context: Context,
   ): Promise<string | undefined> {
-    const task = await api.getTask(api.taskId, context);
-    return task?.owner
-      ? this.readState(`request-generation:${task.owner}`)
-      : undefined;
+    const direct = this.readState(`request-generation:${api.taskId}`);
+    if (direct) return direct;
+    const pi = await this.harness.pi();
+    let task = await pi.getTask(api.taskId, context);
+    // A nested writer belongs to its parent tool, then to the issuing
+    // generation. Keep the same generation fence at every depth.
+    while (task?.owner) {
+      const generation = this.readState(`request-generation:${task.owner}`);
+      if (generation) return generation;
+      task = await pi.getTask(task.owner, context);
+    }
+    return undefined;
   }
 
   private async toolProgressStamp(
@@ -244,10 +254,7 @@ export class PurchaseImportRunAgent
   ): Promise<RunProgressStamp> {
     const existing = await api.memo("progress-stamp", context);
     if (existing) return runProgressStamp.parse(existing);
-    const task = await api.getTask(api.taskId, context);
-    const generation = task?.owner
-      ? this.readState(`request-generation:${task.owner}`)
-      : undefined;
+    const generation = await this.toolGeneration(api, context);
     if (!generation)
       throw new Error("Progress tool has no originating request generation");
     const stamp = this.allocateProgressStamp(generation);
@@ -325,8 +332,12 @@ export class PurchaseImportRunAgent
     if (this.installed === identity.runId) return;
     const { runId, purpose } = identity;
     const manifest = importRunAgentManifest[purpose];
+    const models = coordinatorModelsFor(
+      manifest,
+      this.agentEnv.coordinatorModels,
+    );
     const escalation = coordinatorEscalation({
-      models: coordinatorModelsFor(manifest, this.agentEnv.coordinatorModels),
+      models,
       store: {
         read: (key) => this.readState(key),
         write: (key, value) => this.writeState(key, value),
@@ -334,6 +345,45 @@ export class PurchaseImportRunAgent
       useModel: (model) => this.useModel(model),
       unavailable: (model) => this.services().escalationUnavailable(model),
     });
+    const attempts =
+      purpose === "mail_import"
+        ? mailAttempts({
+            read: (key) => this.readState(key),
+            write: (key, value) => this.writeState(key, value),
+          })
+        : undefined;
+    const reserveExtraction = async (
+      callId: string,
+      api: Pick<ToolExecutionApi, "taskId">,
+      context: Context,
+    ) => {
+      if (!attempts) return;
+      const admitted = attempts.admit(
+        callId,
+        escalation.active && escalation.model() === models.escalation
+          ? "escalation"
+          : "primary",
+      );
+      if (admitted.kind === "admitted") return;
+      if (admitted.kind === "no_evidence")
+        return {
+          block:
+            "Claim the current Email's checksum-bound evidence before extracting an order.",
+        };
+      const generation = await this.toolGeneration(api, context);
+      if (!generation)
+        throw new Error("Mail extraction has no issuing generation");
+      await settleMailAttemptLimit({
+        services: () => this.services(),
+        runId,
+        source: admitted.source,
+        generation,
+      });
+      return {
+        block:
+          "This Email reached its durable extraction attempt limit and was resolved unresolved. Claim the next Email; do not prepare this source again.",
+      };
+    };
     this.escalation = escalation;
     const workflow = workflowForRun(purpose, runId, {
       escalation: escalation.active,
@@ -342,22 +392,47 @@ export class PurchaseImportRunAgent
     this.registry.install(
       defineExtension({
         name: "cubby.run",
-        tools: runAgentTools(
-          () => this.services(),
-          (api, context) => this.toolProgressStamp(api, context),
-          (request) => escalation.escalate(request),
-        ).filter(
+        tools: [
+          ...runAgentTools(
+            () => this.services(),
+            (api, context) => this.toolProgressStamp(api, context),
+            (request) => escalation.escalate(request),
+          ),
+          ...(attempts
+            ? [importExtractedOrderTool(runId, attempts.ordinaryEvidence)]
+            : []),
+        ].filter(
           (tool) =>
             agentTools.has(tool.name) &&
             (tool.name !== ESCALATE_TOOL || escalation.active),
         ),
         hooks: [
-          // Inert unless the escalation model differs from the primary.
-          ...(escalation.active
+          ...(attempts || escalation.active
             ? [
                 hook(ToolTask, {
-                  afterTool: (call, result) =>
-                    escalation.afterTool(call, result),
+                  beforeTool: (call, api, context) => {
+                    if (!attempts || call.parent || !isMailExtractionCall(call))
+                      return;
+                    return reserveExtraction(call.id, api, context);
+                  },
+                  afterTool: async (call, result) => {
+                    if (attempts && call.name === "claim_next_import_work") {
+                      const text = result.output?.find(
+                        (part) => part.type === "text",
+                      );
+                      let value: unknown;
+                      try {
+                        value =
+                          text?.type === "text"
+                            ? JSON.parse(text.text)
+                            : undefined;
+                      } catch {
+                        // SILENT: an unreadable claim grants no source budget.
+                      }
+                      attempts.observeClaim(value);
+                    }
+                    return escalation.afterTool(call, result);
+                  },
                 }),
               ]
             : []),
@@ -400,7 +475,17 @@ export class PurchaseImportRunAgent
                 ? { messages: currentWorkItemMessages(request.messages) }
                 : undefined;
             },
-            afterResponse: (message) => this.afterResponse(message),
+            afterResponse: async (message, api, context) => {
+              await this.afterResponse(message);
+              // ToolTask validates before beforeTool. Count malformed model
+              // submissions here too, but not transient failed generations.
+              if (attempts && message.stopReason === "toolUse") {
+                for (const part of message.content) {
+                  if (part.type === "toolCall" && isMailExtractionCall(part))
+                    await reserveExtraction(part.id, api, context);
+                }
+              }
+            },
             onYield: (_answer, api, context) =>
               purpose === "mail_import"
                 ? continueMailImportOnYield({

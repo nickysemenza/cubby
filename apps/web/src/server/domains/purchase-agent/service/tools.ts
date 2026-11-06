@@ -1,3 +1,4 @@
+import { MAIL_READ_RESPONSE_MAX_BYTES } from "@cubby/schemas/mailbox-research";
 import { photoInventoryToolInputs } from "@cubby/schemas/purchase-agent-services";
 import type { RunProgressStamp } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -192,6 +193,16 @@ function tool<N extends ToolName>(
     // Every typed tool is replay-safe: its effects are memoized steps keyed
     // by the durable tool task.
     replay: "safe",
+    // A complete mail read may be 200 KB. Pi's default 50 KB cap must not
+    // silently cut its item lines while the claim still says complete.
+    ...(name === "claim_next_import_work"
+      ? {
+          outputLimits: {
+            maxBytes: MAIL_READ_RESPONSE_MAX_BYTES * 2,
+            maxLines: 10_000,
+          },
+        }
+      : {}),
     ...definition,
     execute: async (args, api, context) => {
       // pi-durable resumes execute checkpoints without revalidating their

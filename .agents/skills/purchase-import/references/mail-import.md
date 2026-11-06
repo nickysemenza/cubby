@@ -43,7 +43,23 @@ Claude or Codex session researches it later through the Research queue.
      Name the Vendor by `vendorId`: `known.senderVendor.id`, or else the
      Vendor `search` / `entity_read` finds; or by `vendor.name` exactly as
      the Email names the seller.
-     `purchase_import` `prepare` the order from this Email
+     For an ordinary complete Email body without attachments or omitted content,
+     call `import_extracted_order` once with `mail` (the claim's mailboxId,
+     messageId and read checksum), the Vendor, optional known target Purchase,
+     `extraction` and `products`. Supply one Product decision per extracted line,
+     in order; use null for a non-principal line and preserve unknown Product
+     identity explicitly. The host generates stable IDs and runs the normal
+     prepare/commit writers without another model turn. Inspect every
+     `commit_result` item: conflict is review work, not success.
+     `needs_resolution` returns the canonical preparation and its Product
+     candidates: review those and call the existing commit with that preparation's
+     operation ID and stable line IDs. Do not prepare the same facts again.
+     An operation_error may follow a committed write; replay identical input to
+     recover its durable receipt before changing facts. Incomplete evidence must
+     stay incomplete, never a generic invented merchandise line.
+
+     Attachments, supporting originals and multi-order sources use the exception
+     flow: `purchase_import` `prepare` the order from this Email
      (`source.kind: "mail_message"`, `externalKey`
      `gmail:<mailboxId>:<messageId>`, the read `checksum` as both source and
      evidence checksum, and the extraction rules below; when the order lives
@@ -52,6 +68,7 @@ Claude or Codex session researches it later through the Research queue.
      read's `attachmentId` (itself the attachment's key, which Cubby also
      accepts alone) and that attachment's `checksum`). Then `commit` it with a
      resolution for every principal line.
+
    - **Package observations** (vendor, carrier or Shop): retain each package
      with `shipments.record`, using the read's EML- `id` and checksum and a
      supported Purchase or null. Follow
@@ -131,7 +148,13 @@ Claude or Codex session researches it later through the Research queue.
    another live Run's Email cannot join yours, so say "held by RUN-…" in the
    unresolved reason, never "not admitted". `retryableMessageIds` lost a
    contention race: search again before treating them as missing.
-5. Claim the next Email. One Email's failure never ends the batch: resolve it
+5. Extraction has a durable budget per checksum-bound original: two primary
+   submissions (initial plus repair) and one stronger-model submission.
+   Replays and repeated claims do not reset it; changed evidence gets a fresh
+   budget. Exhaustion records an unresolved gap through the existing writer.
+   Transient retries reuse the same invocation and its receipt.
+
+   Claim the next Email. One Email's failure never ends the batch: resolve it
    `unresolved` and continue. Stop with `stop_import_run_for_review` and reason
    `provider_failure` only when the same failure has blocked two Emails in a
    row; Cubby refuses any other stop for a Mail import. Once every admitted Email is

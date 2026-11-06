@@ -2,7 +2,9 @@ import {
   MAIL_READ_RESPONSE_MAX_BYTES,
   mailAttachmentOriginal,
   mailReadAgentText,
+  mailResolveOut,
 } from "@cubby/schemas/mailbox-research";
+import { sha256Hex } from "@cubby/shared/sha256";
 import type { Context } from "@earendil-works/chord";
 import { Type, type JsonObject } from "@earendil-works/pi-ai";
 import {
@@ -19,6 +21,7 @@ import {
 import { z } from "zod";
 
 import type { McpToolDefinition, RunServices } from "./environment";
+import type { MailAttemptEvidence } from "./mail-attempts";
 
 // The transport needs a URL. No request leaves the Worker: `mcpFetch` hands
 // it to Cubby's MCP handler in process with the run's bearer.
@@ -74,6 +77,61 @@ const callResult = z.object({
  * long mail search reads as a failure and its Email can end unresolved.
  */
 const TOOL_CALL_TIMEOUT_MS = 180_000;
+
+/** Exhaustion records a source gap through the same delegated writer as Pi. */
+export async function settleMailAttemptLimit(input: {
+  services: () => RunServices;
+  runId: string;
+  source: MailAttemptEvidence;
+  generation: string;
+}) {
+  const client = await connectCubbyMcp(input.services);
+  try {
+    const outcome = await client.callTool(
+      {
+        name: "purchase_import",
+        arguments: {
+          action: "mail_resolve",
+          input: {
+            ...input.source,
+            disposition: {
+              kind: "unresolved",
+              reason:
+                "The bounded extraction and repair attempts could not establish a safe import. Retained evidence needs review.",
+            },
+          },
+          _runExecution: {
+            runId: input.runId,
+            operationId: `attempt-limit:${await sha256Hex(JSON.stringify(input.source))}`,
+            generation: input.generation,
+          },
+        },
+      },
+      { timeout: TOOL_CALL_TIMEOUT_MS },
+    );
+    const parsed = callResult.parse(outcome);
+    if (parsed.isError)
+      throw new Error(
+        "Mail attempt-limit resolution was refused; preserve the source and inspect its durable operation before retrying.",
+      );
+    const text = parsed.content
+      .map((part) => textBlock.safeParse(part).data?.text)
+      .find((part) => part !== undefined);
+    const resolved = mailResolveOut.parse(
+      parsed.structuredContent ?? JSON.parse(text ?? "null"),
+    );
+    if (
+      resolved.mailboxId !== input.source.mailboxId ||
+      resolved.messageId !== input.source.messageId ||
+      resolved.disposition !== "unresolved"
+    )
+      throw new Error(
+        "Mail attempt-limit result did not confirm this source's unresolved outcome.",
+      );
+  } finally {
+    await client.close();
+  }
+}
 
 export function cubbyToolResult(raw: unknown): ToolExecutionResult {
   const parsed = callResult.parse(raw);

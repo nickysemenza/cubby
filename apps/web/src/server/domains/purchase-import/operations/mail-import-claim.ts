@@ -312,6 +312,7 @@ export async function claimMailImportWork(db: Database, runId: string) {
       remaining: pending.length - index,
       email: {
         ...ref,
+        checksum: email.checksum,
         sender: email.sender,
         subject: email.subject,
         receivedAt: email.receivedAt?.toISOString() ?? null,

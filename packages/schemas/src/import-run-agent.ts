@@ -50,9 +50,11 @@ const RUN_AGENT_TOOLS = [
 ] as const;
 /** Mounted only while a purpose's escalation model differs from its primary. */
 export const ESCALATE_TOOL = "escalate_import_work";
+export const EXTRACT_ORDER_TOOL = "import_extracted_order";
 export type ImportRunAgentToolName =
   | (typeof RUN_AGENT_TOOLS)[number]
-  | typeof ESCALATE_TOOL;
+  | typeof ESCALATE_TOOL
+  | typeof EXTRACT_ORDER_TOOL;
 
 /** Mail import reads Email and writes through the same public tools a member uses. */
 const MAIL_IMPORT_MCP_ACTIONS = [
@@ -184,7 +186,7 @@ export const importRunAgentManifest = {
     model: "gpt-6-luna",
     escalationModel: "claude-opus-5-5",
     effort: "medium",
-    agentTools: [...RUN_AGENT_TOOLS, ESCALATE_TOOL],
+    agentTools: [...RUN_AGENT_TOOLS, ESCALATE_TOOL, EXTRACT_ORDER_TOOL],
     mcpActions: MAIL_IMPORT_MCP_ACTIONS,
     mcpTools: toolsOf(MAIL_IMPORT_MCP_ACTIONS),
     workItemContext: "current",

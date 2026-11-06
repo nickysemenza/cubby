@@ -100,6 +100,16 @@ pending: nothing here starts Product research.
    automatically spend a stronger-model turn; repairable extraction, identity,
    contradictory evidence or an unclassified reasoning gap may request one.
    Its durable per-Email decision survives re-claims and coordinator recovery.
+   The coordinator's SQLite also owns evidence-keyed extraction budgets: two
+   primary submissions (initial plus repair) and one escalation submission.
+   Replays do not consume another attempt; repeated claims retain the budget.
+   Exhaustion records an unresolved gap through the delegated mail-resolve writer,
+   using a stable operation ID and the issuing generation fence.
+   `import_extracted_order` handles complete, admitted, attachment-free Email.
+   It generates stable IDs and runs the existing prepare/commit tools as durable
+   nested calls. Newly discovered Product candidates return the preparation for
+   review instead of creating a possible duplicate. Incomplete source views and
+   complex originals retain the exception path.
    A Mail import claim (`operations/mail-import-claim.ts`) returns the
    claimed Email's compact read (`readMail`, bounded by `fitMailRead`). Before
    claiming, it settles leading roster Emails a Mail import rule decides
@@ -230,6 +240,18 @@ until a session itemizes it.
 | Findings and their fixes                   | `findings.ts`                                                          |
 
 ## Hidden dependencies
+
+Live `eval:mail-replay` requires `MAIL_REPLAY_PRICING_FILE` (an official
+models.dev `?type=all` snapshot) and `MAIL_REPLAY_BUDGET_FILE` (an exclusive
+JSON ledger with `limitUsd`, `accountedUsd`, `outstandingUsd` and `stopped`).
+The launcher reserves the remaining allowance before starting each case;
+each peer reserves full catalog window bounds before every physical call.
+Frontier requests require the subscriber-credit alias and no-wholesale flag;
+paid forwarding is disabled. Uncertain calls retain their reservations and
+stop further evaluation. Only exact reconciliation of successful physical
+requests with priced stored usage releases unused capacity. The ledger spans
+fresh databases, peer isolates and launcher invocations. A stale lock or
+outstanding reservation requires reconciliation before another launch.
 
 The existing `eval:mail-replay` reports all Run-scoped AI usage, including
 extraction and audit, with raw token/cache counts, duration and unknown prices.

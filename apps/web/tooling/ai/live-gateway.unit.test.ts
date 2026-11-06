@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import liveGateway from "./live-gateway";
 
 // Failure modes: the agent keeps its pinned model; the swap drops other
@@ -26,6 +26,95 @@ const responsesBody = {
 };
 
 const upstream = vi.fn<typeof fetch>();
+beforeEach(async () => {
+  await liveGateway.fetch(new Request("https://model.test/reset"), env);
+});
+
+// Physical-call admission must remain safe under overlapping requests, a
+// failed transport and a fresh caller attempting to reset the allowance.
+it("reserves overlapping credit calls before forwarding and refuses reset or overspend", async () => {
+  const guarded = {
+    ...env,
+    EVAL_BUDGET_USD: "1",
+    EVAL_QUOTES: JSON.stringify([
+      { model: "gpt-6-luna", route: "openai", maxCostUsd: 0.6 },
+    ]),
+  };
+  vi.stubGlobal("fetch", upstream);
+  upstream.mockResolvedValue(new Response("synthetic stream"));
+  const request = () =>
+    new Request("https://model.test/openai/responses", {
+      method: "POST",
+      headers: {
+        "cf-aig-byok-alias": "subscriber-credit",
+        "cf-aig-no-wholesale": "true",
+      },
+      body: JSON.stringify({ model: "gpt-6-luna" }),
+    });
+  const responses = await Promise.all([
+    liveGateway.fetch(request(), guarded),
+    liveGateway.fetch(request(), guarded),
+  ]);
+  expect(responses.map((response) => response.status)).toEqual([200, 403]);
+  expect(upstream).toHaveBeenCalledTimes(1);
+  expect(
+    (await liveGateway.fetch(new Request("https://model.test/reset"), guarded))
+      .status,
+  ).toBe(409);
+  expect(
+    await (
+      await liveGateway.fetch(new Request("https://model.test/budget"), guarded)
+    ).json(),
+  ).toMatchObject({ reservedUsd: 0.6, stopped: true });
+});
+
+it("never transmits paid or unpriced frontier calls under the replay guard", async () => {
+  vi.stubGlobal("fetch", upstream);
+  const response = await liveGateway.fetch(
+    new Request("https://model.test/openai/responses", {
+      method: "POST",
+      headers: { "x-cubby-inference-funding": "paid" },
+      body: JSON.stringify({ model: "gpt-6-luna" }),
+    }),
+    { ...env, EVAL_BUDGET_USD: "10", EVAL_QUOTES: "[]" },
+  );
+  expect(response.status).toBe(403);
+  expect(upstream).not.toHaveBeenCalled();
+});
+
+it("retains the full reservation and stops after an ambiguous transport failure", async () => {
+  vi.stubGlobal("fetch", upstream);
+  upstream.mockRejectedValue(new Error("synthetic disconnected stream"));
+  const guarded = {
+    ...env,
+    EVAL_BUDGET_USD: "1",
+    EVAL_QUOTES: JSON.stringify([
+      { model: "gpt-6-luna", route: "openai", maxCostUsd: 0.6 },
+    ]),
+  };
+  await expect(
+    liveGateway.fetch(
+      new Request("https://model.test/openai/responses", {
+        method: "POST",
+        headers: {
+          "cf-aig-byok-alias": "subscriber-credit",
+          "cf-aig-no-wholesale": "true",
+        },
+        body: JSON.stringify({ model: "gpt-6-luna" }),
+      }),
+      guarded,
+    ),
+  ).rejects.toThrow("synthetic disconnected stream");
+  expect(
+    await (
+      await liveGateway.fetch(new Request("https://model.test/budget"), guarded)
+    ).json(),
+  ).toMatchObject({
+    reservedUsd: 0.6,
+    stopped: true,
+    usage: { openai: { requests: 1, failed: 1 } },
+  });
+});
 
 // The live peer has no connected ChatGPT session; a subscription-only attempt
 // must refuse explicitly rather than silently purchase OpenAI inference.
