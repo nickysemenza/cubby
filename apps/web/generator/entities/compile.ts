@@ -1812,6 +1812,36 @@ const declarationDescriptor = (
   descriptor.displayImages = true;
   descriptor.searchable = declaration.search.enabled;
   descriptor.embeddable = declaration.search.embedding;
+  const signals = declaration.extensions.relatednessSignals;
+  if (
+    signals.length &&
+    signals.filter((signal) => signal.kind === "semantic").length !== 1
+  )
+    throw new Error(
+      `${context}: relatedness requires exactly one semantic signal`,
+    );
+  if (signals.length && !declaration.search.embedding)
+    throw new Error(`${context}: relatedness requires semantic search`);
+  for (const signal of signals) {
+    if (signal.kind !== "scalarOverlap") continue;
+    const field = declaration.model?.fields.find(
+      (field) => field.key === signal.field,
+    );
+    if (
+      !field ||
+      field.kind !== "text-array" ||
+      !declaration.model?.storage.some(
+        (field) =>
+          typeof field !== "string" &&
+          field.key === signal.field &&
+          field.specialized === "text-array",
+      )
+    )
+      throw new Error(
+        `${context}: relatedness overlap ${signal.field} must be stored text arrays`,
+      );
+  }
+  descriptor.relatednessSignals = signals;
   descriptor.countable = declaration.capabilities.countable;
   descriptor.relationships = serializedDeclarationRelations(
     declaration.relations,

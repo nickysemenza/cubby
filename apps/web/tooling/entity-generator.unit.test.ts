@@ -126,7 +126,7 @@ const base = {
     mcp: [],
   },
   extensions: {
-    relatednessSignals: null,
+    relatednessSignals: [],
     ports: {
       repository: null,
       references: { label: null, resolver: null },

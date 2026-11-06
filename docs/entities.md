@@ -4928,11 +4928,32 @@ returns before ticket/capture writes for those declared targets and indexed
 fan-out addresses. Existing tickets remain until the hourly pass has published
 the replacement target; stopping admission alone does not prove coverage.
 
+## Related records
+
+`extensions.relatednessSignals` is the static opt-in for the shared detail-page
+Related records rail and `relatedness.forEntity({ entity, id })` operation.
+Every entity with semantic search declares a same-entity semantic signal (label,
+weight and candidate limit). Product, Recipe and Location additionally declare
+stored tag overlaps as display-only evidence; popularity caps omit ubiquitous
+tag hubs. Generation rejects signals on entities without embeddings and overlap
+fields that are not stored text arrays. No entity-keyed runtime registry is needed.
+
+The generic semantic reader shares source readiness, current-vector validation
+and canonical hit hydration with explicit similarity search. Unavailable,
+uncomputed and stale indexes remain visible, rather than masquerading as an
+empty result. An explicit Index now action uses the existing embedding refresh
+operation and bounded readiness poll. Related records never publish suggestions,
+merge identities, or mutate records. Scalar-only candidates remain visible with
+zero score; semantic weights determine ranking. Evidence is merged once per
+public record, deterministically ranked, and images are batch-resolved for the
+visible rows. The rail is a shared indexed detail section, loaded on visibility.
+
 ## Retired entity tools (ADR 0025)
 
 The entity explorer provides records, schema and integrity inspection, recipe and
 work dependency graphs, and cross-record exploration. Graph path search finds
-connections across records. The similar-products rail is retired.
+connections across records. Every entity that declares relatedness signals shows
+the related-records rail on its detail page.
 Ordinary record relations retain `connectedRecords`, `connectedRecordsPreview` and `connections`.
 Connection discovery still proposes inventory placement and expense/project links.
 Product-match review commands belong to the `productMatch` contract.

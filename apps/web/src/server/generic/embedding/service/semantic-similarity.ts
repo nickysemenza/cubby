@@ -2,6 +2,7 @@ import {
   similarEntityPairs,
   type SimilarEntitiesInput,
   type SimilarEntitiesOut,
+  type SearchableEntity,
 } from "@cubby/schemas/search";
 
 import type { Database } from "~/server/db";
@@ -14,61 +15,66 @@ import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 
 import { getSemanticEmbeddingConfig } from "./semantic/config";
 
-/** Shared by explicit similarity requests and product relatedness. Readiness
- * gates candidate work; hydration removes deleted references and private IDs. */
+/** Shared candidate/readiness/hydration path for public pair search and declared rails. */
+export async function findSemanticNeighbours(
+  db: Database,
+  input: {
+    entity: SearchableEntity;
+    id: string;
+    target: SearchableEntity;
+    limit: number;
+  },
+): Promise<SimilarEntitiesOut> {
+  const source = {
+    entityKind: input.entity,
+    entityId: await resolveOrThrow(db, input.entity, input.id),
+  };
+  const readiness = await getEmbeddingReadiness(db, source);
+  if (readiness !== "ready")
+    return {
+      source: { entityKind: input.entity, entityId: input.id },
+      status: readiness,
+      complete: false,
+      results: [],
+    };
+  const candidates = await findSimilarEntities(
+    db,
+    productionVectorStore,
+    source,
+    {
+      targetType: input.target,
+      limit: input.limit,
+      config: getSemanticEmbeddingConfig(),
+    },
+  );
+  const hits = await hydrateSearchHitRefs(db, candidates.candidates);
+  const hitByRef = new Map(
+    hits.map((hit) => [`${hit.entityKind}:${hit.entityId}`, hit]),
+  );
+  return {
+    source: { entityKind: input.entity, entityId: input.id },
+    status: candidates.complete ? "ready" : "stale",
+    complete: candidates.complete,
+    results: candidates.candidates.flatMap((candidate) => {
+      const hit = hitByRef.get(`${candidate.entityKind}:${candidate.entityId}`);
+      if (!hit) return [];
+      const { entityId: _privateEntityId, ...entity } = hit;
+      return [{ similarity: candidate.similarity, entity }];
+    }),
+  };
+}
+
 export const findSimilarEntitiesWorkflow = bindWorkflow(
   workflow<Database, SimilarEntitiesInput>("search.similar")
-    .call("pair", async (_, { input }) => {
+    .call("matches", ({ context }, { input }) => {
       const pair = similarEntityPairs[input.pair];
       if (!pair) throw new Error(`Unsupported relatedness pair: ${input.pair}`);
-      return pair;
+      return findSemanticNeighbours(context, {
+        entity: pair.source,
+        id: input.sourceId,
+        target: pair.target,
+        limit: input.limit,
+      });
     })
-    .call("source", async ({ context }, { input, pair }) => ({
-      entityKind: pair.source,
-      entityId: await resolveOrThrow(context, pair.source, input.sourceId),
-    }))
-    .call("readiness", ({ context }, { source }) =>
-      getEmbeddingReadiness(context, source),
-    )
-    .branch("matches", {
-      when: async (_, { readiness }) => readiness === "ready",
-      whenTrue: (branch) =>
-        branch
-          .call("candidates", ({ context }, { input }) =>
-            findSimilarEntities(context, productionVectorStore, input.source, {
-              targetType: input.pair.target,
-              limit: input.input.limit,
-              config: getSemanticEmbeddingConfig(),
-            }),
-          )
-          .call("hits", ({ context }, { candidates }) =>
-            hydrateSearchHitRefs(context, candidates.candidates),
-          )
-          .output(({ candidates, hits }) => {
-            const hitByRef = new Map(
-              hits.map(
-                (hit) => [`${hit.entityKind}:${hit.entityId}`, hit] as const,
-              ),
-            );
-            return {
-              complete: candidates.complete,
-              results: candidates.candidates.flatMap((candidate) => {
-                const hit = hitByRef.get(
-                  `${candidate.entityKind}:${candidate.entityId}`,
-                );
-                if (!hit) return [];
-                const { entityId: _privateEntityId, ...entity } = hit;
-                return [{ similarity: candidate.similarity, entity }];
-              }),
-            } satisfies Pick<SimilarEntitiesOut, "results" | "complete">;
-          }),
-      whenFalse: (branch) =>
-        branch.output(() => ({ results: [], complete: false })),
-    })
-    .output(({ input, pair, readiness, matches }): SimilarEntitiesOut => ({
-      source: { entityKind: pair.source, entityId: input.sourceId },
-      status: readiness === "ready" && !matches.complete ? "stale" : readiness,
-      complete: matches.complete,
-      results: matches.results,
-    })),
+    .output(({ matches }) => matches),
 );

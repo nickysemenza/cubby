@@ -8,6 +8,7 @@ import { isGalleryEntity } from "@cubby/schemas/entity-roster";
 import { fieldEnvelopeFor } from "@cubby/schemas/field-envelope";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
+import { embeddableEntitySchema } from "@cubby/schemas/search";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ClockCounterClockwise";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
@@ -99,6 +100,12 @@ import {
   RecordQualityProvider,
   useQualityCheckSections,
 } from "./record-quality";
+
+const RelatednessRail = lazy(() =>
+  import("~/entity/relatedness/relatedness-rail").then((module) => ({
+    default: module.RelatednessRail,
+  })),
+);
 
 const RecordProposals = lazy(() =>
   import("~/entity/suggestions/queue/record-proposals").then((module) => ({
@@ -697,6 +704,30 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     placement: "primary",
     content: <ConnectedRecordsSection source={entity} sourceId={bag.id} />,
   });
+
+  const relatedEntity = embeddableEntitySchema.safeParse(entity);
+  if (
+    relatedEntity.success &&
+    entityMetadata(queryClient, entity).descriptor.relatednessSignals.length
+  )
+    sections.push({
+      id: "related-records",
+      title: "Related records",
+      workspace: "relations",
+      icon: SparkleIcon,
+      placement: "primary",
+      content: (
+        <VisibleContent fallback={<SlotFallback />}>
+          <Suspense fallback={<SlotFallback />}>
+            <RelatednessRail
+              key={bag.id}
+              entity={relatedEntity.data}
+              id={bag.id}
+            />
+          </Suspense>
+        </VisibleContent>
+      ),
+    });
 
   if (!sections.some((section) => section.id === "suggestions"))
     sections.push({

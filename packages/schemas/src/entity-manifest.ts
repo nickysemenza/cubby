@@ -1,3 +1,4 @@
+import { relatedRecordSignalSchema } from "./related-record-signals";
 import { z } from "zod";
 import { type Entity, entitySchema } from "./entity-core";
 export {
@@ -144,6 +145,7 @@ export const entityDescriptor = z.object({
   searchable: z.boolean(),
   /** Whether this searchable entity also gets an `EntityEmbedding` vector. */
   embeddable: z.boolean(),
+  relatednessSignals: z.array(relatedRecordSignalSchema).readonly(),
   countable: z.boolean(),
   relationships: z.array(entityRelationshipSchema).readonly(),
   lifecycle: entityLifecycleSchema,

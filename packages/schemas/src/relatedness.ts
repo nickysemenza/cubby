@@ -1,7 +1,6 @@
 import { suggestionReviewReference } from "./suggestion-reference";
 import { z } from "zod";
 import { entitySchema, type Entity } from "./entity-core";
-import type { RelationshipPathStep } from "./entity-integrity";
 
 /**
  * The one declaration of an entity pair's semantic/relatedness capability.
@@ -90,69 +89,6 @@ export const embeddingReadinessValues = [
 ] as const;
 export const embeddingReadinessSchema = z.enum(embeddingReadinessValues);
 export type EmbeddingReadiness = z.infer<typeof embeddingReadinessSchema>;
-
-const relationshipStepSchema = z.object({
-  edge: z.string(),
-  direction: z.enum(["incoming", "outgoing"]),
-});
-
-export const relatednessSignalSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("coOccurrence"),
-    label: z.string(),
-    pair: z.string(),
-    weight: z.number(),
-    sourcePath: z.array(relationshipStepSchema).readonly(),
-    targetPath: z.array(relationshipStepSchema).readonly().optional(),
-    predicate: z.string().optional(),
-    hubCap: z.number().int().positive(),
-    evidenceOnly: z.boolean().optional(),
-  }),
-  z.object({
-    kind: z.literal("direct"),
-    label: z.string(),
-    pair: z.string(),
-    weight: z.number(),
-    relationship: z.string(),
-  }),
-  z.object({
-    kind: z.literal("scalarOverlap"),
-    label: z.string(),
-    pair: z.string(),
-    column: z.string(),
-    popularityCap: z.number().int().positive(),
-    scoring: z.enum(["scored", "displayOnly"]),
-    weight: z.number().optional(),
-  }),
-  z.object({
-    kind: z.literal("textSimilarity"),
-    label: z.string(),
-    pair: z.string(),
-    column: z.string(),
-    thresholds: z
-      .array(z.object({ min: z.number(), weight: z.number() }))
-      .min(1)
-      .readonly(),
-  }),
-  z.object({
-    kind: z.literal("semantic"),
-    label: z.string(),
-    pair: z.string(),
-    weight: z.number(),
-    limit: z.number().int().positive(),
-  }),
-  z.object({
-    kind: z.literal("temporalOverlap"),
-    label: z.string(),
-    pair: z.string(),
-    weight: z.number(),
-    windowResolver: z.string(),
-  }),
-]);
-export type RelatednessSignal = z.infer<typeof relatednessSignalSchema> & {
-  sourcePath?: readonly RelationshipPathStep[];
-  targetPath?: readonly RelationshipPathStep[];
-};
 
 export const relatednessEvidenceSchema = z.object({
   signal: z.string(),
