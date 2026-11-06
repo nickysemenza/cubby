@@ -704,10 +704,11 @@ new review inputs. The parent renumbers the migration during integration.
 
 ## Suggestion served flag retirement (ADR 0025 L2b)
 
-0111 locks Suggestion before inspecting every unserved row. It aborts if any
-such row has retained decisions, confirmed/correct values, suppression, an
-acceptance receipt, or applied/rejected status. It then rebuilds the three
-partial reference indexes without the obsolete flag and drops the column.
+0112 locks Suggestion and retires every unserved row (trial output that was
+never a member review candidate or automatic decision) as inactive history. It
+verifies row by row that only `active` changed, including retained evaluation
+decisions on trials, then rebuilds the three partial reference indexes without
+the obsolete flag and drops the column.
 Publication, evidence and decisions remain unchanged. The two connection scope
 indexes also drop their served predicate in desired-state DDL.
 
@@ -742,12 +743,13 @@ and Job checkpoint, then resume through `run.control` when appropriate.
 `adr25-l2f-image` is one breaking migration with matching clients. It locks
 Suggestion and Image against writes through commit, archives every image-description
 Suggestion exactly in `archive.Suggestion_image_description`, and checks archive
-JSON against every source row. Each confirmed text, source hash, confirmation time
+JSON against every source row. Each live confirmation (active, current content
+hash, undeleted Image, valid owner) copies its text, source hash, confirmation time
 (the latest application decision time, otherwise the retained update time) and
-owner provenance is copied into Image and read back with null-safe comparisons.
-A missing Image, non-text confirmation, subject/target mismatch or unequal copy
-raises an exception. Historical rows remain in archive; the latest live confirmation
-owns the Image columns. Only after verification are live family rows deleted.
+owner provenance into Image, read back with null-safe comparisons. For a live
+confirmation, non-text, subject/target mismatch or unequal copy raises an
+exception. Historical rows, including those for since-deleted Images, remain only
+in archive; the latest live confirmation owns the Image columns. Only after verification are live family rows deleted.
 There is no database family enum or CHECK to contract; the schema union removes
 the family. No history is reconstructed.
 

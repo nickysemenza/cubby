@@ -25,8 +25,7 @@ BEGIN
     RAISE EXCEPTION 'Image description archive differs from source';
   END IF;
 
-  -- Each retained confirmation is copied and verified, including stale-content text.
-  -- Older/inactive confirmations remain in archive; the last live authority wins.
+  -- Each live confirmation is copied and verified; the last live authority wins.
   FOR source IN SELECT s.*,
     (s.active AND s.entity = 'image' AND s.fingerprint = i.sha256 AND i."deletedAt" IS NULL
       AND (s.data->'confirmationOwner' IS NULL OR (
@@ -40,6 +39,9 @@ BEGIN
     WHERE s."confirmedValue" @> '{"present":true}'::jsonb
     ORDER BY eligible, s."updatedAt", s.id
   LOOP
+    -- Ineligible confirmations stay only in the verified archive, so historical
+    -- shapes or since-deleted Images cannot block the cutover.
+    CONTINUE WHEN NOT source.eligible;
     IF jsonb_typeof(source."confirmedValue"->'value') IS DISTINCT FROM 'string' THEN
       RAISE EXCEPTION 'Confirmed image description is not text: %', source.id;
     END IF;
@@ -70,13 +72,6 @@ BEGIN
         AND i."descriptionConfirmationOwner" IS NOT DISTINCT FROM source.data->'confirmationOwner'
     ) THEN
       RAISE EXCEPTION 'Image description copy differs from source: %', source.id;
-    END IF;
-    -- Historical/inactive effects stay only in archive, never acquire live authority.
-    -- Eligible confirmations sort last, preserving the previous reader's selection.
-    IF NOT source.eligible THEN
-      UPDATE public."Image" SET "confirmedDescription" = NULL,
-        "descriptionContentHash" = NULL, "descriptionConfirmedAt" = NULL,
-        "descriptionConfirmationOwner" = NULL WHERE id = source."recordId";
     END IF;
   END LOOP;
 END $$;
