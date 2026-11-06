@@ -276,11 +276,7 @@ export const workQueueInput = workQueueList.input;
 export const NEEDS_YOU_FILTERS = {
   view: "human" as const,
   owner: CURRENT_MEMBER_FILTER,
-  reasonExclude: [
-    "suggestions:field",
-    "suggestions:recommendation",
-    "suggestions:image_description",
-  ],
+  reasonExclude: ["suggestions:field", "suggestions:recommendation"],
 };
 export type WorkQueueInput = z.input<typeof workQueueInput>;
 export type WorkQueueView = NonNullable<

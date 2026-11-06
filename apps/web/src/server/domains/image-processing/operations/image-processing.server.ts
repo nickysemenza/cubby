@@ -16,6 +16,7 @@ import {
   scheduleImageProcessingJobs,
 } from "~/server/domains/image-processing/service/image-processing.service";
 import { imageAnalysisHistory } from "~/server/domains/image/repo/image-analysis-history";
+import { confirmImageDescription } from "~/server/domains/image/repo/image-description-confirmation";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
@@ -49,6 +50,15 @@ export const imageProcessingHandlers = implementOperationDomain(
         ...input,
         userId: context.actorContext.userId,
       }),
+    confirmDescription: async (context, input) =>
+      confirmImageDescription(
+        context.db,
+        {
+          ...input,
+          imageId: await resolveOrThrow(context.db, "image", input.id),
+        },
+        context.actorContext.userId,
+      ),
     status: async (context, input) => {
       const row = await getImageProcessingReadProjection(
         context.db,

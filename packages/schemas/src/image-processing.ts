@@ -313,19 +313,22 @@ export const imageDescriptionConfirmationOwner = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("member"),
     effectId: z.uuid(),
-    commandFeedbackId: suggestionChildHandle,
+    commandFeedbackId: suggestionChildHandle.optional(),
     actorUserId: z.string().min(1),
   }),
   // Never written now that propagation is gone; the native codec still decodes it.
   imageDescriptionCorrectionOwner,
 ]);
 
-export const imageDescriptionCorrectionReceipt = z.object({
-  kind: z.literal("image_description"),
-  recordId: entityIdSchema("image"),
+export type ImageDescriptionConfirmationOwner = z.infer<
+  typeof imageDescriptionConfirmationOwner
+>;
+
+export const confirmImageDescriptionInput = z.object({
+  id: imageShortcode,
   contentHash: z.string().min(1),
-  description: z.string(),
-  owner: imageDescriptionCorrectionOwner,
+  description: z.string().trim().min(1).max(4000),
+  operationId: z.uuid(),
 });
 
 export const imageDescriptionCorrection = z.object({

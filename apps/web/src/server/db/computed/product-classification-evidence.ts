@@ -3,7 +3,6 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 import { productImagePurpose } from "@cubby/schemas/image";
 import { type SQL, sql } from "drizzle-orm";
 
-import { currentImageDescriptionConfirmation } from "~/server/db/computed/image-description-confirmation";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   repositoryQueries as unwrapDb,
@@ -19,10 +18,9 @@ export const productClassificationEvidenceSql = (
   ),'[]'::jsonb)::text) FROM "ProductCategory" c WHERE ${notDeleted("c")}),
   E'\n', COALESCE((
     SELECT string_agg(concat(COALESCE(pi."purpose", ${productImagePurpose.enum.item}), ': ',
-      COALESCE(correction."description", analysis."result"->>'description', ''),
-      CASE WHEN correction."description" IS NOT NULL THEN ' [confirmed correction]' ELSE '' END), E'\n' ORDER BY pi."sortOrder", pi."createdAt")
+      COALESCE(CASE WHEN "Image"."descriptionContentHash" = "Image"."sha256" THEN "Image"."confirmedDescription" END, analysis."result"->>'description', ''),
+      CASE WHEN CASE WHEN "Image"."descriptionContentHash" = "Image"."sha256" THEN "Image"."confirmedDescription" END IS NOT NULL THEN ' [confirmed correction]' ELSE '' END), E'\n' ORDER BY pi."sortOrder", pi."createdAt")
     FROM "EntityAttachment" pi JOIN "Image" ON "Image"."id" = pi."imageId" AND ${notDeleted("Image")}
-    LEFT JOIN LATERAL (SELECT "Suggestion"."confirmedValue"->>'value' AS description FROM "Suggestion" WHERE "Suggestion"."recordId" = "Image"."id" AND ${currentImageDescriptionConfirmation()} ORDER BY "Suggestion"."createdAt" DESC LIMIT 1) correction ON true
     LEFT JOIN LATERAL (SELECT a."result" FROM "AiAnalysis" a WHERE a."entityKind" = ${entitySchema.enum.image} AND a."entityId" = "Image"."id" AND a."feature" = 'image-description' AND ${notDeleted("a")} AND CASE WHEN pg_input_is_valid(a."inputFingerprint", ${"jsonb"}) THEN a."inputFingerprint"::jsonb->>'sourceContentHash' ELSE NULL END = "Image".sha256 ORDER BY a."createdAt" DESC LIMIT 1) analysis ON true
     WHERE pi."entityId" = ${productId} AND ${notDeleted("pi")}
   ), '')

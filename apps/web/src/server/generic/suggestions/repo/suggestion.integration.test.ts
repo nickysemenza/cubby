@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { suggestionTable, auditLog, image } from "~/server/db/schema";
+import { confirmImageDescription } from "~/server/domains/image/repo/image-description-confirmation";
+import { readConfirmedDescription } from "~/server/domains/image/repo/image-description-read";
 import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
 import {
   kernelCtx,
@@ -19,7 +21,6 @@ import {
   publishSuggestion,
   recordFeedback,
 } from "~/server/generic/suggestions/repo/suggestion";
-import { readConfirmedDescription } from "~/server/generic/suggestions/repo/suggestion-image";
 import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
@@ -219,81 +220,6 @@ describe("shared Suggestion history", () => {
       ).rejects.toThrow(/resolved/);
     },
   );
-  it("replays an image confirmation without allowing another operation to reuse its success", async () => {
-    const picture = await insertWithShortcode(ctx.db, "image", {
-      key: "synthetic/replay.jpg",
-      filename: "replay.jpg",
-      size: 1,
-      contentType: "image/jpeg",
-      sha256: "a".repeat(64),
-    });
-    const prediction = await publishSuggestion(ctx.db, {
-      publicationKey: "synthetic:image-replay",
-      family: "image_description",
-      subject: {
-        kind: "image_description",
-        entity: "image",
-        recordId: picture.id,
-        contentHash: picture.sha256,
-      },
-      judgment: "Original image text",
-      fingerprint: picture.sha256,
-      producer: null,
-      evidence: null,
-    });
-    await getDb(ctx.db)
-      .update(suggestionTable)
-      .set({ createdAt: new Date("2000-01-01T00:00:00Z") })
-      .where(eq(suggestionTable.id, prediction.id));
-    const command = {
-      suggestionId: prediction.id,
-      operationId: "synthetic:image-command",
-      verdict: "wrong" as const,
-      intent: "apply" as const,
-      correction: { present: true as const, value: "Confirmed image text" },
-    };
-    const first = await reviewSuggestion(ctx.db, kernelCtx(ctx), command);
-    expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), command)).toEqual(
-      first,
-    );
-    expect(
-      (
-        await readConfirmedDescription(
-          ctx.db,
-          parseEntityId("image", picture.id),
-        )
-      )?.confirmedAt.getTime(),
-    ).toBeGreaterThan(new Date("2000-01-01T00:00:00Z").getTime());
-    const confirmedAt = (
-      await readConfirmedDescription(ctx.db, parseEntityId("image", picture.id))
-    )?.confirmedAt;
-    await expect(
-      reviewSuggestion(ctx.db, kernelCtx(ctx), {
-        ...command,
-        operationId: "synthetic:new-image-command",
-        correction: { present: true, value: "Later text" },
-      }),
-    ).rejects.toThrow(/resolved/);
-    // A later command that never applied does not move the confirmation time.
-    await recordFeedback(ctx.db, {
-      suggestionId: prediction.id,
-      operationId: "synthetic:later-failed-grade",
-      verdict: "wrong",
-      intent: "apply",
-      authority: "member",
-      actorUserId: ctx.actor.userId,
-      correction: { present: true, value: "Unapplied text" },
-    });
-    expect(
-      (
-        await readConfirmedDescription(
-          ctx.db,
-          parseEntityId("image", picture.id),
-        )
-      )?.confirmedAt,
-    ).toEqual(confirmedAt);
-  });
-
   it("fences confirmed descriptions to current image content in direct and batch readers", async () => {
     const picture = await insertWithShortcode(ctx.db, "image", {
       key: "synthetic/content-fence.jpg",
@@ -302,27 +228,16 @@ describe("shared Suggestion history", () => {
       contentType: "image/jpeg",
       sha256: "a".repeat(64),
     });
-    const prediction = await publishSuggestion(ctx.db, {
-      publicationKey: "synthetic:content-fenced-description",
-      family: "image_description",
-      subject: {
-        kind: "image_description",
-        entity: "image",
-        recordId: picture.id,
-        contentHash: picture.sha256,
+    await confirmImageDescription(
+      ctx.db,
+      {
+        imageId: picture.id,
+        contentHash: "a".repeat(64),
+        description: "Confirmed description",
+        operationId: crypto.randomUUID(),
       },
-      judgment: "Original description",
-      fingerprint: picture.sha256,
-      producer: null,
-      evidence: null,
-    });
-    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
-      suggestionId: prediction.id,
-      operationId: "synthetic:confirm-description",
-      verdict: "wrong",
-      intent: "apply",
-      correction: { present: true, value: "Confirmed description" },
-    });
+      ctx.actor.userId,
+    );
     const readDirect = () =>
       readConfirmedDescription(ctx.db, parseEntityId("image", picture.id));
     const readBatch = async () =>
@@ -331,24 +246,29 @@ describe("shared Suggestion history", () => {
       );
     expect((await readDirect())?.description).toBe("Confirmed description");
     expect((await readBatch())?.description).toBe("Confirmed description");
-    const retained = await readSuggestionDecisions(ctx.db, prediction.id);
     await getDb(ctx.db)
       .update(image)
       .set({ sha256: "b".repeat(64) })
       .where(eq(image.id, picture.id));
     expect(await readDirect()).toBeNull();
     expect((await readBatch())?.description ?? null).toBeNull();
-    expect(await readSuggestionDecisions(ctx.db, prediction.id)).toEqual(
-      retained,
-    );
     expect(
       (
-        await getDb(ctx.db)
-          .select()
-          .from(suggestionTable)
-          .where(eq(suggestionTable.id, prediction.id))
-      )[0]?.confirmedValue,
-    ).toEqual({ present: true, value: "Confirmed description" });
+        await getDb(ctx.db).select().from(image).where(eq(image.id, picture.id))
+      )[0]?.confirmedDescription,
+    ).toBe("Confirmed description");
+    await expect(
+      confirmImageDescription(
+        ctx.db,
+        {
+          imageId: picture.id,
+          contentHash: "a".repeat(64),
+          description: "Stale correction",
+          operationId: crypto.randomUUID(),
+        },
+        ctx.actor.userId,
+      ),
+    ).rejects.toThrow(/evidence changed/);
     await getDb(ctx.db)
       .update(image)
       .set({ sha256: "a".repeat(64), deletedAt: new Date() })
@@ -359,25 +279,22 @@ describe("shared Suggestion history", () => {
 
   // Public history must never impersonate a private domain-application receipt.
   it("refuses public receipt namespace collisions and forged application receipts", async () => {
-    const picture = await insertWithShortcode(ctx.db, "image", {
-      key: "synthetic/receipt-collision.jpg",
-      filename: "receipt-collision.jpg",
-      size: 1,
-      contentType: "image/jpeg",
-      sha256: "b".repeat(64),
+    const record = await productFixture(ctx, "Synthetic receipt collision", {
+      notes: "Synthetic saved note",
     });
     const prediction = await publishSuggestion(ctx.db, {
       publicationKey: "synthetic:receipt-collision",
-      family: "image_description",
+      family: "field",
       subject: {
-        kind: "image_description",
-        entity: "image",
-        recordId: picture.id,
-        contentHash: picture.sha256,
+        kind: "field",
+        entity: "product",
+        recordId: null,
+        field: "notes",
+        draft: true,
       },
-      judgment: "Synthetic image description",
-      fingerprint: picture.sha256,
+      judgment: { value: "Synthetic saved note" },
       producer: null,
+      fingerprint: "synthetic-receipt",
       evidence: null,
     });
     for (const operationId of [
@@ -416,29 +333,17 @@ describe("shared Suggestion history", () => {
         operationId: "synthetic-command",
         verdict: "correct",
         intent: "apply",
+        application: { kind: "saved_field", recordId: record.id },
       }),
     ).rejects.toThrow(/receipt/);
-    expect(
-      await readConfirmedDescription(
-        ctx.db,
-        parseEntityId("image", picture.id),
-      ),
-    ).toBeNull();
     const applied = await reviewSuggestion(ctx.db, kernelCtx(ctx), {
       suggestionId: prediction.id,
       operationId: "synthetic-genuine-command",
       verdict: "correct",
       intent: "apply",
+      application: { kind: "saved_field", recordId: record.id },
     });
     expect(applied.applied).toBe(true);
-    expect(
-      (
-        await readConfirmedDescription(
-          ctx.db,
-          parseEntityId("image", picture.id),
-        )
-      )?.description,
-    ).toBe("Synthetic image description");
   });
 
   it("retires a nonsearchable category projection while retaining immutable history", async () => {

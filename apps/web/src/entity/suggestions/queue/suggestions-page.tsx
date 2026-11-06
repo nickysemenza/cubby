@@ -275,7 +275,7 @@ export function SuggestionsPage({
         preset={
           search.family === "product_pair"
             ? { families: ["recommendation"] }
-            : search.family && search.family !== "image_description"
+            : search.family
               ? { families: [search.family] }
               : undefined
         }

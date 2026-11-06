@@ -8,7 +8,6 @@ import {
   suggestionReviewInput,
   suggestionFamily,
   suggestionReviewBatchInput,
-  suggestionSubjects,
   suggestionReviewOut,
   mailDecisionFamily,
   type SuggestionFamily,
@@ -21,12 +20,10 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import {
   getDb,
-  notDeleted,
   withTransactionDatabase,
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
-import { suggestionTable, image } from "~/server/db/schema";
-import { withImageCorrectionIntent } from "~/server/domains/image/repo/image-correction-lock";
+import { suggestionTable } from "~/server/db/schema";
 import type { EmailEvidenceWriteScope } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { withEmailReviewBoundary } from "~/server/domains/purchase-import/repo/email-review-intent";
 import {
@@ -36,11 +33,9 @@ import {
 import { statementSuggestionSourceHeld } from "~/server/domains/transaction-import/repo/source-observation-state";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import {
   assertApplicationReceipt,
-  publishSuggestion,
   recordFeedback,
   recordFeedbackWithInsertion,
 } from "~/server/generic/suggestions/repo/suggestion";
@@ -272,36 +267,6 @@ async function settleReview(
       }
       prediction = undefined;
     }
-  } else {
-    if (
-      !input.standalone ||
-      !input.correction.present ||
-      typeof input.correction.value !== "string"
-    )
-      throw new Error(
-        "Standalone image confirmation requires an Image and corrected description",
-      );
-    const imageId = await resolveOrThrow(db, "image", input.standalone.id);
-    const [source] = await getDb(db)
-      .select({ hash: image.sha256 })
-      .from(image)
-      .where(and(eq(image.id, imageId), notDeleted(image)))
-      .limit(1);
-    if (!source) throw new Error("Image not found");
-    prediction = await publishSuggestion(db, {
-      publicationKey: `image-confirmation:${context.actorContext.userId}:${input.operationId}`,
-      family: "image_description",
-      subject: {
-        kind: "image_description",
-        entity: "image",
-        recordId: imageId,
-        contentHash: source.hash,
-      },
-      judgment: null,
-      producer: null,
-      fingerprint: source.hash,
-      evidence: input.evidence,
-    });
   }
   if (!prediction) throw new Error("Suggestion not found");
   // Problems findings and grading rosters are resolved by their own paths.
@@ -386,8 +351,6 @@ async function settleReview(
     throw new Error("Only field Suggestions support draft acceptance");
   assertApplicationFamily(prediction.family, input.application);
   if (input.correction.present) {
-    if (prediction.family === "image_description")
-      z.string().parse(input.correction.value);
     // A different choice is a Wrong verdict whose correction is that choice.
     if (
       prediction.family === "statement_transaction" &&
@@ -400,10 +363,6 @@ async function settleReview(
         "A corrected Transaction suggestion must apply the corrected action",
       );
   }
-  const imageSubject =
-    prediction.family === "image_description"
-      ? suggestionSubjects.image_description.parse(prediction.subject)
-      : null;
   const writeReview = (transactionDb: Database) =>
     recordFeedbackWithInsertion(transactionDb, {
       ...input,
@@ -417,9 +376,12 @@ async function settleReview(
         ...(automatic && { rule: automatic.rule }),
       },
     });
-  const publication = imageSubject
-    ? await withImageCorrectionIntent(db, imageSubject, writeReview)
-    : await withEmailReviewBoundary(db, prediction, writeReview, emailScope);
+  const publication = await withEmailReviewBoundary(
+    db,
+    prediction,
+    writeReview,
+    emailScope,
+  );
   const event = publication.event;
   if (input.intent === "draft") {
     return {
@@ -647,14 +609,12 @@ async function settleReview(
     }
     return state?.status ?? "historical";
   };
-  const status = imageSubject
-    ? await withImageCorrectionIntent(db, imageSubject, writeHistory)
-    : await withEmailReviewBoundary(
-        db,
-        prediction,
-        (scopedDb) => withTransactionDatabase(scopedDb, writeHistory),
-        emailScope,
-      );
+  const status = await withEmailReviewBoundary(
+    db,
+    prediction,
+    (scopedDb) => withTransactionDatabase(scopedDb, writeHistory),
+    emailScope,
+  );
   return {
     suggestionId: prediction.id,
     feedbackId: event.id,

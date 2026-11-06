@@ -13,7 +13,6 @@ import {
   type SuggestionFamilyQuery,
   type SuggestionKey,
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
-import { pendingImageDescriptionEligibility } from "~/server/generic/suggestions/repo/suggestion-touching";
 
 export const actions = (
   ...verbs: (
@@ -27,7 +26,7 @@ export const actions = (
 ) => verbs.map((verb) => ({ verb, ownerOnly: false }));
 export const outcomes =
   (
-    family: "product_pair" | "image_description",
+    family: "product_pair",
   ): SuggestionFamilyPresentation<typeof family>["outcomes"] =>
   async (db, filters) => {
     const { rows } = await unwrapDb(db).execute<{
@@ -49,7 +48,7 @@ export const outcomes =
 export async function storedKeys(
   db: Database,
   query: SuggestionFamilyQuery,
-  family: "product_pair" | "image_description",
+  family: "product_pair",
 ): Promise<SuggestionKey[]> {
   if (query.filters.status !== "pending") return [];
   const declaration = reviewFamilyDeclarations[family];
@@ -61,7 +60,7 @@ export async function storedKeys(
   }>(sql`
     SELECT s.id, s.fingerprint, s."createdAt", COALESCE((s.judgment->>${suggestionJudgments.product_pair.keyof().enum.conflict})::boolean, false) AS conflict
     FROM "Suggestion" s
-    WHERE ${family === "image_description" ? pendingImageDescriptionEligibility() : sql`s.family = ${family} AND s.active AND s.status = ${suggestionStatus.enum.pending} AND s.suppression IS NULL AND ${declaration.actionable}`}
+    WHERE s.family = ${family} AND s.active AND s.status = ${suggestionStatus.enum.pending} AND s.suppression IS NULL AND ${declaration.actionable}
       AND ${suggestionIdScope(query.suggestionIds, sql`s.id`)}
       ${query.filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${query.filters.runId})` : sql``}
       ${

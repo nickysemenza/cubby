@@ -2457,12 +2457,7 @@ const buildMetadataSchemas = () => {
        */
       suggestions: z
         .array(
-          z.enum([
-            "statement_transaction",
-            "transfer_pair",
-            "product_pair",
-            "image_description",
-          ]),
+          z.enum(["statement_transaction", "transfer_pair", "product_pair"]),
         )
         .optional()
         .default([]),
