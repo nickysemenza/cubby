@@ -115,6 +115,19 @@ it("retains model usage and attempt errors before failed replay teardown", async
             ],
             diagnostics: ["[purchase-agent] Synthetic operation failure"],
             usd: { "claude-haiku-5-5": 0.01 },
+            usage: [
+              {
+                feature: "purchase_import_extraction",
+                model: "gpt-6-luna",
+                status: "succeeded",
+                standardCost: null,
+                inputTokens: 100,
+                outputTokens: 20,
+                cacheReadTokens: 0,
+                cacheWriteTokens: 0,
+                durationMs: 200,
+              },
+            ],
           };
         },
         record: (report) => {
@@ -137,6 +150,15 @@ it("retains model usage and attempt errors before failed replay teardown", async
       ],
       diagnostics: ["[purchase-agent] Synthetic operation failure"],
       usd: { "claude-haiku-5-5": 0.01 },
+      usage: [
+        {
+          feature: "purchase_import_extraction",
+          standardCost: null,
+          inputTokens: 100,
+          outputTokens: 20,
+          durationMs: 200,
+        },
+      ],
     },
   ]);
 });

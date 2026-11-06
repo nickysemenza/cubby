@@ -94,6 +94,12 @@ pending: nothing here starts Product research.
    MCP handler with a run-bound delegation (`agent-services.ts`
    `mcpFetch`). Instructions: `.agents/skills/purchase-import/references/mail-import.md`
    via `server/domains/purchase-agent/service/import-run-workflows.ts`.
+   Stronger-model escalation is explicitly requested with a blocker category.
+   Missing evidence, member decisions, held sources and transient failures do
+   not escalate. An unresolved disposition or refused preparation does not
+   automatically spend a stronger-model turn; repairable extraction, identity,
+   contradictory evidence or an unclassified reasoning gap may request one.
+   Its durable per-Email decision survives re-claims and coordinator recovery.
    A Mail import claim (`operations/mail-import-claim.ts`) returns the
    claimed Email's compact read (`readMail`, bounded by `fitMailRead`). Before
    claiming, it settles leading roster Emails a Mail import rule decides
@@ -224,6 +230,14 @@ until a session itemizes it.
 | Findings and their fixes                   | `findings.ts`                                                          |
 
 ## Hidden dependencies
+
+The existing `eval:mail-replay` reports all Run-scoped AI usage, including
+extraction and audit, with raw token/cache counts, duration and unknown prices.
+Known cost subtotals are not complete costs when calls are unpriced. Synthetic
+replays fail on disposition, amount, line or supported-link disagreements;
+free-form unresolved wording remains a review difference. Private replay
+disagreements remain report-only evidence for member grading. Scripted replay
+proves execution plumbing, not model quality or speed.
 
 - Pi's instructions are skill Markdown (`mail-import.md`, `extraction.md`, the
   settlement rules) selected in `import-run-workflows.ts`; editing them changes

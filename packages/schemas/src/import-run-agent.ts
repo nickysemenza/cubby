@@ -99,8 +99,8 @@ export type ImportRunAgentConfig = {
   model: SupportedChatModel;
   /**
    * The model one work item escalates to (Mail import: an `escalate_import_work`
-   * call, a second `purchase_import.prepare` refusal, or an `unresolved`
-   * resolution the primary would record). Absent, or equal to `model`, turns
+   * call with a repairable reasoning gap). Unresolved outcomes and prepare
+   * refusals do not force escalation. Absent, or equal to `model`, turns
    * escalation off: no tool is mounted and no request changes.
    */
   escalationModel?: SupportedChatModel;

@@ -119,6 +119,20 @@ export const photoInventoryToolInputs = {
   }),
   stop_import_run_for_review: stopForReviewInput.extend(modelId),
   escalate_import_work: z.object({
+    category: z
+      .enum([
+        "extraction",
+        "identity",
+        "contradiction",
+        "unknown",
+        "missing_evidence",
+        "member_decision",
+        "source_held",
+        "transient_failure",
+      ])
+      .describe(
+        "Classify the blocker. Evidence, member authority, ownership and transport gaps cannot be solved by escalation.",
+      ),
     reason: z
       .string()
       .trim()

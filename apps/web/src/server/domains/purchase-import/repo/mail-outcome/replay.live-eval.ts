@@ -30,6 +30,7 @@ import {
 } from "../../operations/order-import.fixtures";
 import {
   observeMailReplayAttempt,
+  mailReplayDisagreement,
   type MailReplayCaseReport,
 } from "../../service/mail-replay-report";
 import { startMailImport } from "../mail-import-run";
@@ -208,7 +209,16 @@ describe("isolated Mail coordinator replay", () => {
           report.actualModels.includes(primary),
         ).length,
         disagreements,
-        /** Standard (list-price) coordinator cost per case, every case. */
+        measurements: reports.map((report) => ({
+          case: report.case,
+          seconds: report.seconds ?? null,
+          usage: report.usage ?? null,
+          // A known subtotal is not a complete cost when usage is unpriced.
+          unpricedCalls:
+            report.usage?.filter((row) => row.standardCost === null).length ??
+            null,
+        })),
+        /** Known standard cost of every Run-scoped feature, not just coordination. */
         usd: reports.map((report) => ({
           case: report.case,
           total: Object.values(report.usd).reduce((sum, usd) => sum + usd, 0),
@@ -317,19 +327,20 @@ describe("isolated Mail coordinator replay", () => {
                   .limit(1);
                 const usage = await getDb(ctx.db)
                   .select({
+                    feature: aiUsage.feature,
                     model: aiUsage.model,
                     status: aiUsage.status,
                     transport: aiUsage.transport,
                     failure: aiUsage.failure,
                     standardCost: aiUsage.standardCost,
+                    inputTokens: aiUsage.inputTokens,
+                    outputTokens: aiUsage.outputTokens,
+                    cacheReadTokens: aiUsage.cacheReadTokens,
+                    cacheWriteTokens: aiUsage.cacheWriteTokens,
+                    durationMs: aiUsage.durationMs,
                   })
                   .from(aiUsage)
-                  .where(
-                    and(
-                      eq(aiUsage.runId, runId),
-                      eq(aiUsage.feature, "purchase_import_agent"),
-                    ),
-                  )
+                  .where(eq(aiUsage.runId, runId))
                   .orderBy(aiUsage.createdAt);
                 const [failed] = await getDb(ctx.db)
                   .select({
@@ -349,7 +360,11 @@ describe("isolated Mail coordinator replay", () => {
                         ?.mailOutcome.judgment ?? null)
                     : null,
                   actualModels: usage
-                    .filter((row) => row.status === "succeeded")
+                    .filter(
+                      (row) =>
+                        row.status === "succeeded" &&
+                        row.feature === "purchase_import_agent",
+                    )
                     .map((row) => row.model),
                   failedAttempts: usage
                     .filter((row) => row.status !== "succeeded")
@@ -360,6 +375,7 @@ describe("isolated Mail coordinator replay", () => {
                       ),
                     ),
                   diagnostics: await diagnose(),
+                  usage,
                   usd: usage.reduce<Record<string, number>>(
                     (byModel, row) => ({
                       ...byModel,
@@ -476,6 +492,14 @@ describe("isolated Mail coordinator replay", () => {
             );
           }
           expect(observedOutcome).not.toBeNull();
+          // Private cases retain report-only grading. Synthetic facts must
+          // agree; free-form gap wording is not a different disposition.
+          const requiredDisagreements = inputUrl
+            ? []
+            : mailReplayDisagreement(sample.baseline, observedOutcome).filter(
+                (field) => field !== "reason",
+              );
+          expect(requiredDisagreements).toEqual([]);
         } catch (error) {
           if (!reports.some((report) => report.case === index + 1))
             reports.push(unavailable(index + 1, String(error)));

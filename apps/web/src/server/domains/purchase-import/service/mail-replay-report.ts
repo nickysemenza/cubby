@@ -59,8 +59,19 @@ export type MailReplayCaseReport = {
   diagnostics: string[];
   /** The replayed outcome, for grading the disagreement in this session. */
   outcome: Outcome | null;
-  /** Standard (list-price) cost of the case's coordinator calls, by model. */
+  /** Known standard cost of all Run-scoped calls; null prices stay visible in usage. */
   usd: Record<string, number>;
+  usage?: {
+    feature: string;
+    model: string;
+    status: string;
+    standardCost: number | null;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    cacheReadTokens: number | null;
+    cacheWriteTokens: number | null;
+    durationMs: number;
+  }[];
 };
 
 /** Observe a failed attempt while its Worker and database still exist. */
@@ -76,6 +87,7 @@ export async function observeMailReplayAttempt(input: {
     failedAttempts: string[];
     usd: Record<string, number>;
     diagnostics: string[];
+    usage?: MailReplayCaseReport["usage"];
   }>;
   record: (report: MailReplayCaseReport) => void;
 }) {
@@ -107,6 +119,7 @@ export async function observeMailReplayAttempt(input: {
       diagnostics: observation.diagnostics,
       outcome: observation.outcome,
       usd: observation.usd,
+      usage: observation.usage,
     });
   } catch (error) {
     if (completion.kind === "failed")

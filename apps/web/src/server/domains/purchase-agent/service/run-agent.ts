@@ -345,8 +345,7 @@ export class PurchaseImportRunAgent
         tools: runAgentTools(
           () => this.services(),
           (api, context) => this.toolProgressStamp(api, context),
-          (reason) =>
-            escalation.escalate({ reason: "requested", detail: reason }),
+          (request) => escalation.escalate(request),
         ).filter(
           (tool) =>
             agentTools.has(tool.name) &&
@@ -357,7 +356,6 @@ export class PurchaseImportRunAgent
           ...(escalation.active
             ? [
                 hook(ToolTask, {
-                  beforeTool: (call) => escalation.beforeTool(call),
                   afterTool: (call, result) =>
                     escalation.afterTool(call, result),
                 }),
