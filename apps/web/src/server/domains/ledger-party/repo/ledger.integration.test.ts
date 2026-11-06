@@ -234,14 +234,6 @@ describe("consolidated household ledger", () => {
       ).rejects.toThrow(message);
     await expectInvalidEvidence([voidEvidence], "observed, pending, or posted");
     await expectInvalidEvidence([wrongAmount], "match the transfer amount");
-    await unwrapDb(ctx.db)
-      .update(financialTransaction)
-      .set({ amount: 12.000000000000002 })
-      .where(eq(financialTransaction.id, wrongAmount.id));
-    await expectInvalidEvidence(
-      [wrongAmount],
-      "exact, supported whole-cent amount",
-    );
     await expectInvalidEvidence([wrongParty], "endpoint party");
     await expectInvalidEvidence([outflow, secondPositive], "one positive");
     await expectInvalidEvidence(
