@@ -452,6 +452,15 @@ export async function resolveSourceIdentity(
         JOIN "SourceOccurrence" other ON other.id=record."occurrenceId"
         WHERE record.source=${owner.source} AND record."providerTransactionId"=${owner.providerIdentity}
           AND record."occurrenceId"<>${owner.id}::uuid AND other."identityKind"<>${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
+      ) OR
+        -- includes-deleted: retained alias overlaps still fence unresolved identities after tombstoning.
+      EXISTS (
+        SELECT 1 FROM "FinancialEvidenceAlias" own
+        JOIN "FinancialEvidenceAlias" sibling ON sibling.source=own.source AND sibling.value=own.value
+        JOIN "SourceTransactionRecord" record ON record.id=sibling."observationId"
+        JOIN "SourceOccurrence" other ON other.id=record."occurrenceId"
+        WHERE own."occurrenceId"=${owner.id}::uuid AND record."occurrenceId"<>${owner.id}::uuid
+          AND other."identityKind"<>${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
       ) AS remaining`)
       : { rows: [] };
   const [updatedOwner] = await db

@@ -4,10 +4,11 @@ import { and, eq, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { isTransaction, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sourceOccurrence, sourceTransactionRecord } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { createAppError } from "~/server/errors/app-error";
 
 import { auditEvidenceRows } from "./intake-audit";
@@ -114,6 +115,10 @@ export async function retireDeletedUnprovenOwners(
 ): Promise<void> {
   if (!ids.length) return;
   const query = unwrapDb(db);
+  if (!isTransaction(query))
+    throw new Error(
+      "Unproven owner retirement must share the bank-record deletion transaction.",
+    );
   const selected = await query
     .select({ id: sourceTransactionRecord.occurrenceId })
     .from(sourceTransactionRecord)
@@ -150,11 +155,12 @@ export async function retireDeletedUnprovenOwners(
   const liveIds = new Set(live.map((row) => row.id));
   const owners = candidates.filter((owner) => !liveIds.has(owner.id));
   if (!owners.length) return;
+  const at = new Date();
   const retired = await query
     .update(sourceOccurrence)
     .set({
-      deletedAt: new Date(),
-      updatedAt: new Date(),
+      deletedAt: at,
+      updatedAt: at,
       version: sql`${sourceOccurrence.version}+1`,
     })
     .where(
@@ -164,5 +170,10 @@ export async function retireDeletedUnprovenOwners(
       ),
     )
     .returning();
+  await tombstoneEntityIdentities(
+    query,
+    owners.map((owner) => owner.id),
+    at,
+  );
   await auditEvidenceRows(db, actor, "sourceOccurrence", owners, retired);
 }

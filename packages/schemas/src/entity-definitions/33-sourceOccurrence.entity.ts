@@ -375,6 +375,13 @@ export const { definition, readSchemas } = defineEntityModel(
           stored: true,
           placeholder: "Filter source state...",
         },
+        {
+          columnId: "supersededByOccurrenceId",
+          kind: "idMulti",
+          brandRef: { entity: "sourceOccurrence" },
+          deriveSchema: true,
+          placeholder: "Filter replacement group...",
+        },
       ],
     },
     search: false,

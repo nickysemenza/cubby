@@ -17,6 +17,7 @@ import {
 } from "@cubby/schemas/statement-suggestion";
 import { workQueueInput } from "@cubby/schemas/work-queue";
 import { DECISION_MODEL } from "@cubby/shared/ai/models";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
@@ -75,6 +76,7 @@ import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { renewJob } from "~/server/generic/jobs/jobs.fixtures";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   captureBackgroundQueue,
   drainStoredDerived,
@@ -2735,6 +2737,27 @@ describe("statement Transaction suggestions", () => {
       providerTransactionId: "synthetic-revision-dismissal",
     });
     await record(ctx, [observed]);
+    const [legacyOwner] = await getDb(ctx.db)
+      .select({
+        id: sourceOccurrence.id,
+        version: sourceOccurrence.version,
+        reviewState: sourceOccurrence.reviewState,
+        currentObservationId: sourceOccurrence.currentObservationId,
+        acceptedTransactionId: sourceOccurrence.acceptedTransactionId,
+      })
+      .from(sourceOccurrence);
+    const [legacyRecord] = (await listSourceTransactionRecords(ctx.db, {}))
+      .data;
+    if (!legacyOwner || !legacyRecord)
+      throw new Error("Synthetic predecessor evidence missing");
+    // Frozen predecessor hash: removing a presentation field must not revive unchanged dismissed advice.
+    const predecessorOwnerHash = await sha256Hex(
+      canonicalJson(jsonSnapshot.parse({ ...legacyOwner, suppressed: false })),
+    );
+    const [proposal] = await buildChargeProposals(ctx.db, [
+      { source: legacyRecord.source, chargeKey: legacyRecord.chargeKey },
+    ]);
+    expect(proposal?.providerScopeFingerprint).toBe(predecessorOwnerHash);
     await generate(ctx);
     await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
     const [current] = await readPendingStatements(ctx);
@@ -2760,6 +2783,16 @@ describe("statement Transaction suggestions", () => {
     expect(dismissed?.suppression?.fingerprint).toBe(dismissed?.fingerprint);
     await generate(ctx);
     expect(await readPendingStatements(ctx)).toEqual([]);
+    const [retainedDismissal] = await getDb(ctx.db)
+      .select()
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, current.assessmentId));
+    expect(retainedDismissal).toMatchObject({
+      active: true,
+      status: "resolved",
+      data: { evidenceFingerprint: proposal?.evidenceFingerprint },
+    });
+    expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
     await getDb(ctx.db)
       .update(suggestionTable)
       .set({

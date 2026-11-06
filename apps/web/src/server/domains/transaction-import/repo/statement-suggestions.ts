@@ -857,7 +857,10 @@ async function providerIdentityFacts(
     result.set(chargeId(charge), {
       unresolved: !owner || owner.reviewState !== "ready",
       fingerprint: await sha256Hex(
-        canonicalJson(jsonSnapshot.parse(owner ?? null)),
+        // Presentation suppression no longer owns eligibility; keep its former false hash slot so unchanged paid advice and dismissals retain their evidence revision.
+        canonicalJson(
+          jsonSnapshot.parse(owner ? { ...owner, suppressed: false } : null),
+        ),
       ),
     });
   }

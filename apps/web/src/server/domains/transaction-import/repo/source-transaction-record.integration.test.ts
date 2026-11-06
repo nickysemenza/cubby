@@ -21,6 +21,7 @@ import {
   sourceHistoricalTransactionRows,
   sourceOccurrenceHasUnresolvedHistory,
 } from "~/server/db/computed/source-occurrence-history-sql";
+import { entityIdentity } from "~/server/db/entity-identity-schema";
 import {
   databaseForTransaction,
   getDb,
@@ -1553,6 +1554,11 @@ describe("statement row ledger", () => {
       disposition: "ignored",
       dispositionNote: "Keep this explicit financial decision",
     });
+    const [identity] = await getDb(ctx.db)
+      .select()
+      .from(entityIdentity)
+      .where(eq(entityIdentity.id, owner.id));
+    expect(identity?.deletedAt).toEqual(retired?.deletedAt);
     await deleteThroughKernel(ctx.db, ctx.actor, "financialAccount", [
       account.output.id,
     ]);
@@ -1563,97 +1569,153 @@ describe("statement row ledger", () => {
     expect(deletedAccount?.deletedAt).toBeInstanceOf(Date);
   });
 
-  it("keeps provider authority held while a replaced legacy owner retains accepted money", async () => {
-    await record([
-      rowInput({ providerTransactionId: "synthetic-overlap" }),
-      rowInput({ providerTransactionId: "synthetic-overlap" }),
-    ]);
-    const legacy = (await listSourceTransactionRecords(ctx.db, {})).data;
-    const account = await createRepoEntity(ctx, "financialAccount", {
-      name: "Synthetic overlap account",
-    });
-    const money = await createRepoEntity(ctx, "financialTransaction", {
-      accountId: account.output.id,
-      kind: "purchase",
-      status: "posted",
-      postedDate: "2026-05-04",
-      amount: 128.5,
-      sourceRefs: [],
-    });
-    await record(
-      [
-        providerRow({
-          providerTransactionId: "synthetic-overlap",
-          providerData: {
-            id: "synthetic-overlap",
-            account_id: "synthetic-account",
-          },
-        }),
-      ],
-      { fingerprint: "synthetic-overlap-provider" },
-    );
-    await updateSourceTransactionRecords(
-      ctx.db,
-      {
-        selector: { filter: { source: "monarch" } },
-        data: { accountId: account.output.id },
-      },
-      ctx.actor,
-    );
-    const owners = await getDb(ctx.db).select().from(sourceOccurrence);
-    const target = owners.find((owner) => owner.identityKind === "provider");
-    const source = owners.find(
-      (owner) => owner.shortcode === legacy[0]?.chargeKey,
-    );
-    const other = owners.find(
-      (owner) => owner.shortcode === legacy[1]?.chargeKey,
-    );
-    if (!target?.currentObservationId || !source || !other || !legacy[0])
-      throw new Error("Synthetic reviewed overlap missing");
-    // Retained replacement history can still have an accepted reservation; it must fence readiness.
-    await getDb(ctx.db)
-      .update(sourceOccurrence)
-      .set({
-        acceptedTransactionId: money.entityId,
-        supersededByOccurrenceId: target.id,
-        replacementObservationId: target.currentObservationId,
-      })
-      .where(eq(sourceOccurrence.id, other.id));
-    await updateThroughKernel(
-      ctx.db,
-      ctx.actor,
-      "sourceTransactionRecord",
-      legacy[0].id,
-      {
-        identityResolution: {
-          decision: "assign",
-          expectedDisposition: "open",
-          expectedFactFingerprint: legacy[0].factFingerprint,
-          expectedOccurrenceVersion: source.version,
-          expectedAcceptedTransactionId: null,
-          historicalTransactionIds: [],
-          accountId: account.output.id,
-          occurrenceId: parseShortcodeFor("sourceOccurrence", target.shortcode),
-          expectedTargetVersion: target.version,
-          note: "Consolidate one reviewed legacy group only",
-          judgment: { disposition: "open" },
+  it.each(["provider", "legacy alias"])(
+    "keeps provider authority held while a replaced legacy owner retains accepted money through %s overlap",
+    async (overlap) => {
+      await record([
+        rowInput({ providerTransactionId: "synthetic-overlap" }),
+        rowInput({ providerTransactionId: "synthetic-overlap" }),
+      ]);
+      const legacy = (await listSourceTransactionRecords(ctx.db, {})).data;
+      const account = await createRepoEntity(ctx, "financialAccount", {
+        name: "Synthetic overlap account",
+      });
+      const money = await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        kind: "purchase",
+        status: "posted",
+        postedDate: "2026-05-04",
+        amount: 128.5,
+        sourceRefs: [],
+      });
+      await record(
+        [
+          providerRow({
+            providerTransactionId: "synthetic-overlap",
+            providerData: {
+              id: "synthetic-overlap",
+              account_id: "synthetic-account",
+            },
+          }),
+        ],
+        { fingerprint: "synthetic-overlap-provider" },
+      );
+      await updateSourceTransactionRecords(
+        ctx.db,
+        {
+          selector: { filter: { source: "monarch" } },
+          data: { accountId: account.output.id },
         },
-      },
-    );
-    const after = await getDb(ctx.db).select().from(sourceOccurrence);
-    expect(after.find((owner) => owner.id === target.id)).toMatchObject({
-      reviewState: "identity_conflict",
-      acceptedTransactionId: null,
-      currentObservationId: target.currentObservationId,
-    });
-    expect(after.find((owner) => owner.id === other.id)).toMatchObject({
-      acceptedTransactionId: money.entityId,
-    });
-    expect(await getSourceTransactionRecordSummary(ctx.db, {})).toMatchObject({
-      matched: 0,
-      unmatched: 0,
-    });
-  });
+        ctx.actor,
+      );
+      const owners = await getDb(ctx.db).select().from(sourceOccurrence);
+      const target = owners.find((owner) => owner.identityKind === "provider");
+      const source = owners.find(
+        (owner) => owner.shortcode === legacy[0]?.chargeKey,
+      );
+      const other = owners.find(
+        (owner) => owner.shortcode === legacy[1]?.chargeKey,
+      );
+      if (!target?.currentObservationId || !source || !other || !legacy[0])
+        throw new Error("Synthetic reviewed overlap missing");
+      if (overlap === "legacy alias") {
+        await getDb(ctx.db)
+          .update(sourceOccurrence)
+          .set({
+            identityKind: "unproven",
+            reviewState: "unproven",
+            physicalImportId: null,
+            physicalPosition: null,
+          })
+          .where(eq(sourceOccurrence.id, source.id));
+        await getDb(ctx.db)
+          .update(sourceTransactionRecord)
+          .set({ providerTransactionId: null })
+          .where(
+            sql`${sourceTransactionRecord.occurrenceId} IN (${source.id},${other.id})`,
+          );
+        await getDb(ctx.db)
+          .insert(financialEvidenceAlias)
+          .values(
+            [source, other].map((owner) => ({
+              source: "monarch",
+              kind: "chargeKey",
+              value: "synthetic-shared-legacy-key",
+              occurrenceId: owner.id,
+              observationId: owner.currentObservationId,
+              provenanceKey: `synthetic-overlap:${owner.id}`,
+              provenance: { kind: "synthetic_historical_key" },
+              scopeEvidence: {},
+            })),
+          );
+      }
+      // Retained replacement history can still have an accepted reservation; it must fence readiness.
+      await getDb(ctx.db)
+        .update(sourceOccurrence)
+        .set({
+          acceptedTransactionId: money.entityId,
+          supersededByOccurrenceId: target.id,
+          replacementObservationId: target.currentObservationId,
+        })
+        .where(eq(sourceOccurrence.id, other.id));
+      await updateThroughKernel(
+        ctx.db,
+        ctx.actor,
+        "sourceTransactionRecord",
+        legacy[0].id,
+        {
+          identityResolution: {
+            decision: "assign",
+            expectedDisposition: "open",
+            expectedFactFingerprint: legacy[0].factFingerprint,
+            expectedOccurrenceVersion: source.version,
+            expectedAcceptedTransactionId: null,
+            historicalTransactionIds: [],
+            accountId: account.output.id,
+            occurrenceId: parseShortcodeFor(
+              "sourceOccurrence",
+              target.shortcode,
+            ),
+            expectedTargetVersion: target.version,
+            note: "Consolidate one reviewed legacy group only",
+            judgment: { disposition: "open" },
+          },
+        },
+      );
+      const after = await getDb(ctx.db).select().from(sourceOccurrence);
+      expect(after.find((owner) => owner.id === target.id)).toMatchObject({
+        reviewState: "identity_conflict",
+        acceptedTransactionId: null,
+        currentObservationId: target.currentObservationId,
+      });
+      expect(after.find((owner) => owner.id === other.id)).toMatchObject({
+        acceptedTransactionId: money.entityId,
+      });
+      const reader = buildKernelContext(ctx.db, ctx.actor.userId);
+      const worklist = await callMcpTool(
+        createMcpServer(),
+        "entity_read",
+        {
+          action: "list",
+          entity: "sourceOccurrence",
+          filters: {
+            ids: [source.shortcode],
+            supersededByOccurrenceIdPresenceFilter: "none",
+          },
+        },
+        kernelRequestContext(reader),
+        { entityKernel: reader },
+      );
+      expect(worklist.isError).not.toBe(true);
+      expect(worklist.structuredContent).toMatchObject({ items: [] });
+      expect(await getSourceTransactionRecordSummary(ctx.db, {})).toMatchObject(
+        {
+          matched: 0,
+          unmatched: 0,
+        },
+      );
+    },
+  );
 
   it("refuses consolidation when retained raw provider claims contradict normalized identity", async () => {
     await record([

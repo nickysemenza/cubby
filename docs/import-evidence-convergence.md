@@ -629,7 +629,9 @@ The public number shape is unchanged: source amounts store exact signed bigint
 minor units, with checked dollar-number reads for shipped clients. `chargeKey`
 is always the judgment owner's opaque `SOC-` handle. `STR-` still addresses the
 original bank record. Find uncertain groups through Source occurrence's
-`reviewState: unproven` filter; a non-null owner never grants financial authority. Original v1/v2/v3 references
+`reviewState: unproven` and `supersededByOccurrenceIdPresenceFilter: none` filters;
+retired consolidated reservations remain readable as history. A non-null owner
+never grants financial authority. Original v1/v2/v3 references
 remain evidence aliases. Fresh source acceptance uses an SOC handle and rechecks
 its ready state, head, live target, exact amount and account. Old successful
 operation receipts replay before fresh guards; uncommitted legacy-reference
