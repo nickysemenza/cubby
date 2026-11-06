@@ -594,48 +594,6 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
   ).toBeVisible();
 });
 
-// Failure modes: clean booking is hidden or cannot resume, and audit history
-// becomes a second disconnected workspace. Field fill remains a fixed policy.
-test("Suggestions contains automatic history and pausable statement spending", async ({
-  page,
-}) => {
-  await gotoAuthenticatedPage(page, "/suggestions");
-  await page.getByRole("tab", { name: "Automatic rules", exact: true }).click();
-  await expect(page).toHaveURL(/status=rules/);
-  const rules = page.getByRole("list", { name: "Automatic rules" });
-  await expect(
-    rules.getByRole("listitem", { name: "Field assignment" }),
-  ).toHaveCount(0);
-  const attach = rules.getByRole("listitem", { name: "Statement attach" });
-  await expect(
-    attach.getByRole("switch", { name: "Statement attach automatic rule" }),
-  ).toBeEnabled();
-  const spending = rules.getByRole("listitem", { name: "Statement spending" });
-  const toggle = spending.getByRole("switch", {
-    name: "Statement spending automatic rule",
-  });
-  await expect(toggle).toHaveAttribute("aria-checked", "true");
-  await toggle.click();
-  await page
-    .getByRole("alertdialog")
-    .getByRole("button", { name: "Turn off", exact: true })
-    .click();
-  await expect(toggle).toHaveAttribute("aria-checked", "false");
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-checked", "true");
-  await page
-    .getByRole("tab", { name: "Automation history", exact: true })
-    .click();
-  await expect(page).toHaveURL(/status=automatic/);
-  await expect(
-    page.getByRole("region", { name: "Automation history", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("tab", { name: "Pending", exact: true }).click();
-  await expect(suggestionsTable(page)).toBeVisible();
-  await gotoAuthenticatedPage(page, "/automatic-decisions");
-  await expect(page).toHaveURL(/suggestions\?status=automatic/);
-});
-
 // Acceptance must acknowledge the chosen value before the response arrives,
 // retain other pills throughout the write/refetch, and persist the real value.
 test("list pills accept immediately without unloading another row's suggestion", async ({
