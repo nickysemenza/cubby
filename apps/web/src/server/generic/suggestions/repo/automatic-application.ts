@@ -1,18 +1,11 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import {
-  AUTOMATIC_RULE_KEYS,
-  automaticRuleOut,
-  automaticRulesOut,
-  setAutomaticRuleInput,
-  type AutomaticRuleKey,
-} from "@cubby/schemas/automatic-rule";
-import type { ActorContext } from "@cubby/schemas/context";
+import { type AutomaticRuleKey } from "@cubby/schemas/automatic-rule";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { statementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
 import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { createLogger } from "@cubby/worker-tracing";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -20,20 +13,17 @@ import {
   scrubErrorMessage,
 } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
-import { getDb, unwrapDb } from "~/server/db/helpers";
-import { notDeleted } from "~/server/db/helpers/predicates";
-import { suggestionTable, automaticRule } from "~/server/db/schema";
+import { unwrapDb } from "~/server/db/helpers";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { createAppError } from "~/server/errors/app-error";
 import {
   AUTOMATIC_RULES,
   type AutomaticRuleMatch,
   matchFieldRules,
   matchStatementRules,
   ruleBase,
-} from "~/server/generic/suggestions/repo/automatic-rules";
+} from "~/server/generic/suggestions/repo/automatic-policy";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { matchedRulesOf } from "~/server/generic/suggestions/repo/suggestion";
 import { canAutomaticallyFillField } from "~/server/generic/suggestions/repo/suggestion-review";
@@ -44,161 +34,15 @@ const ruleStamps = z
   .object({ matchedRules: z.array(z.string()).default([]) })
   .passthrough();
 
-async function storedRules(db: Database) {
-  const rows = await getDb(db).select().from(automaticRule);
-  return new Map(rows.map((row) => [row.ruleKey, row]));
-}
-
-type StoredRule = typeof automaticRule.$inferSelect;
-/** Import booking defaults on; an explicit pause survives policy revisions. */
-const isOn = (key: AutomaticRuleKey, row: StoredRule | undefined) =>
-  AUTOMATIC_RULES[key].execution === "field_policy" ||
-  (AUTOMATIC_RULES[key].execution === "import_clean"
-    ? (row?.enabled ?? true)
-    : Boolean(
-        row?.enabled && row.revision === AUTOMATIC_RULES[key].revision(),
-      ));
-
-/**
- * Inside the application's transaction: the rule is still on for this
- * revision. The share lock serializes the application with a member's
- * switch, so a rule turned off before the application commits applies
- * nothing.
- */
+/** Policy is fixed; old attach stamps cannot authorize an automatic application. */
 export async function assertAutomaticRuleOn(
-  db: Database,
+  _db: Database,
   key: AutomaticRuleKey,
   stamp: string,
-  suggestionId: string | null,
+  _suggestionId: string | null,
 ) {
-  const rule = AUTOMATIC_RULES[key];
-  if (rule.execution !== "member_switch") {
-    if (stamp !== ruleBase(key))
-      throw new Error("Automatic policy changed; refresh the suggestion");
-    if (rule.execution === "field_policy") return;
-    // Materialize the default before locking: a concurrent first pause must
-    // serialize with this application even when no switch row existed yet.
-    await getDb(db)
-      .insert(automaticRule)
-      .values({
-        family: rule.family,
-        ruleKey: key,
-        revision: rule.revision(),
-        enabled: true,
-      })
-      .onConflictDoNothing({
-        target: [automaticRule.family, automaticRule.ruleKey],
-      });
-  } else {
-    if (suggestionId === null)
-      throw new Error(
-        "A member-switched automatic rule requires its retained Suggestion.",
-      );
-    const [prediction] = await getDb(db)
-      .select({ judgment: suggestionTable.judgment })
-      .from(suggestionTable)
-      .where(eq(suggestionTable.id, suggestionId))
-      .limit(1);
-    const judgment = statementTransactionJudgment.safeParse(
-      prediction?.judgment,
-    );
-    if (judgment.success) {
-      const booking = matchStatementRules(judgment.data).find(
-        (match) => AUTOMATIC_RULES[match.key].execution === "import_clean",
-      );
-      // Attaching a clean spending charge also books it; it shares the pause.
-      if (booking)
-        await assertAutomaticRuleOn(
-          db,
-          booking.key,
-          booking.stamp,
-          suggestionId,
-        );
-    }
-  }
-  const [row] = await getDb(db)
-    .select()
-    .from(automaticRule)
-    .where(eq(automaticRule.ruleKey, key))
-    .for("share");
-  if (!isOn(key, row))
-    throw new Error(`Automatic rule ${key} is off; review the suggestion`);
-}
-
-function ruleSummary(key: AutomaticRuleKey, row: StoredRule | undefined) {
-  const rule = AUTOMATIC_RULES[key];
-  return automaticRuleOut.parse({
-    family: rule.family,
-    ruleKey: key,
-    revision: rule.revision(),
-    description: rule.description,
-    enabled: isOn(key, row),
-    enabledRevision: row?.revision ?? rule.revision(),
-    enabledAt: row?.enabledAt?.toISOString() ?? null,
-    enabledByUserId: row?.enabledByUserId ?? null,
-    enabledReason: row?.enabledReason ?? null,
-    disabledAt: row?.disabledAt?.toISOString() ?? null,
-    disabledReason: row?.disabledReason ?? null,
-  });
-}
-
-/** Every member-switched rule and its switch. */
-export async function listAutomaticRules(db: Database) {
-  const stored = await storedRules(db);
-  return automaticRulesOut.parse({
-    rules: AUTOMATIC_RULE_KEYS.filter(
-      (key) => AUTOMATIC_RULES[key].execution !== "field_policy",
-    ).map((key) => ruleSummary(key, stored.get(key))),
-  });
-}
-
-/** A member turns a rule on for its declared revision, or off. */
-export async function setAutomaticRule(
-  db: Database,
-  actor: ActorContext,
-  raw: z.input<typeof setAutomaticRuleInput>,
-) {
-  const input = setAutomaticRuleInput.parse(raw);
-  if (actor.userId === systemActor().userId)
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Only a member turns an Automatic rule on or off",
-    );
-  const rule = AUTOMATIC_RULES[input.ruleKey];
-  if (rule.execution === "field_policy")
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "This automatic policy is not an optional member switch.",
-    );
-  const now = new Date();
-  const change = input.enabled
-    ? {
-        revision: rule.revision(),
-        enabled: true,
-        enabledAt: now,
-        enabledByUserId: actor.userId,
-        enabledReason: `Turned on by a member for ${ruleBase(input.ruleKey)}`,
-        disabledAt: null,
-        disabledReason: null,
-      }
-    : {
-        enabled: false,
-        disabledAt: now,
-        disabledReason: "Turned off by a member",
-      };
-  await getDb(db)
-    .insert(automaticRule)
-    .values({
-      family: rule.family,
-      ruleKey: input.ruleKey,
-      revision: rule.revision(),
-      ...change,
-    })
-    .onConflictDoUpdate({
-      target: [automaticRule.family, automaticRule.ruleKey],
-      set: change,
-    });
-  return ruleSummary(input.ruleKey, (await storedRules(db)).get(input.ruleKey));
+  if (key === "statement_transaction.attach" || stamp !== ruleBase(key))
+    throw new Error("Automatic policy changed; refresh the suggestion");
 }
 
 const shortcodeEntity = z.enum(shortcodeEntities);
@@ -208,7 +52,6 @@ type Candidate = {
   family: string;
   status: string;
   active: boolean;
-  served: boolean;
   data: unknown;
   evidence: unknown;
   subject: unknown;
@@ -263,7 +106,7 @@ export async function applyAutomaticRules(
     /** Kernel services for field writes; the actor is always the system's. */
     context?: EntityKernelContext;
     onFailure?: (suggestionId: string, message: string) => void;
-    /** An import authorizes clean spending plans while their rule is enabled. */
+    /** An import authorizes automatic clean spending plans. */
     importClean?: boolean;
     /** Selection constraints survive regeneration and are rechecked by write admission. */
     statementScope?: StatementSuggestionScope;
@@ -272,7 +115,7 @@ export async function applyAutomaticRules(
   const outcome: AutomaticRuleOutcome = { applied: [], refused: [] };
   if (!suggestionIds.length) return outcome;
   const { rows } = await unwrapDb(db).execute<Candidate>(sql`
-    SELECT s.id, s.family, s.status, s.active, s.served, s.data, s.entity, s.field,
+    SELECT s.id, s.family, s.status, s.active, s.data, s.entity, s.field,
       s.kind, s.confidence, s.model, s.fingerprint, s."runId", s.judgment, s.evidence, s.subject
     FROM "Suggestion" s
     WHERE s.id IN (${sql.join(
@@ -280,29 +123,19 @@ export async function applyAutomaticRules(
       sql`, `,
     )})
   `);
-  const stored = await storedRules(db);
   let base = options.context;
   for (const row of rows) {
-    if (!row.active || row.status !== "pending" || !row.served) continue;
+    if (!row.active || row.status !== "pending") continue;
     const stamp = ruleStamps.safeParse(row.data).data;
     if (row.family !== "field" && !stamp?.matchedRules.length) continue;
     const current = currentMatches(row);
-    if (
-      current.some(
-        (match) =>
-          AUTOMATIC_RULES[match.key].execution === "import_clean" &&
-          !isOn(match.key, stored.get(match.key)),
-      )
-    )
-      continue;
     const matches = current
       .filter(
         (match) =>
           (row.family === "field" ||
             stamp?.matchedRules.includes(match.stamp)) &&
           (AUTOMATIC_RULES[match.key].execution !== "import_clean" ||
-            options.importClean === true) &&
-          isOn(match.key, stored.get(match.key)),
+            options.importClean === true),
       )
       .sort(
         (a, b) =>
@@ -313,26 +146,6 @@ export async function applyAutomaticRules(
     if (!match) continue;
     try {
       let application;
-      if (match.application.kind === "statement_attach") {
-        const { rows: codes } = await unwrapDb(db).execute<{
-          shortcode: string;
-        }>(sql`
-          SELECT shortcode FROM "FinancialTransaction"
-          WHERE id = ${match.application.transactionId}::uuid AND ${notDeleted("FinancialTransaction")}
-        `);
-        if (!codes[0])
-          throw new Error(
-            "The rule's candidate transaction no longer exists; review the suggestion",
-          );
-        application = {
-          kind: "statement_transaction" as const,
-          action: "attach" as const,
-          transactionId: codes[0].shortcode,
-          // An automatic attach never copies statement fields onto the transaction.
-          fields: [],
-          rejectedCandidateIds: [],
-        };
-      }
       if (!application && row.family === "statement_transaction") {
         const judgment = statementTransactionJudgment.parse(row.judgment);
         application = {

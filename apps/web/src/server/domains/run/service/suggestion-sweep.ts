@@ -185,7 +185,6 @@ async function suggestTarget(
       runnerUpConfidence: decision.alternatives[0]?.probability,
     },
     model,
-    served: true,
   });
   if (primary) {
     primary.reviewKey = await fieldReviewIdentity({
@@ -683,7 +682,6 @@ export function makeSweepSuggestion(args: {
   currentValue: SuggestionValue;
   decision: SweepDecision;
   model: string;
-  served?: boolean;
 }): SweepSuggestion | null {
   if (equalValue(args.currentValue, args.decision.value)) return null;
   return {
@@ -694,6 +692,5 @@ export function makeSweepSuggestion(args: {
     runnerUpValue: args.decision.runnerUpValue ?? null,
     runnerUpConfidence: args.decision.runnerUpConfidence ?? null,
     model: args.model,
-    served: args.served ?? true,
   };
 }

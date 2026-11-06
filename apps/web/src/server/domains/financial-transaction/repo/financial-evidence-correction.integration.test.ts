@@ -18,7 +18,6 @@ import { financialSourceRefsFor } from "~/server/domains/financial-transaction/r
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
-import { setAutomaticRule } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
 
 import { digestValue, loadFinancialBookingLineage } from "./financial-booking";
 import { acceptedAutomaticFacts } from "./financial-convergence";
@@ -461,30 +460,6 @@ describe("generated booking evidence corrections", () => {
       allocations: [25],
       expenses: [25],
     });
-  });
-
-  it("leaves generated money unchanged while automatic spending is paused", async () => {
-    const { input, money } = await fixture();
-    const before = await money();
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: "statement_transaction.book_spending",
-      enabled: false,
-    });
-    expect(
-      await reconcileFinancialEvidenceCorrection(ctx.db, input, ctx.actor),
-    ).toMatchObject({
-      status: "review",
-      reason: expect.stringContaining("is off"),
-    });
-    expect(await money()).toEqual(before);
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: "statement_transaction.book_spending",
-      enabled: true,
-    });
-    expect(
-      await reconcileFinancialEvidenceCorrection(ctx.db, input, ctx.actor),
-    ).toMatchObject({ status: "corrected" });
-    expect((await money()).expenses).toEqual([30]);
   });
 
   it("requires persisted withdrawal and caller proof, then retains retired booking history on replay", async () => {

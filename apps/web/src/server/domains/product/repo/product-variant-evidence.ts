@@ -127,7 +127,7 @@ export async function readVariantVerifications(
     .where(
       and(
         eq(suggestionTable.family, "product_pair"),
-        eq(suggestionTable.served, true),
+
         sql`(${inArray(subjectKey, keys)} OR ${inArray(stateKey, keys)})`,
       ),
     )

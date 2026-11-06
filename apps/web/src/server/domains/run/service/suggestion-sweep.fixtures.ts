@@ -16,6 +16,7 @@ import {
   taxonomyId,
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import type { TestDbContext } from "tooling/test-setup";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
@@ -31,10 +32,10 @@ import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import {
   lookupShortcodes,
   resolveLiveShortcode,
+  resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
-import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import {
   createProductFixture,
   makeProductInput,
@@ -143,7 +144,7 @@ export async function seedPending(
     trigger: "manual",
     status: "completed",
   });
-  const saved = await publishFieldSuggestion(
+  const saved = await seedFieldSuggestion(
     ctx.db,
     {
       runId,
@@ -167,9 +168,7 @@ export async function seedPending(
 
 /** Eligibility follows current field inputs; historical state need not be rewritten. */
 export async function isSuggestionReviewable(db: Database, id: string) {
-  const { listSuggestions } =
-    await import("~/server/generic/suggestions/repo/suggestion-review");
-  return (await listSuggestions(db, { minConfidence: 0 })).some(
+  return (await readReviewFields(db, { minConfidence: 0 })).some(
     (row) => row.id === id,
   );
 }
@@ -281,3 +280,48 @@ export const categoryPorts = (confidence = 0.97) => ({
     registry: { "product.categoryId": categorySpec },
   },
 });
+
+/** Existing review journeys use the production key reader and field hydrator. */
+export async function readReviewFields(
+  db: Database,
+  input: {
+    entity?: ShortcodeEntity;
+    field?: string;
+    fields?: string[];
+    kind?: "addition" | "correction";
+    status?: "pending" | "applied" | "rejected" | "superseded";
+    minConfidence?: number;
+    limit?: number;
+    recordIds?: string[];
+    runId?: string;
+  } = {},
+) {
+  if (input.recordIds && !input.entity)
+    throw new Error("recordIds filters one entity's records; name its entity.");
+  const { fieldSuggestionKeys, readFieldSuggestions } =
+    await import("~/server/generic/suggestions/repo/suggestion-review");
+  const keys = await fieldSuggestionKeys(db, {
+    status: input.status ?? "pending",
+    entities: input.entity ? [input.entity] : undefined,
+    runId: input.runId,
+    recordUuids:
+      input.recordIds && input.entity
+        ? [
+            ...(
+              await resolveLiveShortcodes(db, input.recordIds, input.entity)
+            ).values(),
+          ]
+        : undefined,
+  });
+  const selected = keys.filter(
+    (row) =>
+      row.confidence >= (input.minConfidence ?? 0.5) &&
+      (!input.field || row.field === input.field) &&
+      (!input.fields || input.fields.includes(row.field)) &&
+      (!input.kind || row.kind === input.kind),
+  );
+  return readFieldSuggestions(
+    db,
+    selected.slice(0, input.limit ?? 500).map((row) => row.id),
+  );
+}

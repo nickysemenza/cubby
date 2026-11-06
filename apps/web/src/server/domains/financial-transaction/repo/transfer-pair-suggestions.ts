@@ -939,9 +939,7 @@ export type TransferPairScope = {
   since?: string | null;
 };
 
-type Seeds =
-  | { kind: "ledger"; since: string | null }
-  | { kind: "legs"; keys: readonly string[]; seedOnly?: boolean };
+type Seeds = { kind: "legs"; keys: readonly string[]; seedOnly?: boolean };
 
 const parseLegKey = (key: string) => {
   if (key.startsWith("ftx:")) return { code: key.slice(4) };
@@ -1095,38 +1093,29 @@ async function discover(
   preparation?: ReturnType<typeof transferPreparation>,
 ): Promise<Pair[]> {
   const accounts = loadedAccounts ?? (await loadAccounts(db));
-  let seedLegs: LegFacts[];
-  if (seeds.kind === "ledger") {
-    const filter = { seedOnly: true, since: seeds.since };
-    seedLegs = [
-      ...(await loadTransactionLegs(db, accounts, filter)),
-      ...(await loadStatementLegs(db, accounts, filter)),
-    ];
-  } else {
-    const parsed = seeds.keys.map(parseLegKey);
-    const codes = parsed.flatMap((leg) => (leg?.code ? [leg.code] : []));
-    const charges = parsed.flatMap((leg) => (leg?.charge ? [leg.charge] : []));
-    seedLegs = [
-      ...(codes.length
-        ? (preparation?.transactionSeeds(codes, seeds.seedOnly) ??
-          (await loadTransactionLegs(db, accounts, {
-            codes,
+  const parsed = seeds.keys.map(parseLegKey);
+  const codes = parsed.flatMap((leg) => (leg?.code ? [leg.code] : []));
+  const charges = parsed.flatMap((leg) => (leg?.charge ? [leg.charge] : []));
+  const seedLegs = [
+    ...(codes.length
+      ? (preparation?.transactionSeeds(codes, seeds.seedOnly) ??
+        (await loadTransactionLegs(db, accounts, {
+          codes,
+          seedOnly: seeds.seedOnly,
+        })))
+      : []),
+    ...(charges.length
+      ? await loadStatementLegs(
+          db,
+          accounts,
+          {
+            charges,
             seedOnly: seeds.seedOnly,
-          })))
-        : []),
-      ...(charges.length
-        ? await loadStatementLegs(
-            db,
-            accounts,
-            {
-              charges,
-              seedOnly: seeds.seedOnly,
-            },
-            preparation?.preview,
-          )
-        : []),
-    ];
-  }
+          },
+          preparation?.preview,
+        )
+      : []),
+  ];
   if (!seedLegs.length) return [];
   const dates = seedLegs.map((leg) => leg.date).sort();
   const poolFilter = {
@@ -1176,22 +1165,6 @@ const inScope = (pair: Pair, scope: TransferPairScope) =>
   !scope.accountIds?.length ||
   scope.accountIds.includes(pair.outflowAccountId) ||
   scope.accountIds.includes(pair.inflowAccountId);
-
-async function discoverPairs(db: Database, scope: TransferPairScope = {}) {
-  const pairs = await discover(db, {
-    kind: "ledger",
-    since: scope.since ?? null,
-  });
-  return pairs.filter((pair) => inScope(pair, scope));
-}
-
-/** Current rule judgments (no labels) for every unmatched movement in scope. */
-export async function discoverTransferPairs(
-  db: Database,
-  scope: TransferPairScope = {},
-): Promise<TransferPairJudgment[]> {
-  return (await discoverPairs(db, scope)).map((pair) => pair.judgment);
-}
 
 /** One pair's current rule judgment, or null when it is no longer a candidate. */
 export async function buildTransferPair(

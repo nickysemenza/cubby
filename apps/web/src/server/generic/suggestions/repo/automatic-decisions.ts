@@ -75,7 +75,7 @@ export async function listAutomaticDecisions(
     // it here validates the same correction receipts for the count and page.
     const admission = touching
       ? sql`s.id = ANY(${uuidArrayParam([...touching])})`
-      : sql`s.served AND ${automaticSuggestionEligibility(rule)}
+      : sql`${automaticSuggestionEligibility(rule)}
         ${suggestionFamilyFilter ? sql`AND s.family = ${suggestionFamilyFilter}` : sql``}`;
     const from = sql`FROM "Suggestion" s
       LEFT JOIN LATERAL (SELECT f.id, f.verdict, f."createdAt"

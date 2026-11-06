@@ -14,12 +14,15 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { JobTargetError } from "~/server/generic/jobs/errors";
-import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
+import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
 } from "~/server/generic/suggestions/repo/field-input-fence";
-import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import {
+  fieldSuggestionPublication,
+  publishSuggestions,
+} from "~/server/generic/suggestions/repo/suggestion";
 import {
   suggestionStateColumns,
   transitionSuggestionStates,
@@ -55,7 +58,6 @@ export const sweepSuggestionSchema = z.object({
   runnerUpValue: suggestionValueSchema,
   runnerUpConfidence: z.number().nullable(),
   model: z.string(),
-  served: z.boolean(),
 });
 export type SweepSuggestion = z.infer<typeof sweepSuggestionSchema>;
 
@@ -310,9 +312,8 @@ export async function saveSweepSuggestions(
       }
       const created: string[] = [];
       for (const entry of admissible) {
-        const row = await publishFieldSuggestion(
-          tx,
-          {
+        const [row] = await publishSuggestions(tx, [
+          fieldSuggestionPublication({
             runId,
             entity: input.entity,
             recordId: typedRecordId,
@@ -330,14 +331,13 @@ export async function saveSweepSuggestions(
             model: entry.model,
             kind: entry.kind,
             data: {
-              served: entry.served,
               liveInputFingerprint,
               reviewKey: entry.reviewKey ?? null,
             },
             status: "pending",
-          },
-          entry.served,
-        );
+          }),
+        ]);
+        if (!row) throw new Error("Field publication returned no row");
         created.push(row.id);
       }
       // Proposals publish pending; a confident assignment then applies only

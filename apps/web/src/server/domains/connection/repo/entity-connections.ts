@@ -309,7 +309,7 @@ function storedConnectionProposal(prediction: {
 }
 
 /** Batched Suggestion selection; freshness also rereads family-owned evidence. */
-export async function readEntityConnectionsBatch(
+async function readEntityConnectionsBatch(
   db: Database,
   raw: readonly EntityRef[],
   reviewIds?: readonly string[],
@@ -336,7 +336,7 @@ export async function readEntityConnectionsBatch(
     .where(
       and(
         eq(suggestionTable.family, "recommendation"),
-        eq(suggestionTable.served, true),
+
         eq(suggestionTable.active, true),
         eq(suggestionTable.status, "pending"),
         sql`${suggestionTable.subject}->>'scope' LIKE 'connection.%'`,

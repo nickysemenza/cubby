@@ -4,10 +4,6 @@ import { suggestionsContract } from "~/contracts/suggestions.contract";
 import type { Database } from "~/server/db";
 import { unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
-  listAutomaticRules,
-  setAutomaticRule,
-} from "~/server/generic/suggestions/repo/automatic-rule-runtime";
-import {
   acceptCleanSuggestions,
   listSuggestionPage,
   suggestionCountsByFamily,
@@ -46,8 +42,5 @@ export const suggestionsHandlers = implementOperationDomain(
       suggestionRead(context.db, (db) => suggestionCountsByFamily(db, input)),
     acceptClean: (context, input) =>
       acceptCleanSuggestions(context.db, context, input),
-    rules: (context) => listAutomaticRules(context.db),
-    setRule: (context, input) =>
-      setAutomaticRule(context.db, context.actorContext, input),
   },
 );

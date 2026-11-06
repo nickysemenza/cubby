@@ -26,7 +26,6 @@ import { suggestionTable } from "~/server/db/retained-tables";
 import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
-import { fieldInputFingerprint } from "./field-input-fence";
 import {
   decisionForOperation,
   type StoredDecision,
@@ -198,9 +197,8 @@ export async function publishSuggestion(
   return row;
 }
 
-/** Field producers publish evidence before its live projection; serving is a producer decision. */
-export async function publishFieldSuggestion(
-  db: Database,
+/** Builds field evidence; publishSuggestions owns immutable publication and replay. */
+export function fieldSuggestionPublication(
   projection: Omit<
     typeof suggestionTable.$inferInsert,
     "id" | "family" | "publicationKey" | "subject" | "judgment"
@@ -208,23 +206,11 @@ export async function publishFieldSuggestion(
     field: string;
     recordId: string;
   },
-  served: boolean,
-) {
+): Parameters<typeof publishSuggestions>[1][number] {
   const data = z.record(z.string(), z.json()).parse(projection.data ?? {});
-  if (projection.status === undefined || projection.status === "pending") {
-    if (!("connectionEvidence" in data) && !("liveInputFingerprint" in data)) {
-      data.liveInputFingerprint = await fieldInputFingerprint(
-        db,
-        projection.entity,
-        projection.recordId,
-        projection.field,
-      );
-    }
-  }
   const model = projection.model ?? "unknown";
-  return publishSuggestion(
-    db,
-    {
+  return {
+    input: {
       publicationKey: `field:${crypto.randomUUID()}`,
       family: "field",
       subject: {
@@ -258,10 +244,9 @@ export async function publishFieldSuggestion(
         currentValue: z.json().parse(projection.currentValue ?? null),
         provenance: projection.provenance ?? null,
       },
-      served,
     },
-    { ...projection, data },
-  );
+    projection: { ...projection, data },
+  };
 }
 
 /** Recording a grade is independent of applying a correction or changing authority. */
@@ -283,7 +268,6 @@ export async function recordFeedbackWithInsertion(
     const client = getDb(transactionDb);
     const [prediction] = await client
       .select({
-        served: suggestionTable.served,
         family: suggestionTable.family,
         subject: suggestionTable.subject,
         decisions: suggestionTable.decisions,
@@ -300,10 +284,6 @@ export async function recordFeedbackWithInsertion(
       .where(eq(suggestionTable.id, suggestionId))
       .for("update");
     if (!prediction) throw new Error("Suggestion not found");
-    if (!prediction.served && input.authority === "member")
-      throw new Error(
-        "Unserved trial suggestions are not member review candidates",
-      );
     if (
       input.authority === "evaluation" &&
       (input.intent !== "history" || input.suppression)

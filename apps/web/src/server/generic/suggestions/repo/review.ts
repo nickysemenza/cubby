@@ -328,7 +328,7 @@ export async function reviewSuggestion(
     throw new Error("An Automatic rule only accepts an Suggestion as is");
   const suggestionId = input.suggestionId;
   const { assertAutomaticRuleOn } =
-    await import("~/server/generic/suggestions/repo/automatic-rule-runtime");
+    await import("~/server/generic/suggestions/repo/automatic-application");
   return withSnapshotWriteDatabase(
     db,
     async (transactionDb) => {

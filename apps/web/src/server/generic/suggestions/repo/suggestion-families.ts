@@ -687,7 +687,7 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
     }>(sql`
       SELECT s.id, s.fingerprint, s."createdAt", s.evidence->'candidate' AS candidate
       FROM "Suggestion" s
-      WHERE s.family = ${suggestionFamily.enum.recommendation} AND s.served AND s.active
+      WHERE s.family = ${suggestionFamily.enum.recommendation} AND s.active
         AND ${suggestionIdScope(query.suggestionIds, sql`s.id`)}
         AND s.status = ${suggestionStatus.enum.pending}
         AND ${reviewFamilyDeclarations.recommendation.scopes.connection}

@@ -155,7 +155,7 @@ async function tagRows(db: Database, ids?: readonly string[]) {
   }>(sql`
     SELECT s.id, s.evidence, s.subject, s.fingerprint, s."createdAt", p.shortcode
     FROM "Suggestion" s JOIN "Product" p ON p.id = s."recordId" AND ${notDeleted("p")}
-    WHERE s.family = ${suggestionFamily.enum.recommendation} AND ${reviewFamilyDeclarations.recommendation.scopes.tagPropagation} AND s.served AND s.active AND s.status = ${suggestionStatus.enum.pending}
+    WHERE s.family = ${suggestionFamily.enum.recommendation} AND ${reviewFamilyDeclarations.recommendation.scopes.tagPropagation} AND s.active AND s.status = ${suggestionStatus.enum.pending}
       AND s.suppression IS NULL AND p."updatedAt" <= s."createdAt" AND NOT (s.evidence->>'tag' = ANY(p.tags))
       AND ${pendingRecommendationEligibility({ memberFeedback: false })}
       ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}`);

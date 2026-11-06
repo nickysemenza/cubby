@@ -4496,6 +4496,12 @@ review.
 
 ### Shared proposal queue and automatic decisions
 
+ADR 0025 fixes automatic application policy: high-confidence eligible field additions
+and clean supported import spending always apply through their domain validation.
+Attaching an existing transaction requires review. There are no per-revision
+member switches or Rules tab. Automatic-decision history and its Wrong grade
+remain available; a Wrong decision prevents unchanged work from applying again.
+
 The review implementation and wire use Suggestion names (`suggestionId`,
 `suggestionIds`, `targetSuggestionId`). The generic owner is
 `generic/suggestions`; field-resolution evidence belongs to
@@ -4514,10 +4520,9 @@ and placement moves), Product pairs, image descriptions and transfer pairs on on
 `server/generic/suggestions/repo/suggestion-families.ts`): family chips with counts, each family's own columns,
 inline evidence, keyboard review (↑/↓, →, A, D), a confirmed "Accept N clean"
 that re-lists before each chunk, bulk Dismiss and Never suggest (no bulk
-Wrong), and Find suggestions, which estimates and starts a Sweep. A
-collapsible Automatic rules section lists each rule's state, measured
-precision and member switch (`suggestions_read.rules`/`setRule`; On only when
-eligible, Off after a confirm). Its `family`, `record` (`<kind>:<CODE>`) and `runId` params scope it.
+Wrong), and Find suggestions, which estimates and starts a Sweep.
+The Automatic decisions tab retains application history and Wrong grading.
+The page's `family`, `record` (`<kind>:<CODE>`) and `runId` params scope the queue.
 Every multiselect filter, including Clean, offers **is / is not** through the
 shared filter editor. Excluded column values use the shared `__not__:` state
 prefix and `<column>Exclude` URL parameter. Quick pickers edit included values
@@ -4904,10 +4909,6 @@ branch, its five group finders and the coverage-meter denominator query are gone
 Record metadata and canonical edit validation remain necessary for ordinary record
 pages and live under `server/entity-kernel/metadata`.
 
-Generated search output remains ignored. Commit 7022da36e first tracked its entire
-1,275-line output; the increase was artifact tracking, not duplicated Problem
-emission. Its emitter already reads canonical filter URL keys from list fields.
-
 Numeric filter ranges use Zod numbers, which already reject nonfinite values.
 The redundant declaration-only `range.finite` option is removed.
 
@@ -4917,3 +4918,9 @@ new tag suggestions. List relation traversal remains shared with live record rea
 
 Search embedding text is read directly from SearchDocument. Declarations no longer
 carry the unused `ports.search.semanticText` reference.
+
+The retired `connection.readBatch` transport has no client callers. Single-record
+connection reads remain; internal batch hydration remains private to that reader.
+Field publication builds an entry for `publishSuggestions`, whose immutable-key
+replay check also owns the field Sweep write. Field review tests hydrate through
+the same key and row readers used by the live queue.

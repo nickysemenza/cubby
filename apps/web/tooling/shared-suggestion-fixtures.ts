@@ -1,3 +1,9 @@
+import { z } from "zod";
+import {
+  fieldSuggestionPublication,
+  publishSuggestions,
+} from "~/server/generic/suggestions/repo/suggestion";
+import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { randomUUID } from "node:crypto";
 
 import { eq, sql } from "drizzle-orm";
@@ -86,4 +92,24 @@ export async function seedEmailClassificationFeedback(
       predictionId: input.predictionId,
     },
   });
+}
+
+export async function seedFieldSuggestion(
+  db: Database,
+  projection: Parameters<typeof fieldSuggestionPublication>[0],
+  _served = true,
+) {
+  const data = z.record(z.string(), z.json()).parse(projection.data ?? {});
+  if (!("connectionEvidence" in data) && !("liveInputFingerprint" in data))
+    data.liveInputFingerprint = await fieldInputFingerprint(
+      db,
+      projection.entity,
+      projection.recordId,
+      projection.field,
+    );
+  const [row] = await publishSuggestions(db, [
+    fieldSuggestionPublication({ ...projection, data }),
+  ]);
+  if (!row) throw new Error("Synthetic field publication returned no row");
+  return row;
 }

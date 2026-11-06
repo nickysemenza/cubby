@@ -9,6 +9,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { sql } from "drizzle-orm";
 import { StatusCodes } from "http-status-codes";
 import { createRepoEntity } from "tooling/factories/repo";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -24,7 +25,6 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { requireActor } from "~/server/http/request-context";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
@@ -900,7 +900,7 @@ describe("MCP catalog", () => {
       trigger: "manual",
       status: "completed",
     });
-    await publishFieldSuggestion(
+    await seedFieldSuggestion(
       ctx.db,
       {
         runId,

@@ -15,7 +15,6 @@ import {
   run as runTable,
   vendor as vendorTable,
   product as productTable,
-  suggestionTable,
 } from "~/server/db/schema";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
@@ -122,16 +121,6 @@ describe("persisted Suggestion sweeps", () => {
     );
     const rows = await runSuggestions(ctx.db, started.id);
     expect(rows).toHaveLength(1);
-    const histories = await getDb(ctx.db)
-      .select({ served: suggestionTable.served })
-      .from(suggestionTable)
-      .where(
-        sql`${suggestionTable.id} IN (${sql.join(
-          rows.map((row) => sql`${row.id}::uuid`),
-          sql`, `,
-        )})`,
-      );
-    expect(histories.map((row) => row.served)).toEqual([true]);
     const visible = await getDb(ctx.db)
       .select({ id: productTable.id })
       .from(productTable)

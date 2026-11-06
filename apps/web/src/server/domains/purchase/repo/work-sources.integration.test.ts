@@ -1,6 +1,7 @@
 import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -12,7 +13,6 @@ import {
 } from "~/server/domains/work/service/work-queue-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 
@@ -89,7 +89,7 @@ describe("financial Work sources", () => {
       }),
     );
     for (const target of [order, empty])
-      await publishFieldSuggestion(
+      await seedFieldSuggestion(
         ctx.db,
         {
           entity: "purchase",

@@ -265,7 +265,6 @@ export const suggestionPublication = z
     fingerprint: z.string().nullable(),
     producer: suggestionProducer.nullable(),
     evidence: z.json().nullable(),
-    served: z.boolean().default(true),
   })
   .refine(
     ({ family, subject }) => family === subject.kind,

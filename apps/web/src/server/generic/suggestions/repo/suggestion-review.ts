@@ -1,7 +1,6 @@
 import {
   fieldSuggestionsInput,
   financeCategoryApplyInput,
-  suggestionReviewListInput,
   suggestionStatus,
 } from "@cubby/schemas/ai";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
@@ -17,7 +16,7 @@ import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
 import { suggestionChildHandle } from "@cubby/schemas/suggestion";
 import { suggestionFieldCount } from "@cubby/schemas/suggestion-list";
-import { type SQL, and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { type SQL, and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -47,10 +46,7 @@ import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import {
-  lookupShortcodes,
-  resolveLiveShortcodes,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   fieldInputFingerprint,
   fieldInputFingerprintIfLive,
@@ -109,72 +105,9 @@ function reviewableRow(suggestion: SuggestionStateRow, runCode: string | null) {
     },
   ];
 }
-/** Only served Suggestions are member review candidates. */
+/** Saved records are member review candidates. */
 // An answer for an unsaved record has nothing to review against.
-const reviewableSuggestionSql = sql`${suggestionTable.served} AND ${suggestionTable.recordId} IS NOT NULL`;
-
-/** Pending review queue, or reviewed history by `status` (the label set a
- * decision eval replays). Every filter composes, including a list page's
- * `recordIds` and `fields`. Unserved Suggestions never appear. */
-export async function listSuggestions(
-  db: Database,
-  rawInput: z.input<typeof suggestionReviewListInput> = {},
-) {
-  const input = suggestionReviewListInput.parse(rawInput);
-  if (
-    (input.recordIds && !input.recordIds.length) ||
-    (input.fields && !input.fields.length)
-  )
-    return [];
-  let recordUuids: string[] | undefined;
-  if (input.recordIds) {
-    if (!input.entity)
-      throw new Error(
-        "recordIds filters one entity's records; name its entity.",
-      );
-    recordUuids = [
-      ...new Set(
-        (
-          await resolveLiveShortcodes(db, input.recordIds, input.entity)
-        ).values(),
-      ),
-    ];
-    if (!recordUuids.length) return [];
-  }
-  const conditions = [
-    eq(suggestionTable.family, "field"),
-    eq(suggestionTable.active, true),
-    eq(suggestionTable.status, input.status),
-    gte(suggestionTable.confidence, input.minConfidence),
-  ];
-  if (input.entity) conditions.push(eq(suggestionTable.entity, input.entity));
-  if (input.field) conditions.push(eq(suggestionTable.field, input.field));
-  if (input.kind) conditions.push(eq(suggestionTable.kind, input.kind));
-  if (input.runId) conditions.push(requestedSuggestionRun(input.runId));
-  if (recordUuids)
-    conditions.push(inArray(suggestionTable.recordId, recordUuids));
-  if (input.fields)
-    conditions.push(inArray(suggestionTable.field, input.fields));
-  // Before the limit: unserved trial candidates must not use up the page.
-  conditions.push(reviewableSuggestionSql);
-  const rows = await getDb(db)
-    .select({
-      suggestion: suggestionStateColumns,
-      runInput: runTable.input,
-      runCode: runTable.shortcode,
-    })
-    .from(suggestionTable)
-    .leftJoin(runTable, eq(runTable.id, suggestionTable.runId))
-    .where(and(...conditions))
-    .orderBy(
-      input.status === "pending"
-        ? desc(suggestionTable.confidence)
-        : desc(suggestionTable.updatedAt),
-      suggestionTable.id,
-    )
-    .limit(input.limit);
-  return presentFieldRows(db, rows);
-}
+const reviewableSuggestionSql = sql`${suggestionTable.recordId} IS NOT NULL`;
 
 type StoredFieldRow = {
   suggestion: SuggestionStateRow;
@@ -508,11 +441,11 @@ async function automaticFieldFillRefusal(
       row.confidence - row.runnerUpConfidence < 0.1)
   )
     return `Field ${row.entity}.${row.field} is not eligible for automatic fill`;
-  const [served] = await getDb(db)
+  const [saved] = await getDb(db)
     .select({ id: suggestionTable.id })
     .from(suggestionTable)
     .where(and(eq(suggestionTable.id, row.id), reviewableSuggestionSql));
-  if (!served) return "Only a served field suggestion can apply automatically";
+  if (!saved) return "Only a saved field suggestion can apply automatically";
   const provenance = aiProvenance.safeParse(row.provenance);
   const manifest = await producingAiManifest(db);
   if (

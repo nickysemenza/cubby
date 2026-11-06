@@ -1,9 +1,6 @@
-import { suggestionStatus } from "@cubby/schemas/ai";
-import type { AutomaticRuleKey } from "@cubby/schemas/automatic-rule";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
-import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -13,23 +10,16 @@ import {
 } from "tooling/product-category-fixtures";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { AiBudgetExhaustedError } from "~/server/ai/budget";
-import { AiWorkDeferredError } from "~/server/ai/cooperative-work";
 import {
   dependencyStamps,
   fieldDependencyKeys,
 } from "~/server/ai/policy/refresh-manifest";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import {
-  suggestionTable,
-  automaticRule,
-  expense,
-  spendingCategory,
-} from "~/server/db/schema";
-import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
+import { suggestionTable, expense, spendingCategory } from "~/server/db/schema";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   categoryPorts,
   kernelCtx,
@@ -40,29 +30,17 @@ import {
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { sourceObservationFrom } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
-import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
-import {
-  buildChargeProposals,
-  generateStatementSuggestionPage,
-  suggestionsNeedingLabels,
-} from "~/server/domains/transaction-import/repo/statement-suggestions";
+import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
 import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
 import { loadCurrentFieldOwnership } from "~/server/generic/suggestions/repo/automatic-fields";
-import {
-  applyAutomaticRules,
-  listAutomaticRules,
-  setAutomaticRule,
-} from "~/server/generic/suggestions/repo/automatic-rule-runtime";
-import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-rule-runtime";
-import { ruleBase } from "~/server/generic/suggestions/repo/automatic-rules";
+import { ruleBase } from "~/server/generic/suggestions/repo/automatic-policy";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import * as suggestionReviewRepo from "~/server/generic/suggestions/repo/review";
-import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import {
   canAutomaticallyFillField,
   acceptSuggestion,
@@ -90,15 +68,8 @@ const labelStatementSuggestions: typeof runStatementLabels = async (
   });
 };
 
-const ATTACH: AutomaticRuleKey = "statement_transaction.attach";
-const BOOK_SPENDING: AutomaticRuleKey = "statement_transaction.book_spending";
+const BOOK_SPENDING = "statement_transaction.book_spending";
 
-const ruleOf = async (ctx: Ctx, key: AutomaticRuleKey) =>
-  (await listAutomaticRules(ctx.db)).rules.find(
-    (rule) => rule.ruleKey === key,
-  )!;
-
-/** Judgments and application receipts retained on a Suggestion. */
 const feedbackFor = async (ctx: Ctx, suggestionId: string) =>
   (
     await getDb(ctx.db).execute<{
@@ -151,20 +122,8 @@ const card = async (ctx: Ctx) => {
   });
 };
 
-async function soleCandidateCharge(ctx: Ctx) {
+async function unmatchedCharge(ctx: Ctx) {
   const account = (await card(ctx)).output;
-  const existing = (
-    await createRepoEntity(ctx, "financialTransaction", {
-      accountId: account.id,
-      kind: "purchase",
-      status: "posted",
-      amount: 42.5,
-      postedDate: "2026-05-05",
-      merchant: "Older import label",
-      rawDescription: "EXMPL GRCR #1 SYNTHETIC",
-      sourceRefs: [],
-    })
-  ).output;
   const recorded = await recordSourceTransactionRecords(
     ctx.db,
     recordSourceTransactionRecordsInput.parse({
@@ -193,74 +152,10 @@ async function soleCandidateCharge(ctx: Ctx) {
     ctx.actor,
   );
   await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-  return { account, existing, recorded };
+  return { account, recorded };
 }
 
 /** A second charge of the same money, a day after the sole candidate's. */
-const competingCharge = (ctx: Ctx) =>
-  recordSourceTransactionRecords(
-    ctx.db,
-    recordSourceTransactionRecordsInput.parse({
-      import: {
-        source: "monarch",
-        label: "synthetic-export.csv",
-        fingerprint: "fp-automatic-rule-1",
-        dateKind: "posted",
-        rowCountDeclared: null,
-        notes: null,
-      },
-      rows: [
-        {
-          accountDescriptor: "Synthetic Card (...4242)",
-          statementDate: "2026-05-06",
-          providerAmount: -42.5,
-          merchant: "Example Grocer",
-          rawDescription: "EXAMPLE GROCER 0002",
-          sourceCategory: "Groceries",
-          providerStatus: "posted",
-          providerNotes: null,
-          rowPosition: 2,
-        },
-      ],
-    }),
-    ctx.actor,
-  );
-
-/** Every pending statement suggestion still matches its charge's evidence. */
-async function expectCurrentPending(ctx: Ctx, count: number) {
-  const { rows: pending } = await getDb(ctx.db).execute<{
-    source: string;
-    chargeKey: string;
-    evidenceFingerprint: string;
-  }>(
-    sql`SELECT data->>${"source"} AS source, data->>${"chargeKey"} AS "chargeKey",
-        data->>${"evidenceFingerprint"} AS "evidenceFingerprint"
-      FROM "Suggestion"
-      WHERE family = ${suggestionFamily.enum.statement_transaction} AND active
-        AND status = ${suggestionStatus.enum.pending} AND data ? ${"chargeKey"}`,
-  );
-  expect(pending).toHaveLength(count);
-  // Every pending suggestion still matches its charge's current evidence.
-  for (const row of pending) {
-    const [current] = await buildChargeProposals(ctx.db, [row]);
-    expect(current?.evidenceFingerprint).toBe(row.evidenceFingerprint);
-  }
-}
-
-const exhausted = () =>
-  new AiBudgetExhaustedError(
-    {
-      windowStart: "2026-05-10T00:00:00.000Z",
-      windowEnd: "2026-05-10T06:00:00.000Z",
-      credit: { limitUsd: 1, spentUsd: 0 },
-      openaiCredit: { limitUsd: 1.5, spentUsd: 0 },
-      plan: { limitUsd: 1, spentUsd: 0 },
-      paid: { limitUsd: 1, spentUsd: 1 },
-    },
-    "AI budget reached: synthetic",
-  );
-
-// The candidate is the same charge; a create, if any, is a business purchase.
 const sameCharge = answering({ kind: "purchase", counterparty: "business" });
 
 const label = async (ctx: Ctx) =>
@@ -296,25 +191,11 @@ describe("clean import booking controls", () => {
 
   it.each([
     { scope: "import", booking: true, booked: true },
-    { scope: "import", booking: false, booked: false },
     { scope: "account/date", booking: true, booked: false },
   ] as const)(
-    "reprocesses retained $scope spending with booking $booking and measured attach off",
-    async ({ scope, booking, booked }) => {
-      const { account, recorded } = await soleCandidateCharge(ctx);
-      await setAutomaticRule(ctx.db, ctx.actor, {
-        ruleKey: ATTACH,
-        enabled: false,
-      });
-      await setAutomaticRule(ctx.db, ctx.actor, {
-        ruleKey: BOOK_SPENDING,
-        enabled: booking,
-      });
-      const switches = async () =>
-        (await listAutomaticRules(ctx.db)).rules.map(
-          ({ ruleKey, enabled }) => ({ ruleKey, enabled }),
-        );
-      const before = await switches();
+    "books clean $scope spending only in import scope",
+    async ({ scope, booked }) => {
+      const { account, recorded } = await unmatchedCharge(ctx);
       const collection = await getDb(ctx.db).query.transactionImport.findFirst({
         where: (table, { eq }) => eq(table.id, recorded.batchId!),
       });
@@ -350,7 +231,6 @@ describe("clean import booking controls", () => {
       expect(audit.items.map(({ automaticRule }) => automaticRule)).toEqual(
         booked ? [ruleBase(BOOK_SPENDING)] : [],
       );
-      expect(await switches()).toEqual(before);
       expect(
         await getDb(ctx.db).query.transactionImport.findFirst({
           where: (table, { eq }) => eq(table.id, recorded.batchId!),
@@ -360,126 +240,8 @@ describe("clean import booking controls", () => {
     },
   );
 
-  it("defaults on and lets a member pause and resume", async () => {
-    expect(await ruleOf(ctx, BOOK_SPENDING)).toMatchObject({
-      enabled: true,
-    });
-    expect(
-      await setAutomaticRule(ctx.db, ctx.actor, {
-        ruleKey: BOOK_SPENDING,
-        enabled: false,
-      }),
-    ).toMatchObject({ enabled: false });
-    // A new code revision must not silently discard a member's pause.
-    await getDb(ctx.db)
-      .update(automaticRule)
-      .set({ revision: "synthetic-previous-revision" })
-      .where(eq(automaticRule.ruleKey, BOOK_SPENDING));
-    expect((await ruleOf(ctx, BOOK_SPENDING)).enabled).toBe(false);
-    expect(
-      await setAutomaticRule(ctx.db, ctx.actor, {
-        ruleKey: BOOK_SPENDING,
-        enabled: true,
-      }),
-    ).toMatchObject({ enabled: true });
-    await expect(
-      setAutomaticRule(ctx.db, systemActor(), {
-        ruleKey: BOOK_SPENDING,
-        enabled: false,
-      }),
-    ).rejects.toThrow(/Only a member/);
-  });
-
-  it("holds clean spending while paused even when measured attach is on, then resumes once", async () => {
-    const { existing } = await soleCandidateCharge(ctx);
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: ATTACH,
-      enabled: true,
-    });
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: BOOK_SPENDING,
-      enabled: false,
-    });
-    await label(ctx);
-    const suggestion = await chargeSuggestion(ctx);
-    expect((await stateOf(ctx, suggestion.id)).status).toBe("pending");
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
-    expect(
-      await applyAutomaticRules(ctx.db, [suggestion.id], { importClean: true }),
-    ).toEqual({ applied: [], refused: [] });
-    const attachStamp = (
-      await stateOf(ctx, suggestion.id)
-    ).data.matchedRules!.find((stamp) => stamp === ruleBase(ATTACH))!;
-    await expect(
-      reviewSuggestion(
-        ctx.db,
-        kernelCtx(ctx),
-        {
-          suggestionId: suggestion.id,
-          operationId: "automatic:synthetic-paused-attach",
-          verdict: "correct",
-          intent: "apply",
-          expectedFingerprint: suggestion.fingerprint,
-          application: {
-            kind: "statement_transaction",
-            action: "attach",
-            transactionId: existing.id,
-            fields: [],
-            rejectedCandidateIds: [],
-          },
-        },
-        {
-          authority: "automatic",
-          rule: {
-            key: ATTACH,
-            revision: ruleBase(ATTACH).slice(ATTACH.length + 1),
-            stamp: attachStamp,
-          },
-        },
-      ),
-    ).rejects.toThrow(/is off; review the suggestion/);
-    expect(await feedbackFor(ctx, suggestion.id)).toEqual([]);
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: BOOK_SPENDING,
-      enabled: true,
-    });
-    expect(
-      (
-        await applyAutomaticRules(ctx.db, [suggestion.id], {
-          importClean: true,
-        })
-      ).applied,
-    ).toEqual([suggestion.id]);
-    const booked = await getDb(ctx.db).select().from(expense);
-    expect(booked).toHaveLength(1);
-    const history = await feedbackFor(ctx, suggestion.id);
-    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
-      suggestionId: suggestion.id,
-      operationId: "synthetic-booked-wrong",
-      verdict: "wrong",
-      intent: "history",
-    });
-    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    expect(
-      (
-        await applyAutomaticRules(ctx.db, [suggestion.id], {
-          importClean: true,
-        })
-      ).applied,
-    ).toEqual([]);
-    expect((await stateOf(ctx, suggestion.id)).status).toBe("applied");
-    expect(await getDb(ctx.db).select().from(expense)).toEqual(booked);
-    expect(await feedbackFor(ctx, suggestion.id)).toEqual([
-      ...history,
-      expect.objectContaining({
-        authority: "member",
-        verdict: "wrong",
-      }),
-    ]);
-  });
-
   it("does not automatically reapply an unchanged pending suggestion marked Wrong", async () => {
-    await soleCandidateCharge(ctx);
+    await unmatchedCharge(ctx);
     await label(ctx);
     const suggestion = await chargeSuggestion(ctx);
     await reviewSuggestion(ctx.db, kernelCtx(ctx), {
@@ -504,429 +266,6 @@ describe("clean import booking controls", () => {
   });
 });
 
-describe("Automatic rules", () => {
-  const ctx = withTestDb();
-
-  // Failure mode: a label page built up front publishes a charge with
-  // evidence an automatic rule earlier in the page already changed, so its
-  // suggestion fails as stale on accept.
-  // Failure mode: a budget pause after an automatic attach left a competing
-  // charge's suggestion on evidence the attach changed, so the resumed label
-  // pass skipped it as stale.
-  it("republishes evidence an automatic attach moved before a budget pause", async () => {
-    await soleCandidateCharge(ctx);
-    await competingCharge(ctx);
-    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: ATTACH,
-      enabled: true,
-    });
-    await expect(
-      labelStatementSuggestions(ctx.db, {
-        port: async (request) => {
-          if (request.state.includes("EXAMPLE GROCER 0002")) throw exhausted();
-          return sameCharge(request);
-        },
-        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
-      }),
-    ).rejects.toThrow("AI budget reached: synthetic");
-    await expectCurrentPending(ctx, 1);
-  });
-
-  // Decision and capacity yields need the same evidence refresh as a funding pause.
-  it.each(["decisions", "capacity"])(
-    "republishes evidence moved by a rule before a %s yield",
-    async (reason) => {
-      await soleCandidateCharge(ctx);
-      await competingCharge(ctx);
-      await generateStatementSuggestionPage(ctx.db, {
-        after: null,
-        runId: null,
-      });
-      await setAutomaticRule(ctx.db, ctx.actor, {
-        ruleKey: ATTACH,
-        enabled: true,
-      });
-      const runId = await ensureRun(ctx.db, ctx.actor, {
-        purpose: "background",
-      });
-      const outcome = await labelStatementSuggestions(ctx.db, {
-        runId,
-        cooperative: true,
-        ...(reason === "decisions" && { decisionLimit: 4 }),
-        port: async (request) => {
-          if (
-            reason === "capacity" &&
-            request.state.includes("EXAMPLE GROCER 0002")
-          )
-            throw new AiWorkDeferredError(Date.now() + 60_000);
-          return sameCharge(request);
-        },
-      });
-      expect(outcome.next).not.toBeNull();
-      await expectCurrentPending(ctx, 1);
-      const resumed = await labelStatementSuggestions(ctx.db, {
-        runId,
-        after: outcome.next,
-        port: sameCharge,
-      });
-      expect(resumed.stale).toBe(0);
-    },
-  );
-
-  // A later round can exhaust its budget after an earlier rule changed evidence.
-  it("keeps moved later-round work queued across a decision-cap yield", async () => {
-    const { account } = await soleCandidateCharge(ctx);
-    await competingCharge(ctx);
-    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: ATTACH,
-      enabled: true,
-    });
-    const original = automaticRuleRuntime.applyAutomaticRulesForCharge;
-    let inserted = false;
-    const rules = vi
-      .spyOn(automaticRuleRuntime, "applyAutomaticRulesForCharge")
-      .mockImplementation(async (...args) => {
-        const result = await original(...args);
-        // Concurrent imported evidence arrives after the first rule commits.
-        if (!inserted && result.applied.length) {
-          inserted = true;
-          await createRepoEntity(ctx, "financialTransaction", {
-            accountId: account.id,
-            kind: "purchase",
-            status: "posted",
-            amount: 42.5,
-            postedDate: "2026-05-05",
-            rawDescription: "SYNTHETIC LATER RULE CANDIDATE",
-            sourceRefs: [],
-          });
-        }
-        return result;
-      });
-    try {
-      const runId = await ensureRun(ctx.db, ctx.actor, {
-        purpose: "background",
-      });
-      const page = await labelStatementSuggestions(ctx.db, {
-        runId,
-        port: sameCharge,
-        decisionLimit: 8,
-      });
-      expect(page.next).not.toBeNull();
-      expect(
-        await suggestionsNeedingLabels(ctx.db, 10, page.next),
-      ).toHaveLength(1);
-      const resumed = await labelStatementSuggestions(ctx.db, {
-        runId,
-        port: sameCharge,
-        after: page.next,
-      });
-      expect(resumed.failed).toEqual([]);
-      expect(resumed.stale).toBe(0);
-      expect(await suggestionsNeedingLabels(ctx.db, 10)).toEqual([]);
-    } finally {
-      rules.mockRestore();
-    }
-  });
-
-  it("leaves no stale suggestion after an automatic attach mid-page", async () => {
-    const { existing } = await soleCandidateCharge(ctx);
-    await competingCharge(ctx);
-    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: ATTACH,
-      enabled: true,
-    });
-    await label(ctx);
-    const rows = (await listSourceTransactionRecords(ctx.db, {})).data;
-    expect(rows.filter((row) => row.matchState === "matched")).toEqual([
-      expect.objectContaining({ transactionId: existing.id }),
-    ]);
-    await expectCurrentPending(ctx, 1);
-  });
-
-  // Failure mode: a budget pause on one charge skipped the automatic rules
-  // of a charge already published on the same page; published labels leave
-  // the label queue, so that attach stayed pending for good.
-  it("applies automatic rules to published charges before a budget pause", async () => {
-    const { existing } = await soleCandidateCharge(ctx);
-    await recordSourceTransactionRecords(
-      ctx.db,
-      recordSourceTransactionRecordsInput.parse({
-        import: {
-          source: "monarch",
-          label: "synthetic-export.csv",
-          fingerprint: "fp-automatic-rule-1",
-          dateKind: "posted",
-          rowCountDeclared: null,
-          notes: null,
-        },
-        rows: [
-          {
-            accountDescriptor: "Synthetic Card (...4242)",
-            statementDate: "2026-05-10",
-            providerAmount: -17.25,
-            merchant: "Example Hardware",
-            rawDescription: "EXAMPLE HARDWARE 0003",
-            sourceCategory: "Shopping",
-            providerStatus: "posted",
-            providerNotes: null,
-            rowPosition: 3,
-          },
-        ],
-      }),
-      ctx.actor,
-    );
-    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: ATTACH,
-      enabled: true,
-    });
-    await expect(
-      labelStatementSuggestions(ctx.db, {
-        port: async (request) => {
-          if (request.state.includes("EXAMPLE HARDWARE")) throw exhausted();
-          return sameCharge(request);
-        },
-        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
-      }),
-    ).rejects.toThrow("AI budget reached: synthetic");
-    const matched = (
-      await listSourceTransactionRecords(ctx.db, {})
-    ).data.filter((row) => row.matchState === "matched");
-    expect(matched).toEqual([
-      expect.objectContaining({ transactionId: existing.id }),
-    ]);
-  });
-
-  // Failure modes: an automatic attach ticks diff fields, bypasses the
-  // family apply path, records member Feedback, or applies twice on replay.
-  it("attaches a sole same-charge candidate through the review path, once", async () => {
-    const { existing } = await soleCandidateCharge(ctx);
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: ATTACH,
-      enabled: true,
-    });
-    await label(ctx);
-    const suggestion = await chargeSuggestion(ctx);
-    const state = await stateOf(ctx, suggestion.id);
-    expect(state.status).toBe("applied");
-    // Automatic applications stay available to historical grading reads.
-    const history = await listSuggestionPage(ctx.db, {
-      family: "statement_transaction",
-      status: "applied",
-    });
-    expect(history.items.map((item) => item.suggestionId)).toContain(
-      suggestion.id,
-    );
-    const audited = (
-      await listAutomaticDecisions(ctx.db, {
-        family: "statement_transaction",
-        recordIds: [existing.id],
-      })
-    ).items.find((item) => item.id === suggestion.id);
-    expect(audited?.records).toEqual(
-      expect.arrayContaining([
-        { entity: "financialTransaction", id: existing.id },
-        expect.objectContaining({ entity: "financialAccount" }),
-      ]),
-    );
-    const [stamp] = state.data.matchedRules!;
-    expect(stamp).toBe(ruleBase(ATTACH));
-    const events = await feedbackFor(ctx, suggestion.id);
-    expect(events).toEqual([
-      expect.objectContaining({
-        authority: "automatic",
-        verdict: "correct",
-        metadata: expect.objectContaining({
-          rule: expect.objectContaining({ key: ATTACH, stamp }),
-        }),
-      }),
-      expect.objectContaining({
-        authority: "automatic",
-        verdict: "ungraded",
-        metadata: expect.objectContaining({ kind: "assessment_application" }),
-      }),
-    ]);
-    const [row] = (await listSourceTransactionRecords(ctx.db, {})).data;
-    expect(row).toMatchObject({
-      matchState: "matched",
-      transactionId: existing.id,
-    });
-    // The candidate's posted date differs from the statement's; untouched.
-    const [transaction] = (
-      await getDb(ctx.db).execute<{ postedDate: string }>(
-        sql`SELECT "postedDate"::text AS "postedDate" FROM "FinancialTransaction" WHERE shortcode = ${existing.id}`,
-      )
-    ).rows;
-    expect(transaction?.postedDate).toBe("2026-05-05");
-
-    const view = await listAutomaticDecisions(ctx.db, {
-      family: "statement_transaction",
-    });
-    expect(view.items).toEqual([
-      expect.objectContaining({
-        id: suggestion.id,
-        automaticRule: `${ruleBase(ATTACH)}`,
-      }),
-    ]);
-
-    expect(await applyAutomaticRules(ctx.db, [suggestion.id])).toMatchObject({
-      applied: [],
-      refused: [],
-    });
-    const replayed = await reviewSuggestion(
-      ctx.db,
-      { ...kernelCtx(ctx), actorContext: systemActor() },
-      {
-        suggestionId: suggestion.id,
-        operationId: `automatic:${ruleBase(ATTACH)}:${suggestion.id}`,
-        verdict: "correct",
-        correction: { present: false },
-        intent: "apply",
-        expectedFingerprint: suggestion.fingerprint,
-        application: {
-          kind: "statement_transaction",
-          action: "attach",
-          transactionId: existing.id,
-          fields: [],
-          rejectedCandidateIds: [],
-        },
-      },
-      {
-        authority: "automatic",
-        rule: {
-          key: ATTACH,
-          revision: ruleBase(ATTACH).slice(ATTACH.length + 1),
-          stamp: stamp!,
-        },
-      },
-    );
-    expect(replayed).toMatchObject({ status: "applied", applied: true });
-    expect(await feedbackFor(ctx, suggestion.id)).toHaveLength(2);
-  });
-
-  // Failure mode (#2722 review): a rule turned off after the application
-  // snapshot still applied, because the transaction never rechecked it.
-  it("refuses an automatic application once the rule is off", async () => {
-    const { existing } = await soleCandidateCharge(ctx);
-    await label(ctx);
-    const suggestion = await chargeSuggestion(ctx);
-    expect((await stateOf(ctx, suggestion.id)).status).toBe("pending");
-    await expect(
-      reviewSuggestion(
-        ctx.db,
-        { ...kernelCtx(ctx), actorContext: systemActor() },
-        {
-          suggestionId: suggestion.id,
-          operationId: `automatic:${ruleBase(ATTACH)}:${suggestion.id}`,
-          verdict: "correct",
-          correction: { present: false },
-          intent: "apply",
-          expectedFingerprint: suggestion.fingerprint,
-          application: {
-            kind: "statement_transaction",
-            action: "attach",
-            transactionId: existing.id,
-            fields: [],
-            rejectedCandidateIds: [],
-          },
-        },
-        {
-          authority: "automatic",
-          rule: {
-            key: ATTACH,
-            revision: ruleBase(ATTACH).slice(ATTACH.length + 1),
-            stamp: ruleBase(ATTACH),
-          },
-        },
-      ),
-    ).rejects.toThrow(/is off; review the suggestion/);
-    expect((await stateOf(ctx, suggestion.id)).status).toBe("pending");
-    expect(await feedbackFor(ctx, suggestion.id)).toEqual([]);
-  });
-
-  // Failure modes: a rule applies while off; evidence that drifted after
-  // publication is applied anyway.
-  it("applies nothing while off or for drifted evidence", async () => {
-    const { account } = await soleCandidateCharge(ctx);
-    await label(ctx);
-    const suggestion = await chargeSuggestion(ctx);
-    expect(await applyAutomaticRules(ctx.db, [suggestion.id])).toEqual({
-      applied: [],
-      refused: [],
-    });
-    expect((await stateOf(ctx, suggestion.id)).status).toBe("pending");
-
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: ATTACH,
-      enabled: true,
-    });
-    // A second transaction appears nearby: the published evidence is stale.
-    await createRepoEntity(ctx, "financialTransaction", {
-      accountId: account.id,
-      kind: "purchase",
-      status: "posted",
-      amount: 42.5,
-      postedDate: "2026-05-04",
-      merchant: "Example Grocer",
-      rawDescription: "EXAMPLE GROCER 0001",
-      sourceRefs: [],
-    });
-    const outcome = await applyAutomaticRules(ctx.db, [suggestion.id]);
-    expect(outcome.applied).toEqual([]);
-    expect(outcome.refused).toEqual([
-      expect.objectContaining({
-        suggestionId: suggestion.id,
-        message: expect.stringMatching(/evidence changed/),
-      }),
-    ]);
-    expect((await stateOf(ctx, suggestion.id)).status).toBe("pending");
-    expect(await feedbackFor(ctx, suggestion.id)).toEqual([]);
-    expect(
-      (await listSourceTransactionRecords(ctx.db, {})).data[0],
-    ).toMatchObject({
-      matchState: "unmatched",
-    });
-
-    // A driver refusal must remain diagnosable without accepting the suggestion.
-    const driver = Object.assign(
-      new Error(
-        "Synthetic connection admission refused password=synthetic-driver-secret",
-      ),
-      { code: "53300" },
-    );
-    const review = vi
-      .spyOn(suggestionReviewRepo, "reviewSuggestion")
-      .mockRejectedValueOnce(
-        new Error(
-          "Failed query: insert into synthetic_purchase; Authorization: Bearer synthetic-token",
-          { cause: driver },
-        ),
-      );
-    try {
-      const failure = await applyAutomaticRules(ctx.db, [suggestion.id]);
-      expect(failure.applied).toEqual([]);
-      expect(failure.refused).toHaveLength(1);
-      expect(failure.refused[0]!.message).toContain("53300");
-      expect(failure.refused[0]!.message).toContain(
-        "Synthetic connection admission refused",
-      );
-      expect(failure.refused[0]!.message).toContain("Failed query");
-      expect(failure.refused[0]!.message).not.toContain("synthetic-token");
-      expect(failure.refused[0]!.message).not.toContain(
-        "synthetic-driver-secret",
-      );
-      expect((await stateOf(ctx, suggestion.id)).status).toBe("pending");
-      expect(await feedbackFor(ctx, suggestion.id)).toEqual([]);
-    } finally {
-      review.mockRestore();
-    }
-  });
-});
-
-// Failure: automatic policy overwrites a populated member field.
 describe("automatic field assignments", () => {
   const ctx = withTestDb();
   it.each([0.849, 0.85, 0.88])(

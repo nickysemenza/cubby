@@ -551,22 +551,6 @@ export const suggestionStatus = z.enum([
   "rejected",
   "superseded",
 ]);
-/** The most rows one field-suggestion read returns. */
-export const SUGGESTION_LIST_LIMIT_MAX = 1000;
-export const suggestionReviewListInput = z.object({
-  entity: z.enum(shortcodeEntities).optional(),
-  field: z.string().optional(),
-  kind: z.enum(["correction", "addition"]).optional(),
-  minConfidence: z.number().min(0).max(1).default(0.5),
-  runId: runShortcode.optional(),
-  /** Reviewed history (applied, rejected, superseded) is the decision-eval
-   * label set; the review queue reads `pending`. */
-  status: suggestionStatus.default("pending"),
-  limit: z.number().int().min(1).max(SUGGESTION_LIST_LIMIT_MAX).default(500),
-  /** Bounded list-page read; both are supplied together by generic entity lists. */
-  recordIds: z.array(z.string().min(1)).max(250).optional(),
-  fields: z.array(z.string()).max(100).optional(),
-});
 const [firstShortcodeEntity, ...otherShortcodeEntities] = shortcodeEntities;
 if (!firstShortcodeEntity) throw new Error("No entity has a shortcode");
 /** A stored suggestion names its record by that kind's public shortcode. */

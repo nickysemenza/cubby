@@ -99,7 +99,7 @@ import {
   automaticRuleStamp,
   importOnlyStatementRuleStamps,
   matchStatementRules,
-} from "~/server/generic/suggestions/repo/automatic-rules";
+} from "~/server/generic/suggestions/repo/automatic-policy";
 import {
   publishSuggestion as publishStoredSuggestion,
   publishSuggestions,
@@ -2888,7 +2888,7 @@ export async function generateStatementSuggestionPage(
   );
   if (input.scope?.importId) {
     const { applyAutomaticRulesForCharge } =
-      await import("~/server/generic/suggestions/repo/automatic-rule-runtime");
+      await import("~/server/generic/suggestions/repo/automatic-application");
     for (const [chargeIndex, charge] of proposalCharges.entries()) {
       const ref = `charge:${chargeId(charge)}`;
       if (failed.some((failure) => failure.ref === ref)) continue;

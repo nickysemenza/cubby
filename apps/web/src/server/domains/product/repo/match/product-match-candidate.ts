@@ -438,30 +438,6 @@ export async function publishProductPair(
     return result.row;
   });
 }
-export async function prepareProductPairPublication(
-  db: Database,
-  input: ProductPairPublicationInput,
-) {
-  const prepared = await prepareProductPairPublications(db, [
-    { key: "target", input },
-  ]);
-  if (!prepared.length)
-    throw new Error("Product pair evidence changed during inference");
-  return (tx: Database) =>
-    withTransactionDatabase(
-      tx,
-      async (transactionDb) => {
-        const [result] = await publishProductPairPublications(
-          transactionDb,
-          prepared,
-        );
-        if (!result?.valid)
-          throw new Error("Product pair evidence changed during inference");
-        return result.row;
-      },
-      { isolationLevel: "serializable" },
-    );
-}
 /**
  * An agent proposal claims the two records are one item, not one snapshot of
  * them, so enrichment never retires it: it is fingerprinted live and a merge
@@ -524,7 +500,7 @@ export async function listProductMatchRows(
       and(
         eq(suggestionTable.family, "product_pair"),
         eq(suggestionTable.active, true),
-        eq(suggestionTable.served, true),
+
         options.suggestionIds
           ? sql`${suggestionTable.id} IN (${sql.join(
               options.suggestionIds.map((id) => sql`${id}::uuid`),

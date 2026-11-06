@@ -128,7 +128,6 @@ describe("retained Product identity conflict guards", () => {
         },
         judgment: { actionable: true, conflict },
         evidence: { conflict, signals },
-        served: true,
         fingerprint,
       })
       .returning();

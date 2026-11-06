@@ -100,7 +100,7 @@ import {
   lookupShortcodes,
   resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
+import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
