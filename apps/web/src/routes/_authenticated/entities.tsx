@@ -14,7 +14,10 @@ import {
   entityRecordsInputSchema,
   type EntityRecordsInput,
 } from "~/contracts/entity-records.schema";
+import { EntityIntegrityTab } from "~/entity/platform/entity-integrity-tab";
+import { EntityManifestGrid } from "~/entity/platform/entity-manifest-grid";
 import { EntityRecordsTab } from "~/entity/platform/entity-records-tab";
+import { schemaSheetSchema } from "~/entity/platform/schema-sheet";
 import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
 import { EntityRelations } from "~/entity/relationships/entity-relations";
 import { CookbookSelect } from "~/features/recipe/cookbook-select";
@@ -36,7 +39,14 @@ import { useTabParam } from "~/ui/hooks/use-tab-param";
 import { Stack } from "~/ui/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
-const tabSchema = z.enum(["records", "recipes", "work", "explore"]);
+const tabSchema = z.enum([
+  "records",
+  "recipes",
+  "work",
+  "schema",
+  "integrity",
+  "explore",
+]);
 const graphRefSearchSchema = z.string().refine((value) => {
   const separator = value.indexOf(":");
   if (separator < 1) return false;
@@ -47,7 +57,9 @@ const graphRefSearchSchema = z.string().refine((value) => {
 const searchSchema = z.object({
   ...entityRecordsInputSchema.omit({ direction: true }).partial().shape,
   recordsDirection: z.enum(["asc", "desc"]).optional(),
-  // Active tab, deep-linkable; records is the default.
+  // Active tab, deep-linkable. Default ("schema") is omitted from the URL —
+  // it preserves the pre-merge /entities content (and its zero-query cost);
+  // the recipe graph is opt-in via ?tab=recipes (the recipes-list Graph button).
   tab: tabSchema.optional().catch(undefined),
   // Recipe-graph filters (migrated from the old /recipes/graph route). Branded
   // at the route boundary so garbage ?cookbookId= values are rejected here.
@@ -70,6 +82,8 @@ const searchSchema = z.object({
   q: z.string().optional().catch(undefined),
   reduce: z.boolean().optional().catch(undefined),
   entity: entitySchema.optional().catch(undefined),
+  // Schema tab sub-sheet; the entities sheet is the default and stays off the URL.
+  sheet: schemaSheetSchema.optional().catch(undefined),
   root: z.string().optional().catch(undefined),
   view: z.enum(["list", "graph"]).optional().catch(undefined),
   layout: z.enum(["neighborhood", "flow"]).optional().catch(undefined),
@@ -105,7 +119,7 @@ export const Route = createFileRoute("/_authenticated/entities")({
 });
 
 function EntitiesRoute() {
-  const { tab } = Route.useSearch();
+  const { tab, entity, sheet } = Route.useSearch();
   const navigate = useNavigate();
   const rawSearch = Route.useSearch();
   const recordsSearch = entityRecordsInputSchema.parse({
@@ -129,7 +143,7 @@ function EntitiesRoute() {
     [navigate],
   );
 
-  const tabs = useTabParam(tab, "records", tabSchema, (next) =>
+  const tabs = useTabParam(tab, "schema", tabSchema, (next) =>
     navigate({
       to: ".",
       search: (prev) => ({
@@ -150,6 +164,8 @@ function EntitiesRoute() {
         >
           <TabsTrigger value="records">Records</TabsTrigger>
           <TabsTrigger value="explore">Explore records</TabsTrigger>
+          <TabsTrigger value="schema">Schema</TabsTrigger>
+          <TabsTrigger value="integrity">Integrity</TabsTrigger>
           <TabsTrigger value="work">Projects &amp; tasks</TabsTrigger>
           <TabsTrigger value="recipes">Recipe graph</TabsTrigger>
         </TabsList>
@@ -163,6 +179,34 @@ function EntitiesRoute() {
         </TabsContent>
         <TabsContent value="explore">
           <CrossEntityTab />
+        </TabsContent>
+        <TabsContent value="schema">
+          <EntityManifestGrid
+            selected={entity ?? null}
+            sheet={sheet}
+            active={tabs.value === "schema"}
+            onSelect={(selected) =>
+              navigate({
+                to: ".",
+                replace: true,
+                search: (prev) => ({ ...prev, entity: selected ?? undefined }),
+              })
+            }
+            onSheetChange={(next) =>
+              navigate({
+                to: ".",
+                search: (prev) => ({
+                  ...prev,
+                  sheet: next === "entities" ? undefined : next,
+                }),
+              })
+            }
+          />
+        </TabsContent>
+        {/* Same reasoning as the recipe graph below: the catalog query and the
+            Problems audit it cross-references only fire once this tab opens. */}
+        <TabsContent value="integrity">
+          <EntityIntegrityTab />
         </TabsContent>
         {/* Filters + graph live inside the tab content so their queries
             (listCookbooks, getDependencyGraph) fire only when this tab opens. */}

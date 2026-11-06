@@ -2,6 +2,7 @@ import { problemsTypeSliceOut } from "@cubby/schemas/mcp";
 import { referentialLivenessViolationsMcpOut } from "@cubby/schemas/problems";
 import { z } from "zod";
 
+import { integrityProblemsContract } from "~/contracts/entity-integrity.contract";
 import {
   problemReportWantsCounts,
   problemsContract,
@@ -100,6 +101,26 @@ export function projectProblemTypeSlice(
       return slice;
   }
 }
+
+export const integrityProblemsHandlers = implementOperationDomain(
+  integrityProblemsContract,
+  {
+    getByType: async (context, input) =>
+      integrityProblemsContract.ops.getByType.output.parse(
+        await publicProblemSlice(
+          context.db,
+          await (
+            await problemExecution()
+          ).findProblemByType(
+            context.db,
+            input.key,
+            context.upcLookupClient,
+            context.usdaClient,
+          ),
+        ),
+      ),
+  },
+);
 
 export const problemsStreamHandlers = implementSubscriptionDomain(
   problemsStreamsContract,

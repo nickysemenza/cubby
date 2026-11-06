@@ -2343,6 +2343,7 @@ const buildMetadataSchemas = () => {
     label: nonEmptyString(),
     /** `gap.message` shown beside the check. */
     message: nonEmptyString(),
+    coverage: nonEmptyString().optional(),
   });
 
   const entityDataQualityMetadataSchema = z.strictObject({

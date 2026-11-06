@@ -15,6 +15,7 @@ import { renderSwiftSharedConstants } from "./swift-shared-constants.ts";
 import { renderDataQualityArtifacts } from "./data-quality.ts";
 import { renderClassificationPolicyArtifacts } from "../classification-policies.ts";
 import { renderImagePolicyArtifacts } from "./image-policy.ts";
+import { renderCoverageTotalsArtifacts } from "./coverage-totals.ts";
 import { renderRelatedViewArtifacts } from "./related-views.ts";
 import { renderSchemaWrapperArtifacts } from "./schema-wrappers.ts";
 
@@ -33,6 +34,7 @@ export const renderEntityArtifacts = (
   ...renderDataQualityArtifacts(entities),
   ...renderClassificationPolicyArtifacts(entities),
   ...renderSchemaWrapperArtifacts(entities),
+  ...renderCoverageTotalsArtifacts(entities),
   ...renderImagePolicyArtifacts(entities),
   ...renderFieldExplanationReference(entities),
   ...renderEntityMetadataArtifacts(entities),

@@ -632,6 +632,7 @@ export const { definition, readSchemas } = defineEntityModel(
             facet: "linkage",
             label: "Product link",
             message: "No product is linked to this ingredient.",
+            coverage: "ingredientsWithoutProduct",
           },
           {
             id: "ingredient_recipe_deleted",
