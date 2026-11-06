@@ -105,31 +105,34 @@ const source: WorkSource = {
       : null;
     if (ids?.size === 0) return null;
     const liveIdentity = sql`${notDeleted(alias(entityIdentity, "work_identity"))} AND work_identity."mergedIntoId" IS NULL`;
-    const queries = shortcodeEntities
-      .filter((entity) => !scope.record || scope.record.entity === entity)
-      .map((entity) => {
-        const table = SHORTCODE_TABLE[entity];
-        return selectWorkCandidates(db, source, {
-          entity,
-          id: sql`${table.shortcode}`,
-          name: labelSql(entity, `"${getTableName(table)}"`),
-          reason: "Pending suggestions",
-          reasonKeys: sql`pending.reason_keys`,
-          ...recordAuthority(entity, outer(table.id)),
-          ...workRecordFactsFor(entity),
-        })
-          .from(table)
-          .innerJoin(
-            sql`work_pending_records pending`,
-            sql`pending.entity = ${entity} AND pending.record_id = ${table.id}`,
-          )
-          .where(
-            and(
-              "deletedAt" in table ? notDeleted(table) : undefined,
-              recordScope(scope, sql`${table.shortcode}`),
-            ),
-          );
-      });
+    const queries = await Promise.all(
+      shortcodeEntities
+        .filter((entity) => !scope.record || scope.record.entity === entity)
+        .map(async (entity) => {
+          const table = SHORTCODE_TABLE[entity];
+          const query = selectWorkCandidates(db, source, {
+            entity,
+            id: sql`${table.shortcode}`,
+            name: await labelSql(entity, `"${getTableName(table)}"`),
+            reason: "Pending suggestions",
+            reasonKeys: sql`pending.reason_keys`,
+            ...recordAuthority(entity, outer(table.id)),
+            ...workRecordFactsFor(entity),
+          })
+            .from(table)
+            .innerJoin(
+              sql`work_pending_records pending`,
+              sql`pending.entity = ${entity} AND pending.record_id = ${table.id}`,
+            )
+            .where(
+              and(
+                "deletedAt" in table ? notDeleted(table) : undefined,
+                recordScope(scope, sql`${table.shortcode}`),
+              ),
+            );
+          return sql`${query}`;
+        }),
+    );
     return {
       query: sql.join(
         queries.map((query) => sql`(${query})`),

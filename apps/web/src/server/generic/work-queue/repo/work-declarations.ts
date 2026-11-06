@@ -21,7 +21,7 @@ import {
 } from "@cubby/schemas/work-queue";
 import { workQueueGapChecks } from "@cubby/schemas/work-queue-policy";
 import { eq, isNull, or, sql, type SQL, type AnyColumn } from "drizzle-orm";
-import { alias, type PgTable } from "drizzle-orm/pg-core";
+import { alias, PgDialect, type PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
@@ -223,6 +223,22 @@ export const entityProblemSources = (
     if (!pending) {
       pending = (async () => {
         const columns: Record<string, SQL> = {};
+        const facts: Record<string, SQL> = {};
+        const expressions = new Map<string, string>();
+        const dialect = new PgDialect();
+        const factName = `${baseName}_facts`;
+        // Bind values are part of identity: prepared contexts can differ by Problem.
+        const project = (value: SQL): SQL => {
+          const compiled = dialect.sqlToQuery(value);
+          const key = JSON.stringify([compiled.sql, compiled.params]);
+          let name = expressions.get(key);
+          if (!name) {
+            name = `fact_${expressions.size}`;
+            expressions.set(key, name);
+            facts[name] = value;
+          }
+          return sql`${sql.identifier(factName)}.${sql.identifier(name)}`;
+        };
         for (const [index, definition] of definitions.entries()) {
           if (definition.source.kind !== "entity") continue;
           const filters = read.parseFilters(
@@ -236,16 +252,65 @@ export const entityProblemSources = (
             seeded,
           );
           columns[`match_${index}`] =
-            read.scaffold.plan(filters, { context, membership: "certain" })
-              .where ?? sql`true`;
+            read.scaffold.plan(filters, {
+              context,
+              membership: "certain",
+              project,
+            }).where ?? sql`true`;
           columns[`missing_${index}`] = read.scaffold.hasResultFilters(filters)
-            ? (read.scaffold.plan(filters, { context, membership: "possible" })
-                .where ?? sql`true`)
+            ? (read.scaffold.plan(filters, {
+                context,
+                membership: "possible",
+                project,
+              }).where ?? sql`true`)
             : sql`false`;
         }
+        const routedColumns =
+          typeof read.columns === "function"
+            ? Object.fromEntries(
+                sources.flatMap((source, index) =>
+                  Object.entries(
+                    typeof read.columns === "function"
+                      ? read.columns(source)
+                      : {},
+                  ).map(([key, value]) => {
+                    const expression = Array.isArray(value)
+                      ? sql`ARRAY[${sql.join(
+                          value.map((item) => sql`${item}`),
+                          sql`, `,
+                        )}]::text[]`
+                      : sql`${value}`;
+                    return [`source_${index}_${key}`, project(expression)];
+                  }),
+                ),
+              )
+            : {};
+        const factQuery = getDb(db)
+          .select({
+            code: sql`${read.table.shortcode}`.as("code"),
+            ...Object.fromEntries(
+              Object.entries(facts).map(([key, value]) => [key, value.as(key)]),
+            ),
+          })
+          .from(read.table)
+          .where(recordScope(scope, sql`${read.table.shortcode}`));
         const root = getDb(db)
           .select({
             code: sql`${read.table.shortcode}`.as("code"),
+            ...(typeof read.columns === "function"
+              ? {}
+              : Object.fromEntries(
+                  Object.entries(read.columns).map(([key, value]) => [
+                    key,
+                    sql`${value}`.as(key),
+                  ]),
+                )),
+            ...Object.fromEntries(
+              Object.entries(routedColumns).map(([key, value]) => [
+                key,
+                value.as(key),
+              ]),
+            ),
             ...Object.fromEntries(
               Object.entries(columns).map(([key, value]) => [
                 key,
@@ -254,14 +319,21 @@ export const entityProblemSources = (
             ),
           })
           .from(read.table)
+          .innerJoin(
+            sql`${sql.identifier(factName)}`,
+            sql`${sql.identifier(factName)}.code = ${read.table.shortcode}`,
+          )
           .where(recordScope(scope, sql`${read.table.shortcode}`));
-        return [{ name: baseName, sql: sql`${root}` }];
+        return [
+          { name: factName, sql: sql`${factQuery}` },
+          { name: baseName, sql: sql`${root}` },
+        ];
       })();
       prepared.set(scope, pending);
     }
     return pending;
   };
-  return definitions.flatMap((definition, index) => {
+  const sources: WorkSource[] = definitions.flatMap((definition, index) => {
     if (
       definition.source.kind !== "entity" ||
       definition.source.entity !== entity
@@ -292,7 +364,12 @@ export const entityProblemSources = (
       candidates: async (db, scope) => {
         const ctes = await base(db, scope);
         if (typeof read.columns !== "function") {
-          const columns = read.columns;
+          const columns = Object.fromEntries(
+            Object.keys(read.columns).map((key) => [
+              key,
+              sql`base.${sql.identifier(key)}`,
+            ]),
+          );
           const admitted = definitions.flatMap((definition, index) =>
             scopeAdmitsReasons(scope, [
               { key: definition.key, label: definition.title },
@@ -305,18 +382,16 @@ export const entityProblemSources = (
           const candidates = (missing: boolean) =>
             selectWorkCandidates(db, source, {
               entity,
-              id: sql`${read.table.shortcode}`,
+              id: sql`base.code`,
+              name: sql`base.name`,
+              owners: sql`base.owners`,
               ...columns,
               source: sql`reason.source`,
-              key: sql`reason.source || ':' || ${read.table.shortcode}`,
+              key: sql`reason.source || ':' || base.code`,
               reason: sql`reason.label`,
               reasonKeys: sql`ARRAY[reason.source]`,
             })
-              .from(read.table)
-              .innerJoin(
-                sql`${sql.identifier(baseName)} base`,
-                sql`base.code = ${read.table.shortcode}`,
-              )
+              .from(sql`${sql.identifier(baseName)} base`)
               .innerJoin(
                 sql`LATERAL (VALUES ${sql.join(admitted, sql`, `)}) reason(source, label, matched, missing)`,
                 sql`true`,
@@ -329,21 +404,23 @@ export const entityProblemSources = (
             ctes,
           };
         }
+        const sourceColumns = read.columns(source);
         const candidates = (unresolved: boolean) =>
           selectWorkCandidates(db, source, {
             entity,
-            id: sql`${read.table.shortcode}`,
+            id: sql`base.code`,
             reason: definition.title,
             reasonKeys: [definition.key],
-            ...(typeof read.columns === "function"
-              ? read.columns(source)
-              : read.columns),
+            name: sql`base.${sql.identifier(`source_${index}_name`)}`,
+            owners: sql`base.${sql.identifier(`source_${index}_owners`)}`,
+            ...Object.fromEntries(
+              Object.keys(sourceColumns).map((key) => [
+                key,
+                sql`base.${sql.identifier(`source_${index}_${key}`)}`,
+              ]),
+            ),
           })
-            .from(read.table)
-            .innerJoin(
-              sql`${sql.identifier(baseName)} base`,
-              sql`base.code = ${read.table.shortcode}`,
-            )
+            .from(sql`${sql.identifier(baseName)} base`)
             .where(
               unresolved
                 ? sql`base.${sql.identifier(`missing_${index}`)} AND NOT base.${sql.identifier(`match_${index}`)}`
@@ -358,4 +435,5 @@ export const entityProblemSources = (
     };
     return [source];
   });
+  return sources;
 };

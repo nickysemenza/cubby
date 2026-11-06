@@ -26,23 +26,23 @@ import { diagnosticWorkSources } from "~/server/domains/work/service/work-diagno
 import type { WorkQueueComposition } from "~/server/generic/work-queue/repo/work-queue";
 
 /** Explicit domains, with request-local evidence shared only by this read. */
-export const workQueueComposition = (): WorkQueueComposition => {
+export const workQueueComposition = async (): Promise<WorkQueueComposition> => {
   const context = projectWorkContext();
   const diagnostics = diagnosticWorkSources();
   return {
     sources: [
-      ...productWorkSources(),
-      ...vendorWorkSources(),
+      ...(await productWorkSources()),
+      ...(await vendorWorkSources()),
       ...purchaseWorkSources(),
       ...expenseWorkSources(),
-      ...ingredientWorkSources(),
-      ...recipeWorkSources(),
-      ...inventoryWorkSources(),
-      ...locationWorkSources(),
-      ...mealWorkSources(),
-      ...projectWorkSources(context),
-      ...taskWorkSources(),
-      ...imageWorkSources(),
+      ...(await ingredientWorkSources()),
+      ...(await recipeWorkSources()),
+      ...(await inventoryWorkSources()),
+      ...(await locationWorkSources()),
+      ...(await mealWorkSources()),
+      ...(await projectWorkSources(context)),
+      ...(await taskWorkSources()),
+      ...(await imageWorkSources()),
       ...financialTransactionWorkSources(),
       ...emailWorkSources,
       ...runWorkSources,

@@ -47,7 +47,6 @@ export const repositoryOwners = [
   "src/server/domains/email/repo/field-envelope.ts",
   "src/server/generic/derived/repo/inherited-resolution.ts",
   "src/server/generic/entity-graph/repo/record-label.ts",
-  "src/server/entity-kernel/repo/read-ports.ts",
   "src/server/generic/derived/repo/envelope.ts",
   "src/server/generic/derived/repo/public-read.ts",
   "src/server/generic/field-explanation/repo/inherited-reset-preview.ts",
@@ -320,6 +319,12 @@ export function createRepositoryPrograms(
             join(
               app,
               "artifacts/server-contracts/server/generic/changes/repo/change.d.ts",
+            ),
+          ],
+          "~/server/entity-kernel/read.boundary": [
+            join(
+              app,
+              "artifacts/server-contracts/server/entity-kernel/read.boundary.d.ts",
             ),
           ],
           "~/server/db/repository-access.boundary": [

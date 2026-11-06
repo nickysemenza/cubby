@@ -47,12 +47,12 @@ const gapSource: WorkSource = {
     return { query: candidates(false), missingInputs: candidates(true) };
   },
 };
-export const vendorWorkSources = (): WorkSource[] => [
+export const vendorWorkSources = async (): Promise<WorkSource[]> => [
   gapSource,
   ...entityProblemSources("vendor", {
     table,
     columns: {
-      name: labelSql("vendor", `"${getTableName(table)}"`),
+      name: await labelSql("vendor", `"${getTableName(table)}"`),
       owners: sql`ARRAY[]::uuid[]`,
       shared: true,
     },

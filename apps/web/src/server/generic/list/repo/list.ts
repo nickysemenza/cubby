@@ -70,6 +70,10 @@ import {
   unwrapDb,
 } from "~/server/db/helpers";
 import { executeListQueryWithoutCount } from "~/server/db/helpers/query";
+import {
+  repositoryQueries,
+  type RepositoryQueryInput,
+} from "~/server/db/repository-access.boundary";
 import { ENTITY_LIST_READ_SCHEMAS } from "~/server/entity-reads/list-contracts";
 import { createAppError } from "~/server/errors/app-error";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
@@ -869,10 +873,12 @@ export function listScaffold<
         context = ListContext.empty,
         readContext,
         membership,
+        project,
       }: {
         context?: ListContext;
         readContext?: QualityReadContext;
         membership?: "certain" | "possible";
+        project?: (value: SQL) => SQL;
       } = {},
     ): ListFilterPlan {
       if (
@@ -899,9 +905,12 @@ export function listScaffold<
             filters,
             context.withRead(readContext),
             membership,
+            project,
           ),
           ...(scored
-            ? dataQualityFilterPredicates(scored, table, filters)
+            ? dataQualityFilterPredicates(scored, table, filters).map(
+                (value) => (value && project ? project(value) : value),
+              )
             : []),
           ...auditDateWhereConditions(
             {
@@ -912,7 +921,9 @@ export function listScaffold<
           ),
           // The declared related-view filters (`related-<key>`, `<prefix>Id`,
           // `<prefix>PresenceFilter`, `<prefix>Search`) for every list.
-          ...relatedWhereConditions(entity, filters, table.id),
+          ...relatedWhereConditions(entity, filters, table.id).map((value) =>
+            value && project ? project(value) : value,
+          ),
           // The kernel's `filters.ids` restriction, by canonical shortcode.
           listIdsCondition(table.shortcode, filters),
           ...staticScope,
@@ -977,6 +988,7 @@ export function listScaffold<
       filters: Filters,
       context: ListContext = ListContext.empty,
       membership: "certain" | "possible" = "certain",
+      project?: (value: SQL) => SQL,
     ): Array<SQL | undefined> {
       const values = options?.populationFilters
         ? Object.fromEntries(
@@ -991,6 +1003,7 @@ export function listScaffold<
         table,
         values,
         {
+          project,
           derived: derivedSql,
           rows: rowsSql,
           context,
@@ -1360,6 +1373,21 @@ export function listScaffold<
      * count. Absent, foreign and deleted codes are simply missing. Quality
      * evaluates live, as every record read does.
      */
+    async fieldReads(
+      db: RepositoryQueryInput,
+      codes: readonly string[],
+    ): Promise<PageFieldReadContexts> {
+      if (!codes.length) return new Map();
+      const source: PgTable = table;
+      const rows = await repositoryQueries(db)
+        .select(getTableColumns(source))
+        .from(source)
+        .where(
+          and(inArray(table.shortcode, [...codes]), scaffold.plan({}).where),
+        );
+      return (await withPageFields(db, entity, rows, () => [])).fieldReads;
+    },
+
     async get(
       db: Database | DrizzleTransaction,
       codes: readonly string[],

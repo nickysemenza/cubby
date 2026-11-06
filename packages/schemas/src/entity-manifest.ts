@@ -3,7 +3,7 @@ import { type Entity, entitySchema } from "./entity-core";
 export {
   entityInspectorMetadata,
   type EntityInspectorMetadata,
-} from "./generated/entity-inspector.gen";
+} from "./generated/entity-record-metadata.gen";
 import {
   imagePolicyCatalog,
   type ImageDisplayBinding,

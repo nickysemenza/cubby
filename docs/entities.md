@@ -2069,9 +2069,12 @@ Only an explicit contextual `storedProjection` may replace its default stored
 path; its declaration still owns availability and provenance. Filter-only
 `fromResult` members use the same typed path SQL as visible stored fields.
 
-Work Problems share one materialized base per entity in each request. Compact
-reason arms read its membership columns, with a shared lateral reason relation
-where routing is identical. Reason declarations still own actions and ordering;
+Work Problems project filter values, readiness and related predicates into a
+materialized facts relation per entity and request, then compute membership and
+shared label/authority columns once in its base. Expression reuse includes bound
+values so distinct prepared Problem contexts retain their own semantics. Compact
+reason arms only filter that base, with a shared lateral reason relation where
+routing is identical. Reason declarations still own actions and ordering;
 possible matches with missing publications contribute completeness warnings and
 never actionable rows. Preparation is shared only inside that request.
 
@@ -2090,9 +2093,12 @@ WHERE because allocation shares apply those filters themselves.
 Repository `read.title` owns computed SQL labels; otherwise the scaffold
 resolves the declared stored title field. Shortcode lookups, reference pickers
 and record graphs share that title, including Inventory's product and location.
-Repository initialization publishes title and field-context ports separately from
-the complete registry, so SQL compilers and public envelope readers use declared
-reads without importing repositories during their initialization.
+The existing generated kernel bindings compile stored titles from `titleField` and
+lazily import each repository for composed titles and field contexts. Missing ports
+throw; reads never depend on registration or repository initialization order.
+The annotated kernel read boundary also keeps the generated domain loaders out
+of the repository compiler program. Queue and scheduled entry points must retain
+their lazy repository boundary.
 Picker count and kind projections are declared by their repository, with counts
 compiled from the entity's declared rollup. The shortcode table registry stays
 independent of repositories so identity writers can use it without a cycle.

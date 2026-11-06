@@ -7,11 +7,11 @@ import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { entityProblemSources } from "~/server/generic/work-queue/repo/work-declarations";
 import { type WorkSource } from "~/server/generic/work-queue/repo/work-source";
 
-export const locationWorkSources = (): WorkSource[] => [
+export const locationWorkSources = async (): Promise<WorkSource[]> => [
   ...entityProblemSources("location", {
     table,
     columns: {
-      name: labelSql("location", `"${getTableName(table)}"`),
+      name: await labelSql("location", `"${getTableName(table)}"`),
       owners: sql`ARRAY[]::uuid[]`,
       shared: true,
     },

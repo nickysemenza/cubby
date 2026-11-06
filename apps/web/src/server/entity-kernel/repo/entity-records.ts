@@ -38,7 +38,9 @@ const privateRowSchema = entityRecordSchema
   });
 
 /** Compute costly display fields before paging only when query semantics need them. */
-export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
+export async function buildEntityRecordsQuery(
+  input: EntityRecordsInput,
+): Promise<SQL> {
   const kinds = shortcodeEntities.filter(
     (kind) => !input.kind || kind === input.kind,
   );
@@ -55,40 +57,41 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
       ? gapCountSql(kind, storedEntryFor(kind).table)
       : sql`NULL::bigint`;
   const pageBranches: SQL[] = [];
-  const branches = kinds.map((kind) => {
-    const table = entityManifest[kind].dbTable;
-    if (!table)
-      throw new Error(`Shortcode entity ${kind} has no payload table`);
-    const payload = sql.identifier(table);
-    // An immutable payload has no update clock; its creation is its latest fact change.
-    const columns = getTableColumns(SHORTCODE_TABLE[kind]);
-    const updatedAt =
-      "updatedAt" in columns ? columns.updatedAt : columns.createdAt;
-    const id = sql`${payload}."id"`;
-    const fields = {
-      name: sql`${labelSql(kind, `"${table}"`)} AS name`,
-      missing: sql`${missingFor(kind)} AS missing`,
-      image: sql`${entityDisplayImagePresenceSql(kind, id)} AS "hasImage"`,
-    };
-    const early: SQL[] = [];
-    // Status is display-only: evaluate it for the requested page, never the roster.
-    const late: SQL[] = [
-      sql`, ${scored(kind) ? statusSql(kind, storedEntryFor(kind).table) : sql`NULL::text`} AS "qualityStatus"`,
-    ];
-    for (const [field, needed] of [
-      [fields.name, earlyName],
-      [fields.missing, earlyQuality],
-      [fields.image, earlyImage],
-    ] as const) {
-      (needed ? early : late).push(sql`, ${field}`);
-    }
-    if (late.length)
-      pageBranches.push(sql`
+  const branches = await Promise.all(
+    kinds.map(async (kind) => {
+      const table = entityManifest[kind].dbTable;
+      if (!table)
+        throw new Error(`Shortcode entity ${kind} has no payload table`);
+      const payload = sql.identifier(table);
+      // An immutable payload has no update clock; its creation is its latest fact change.
+      const columns = getTableColumns(SHORTCODE_TABLE[kind]);
+      const updatedAt =
+        "updatedAt" in columns ? columns.updatedAt : columns.createdAt;
+      const id = sql`${payload}."id"`;
+      const fields = {
+        name: sql`${await labelSql(kind, `"${table}"`)} AS name`,
+        missing: sql`${missingFor(kind)} AS missing`,
+        image: sql`${entityDisplayImagePresenceSql(kind, id)} AS "hasImage"`,
+      };
+      const early: SQL[] = [];
+      // Status is display-only: evaluate it for the requested page, never the roster.
+      const late: SQL[] = [
+        sql`, ${scored(kind) ? statusSql(kind, storedEntryFor(kind).table) : sql`NULL::text`} AS "qualityStatus"`,
+      ];
+      for (const [field, needed] of [
+        [fields.name, earlyName],
+        [fields.missing, earlyQuality],
+        [fields.image, earlyImage],
+      ] as const) {
+        (needed ? early : late).push(sql`, ${field}`);
+      }
+      if (late.length)
+        pageBranches.push(sql`
         SELECT page.* ${sql.join(late, sql``)}
         FROM page JOIN ${payload} ON ${id} = page."dbId"::uuid
         WHERE page.kind = ${kind}
       `);
-    return sql`
+      return sql`
       SELECT identity.id::text AS "dbId", identity.shortcode AS id,
         identity.kind, identity."createdAt", ${updatedAt} AS "updatedAt"
         ${sql.join(early, sql``)}
@@ -96,7 +99,8 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
       WHERE identity.kind = ${kind} AND ${notDeleted("identity")}
         AND identity."mergedIntoId" IS NULL AND ${notDeleted(SHORTCODE_TABLE[kind])}
     `;
-  });
+    }),
+  );
   const predicates: SQL[] = [];
   if (input.q) {
     const pattern = ilikeContains(input.q);
@@ -141,7 +145,9 @@ export async function listEntityRecords(
   db: Database,
   input: EntityRecordsInput,
 ) {
-  const result = await unwrapDb(db).execute(buildEntityRecordsQuery(input));
+  const result = await unwrapDb(db).execute(
+    await buildEntityRecordsQuery(input),
+  );
   const parsed = z
     .object({
       totalCount: z.coerce.number().int().nonnegative(),

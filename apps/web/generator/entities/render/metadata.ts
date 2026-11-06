@@ -919,7 +919,7 @@ export const renderEntityMetadataArtifacts = (
         },
       ],
     }),
-    artifact("packages/schemas/src/generated/entity-inspector.gen.ts", {
+    artifact("packages/schemas/src/generated/entity-record-metadata.gen.ts", {
       imports: [typeImport(["MetadataEntityInspectorMetadata"])],
       consts: [
         {

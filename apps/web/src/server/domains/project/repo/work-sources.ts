@@ -11,13 +11,13 @@ import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { entityProblemSources } from "~/server/generic/work-queue/repo/work-declarations";
 import { type WorkSource } from "~/server/generic/work-queue/repo/work-source";
 
-export const projectWorkSources = (
+export const projectWorkSources = async (
   context: ProjectWorkContext,
-): WorkSource[] => [
+): Promise<WorkSource[]> => [
   ...entityProblemSources("project", {
     table,
     columns: {
-      name: labelSql("project", `"${getTableName(table)}"`),
+      name: await labelSql("project", `"${getTableName(table)}"`),
       owners: sql`ARRAY[]::uuid[]`,
       shared: true,
     },

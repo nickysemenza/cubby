@@ -12,11 +12,11 @@ import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { entityProblemSources } from "~/server/generic/work-queue/repo/work-declarations";
 import { type WorkSource } from "~/server/generic/work-queue/repo/work-source";
 
-export const imageWorkSources = (): WorkSource[] => [
+export const imageWorkSources = async (): Promise<WorkSource[]> => [
   ...entityProblemSources("image", {
     table,
     columns: {
-      name: labelSql("image", `"${getTableName(table)}"`),
+      name: await labelSql("image", `"${getTableName(table)}"`),
       owners: workImageOwners(outer(table.id)),
       shared: workImageIsShared(sql`${table.id}`),
     },
