@@ -17,7 +17,6 @@ import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import { sourceTransactionRecordSearch } from "~/server/domains/transaction-import/repo/search-read-source-transaction-record";
 import {
   sourceObservations,
-  sourceObservationFacts,
   sourceObservationField,
   sourceObservationColumns,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
@@ -105,7 +104,7 @@ const sourceRead = {
           importFingerprint: sql<string>`${initialFingerprint}`,
           supersededBy: sql<
             string | null
-          >`(SELECT successor."externalId" FROM ${sourceObservationFacts} successor WHERE successor.id = ${sourceObservationField("supersededByRowId")})`,
+          >`(SELECT successor."externalId" FROM ${sourceObservations} successor WHERE successor.id = ${sourceObservationField("supersededByRowId")})`,
         })
         .from(sourceTransactionRecord)
         .where(
@@ -195,7 +194,7 @@ export const sourceTransactionRecordScaffold = listScaffold(
   {
     rows: {
       runStepInputs: runStepInputListRows("sourceTransactionRecord"),
-      reconciliation: sql`SELECT r.id AS owner, r."accountId" AS account, r."withdrawalImportId" AS withdrawal, r."supersededByRowId" AS successor FROM ${sourceObservationFacts} r`,
+      reconciliation: sql`SELECT r.id AS owner, r."accountId" AS account, r."withdrawalImportId" AS withdrawal, r."supersededByRowId" AS successor FROM ${sourceObservations} r`,
       acceptedTransactions: sql`SELECT "record" AS "owner", "transaction" FROM (${sourceTransactionSettlements}) accepted`,
     },
     derived: {

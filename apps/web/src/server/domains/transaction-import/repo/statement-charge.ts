@@ -9,7 +9,7 @@ import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
   sourceReadyOccurrenceIds,
   sourceObservationFacts,
-  sourceObservationIdentities,
+  sourceObservations,
   sourceOccurrenceStates,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 
@@ -30,7 +30,7 @@ export const chargeKeyOf = (alias: string) => sql.raw(`${alias}."chargeKey"`);
 /** Scoped direct state, with one row per owner and no observation-state aggregation. */
 export const chargeStateOf = (scope: SQL) => sql`(
   SELECT state.* FROM ${sourceOccurrenceStates} state
-  WHERE EXISTS (SELECT 1 FROM ${sourceObservationIdentities} r
+  WHERE EXISTS (SELECT 1 FROM ${sourceObservations} r
     WHERE r.source = state.source AND r."chargeKey" = state."chargeKey"
       AND ${notDeleted("r")} AND (${scope}))
 )`;

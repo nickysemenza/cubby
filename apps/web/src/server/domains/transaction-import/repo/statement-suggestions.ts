@@ -66,9 +66,8 @@ import {
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import { sourceOccurrenceSuppressed } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
-  sourceObservationReviews,
+  sourceObservations,
   sourceObservationIdentities,
-  sourceObservationFacts,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { PROVIDER_IDENTITY_REVIEW } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
@@ -290,7 +289,7 @@ async function loadObservations(
       r."statementDate", r."providerAmount", r.amount, r.merchant,
       r."rawDescription", r."sourceCategory", r."providerStatus",
       r."providerNotes", r."withdrawnAt", r."accountId", r."createdAt", si.fingerprint AS "importFingerprint"
-    FROM ${sourceObservationReviews} r
+    FROM ${sourceObservations} r
     JOIN "TransactionImport" si ON si.id = r."batchId"
     WHERE ${notDeleted("r")}
       AND (r.source, ${chargeKeyOf("r")}) IN (${tuples(charges)})
@@ -444,7 +443,7 @@ async function siblingsFor(
     ),
     o AS MATERIALIZED (
       SELECT p.key, p."rowIds", o.id, o.source, o."batchId", o."rowPosition", o."providerTransactionId", ${chargeKeyOf("o")} AS "chargeKey"
-      FROM p JOIN ${sourceObservationFacts} o ON o.source = p.source
+      FROM p JOIN ${sourceObservations} o ON o.source = p.source
         AND normalize(o."accountDescriptor", NFKC) = normalize(p.descriptor, NFKC)
         AND o."providerAmount" = p.amount
         AND o."statementDate" BETWEEN p.day - ${SIBLING_WINDOW_DAYS}::int AND p.day + ${SIBLING_WINDOW_DAYS}::int
@@ -468,7 +467,7 @@ async function siblingsFor(
     WHERE NOT EXISTS (
       SELECT 1 FROM members mo
       JOIN members mp ON mp."importId" = mo."importId"
-      JOIN ${sourceObservationFacts} own ON own.id = mp."statementRowId"
+      JOIN ${sourceObservations} own ON own.id = mp."statementRowId"
       WHERE mo."statementRowId" = o.id AND mp."statementRowId" = ANY(o."rowIds")
         AND ${notDeleted("own")}
         AND ((o."providerTransactionId" IS NOT NULL AND own."providerTransactionId" IS NOT NULL)
@@ -1493,7 +1492,7 @@ async function buildHoldVoidProposalsForHolds(
 async function loadObservationsById(db: Database, rowIds: readonly string[]) {
   if (!rowIds.length) return [];
   const { rows } = await unwrapDb(db).execute<ChargeRef>(sql`
-    SELECT DISTINCT r.source, ${chargeKeyOf("r")} AS "chargeKey" FROM ${sourceObservationIdentities} r
+    SELECT DISTINCT r.source, ${chargeKeyOf("r")} AS "chargeKey" FROM ${sourceObservations} r
     WHERE r.id IN (${sql.join(
       rowIds.map((id) => sql`${id}::uuid`),
       sql`, `,
@@ -1516,8 +1515,8 @@ async function laterCoveringImport(
 ): Promise<string | null> {
   const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
     SELECT DISTINCT si.id FROM "TransactionImport" si
-    JOIN ${sourceObservationFacts} head ON head."withdrawalImportId" = si.id
-    JOIN ${sourceObservationFacts} held ON held.source=head.source AND held."chargeKey"=head."chargeKey"
+    JOIN ${sourceObservations} head ON head."withdrawalImportId" = si.id
+    JOIN ${sourceObservations} held ON held.source=head.source AND held."chargeKey"=head."chargeKey"
     WHERE ${notDeleted("si")} AND si.source=${input.source} AND si."completedAt" IS NOT NULL
       AND si.coverage->>${"visibility"}=${"all"} AND head.current AND head."withdrawnAt" IS NOT NULL
       AND ${notDeleted("head")} AND ${notDeleted("held")}
@@ -1539,14 +1538,14 @@ async function postedTwinExists(
     amount: string;
     statementDate: unknown;
   }>(sql`
-    SELECT r.amount, r."statementDate" FROM ${sourceObservationFacts} r
+    SELECT r.amount, r."statementDate" FROM ${sourceObservations} r
     WHERE ${notDeleted("r")}
       AND r."providerStatus" IS DISTINCT FROM ${sourceTransactionRecordProviderStatus.enum.pending}
       AND r."statementDate" BETWEEN ${date}::date - ${PENDING_POST_WINDOW_DAYS}::int
         AND ${date}::date + ${PENDING_POST_WINDOW_DAYS}::int
       AND sign(r.amount) = sign(${hold.amount}::numeric)
       AND r."accountDescriptor" IN (
-        SELECT held."accountDescriptor" FROM ${sourceObservationFacts} held
+        SELECT held."accountDescriptor" FROM ${sourceObservations} held
         WHERE held.id IN (${sql.join(
           hold.pendingRowIds.map((id) => sql`${id}::uuid`),
           sql`, `,
@@ -2614,7 +2613,7 @@ async function admitRetriedCharge(
     throw new Error("Retained charge identity was not found");
   if (scope.importId || scope.since) {
     const { rows } = await getDb(db).execute(sql`
-      SELECT 1 FROM ${sourceObservationFacts} r WHERE ${notDeleted("r")}
+      SELECT 1 FROM ${sourceObservations} r WHERE ${notDeleted("r")}
         AND r.source = ${charge.source} AND r."chargeKey" = ${charge.chargeKey}
         ${scope.since ? sql`AND r."statementDate" >= ${scope.since}::date` : sql``}
         ${scope.importId ? sql`AND (r.id IN (SELECT m."statementRowId" FROM ${transactionImportMembers} m WHERE m."importId" = ${scope.importId}::uuid) OR r."withdrawalImportId" = ${scope.importId}::uuid)` : sql``}
@@ -2679,7 +2678,7 @@ export async function retryStatementGenerationRefs(
       }>(sql`
         SELECT DISTINCT observation.source,observation."chargeKey",
           (observation."occurrenceId" IS NULL OR observation."reviewState"<>${sourceOccurrenceReviewState.enum.ready}) AS held
-        FROM ${sourceObservationReviews} observation
+        FROM ${sourceObservations} observation
         WHERE observation.source=${original.source} AND ${notDeleted("observation")}
           AND (observation."chargeKey"=${original.chargeKey} OR
             -- includes-deleted: retained aliases rebind original work references without accepting ownership.

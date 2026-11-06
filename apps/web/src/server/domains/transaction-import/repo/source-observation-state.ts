@@ -94,13 +94,6 @@ export const sourceReadyOccurrenceIds = sql`-- includes-deleted: reserved owners
   WHERE ready."reviewState"=${sourceOccurrenceReviewState.enum.ready}
     AND ready.id NOT IN (SELECT id FROM ${sourceOccurrencesWithUnresolvedHistory} unresolved)`;
 
-/** Review eligibility needs the negative fence, not every historical transaction code. */
-export const sourceObservationReviews = sql`(SELECT facts.*,
-  CASE WHEN facts."storedReviewState"=${sourceOccurrenceReviewState.enum.ready}
-    AND facts."occurrenceId" NOT IN (${sourceReadyOccurrenceIds})
-    THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE facts."storedReviewState" END AS "reviewState"
-  FROM ${sourceObservationFacts} facts)`;
-
 /** One row per explicit owner; there is no alias lookup or observation-state fold. */
 export const sourceOccurrenceStates = sql`(
   SELECT o.source, o.shortcode AS "chargeKey", o.id AS "occurrenceId", CASE WHEN o."reviewState"=${sourceOccurrenceReviewState.enum.ready} AND unresolved.id IS NOT NULL THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE o."reviewState" END AS "reviewState", o.version, o."acceptedTransactionId",

@@ -15,9 +15,7 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
   sourceOccurrenceSuppressed,
-  sourceObservationReviews,
-  sourceObservationFacts,
-  sourceObservationIdentities,
+  sourceObservations,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   CHARGE_STATE,
@@ -52,7 +50,7 @@ export const scopedStatementChargeKeys = (scope: StatementSuggestionScope) => {
     ...(since ? [sql`seen."statementDate" >= ${since}::date`] : []),
   ];
 
-  return sql`SELECT seen.source, ${chargeKeyOf("seen")} AS "chargeKey" FROM ${sourceObservationReviews} seen
+  return sql`SELECT seen.source, ${chargeKeyOf("seen")} AS "chargeKey" FROM ${sourceObservations} seen
     WHERE NOT ${sourceOccurrenceSuppressed(sql`seen."occurrenceId"`)} AND seen."occurrenceId" IS NOT NULL AND seen."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND ${notDeleted("seen")} ${filters.length ? sql`AND ${sql.join(filters, sql` AND `)}` : sql``}`;
 };
 
@@ -97,11 +95,11 @@ export const statementInputCharges = (
     SELECT cs.source, cs."chargeKey" FROM ${state} cs
     WHERE NOT ${sourceOccurrenceSuppressed(sql`cs."occurrenceId"`)} AND cs."occurrenceId" IS NOT NULL AND cs."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND NOT cs.ignored AND NOT cs.superseded
       AND (cs."acceptedTransactionId" IS NULL OR cs.shortcode IS NOT NULL)
-      AND ((cs.shortcode IS NULL AND EXISTS (SELECT 1 FROM ${sourceObservationFacts} head
+      AND ((cs.shortcode IS NULL AND EXISTS (SELECT 1 FROM ${sourceObservations} head
         WHERE head.source=cs.source AND head."chargeKey"=cs."chargeKey" AND head.current
           AND head."withdrawnAt" IS NULL AND head.amount <> 0 AND ${notDeleted("head")}))
         OR EXISTS (SELECT 1 FROM "FinancialTransaction" changed
-          JOIN ${sourceObservationFacts} head ON head.source=cs.source AND head."chargeKey"=cs."chargeKey"
+          JOIN ${sourceObservations} head ON head.source=cs.source AND head."chargeKey"=cs."chargeKey"
           WHERE changed.shortcode=cs.shortcode AND ${notDeleted("changed")}
             AND head.current AND ${notDeleted("head")}
             AND ((head."withdrawnAt" IS NOT NULL AND changed.status <> ${financialTransactionStatus.enum.void}) OR
@@ -141,7 +139,7 @@ export const statementPendingInputTransactions = (
     JOIN "SourceOccurrence" occurrence ON occurrence."acceptedTransactionId" = ft.id
       AND occurrence."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND occurrence."supersededByOccurrenceId" IS NULL
       AND ${notDeleted("occurrence")}
-    JOIN ${sourceObservationIdentities} sr ON sr.id = occurrence."currentObservationId"
+    JOIN ${sourceObservations} sr ON sr.id = occurrence."currentObservationId"
       AND ${notDeleted("sr")} AND sr."providerStatus" = ${sourceTransactionRecordProviderStatus.enum.pending}
     WHERE ${notDeleted("ft")} AND ft.status = ${financialTransactionStatus.enum.pending}
       ${page?.after ? sql`AND ft.id > ${page.after}::uuid` : sql``}
