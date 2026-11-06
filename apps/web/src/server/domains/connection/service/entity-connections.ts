@@ -54,7 +54,6 @@ import {
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
-import { prepareTagSuggestions } from "~/server/generic/suggestions/service/tag-suggestions";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { discoverAcquisitionCandidateScan } from "./acquisition-discovery";
@@ -157,15 +156,6 @@ export async function prepareEntityConnections(
   }
   await captureCandidates(candidates);
   if (source.entityKind === "product") {
-    publishers.push(
-      ...(
-        await stage("tagSuggestions", () =>
-          prepareTagSuggestions(db, source.entityId),
-        )
-      ).map((publish) => async (transactionDb: Database) => {
-        await publish(transactionDb);
-      }),
-    );
     const recordId = await resolveOrThrow(db, "product", source.entityId);
     productRecordId = recordId;
     const identity = await stage("productIdentity", async () =>

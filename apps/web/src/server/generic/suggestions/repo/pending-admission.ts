@@ -11,7 +11,6 @@ export type SuggestionRecordSelection = {
 
 export const recommendationScopes = {
   connection: sql`s.subject->>'scope' LIKE 'connection.%'`,
-  tagPropagation: sql`s.subject->>'scope' = 'product.tag-propagation'`,
 };
 
 const reviewSuggestion = alias(suggestionTable, "s");

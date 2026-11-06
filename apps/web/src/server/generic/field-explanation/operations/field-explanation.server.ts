@@ -1,10 +1,3 @@
-import {
-  type DataQuality,
-  dataCheck,
-  dataQuality,
-  scoredEntities,
-} from "@cubby/schemas/data-quality";
-import { entityQualityCheckState } from "@cubby/schemas/data-quality-shape";
 import { type Entity, entityRefSchema } from "@cubby/schemas/entity";
 import {
   fieldEnvelopeReadSchema,
@@ -60,23 +53,15 @@ import {
 } from "~/server/entity-kernel/repo/entity-display-image";
 import type { EntitySchemaBindingEntity } from "~/server/generated/entity-bindings.gen";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
-import {
-  buildQualityBreakdown,
-  loadQualityBreakdown,
-} from "~/server/generic/data-quality/repo/hydrate";
-import { evaluateRow } from "~/server/generic/data-quality/repo/presentation";
-import { loadPublishedQuality } from "~/server/generic/data-quality/repo/stored";
-import { explainLiveDerived } from "~/server/generic/derived/repo/explain";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
+import { readPublicEntityRow } from "~/server/generic/derived/service/public-read";
 import { explanationReferenceValues } from "~/server/generic/field-explanation/repo/explanation-reference-values";
 import { loadFieldCountEvidence } from "~/server/generic/field-explanation/repo/field-count-evidence";
 import { withFieldExplanationSnapshot } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import { loadFieldResolutionEvidence } from "~/server/generic/field-explanation/repo/field-resolution-evidence";
 import { inheritedResetPreview } from "~/server/generic/field-explanation/repo/inherited-reset-preview";
-import { specialistResetPreview } from "~/server/generic/field-explanation/service/specialist-reset-preview";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import { derivedComputes } from "~/server/workflows/derived-computes";
 
 import { interpretFieldValue } from "./field-explanation-interpretation";
 
@@ -628,37 +613,6 @@ function matchesDisplayedPublication(
   );
 }
 
-/** Exception records remain current action authority, independently of a published score. */
-async function loadCurrentQualityControls(
-  db: EntityKernelContext["db"],
-  entity: Entity,
-  internalId: string,
-) {
-  const scored = z.enum(scoredEntities).safeParse(entity);
-  if (!scored.success) return undefined;
-  const row = (await loadPublishedQuality(db, scored.data, [internalId]))[0];
-  if (!row) return undefined;
-  const recorded = evaluateRow(scored.data, row).exceptions;
-  const entries = Object.entries(row.checks);
-  return buildQualityBreakdown(
-    [
-      ...new Set([
-        ...entries
-          .filter(([, state]) => state !== "not_applicable")
-          .map(([check]) => dataCheck.parse(check)),
-        ...recorded.map((exception) => dataCheck.parse(exception.check)),
-      ]),
-    ],
-    entries
-      .filter(([, state]) => state === "gap")
-      .map(([check]) => dataCheck.parse(check)),
-    entries
-      .filter(([, state]) => state === "waived")
-      .map(([check]) => dataCheck.parse(check)),
-    recorded,
-  ).checks;
-}
-
 /** Resolve the publication owner inside the explanation's existing MVCC snapshot. */
 async function loadPublishedExplanationFacts({
   db,
@@ -730,12 +684,9 @@ async function loadExplanationSnapshot(
     return {
       projection,
       sourceProjection: projection,
-      comparison: null,
       countEvidence: null,
       resolutionEvidence: null,
       resolutionEvidenceTruncated: false,
-      qualityBreakdown: undefined,
-      currentQualityControls: undefined,
       resetPreview: null,
     };
   }
@@ -748,20 +699,39 @@ async function loadExplanationSnapshot(
         recipeCosting: new RecipeCostingService(snapshotDb, context.usdaClient),
       },
     };
-    const projection = await loadProjection(
-      snapshotContext,
-      entity,
-      input.entityId,
-      input.surface,
-      input.scope,
-      explanationMetadata
-        .nullish()
-        .parse(
-          entityFieldModels[entity].fields.find(
-            (candidate) => candidate.key === fieldKey,
-          )?.explanation,
-        )?.scopeFilters?.[input.scope?.entityKind ?? ""],
-    );
+    const rawDetail =
+      input.surface === "detail" && !input.scope && hasFieldEnvelopeRead(entity)
+        ? await loadSourceProjection(
+            snapshotContext,
+            entity,
+            input.entityId,
+            input.surface,
+          )
+        : null;
+    const projection =
+      rawDetail && hasFieldEnvelopeRead(entity) && entity !== "usda-food"
+        ? asJsonRecord(
+            await readPublicEntityRow({
+              db: snapshotDb,
+              entity,
+              projection: "detail",
+              row: rawDetail,
+            }),
+          )
+        : await loadProjection(
+            snapshotContext,
+            entity,
+            input.entityId,
+            input.surface,
+            input.scope,
+            explanationMetadata
+              .nullish()
+              .parse(
+                entityFieldModels[entity].fields.find(
+                  (candidate) => candidate.key === fieldKey,
+                )?.explanation,
+              )?.scopeFilters?.[input.scope?.entityKind ?? ""],
+          );
     const field = entityFieldModels[entity].fields.find(
       (candidate) => candidate.key === fieldKey,
     );
@@ -783,12 +753,13 @@ async function loadExplanationSnapshot(
     // Current inputs cannot reconstruct the evidence that produced a retained publication.
     const sourceProjection = publicationOnly
       ? projection
-      : await loadSourceProjection(
+      : (rawDetail ??
+        (await loadSourceProjection(
           snapshotContext,
           entity,
           input.entityId,
           input.surface,
-        );
+        )));
     const resolution = fieldResolutionSchema.safeParse(
       readExplanationPath(sourceProjection, `fieldResolutions.${fieldKey}`)
         .value,
@@ -808,29 +779,6 @@ async function loadExplanationSnapshot(
     const internalId = shortcodeEntity
       ? await resolveLiveShortcode(snapshotDb, input.entityId, shortcodeEntity)
       : null;
-    const contextualProjection =
-      field && "storedProjection" in field && field.storedProjection;
-    const comparison = contextualProjection
-      ? {
-          kind: "unavailable" as const,
-          reason:
-            "The live root computation does not apply this field’s current projection context and cannot be compared with its displayed value.",
-        }
-      : input.diagnostic &&
-          internalId &&
-          matchesDisplayedPublication(
-            input.displayedResult,
-            currentEnvelope?.result,
-            input,
-          )
-        ? await explainLiveDerived(
-            snapshotDb,
-            derivedComputes,
-            entity,
-            fieldKey,
-            internalId,
-          )
-        : null;
     const { declaration, storedResult } = await loadPublishedExplanationFacts({
       db: snapshotDb,
       entity,
@@ -844,27 +792,11 @@ async function loadExplanationSnapshot(
       internalId &&
       currentEnvelope?.current.controls.kind === "editable" &&
       currentEnvelope.current.controls.reset.kind === "available"
-        ? ((await specialistResetPreview(
-            snapshotDb,
-            entity,
-            fieldKey,
-            internalId,
-          )) ??
-          (await inheritedResetPreview(
-            snapshotDb,
-            entity,
-            fieldKey,
-            internalId,
-          )))
+        ? await inheritedResetPreview(snapshotDb, entity, fieldKey, internalId)
         : null;
-    const currentQualityControls =
-      publicationOnly && fieldKey === "dataQuality" && internalId
-        ? await loadCurrentQualityControls(snapshotDb, entity, internalId)
-        : undefined;
     return {
       projection,
       resetPreview,
-      currentQualityControls,
       sourceProjection:
         storedResult?.resultExists &&
         currentEnvelope?.result.kind === "cached" &&
@@ -881,17 +813,6 @@ async function loadExplanationSnapshot(
               // A declared snapshot can be unavailable while current live inputs decide a value.
               ...(declaration ? { storedResult: null } : {}),
             },
-      comparison,
-      qualityBreakdown:
-        !publicationOnly &&
-        fieldKey === "dataQuality" &&
-        z.enum(scoredEntities).safeParse(entity).success
-          ? await loadQualityBreakdown(
-              snapshotDb,
-              z.enum(scoredEntities).parse(entity),
-              input.entityId,
-            )
-          : undefined,
       resolutionEvidence: evidence.evidence,
       resolutionEvidenceTruncated: evidence.truncated,
       countEvidence:
@@ -927,75 +848,20 @@ function explanationActions(
   ];
 }
 
-function qualitySummary(
-  quality: DataQuality,
-  breakdown: z.infer<typeof fieldExplanationOutput>["qualityBreakdown"],
-): string {
-  if (quality.status === "not_assessed")
-    return "No assessed check applies to this record and nothing is unresolved, so its quality is not assessed. Not assessed does not mean complete.";
-  if (quality.gaps.length > 0) {
-    const gaps = breakdown?.checks.filter((check) => check.state === "gap");
-    return `${gaps?.length ?? quality.gaps.length} unresolved. Missing information and detected defects are shown separately below.`;
-  }
-  return quality.status === "complete_with_exceptions"
-    ? "Every applicable check passes, at least one only through an accepted exception. This covers the checks defined for this record; it does not guarantee that every possible detail is present."
-    : "All applicable checks are satisfied. This covers the checks defined for this record; it does not guarantee that every possible detail is present.";
-}
-
-const dataQualityStatusResult = (quality: DataQuality) =>
-  quality.status === "not_assessed"
-    ? "Not assessed"
-    : quality.gaps.length > 0
-      ? `${quality.gaps.length} missing`
-      : "Nothing missing";
-
 export function explainInterpretation(
   field: (typeof entityFieldModels)[Entity]["fields"][number],
   value: Json,
-  projection: JsonRecord,
   sources: z.infer<typeof fieldExplanationOutput>["sources"],
-  unscoredQuality: boolean,
   resolution: FieldResolution | null,
-  qualityBreakdown: z.infer<typeof fieldExplanationOutput>["qualityBreakdown"],
   resolutionEvidenceTruncated: boolean,
 ) {
   const boundedSources = boundExplanationSources(sources);
-  const quality =
-    field.key === "dataQuality"
-      ? dataQuality.safeParse(projection.dataQuality)
-      : null;
   const interpretation = interpretFieldValue(field, value, resolution);
   const resultLabel = interpretation.result;
   const caveats = interpretation.caveats;
   const nextSteps = interpretation.nextSteps;
   let summary = interpretation.summary;
-  if (quality?.success) {
-    caveats.length = 0;
-    nextSteps.length = 0;
-    const q = quality.data;
-    summary = qualitySummary(q, qualityBreakdown);
-    caveats.push(
-      "Only this record's applicable checks count. Related records' gaps are reported separately.",
-    );
-    if (q.exceptions.length > 0)
-      caveats.push(
-        "Active exceptions count as satisfied. Stale exceptions no longer excuse a detected gap because their supporting evidence has changed.",
-      );
-    nextSteps.push(...q.gaps.map((gap) => gap.message));
-    sources = [
-      ...sources,
-      { label: "Exceptions", entity: null, value: q.exceptions },
-      { label: "Related record gaps", entity: null, value: q.relatedGaps },
-      {
-        label: "Related record exceptions",
-        entity: null,
-        value: q.relatedExceptions,
-      },
-    ];
-  } else if (unscoredQuality) {
-    summary =
-      "No quality checks are defined for this entity. Not assessed is not a score of zero or a guarantee of completeness.";
-  } else if (resolution) {
+  if (resolution) {
     caveats.push(
       resolution.mode === "inherit"
         ? "This value follows its source and may change when that source changes."
@@ -1006,19 +872,14 @@ export function explainInterpretation(
     caveats.push(
       "Evidence is bounded; the displayed sources are not an exhaustive list.",
     );
-  const finalSources = quality?.success
-    ? boundExplanationSources(sources)
-    : boundedSources;
   return {
     interpretation: {
-      result: quality?.success
-        ? dataQualityStatusResult(quality.data)
-        : resultLabel,
+      result: resultLabel,
       summary,
       caveats,
       nextSteps,
     },
-    finalSources,
+    finalSources: boundedSources,
   };
 }
 
@@ -1047,8 +908,6 @@ function explainPublication({
   publishedEvidence,
   explanation,
   label,
-  comparison,
-  currentQualityControls,
 }: {
   input: ExplainFieldInput;
   envelope: z.output<typeof fieldExplanationOutput>["envelope"];
@@ -1056,10 +915,6 @@ function explainPublication({
   publishedEvidence: Json | undefined;
   explanation: Explanation;
   label: string;
-  comparison: z.output<typeof fieldExplanationOutput>["comparison"] | null;
-  currentQualityControls: z.output<
-    typeof fieldExplanationOutput
-  >["currentQualityControls"];
 }) {
   const subject = { entityKind: input.entityKind, entityId: input.entityId };
   const displayed = input.displayedResult;
@@ -1108,28 +963,6 @@ function explainPublication({
         ]
       : []),
   ]);
-  const checks =
-    input.field === "dataQuality"
-      ? z
-          .object({ checks: z.record(z.string(), entityQualityCheckState) })
-          .safeParse(publishedFacts)
-      : null;
-  const checkEntries = checks?.success
-    ? Object.entries(checks.data.checks)
-    : null;
-  const qualityBreakdown = checkEntries
-    ? buildQualityBreakdown(
-        checkEntries
-          .filter(([, state]) => state !== "not_applicable")
-          .map(([check]) => dataCheck.parse(check)),
-        checkEntries
-          .filter(([, state]) => state === "gap")
-          .map(([check]) => dataCheck.parse(check)),
-        checkEntries
-          .filter(([, state]) => state === "waived")
-          .map(([check]) => dataCheck.parse(check)),
-      )
-    : undefined;
   return fieldExplanationOutput.parse({
     subject,
     field: input.field,
@@ -1143,33 +976,25 @@ function explainPublication({
             "The displayed value has been replaced. Refresh the value and its explanation together.",
         }
       : (publishedFacts != null || publishedEvidence != null) &&
-          ((capturedDependencies.length > 0 &&
-            capturedDependencies.length ===
-              explanation.sourceDependencies?.length &&
-            capturedDependencies.every(
-              (dependency) =>
-                readExplanationPath(capturedProjection, dependency.path).found,
-            )) ||
-            qualityBreakdown)
+          capturedDependencies.length > 0 &&
+          capturedDependencies.length ===
+            explanation.sourceDependencies?.length &&
+          capturedDependencies.every(
+            (dependency) =>
+              readExplanationPath(capturedProjection, dependency.path).found,
+          )
         ? { kind: "current" }
         : {
             kind: "unavailable",
             reason:
               "Additional source evidence was not captured with this publication.",
           },
-    comparison: comparison ?? {
-      kind: "unavailable",
-      reason:
-        "Run a live diagnostic to compare current inputs with this publication.",
-    },
     rule: {
       id: explanation.ruleId,
       revision: explanation.version,
       description: explanation.description,
     },
     sources: matches ? bounded.sources : [],
-    qualityBreakdown: matches ? qualityBreakdown : undefined,
-    currentQualityControls: matches ? currentQualityControls : undefined,
     resolutionEvidence: null,
     truncated: matches && bounded.truncated,
     actions: explanationActions(subject, null),
@@ -1205,14 +1030,11 @@ export async function explainField(
   const { projection, sourceProjection, countEvidence } = snapshot;
   const path = projectionPath(field, explanation, input.surface);
   const resolved = readExplanationPath(sourceProjection, path);
-  const unscoredQuality =
-    field.key === "dataQuality" &&
-    !z.enum(scoredEntities).safeParse(entity).success;
   const displayedEnvelope =
     fieldEnvelopeFor(projection, path) ??
     fieldEnvelopeFor(projection, field.readKey ?? field.key) ??
     fieldEnvelopeAtPath(projection, path);
-  if (!resolved.found && !unscoredQuality && !displayedEnvelope)
+  if (!resolved.found && !displayedEnvelope)
     throw new Error(`Explanation projection does not expose ${path}`);
   let envelope =
     displayedEnvelope ??
@@ -1224,9 +1046,8 @@ export async function explainField(
       result: {
         kind: "live",
         decision: {
-          outcome: unscoredQuality
-            ? { kind: "empty", reason: "not_applicable" }
-            : resolved.value === null
+          outcome:
+            resolved.value === null
               ? { kind: "empty", reason: "unset" }
               : { kind: "value", value: resolved.value },
           provenance: { kind: "computed" },
@@ -1289,8 +1110,6 @@ export async function explainField(
         "storedEvidence" in sourceProjection
           ? sourceProjection.storedEvidence
           : undefined,
-      comparison: snapshot.comparison,
-      currentQualityControls: snapshot.currentQualityControls,
     });
   }
 
@@ -1303,45 +1122,40 @@ export async function explainField(
       [field.readKey ?? field.key]: envelope,
     },
   });
-  const sources = unscoredQuality
-    ? []
-    : [
-        ...explainProjectionSources(
-          evidenceProjection,
-          explanation,
-          value,
-          resolution !== null,
-        ),
-        ...(input.scope && explanation.scopeFilters?.[input.scope.entityKind]
-          ? [
-              {
-                label: "Requested list scope",
-                entity: input.scope,
-                value: input.scope,
-              },
-            ]
-          : []),
-        ...("storedProjection" in field && field.storedProjection
-          ? [
-              {
-                label: "Current projection context",
-                entity: null,
-                value:
-                  "Current inputs determine this value without a cached result timestamp.",
-              },
-            ]
-          : []),
-        ...(countEvidence?.sources ?? []),
-      ];
+  const sources = [
+    ...explainProjectionSources(
+      evidenceProjection,
+      explanation,
+      value,
+      resolution !== null,
+    ),
+    ...(input.scope && explanation.scopeFilters?.[input.scope.entityKind]
+      ? [
+          {
+            label: "Requested list scope",
+            entity: input.scope,
+            value: input.scope,
+          },
+        ]
+      : []),
+    ...("storedProjection" in field && field.storedProjection
+      ? [
+          {
+            label: "Current projection context",
+            entity: null,
+            value:
+              "Current inputs determine this value without a cached result timestamp.",
+          },
+        ]
+      : []),
+    ...(countEvidence?.sources ?? []),
+  ];
   const actions = explanationActions(subject, resolution);
   const { interpretation, finalSources } = explainInterpretation(
     field,
     value,
-    evidenceProjection,
     sources,
-    unscoredQuality,
     resolution,
-    snapshot.qualityBreakdown,
     snapshot.resolutionEvidenceTruncated,
   );
   const linkedValues = await explanationReferenceValues(
@@ -1357,17 +1171,8 @@ export async function explainField(
     field: field.key,
     label: field.label,
     envelope,
-    comparison:
-      snapshot.comparison ??
-      (envelope.result.kind === "live"
-        ? { kind: "available", result: envelope.result }
-        : {
-            kind: "unavailable",
-            reason: "No live comparison is available for this field",
-          }),
     evaluatedAt: new Date().toISOString(),
     interpretation,
-    qualityBreakdown: snapshot.qualityBreakdown,
     rule: {
       id: explanation.ruleId,
       revision: explanation.version,

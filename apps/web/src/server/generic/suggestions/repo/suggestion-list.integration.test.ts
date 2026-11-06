@@ -18,7 +18,6 @@ import { getDb } from "~/server/db/helpers";
 import {
   suggestionTable,
   financialTransactionAllocation,
-  product as productTable,
   sourceTransactionRecord,
   sourceOccurrence,
   transactionImport,
@@ -65,10 +64,6 @@ import {
   suggestionRecordCounts,
   suggestionCountsByFamily,
 } from "./suggestion-list";
-import {
-  prepareTagSuggestionPublication,
-  tagSourceRevision,
-} from "./tag-suggestions";
 
 type Ctx = ReturnType<typeof withTestDb>;
 
@@ -786,44 +781,6 @@ describe("cross-family Suggestion list", () => {
     expect(
       fieldCounts?.fields.reduce((total, field) => total + field.pending, 0),
     ).toBe(1);
-    const donors = [];
-    for (let index = 0; index < 3; index++)
-      donors.push(
-        await createProductFixture(
-          ctx.db,
-          makeProductInput({
-            name: `Synthetic tag donor ${index}`,
-            tags: ["synthetic-shared"],
-          }),
-          ctx.actor,
-        ),
-      );
-    const revision = await tagSourceRevision(ctx.db, product.id);
-    if (!revision) throw new Error("Synthetic tag source missing");
-    const publishTag = await prepareTagSuggestionPublication(
-      ctx.db,
-      product.id,
-      {
-        tag: "synthetic-shared",
-        supportingProductCount: 3,
-        supportingProductIds: donors.map((donor) => donor.id),
-      },
-      revision,
-    );
-    if (!publishTag) throw new Error("Synthetic tag preparation missing");
-    const tag = await publishTag(ctx.db);
-    if (!tag) throw new Error("Synthetic tag publication missing");
-    const listedForProduct = async () =>
-      (await listSuggestionPage(ctx.db, { recordIds: [product.id] })).items.map(
-        (row) => row.suggestionId,
-      );
-    expect(await listedForProduct()).toContain(tag.suggestionId);
-    // A supporting Product edit makes the tag proposal stale.
-    await getDb(ctx.db)
-      .update(productTable)
-      .set({ updatedAt: sql`${productTable.updatedAt} + interval '1 second'` })
-      .where(eq(productTable.id, donors[0]!.entityId));
-    expect(await listedForProduct()).not.toContain(tag.suggestionId);
   });
 
   // Reference pruning must retain both endpoints and mixed scopes without

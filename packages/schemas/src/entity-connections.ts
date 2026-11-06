@@ -69,7 +69,6 @@ export const orphanEntitiesOut = z.object({
 export type OrphanEntitiesOut = z.infer<typeof orphanEntitiesOut>;
 
 /** Canonical recorded-transfer evidence and its invalidation use one window. */
-export const CONNECTION_TRANSFER_WINDOW_DAYS = 5;
 
 export const connectionRelation = z.enum([
   "product-purchase",
@@ -77,7 +76,6 @@ export const connectionRelation = z.enum([
   "product-identity",
   "email-purchase",
   "transaction-purchase",
-  "transaction-transfer",
   "transaction-refund",
   "expense-project",
   "project-tool",
@@ -96,7 +94,6 @@ const connectionEndpoints = {
   "product-identity": ["product", "product"],
   "email-purchase": ["email", "purchase"],
   "transaction-purchase": ["financialTransaction", "purchase"],
-  "transaction-transfer": ["financialTransaction", "financialTransaction"],
   "transaction-refund": ["financialTransaction", "purchase"],
   "expense-project": ["expense", "project"],
   "project-tool": ["project", "product"],

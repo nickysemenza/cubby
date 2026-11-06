@@ -30,7 +30,6 @@ import {
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
-import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
 import { moveInventoryEntries } from "~/server/domains/inventory/repo/bulk";
 import { setProjectToolUsage } from "~/server/domains/project/repo/tools";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
@@ -642,34 +641,6 @@ export async function applyEntityConnection(
           },
           actor,
         );
-        break;
-      }
-      case "transaction-transfer": {
-        const basisRows = z
-          .object({
-            source: z.object({ amount: z.coerce.number() }),
-            target: z.object({ amount: z.coerce.number() }),
-          })
-          .parse(basis);
-        const outflow =
-          basisRows.source.amount > 0 ? candidate.source : candidate.target;
-        const inflow =
-          basisRows.source.amount > 0 ? candidate.target : candidate.source;
-        const result = await acceptFinancialTransferPair(
-          db,
-          {
-            outflowTransactionId: parseShortcodeFor(
-              "financialTransaction",
-              outflow.entityId,
-            ),
-            inflowTransactionId: parseShortcodeFor(
-              "financialTransaction",
-              inflow.entityId,
-            ),
-          },
-          actor,
-        );
-        if (!result.canProceed) throw new Error(result.reason);
         break;
       }
       case "inventory-location": {

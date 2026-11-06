@@ -221,7 +221,7 @@ same ordered source primitive with view-only thumbnail strips. Allocation
 contributors remain independent sources. Freshness and work are separate: failed
 refreshes can retain a usable result and its historical provenance, alongside the
 raw diagnostic. Current explanation evidence is not the historical chain that
-produced a cached result. Live comparison availability has its own discriminant.
+produced a cached result. Explanations do not recompute a live comparison.
 #3324 owns the complete client cutover; do not add a second read contract.
 
 Nested references carry only what their consumer needs. Recipe usage rows and
@@ -329,9 +329,7 @@ Inherited-field previews run the existing SQL source ladder with only the local
 assignment removed, inside the explanation snapshot. They preserve terminal
 source identity and distinguish an ancestor's explicit None from no decision;
 the bounded evidence display never limits the counterfactual. Lists and saves
-do not compute this preview. Specialist previews reuse the existing pricing,
-Recipe-yield, Expense classification/project, itemization-policy and Inventory
-ownership resolvers with only the selected assignment cleared. Blocked ownership
+do not compute this preview. Specialist fields do not compute reset previews and are skipped by bulk redundant-override reset. Blocked ownership
 or category evidence stays a successful blocked outcome, not an invented fallback.
 Assignment facts load the declared governed storage columns in a page batch;
 reference identities normalize in one set lookup, without treating an effective

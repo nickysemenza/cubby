@@ -603,7 +603,6 @@ export function WhyValueContents({
   resolution,
 }: WhyValueProps) {
   const queryClient = useQueryClient();
-  const [diagnostic, setDiagnostic] = useState(false);
   const refresh = useMutation({
     mutationFn: async () => {
       setDiagnostic(false);
@@ -655,7 +654,6 @@ export function WhyValueContents({
               .parse(resolution.result),
           }
         : {}),
-      ...(diagnostic ? { diagnostic: true } : {}),
     }),
     staleTime: 0,
     refetchOnMount: "always",
@@ -762,16 +760,6 @@ export function WhyValueContents({
             <p className="text-xs leading-5 text-muted-foreground">
               {result.data.publication.reason}
             </p>
-          ) : null}
-          {result.data.envelope.result.kind === "cached" && !diagnostic ? (
-            <Button
-              size="xs"
-              variant="outline"
-              disabled={result.isFetching}
-              onClick={() => setDiagnostic(true)}
-            >
-              Compare with current inputs
-            </Button>
           ) : null}
           <ResolutionEvidence evidence={result.data.resolutionEvidence} />
           {result.data.imageChain ? (

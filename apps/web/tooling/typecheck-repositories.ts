@@ -30,7 +30,6 @@ export const repositoryOwners = [
   "src/server/db/computed/vendor-account-label.ts",
   "src/server/domains/usda-food/repo/usda-helpers.ts",
   "src/server/generated/entity-field-envelope-projectors.gen.ts",
-  "src/server/generic/field-explanation/repo/specialist-reset-queries.ts",
   "src/server/domains/purchase/repo/purchase-evidence-policy.ts",
   "src/server/generic/data-quality/repo/presentation.ts",
   "src/server/generic/suggestions/repo/automatic-fields.ts",

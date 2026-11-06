@@ -271,6 +271,10 @@ function prepareLabelledJudgment(
   }
   // Both votes use the original statement evidence, independently of identity
   // answers and of each other. Enqueue them with the whole page's questions.
+  if (judgment.transfer) {
+    checkpoint.kind = true;
+    checkpoint.counterparty = true;
+  }
   for (const part of ["kind", "counterparty"] as const) {
     if (!judgment.create || checkpoint[part]) continue;
     if (!input.admission.available()) break;
