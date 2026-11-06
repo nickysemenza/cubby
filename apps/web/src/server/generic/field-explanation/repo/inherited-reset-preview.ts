@@ -11,6 +11,7 @@ import {
 import type { Database } from "~/server/db/database";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { explanationReferenceValues } from "~/server/generic/field-explanation/repo/explanation-reference-values";
+import { declaredResetPreview } from "~/server/generic/field-explanation/repo/reset-source";
 
 const resultSchema = fieldResult(z.json());
 
@@ -22,7 +23,7 @@ export async function inheritedResetPreview(
   internalId: string,
 ): Promise<z.output<typeof resultSchema> | null> {
   if (!Object.hasOwn(generatedEntityListFields[entity].inherit, field))
-    return null;
+    return declaredResetPreview(db, entity, field, internalId);
   const rows = await repositoryQueries(db).execute(sql`SELECT
     ${inheritedFieldDecisionSql(entity, field, { id: sql`${internalId}::uuid` })} AS decision`);
   const decision = inheritedFieldDecisionSchema.parse(rows.rows[0]?.decision);

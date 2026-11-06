@@ -425,6 +425,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         resolution: {
           reset: { spendingCategoryId: null },
+          resetSource: "expenseCategory",
           redundancy: "eligible",
         },
         explanation: {

@@ -277,7 +277,13 @@ const resolutionJSON = (
   resolution: CompiledEntity["fieldModel"]["fields"][number]["resolution"],
 ) => {
   if (resolution?.reset === undefined) return null;
-  const { inherit: _inherit, labels, reset, ...rest } = resolution;
+  const {
+    inherit: _inherit,
+    resetSource: _resetSource,
+    labels,
+    reset,
+    ...rest
+  } = resolution;
   return {
     ...rest,
     reset,

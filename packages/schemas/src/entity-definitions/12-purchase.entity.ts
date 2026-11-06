@@ -647,6 +647,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         resolution: {
           reset: { itemizationExpectation: null },
+          resetSource: "purchaseEvidence",
           redundancy: "eligible",
         },
         explanation: {

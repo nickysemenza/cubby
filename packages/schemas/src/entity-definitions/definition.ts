@@ -724,6 +724,15 @@ const buildMetadataSchemas = () => {
         .strictObject({
           /** Absent for a field that only inherits: clients get no actions. */
           reset: z.record(z.string(), z.json()).optional(),
+          /** Canonical SQL resolution evaluated over the declared reset patch. */
+          resetSource: z
+            .enum([
+              "vendorEvidence",
+              "purchaseEvidence",
+              "transactionEvidence",
+              "expenseCategory",
+            ])
+            .optional(),
           /**
            * The fallback chain. Without `mode`, NULL inherits. With `mode`,
            * the row's stored value wins unless the mode field holds

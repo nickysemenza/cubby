@@ -20,6 +20,7 @@ import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { loadFieldResolutionEvidence } from "./field-resolution-evidence";
+import { inheritedResetPreview } from "./inherited-reset-preview";
 
 // Unsaved dependency changes must use live policy without materializing an
 // inherited value, and an explicit unknown remains a deliberate override.
@@ -122,12 +123,45 @@ it("resolves draft itemization policy against changed vendor and category depend
   });
   const vendor = await insertWithShortcode(ctx.db, "vendor", {
     name: "Synthetic optional receipts",
+    orderEvidence: "online_account",
     itemizationExpectation: "not_expected",
   });
   const purchase = await insertWithShortcode(ctx.db, "purchase", {
     vendorId: vendor.id,
     spendingCategoryId: category.id,
     date: "2026-09-01",
+    itemizationExpectation: "not_expected",
+  });
+  expect(
+    await inheritedResetPreview(
+      ctx.db,
+      "vendor",
+      "itemizationExpectation",
+      vendor.id,
+    ),
+  ).toMatchObject({
+    kind: "live",
+    decision: {
+      outcome: { kind: "value", value: "required" },
+      provenance: { kind: "computed" },
+    },
+  });
+  expect(
+    await inheritedResetPreview(
+      ctx.db,
+      "purchase",
+      "itemizationExpectation",
+      purchase.id,
+    ),
+  ).toMatchObject({
+    kind: "live",
+    decision: {
+      outcome: { kind: "value", value: "not_expected" },
+      provenance: {
+        kind: "inherited",
+        source: { entityKind: "vendor", entityId: vendor.shortcode },
+      },
+    },
   });
   const basis: DraftEvidenceBasis = {
     vendorId: vendor.shortcode,
@@ -178,7 +212,7 @@ it("resolves draft itemization policy against changed vendor and category depend
   });
   expect(await readPurchaseById(ctx.db, purchase.id)).toMatchObject({
     vendorId: parseShortcodeFor("vendor", vendor.shortcode),
-    itemizationExpectation: null,
+    itemizationExpectation: "not_expected",
   });
   expect(
     fieldResolutionsSchema.parse(
