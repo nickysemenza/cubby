@@ -163,7 +163,7 @@ it("refuses legacy derived decisions and drops only the retired cache on replay"
 it("contracts only the old Project start-date cache while rollups and current overrides keep serving the view", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
-    await migrateDatabase(db, { through: "0100_payment_evidence_minor_units" });
+    await migrateDatabase(db, { through: "0101_drop_legacy_derived_values" });
     const project = "00000000-0000-4000-8000-000000000092";
     await client.query(
       `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'project','PRJ-SYNTHDROP')`,
@@ -198,7 +198,7 @@ it("contracts only the old Project start-date cache while rollups and current ov
     const before = await retained();
     expect(await value()).toEqual([{ value: "2026-06-01" }]);
     await migrateDatabase(db, {
-      through: "0101_drop_retired_project_start_snapshot",
+      through: "0102_drop_retired_project_start_snapshot",
     });
     expect(await retained()).toEqual(before);
     expect(await value()).toEqual([{ value: "2026-06-01" }]);
@@ -210,7 +210,7 @@ it("contracts only the old Project start-date cache while rollups and current ov
       `DELETE FROM drizzle.__drizzle_migrations WHERE created_at=(SELECT max(created_at) FROM drizzle.__drizzle_migrations)`,
     );
     await migrateDatabase(db, {
-      through: "0101_drop_retired_project_start_snapshot",
+      through: "0102_drop_retired_project_start_snapshot",
     });
     expect(await value()).toEqual([{ value: "2026-01-02" }]);
   });
