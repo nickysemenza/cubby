@@ -1,3 +1,4 @@
+import { moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { purchaseSettlementCandidatesOut } from "@cubby/schemas/purchase";
 
@@ -23,7 +24,7 @@ test("preserves residual allocations and saves a reviewed split without booking 
     accountId: seed.transaction.accountId,
     kind: "purchase",
     status: "posted",
-    amount: 57.5,
+    amount: moneyToMinor(57.5),
     merchant: "Synthetic processor alias",
     postedDate: "2026-10-20",
   });

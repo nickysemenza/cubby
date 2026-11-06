@@ -307,7 +307,10 @@ async function settleableCharges(
     .select({
       id: financialTransaction.id,
       accountId: financialTransaction.accountId,
-      amount: financialTransaction.amount,
+      amount:
+        sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
+          Number,
+        ),
       kind: financialTransaction.kind,
       transactionDate: financialTransaction.transactionDate,
       postedDate: financialTransaction.postedDate,
@@ -347,7 +350,7 @@ async function settleableCharges(
             AND ${notDeleted("fta")}
         ) OR (${input.allocatedPurchaseId ?? null}::uuid IS NOT NULL AND (
           SELECT count(*) = 1 AND bool_and(fta."purchaseId" = ${input.allocatedPurchaseId ?? null}::uuid
-            AND round((fta."amountMinor"::numeric / 100) * 100) = round("FinancialTransaction".amount * 100))
+            AND fta."amountMinor" = "FinancialTransaction"."amountMinor")
           FROM "FinancialTransactionAllocation" fta
           WHERE fta."transactionId" = "FinancialTransaction".id AND ${notDeleted("fta")}
         )))`,
@@ -944,7 +947,7 @@ export async function settleRetainedPaymentEvidence(
           WHERE fa."ledgerPartyId" = ${importSourceClaim.ledgerPartyId}
             AND ${notDeleted("ft")}
             AND ft."status" IN (${financialTransactionStatus.enum.observed}, ${financialTransactionStatus.enum.pending}, ${financialTransactionStatus.enum.posted})
-            AND round(ft."amount" * 100) = ${purchasePaymentEvidence.amountMinor}
+            AND round((ft."amountMinor"::numeric / 100) * 100) = ${purchasePaymentEvidence.amountMinor}
             AND abs(coalesce(ft."transactionDate", ft."postedDate") - (${purchasePaymentEvidence.chargedAt})::date) <= ${POSTING_WINDOW_DAYS}
             AND NOT EXISTS (
               SELECT 1 FROM "FinancialTransactionAllocation" ofta

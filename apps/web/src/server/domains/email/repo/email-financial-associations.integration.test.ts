@@ -1,5 +1,6 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { mailFinancialAssociation } from "@cubby/schemas/mailbox-research";
+import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -74,7 +75,7 @@ describe("reviewed Email financial evidence", () => {
         accountId: reviewed.id,
         kind: "refund",
         status: "posted",
-        amount: -12,
+        amount: moneyToMinor(-12),
         postedDate: "2026-09-03",
       },
     );

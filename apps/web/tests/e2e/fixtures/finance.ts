@@ -1,3 +1,4 @@
+import { moneyToMinor } from "@cubby/shared";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import type { Page } from "@playwright/test";
@@ -43,7 +44,7 @@ export async function seedSplitSettlementPrerequisite(
     accountId: card.id,
     kind: "purchase",
     status: "posted",
-    amount: 91,
+    amount: moneyToMinor(91),
     merchant: name,
     transactionDate: "2026-09-12",
     postedDate: "2026-09-12",

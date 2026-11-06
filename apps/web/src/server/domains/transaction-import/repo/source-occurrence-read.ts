@@ -95,7 +95,11 @@ async function loadOccurrenceClosures(
         ["aliases", "aliases", "to_jsonb(r)"],
         ["memberships", "memberships", "to_jsonb(r)"],
         ["collections", "collections", "to_jsonb(r) - 'notes'"],
-        ["transactions", "transactions", "to_jsonb(r)"],
+        [
+          "transactions",
+          "transactions",
+          `to_jsonb(r)||jsonb_build_object('amountMinor',r."amountMinor"::text)`,
+        ],
         [
           "allocations",
           "allocations",

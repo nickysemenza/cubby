@@ -207,7 +207,7 @@ describe("incomplete itemized purchase identity", () => {
         accountId: account.id,
         kind: "purchase",
         status: "posted",
-        amount: 61,
+        amount: moneyToMinor(61),
         postedDate: "2032-02-28",
         merchant: "Example variant maker",
       });

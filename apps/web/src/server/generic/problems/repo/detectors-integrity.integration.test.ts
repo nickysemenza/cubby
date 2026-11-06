@@ -260,7 +260,7 @@ const mkFinancialTransaction = async (db: Database) => {
     accountId: account.id,
     kind: "purchase",
     status: "pending",
-    amount: 1,
+    amount: moneyToMinor(1),
   });
 };
 
@@ -691,7 +691,7 @@ const SOURCE_FACTORIES = {
       accountId: (await mkFinancialAccount(db)).id,
       kind: "purchase",
       status: "posted",
-      amount: 1,
+      amount: moneyToMinor(1),
       postedDate: "2026-09-01",
       spendingCategoryId: parseEntityId("spendingCategory", targetId),
     }),
@@ -922,7 +922,7 @@ const SOURCE_FACTORIES = {
       ledgerTransferId: parseEntityId("ledgerTransfer", targetId),
       kind: "purchase",
       status: "pending",
-      amount: 1,
+      amount: moneyToMinor(1),
     });
   },
 
@@ -1594,7 +1594,7 @@ const SOURCE_FACTORIES = {
       accountId: parseEntityId("financialAccount", targetId),
       kind: "purchase",
       status: "pending",
-      amount: 1,
+      amount: moneyToMinor(1),
     }),
 
   "SourceOccurrence.accountId": async (db, targetId) => {
@@ -1615,7 +1615,7 @@ const SOURCE_FACTORIES = {
       accountId: account.id,
       kind: "purchase",
       status: "pending",
-      amount: 1,
+      amount: moneyToMinor(1),
     });
     return insertAndReturn(db, financialTransactionAllocation, {
       transactionId: txn.id,

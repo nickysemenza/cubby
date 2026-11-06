@@ -81,7 +81,7 @@ const transferSourceClaimsSql = sql<LedgerSourceClaimRow[]>`COALESCE((
   WHERE c."ledgerTransferId" = "LedgerTransfer".id AND ${notDeleted("c")}
 ), '[]'::jsonb)`;
 const transferEvidenceIdsSql = sql<string[]>`COALESCE((
-  SELECT jsonb_agg(ft.shortcode ORDER BY ft.amount DESC, ft.shortcode)
+  SELECT jsonb_agg(ft.shortcode ORDER BY (ft."amountMinor"::numeric / 100) DESC, ft.shortcode)
   FROM "FinancialTransaction" ft
   WHERE ft."ledgerTransferId" = "LedgerTransfer".id AND ${notDeleted("ft")}
 ), '[]'::jsonb)`;
@@ -295,7 +295,10 @@ async function assertEvidenceSet(
       id: financialTransaction.id,
       accountId: financialTransaction.accountId,
       ledgerTransferId: financialTransaction.ledgerTransferId,
-      amount: financialTransaction.amount,
+      amount:
+        sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
+          Number,
+        ),
       ledgerPartyId: financialAccount.ledgerPartyId,
       ...transferEvidenceLegFields,
     })

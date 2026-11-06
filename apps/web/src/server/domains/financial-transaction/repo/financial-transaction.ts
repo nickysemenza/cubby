@@ -18,7 +18,7 @@ import {
   type FinancialTransactionShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { cents } from "@cubby/shared";
+import { moneyToMinor } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { capitalize, sortBy, uniq } from "es-toolkit";
 import { z } from "zod";
@@ -69,6 +69,8 @@ import {
   findSettlementConflicts,
   refuseSettlementConflicts,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   financialTransactionCoverageSql,
   financialTransactionEvidenceFieldResolutionsSql,
@@ -204,7 +206,10 @@ export const financialTransactionScaffold = listScaffold(
                 status: rawFinancialTransactionOut.shape.status.parse(
                   row.status,
                 ),
-                amount: row.amount,
+                // Generic entity reads already decode storage money.
+                amount: rawFinancialTransactionOut.shape.amount.parse(
+                  row.amount,
+                ),
                 merchant: row.merchant,
                 allocations: values.allocationRows,
                 ledgerTransferId: values.ledgerTransferShortcode,
@@ -378,6 +383,7 @@ export const createFinancialTransaction = defineMutationWriter({
       const created = await insertWithShortcode(tx, "financialTransaction", {
         ...columns,
         ...foreign,
+        amount: moneyToMinor(data.amount),
       });
       const acceptedSourceChanges = await replaceFinancialSourceRefs(
         tx,
@@ -446,7 +452,7 @@ const allocationStateFields = [
   "postedDate",
 ] satisfies readonly (keyof FinancialTransactionUpdateData)[];
 
-type FinancialTransactionDbRow = typeof financialTransaction.$inferSelect;
+type FinancialTransactionDbRow = FinancialTransactionDollars;
 
 export const lockUpdatePurchases = async (
   tx: DrizzleTransaction,
@@ -536,7 +542,8 @@ const deriveUpdatedTransactionState = async (
   if (settlementViolation) {
     throw createAppError("CONSTRAINT_VIOLATION", settlementViolation.message);
   }
-  const amountChanged = cents(nextAmount) !== cents(before.amount);
+  const amountChanged =
+    moneyToMinor(nextAmount) !== moneyToMinor(before.amount);
   if (amountChanged && allocationCount >= 2) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
@@ -708,12 +715,14 @@ export const updateFinancialTransaction = defineMutationWriter({
           "CONSTRAINT_VIOLATION",
           "Source ownership expanded while locking the transaction; retry with current evidence.",
         );
-      const before = await tx.query.financialTransaction.findFirst({
-        where: and(
-          eq(financialTransaction.id, id),
-          notDeleted(financialTransaction),
-        ),
-      });
+      const before = await tx.query.financialTransaction
+        .findFirst({
+          where: and(
+            eq(financialTransaction.id, id),
+            notDeleted(financialTransaction),
+          ),
+        })
+        .then((row) => (row ? transactionDollars(row) : row));
       if (!before)
         throw createAppError(
           "FINANCIAL_TRANSACTION_NOT_FOUND",
@@ -766,6 +775,8 @@ export const updateFinancialTransaction = defineMutationWriter({
       } = data;
       const values = buildPartialUpdateValues({
         ...writableData,
+        amount:
+          data.amount === undefined ? undefined : moneyToMinor(data.amount),
         accountId,
       });
 
@@ -808,7 +819,12 @@ export const updateFinancialTransaction = defineMutationWriter({
       ]);
       const changes = computeChanges(
         beforeState,
-        { ...beforeState, ...values, sourceRefs: canonicalRefs },
+        {
+          ...beforeState,
+          ...values,
+          amount: data.amount ?? before.amount,
+          sourceRefs: canonicalRefs,
+        },
         [...entityFieldModels.financialTransaction.audit],
       );
       if (changes)

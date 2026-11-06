@@ -376,7 +376,7 @@ describe("state predicates re-declared as values", () => {
           "financialTransaction",
           {
             accountId: account.id,
-            amount: refund,
+            amount: moneyToMinor(refund),
             kind: "refund",
             status: "posted",
             postedDate: "2026-09-02",

@@ -30,6 +30,7 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { paymentEvidenceDollars } from "~/server/domains/purchase-import/repo/payment-evidence";
 import {
   isLiveSourceOrder,
@@ -275,6 +276,7 @@ export async function loadSourceReconciliationState(
         .where(inArray(financialTransaction.id, transactionIds))
         .orderBy(asc(financialTransaction.id))
         .for("share")
+        .then((rows) => rows.map(transactionDollars))
     : [];
   const financialAccountIds = transactions.map((row) => row.accountId);
   const financialAccounts = financialAccountIds.length

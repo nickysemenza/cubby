@@ -194,7 +194,7 @@ describe("purchase evidence policy", () => {
     });
     const charge = await insertWithShortcode(ctx.db, "financialTransaction", {
       accountId: account.id,
-      amount: 1000,
+      amount: moneyToMinor(1000),
       kind: "purchase",
       status: "posted",
       postedDate: "2026-09-01",
@@ -716,7 +716,7 @@ describe("vendor itemization default from order evidence", () => {
       });
       const charge = await insertWithShortcode(ctx.db, "financialTransaction", {
         accountId: account.id,
-        amount: 25,
+        amount: moneyToMinor(25),
         kind: "purchase",
         status: "posted",
         postedDate: "2026-09-01",
@@ -812,7 +812,7 @@ describe("vendor itemization default from order evidence", () => {
     });
     const charge = await insertWithShortcode(ctx.db, "financialTransaction", {
       accountId: account.id,
-      amount: 25,
+      amount: moneyToMinor(25),
       kind: "purchase",
       status: "posted",
       postedDate: "2026-09-01",

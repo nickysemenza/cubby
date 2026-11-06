@@ -166,7 +166,7 @@ describe("generated booking evidence corrections", () => {
         with: { allocations: true },
       });
       return {
-        amount: stored?.amount,
+        amount: stored ? minorToMoney(stored.amount) : undefined,
         status: stored?.status,
         allocations: stored?.allocations
           .filter((row) => row.deletedAt === null)

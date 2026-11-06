@@ -20,6 +20,7 @@ import {
   financialAccount,
 } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   sourceObservationColumns,
   sourceObservationFrom,
@@ -257,6 +258,7 @@ export async function updateSourceObservationJudgments(
           .select()
           .from(financialTransaction)
           .where(inArray(financialTransaction.id, acceptedIds))
+          .then((rows) => rows.map(transactionDollars))
       : [];
     if (
       owners.some(

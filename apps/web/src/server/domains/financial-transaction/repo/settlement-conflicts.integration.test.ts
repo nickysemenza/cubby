@@ -90,7 +90,7 @@ describe("settlement conflicts", () => {
         accountId,
         kind: "purchase",
         status: "posted",
-        amount,
+        amount: moneyToMinor(amount),
         transactionDate: null,
         postedDate: "2026-09-13",
         merchant: "Example Store",

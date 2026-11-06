@@ -85,7 +85,7 @@ describe("reviewed linked finance category suggestions", () => {
       accountId: account.id,
       kind: "purchase",
       status: "posted",
-      amount: 29.99,
+      amount: moneyToMinor(29.99),
       postedDate: "2026-09-01",
       spendingCategoryId: explicit.id,
     });

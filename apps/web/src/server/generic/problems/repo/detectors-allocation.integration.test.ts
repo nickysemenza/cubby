@@ -78,7 +78,10 @@ const mkTransaction = async (
         ...values,
         purchaseId: overrides.purchaseId,
       })
-    : insertWithShortcode(db, "financialTransaction", values);
+    : insertWithShortcode(db, "financialTransaction", {
+        ...values,
+        amount: moneyToMinor(values.amount),
+      });
 };
 
 const allocate = (

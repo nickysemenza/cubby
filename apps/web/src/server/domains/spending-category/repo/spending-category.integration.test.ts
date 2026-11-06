@@ -3,6 +3,7 @@ import {
   parseShortcodeFor,
   type SpendingCategoryId,
 } from "@cubby/schemas/identifiers";
+import { moneyToMinor } from "@cubby/shared";
 import { and, eq, inArray } from "drizzle-orm";
 import { TEST_ACTOR } from "tooling/test-setup";
 import { withTestDb } from "tooling/test-setup";
@@ -89,7 +90,7 @@ describe("spending category merge", () => {
         accountId: account.id,
         kind: "purchase",
         status: "posted",
-        amount: 18,
+        amount: moneyToMinor(18),
         postedDate: "2026-09-02",
         merchant: "Synthetic pet shop",
         spendingCategoryId: loserId,

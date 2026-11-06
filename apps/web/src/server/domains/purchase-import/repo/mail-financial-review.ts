@@ -7,7 +7,7 @@ import type {
   PurchaseId,
 } from "@cubby/schemas/identifiers";
 import type { MailSettlementReview } from "@cubby/schemas/mailbox-research";
-import { and, eq, inArray } from "drizzle-orm";
+import { sql, and, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -20,6 +20,8 @@ import {
   ledgerParty,
 } from "~/server/db/schema";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
+import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -35,7 +37,7 @@ function accountAvailable(
 
 function sameReviewSet(
   existing: (typeof emailFinancialAssociation.$inferSelect)[],
-  ids: (typeof financialTransaction.$inferSelect)["id"][],
+  ids: FinancialTransactionDollars["id"][],
 ) {
   return (
     existing.length === 0 ||
@@ -60,10 +62,7 @@ const reviewedRefundAssociations = (
 
 async function assertRefundAllocationsExplain(
   db: Database,
-  transactions: Pick<
-    typeof financialTransaction.$inferSelect,
-    "id" | "amount"
-  >[],
+  transactions: Pick<FinancialTransactionDollars, "id" | "amount">[],
   purchaseIds: PurchaseId[],
 ) {
   const allocations = await getDb(db)
@@ -130,7 +129,10 @@ export async function reconcileMailRefundReview(
   const transactions = await getDb(db)
     .select({
       id: financialTransaction.id,
-      amount: financialTransaction.amount,
+      amount:
+        sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
+          Number,
+        ),
     })
     .from(financialTransaction)
     .where(
@@ -189,7 +191,8 @@ async function recordMailFinancialReview(
       ),
     )
     .orderBy(financialTransaction.id)
-    .for("update");
+    .for("update")
+    .then((rows) => rows.map(transactionDollars));
   if (
     transactions.length !== selected.length ||
     transactions.some(
@@ -291,7 +294,7 @@ const FINANCIAL_ONLY_MATCHES = {
 } as const satisfies Record<
   Exclude<FinancialMailEvent["kind"], "purchase_payment">,
   {
-    kinds: readonly (typeof financialTransaction.$inferSelect)["kind"][];
+    kinds: readonly FinancialTransactionDollars["kind"][];
     sign: -1 | 1 | 0;
   }
 >;
@@ -336,7 +339,8 @@ export async function recordMailFinancialEvidence(
         notDeleted(financialTransaction),
       ),
     )
-    .for("update");
+    .for("update")
+    .then((rows) => rows.map(transactionDollars));
   if (!transaction || transaction.status !== "posted")
     throw new Error(
       "Financial Email evidence must name a live posted transaction.",

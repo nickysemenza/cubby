@@ -13,6 +13,7 @@ import {
   prepareFinancialSpendingCandidates,
   type FinancialSpendingPage,
 } from "~/server/domains/financial-transaction/repo/financial-spending";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 
 /** Statement observations supply evidence to the shared financial planner. */
 export async function prepareStatementSpending(
@@ -36,12 +37,14 @@ export async function prepareStatementSpending(
   const matched = targetId
     ? page
       ? page.transactions.get(targetId)
-      : await getDb(db).query.financialTransaction.findFirst({
-          where: eq(
-            financialTransaction.id,
-            parseEntityId("financialTransaction", targetId),
-          ),
-        })
+      : await getDb(db)
+          .query.financialTransaction.findFirst({
+            where: eq(
+              financialTransaction.id,
+              parseEntityId("financialTransaction", targetId),
+            ),
+          })
+          .then((row) => (row ? transactionDollars(row) : row))
     : null;
   if (matched)
     return previewFinancialSpending(

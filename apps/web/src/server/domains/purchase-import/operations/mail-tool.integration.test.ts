@@ -581,7 +581,7 @@ describe("public mail tool", () => {
     );
     const refund = await insertWithShortcode(ctx.db, "financialTransaction", {
       accountId: refundAccount.id,
-      amount: -4,
+      amount: moneyToMinor(-4),
       kind: "refund",
       status: "posted",
       transactionDate: "2026-10-08",
@@ -779,7 +779,7 @@ describe("public mail tool", () => {
       purchases.map((_row, i) =>
         insertWithShortcode(ctx.db, "financialTransaction", {
           accountId: account.id,
-          amount: i === 0 ? -3 : -7,
+          amount: moneyToMinor(i === 0 ? -3 : -7),
           kind: "refund",
           status: "posted",
           transactionDate: "2026-10-07",
@@ -796,7 +796,7 @@ describe("public mail tool", () => {
           return {
             transactionId: row.id,
             purchaseId: purchased.id,
-            amountMinor: moneyToMinor(row.amount),
+            amountMinor: row.amount,
           };
         }),
       );

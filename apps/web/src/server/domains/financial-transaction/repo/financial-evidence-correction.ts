@@ -32,6 +32,8 @@ import {
   lockFinancialSourceOccurrences,
   financialSourceRefsFor,
 } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   sourceObservationColumns,
   sourceObservationFrom,
@@ -138,7 +140,7 @@ async function loadCorrectionObservation(
 }
 
 function isRetiredBooking(
-  row: typeof financialTransaction.$inferSelect,
+  row: FinancialTransactionDollars,
   lineage: Awaited<ReturnType<typeof loadFinancialBookingLineage>>,
   allocationCount: number,
 ): boolean {
@@ -198,7 +200,7 @@ const hasSourceUpdates = (
 
 function sourceLifecycle(
   observation: Observation,
-  row: typeof financialTransaction.$inferSelect,
+  row: FinancialTransactionDollars,
 ) {
   if (
     observation.providerStatus === "posted" &&
@@ -219,7 +221,7 @@ function sourceLifecycle(
 }
 
 function changesFundingDate(
-  row: typeof financialTransaction.$inferSelect,
+  row: FinancialTransactionDollars,
   lifecycle: ReturnType<typeof sourceLifecycle>,
 ) {
   const projectedDate =
@@ -242,7 +244,7 @@ function settledBeforeBookingGuards(
   >,
   amount: number | null,
   observation: Observation,
-  row: typeof financialTransaction.$inferSelect,
+  row: FinancialTransactionDollars,
   addsReference: boolean,
 ): FinancialEvidenceCorrectionResult | null {
   if (verification.status === "review") return verification;
@@ -274,12 +276,14 @@ export async function reconcileFinancialEvidenceCorrection(
     db,
     async (tx): Promise<FinancialEvidenceCorrectionResult> => {
       const txDb = databaseForTransaction(tx);
-      const row = await tx.query.financialTransaction.findFirst({
-        where: and(
-          eq(financialTransaction.shortcode, input.transactionId),
-          notDeleted(financialTransaction),
-        ),
-      });
+      const row = await tx.query.financialTransaction
+        .findFirst({
+          where: and(
+            eq(financialTransaction.shortcode, input.transactionId),
+            notDeleted(financialTransaction),
+          ),
+        })
+        .then((row) => (row ? transactionDollars(row) : row));
       if (!row) return review("The financial transaction is no longer live.");
       await lockFinancialEvidenceKeys(tx, "reviewed-booking", [
         `transaction:${row.id}`,

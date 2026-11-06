@@ -4,6 +4,7 @@ import {
   sourceOrderReconciliationReview,
   type ExtractedOrderCandidate,
 } from "@cubby/schemas/purchase-import";
+import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -156,7 +157,7 @@ describe("accepted source financial reconciliation", () => {
       accountId: card.id,
       kind: "purchase",
       status: "posted",
-      amount: 40,
+      amount: moneyToMinor(40),
       postedDate: "2026-09-02",
       merchant: "SYNTHETIC WORKSHOP",
     });

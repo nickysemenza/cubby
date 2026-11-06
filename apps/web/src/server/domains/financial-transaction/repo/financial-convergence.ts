@@ -43,6 +43,8 @@ import { allocationDollars } from "~/server/domains/financial-transaction/repo/a
 import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { findSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   assertMailFinancialEvidenceCurrent,
   type PreparedMailFinancialEvent,
@@ -86,9 +88,11 @@ export async function acceptedAutomaticFacts(
   db: Database,
   transactionId: FinancialConvergenceInput["transactionId"],
 ) {
-  const row = await getDb(db).query.financialTransaction.findFirst({
-    where: eq(financialTransaction.shortcode, transactionId),
-  });
+  const row = await getDb(db)
+    .query.financialTransaction.findFirst({
+      where: eq(financialTransaction.shortcode, transactionId),
+    })
+    .then((row) => (row ? transactionDollars(row) : row));
   if (!row) return null;
   const account = await getDb(db).query.financialAccount.findFirst({
     where: (a, { eq }) => eq(a.id, row.accountId),
@@ -162,7 +166,7 @@ export const resolveConvergenceEmail = (
 
 async function verifyMailPayment(
   tx: DrizzleTransaction,
-  row: typeof financialTransaction.$inferSelect,
+  row: FinancialTransactionDollars,
   purchaseId: PurchaseId | null,
   evidence: PreparedMailFinancialEvent,
   actor: ActorContext,
@@ -300,7 +304,7 @@ async function verifyMailPayment(
 
 async function automaticBookingPreview(
   txDb: Database,
-  row: typeof financialTransaction.$inferSelect,
+  row: FinancialTransactionDollars,
   input: FinancialConvergenceInput,
   target: typeof purchase.$inferSelect | undefined,
   vendorId: typeof vendor.$inferSelect | undefined,
@@ -389,7 +393,8 @@ async function runFinancialConvergence(
             notDeleted(financialTransaction),
           ),
         )
-        .for("update");
+        .for("update")
+        .then((rows) => rows.map(transactionDollars));
       if (
         !row ||
         row.status === "void" ||
@@ -642,9 +647,11 @@ export async function refreshAutomaticBookingFingerprint(
   db: Database,
   transactionId: FinancialConvergenceInput["transactionId"],
 ) {
-  const row = await getDb(db).query.financialTransaction.findFirst({
-    where: eq(financialTransaction.shortcode, transactionId),
-  });
+  const row = await getDb(db)
+    .query.financialTransaction.findFirst({
+      where: eq(financialTransaction.shortcode, transactionId),
+    })
+    .then((row) => (row ? transactionDollars(row) : row));
   if (!row?.bookingDecisionFingerprint?.startsWith("automatic:")) return;
   await getDb(db)
     .update(financialTransaction)

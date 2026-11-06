@@ -1122,7 +1122,7 @@ export const { definition, readSchemas } = defineEntityModel(
         "ledgerTransferId",
         { key: "kind", specialized: "enum:kind" },
         { key: "status", specialized: "enum:status" },
-        { key: "amount", specialized: "double-precision" },
+        { key: "amount", specialized: "minor-unit-money" },
         "transactionDate",
         "postedDate",
         "merchant",
@@ -1269,8 +1269,8 @@ export const { definition, readSchemas } = defineEntityModel(
       ],
       checks: [
         {
-          name: "FinancialTransaction_amount_whole_cent_check",
-          sql: "{amount} <> 0 AND abs({amount} * 100 - round({amount} * 100)) < 0.0000001",
+          name: "FinancialTransaction_amount_minor_range_check",
+          sql: "{amount} <> 0 AND abs({amount}) <= 100000000000000",
         },
         {
           name: "FinancialTransaction_posted_date_check",

@@ -49,6 +49,7 @@ describe("financial transaction descriptor processor filter", () => {
         ],
         allocations: [],
       });
+      expect(created.output.amount).toBe(10 + index);
       charges.set(created.output.id, rawDescription);
     }
     const listed = async (descriptorProcessor: DescriptorProcessor[]) =>

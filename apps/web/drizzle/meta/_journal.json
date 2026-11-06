@@ -743,6 +743,13 @@
       "when": 1793930381774,
       "tag": "0105_allocation_minor_units",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1793930381775,
+      "tag": "0106_transaction_amount_minor_units",
+      "breakpoints": true
     }
   ]
 }

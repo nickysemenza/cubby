@@ -25,6 +25,7 @@ import {
   financialEvidenceAmountMinor,
   lockFinancialEvidenceKeys,
 } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -292,7 +293,8 @@ export async function replaceFinancialSourceRefs(
     .from(financialTransaction)
     .where(
       and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
-    );
+    )
+    .then((rows) => rows.map(transactionDollars));
   if (!transaction)
     return refuse("The accepted transaction is no longer live.");
   const current =

@@ -54,7 +54,10 @@ export async function acceptFinancialTransferPair(
       const rows = await tx
         .select({
           shortcode: financialTransaction.shortcode,
-          amount: financialTransaction.amount,
+          amount:
+            sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
+              Number,
+            ),
           date: sql<
             string | null
           >`COALESCE(${financialTransaction.postedDate}, ${financialTransaction.transactionDate})`,

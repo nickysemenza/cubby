@@ -393,7 +393,11 @@ export async function seedPerformanceCorpus(
         { status: "posted", amount: 45 },
       ],
     ] satisfies Array<
-      Array<Pick<typeof financialTransaction.$inferInsert, "status" | "amount">>
+      Array<
+        Pick<typeof financialTransaction.$inferInsert, "status"> & {
+          amount: number;
+        }
+      >
     >;
     const settlement = settlements[bundle % settlements.length]!;
     for (const charge of settlement) {
@@ -404,7 +408,7 @@ export async function seedPerformanceCorpus(
           (typeof financialTransaction.$inferInsert)["kind"]
         >,
         status: charge.status,
-        amount: charge.amount,
+        amount: moneyToMinor(charge.amount),
         transactionDate: "2026-01-16",
         postedDate: charge.status === "posted" ? "2026-01-17" : null,
         merchant: `${label} supplier charge`,

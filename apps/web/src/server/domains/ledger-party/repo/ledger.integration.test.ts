@@ -111,7 +111,7 @@ describe("consolidated household ledger", () => {
         accountId: memberAccount.id,
         kind: "account_transfer",
         status: "posted",
-        amount: 12,
+        amount: moneyToMinor(12),
         transactionDate: "2026-08-20",
         postedDate: "2026-08-20",
       }),
@@ -119,7 +119,7 @@ describe("consolidated household ledger", () => {
         accountId: otherMemberAccount.id,
         kind: "account_transfer",
         status: "posted",
-        amount: -12,
+        amount: moneyToMinor(-12),
         transactionDate: "2026-08-20",
         postedDate: "2026-08-20",
       }),
@@ -144,14 +144,14 @@ describe("consolidated household ledger", () => {
         accountId: memberAccount.id,
         kind: "account_transfer",
         status: "void",
-        amount: 12,
+        amount: moneyToMinor(12),
         transactionDate: "2026-08-20",
       }),
       insertWithShortcode(ctx.db, "financialTransaction", {
         accountId: memberAccount.id,
         kind: "account_transfer",
         status: "posted",
-        amount: 11,
+        amount: moneyToMinor(11),
         transactionDate: "2026-08-20",
         postedDate: "2026-08-20",
       }),
@@ -159,7 +159,7 @@ describe("consolidated household ledger", () => {
         accountId: memberAccount.id,
         kind: "account_transfer",
         status: "posted",
-        amount: -12,
+        amount: moneyToMinor(-12),
         transactionDate: "2026-08-20",
         postedDate: "2026-08-20",
       }),
@@ -167,7 +167,7 @@ describe("consolidated household ledger", () => {
         accountId: secondMemberAccount.id,
         kind: "account_transfer",
         status: "posted",
-        amount: 12,
+        amount: moneyToMinor(12),
         transactionDate: "2026-08-20",
         postedDate: "2026-08-20",
       }),
@@ -175,7 +175,7 @@ describe("consolidated household ledger", () => {
         accountId: memberAccount.id,
         kind: "account_transfer",
         status: "posted",
-        amount: -12,
+        amount: moneyToMinor(-12),
         transactionDate: "2026-08-20",
         postedDate: "2026-08-20",
       }),
@@ -196,7 +196,7 @@ describe("consolidated household ledger", () => {
         accountId: memberAccount.id,
         kind: "account_transfer",
         status: "posted",
-        amount: 12,
+        amount: moneyToMinor(12),
         transactionDate: "2026-08-20",
         postedDate: "2026-08-20",
       },
@@ -234,14 +234,6 @@ describe("consolidated household ledger", () => {
       ).rejects.toThrow(message);
     await expectInvalidEvidence([voidEvidence], "observed, pending, or posted");
     await expectInvalidEvidence([wrongAmount], "match the transfer amount");
-    await unwrapDb(ctx.db)
-      .update(financialTransaction)
-      .set({ amount: 12.000000000000002 })
-      .where(eq(financialTransaction.id, wrongAmount.id));
-    await expectInvalidEvidence(
-      [wrongAmount],
-      "exact, supported whole-cent amount",
-    );
     await expectInvalidEvidence([wrongParty], "endpoint party");
     await expectInvalidEvidence([outflow, secondPositive], "one positive");
     await expectInvalidEvidence(
@@ -288,10 +280,6 @@ describe("consolidated household ledger", () => {
         data: { amount: 12 },
       }),
     ).toMatchObject({ action: "update", item: { amount: 12 } });
-    await unwrapDb(ctx.db)
-      .update(financialTransaction)
-      .set({ amount: 12.000000000000002 })
-      .where(eq(financialTransaction.id, outflow.id));
     await expect(
       updateLedgerTransfer(
         ctx.db,
@@ -300,10 +288,6 @@ describe("consolidated household ledger", () => {
         ctx.actor,
       ),
     ).resolves.toMatchObject({ output: { amount: 12 } });
-    await unwrapDb(ctx.db)
-      .update(financialTransaction)
-      .set({ amount: 12 })
-      .where(eq(financialTransaction.id, outflow.id));
     expect(transfer.output?.classification).toBe("reimbursement");
     expect(transfer.output).toMatchObject({
       fromPartyName: member.output.name,

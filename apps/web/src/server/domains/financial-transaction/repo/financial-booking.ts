@@ -46,6 +46,8 @@ import {
 } from "~/server/domains/financial-account/repo/purchaser";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { createPurchase } from "~/server/domains/purchase/repo/purchase";
 import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
@@ -87,10 +89,7 @@ const fail = (message: string): never => {
   throw createAppError("CONSTRAINT_VIOLATION", message);
 };
 type BookingProjection = Partial<
-  Pick<
-    typeof financialTransaction.$inferSelect,
-    "amount" | "status" | "postedDate"
-  >
+  Pick<FinancialTransactionDollars, "amount" | "status" | "postedDate">
 >;
 async function transactionForBooking(
   db: Database,
@@ -102,12 +101,14 @@ async function transactionForBooking(
     "financialTransaction",
     input.transactionId,
   );
-  const stored = await getDb(db).query.financialTransaction.findFirst({
-    where: and(
-      eq(financialTransaction.id, id),
-      notDeleted(financialTransaction),
-    ),
-  });
+  const stored = await getDb(db)
+    .query.financialTransaction.findFirst({
+      where: and(
+        eq(financialTransaction.id, id),
+        notDeleted(financialTransaction),
+      ),
+    })
+    .then((row) => (row ? transactionDollars(row) : row));
   if (!stored) return fail("The financial transaction is no longer live.");
   const row = { ...stored, ...projection };
   if (

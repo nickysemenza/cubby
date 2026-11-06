@@ -32,7 +32,7 @@ const recordFacts = {
   },
   financialTransaction: {
     table: sql`${financialTransaction}`,
-    amount: sql`"FinancialTransaction".amount::double precision`,
+    amount: sql`("FinancialTransaction"."amountMinor"::numeric / 100)::double precision`,
     date: sql`coalesce("FinancialTransaction"."postedDate", "FinancialTransaction"."transactionDate")`,
   },
   email: {
