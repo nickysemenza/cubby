@@ -191,26 +191,6 @@ export const RUN_KINDS = {
     trigger: "member",
     progress: "calls",
   },
-  suggestion_sweep: {
-    explanation: {
-      targets:
-        "Eligible records of the selected entity and requested suggestion scope.",
-      exclusions:
-        "Records outside the selected scope or ineligible under the owning family policy are excluded.",
-      effects:
-        "Requests field evaluations and publishes their Suggestions; application follows the owning policy.",
-      dependencies: "Current record evidence and configured AI models.",
-      cost: "Uses AI funding; a funding wait is not a completed evaluation.",
-      recovery:
-        "Inspect evaluations and their outcomes; use supported Run controls and suggestion review.",
-    },
-    label: "Suggestion sweep",
-    description: "Field suggestions for one entity's records.",
-    trigger: "member",
-    execution: "ai_work",
-    aiWork: "requested",
-    progress: "checkpoint",
-  },
   ai_refresh: {
     explanation: {
       targets: "AI evaluations made stale by changed inputs or policy.",

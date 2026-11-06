@@ -881,7 +881,12 @@ as zero-input work. Stored steps outside the current declaration/selection are
 shown separately as historical execution history, not future planned work.
 Scope summaries describe selected accounts/imports without exposing source IDs.
 A Sweep selecting exactly transfer pairs and statements is named Financial
-reconciliation; its stored purpose remains `sweep`.
+reconciliation; its stored purpose remains `sweep`. Field sweeps use that same
+purpose and the `field_roster` / `field_evaluate` steps. Start them with
+`run.sweep` and a field family containing entity, fields and filters; inspect
+and pause/resume them with regular Run reads and controls. There are no separate
+AI sweep operations or model overrides on a Run. Each evaluation retains its
+own pinned model and evidence.
 
 Observed throughput is available after the first completed interval; it does
 not by itself support a completion estimate.

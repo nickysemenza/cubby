@@ -1,4 +1,3 @@
-import { entityIdSchema } from "./identifier-fields";
 import { suggestionChildHandle } from "./suggestion-reference";
 import { aiCallCostFields, aiCostSummaryFields } from "./ai-cost";
 import {
@@ -638,25 +637,6 @@ export const decisionCatalogRowSchema = z.object({
 });
 export const decisionCatalogOut = z.array(decisionCatalogRowSchema);
 export type DecisionCatalogRow = z.infer<typeof decisionCatalogRowSchema>;
-export const suggestionSweepStartInput = z.object({
-  entity: z.enum(shortcodeEntities),
-  fields: z.array(z.string().min(1)).min(1),
-  filters: z.record(z.string(), z.json()).default({}),
-});
-export const suggestionSweepStartOut = z.object({ id: z.string().uuid() });
-export const suggestionSweepControlInput = z.object({
-  runId: entityIdSchema("run"),
-});
-export const suggestionSweepStatusOut = z.object({
-  latestRunId: z.string().uuid().nullable(),
-  entity: z.string().nullable(),
-  fields: z.array(z.string()),
-  taxonomyChanged: z.boolean(),
-  status: z.string().nullable(),
-  paused: z.boolean(),
-  progress: z.json().nullable(),
-});
-
 /**
  * One target's answer: `value` is the raw field value (a shortcode for a
  * reference target, the enum member for an enum target, the chosen string

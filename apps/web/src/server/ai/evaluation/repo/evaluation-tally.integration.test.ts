@@ -1,6 +1,5 @@
 import { aiEvaluationTarget } from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -100,7 +99,15 @@ const isRetried = (receipt: unknown) =>
   z.object({ retryEvaluationId: z.uuid() }).safeParse(receipt).success;
 const outcomeReceipt = z.object({
   outcome: z.string(),
-  diagnostics: suggestionSweepRunProgress.shape.diagnostics.optional(),
+  diagnostics: z
+    .array(
+      z.object({
+        targetId: z.string(),
+        stage: z.enum(["apply", "paired_model"]),
+        reason: z.string(),
+      }),
+    )
+    .optional(),
 });
 
 /** The application rules these reads replaced, applied to the same rows. */
@@ -150,8 +157,7 @@ function expected(
 
 describe("evaluation tally", () => {
   const ctx = withTestDb();
-  const newRun = () =>
-    ensureRun(ctx.db, ctx.actor, { purpose: "suggestion_sweep" });
+  const newRun = () => ensureRun(ctx.db, ctx.actor, { purpose: "sweep" });
   /** Stored JSON `null`, which the driver reads back as a missing receipt. */
   const stored = (receipt: unknown) =>
     receipt === JSON_NULL ? sql`'null'::jsonb` : receipt;

@@ -681,8 +681,6 @@ describe("MCP catalog schemas", () => {
       // separate discriminator, so no one shortcode prefix can describe them.
       "activity.resolve_run_finding.id",
       "ai.apply_finance_category_suggestion.entityId",
-      "ai.pause_suggestion_sweep.runId",
-      "ai.resume_suggestion_sweep.runId",
       "ai_read.suggest_fields.entityId",
       "field_explanation.explain.entityId",
       "field_explanation.explain.scope.entityId",

@@ -17,7 +17,6 @@ import {
 } from "@cubby/schemas/run-fields";
 import {
   mailDiscoveryRunProgress,
-  suggestionSweepRunProgress,
   runStatus,
   productResearchRunInput,
   purchaseValidationResearchRunInput,
@@ -225,10 +224,6 @@ function checkpointWorkItems(
   const ai = OWNED_AI_WORK_PURPOSES.includes(purpose)
     ? aiRefreshProgress.safeParse(owner.progress).data
     : undefined;
-  const sweep =
-    purpose === "suggestion_sweep"
-      ? suggestionSweepRunProgress.safeParse(owner.progress).data
-      : undefined;
   const mail =
     purpose === "mail_discovery"
       ? mailDiscoveryRunProgress.safeParse(owner.progress).data
@@ -251,16 +246,6 @@ function checkpointWorkItems(
         (ai.cancelled ?? 0),
       total: ai.selected,
       failures: ai.failed,
-    };
-  if (sweep)
-    items = {
-      ...items,
-      phase: "suggest",
-      label: "Evaluating suggestions",
-      unit: "targets",
-      processed: sweep.done,
-      total: sweep.rosterPrepared ? sweep.total : null,
-      failures: sweep.failed,
     };
   if (mail) {
     const phase =

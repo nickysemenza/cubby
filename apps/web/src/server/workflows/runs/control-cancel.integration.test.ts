@@ -31,7 +31,7 @@ describe("Run AI work cancel", () => {
       ctx.actor,
     );
     const runId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "suggestion_sweep",
+      purpose: "sweep",
       trigger: "manual",
       execution: false,
     });

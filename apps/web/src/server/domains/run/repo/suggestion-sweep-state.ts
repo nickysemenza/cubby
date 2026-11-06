@@ -9,7 +9,7 @@ import { z } from "zod";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { run as runTable, suggestionTable } from "~/server/db/schema";
+import { suggestionTable } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
@@ -60,35 +60,6 @@ export const sweepSuggestionSchema = z.object({
   model: z.string(),
 });
 export type SweepSuggestion = z.infer<typeof sweepSuggestionSchema>;
-
-export const readSuggestionSweepRun = async (db: Database, runId: RunId) => {
-  const [row] = await getDb(db)
-    .select()
-    .from(runTable)
-    .where(eq(runTable.id, runId));
-  if (!row || row.purpose !== "suggestion_sweep")
-    throw new Error("Suggestion sweep Run not found");
-  return row;
-};
-
-/** Replaces the sweep Run's progress checkpoint. */
-export async function writeSuggestionSweepProgress(
-  db: Database,
-  runId: RunId,
-  progress: (typeof runTable.$inferInsert)["progress"],
-) {
-  await getDb(db)
-    .update(runTable)
-    .set({ progress })
-    .where(eq(runTable.id, runId));
-}
-
-export async function pauseRunningSuggestionSweep(db: Database, runId: RunId) {
-  await getDb(db)
-    .update(runTable)
-    .set({ status: "paused" })
-    .where(and(eq(runTable.id, runId), eq(runTable.status, "running")));
-}
 
 export async function saveSweepSuggestions(
   db: Database,

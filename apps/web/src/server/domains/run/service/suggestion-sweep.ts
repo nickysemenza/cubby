@@ -11,11 +11,8 @@ import {
   fieldSuggestionResolutionContext,
 } from "@cubby/schemas/field-suggestion";
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
-import type { RunTrigger } from "@cubby/schemas/purchase-import";
-import {
-  suggestionSweepRunInput,
-  suggestionSweepRunProgress,
-} from "@cubby/schemas/run-fields";
+import { sweepFieldTargets } from "@cubby/schemas/run-fields";
+import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
@@ -54,38 +51,22 @@ import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
 import { canonicalJson } from "~/server/lib/canonical-json";
-import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
-import { ensureRun } from "../repo/ensure-run";
-import { withRunTransaction } from "../repo/run";
 import {
   jsonValue,
-  pauseRunningSuggestionSweep,
-  readSuggestionSweepRun,
   saveSweepSuggestions,
   suggestionValueSchema,
   sweepSuggestionSchema,
-  writeSuggestionSweepProgress,
   type SuggestionValue,
   type SweepSuggestion,
 } from "../repo/suggestion-sweep-state";
 
-type SweepEntity = FieldSuggestionsInput["entity"];
-type SweepInput = {
-  entity: SweepEntity;
-  fields: string[];
-  filters: Record<string, SuggestionValue>;
-};
-/** Who started the sweep: a member (`manual`) or follow-up work (`scheduled`). */
-type SweepTrigger = Extract<RunTrigger, "manual" | "scheduled">;
 export type SuggestionSweepPorts = {
   /** Entity operations need the authenticated request's kernel services. */
   context: EntityKernelContext;
   decisionModel?: () => SupportedDecisionModel;
   suggest?: typeof suggestFields;
   suggestPorts?: SuggestFieldsPorts;
-  pacePerMinute?: number;
-  wait?: (milliseconds: number) => Promise<void>;
   /** Test seam that pauses after a persisted number of processed targets. */
   pauseAfter?: number;
 };
@@ -96,16 +77,13 @@ type SweepTarget = {
   basis: Record<string, string | null>;
   field: string;
 };
-const processedTargetIdsSchema = z
-  .object({
-    processedTargetIds: z.array(z.string()).default([]),
-  })
-  .passthrough();
 const sweepListRowSchema = z.object({ id: z.string() }).passthrough();
-const sweepRunInputSchema = suggestionSweepRunInput.transform((input) => ({
-  ...input,
-  entity: fieldSuggestionsInput.shape.entity.parse(input.entity),
-}));
+const sweepRunInputSchema = sweepFieldTargets.element.extend({
+  entity: fieldSuggestionsInput.shape.entity,
+  model: supportedDecisionModelSchema.optional(),
+  taxonomyRevision: z.string().optional(),
+});
+type SweepInput = z.infer<typeof sweepRunInputSchema>;
 const sweepSnapshot = z.object({
   input: sweepRunInputSchema,
   target: z.object({
@@ -150,7 +128,7 @@ async function suggestTarget(
   const primaryCall = await withAiInputs(false, () =>
     recommend(db, aiRunOwner(runId), fieldInput, {
       ...ports.suggestPorts,
-      decisionModel: input.decisionModelOverride,
+      decisionModel: input.model,
     }),
   );
   const manifest = await producingAiManifest(db);
@@ -171,7 +149,7 @@ async function suggestTarget(
         (call) =>
           call.operation === `suggestFields.${input.entity}.${input.field}`,
       )?.model ??
-    input.decisionModelOverride ??
+    input.model ??
     "unknown";
   const primary = makeSweepSuggestion({
     currentValue: target.currentValue,
@@ -208,50 +186,22 @@ async function suggestTarget(
   };
 }
 
-export async function prepareSuggestionSweep(
-  db: Database,
-  runId: RunId,
-  ports: SuggestionSweepPorts,
-) {
-  const saved = await readSuggestionSweepRun(db, runId);
-  const processed = new Set(
-    processedTargetIdsSchema.parse(saved.progress ?? {}).processedTargetIds,
-  );
-  await rosterSuggestionTargets(db, runId, saved.input, ports, processed);
-  await writeSuggestionSweepProgress(db, runId, {
-    ...suggestionSweepRunProgress.parse(saved.progress),
-    ...(processed.size
-      ? {
-          legacyCounts: suggestionSweepRunProgress
-            .pick({ done: true, applied: true, queued: true, failed: true })
-            .parse(saved.progress),
-        }
-      : {}),
-    rosterPrepared: true,
-    attempt: z
-      .object({ attempt: z.number().default(0) })
-      .parse(saved.progress ?? {}).attempt,
-  });
-}
-
-/** The stored input a field pass evaluates under, as `startSuggestionSweep` captures it. */
+/** The stored input a field pass evaluates under, captured by its roster step. */
 export async function suggestionSweepInput(
   db: Database,
   input: SweepInput,
   ports: Pick<SuggestionSweepPorts, "decisionModel" | "suggestPorts"> = {},
 ) {
-  return suggestionSweepRunInput.parse({
-    kind: "suggestion_sweep",
+  return sweepRunInputSchema.parse({
     ...input,
-    decisionModelOverride:
-      ports.decisionModel?.() ?? ports.suggestPorts?.decisionModel,
+    model: ports.decisionModel?.() ?? ports.suggestPorts?.decisionModel,
     taxonomyRevision: await spendingClassificationRevision(db),
   });
 }
 
 /**
  * Queues one AI evaluation per listed record and decision field, requested
- * by `runId`: a `suggestion_sweep` Run's own roster, or a Sweep's field step.
+ * by the owning Sweep field step.
  * Returns how many evaluations it requested.
  */
 export async function rosterSuggestionTargets(
@@ -259,7 +209,6 @@ export async function rosterSuggestionTargets(
   runId: RunId,
   storedInput: unknown,
   ports: SuggestionSweepPorts,
-  processed: ReadonlySet<string> = new Set(),
 ) {
   const input = sweepRunInputSchema.parse(storedInput);
   let pageIndex = 0;
@@ -324,22 +273,6 @@ export async function rosterSuggestionTargets(
     }
     pageIndex++;
   } while (rowsSeen < totalCount);
-  const selected = new Set(
-    targets.map((target) => `${target.entityId}:${target.field}`),
-  );
-  for (const key of processed) {
-    if (selected.has(key)) continue;
-    const [entityId, field] = z
-      .tuple([z.uuid(), z.string().min(1)])
-      .parse(key.split(":"));
-    targets.push({
-      id: "legacy-processed",
-      entityId,
-      field,
-      currentValue: null,
-      basis: {},
-    });
-  }
   const manifest = await producingAiManifest(db);
   for (const [sequence, target] of targets.entries()) {
     const fieldDecisionId =
@@ -355,33 +288,23 @@ export async function rosterSuggestionTargets(
         entity: input.entity,
         target,
         fieldDecisionId,
-        model: input.decisionModelOverride ?? null,
+        model: input.model ?? null,
         taxonomy: input.taxonomyRevision,
         manifest,
       }),
     );
-    const legacy = processed.has(`${target.entityId}:${target.field}`);
     await enqueueAiEvaluation(
       db,
       {
-        ...(legacy
-          ? {
-              workKey: `sweep-legacy:${runId}:${target.entityId}:${target.field}`,
-              state: "completed",
-              receipt: { outcome: "legacy_processed" },
-            }
-          : {}),
         runId,
         executionKind: "suggestion_sweep",
-        shareKey: legacy
-          ? null
-          : await sha256Hex(
-              JSON.stringify({
-                kind: "suggestion_sweep",
-                actor: ports.context.actorContext.userId,
-                inputFingerprint,
-              }),
-            ),
+        shareKey: await sha256Hex(
+          JSON.stringify({
+            kind: "field",
+            actor: ports.context.actorContext.userId,
+            inputFingerprint,
+          }),
+        ),
         feature: fieldPolicyKey(input.entity, target.field),
         target: {
           kind: "field",
@@ -399,7 +322,7 @@ export async function rosterSuggestionTargets(
           optionFingerprint:
             manifest[fieldPolicyKey(input.entity, target.field)]
               ?.policyFingerprint ?? "",
-          model: input.decisionModelOverride ?? null,
+          model: input.model ?? null,
         },
         snapshot,
       },
@@ -530,8 +453,7 @@ export async function executeSuggestionSweepTarget(
       optionFingerprint:
         manifest[fieldPolicyKey(input.entity, target.field)]
           ?.policyFingerprint ?? "",
-      model:
-        captured.result.primary?.model ?? input.decisionModelOverride ?? null,
+      model: captured.result.primary?.model ?? input.model ?? null,
     };
     saved = sweepResult.safeParse({
       ...captured.result,
@@ -613,55 +535,6 @@ export async function publishSweepSuggestions(
       (row) => row.entity === input.entity && row.field === input.field,
     )?.mode === "prune";
   return saveSweepSuggestions(db, runId, { ...input, unordered }, ...rest);
-}
-
-export async function pauseSuggestionSweep(db: Database, runId: RunId) {
-  const saved = await readSuggestionSweepRun(db, runId);
-  if (saved.status === "paused") return;
-  if (saved.status !== "running")
-    throw new Error("Only a running sweep can be paused");
-  await pauseRunningSuggestionSweep(db, runId);
-}
-export async function resumeSuggestionSweep(db: Database, runId: RunId) {
-  const saved = await readSuggestionSweepRun(db, runId);
-  if (saved.status === "completed")
-    throw new Error("Completed suggestion sweep cannot be resumed");
-  if (saved.status !== "paused")
-    throw new Error("Only a paused sweep can be resumed");
-  await launchWorkflowRun(db, { runId, purpose: "suggestion_sweep" });
-  return saved.progress;
-}
-export async function startSuggestionSweep(
-  db: Database,
-  { trigger = "manual", ...input }: SweepInput & { trigger?: SweepTrigger },
-  ports: SuggestionSweepPorts,
-) {
-  const actor = { ...ports.context.actorContext, runId: null };
-  const storedInput = await suggestionSweepInput(db, input, ports);
-  const initialProgress = suggestionSweepRunProgress.parse({
-    total: 0,
-    done: 0,
-    applied: 0,
-    queued: 0,
-    failed: 0,
-    diagnostics: [],
-  });
-  const runId = await withRunTransaction(db, async (tx) => {
-    const runId = await ensureRun(tx, actor, {
-      purpose: "suggestion_sweep",
-      trigger,
-      status: "running",
-      input: storedInput,
-      progress: initialProgress,
-    });
-    await prepareSuggestionSweep(tx, runId, {
-      ...ports,
-      context: { ...ports.context, db: tx },
-    });
-    return runId;
-  });
-  await launchWorkflowRun(db, { runId, purpose: "suggestion_sweep" });
-  return { id: runId };
 }
 
 export type SweepDecision = {

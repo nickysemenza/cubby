@@ -718,3 +718,21 @@ an exclusive lock. Keys contain no member facts, money, evidence, decisions or
 unfinished work. Image intent uses its Image row, Suggestion review its Suggestion
 row, and Email mutations their existing domain rows and serializable retries.
 There is no household-wide Email evidence gate.
+
+## Field sweep consolidation (ADR 0025 L2e)
+
+Migration `0114_adr25-l2e-sweep` locks Runs, steps, Jobs and evaluation demand
+before copying its verification witnesses. It converts `suggestion_sweep` Runs
+in place to a single field family under `sweep`, updates the execution Job's
+purpose, and records roster/evaluate steps. Run progress and every Job state,
+generation, cursor and result remain intact; the evaluate step also retains
+the old progress as diagnostic JSON text. Evaluation targets, requests, results,
+receipts and model fingerprints stay intact. Frozen input drops the legacy kind
+and paused flag and moves its pinned model to `model`.
+
+The migration compares every retained row and row count before contracting the
+Run purpose check. Malformed scopes, conflicting ledgers or Job purposes, and
+unfinished pre-roster progress without durable targets refuse atomically; they
+need evidence reconciliation rather than replaying already completed paid work.
+After deployment verify the converted Run's field scope, steps, original status
+and Job checkpoint, then resume through `run.control` when appropriate.

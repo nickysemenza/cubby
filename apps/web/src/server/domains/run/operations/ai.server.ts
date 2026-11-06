@@ -81,11 +81,6 @@ import {
   resumeAutomaticAi,
   stopAutomaticAi,
 } from "~/server/domains/run/repo/automatic-ai-stop";
-import {
-  pauseSuggestionSweep,
-  resumeSuggestionSweep,
-  startSuggestionSweep,
-} from "~/server/domains/run/service/suggestion-sweep";
 import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import {
   resolveAllOrThrow,
@@ -95,7 +90,6 @@ import {
 import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
 import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
-import { latestSuggestionSweepStatus } from "~/server/generic/suggestions/repo/suggestion-review";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
@@ -715,19 +709,6 @@ export const aiHandlers = implementOperationDomain(aiContract, {
     const { decisionCatalog } = await import("~/server/ai/decision-catalog");
     return decisionCatalog(context.db);
   },
-  startSuggestionSweep: (context, input) =>
-    startSuggestionSweep(context.db, input, { context }),
-  pauseSuggestionSweep: async (context, input) => {
-    await pauseSuggestionSweep(context.db, parseEntityId("run", input.runId));
-    return { paused: true as const };
-  },
-  resumeSuggestionSweep: async (context, input) => {
-    const id = parseEntityId("run", input.runId);
-    await resumeSuggestionSweep(context.db, id);
-    return { id };
-  },
-  latestSuggestionSweepStatus: (context) =>
-    latestSuggestionSweepStatus(context.db),
   automaticWork: async (context) => ({
     stoppedAt: (await readAutomaticAiStop(context.db))?.stoppedAt ?? null,
   }),

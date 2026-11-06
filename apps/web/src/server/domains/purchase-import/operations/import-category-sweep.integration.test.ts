@@ -1,6 +1,6 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
-import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
+import { sweepRunInput } from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
 import { driveAiWork } from "tooling/ai-work";
 import { taxonomyId } from "tooling/product-category-fixtures";
@@ -101,7 +101,7 @@ describe("post-commit category suggestions", () => {
       undefined,
       {
         onProductsCreated: (ids) =>
-          sweepImportedProductCategories(context, ids, sweepPorts),
+          sweepImportedProductCategories(context, ids),
       },
     );
     // A replay reads the ledger's original result: the sweep changed nothing.
@@ -117,9 +117,14 @@ describe("post-commit category suggestions", () => {
     const [sweep] = await getDb(ctx.db)
       .select()
       .from(run)
-      .where(eq(run.purpose, "suggestion_sweep"));
+      .where(eq(run.purpose, "sweep"));
     expect(sweep?.trigger).toBe("scheduled");
-    const input = suggestionSweepRunInput.parse(sweep?.input);
+    const family = sweepRunInput
+      .parse(sweep?.input)
+      .families.find((entry) => entry.family === "field");
+    if (family?.family !== "field")
+      throw new Error("Synthetic field scope is missing");
+    const input = family.scope.targets![0]!;
     expect(input).toMatchObject({ entity: "product", fields: ["categoryId"] });
     expect([...(input.filters.ids as string[])].sort()).toEqual(
       created.map(({ shortcode }) => shortcode).sort(),

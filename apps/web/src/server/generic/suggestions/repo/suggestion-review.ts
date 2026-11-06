@@ -13,10 +13,9 @@ import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { basisValueOf } from "@cubby/schemas/field-suggestion";
 import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
-import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
 import { suggestionChildHandle } from "@cubby/schemas/suggestion";
 import { suggestionFieldCount } from "@cubby/schemas/suggestion-list";
-import { type SQL, and, desc, eq, inArray, sql } from "drizzle-orm";
+import { type SQL, and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -38,7 +37,6 @@ import {
   connectionBasisIsCurrent,
   connectionReadEvidence,
 } from "~/server/domains/connection/repo/connection-evidence";
-import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";
 import { applyFinanceCategorySuggestion } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -688,46 +686,4 @@ export async function applyFieldCorrection(
     });
   }
   throw new Error("Field correction requires an explicit corrected value");
-}
-
-export async function latestSuggestionSweepStatus(db: Database) {
-  const [latest] = await getDb(db)
-    .select({
-      id: runTable.id,
-      input: runTable.input,
-      status: runTable.status,
-      progress: runTable.progress,
-    })
-    .from(runTable)
-    .where(eq(runTable.purpose, "suggestion_sweep"))
-    .orderBy(desc(runTable.createdAt))
-    .limit(1);
-  if (!latest)
-    return {
-      latestRunId: null,
-      entity: null,
-      fields: [],
-      taxonomyChanged: false,
-      status: null,
-      paused: false,
-      progress: null,
-    };
-  const stored = z
-    .object({
-      taxonomyRevision: z.string().optional(),
-      paused: z.boolean().optional(),
-    })
-    .passthrough()
-    .parse(latest.input);
-  const sweep = suggestionSweepRunInput.safeParse(latest.input);
-  return {
-    latestRunId: latest.id,
-    entity: sweep.success ? sweep.data.entity : null,
-    fields: sweep.success ? sweep.data.fields : [],
-    taxonomyChanged:
-      stored.taxonomyRevision !== (await spendingClassificationRevision(db)),
-    status: latest.status,
-    paused: latest.status === "paused",
-    progress: latest.progress,
-  };
 }

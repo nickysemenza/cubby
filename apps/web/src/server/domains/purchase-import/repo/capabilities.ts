@@ -53,7 +53,6 @@ const capabilityMatrix = {
   // Runs that only group AI work never authorize purchase-agent writes.
   ai_refresh: new Set(),
   ai_suggest: new Set(),
-  suggestion_sweep: new Set(),
   background: new Set(),
   // A member's own import (a receipt, an order Email, a vendor export).
   file_import: new Set([
@@ -97,11 +96,8 @@ const actionCapability = {
   "inventory.resolve_scan_strays": "member_decision",
   "inventory.confirm_ownership": "member_decision",
   "ai.approve_detected_inventory_item": "member_decision",
-  "ai.pause_suggestion_sweep": "member_decision",
   "ai.stop_automatic_work": "member_decision",
   "ai.resume_automatic_work": "member_decision",
-  "ai.resume_suggestion_sweep": "member_decision",
-  "ai.start_suggestion_sweep": "member_decision",
   "suggestions.review": "member_decision",
   "suggestions.review_batch": "member_decision",
   "finance.commit_booking": "member_decision",

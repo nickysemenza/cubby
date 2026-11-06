@@ -8,7 +8,6 @@ import {
 import type { MailReclassificationCheckpoint } from "./email-actions.js";
 import { z } from "zod";
 import { entityIdSchema } from "./identifier-fields";
-import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import {
   ATTENTION_RUN_PURPOSES,
   RUN_KINDS,
@@ -346,43 +345,6 @@ export const runRestartInput = z.discriminatedUnion("kind", [
   runRestartMailResearchInput,
 ]);
 export type RunRestartInput = z.infer<typeof runRestartInput>;
-export const suggestionSweepRunInput = z.object({
-  kind: z.literal("suggestion_sweep"),
-  entity: z.string().min(1),
-  fields: z.array(z.string().min(1)).min(1),
-  filters: z.record(z.string(), z.json()),
-  decisionModelOverride: supportedDecisionModelSchema.optional(),
-  taxonomyRevision: z.string().optional(),
-  /** Retained legacy snapshots; current pause state belongs to Run.status. */
-  paused: z.boolean().optional(),
-});
-export type SuggestionSweepRunInput = z.infer<typeof suggestionSweepRunInput>;
-const sweepCounters = z.object({
-  total: z.number().int().nonnegative(),
-  done: z.number().int().nonnegative(),
-  applied: z.number().int().nonnegative(),
-  queued: z.number().int().nonnegative(),
-  failed: z.number().int().nonnegative(),
-});
-export const suggestionSweepRunProgress = sweepCounters.extend({
-  attempt: z.number().int().nonnegative().optional(),
-  rosterPrepared: z.boolean().optional(),
-  legacyCounts: sweepCounters
-    .pick({ done: true, applied: true, queued: true, failed: true })
-    .optional(),
-  diagnostics: z
-    .array(
-      z.object({
-        targetId: z.string(),
-        stage: z.enum(["apply", "paired_model"]),
-        reason: z.string(),
-      }),
-    )
-    .default([]),
-});
-export type SuggestionSweepRunProgress = z.infer<
-  typeof suggestionSweepRunProgress
->;
 /**
  * A member's Reclassify, extraction-preview rerun, or read-only triage preview
  * of selected Emails in one mailbox.
@@ -523,12 +485,10 @@ export type RunInput =
   | z.infer<typeof orderMailImportRunInput>
   | OrderBackfillRunInput
   | z.infer<typeof chargeHuntRunInput>
-  | SuggestionSweepRunInput
   | AiRefreshRunInput
   | PhotoInventoryRunInput;
 export type RunProgress =
   | MailDiscoveryRunProgress
-  | SuggestionSweepRunProgress
   | MailReclassificationCheckpoint
   | z.infer<typeof aiRefreshProgress>;
 

@@ -31,7 +31,6 @@ const RUN_PURPOSE_GLYPH = {
   product_enrichment: { phosphor: "Package", sfSymbol: "shippingbox" },
   photo_inventory: { phosphor: "Camera", sfSymbol: "camera" },
   ai_suggest: { phosphor: "Sparkle", sfSymbol: "sparkles" },
-  suggestion_sweep: { phosphor: "MagicWand", sfSymbol: "wand.and.stars" },
   ai_refresh: { phosphor: "ArrowClockwise", sfSymbol: "arrow.clockwise" },
   background: { phosphor: "Gear", sfSymbol: "gearshape" },
   file_import: { phosphor: "FileArrowUp", sfSymbol: "doc.badge.arrow.up" },

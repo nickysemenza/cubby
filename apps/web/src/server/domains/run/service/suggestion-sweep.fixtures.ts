@@ -9,6 +9,7 @@ import {
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fields";
+import { RUN_KINDS } from "@cubby/schemas/run-fields";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { eq } from "drizzle-orm";
 import { driveAiWork } from "tooling/ai-work";
@@ -41,15 +42,28 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
 import { ensureRun } from "../repo/ensure-run";
+import type { StepPlan } from "./step-run";
 import {
-  startSuggestionSweep as startSweep,
-  resumeSuggestionSweep as resumeSweep,
+  rosterSuggestionTargets,
+  suggestionSweepInput,
+  type SuggestionSweepPorts,
 } from "./suggestion-sweep";
+import { startSweep, sweepStepDrivers } from "./sweep";
 
 type Ctx = Pick<TestDbContext, "db" | "actor">;
-type SweepPorts = Parameters<typeof startSweep>[2];
+type SweepPorts = SuggestionSweepPorts;
+type SweepInput = {
+  entity: ShortcodeEntity;
+  fields: string[];
+  filters: Record<
+    string,
+    import("./../repo/suggestion-sweep-state").SuggestionValue
+  >;
+  trigger?: "manual" | "scheduled";
+};
 
 export const PRIMARY_MODEL =
   "typesafe/jev" as const satisfies SupportedDecisionModel;
@@ -59,28 +73,66 @@ export const kernelCtx = (ctx: Ctx) =>
     createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
   );
 
-/** Defaults: pinned primary model, no pacing waits. */
+/** Provider seam shared by the existing review journeys. */
 const sweepDefaults = {
   decisionModel: () => PRIMARY_MODEL,
-  wait: async () => {},
 };
+function fieldPlan(
+  target: Omit<SweepInput, "trigger">,
+  ports: SweepPorts,
+): StepPlan {
+  return RUN_KINDS.sweep.steps
+    .filter((step) => step.family === "field")
+    .map((declaration) => ({
+      declaration,
+      driver:
+        declaration.key === "field_roster"
+          ? {
+              ...sweepStepDrivers.field_roster,
+              page: async ({ db, run }) => ({
+                kind: "progress" as const,
+                delta: { done: 1 },
+                cursor: 1,
+                tallies: {
+                  evaluations: await rosterSuggestionTargets(
+                    db,
+                    run.id,
+                    await suggestionSweepInput(db, target, ports),
+                    ports,
+                  ),
+                },
+                done: true,
+              }),
+            }
+          : sweepStepDrivers.field_evaluate,
+    }));
+}
 export const startSuggestionSweep = async (
   db: Database,
-  input: Parameters<typeof startSweep>[1],
+  input: SweepInput,
   ports: SweepPorts,
 ) => {
   const options = { ...sweepDefaults, ...ports };
-  const started = await startSweep(db, input, options);
-  await driveAiWork(db, started.id, { sweep: options });
-  return started;
+  const { trigger = "manual", ...target } = input;
+  const id = await startSweep(db, ports.context.actorContext, {
+    trigger,
+    families: [{ family: "field", scope: { targets: [target] } }],
+  });
+  await driveAiWork(db, id, { sweep: options }, fieldPlan(target, options));
+  return { id };
 };
 export const resumeSuggestionSweep = async (
   db: Database,
-  runId: Parameters<typeof resumeSweep>[1],
+  runId: RunId,
   ports: SweepPorts,
 ) => {
   const options = { ...sweepDefaults, ...ports };
-  await resumeSweep(db, runId);
+  await controlWorkflowRun(
+    db,
+    ports.context.actorContext,
+    { runPublicId: await runCode(db, runId), action: "resume" },
+    "sweep",
+  );
   await driveAiWork(db, runId, { sweep: options });
 };
 

@@ -358,7 +358,7 @@ const detailSlots = {
     "import-debug-log": runReportSlot("import-debug-log", undefined, true),
     suggestions: slot(
       () => named(import("~/features/run/slots"), "RunSuggestions"),
-      (run) => run.purpose === "suggestion_sweep",
+      (run) => run.purpose === "sweep",
     ),
     "photo-batch": slot(
       () =>

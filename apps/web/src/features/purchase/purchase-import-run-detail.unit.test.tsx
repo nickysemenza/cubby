@@ -360,10 +360,7 @@ it("runs a waiting import now with paid models after confirmation", async () => 
 
 // Discovery and suggestion work wait on the same funding policy but must not
 // acquire import-agent controls merely to expose their paid override.
-it.each([
-  "mail_discovery",
-  "suggestion_sweep",
-] satisfies RunDetail["purpose"][])(
+it.each(["mail_discovery"] satisfies RunDetail["purpose"][])(
   "offers only funding controls for a waiting %s Run",
   async (purpose) => {
     detailRun = {

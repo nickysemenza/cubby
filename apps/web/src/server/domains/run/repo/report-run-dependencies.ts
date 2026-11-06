@@ -144,7 +144,7 @@ const runChanges = reportDependency(async (execution) => {
 });
 const runSuggestions = reportDependency(async (execution) => {
   const { code, purpose } = await execution.read(runBase);
-  return purpose === "suggestion_sweep"
+  return purpose === "sweep"
     ? suggestionBlocks(
         await suggestionCountsByFamily(execution.request.db, { runId: code }),
       )

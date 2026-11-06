@@ -765,15 +765,6 @@ describe("transfer-pair suggestions", () => {
       purpose: "background",
       trigger: "manual",
       status: "running",
-      progress: {
-        attempt: 1,
-        total: 0,
-        done: 0,
-        applied: 0,
-        queued: 0,
-        failed: 0,
-        diagnostics: [],
-      },
     });
     await generateTransferPairSuggestions(ctx.db, { runId });
     const answer = movementPort(byDescriptor);
