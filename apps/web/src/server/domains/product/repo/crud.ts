@@ -144,6 +144,7 @@ import {
 import { projectProductUnitPriceBatch } from "~/server/domains/product/repo/list-enrichment";
 import { buildNutritionDisplay } from "~/server/domains/product/repo/nutrition-display";
 import { productSearch as productSearchRead } from "~/server/domains/product/repo/search-read-product";
+import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
 import { loadStoredProductDisplay } from "~/server/domains/product/repo/stored-display";
 import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand";
 import { externalIdsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
@@ -209,7 +210,6 @@ import {
 } from "./pricing";
 import { storedEffectivePrice } from "./pricing";
 import { EMPTY_QUANTITY_LEDGER } from "./quantity-ledger";
-import { serviceCategorySql } from "./service-category";
 import { unitMappingColumns } from "./unit-mappings";
 import {
   assertNoCanonicalPriceMapping,
