@@ -106,6 +106,8 @@ export type ImportRunAgentConfig = {
    * escalation off: no tool is mounted and no request changes.
    */
   escalationModel?: SupportedChatModel;
+  /** Existing provider-ladder alternative, selected only with free funding. */
+  escalationAlternative?: SupportedChatModel;
   effort: "low" | "medium" | "high";
   agentTools: readonly ImportRunAgentToolName[];
   /**
@@ -185,6 +187,7 @@ export const importRunAgentManifest = {
   mail_import: {
     model: "gpt-6-luna",
     escalationModel: "claude-opus-5-5",
+    escalationAlternative: "gpt-6-sol",
     effort: "medium",
     agentTools: [...RUN_AGENT_TOOLS, ESCALATE_TOOL, EXTRACT_ORDER_TOOL],
     mcpActions: MAIL_IMPORT_MCP_ACTIONS,

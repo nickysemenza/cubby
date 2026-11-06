@@ -26,6 +26,7 @@ export async function recordMailAttempt(
       .for("no key update");
     if (
       !owner ||
+      !owner.ledgerPartyId ||
       owner.purpose !== "mail_import" ||
       (input.action === "admit" && owner.status !== "running") ||
       owner.retiredAt ||
@@ -84,6 +85,7 @@ export async function recordMailAttempt(
         .where(
           and(
             eq(runOperation.runId, runId),
+            sql`${runOperation.result}->${"source"} = ${JSON.stringify(input.source)}::jsonb`,
             sql`${runOperation.result}->>${"identity"} = ${input.identity}`,
             eq(runOperation.kind, "mail_extraction_attempt"),
           ),

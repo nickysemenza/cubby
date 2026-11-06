@@ -116,6 +116,12 @@ policy cutover. The coordinator mechanically bounds extraction submissions by
 source checksum: initial extraction plus one repair on the primary and one
 escalated submission. Invalid tool arguments count too; replaying the same call
 does not. Exhaustion publishes a gap through the ordinary checksum-bound writer.
+Attempt receipts live in Run operations and remain authoritative across successor
+Runs. Only the trusted claim establishes their evidence version; display names
+and Purchase date corrections do not renew it. Writer refusal classification
+uses server metadata, never matching error codes in Email text. Held-source
+refusals do not spend semantic attempts. An uncertain writer outcome retains its
+reservation and permits bounded identical-operation recovery before changed input.
 The bundled ordinary tool owns stable preparation/commit identities and returns
 the next durable claim after known publication. New retained source bytes or
 accepted evidence of the exact own-account order may reopen an untouched

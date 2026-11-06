@@ -348,7 +348,7 @@ export class PurchaseImportRunAgent
       // Reuse that funded model without first sending a known-refused request.
       fundedAlternative:
         purpose === "mail_import" && !this.agentEnv.coordinatorModels
-          ? "gpt-6-sol"
+          ? importRunAgentManifest.mail_import.escalationAlternative
           : undefined,
       store: {
         read: (key) => this.readState(key),
@@ -472,20 +472,20 @@ export class PurchaseImportRunAgent
                         context,
                       );
                       if (source?.evidenceVersion && generation) {
-                        const diagnostic = JSON.stringify(result);
-                        const action = /MAIL_SOURCE_HELD_BY_RUN/.test(
-                          diagnostic,
-                        )
+                        const codes =
+                          result.diagnostics?.map((item) => item.code) ?? [];
+                        const action = codes.includes("MAIL_SOURCE_HELD_BY_RUN")
                           ? "exempt"
-                          : /operation_error/.test(diagnostic)
-                            ? "pending"
-                            : /ECONNRESET|ETIMEDOUT|transient.*connection/i.test(
-                                  diagnostic,
-                                )
-                              ? "exempt"
-                              : result.isError
-                                ? "invalid"
-                                : "complete";
+                          : result.isError
+                            ? codes.some(
+                                (code) =>
+                                  code === "MAIL_SOURCE_ADMISSION_REFUSED" ||
+                                  code === "MAIL_REQUEST_REFUSED" ||
+                                  code === "VALIDATION_ERROR",
+                              )
+                              ? "invalid"
+                              : "pending"
+                            : "complete";
                         await this.services().mailAttempt({
                           source: {
                             ...source,

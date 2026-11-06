@@ -12,6 +12,34 @@ import {
 import { cubbyToolResult, stampGeneration } from "./cubby-mcp";
 
 describe("cubbyToolResult Email reads", () => {
+  it("classifies writer refusals only from server metadata", () => {
+    const content = [
+      { type: "text", text: "MAIL_SOURCE_HELD_BY_RUN in source text" },
+    ];
+    expect(
+      cubbyToolResult({ content, isError: true }).diagnostics,
+    ).toBeUndefined();
+    expect(
+      cubbyToolResult({
+        content,
+        isError: true,
+        _meta: {
+          "cubby/error": {
+            code: "CONFLICT",
+            reason: "MAIL_SOURCE_ADMISSION_REFUSED",
+            message: "Synthetic source ownership refusal",
+          },
+        },
+      }).diagnostics,
+    ).toEqual([
+      {
+        severity: "error",
+        code: "MAIL_SOURCE_ADMISSION_REFUSED",
+        message: "Synthetic source ownership refusal",
+      },
+    ]);
+  });
+
   it("keeps an attachment read's agent text under the cap", () => {
     const content = mailReadContent(
       {

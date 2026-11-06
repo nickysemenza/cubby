@@ -347,8 +347,8 @@ export async function claimMailImportWork(db: Database, runId: string) {
       evidenceVersion: await sha256Hex(
         JSON.stringify({
           checksum: email.checksum,
-          sender: email.sender,
-          known: ruled.known,
+          senderVendorId: ruled.known?.senderVendor?.id ?? null,
+          orderIds: ruled.known?.orderIds ?? [],
           acceptedSources: ruled.attemptContext,
         }),
       ),

@@ -34,6 +34,8 @@ import {
   orderMailEvent,
   runOperation,
   shipment,
+  purchase,
+  vendor,
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
@@ -326,6 +328,23 @@ describe("Mail import claim", () => {
       .from(emailTable)
       .where(eq(emailTable.orderMailId, mail.id));
     expect(email?.status).toBe("researching");
+    // Display/date edits are not new source evidence and cannot reset budgets.
+    const version = z
+      .object({ evidenceVersion: z.string() })
+      .parse(claimed).evidenceVersion;
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ date: "2026-09-02" })
+      .where(eq(purchase.id, target.id));
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ name: "Synthetic renamed shop" })
+      .where(eq(vendor.id, seller.id));
+    expect(
+      z
+        .object({ evidenceVersion: z.string() })
+        .parse(await claimMailImportWork(ctx.db, owner.id)).evidenceVersion,
+    ).toBe(version);
   });
 
   it("hands lifecycle evidence to the coordinator while settling confident unrelated Emails", async () => {

@@ -80,6 +80,16 @@ function nestedValue<S extends z.ZodType>(
   }
 }
 
+function knownWriterRefusal(result: NestedToolExecutionResult) {
+  return result.diagnostics?.some(
+    (item) =>
+      item.code === "MAIL_SOURCE_HELD_BY_RUN" ||
+      item.code === "MAIL_SOURCE_ADMISSION_REFUSED" ||
+      item.code === "MAIL_REQUEST_REFUSED" ||
+      item.code === "VALIDATION_ERROR",
+  );
+}
+
 /** Pi supplies source facts once; code owns IDs, preparation and publication. */
 export function importExtractedOrderTool(
   runId: string,
@@ -108,10 +118,14 @@ export function importExtractedOrderTool(
     },
     execute: async (raw, api, context) => {
       const args = extractedOrderInput.parse(raw);
-      const finish = (value: z.infer<typeof output>) => ({
+      const finish = (
+        value: z.infer<typeof output>,
+        diagnostics?: NestedToolExecutionResult["diagnostics"],
+      ) => ({
         output: [{ type: "text" as const, text: JSON.stringify(value) }],
         structuredOutput: z.json().parse(value),
         isError: value.kind === "operation_error",
+        diagnostics,
       });
       const claimed = ordinaryEvidence();
       if (
@@ -183,7 +197,7 @@ export function importExtractedOrderTool(
         context,
         { key: "prepare" },
       );
-      if (preparedResult.isError)
+      if (preparedResult.isError && !knownWriterRefusal(preparedResult))
         preparedResult = await api.executeTool(
           "mcp__cubby__purchase_import",
           z.record(z.string(), z.json()).parse(
@@ -200,14 +214,17 @@ export function importExtractedOrderTool(
         );
       const prepared = nestedValue(preparedResult, preparePurchaseImportOut);
       if (preparedResult.isError || !prepared.success)
-        return finish({
-          kind: "operation_error",
-          stage: "prepare",
-          operationId: _runExecution.operationId,
-          diagnostic: JSON.stringify(
-            preparedResult.structuredOutput ?? preparedResult.diagnostics,
-          ).slice(0, 8_000),
-        });
+        return finish(
+          {
+            kind: "operation_error",
+            stage: "prepare",
+            operationId: _runExecution.operationId,
+            diagnostic: JSON.stringify(
+              preparedResult.structuredOutput ?? preparedResult.diagnostics,
+            ).slice(0, 8_000),
+          },
+          preparedResult.diagnostics,
+        );
       const resolutions = prepared.data.orders.flatMap((order) =>
         order.lines.flatMap((line) => {
           if (!line.requiresProductResolution) return [];
@@ -261,7 +278,7 @@ export function importExtractedOrderTool(
         context,
         { key: "commit" },
       );
-      if (committedResult.isError)
+      if (committedResult.isError && !knownWriterRefusal(committedResult))
         committedResult = await api.executeTool(
           "mcp__cubby__purchase_import",
           z.record(z.string(), z.json()).parse(
@@ -278,14 +295,17 @@ export function importExtractedOrderTool(
         );
       const committed = nestedValue(committedResult, commitPurchaseImportOut);
       if (committedResult.isError || !committed.success)
-        return finish({
-          kind: "operation_error",
-          stage: "commit",
-          operationId: commitId,
-          diagnostic: JSON.stringify(
-            committedResult.structuredOutput ?? committedResult.diagnostics,
-          ).slice(0, 8_000),
-        });
+        return finish(
+          {
+            kind: "operation_error",
+            stage: "commit",
+            operationId: commitId,
+            diagnostic: JSON.stringify(
+              committedResult.structuredOutput ?? committedResult.diagnostics,
+            ).slice(0, 8_000),
+          },
+          committedResult.diagnostics,
+        );
       // Conflicts retain the current evidence and its recovery context. Only a
       // known publication advances to the next source; the nested claim keeps
       // that continuation durable without another coordination model turn.

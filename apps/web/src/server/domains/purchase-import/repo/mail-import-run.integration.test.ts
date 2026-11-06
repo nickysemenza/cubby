@@ -1,4 +1,5 @@
 import {
+  type ShortcodeFor,
   parseEntityId,
   runShortcode,
   vendorShortcode,
@@ -188,7 +189,7 @@ describe("mail research admission", () => {
       makeProductInput({ name: "Synthetic recovery mug" }),
       ctx.actor,
     );
-    const purchases = new Map<string, string>();
+    const purchases = new Map<string, ShortcodeFor<"purchase">>();
     const history = async (orderId: string, revision: string) => {
       const capture = await startImportRunFixture(ctx.db, {
         ledgerPartyId: party.id,

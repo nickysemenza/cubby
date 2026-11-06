@@ -122,9 +122,11 @@ pending: nothing here starts Product research.
    primary submissions (initial plus repair) and one escalation submission.
    Identical extraction replay does not consume another attempt; repeated claims
    and successor Runs retain the budget. The claim binds the original checksum,
-   sender proof and accepted order-source context. Held sources and known
-   transport refusals are exempt; unknown writes remain pending until receipt
-   recovery through an exact writer replay. Generation response hooks only
+   sender proof and accepted order-source context; display-name and Purchase-date
+   edits do not reset it. Writer classification uses trusted MCP error metadata,
+   never Email text. Held-source refusals are exempt. Known validation refusals
+   return without automatic replay; unknown writes retain their reservation until
+   exact writer recovery. Generation response hooks only
    account for submissions; they never publish dispositions.
    Exhaustion records an unresolved gap through the delegated mail-resolve writer,
    using a stable operation ID and the issuing generation fence.

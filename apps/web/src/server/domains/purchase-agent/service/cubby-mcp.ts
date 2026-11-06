@@ -69,6 +69,17 @@ const callResult = z.object({
   content: z.array(z.unknown()).default([]),
   structuredContent: z.unknown().optional(),
   isError: z.boolean().optional(),
+  _meta: z
+    .object({
+      "cubby/error": z
+        .object({
+          message: z.string(),
+          code: z.string().optional(),
+          reason: z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 /** A Cubby MCP call result as the agent's tool output. */
@@ -136,6 +147,18 @@ export async function settleMailAttemptLimit(input: {
 
 export function cubbyToolResult(raw: unknown): ToolExecutionResult {
   const parsed = callResult.parse(raw);
+  // Only server metadata supplies retry codes. Email text is untrusted and
+  // must never classify the outcome of a writer.
+  const error = parsed.isError ? parsed._meta?.["cubby/error"] : undefined;
+  const diagnostics: ToolExecutionResult["diagnostics"] = error
+    ? [
+        {
+          severity: "error",
+          message: error.message,
+          code: error.reason ?? error.code,
+        },
+      ]
+    : undefined;
   const content: NonNullable<ToolExecutionResult["output"]> = [];
   for (const block of parsed.content) {
     const text = textBlock.safeParse(block);
@@ -157,6 +180,7 @@ export function cubbyToolResult(raw: unknown): ToolExecutionResult {
         { type: "image", data: dataBase64, mimeType },
       ],
       isError: parsed.isError === true,
+      diagnostics,
     };
   }
   if (content.length === 0 && parsed.structuredContent !== undefined)
@@ -164,7 +188,7 @@ export function cubbyToolResult(raw: unknown): ToolExecutionResult {
       type: "text",
       text: JSON.stringify(parsed.structuredContent),
     });
-  return { output: content, isError: parsed.isError === true };
+  return { output: content, isError: parsed.isError === true, diagnostics };
 }
 
 /**
