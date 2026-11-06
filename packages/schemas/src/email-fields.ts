@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { purchaseShortcode } from "./identifier-fields.js";
 
 /** Persisted import gaps distinguish missing facts from execution and member choices. */
 export const mailImportGapCategory = z.enum([
@@ -11,8 +12,6 @@ export const mailImportGapCategory = z.enum([
   "attempt_limit",
   "unknown",
 ]);
-
-import { purchaseShortcode } from "./identifier-fields.js";
 
 export { EMAIL_RELATIONSHIP_INPUTS } from "./entity-definitions/email-relationship-inputs";
 

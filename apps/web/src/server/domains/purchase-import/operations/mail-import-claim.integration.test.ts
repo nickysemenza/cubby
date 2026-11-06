@@ -18,6 +18,7 @@ import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray } from "drizzle-orm";
+import { createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -45,6 +46,10 @@ import { readMailProductCandidates } from "~/server/domains/purchase-import/repo
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
+import {
+  createProductIdentityFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 
 import { recordMailAttempt } from "../repo/mail-attempts";
 import { MAIL_IMPORT_RULE_REVISION } from "../service/mail-import-rule";
@@ -301,14 +306,20 @@ describe("Mail import claim", () => {
   it("claims an incomplete lifecycle read instead of settling its first-page match", async () => {
     const { party, seller, order, retain } = await world();
     const target = await order("SYN-3001");
-    const recordedProduct = await insertWithShortcode(ctx.db, "product", {
-      name: "Synthetic previously ordered mug",
-      brandId: null,
-    });
-    await insertWithShortcode(ctx.db, "expense", {
+    const recordedProduct = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic previously ordered mug",
+        brandId: null,
+        model: null,
+      }),
+      ctx.actor,
+    );
+    await createRepoIdentity(ctx, "expense", {
       name: "Synthetic mug",
-      purchaseId: target.id,
+      purchaseId: target.shortcode,
       productId: recordedProduct.id,
+      trade: "other",
       cost: 12,
       date: "2026-09-20",
       lineKind: "principal",
@@ -325,16 +336,21 @@ describe("Mail import claim", () => {
       "Synthetic blue mug",
       "Synthetic green mug",
     ].entries()) {
-      const variant = await insertWithShortcode(ctx.db, "product", {
-        name,
-        brandId: null,
-      });
-      variants.push(variant.shortcode);
+      const variant = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({
+          name,
+          brandId: null,
+          model: null,
+        }),
+        ctx.actor,
+      );
+      variants.push(variant.id);
       await getDb(ctx.db)
         .insert(entityExternalId)
         .values({
           entityKind: "product",
-          entityId: variant.id,
+          entityId: variant.entityId,
           source: "synthetic-catalog",
           kind: index === 0 ? "asin" : "retailer_sku",
           externalId: "B012345678",
@@ -379,7 +395,7 @@ describe("Mail import claim", () => {
           omitted: false,
           candidates: [
             {
-              productId: recordedProduct.shortcode,
+              productId: recordedProduct.id,
               basis: { kind: "recorded_order", purchaseId: target.shortcode },
             },
           ],
