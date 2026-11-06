@@ -704,10 +704,11 @@ new review inputs. The parent renumbers the migration during integration.
 
 ## Suggestion served flag retirement (ADR 0025 L2b)
 
-0111 locks Suggestion before inspecting every unserved row. It aborts if any
-such row has retained decisions, confirmed/correct values, suppression, an
-acceptance receipt, or applied/rejected status. It then rebuilds the three
-partial reference indexes without the obsolete flag and drops the column.
+0112 locks Suggestion and retires every unserved row (trial output that was
+never a member review candidate or automatic decision) as inactive history. It
+verifies row by row that only `active` changed, including retained evaluation
+decisions on trials, then rebuilds the three partial reference indexes without
+the obsolete flag and drops the column.
 Publication, evidence and decisions remain unchanged. The two connection scope
 indexes also drop their served predicate in desired-state DDL.
 
