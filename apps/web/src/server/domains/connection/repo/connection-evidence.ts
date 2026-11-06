@@ -153,7 +153,14 @@ export function connectionRelevantRowSql(kind: string, table: ShortcodeTable) {
   const fields = connectionRelevantFields(kind);
   const pairs = Object.entries(getTableColumns(table))
     .filter(([name]) => fields.includes(name))
-    .flatMap(([name, column]) => [sql`${name}::text`, sql`${column}`]);
+    .flatMap(([name, column]) => [
+      sql`${name}::text`,
+      // Evidence and fingerprints hold dollars. A raw minor-unit column would
+      // change every fingerprint and show the evaluator amounts 100x too large.
+      column.name.endsWith("Minor")
+        ? sql`(${column}::float8 / 100)`
+        : sql`${column}`,
+    ]);
   return pairs.length
     ? sql<unknown>`jsonb_build_object(${sql.join(pairs, sql`, `)})`
     : sql<unknown>`'{}'::jsonb`;
