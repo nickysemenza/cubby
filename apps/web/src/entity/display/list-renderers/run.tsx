@@ -1,4 +1,5 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { fieldEmptyLabel } from "@cubby/schemas/field-envelope-presentation";
 
 import { textCellData } from "~/ui/data-table/cell-data";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
@@ -28,7 +29,9 @@ function WorkValue({ row }: { row: RunRow }) {
   return sample ? (
     <RunWorkProgress sample={sample} status={row.status} />
   ) : (
-    <span className="text-muted-foreground">Unavailable</span>
+    <span className="text-muted-foreground">
+      {fieldEmptyLabel(row.fields.workProgress)}
+    </span>
   );
 }
 

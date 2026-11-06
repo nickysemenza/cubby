@@ -1,5 +1,6 @@
 import { mealOut } from "@cubby/schemas/entities/meal";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { fieldEmptyLabel } from "@cubby/schemas/field-envelope-presentation";
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 import {
   MEAL_KIND_LABELS,
@@ -184,7 +185,7 @@ export function AddToMeal({
           name:
             mealKind === "cooked"
               ? `${mealLabel} (${countLabel(meal.recipes.length, "recipe")})`
-              : `${mealLabel} — ${mealKind ? MEAL_KIND_LABELS[mealKind] : "Updating…"}`,
+              : `${mealLabel} — ${mealKind ? MEAL_KIND_LABELS[mealKind] : fieldEmptyLabel(meal.fields.mealKind)}`,
         };
       }) ?? []),
     ],

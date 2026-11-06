@@ -1,4 +1,5 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { fieldEmptyLabel } from "@cubby/schemas/field-envelope-presentation";
 import type {
   LedgerPartyShortcode,
   MealShortcode,
@@ -114,7 +115,13 @@ export function useMealPreparationController({
       ?.flatMap((target): PreparationTargetOption[] => {
         const mealKind = fieldValueOf(target.fields.mealKind);
         return [
-          { id: target.id, date: target.date, name: target.name, mealKind },
+          {
+            id: target.id,
+            date: target.date,
+            name: target.name,
+            mealKind,
+            mealKindEmptyLabel: fieldEmptyLabel(target.fields.mealKind),
+          },
         ];
       })
       .sort((left, right) =>
