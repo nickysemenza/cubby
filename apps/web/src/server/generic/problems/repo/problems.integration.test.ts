@@ -7,6 +7,10 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { buildNutrition } from "@cubby/schemas/nutrition";
 import { dryRunPruneAliasesOut } from "@cubby/schemas/problems";
 import { problemsFastSchema } from "@cubby/schemas/problems";
+import {
+  allProblemsSchema,
+  type ProblemKey,
+} from "@cubby/schemas/problems-raw-read";
 import { type ExpenseCreateInput } from "@cubby/schemas/project";
 import { eq, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
@@ -15,6 +19,7 @@ import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import type { Database } from "~/server/db";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   executeProblem,
@@ -37,7 +42,6 @@ beforeEach(() => {
 });
 afterEach(() => backgroundQueue.restore());
 
-import { viewProblemDeclarations } from "@cubby/schemas/entity-definitions/problems/view-problems";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -86,12 +90,7 @@ import {
   reparseStaleWorkflow,
 } from "../operations/problem-workflows.server";
 import { runDiagnostic } from "../service/problem-diagnostics.service";
-import { findViewProblems } from "../service/problem-views.service";
-import {
-  findFastProblems,
-  dryRunPruneAliases,
-  findTrackerProblems,
-} from "../service/problems.service";
+import { dryRunPruneAliases } from "../service/problems.service";
 
 /**
  * The ledger repos hand back `{ output, entityId }` — the uuid is for audit and
@@ -202,7 +201,6 @@ describe("Problems card read projections", () => {
     );
     expect(emptySnapshot.data).toEqual([]);
     expect(emptySnapshot.count).toBe(0);
-    const grouped = await findTrackerProblems(ctx.db);
     const clients = createTestRequestContext(ctx.db);
     for (const key of ["overdueTasks", "projectsMissingBudget"] as const) {
       const focused = await findProblemByType(
@@ -211,12 +209,12 @@ describe("Problems card read projections", () => {
         clients.upcLookupClient,
         clients.usdaClient,
       );
-      expect(grouped[key]).toEqual(focused.items);
-      expect(grouped.sectionTotals[key]).toBe(focused.total);
-      expect(grouped[key]).toHaveLength(12);
-      expect(grouped.sectionTotals[key]).toBe(16);
+      expect(focused.items).toHaveLength(12);
+      expect(focused.total).toBe(16);
     }
-    expect(grouped.overdueTasks[0]?.facts).toMatchObject({ daysOverdue: 2 });
+    expect(
+      (await problemItems(ctx.db, "overdueTasks"))[0]?.facts,
+    ).toMatchObject({ daysOverdue: 2 });
   });
 });
 
@@ -261,7 +259,7 @@ describe("problems — unlinked exit expenses", () => {
     expect(taxCredit.purchaseId).toBe(soldItem.purchaseId);
     expect(allocatedCredit.purchaseId).toBe(soldItem.purchaseId);
 
-    const ids = (await findFastProblems(ctx.db)).unlinkedExitExpenses.map(
+    const ids = (await problemItems(ctx.db, "unlinkedExitExpenses")).map(
       (row) => row.id,
     );
 
@@ -353,7 +351,34 @@ describe("problems — view-backed uniform rows", () => {
 
     await drainStoredDerived(ctx.db);
     await publishAllQualityFixtures(ctx.db);
-    const views = await findViewProblems(ctx.db);
+    const views = {
+      negativeExpectedQuantity: await problemItems(
+        ctx.db,
+        "negativeExpectedQuantity",
+      ),
+      unvaluedBucketProducts: await problemItems(
+        ctx.db,
+        "unvaluedBucketProducts",
+      ),
+      ingredientsWithoutProduct: await problemItems(
+        ctx.db,
+        "ingredientsWithoutProduct",
+      ),
+      productsWithoutMappings: await problemItems(
+        ctx.db,
+        "productsWithoutMappings",
+      ),
+      neverVerifiedInventory: await problemItems(
+        ctx.db,
+        "neverVerifiedInventory",
+      ),
+      productsMissingPrice: await problemItems(ctx.db, "productsMissingPrice"),
+      staleLocations: await problemItems(ctx.db, "staleLocations"),
+      unusedIngredientsWithoutProduct: await problemItems(
+        ctx.db,
+        "unusedIngredientsWithoutProduct",
+      ),
+    };
     expect(
       views.negativeExpectedQuantity.some(({ id }) => id === thing.id),
     ).toBe(true);
@@ -366,20 +391,6 @@ describe("problems — view-backed uniform rows", () => {
     expect(
       views.productsWithoutMappings.some(({ id }) => id === thing.id),
     ).toBe(true);
-    const fullViews = await Promise.all(
-      viewProblemDeclarations().map(async ({ problem }) => ({
-        key: problem.key,
-        page: await executeProblem(ctx.db, problem.key),
-      })),
-    );
-    expect(views).toEqual({
-      ...Object.fromEntries(
-        fullViews.map(({ key, page }) => [key, page.items]),
-      ),
-      sectionTotals: Object.fromEntries(
-        fullViews.map(({ key, page }) => [key, page.count]),
-      ),
-    });
     const shelfBadge = {
       label: "Test shelf",
       entity: "location",
@@ -457,7 +468,7 @@ describe("problems — orphaned products", () => {
       );
 
     await publishAllQualityFixtures(ctx.db);
-    const ids = (await findFastProblems(ctx.db)).orphanedProducts.map(
+    const ids = (await problemItems(ctx.db, "orphanedProducts")).map(
       (row) => row.id,
     );
 
@@ -535,7 +546,7 @@ describe("problems — understated meal cost", () => {
     const meal = createdMeal.output;
 
     await publishQualityFixtures(ctx.db, "meal");
-    const row = (await findFastProblems(ctx.db)).understatedCostMeals.find(
+    const row = (await problemItems(ctx.db, "understatedCostMeals")).find(
       (candidate) => candidate.id === meal.id,
     );
 
@@ -643,7 +654,7 @@ describe("problems — understated meal cost", () => {
     ).output;
 
     await publishQualityFixtures(ctx.db, "meal");
-    const row = (await findFastProblems(ctx.db)).understatedCostMeals.find(
+    const row = (await problemItems(ctx.db, "understatedCostMeals")).find(
       (candidate) => candidate.id === meal.id,
     );
 
@@ -664,9 +675,14 @@ describe("problems — understated meal cost", () => {
 
 describe("problems — charges not reconciling", () => {
   const ctx = withTestDb();
-  const publishedProblems: typeof findFastProblems = async (...args) => {
+  const publishedProblems = async (_db: Database) => {
     await publishQualityFixtures(ctx.db, "purchase");
-    return findFastProblems(...args);
+    return {
+      purchasesNotReconciling: await problemItems(
+        ctx.db,
+        "purchasesNotReconciling",
+      ),
+    };
   };
 
   const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
@@ -832,7 +848,7 @@ describe("problems — duplicate spend candidates", () => {
     unwrap(createRepoEntity(ctx, "expense", makeExpenseInput(overrides)));
 
   const candidates = async () =>
-    (await findFastProblems(ctx.db)).duplicateSpendCandidates;
+    await problemItems(ctx.db, "duplicateSpendCandidates");
 
   it("flags an unlinked lump matching a purchase's expense total", async () => {
     await seedLine({
@@ -889,9 +905,14 @@ describe("problems — duplicate spend candidates", () => {
 // stated total against its own lines and never looks at a card statement.
 describe("problems — purchase financial settlement mismatches", () => {
   const ctx = withTestDb();
-  const publishedProblems: typeof findFastProblems = async (...args) => {
+  const publishedProblems = async (_db: Database) => {
     await publishQualityFixtures(ctx.db, "purchase");
-    return findFastProblems(...args);
+    return {
+      purchaseFinancialSettlementMismatches: await problemItems(
+        ctx.db,
+        "purchaseFinancialSettlementMismatches",
+      ),
+    };
   };
 
   const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
@@ -1218,7 +1239,7 @@ describe("problems — weight-sold products", () => {
       bookLines(narrow.id, [4.01, 4.32, 4.55, 4.77]),
     ]);
 
-    const rows = (await findFastProblems(ctx.db)).weightSoldProducts;
+    const rows = await problemItems(ctx.db, "weightSoldProducts");
     const ids = rows.map((row) => row.id);
 
     expect(ids).toContain(weighed.id);
@@ -1252,7 +1273,7 @@ describe("problems — weight-sold products", () => {
     );
     await bookLines(mapped.id, [2.7, 3.38, 5.45, 6.09]);
 
-    const ids = (await findFastProblems(ctx.db)).weightSoldProducts.map(
+    const ids = (await problemItems(ctx.db, "weightSoldProducts")).map(
       (row) => row.id,
     );
 
@@ -1435,3 +1456,17 @@ describe("Problems maintenance coordinator", () => {
     ]);
   });
 });
+
+async function problemItems<K extends ProblemKey>(db: Database, key: K) {
+  const clients = createTestRequestContext(db);
+  const result = await findProblemByType(
+    db,
+    key,
+    clients.upcLookupClient,
+    clients.usdaClient,
+  );
+  // The schema selected by K validates this exact Problem card family.
+  return allProblemsSchema.shape[key].parse(
+    result.items,
+  ) as import("zod").output<(typeof allProblemsSchema.shape)[K]>;
+}

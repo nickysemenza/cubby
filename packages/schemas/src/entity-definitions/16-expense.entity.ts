@@ -2171,6 +2171,10 @@ Rules:
   },
   extensions: {
     ports: {
+      reports: {
+        module: "~/server/domains/expense/repo/report-bindings",
+        export: "reportBindings",
+      },
       repository: {
         module: "~/server/domains/expense/repo/repository",
         export: "expenseRepository",

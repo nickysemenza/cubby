@@ -64,7 +64,6 @@ const derivedRangeEntry = (
   const options = [
     ...(range.int ? ["int:true"] : []),
     ...(range.nonnegative ? ["nonnegative:true"] : []),
-    ...(range.finite ? ["finite:true"] : []),
     ...(range.describe === null
       ? []
       : [

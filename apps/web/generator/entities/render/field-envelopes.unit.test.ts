@@ -98,7 +98,7 @@ describe("recursive field projections", () => {
     });
     const artifacts = renderKernelBindingsArtifacts([compiled]);
     const runtime = artifacts.find((artifact) =>
-      artifact.relativePath.endsWith("entity-kernel-bindings.gen.ts"),
+      artifact.relativePath.endsWith("entity-kernel-runtime.gen.ts"),
     );
     expect(runtime?.source).toContain("createLedgerPartyDefaultRepository");
     expect(runtime?.source).toContain(

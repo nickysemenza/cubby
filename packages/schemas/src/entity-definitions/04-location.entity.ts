@@ -392,7 +392,7 @@ Rules:
           key: "productId",
           kind: "identifier",
           nullable: true,
-          readKeyOverride: "product",
+          readKey: "product",
           reference: { entity: "product" },
           control: { kind: "specialized", renderer: "entity-select" },
           display: { list: false },
@@ -433,7 +433,7 @@ Rules:
           key: "product",
           kind: "json",
           nullable: true,
-          labelOverride: "Is a",
+          label: "Is a",
           display: {
             columnGroup: "Place",
             detail: false,
@@ -1153,6 +1153,10 @@ Rules:
     },
     extensions: {
       ports: {
+        reports: {
+          module: "~/server/domains/location/repo/report-bindings",
+          export: "reportBindings",
+        },
         repository: {
           module: "~/server/domains/location/repo/repository",
           export: "locationRepository",

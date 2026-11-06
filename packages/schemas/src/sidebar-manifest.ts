@@ -345,16 +345,6 @@ export const SIDEBAR_SECTIONS = [
         route: "/suggestions",
         sfSymbol: "lightbulb",
       },
-      {
-        label: "Entity explorer",
-        route: "/entities",
-        sfSymbol: "point.3.connected.trianglepath.dotted",
-      },
-      {
-        label: "Graph",
-        route: "/graph",
-        sfSymbol: "point.3.connected.trianglepath.dotted",
-      },
     ],
   },
   {

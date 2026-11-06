@@ -10,7 +10,6 @@ export function RelatedPreviewCell({
   group,
   loading,
   error,
-  source,
   relationship,
 }: {
   group?: RelatedPreviewGroup;
@@ -31,12 +30,9 @@ export function RelatedPreviewCell({
       trailing={
         relationship ? (
           <Link
-            to="/connections"
-            search={{
-              source,
-              id: group.sourceId,
-              view: `relation:${relationship}`,
-            }}
+            to="/$shortcode"
+            params={{ shortcode: group.sourceId }}
+            hash="relationships"
             className="text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
             aria-label={`View all ${group.totalCount} related records`}
             onClick={(event) => event.stopPropagation()}

@@ -2,7 +2,10 @@ import { shortcode } from "@cubby/schemas/identifiers";
 import { runWorkLabel } from "@cubby/schemas/run-fields";
 import { describe, expect, it } from "vitest";
 
-import { runStepsBlocks, type RunStepsReport } from "./run";
+import {
+  runStepsBlocks,
+  type RunStepsReport,
+} from "~/server/domains/run/repo/report-run";
 
 type Step = RunStepsReport["steps"][number];
 

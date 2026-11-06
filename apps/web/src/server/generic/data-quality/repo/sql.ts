@@ -54,14 +54,6 @@ export const activeExceptionSql = (
     : null;
 
 /** The check applies to the row; an unpublished row applies nowhere. */
-export const expectedCondition = (
-  entity: ScoredEntity,
-  check: DataCheck,
-  t: ScoredTable = storedEntryFor(entity).table,
-): SQL =>
-  group(
-    sql`coalesce(${storedCheckStateSql(entity, check, t)}, ${state("not_applicable")}) <> ${state("not_applicable")}`,
-  );
 
 /** An unwaived published gap. */
 export const gapCondition = (

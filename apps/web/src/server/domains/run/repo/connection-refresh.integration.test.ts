@@ -24,8 +24,8 @@ import {
   publishEntityConnection,
   readEntityConnections,
 } from "~/server/domains/connection/repo/entity-connections";
+import { getEntityRecommendations } from "~/server/domains/connection/service/connection-recommendations";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
-import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";

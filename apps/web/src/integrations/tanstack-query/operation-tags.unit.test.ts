@@ -15,7 +15,7 @@ import {
 } from "./cache-tags";
 import { entityGraph } from "./generated/domains/entityGraph.gen";
 import { entityMedia } from "./generated/domains/entityMedia.gen";
-import { recommendations } from "./generated/domains/recommendations.gen";
+
 const moduleExportsSchema = z.record(z.string(), z.unknown());
 const domainModules = import.meta.glob("./generated/domains/*.gen.ts", {
   eager: true,
@@ -136,19 +136,11 @@ describe("operation cache tags", () => {
         relatedDataTags,
       ],
     },
-    ...[entityGraph.explore, entityGraph.graph, entityGraph.graphPaths].map(
-      (operation) => ({
-        query: operation.id,
-        tags: operation.definition.tags,
-        refreshedBy: allEntities.map((entity) => entityRipple(entity)),
-      }),
-    ),
-    {
-      // Placement eligibility and labels change when locations change.
-      query: "recommendations.forEntity",
-      tags: recommendations.forEntity.definition.tags,
-      refreshedBy: [entityRipple("location")],
-    },
+    ...[entityGraph.explore, entityGraph.graph].map((operation) => ({
+      query: operation.id,
+      tags: operation.definition.tags,
+      refreshedBy: allEntities.map((entity) => entityRipple(entity)),
+    })),
   ])(
     "refreshes $query after its source records change",
     ({ tags, refreshedBy }) => {

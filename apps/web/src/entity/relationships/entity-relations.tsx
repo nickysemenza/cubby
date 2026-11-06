@@ -24,7 +24,6 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { useEntityMetadata } from "~/entity/metadata";
-import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
@@ -52,7 +51,6 @@ import {
   visibleNeighborhoodKeys,
   visitGraphRecord,
 } from "./entity-graph-state";
-import { GraphExplorer } from "./graph-explorer";
 
 const VIEW_OPTIONS = [
   { value: "list", label: "List", icon: <ListIcon className="size-4" /> },
@@ -106,7 +104,6 @@ const atCapacity = (data: EntityGraphOutput) =>
 type EntityGraphOperations = {
   explore: typeof entityGraph.explore;
   graph: typeof entityGraph.graph;
-  graphPaths?: typeof entityGraph.graphPaths;
   connections?: typeof entityGraph.connections;
 };
 
@@ -116,7 +113,6 @@ export function EntityRelations({
   state,
   onStateChange,
   operations = entityGraph,
-  placement = "explorer",
 }: {
   entity: Entity;
   sourceId: string;
@@ -129,61 +125,13 @@ export function EntityRelations({
   onStateChange?: (state: EntityRelationsState) => void;
   operations?: EntityGraphOperations;
 }) {
-  const [localView, setLocalView] = useState<"list" | "graph">("list");
-  const router = useRouter();
-  const root = useMemo(
-    () => ({ entityKind: entity, entityId: sourceId }),
-    [entity, sourceId],
-  );
   if (!supportsEntityGraph(entity)) return null;
-  if (placement === "detail")
-    return (
-      <Stack gap="md">
-        <RelationshipRecommendations source={root} />
-        <GraphExplorer
-          key={`${entity}:${sourceId}`}
-          root={root}
-          operations={operations}
-          embedded
-          onRootChange={(value) =>
-            void router.navigate({
-              to: "/graph",
-              search: { entity: value.entityKind, root: value.entityId },
-            })
-          }
-        />
-      </Stack>
-    );
-  if ((state?.view ?? localView) === "graph")
-    return (
-      <GraphExplorer
-        key={`${entity}:${sourceId}`}
-        root={root}
-        initialSelected={state?.selected}
-        initialDestination={state?.destination}
-        operations={operations}
-        onRootChange={(value) =>
-          void router.navigate({
-            to: "/graph",
-            search: { entity: value.entityKind, root: value.entityId },
-          })
-        }
-        onNavigationChange={(navigation) =>
-          onStateChange?.({ ...state, view: "graph", ...navigation })
-        }
-        onList={() => {
-          setLocalView("list");
-          onStateChange?.({ ...state, view: "list" });
-        }}
-      />
-    );
   return (
     <EntityRelationsSession
       key={`${entity}:${sourceId}`}
       root={{ entityKind: entity, entityId: sourceId }}
       state={state}
       onStateChange={(next) => {
-        setLocalView(next.view ?? "list");
         onStateChange?.(next);
       }}
       operations={operations}
@@ -387,18 +335,7 @@ function useEntityRelationsModel({
     visibleCounts,
     collapsed,
   );
-  const destination = refFromKey(current.destination);
-  const paths = useQuery({
-    ...(operations.graphPaths ?? entityGraph.graphPaths).queryOptions({
-      start: selectedRef,
-      destination: destination ?? selectedRef,
-    }),
-    enabled: Boolean(destination),
-  });
-  const [pathIndex, setPathIndex] = useState(0);
-  const selectedEdge = [...data.edges, ...(paths.data?.edges ?? [])].find(
-    (edge) => edge.id === selectedEdgeId,
-  );
+  const selectedEdge = data.edges.find((edge) => edge.id === selectedEdgeId);
 
   return {
     root,
@@ -429,10 +366,6 @@ function useEntityRelationsModel({
     reload,
     text,
     neighborhood,
-    destination,
-    paths,
-    pathIndex,
-    setPathIndex,
     selectedRef,
   };
 }
@@ -459,12 +392,8 @@ function EntityRelationsContent(
   model: ReturnType<typeof useEntityRelationsModel>,
 ) {
   const {
-    root,
     router,
     current,
-    trail,
-    cursor,
-    selectedKey,
     change,
     initial,
     loading,
@@ -480,10 +409,6 @@ function EntityRelationsContent(
     showMore,
     text,
     neighborhood,
-    destination,
-    paths,
-    pathIndex,
-    setPathIndex,
     selectedRef,
   } = model;
   const relationshipOptions = useMemo<PickerOption[]>(
@@ -550,25 +475,6 @@ function EntityRelationsContent(
         <span className="text-xs text-muted-foreground">
           Depth counts declared relationship hops.
         </span>
-        <Link
-          to="/entities"
-          search={{
-            tab: "explore",
-            entity: root.entityKind,
-            root: root.entityId,
-            view: "graph",
-            layout: current.layout,
-            selected: selectedKey,
-            trail,
-            cursor,
-            collapsed: current.collapsed,
-            destination: current.destination,
-            depth: current.depth,
-          }}
-          className="text-sm text-primary hover:underline"
-        >
-          Open explorer
-        </Link>
       </Row>
       <Row wrap gap="sm">
         <Input
@@ -602,13 +508,7 @@ function EntityRelationsContent(
         />
       </Row>
       <VisitedRecords model={model} />
-      <GraphPathPanel
-        paths={paths}
-        destination={destination}
-        pathIndex={pathIndex}
-        setPathIndex={setPathIndex}
-        change={change}
-      />
+
       <ExplorationCompletion data={initial.data} />
       {(data.truncated || atCapacity(data)) && (
         <output className="text-sm text-muted-foreground">
@@ -955,92 +855,6 @@ function ExplorationCompletion({
       {reason}
       {suffix}
     </p>
-  );
-}
-
-function GraphPathPanel({
-  paths,
-  destination,
-  pathIndex,
-  setPathIndex,
-  change,
-}: Pick<
-  ReturnType<typeof useEntityRelationsModel>,
-  "paths" | "destination" | "pathIndex" | "setPathIndex" | "change"
->) {
-  return (
-    <Panel tone="default" render={<section />} aria-label="Find a path">
-      <Stack gap="sm">
-        <EntityGraphPicker
-          label="Destination"
-          placeholder="Find a destination record…"
-          onSelect={(value) => {
-            setPathIndex(0);
-            change({
-              destination: graphRefKey({
-                entityKind: value.entity,
-                entityId: value.id,
-              }),
-              view: "graph",
-              layout: "flow",
-            });
-          }}
-        />
-        <Description size="xs">
-          Path search checks both directions across all records. The filters
-          above only affect explored records.
-        </Description>
-        {paths.isFetching && <output>Searching for paths…</output>}
-        {paths.isError && (
-          <ErrorDisplay
-            error={paths.error}
-            title="paths"
-            onRetry={() => void paths.refetch()}
-          />
-        )}
-        {destination && paths.data?.paths.length === 0 && (
-          <p>
-            {paths.data.completion === "exhausted"
-              ? "No connection exists."
-              : paths.data.completion === "depth-limit"
-                ? "No connection was found within eight hops."
-                : "Search capacity was reached before a connection could be confirmed."}
-          </p>
-        )}
-        {destination &&
-          paths.data &&
-          !paths.data.shortestPathCertain &&
-          paths.data.paths.length > 0 && (
-            <Description size="xs">
-              Search capacity was reached; these candidate paths may not be the
-              shortest.
-            </Description>
-          )}
-        {destination && paths.data && paths.data.paths.length > 0 && (
-          <Row wrap gap="sm">
-            {paths.data.paths.slice(0, 3).map((item, index) => (
-              <Button
-                key={item.nodeRefs.map(graphRefKey).join("→")}
-                size="sm"
-                variant={index === pathIndex ? "default" : "outline"}
-                onClick={() => setPathIndex(index)}
-              >
-                Path {index + 1} · {item.edgeIds.length} hops
-              </Button>
-            ))}
-          </Row>
-        )}
-        {destination && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => change({ destination: undefined })}
-          >
-            Return to explored records
-          </Button>
-        )}
-      </Stack>
-    </Panel>
   );
 }
 

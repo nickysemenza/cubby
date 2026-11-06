@@ -290,7 +290,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "receivedAt",
         kind: "timestamp",
         nullable: true,
-        labelOverride: "Received",
+        label: "Received",
         display: { columnGroup: "Message", format: "timestamp" },
         validation: readOnly(dateTime.nullable()),
       },
@@ -298,7 +298,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "classification",
         kind: "enum",
         nullable: true,
-        labelOverride: "Relevance",
+        label: "Relevance",
         control: { kind: "select", options: relevanceOptions },
         // The list cell names the deciding stage, e.g. "Uncertain · Rule".
         display: {
@@ -314,7 +314,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "classificationStage",
         kind: "enum",
         nullable: true,
-        labelOverride: "Relevance stage",
+        label: "Relevance stage",
         control: { kind: "select", options: stageOptions },
         display: {
           columnGroup: "Review",
@@ -329,7 +329,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "classificationReason",
         kind: "text",
         nullable: true,
-        labelOverride: "Relevance reason",
+        label: "Relevance reason",
         display: { columnGroup: "Review", listHidden: true },
         validation: readOnly(z.string().nullable()),
       },
@@ -337,7 +337,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "reviewedClassification",
         kind: "enum",
         nullable: true,
-        labelOverride: "Reviewed relevance",
+        label: "Reviewed relevance",
         control: { kind: "select", options: relevanceOptions },
         display: {
           columnGroup: "Review",
@@ -370,7 +370,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "reviewedClassificationReason",
         kind: "text",
         nullable: true,
-        labelOverride: "Review reason",
+        label: "Review reason",
         display: { list: false },
         provenance: {
           kind: "derived",
@@ -392,7 +392,7 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "mailboxId",
         kind: "text",
-        labelOverride: "Mailbox",
+        label: "Mailbox",
         display: { columnGroup: "Message", listHidden: true },
         validation: readOnly(z.string()),
       },
@@ -400,7 +400,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "ledgerPartyId",
         kind: "identifier",
         reference: { entity: "ledgerParty" },
-        labelOverride: "Owner",
+        label: "Owner",
         display: { list: false, labelPath: "ledgerPartyName" },
         validation: readOnly(ledgerPartyShortcode),
       },
@@ -420,7 +420,7 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "messageId",
         kind: "text",
-        labelOverride: "Provider message ID",
+        label: "Provider message ID",
         display: { list: false },
         validation: readOnly(z.string()),
       },
@@ -456,7 +456,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "identifier",
         nullable: true,
         reference: { entity: "run" },
-        labelOverride: "Processing Run",
+        label: "Processing Run",
         display: { list: false },
         validation: readOnly(runShortcode.nullable()),
       },
@@ -509,7 +509,7 @@ export const { definition, readSchemas } = defineEntityModel({
         storedPath: ["linkState"],
         storedProjection: true,
         kind: "enum",
-        labelOverride: "Link",
+        label: "Link",
         control: { kind: "select", options: linkStateOptions },
         provenance: {
           kind: "derived",
@@ -553,7 +553,7 @@ export const { definition, readSchemas } = defineEntityModel({
         storedPath: ["purchaseLinks"],
         storedProjection: true,
         kind: "json",
-        labelOverride: "Purchases",
+        label: "Purchases",
         provenance: {
           kind: "derived",
           sources: [
@@ -593,7 +593,7 @@ export const { definition, readSchemas } = defineEntityModel({
         storedKey: "relationshipFacts",
         storedProjection: true,
         kind: "enum",
-        labelOverride: "Import",
+        label: "Import",
         control: { kind: "select", options: [...importOutcomeOptions] },
         explanation: {
           ruleId: "email.import-outcome",
@@ -1130,6 +1130,10 @@ export const { definition, readSchemas } = defineEntityModel({
   },
   extensions: {
     ports: {
+      reports: {
+        module: "~/server/domains/email/repo/report-bindings",
+        export: "reportBindings",
+      },
       fieldEnvelope: {
         module: "~/server/domains/email/repo/field-envelope",
         export: "projectEmailFieldEnvelopes",

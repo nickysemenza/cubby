@@ -511,7 +511,7 @@ Rules:
         key: "stockTracked",
         kind: "boolean",
         nullable: true,
-        labelOverride: "Stock tracking",
+        label: "Stock tracking",
         control: { kind: "checkbox" },
         display: { columnGroup: "Classification", listHidden: true },
         resolution: {

@@ -18,6 +18,7 @@ import {
   purchase as purchaseTable,
   run,
 } from "~/server/db/schema";
+import { emailReviewReport } from "~/server/domains/email/repo/report-email";
 import { queueSearchClassification } from "~/server/domains/purchase-import/repo/gmail/reclassify-state";
 import { startAgentRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -27,7 +28,6 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { emailReviewReport } from "./email";
 import { buildEntityReport } from "./index";
 
 describe("Email review report", () => {

@@ -2,12 +2,12 @@ import { searchHitSchema } from "@cubby/schemas/search";
 import { describe, expect, it } from "vitest";
 
 import type { VectorStorePort } from "~/server/generic/embedding/service/semantic/vector-store";
-
 import {
   buildPrefixTsQuery,
-  findRelatedSearchHits,
   searchTerms,
-} from "./search.service";
+} from "~/server/generic/search/repo/search-lexical";
+
+import { findRelatedSearchHits } from "./search.service";
 import type { RelatedSearchPort } from "./search.service";
 
 const unavailableVectorStore: VectorStorePort = {

@@ -24,11 +24,6 @@ export {
   connectionContract,
   entityGraphContract,
 } from "./entity-graph.contract";
-export { entityInspectorHealthContract } from "./entity-inspector-health.contract";
-export {
-  entityIntegrityContract,
-  integrityProblemsContract,
-} from "./entity-integrity.contract";
 export { entityListContract } from "./entity-list.contract";
 export { entityMediaContract } from "./entity-media.contract";
 export { entityReportContract } from "./entity-report.contract";
@@ -61,10 +56,7 @@ export {
   recipeAvailabilityContract,
   recipeStreamsContract,
 } from "./recipe.contract";
-export {
-  relatednessContract,
-  recommendationsContract,
-} from "./recommendations.contract";
+export { productMatchContract } from "./product-match.contract";
 export { relatedDataContract } from "./related-data.contract";
 export { runContract } from "./run.contract";
 export { runDetailContract } from "./run-detail.contract";

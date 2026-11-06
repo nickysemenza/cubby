@@ -11,10 +11,9 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
-
-import { composeExpenseSettlementSection } from "./expense-settlement";
-import { composeFinancialSettlementSection } from "./purchase-financial-settlement";
-import { composeReconciliationSection } from "./purchase-reconciliation";
+import { composeExpenseSettlementSection } from "~/server/domains/expense/repo/report-expense-settlement";
+import { composeFinancialSettlementSection } from "~/server/domains/purchase/repo/report-purchase-financial-settlement";
+import { composeReconciliationSection } from "~/server/domains/purchase/repo/report-purchase-reconciliation";
 
 const pur = shortcode("PUR-2345");
 const ftx = (suffix: string) =>

@@ -22,17 +22,12 @@ import {
   ingredientWithUnusedAliasesSchema,
   staleIngredientParseSchema,
   AUTO_FIX_PROBLEM_KEYS,
-  type CoverageTotals,
   ingredientWithPartialCoverageSchema,
   type MaintenanceCounts,
   type ProblemKey,
   type ProblemsCount,
-  type ProblemsCoverage,
   type ProblemsFast,
-  type ProblemsTracker,
-  type ProblemsUpc,
   problemsCountSchema,
-  productWithBetterUpcDataSchema,
   productWithIslandedMappingsSchema,
   TRACKER_PROBLEM_KEY_BY_TYPE,
   projectAttentionProblemKeys,
@@ -44,10 +39,7 @@ import type {
   ProjectAttentionIncompleteIds,
   ProjectAttentionType,
 } from "@cubby/schemas/project";
-import {
-  projectAttentionItemSchema,
-  projectAttentionTypeSchema,
-} from "@cubby/schemas/project";
+import { projectAttentionTypeSchema } from "@cubby/schemas/project";
 import { rawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
 import {
   isMiscProduct,
@@ -75,9 +67,7 @@ import { deleteIngredients } from "~/server/domains/ingredient/repo/deletion";
 import { countProductsWithNoImagesWithGtin } from "~/server/domains/product/repo/analytics";
 import {
   selectProductCoverageIdsPage,
-  getProductConversionCoverageFreshness,
   loadProductConversionCoverageProjection,
-  type ProductConversionCoverageFreshness,
   type ProductConversionCoverageProjection,
   writeProductConversionCoverageProjection,
 } from "~/server/domains/product/repo/conversion-coverage";
@@ -88,7 +78,6 @@ import { countStaleRecipeTotals } from "~/server/domains/recipe/repo/totals";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { batchEnrichWithFood } from "~/server/domains/usda-food/repo/usda-helpers";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
-import { findCoverageTotalsOnConnection } from "~/server/generic/problems/repo/detectors-coverage";
 import { loadAllocationDefectPresenters } from "~/server/generic/problems/repo/detectors-financial";
 import {
   findIngredientsWithUnusedAliases,
@@ -107,12 +96,7 @@ import {
   findStaleIngredientParses,
   type ReparsedStaleLineWrite,
 } from "~/server/generic/problems/repo/reparse";
-import {
-  type DiagnosticRunOptions,
-  type DiagnosticSampleResult,
-  type UpcLookupBatchPort,
-  runDiagnostic,
-} from "~/server/generic/problems/service/problem-diagnostics.service";
+import { type UpcLookupBatchPort } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { executeProblem } from "~/server/generic/problems/service/problem-execution.service";
 import {
   field,
@@ -536,51 +520,6 @@ type ExactProblemPage = Awaited<ReturnType<typeof executeProblem>>;
  * The typed diagnostic adapter is the sole dispatch point; this cast only
  * restores the existing card-presenter row type after that boundary.
  */
-const diagnosticItems = async <T extends readonly unknown[]>(
-  db: Database,
-  diagnostic: Parameters<typeof runDiagnostic>[1],
-  itemsSchema: z.ZodType<T>,
-): Promise<Omit<DiagnosticSampleResult, "items"> & { items: T }> => {
-  const result = await runDiagnostic(
-    db,
-    diagnostic,
-    {},
-    {
-      kind: "sample",
-      limit: 12,
-    },
-  );
-  return { ...result, items: itemsSchema.parse(result.items) };
-};
-
-const runExactProblemPages = async (
-  db: Database,
-  keys: readonly ProblemKey[],
-  options?: {
-    projectionFreshness?: ProductConversionCoverageFreshness;
-    concurrency?: number;
-    diagnostic?: DiagnosticRunOptions;
-    fieldsFor?: (key: ProblemKey) => readonly string[] | undefined;
-  },
-): Promise<Partial<Record<ProblemKey, ExactProblemPage>>> => {
-  const tasks: Record<string, () => Promise<ExactProblemPage>> = {};
-  for (const key of keys) {
-    tasks[key] = () =>
-      executeProblem(db, key, {
-        projectionFreshness: options?.projectionFreshness,
-        diagnostic: options?.diagnostic,
-        fields: options?.fieldsFor?.(key),
-      });
-  }
-  return await traceAllBounded(tasks, options?.concurrency ?? 4);
-};
-
-const exactSectionTotals = (
-  pages: Partial<Record<ProblemKey, ExactProblemPage>>,
-): Record<string, number> =>
-  Object.fromEntries(
-    Object.entries(pages).map(([key, page]) => [key, page.count]),
-  );
 
 /**
  * Presentation only for the two conversion cards. Membership/count/order came
@@ -1147,12 +1086,6 @@ const presentFastExactRows = (
  * before returning it; callers never reconstruct branded card types with a
  * structural assertion.
  */
-const presentFastExactProblem = <T>(
-  key: FastEntityProblemKey,
-  page: ExactProblemPage,
-  itemsSchema: z.ZodType<T>,
-  hydration?: FastProblemHydration,
-): T => itemsSchema.parse(presentFastExactRows(key, page, hydration));
 
 const presentSingleFastProblem = async (
   db: Database,
@@ -1230,321 +1163,8 @@ for (const key of FAST_ENTITY_PROBLEM_KEYS) {
 }
 
 /** Fast Problems stays DB-only: no WASM or provider calls. */
-export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
-  const exactKeys = FAST_ENTITY_PROBLEM_KEYS;
-
-  // Production traces show remote query waits in the 30–180ms range while a
-  // checkout costs ~20ms. Run the derived and entity-backed branches together,
-  // bounded to four tasks so the request-local max:5 pool retains one slot for
-  // a list task's own count/hydration query.
-  const [r, exact] = await Promise.all([
-    traceAllBounded(
-      {
-        runFindings: () =>
-          diagnosticItems(
-            db,
-            "import-findings",
-            allProblemsSchema.shape.runFindings,
-          ),
-        duplicateProductIdentities: () =>
-          diagnosticItems(
-            db,
-            "duplicate-product-identities",
-            allProblemsSchema.shape.duplicateProductIdentities,
-          ),
-        orphanedProducts: () =>
-          diagnosticItems(
-            db,
-            "orphaned-products",
-            allProblemsSchema.shape.orphanedProducts,
-          ),
-        unconnectedEntities: () =>
-          diagnosticItems(
-            db,
-            "unconnected-entities",
-            allProblemsSchema.shape.unconnectedEntities,
-          ),
-        partiallyImportedCookbooks: () =>
-          diagnosticItems(
-            db,
-            "partially-imported-cookbooks",
-            allProblemsSchema.shape.partiallyImportedCookbooks,
-          ),
-        toolsUsedOutsideOwnership: () =>
-          diagnosticItems(
-            db,
-            "tools-used-outside-ownership",
-            allProblemsSchema.shape.toolsUsedOutsideOwnership,
-          ),
-        imageMetadataOutcomes: () =>
-          diagnosticItems(
-            db,
-            "image-metadata-outcomes",
-            allProblemsSchema.shape.imageMetadataOutcomes,
-          ),
-        weightSoldProducts: () =>
-          diagnosticItems(
-            db,
-            "weight-sold-products",
-            allProblemsSchema.shape.weightSoldProducts,
-          ),
-        duplicateVendors: () =>
-          diagnosticItems(
-            db,
-            "duplicate-vendors",
-            allProblemsSchema.shape.duplicateVendors,
-          ),
-        duplicateSpendCandidates: () =>
-          diagnosticItems(
-            db,
-            "duplicate-spend-candidates",
-            allProblemsSchema.shape.duplicateSpendCandidates,
-          ),
-        duplicateFinancialTransactionSourceRefs: () =>
-          diagnosticItems(
-            db,
-            "duplicate-financial-transaction-source-refs",
-            allProblemsSchema.shape.duplicateFinancialTransactionSourceRefs,
-          ),
-        productIdentifiersOutsideIssuer: () =>
-          diagnosticItems(
-            db,
-            "product-identifiers-outside-issuer",
-            allProblemsSchema.shape.productIdentifiersOutsideIssuer,
-          ),
-        duplicateFinancialAccountSourceAliases: () =>
-          diagnosticItems(
-            db,
-            "duplicate-financial-account-source-aliases",
-            allProblemsSchema.shape.duplicateFinancialAccountSourceAliases,
-          ),
-        invalidFinancialJson: () =>
-          diagnosticItems(
-            db,
-            "invalid-financial-json",
-            allProblemsSchema.shape.invalidFinancialJson,
-          ),
-        incompleteTransactionImports: () =>
-          diagnosticItems(
-            db,
-            "incomplete-transaction-imports",
-            allProblemsSchema.shape.incompleteTransactionImports,
-          ),
-        referentialLivenessViolations: () =>
-          diagnosticItems(
-            db,
-            "referential-liveness-violations",
-            allProblemsSchema.shape.referentialLivenessViolations,
-          ),
-        dependencyCycles: () =>
-          diagnosticItems(
-            db,
-            "dependency-cycles",
-            allProblemsSchema.shape.dependencyCycles,
-          ),
-      },
-      2,
-    ),
-    runExactProblemPages(db, exactKeys, {
-      concurrency: 2,
-      fieldsFor: (key) =>
-        isFastEntityProblemKey(key)
-          ? fastExactPresenters[key].fields
-          : undefined,
-    }),
-  ]);
-  const legacy = {
-    runFindings: r.runFindings.items,
-    duplicateProductIdentities: r.duplicateProductIdentities.items,
-    orphanedProducts: r.orphanedProducts.items,
-    unconnectedEntities: r.unconnectedEntities.items,
-    partiallyImportedCookbooks: r.partiallyImportedCookbooks.items,
-    toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership.items,
-    imageMetadataOutcomes: r.imageMetadataOutcomes.items,
-    weightSoldProducts: r.weightSoldProducts.items,
-    duplicateVendors: r.duplicateVendors.items,
-    duplicateSpendCandidates: r.duplicateSpendCandidates.items,
-    duplicateFinancialTransactionSourceRefs:
-      r.duplicateFinancialTransactionSourceRefs.items,
-    duplicateFinancialAccountSourceAliases:
-      r.duplicateFinancialAccountSourceAliases.items,
-    productIdentifiersOutsideIssuer: r.productIdentifiersOutsideIssuer.items,
-    invalidFinancialJson: r.invalidFinancialJson.items,
-    incompleteTransactionImports: r.incompleteTransactionImports.items,
-    referentialLivenessViolations: r.referentialLivenessViolations.items,
-    dependencyCycles: r.dependencyCycles.items,
-  } satisfies Partial<Omit<ProblemsFast, "sectionTotals">>;
-
-  const derivedTotals = Object.fromEntries(
-    Object.entries(r).map(([key, result]) => [key, result.count]),
-  );
-
-  const page = (key: (typeof exactKeys)[number]): ExactProblemPage => {
-    const result = exact[key];
-    if (!result) throw new Error(`Missing canonical Problem result "${key}"`);
-    return result;
-  };
-  const [vendorExpenseCounts, allocationDefects, soldTotals] =
-    await Promise.all([
-      loadVendorLogoPresenterCounts(
-        db,
-        page("vendorsWithoutLogos").data.map((row) => row.id),
-      ),
-      loadAllocationDefectPresenters(
-        db,
-        page("financialTransactionAllocationDefects").data.map((row) => row.id),
-      ),
-      loadSoldButStockedPresenterTotals(
-        db,
-        page("soldButStillStocked").data.map((row) => row.id),
-      ),
-    ]);
-  const hydration = { vendorExpenseCounts, allocationDefects, soldTotals };
-
-  return {
-    ...legacy,
-    duplicateInventory: presentFastExactProblem(
-      "duplicateInventory",
-      page("duplicateInventory"),
-      allProblemsSchema.shape.duplicateInventory,
-    ),
-    soldButStillStocked: presentFastExactProblem(
-      "soldButStillStocked",
-      page("soldButStillStocked"),
-      allProblemsSchema.shape.soldButStillStocked,
-      hydration,
-    ),
-    kitsCountedTwice: presentFastExactProblem(
-      "kitsCountedTwice",
-      page("kitsCountedTwice"),
-      allProblemsSchema.shape.kitsCountedTwice,
-    ),
-    unlinkedExitExpenses: presentFastExactProblem(
-      "unlinkedExitExpenses",
-      page("unlinkedExitExpenses"),
-      allProblemsSchema.shape.unlinkedExitExpenses,
-    ),
-    purchaselessExitExpenses: presentFastExactProblem(
-      "purchaselessExitExpenses",
-      page("purchaselessExitExpenses"),
-      allProblemsSchema.shape.purchaselessExitExpenses,
-    ),
-    productsWithNoImages: presentFastExactProblem(
-      "productsWithNoImages",
-      page("productsWithNoImages"),
-      allProblemsSchema.shape.productsWithNoImages,
-    ),
-    imageProcessingIssues: presentFastExactProblem(
-      "imageProcessingIssues",
-      page("imageProcessingIssues"),
-      allProblemsSchema.shape.imageProcessingIssues,
-    ),
-    understatedCostMeals: presentFastExactProblem(
-      "understatedCostMeals",
-      page("understatedCostMeals"),
-      allProblemsSchema.shape.understatedCostMeals,
-    ),
-    unknownParkedItems: presentFastExactProblem(
-      "unknownParkedItems",
-      page("unknownParkedItems"),
-      allProblemsSchema.shape.unknownParkedItems,
-    ),
-    inventoryWithoutPricePath: presentFastExactProblem(
-      "inventoryWithoutPricePath",
-      page("inventoryWithoutPricePath"),
-      allProblemsSchema.shape.inventoryWithoutPricePath,
-    ),
-    vendorsWithoutLogos: presentFastExactProblem(
-      "vendorsWithoutLogos",
-      page("vendorsWithoutLogos"),
-      allProblemsSchema.shape.vendorsWithoutLogos,
-      hydration,
-    ),
-    purchasesNotReconciling: presentFastExactProblem(
-      "purchasesNotReconciling",
-      page("purchasesNotReconciling"),
-      allProblemsSchema.shape.purchasesNotReconciling,
-    ),
-    purchaseFinancialSettlementMismatches: presentFastExactProblem(
-      "purchaseFinancialSettlementMismatches",
-      page("purchaseFinancialSettlementMismatches"),
-      allProblemsSchema.shape.purchaseFinancialSettlementMismatches,
-    ),
-    financialTransactionAllocationDefects: presentFastExactProblem(
-      "financialTransactionAllocationDefects",
-      page("financialTransactionAllocationDefects"),
-      allProblemsSchema.shape.financialTransactionAllocationDefects,
-      hydration,
-    ),
-    sectionTotals: { ...derivedTotals, ...exactSectionTotals(exact) },
-  };
-};
-
-export const findCoverageTotals = (db: Database): Promise<CoverageTotals> =>
-  findCoverageTotalsOnConnection(db);
 
 /** Coverage reads serve the persisted projection; broad Jobs own convergence. */
-export const findCoverageProblems = async (
-  db: Database,
-  usdaClient: UsdaFoodBatchPort,
-): Promise<ProblemsCoverage> => {
-  const freshness = await getProductConversionCoverageFreshness(db);
-  const exact = await runExactProblemPages(
-    db,
-    ["ingredientsWithPartialCoverage", "productsWithIslandedMappings"],
-    { projectionFreshness: freshness },
-  );
-  const ingredientsPage = exact.ingredientsWithPartialCoverage;
-  const islandsPage = exact.productsWithIslandedMappings;
-  if (!ingredientsPage || !islandsPage) {
-    throw new Error("Missing canonical conversion coverage Problem result");
-  }
-  const presented = await presentCoverageExactRows(
-    db,
-    usdaClient,
-    ingredientsPage,
-    islandsPage,
-  );
-  const titleSized = await diagnosticItems(
-    db,
-    "title-derivable-unit-size",
-    allProblemsSchema.shape.productsWithTitleDerivableSize,
-  );
-  return {
-    ...presented,
-    // `items` is a sample; `count` is the real population, and the section
-    // total must be the latter or the card under-reports a ~1,400-row backlog.
-    productsWithTitleDerivableSize: titleSized.items,
-    sectionTotals: {
-      ...exactSectionTotals(exact),
-      productsWithTitleDerivableSize: titleSized.count,
-    },
-    freshness,
-  };
-};
-
-const findProductsWithBetterUpcData = async (
-  db: Database,
-  upcLookupClient: UpcLookupBatchPort,
-): Promise<{
-  products: ProblemItem<"productsWithBetterUpcData">[];
-  count: number;
-  freshness: NonNullable<
-    Awaited<ReturnType<typeof runDiagnostic>>["freshness"]
-  >;
-}> => {
-  const result = await runDiagnostic(db, "products-with-better-upc-data", {
-    upcLookupClient,
-  });
-  if (!result.freshness) {
-    throw new Error("UPC diagnostic adapter omitted its freshness contract");
-  }
-  return {
-    products: productWithBetterUpcDataSchema.array().parse(result.items),
-    count: result.count,
-    freshness: result.freshness,
-  };
-};
 
 // Household-tracker group — the attention rules the /projects overview
 // already computes (overdue tasks, stalled projects, missing budgets, spend
@@ -1611,85 +1231,6 @@ const presentTrackerProblem = (
     // visible as a count/rows mismatch rather than silently wrong prose.
     return item ? [item] : [];
   });
-};
-
-export const findTrackerProblems = async (
-  db: Database,
-): Promise<ProblemsTracker> => {
-  const exactKeys = TRACKER_PROBLEM_KEYS;
-  const attentionItems = await computeAttentionItems(db);
-  const exact = await runExactProblemPages(db, exactKeys, {
-    diagnostic: { attentionItems },
-    fieldsFor: (key) => (isTrackerEntityProblemKey(key) ? ["id"] : undefined),
-  });
-  const index = indexAttentionItems(attentionItems.items);
-  const page = (key: (typeof exactKeys)[number]): ExactProblemPage => {
-    const result = exact[key];
-    if (!result) throw new Error(`Missing canonical Problem result "${key}"`);
-    return result;
-  };
-  return {
-    incompleteProjectIds: attentionItems.incompleteProjectIds,
-    overdueTasks: presentTrackerProblem(
-      "overdueTasks",
-      page("overdueTasks"),
-      index,
-    ),
-    stalledProjects: presentTrackerProblem(
-      "stalledProjects",
-      page("stalledProjects"),
-      index,
-    ),
-    projectsMissingBudget: presentTrackerProblem(
-      "projectsMissingBudget",
-      page("projectsMissingBudget"),
-      index,
-    ),
-    projectsSpendBelowEstimate: presentTrackerProblem(
-      "projectsSpendBelowEstimate",
-      page("projectsSpendBelowEstimate"),
-      index,
-    ),
-    pastDuePlannedExpenses: presentTrackerProblem(
-      "pastDuePlannedExpenses",
-      page("pastDuePlannedExpenses"),
-      index,
-    ),
-    unclassifiedExpenses: presentTrackerProblem(
-      "unclassifiedExpenses",
-      page("unclassifiedExpenses"),
-      index,
-    ),
-    blockedWorkProjects: presentTrackerProblem(
-      "blockedWorkProjects",
-      page("blockedWorkProjects"),
-      index,
-    ),
-    projectsWithDateDrift: projectAttentionItemSchema
-      .array()
-      .parse(page("projectsWithDateDrift").items),
-    sectionTotals: {
-      ...exactSectionTotals(exact),
-    },
-  };
-};
-
-export const findUpcProblems = async (
-  db: Database,
-  upcLookupClient: UpcLookupBatchPort,
-): Promise<ProblemsUpc> => {
-  const {
-    products: productsWithBetterUpcData,
-    count,
-    freshness,
-  } = await findProductsWithBetterUpcData(db, upcLookupClient);
-  return {
-    productsWithBetterUpcData,
-    sectionTotals: {
-      productsWithBetterUpcData: count,
-    },
-    freshness,
-  };
 };
 
 /**

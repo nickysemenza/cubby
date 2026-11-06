@@ -7,12 +7,12 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { getEntityRecommendations } from "~/server/domains/connection/service/connection-recommendations";
 import { expenseHandlers } from "~/server/domains/expense/operations.server";
 import { readExpense, updateExpense } from "~/server/domains/expense/repo/crud";
 import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import { purchaseHandlers } from "~/server/domains/purchase/operations/purchase.server";
-import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";

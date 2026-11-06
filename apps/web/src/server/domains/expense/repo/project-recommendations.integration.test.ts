@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { unwrapDb } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
 import { snapshotJson } from "~/server/domains/connection/repo/connection-evidence";
+import { getEntityRecommendations } from "~/server/domains/connection/service/connection-recommendations";
 import {
   deleteExpenses,
   readExpense,
@@ -17,7 +18,6 @@ import {
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { projectContentDatesExcluding } from "~/server/domains/project/repo/analytics";
-import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson } from "~/server/lib/canonical-json";

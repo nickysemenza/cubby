@@ -458,7 +458,6 @@ type EntityFilterDescriptorMetadata = {
     kind: "number" | "date";
     int: boolean;
     nonnegative: boolean;
-    finite: boolean;
     describe: { lower: string; upper: string } | null;
   } | null;
 

@@ -1,5 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { EntityReportInput } from "@cubby/schemas/entity-report";
+import type {
+  EntityReportOut,
+  ReportBlock,
+  EntityReportInput,
+} from "@cubby/schemas/entity-report";
 
 import type { Database } from "~/server/db";
 import type { RequestServices } from "~/server/http/request-services";
@@ -43,3 +47,33 @@ export class ReportExecution {
     return result as Promise<T>;
   }
 }
+
+export const identityBuilder = <T>(
+  identity: ReportDependency<T>,
+  build: (db: Database, id: T) => Promise<ReportBlock[]>,
+) =>
+  reportDependency(async (execution): Promise<EntityReportOut> => ({
+    blocks: await build(execution.request.db, await execution.read(identity)),
+  }));
+
+type ReportBuilder = (
+  db: Database,
+  code: string,
+  viewer: ReportViewer,
+  actor: ActorContext,
+  cursor?: string,
+  services?: RequestServices["services"],
+) => Promise<EntityReportOut["blocks"] | EntityReportOut>;
+
+export const reportBuilder = (build: ReportBuilder) =>
+  reportDependency(async ({ request }): Promise<EntityReportOut> => {
+    const report = await build(
+      request.db,
+      request.id,
+      request.viewer,
+      request.actor,
+      request.cursor,
+      request.services,
+    );
+    return Array.isArray(report) ? { blocks: report } : report;
+  });

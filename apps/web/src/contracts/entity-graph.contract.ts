@@ -21,8 +21,6 @@ import {
   entityGraphInputSchema,
   entityGraphOutputSchema,
   entityGraphRootSchema,
-  entityGraphPathsInputSchema,
-  entityGraphPathsOutputSchema,
 } from "@cubby/schemas/entity-graph";
 import { allEntities } from "@cubby/schemas/entity-roster";
 import { z } from "zod";
@@ -79,11 +77,6 @@ export const entityGraphContract = defineContract(
         "Declared relations of up to 25 records, one hop per relation: `roots` are `{entityKind, entityId}` shortcodes, `relationshipKeys` narrows to the relations the kind declares, and `offset`/`limit` page each branch. A relation an entity declares needs no other tool.",
       input: entityGraphInputSchema,
       output: entityGraphOutputSchema,
-      cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
-    }),
-    graphPaths: query({
-      input: entityGraphPathsInputSchema,
-      output: entityGraphPathsOutputSchema,
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
     }),
     relation: query({

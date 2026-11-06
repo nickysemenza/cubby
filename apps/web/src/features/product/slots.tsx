@@ -5,7 +5,6 @@ import { type FunctionComponent, useMemo } from "react";
 import type { CollectionActionProps } from "~/entity/entity-detail/collection-actions";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
-import { RelatednessRail } from "~/entity/relatedness/relatedness-rail";
 import { FullNutrientBreakdown } from "~/features/nutrition/full-nutrient-breakdown";
 import { NutrientDensityStats } from "~/features/nutrition/nutrient-density-stats";
 import { ProductNutritionLabel } from "~/features/nutrition/product-nutrition-label";
@@ -129,14 +128,6 @@ export const ProductUnitMappings: DetailSlotComponent<"product"> = ({
     />
   );
 };
-
-export const ProductFitsWith: DetailSlotComponent<"product"> = ({
-  record: product,
-}) => (
-  <RelatednessRail
-    product={{ id: product.id, tags: fieldValueOf(product.fields.tags) ?? [] }}
-  />
-);
 
 /** The cookbooks whose physical copies this product is, from the server's report. */
 export const ProductCookbooks: DetailSlotComponent<"product"> = ({

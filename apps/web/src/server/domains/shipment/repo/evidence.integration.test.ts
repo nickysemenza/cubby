@@ -33,11 +33,11 @@ import {
   memberImportWorld,
   retainedMailFixture,
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
+import { shipmentTrackingReport } from "~/server/domains/shipment/repo/report-shipment";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
-import { shipmentTrackingReport } from "~/server/generic/entity-report/repo/shipment";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import { drainStoredDerived } from "~/server/testing/background-queue";

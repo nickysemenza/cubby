@@ -131,8 +131,8 @@ import {
   seedReferenceUniverse,
   setAtPath,
 } from "~/server/entity-kernel/reference-universe.fixtures";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";

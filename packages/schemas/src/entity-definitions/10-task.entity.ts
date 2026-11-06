@@ -567,7 +567,7 @@ export const { definition, readSchemas } = defineEntityModel({
         control: { kind: "dateRange" },
         display: {
           columnGroup: "Schedule",
-          columnIdOverride: "dueDate",
+          columnId: "dueDate",
           mobile: { slot: "meta", priority: 40, interactive: true },
         },
         validation: {
@@ -1667,6 +1667,10 @@ export const { definition, readSchemas } = defineEntityModel({
   },
   extensions: {
     ports: {
+      reports: {
+        module: "~/server/domains/task/repo/report-bindings",
+        export: "reportBindings",
+      },
       repository: {
         module: "~/server/domains/task/repo/repository",
         export: "taskRepository",

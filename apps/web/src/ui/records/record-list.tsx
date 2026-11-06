@@ -310,7 +310,7 @@ export function RecordMore({
   onClick,
 }: {
   label: string;
-  link?: Pick<LinkProps, "to" | "search" | "params">;
+  link?: Pick<LinkProps, "to" | "search" | "params" | "hash">;
   /** A prebuilt list URL (filters and sort encoded) when no typed route fits. */
   href?: string;
   onClick?: () => void;
@@ -424,30 +424,6 @@ export function RecordDot({
 }
 
 /** A 0–1 score as a short meter and a percentage. */
-export function RecordScore({
-  value,
-  label,
-}: {
-  value: number;
-  label: string;
-}) {
-  const percent = Math.round(Math.min(1, Math.max(0, value)) * 100);
-  return (
-    <span className="inline-flex items-center gap-1.5" title={label}>
-      <span
-        aria-hidden
-        className="relative h-1 w-10 overflow-hidden rounded-full bg-muted"
-      >
-        <span
-          className="absolute inset-y-0 left-0 rounded-full bg-foreground/60"
-          style={{ width: `${percent}%` }}
-        />
-      </span>
-      <span className="font-mono text-2xs">{percent}%</span>
-      <span className="sr-only">{label}</span>
-    </span>
-  );
-}
 
 /** How many record hops separate a connected record from its source. */
 export function RecordHops({ count }: { count: number }) {

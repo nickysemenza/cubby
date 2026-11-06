@@ -15,7 +15,7 @@ import { readMailCoverage } from "~/server/domains/purchase-import/repo/gmail/ma
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
 import { vendorMailQueries } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
-import { vendorMailSearchReport } from "~/server/generic/entity-report/repo/vendor";
+import { vendorMailSearchReport } from "~/server/domains/vendor/repo/report-vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { vendorScaffold } from "./vendor";

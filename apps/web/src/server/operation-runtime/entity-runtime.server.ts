@@ -1,12 +1,6 @@
-import { searchableEntitySchema } from "@cubby/schemas/search";
-import * as drizzle from "drizzle-orm";
-import { z } from "zod";
-
 import { entityDetailContract } from "~/contracts/entity-detail.contract";
 import { entityFilterOptionsContract } from "~/contracts/entity-filter-options.contract";
 import { entityGraphContract } from "~/contracts/entity-graph.contract";
-import { entityInspectorHealthContract } from "~/contracts/entity-inspector-health.contract";
-import { entityIntegrityContract } from "~/contracts/entity-integrity.contract";
 import { entityMutationContract } from "~/contracts/entity-mutation.contract";
 import { entityTimelineContract } from "~/contracts/entity-timeline.contract";
 import { generatedEntityRelationListCommandSchema } from "~/entity/generated/entity-relation-lists.gen";
@@ -16,7 +10,6 @@ import {
 } from "~/entity/generated/entity-timelines.gen";
 import { entityDetailInputSchema } from "~/entity/model/detail-contracts";
 import { loadEntityDetailSchemas } from "~/entity/model/read-schemas/loaders";
-import { getEntityCounts } from "~/server/domains/dashboard/repo/dashboard";
 import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import {
   entityBrowserMutationCommandSchema,
@@ -30,7 +23,6 @@ import {
 } from "~/server/generic/entity-detail/repo/detail-data";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getEntityGraphExplore } from "~/server/generic/entity-graph/repo/entity-graph-explore";
-import { getEntityGraphPaths } from "~/server/generic/entity-graph/repo/entity-graph-paths";
 import { withGraphPreviews } from "~/server/generic/entity-graph/service/graph-preview";
 import {
   getConnectedRecords,
@@ -38,18 +30,8 @@ import {
 } from "~/server/generic/entity-links/repo/connected-records";
 import { getEntityConnections } from "~/server/generic/entity-links/repo/entity-edge-source";
 import { runEntityTimeline } from "~/server/generic/entity-timeline/service/entity-timeline.ts";
-import { buildIntegrityCatalog } from "~/server/generic/integrity/repo/entity-integrity";
 import { getFilterOptions } from "~/server/generic/list/repo/filter-options";
-import { executeSearchDocumentSql } from "~/server/generic/search/repo/search-document";
-import { liveAliasSql } from "~/server/lib/live-row";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import { throwIfOperationAborted } from "~/server/operation-runtime/operation.server";
-
-const searchDocumentCountRowSchema = z.object({
-  entityKind: searchableEntitySchema,
-  documents: z.number().int().nonnegative(),
-  embeddings: z.number().int().nonnegative(),
-});
 
 export const entityDetailHandlers = implementOperationDomain(
   entityDetailContract,
@@ -115,8 +97,6 @@ export const entityGraphHandlers = implementOperationDomain(
       ),
     graph: async (context, input) =>
       withGraphPreviews(context, await getEntityGraph(context.db, input)),
-    graphPaths: async (context, input) =>
-      withGraphPreviews(context, await getEntityGraphPaths(context.db, input)),
     connections: (context, input) =>
       getEntityConnections(context.db, input, kernelScaffold),
     relation: async (context, input) => {
@@ -149,52 +129,5 @@ export const entityMutationHandlers = implementOperationDomain(
         );
       },
     },
-  },
-);
-
-export const entityInspectorHealthHandlers = implementOperationDomain(
-  entityInspectorHealthContract,
-  {
-    inspectorHealth: {
-      run: async (context) => {
-        const [counts, rows] = await Promise.all([
-          getEntityCounts(context.db),
-          executeSearchDocumentSql(
-            context.db,
-            searchDocumentCountRowSchema,
-            drizzle.sql`
-              SELECT
-                sd."entityKind" AS "entityKind",
-                count(DISTINCT sd."entityId")::int AS documents,
-                count(DISTINCT ee."entityId")::int AS embeddings
-              FROM "SearchDocument" sd
-              LEFT JOIN "EntityEmbedding" ee
-                ON ee."entityKind" = sd."entityKind"
-                AND ee."entityId" = sd."entityId"
-                AND ${liveAliasSql("ee")}
-              WHERE ${liveAliasSql("sd")}
-              GROUP BY sd."entityKind"
-            `,
-          ),
-        ]);
-        throwIfOperationAborted(context.signal);
-        return {
-          counts,
-          search: Object.fromEntries(
-            rows.map((row) => [
-              row.entityKind,
-              { documents: row.documents, embeddings: row.embeddings },
-            ]),
-          ),
-        };
-      },
-    },
-  },
-);
-
-export const entityIntegrityHandlers = implementOperationDomain(
-  entityIntegrityContract,
-  {
-    catalog: async () => buildIntegrityCatalog(),
   },
 );

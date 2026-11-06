@@ -77,11 +77,6 @@ const productionRelatedSearchPort: RelatedSearchPort = {
   vectorStore: productionVectorStore,
 };
 
-export {
-  buildPrefixTsQuery,
-  searchTerms,
-} from "~/server/generic/search/repo/search-lexical";
-
 const scopes = (entityKinds?: SearchableEntity[]) =>
   entityKinds?.length ? entityKinds : [...searchableEntities];
 

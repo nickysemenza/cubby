@@ -204,7 +204,7 @@ export const { definition, readSchemas } = defineEntityModel(
           audit: false,
           key: "meta",
           kind: "json",
-          labelOverride: "Source URL",
+          label: "Source URL",
           nullable: true,
           control: { kind: "specialized", renderer: "structured-field" },
           // The detail row is the source URL: read from the structured value, drawn as a link.
@@ -387,7 +387,7 @@ export const { definition, readSchemas } = defineEntityModel(
           audit: false,
           key: "sections",
           kind: "json",
-          labelOverride: "Composition",
+          label: "Composition",
           control: { kind: "specialized", renderer: "structured-field" },
           // The body renders in the workflow slot; this row is the composition summary.
           display: { detailLabelPath: "compositionLabel" },
@@ -497,7 +497,7 @@ export const { definition, readSchemas } = defineEntityModel(
         },
         {
           key: "protein",
-          labelOverride: "Protein (g)",
+          label: "Protein (g)",
           kind: "number",
           nullable: true,
           display: { detail: false, list: false, preview: true },
@@ -511,7 +511,7 @@ export const { definition, readSchemas } = defineEntityModel(
         },
         {
           key: "carbs",
-          labelOverride: "Carbs (g)",
+          label: "Carbs (g)",
           kind: "number",
           nullable: true,
           display: { detail: false, list: false, preview: true },
@@ -525,7 +525,7 @@ export const { definition, readSchemas } = defineEntityModel(
         },
         {
           key: "fat",
-          labelOverride: "Fat (g)",
+          label: "Fat (g)",
           kind: "number",
           nullable: true,
           display: { detail: false, list: false, preview: true },
@@ -542,7 +542,7 @@ export const { definition, readSchemas } = defineEntityModel(
           key: "sourceType",
           kind: "enum",
           nullable: true,
-          readKeyOverride: "source",
+          readKey: "source",
         },
         {
           output: false,
@@ -552,7 +552,7 @@ export const { definition, readSchemas } = defineEntityModel(
           key: "sourceUrl",
           kind: "text",
           nullable: true,
-          readKeyOverride: "source",
+          readKey: "source",
         },
         {
           output: false,
@@ -561,7 +561,7 @@ export const { definition, readSchemas } = defineEntityModel(
           key: "sourceLabel",
           kind: "text",
           nullable: true,
-          readKeyOverride: "source",
+          readKey: "source",
         },
         {
           output: false,
@@ -1335,6 +1335,10 @@ export const { definition, readSchemas } = defineEntityModel(
     },
     extensions: {
       ports: {
+        reports: {
+          module: "~/server/domains/recipe/repo/report-bindings",
+          export: "reportBindings",
+        },
         repository: {
           module: "~/server/domains/recipe/repo/repository",
           export: "recipeRepository",

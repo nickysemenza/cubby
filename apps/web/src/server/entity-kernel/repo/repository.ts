@@ -7,7 +7,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
  * One repository shape for every kernel entity.
  *
  * `defineRepository(entity, spec)` is the whole kernel binding: the generated
- * binding module (`entity-kernel-bindings.gen.ts`) imports each entity's
+ * binding module (`entity-kernel-runtime.gen.ts`) imports each entity's
  * repository export and hands it to the kernel as is. Methods take the kernel
  * context natively (`(ctx, …)`); everything a declaration already says is
  * derived rather than restated:

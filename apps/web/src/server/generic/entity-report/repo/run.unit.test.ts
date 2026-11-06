@@ -7,7 +7,6 @@ import {
 import { describe, expect, it } from "vitest";
 
 import type { RunDetail } from "~/contracts/run.contract";
-
 import {
   aiUsageBlocks,
   changesBlocks,
@@ -16,7 +15,7 @@ import {
   liveProgressBlocks,
   runLogBlocks,
   suggestionBlocks,
-} from "./run";
+} from "~/server/domains/run/repo/report-run";
 
 const RUN_ID = shortcode("RUN-4K7M");
 const FINDING_ID = "8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91";

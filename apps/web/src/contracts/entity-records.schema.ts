@@ -5,7 +5,7 @@ import { entitySchema } from "@cubby/schemas/entity";
 import { sortDirection } from "@cubby/schemas/pagination";
 import { z } from "zod";
 
-export const entityRecordSortSchema = z.enum([
+const entityRecordSortSchema = z.enum([
   "name",
   "kind",
   "id",
@@ -44,7 +44,7 @@ export const entityRecordSchema = z.object({
   updatedAt: dateTime,
   displayImages: displayImagesField,
 });
-export type EntityRecord = z.infer<typeof entityRecordSchema>;
+
 export const entityRecordsOutputSchema = z.object({
   items: z.array(entityRecordSchema),
   totalCount: z.number().int().nonnegative(),

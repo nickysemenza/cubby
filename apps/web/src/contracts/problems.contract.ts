@@ -4,7 +4,6 @@ import {
 } from "@cubby/schemas/mcp";
 import { mcpPaginationFields } from "@cubby/schemas/pagination";
 import {
-  allProblemsMcpSchema,
   deleteUnusedIngredientsInput,
   deleteUnusedIngredientsOut,
   dryRunPruneAliasesOut,
@@ -106,7 +105,7 @@ export const problemsContract = defineContract(
           .boolean()
           .optional()
           .describe(
-            "Defaults to counts when no type is supplied. Set false without a type for the complete report; true always returns counts.",
+            "Defaults to counts when no type is supplied. Without a type, returns counts; true always returns counts.",
           ),
         type: z
           .string()
@@ -118,7 +117,6 @@ export const problemsContract = defineContract(
       }),
       output: z.union([
         problemsCountSchema,
-        allProblemsMcpSchema,
         problemsTypeSliceOut,
         problemsUnknownTypeOut,
       ]),

@@ -22,8 +22,8 @@ import {
 } from "~/server/domains/purchase-import/operations/run-review";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
+import { importReportBlocks } from "~/server/domains/run/repo/report-run";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
-import { importReportBlocks } from "~/server/generic/entity-report/repo/run";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 import {

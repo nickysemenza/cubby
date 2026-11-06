@@ -31,16 +31,16 @@ import {
   saveConnectionFieldGuard,
   type ConnectionFieldGuardTargets,
 } from "~/server/domains/connection/repo/field-connections";
+import {
+  getEntityRecommendations,
+  getExpenseRecommendationPage,
+} from "~/server/domains/connection/service/connection-recommendations";
 import { prepareExpenseProjectRecommendationContexts } from "~/server/domains/expense/repo/project-recommendations";
 import {
   prepareProductPairPublications,
   productPairKey,
   type PreparedProductPairPublication,
 } from "~/server/domains/product/repo/match/product-match-candidate";
-import {
-  getEntityRecommendations,
-  getExpenseRecommendationPage,
-} from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { jsonValue } from "~/server/domains/run/repo/suggestion-sweep-state";

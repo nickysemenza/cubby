@@ -21,7 +21,7 @@ import {
 } from "~/server/db/schema";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
 import { createImageFixture } from "~/server/testing/repo.fixtures";

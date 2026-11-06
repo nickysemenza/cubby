@@ -449,6 +449,10 @@ export const { definition, readSchemas } = defineEntityModel(
     },
     extensions: {
       ports: {
+        reports: {
+          module: "~/server/domains/cookbook/repo/report-bindings",
+          export: "reportBindings",
+        },
         repository: {
           module: "~/server/domains/cookbook/repo/cookbook.repository",
           export: "cookbookRepository",
