@@ -21,8 +21,6 @@ import { financialSourceReferenceRows } from "~/server/domains/financial-transac
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { SuggestionRecordScope } from "~/server/generic/suggestions/repo/suggestion-touching";
 
-export { pendingRecommendationEligibility } from "~/server/generic/suggestions/repo/pending-admission";
-
 export const reviewSuggestion = alias(suggestionTable, "s");
 
 const referenceEntity = z.enum(shortcodeEntities);
@@ -76,49 +74,50 @@ export function relatedRecordMatch(
   );
 }
 
+const referenceFields = Object.entries(entityFieldModels).flatMap(
+  ([entity, model]) =>
+    model.fields.flatMap((field) => {
+      const target = referenceEntity.safeParse(field.reference?.entity);
+      return target.success
+        ? [{ entity, field: field.key, target: target.data }]
+        : [];
+    }),
+);
+const fieldValues = (value: SQL) =>
+  sql`CASE WHEN jsonb_typeof(${value}) = 'array' THEN ${value} ELSE jsonb_build_array(${value}) END`;
+const referenceValues = sql`${fieldValues(sql`s."suggestedValue"`)} || ${fieldValues(sql`s."currentValue"`)}`;
+
 export function fieldReferenceMatch(scope: SuggestionRecordScope) {
   return or(
-    ...Object.entries(entityFieldModels).flatMap(([entity, model]) =>
-      model.fields.flatMap((field) => {
-        const target = referenceEntity.safeParse(field.reference?.entity);
-        if (!target.success) return [];
-        const match = relatedRecordMatch(
-          scope,
-          target.data,
-          sql<string>`COALESCE(v->>'id', v #>> '{}')`,
-        );
-        if (!match) return [];
-        const values = (value: SQL) =>
-          sql`CASE WHEN jsonb_typeof(${value}) = 'array' THEN ${value} ELSE jsonb_build_array(${value}) END`;
-        return [
-          and(
-            eq(reviewSuggestion.entity, entity),
-            eq(reviewSuggestion.field, field.key),
-            sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${values(sql`s."suggestedValue"`)} || ${values(sql`s."currentValue"`)}) v WHERE ${match})`,
-          )!,
-        ];
-      }),
-    ),
+    ...referenceFields.flatMap(({ entity, field, target }) => {
+      const match = relatedRecordMatch(
+        scope,
+        target,
+        sql<string>`COALESCE(v->>'id', v #>> '{}')`,
+      );
+      return match
+        ? [
+            and(
+              eq(reviewSuggestion.entity, entity),
+              eq(reviewSuggestion.field, field),
+              sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${referenceValues}) v WHERE ${match})`,
+            )!,
+          ]
+        : [];
+    }),
   );
 }
 
 const fieldReferencesFor = (requested?: readonly string[]) => {
-  const referenceFields = Object.entries(entityFieldModels).flatMap(
-    ([entity, model]) =>
-      model.fields.flatMap((field) => {
-        const target = referenceEntity.safeParse(field.reference?.entity);
-        if (!target.success || (requested && !requested.includes(target.data)))
-          return [];
-        const values = (value: SQL) =>
-          sql`CASE WHEN jsonb_typeof(${value}) = 'array' THEN ${value} ELSE jsonb_build_array(${value}) END`;
-        return [
-          sql`WHEN s.entity = ${entity} AND s.field = ${field.key} THEN COALESCE((SELECT jsonb_agg(${ref(sql`${target.data}`, sql`COALESCE(v->>'id', v #>> '{}')`)})
-    FROM jsonb_array_elements(${values(sql`s."suggestedValue"`)} || ${values(sql`s."currentValue"`)}) v), '[]'::jsonb)`,
-        ];
-      }),
-  );
-  return referenceFields.length
-    ? sql`CASE ${sql.join(referenceFields, sql` `)} ELSE '[]'::jsonb END`
+  const references = referenceFields
+    .filter(({ target }) => !requested || requested.includes(target))
+    .map(
+      ({ entity, field, target }) =>
+        sql`WHEN s.entity = ${entity} AND s.field = ${field} THEN COALESCE((SELECT jsonb_agg(${ref(sql`${target}`, sql`COALESCE(v->>'id', v #>> '{}')`)})
+    FROM jsonb_array_elements(${referenceValues}) v), '[]'::jsonb)`,
+    );
+  return references.length
+    ? sql`CASE ${sql.join(references, sql` `)} ELSE '[]'::jsonb END`
     : sql`'[]'::jsonb`;
 };
 
@@ -157,6 +156,11 @@ const statementAcceptedSettlementFrom = sql`FROM "SourceTransactionRecord" ancho
   JOIN (${statementSettlementRelation}) ON settled.id=owner."acceptedTransactionId"`;
 
 const statementAcceptedSettlementScope = sql`anchor.id=s."recordId" AND ${statementSettlementEligibility}`;
+
+const settlementPaths = [
+  [statementSettlementFrom, statementSettlementScope],
+  [statementAcceptedSettlementFrom, statementAcceptedSettlementScope],
+] as const;
 
 const statementSettlementRefs = [
   { entity: entities.financialTransaction, id: sql<string>`settled.id` },
@@ -215,21 +219,14 @@ function statementRecordParts(
     ({ entity }) => withSettlements && includes(entity),
   );
   if (related.length) {
-    parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`related.kind`, sql`related.id`)})
-        ${statementSettlementFrom}
+    for (const [from, where] of settlementPaths)
+      parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`related.kind`, sql`related.id`)})
+        ${from}
         CROSS JOIN LATERAL (VALUES ${sql.join(
           related.map(({ entity, id }) => sql`(${entity},${id})`),
           sql`, `,
         )}) related(kind,id)
-        WHERE ${statementSettlementScope}
-          AND related.id IS NOT NULL), '[]'::jsonb)`);
-    parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`related.kind`, sql`related.id`)})
-        ${statementAcceptedSettlementFrom}
-        CROSS JOIN LATERAL (VALUES ${sql.join(
-          related.map(({ entity, id }) => sql`(${entity},${id})`),
-          sql`, `,
-        )}) related(kind,id)
-        WHERE ${statementAcceptedSettlementScope}
+        WHERE ${where}
           AND related.id IS NOT NULL), '[]'::jsonb)`);
   }
   if (includes(entities.purchase))
@@ -323,14 +320,11 @@ export function statementReferenceMatch(
     direct.length
       ? recordRefsMatch(scope, sql.join(direct, sql` || `))
       : undefined,
-    settled
-      ? sql`EXISTS (SELECT 1 ${statementSettlementFrom}
-          WHERE ${statementSettlementScope} AND ${settled})`
-      : undefined,
-    settled
-      ? sql`EXISTS (SELECT 1 ${statementAcceptedSettlementFrom}
-      WHERE ${statementAcceptedSettlementScope} AND ${settled})`
-      : undefined,
+    ...settlementPaths.map(([from, where]) =>
+      settled
+        ? sql`EXISTS (SELECT 1 ${from} WHERE ${where} AND ${settled})`
+        : undefined,
+    ),
   ];
 }
 

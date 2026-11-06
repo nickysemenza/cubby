@@ -1,8 +1,4 @@
-import {
-  suggestionJudgments,
-  suggestionSubjects,
-  suggestionProjectionTargets,
-} from "@cubby/schemas/suggestion";
+import { suggestionJudgments } from "@cubby/schemas/suggestion";
 import {
   fieldSuggestionRow,
   type SuggestionSummaryPart,
@@ -16,7 +12,7 @@ import {
   verbs,
   qualityImpact,
   keyBase,
-  runCode,
+  cleanAcceptance,
   fieldChecks,
   fieldStrength,
   shortcodeEntity,
@@ -39,14 +35,10 @@ import {
 export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
   family: "field",
   keys: async (db, query) => {
-    const { filters, records } = query;
-    // Pushed into SQL: the record roster, entity and Run. Column filters
-    // apply to every family's keys in the generic list.
+    const { filters } = query;
     const rows = await fieldSuggestionKeys(db, {
       status: filters.status,
-      entities: filters.recordEntity ? [filters.recordEntity] : undefined,
-      recordUuids: records?.map((record) => record.id),
-      runId: runCode(query),
+      runId: query.filters.runId,
       suggestionIds: query.suggestionIds,
     });
     return rows.map((row) => {
@@ -126,16 +118,7 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
       fields,
     };
   },
-  acceptAsIs: (row) => ({
-    suggestionId: row.suggestionId,
-    operationId: crypto.randomUUID(),
-    verdict: "correct",
-    correction: { present: false },
-    intent: "apply",
-    expectedFingerprint: row.fingerprint,
-    reason: null,
-    evidence: null,
-  }),
+  acceptAsIs: cleanAcceptance,
   ...suggestionReviewFamilies.field,
   ...declareAffectedRecords({
     roles: ["subject", "current", "proposed"],
@@ -145,10 +128,6 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
   actionable: sql`true`,
   summarize: (value: unknown) =>
     `Set field to ${JSON.stringify(suggestionJudgments.field.parse(value).value)}`,
-  subject: suggestionSubjects.field,
-  target: suggestionProjectionTargets.field,
-  transactionBound: true,
-  actions: ["correct", "wrong", "uncertain", "dismissed"],
   apply: async (db, context, state, input, automatic) => {
     // The automatic mode keeps acceptSuggestion's requiresSuggestionReview refusal.
     if (input.verdict === "correct" && !input.correction.present)

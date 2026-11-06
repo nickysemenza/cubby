@@ -11,7 +11,6 @@ import {
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { entityRoster } from "@cubby/schemas/entity-roster";
 import type {
   StatementSuggestionOut,
   StatementTransactionAction,
@@ -38,11 +37,6 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
-import {
-  currentTransferPairs,
-  transferPairEvidenceFingerprint,
-  transferPairStateData,
-} from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import { type StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { suggestionCounts } from "~/server/generic/suggestions/repo/suggestion-review";
 
@@ -95,6 +89,20 @@ export const emptyPendingCounts = (): SuggestionPendingCounts => ({
 });
 
 type ReviewItem = z.input<typeof suggestionReviewInput>;
+
+export const cleanAcceptance = (
+  row: Pick<SuggestionKey, "suggestionId" | "fingerprint">,
+) =>
+  ({
+    suggestionId: row.suggestionId,
+    operationId: crypto.randomUUID(),
+    verdict: "correct",
+    correction: { present: false },
+    intent: "apply",
+    expectedFingerprint: row.fingerprint,
+    reason: null,
+    evidence: null,
+  }) satisfies ReviewItem;
 type Action = z.infer<typeof suggestionAction>;
 type RowOf<F extends SuggestionListFamily> = Extract<
   SuggestionListRow,
@@ -172,16 +180,6 @@ export const keyBase = (key: SuggestionKey) => ({
   createdAt: key.createdAt.toISOString(),
   columns: key.columns,
 });
-
-const recordIdsOf = (
-  query: SuggestionFamilyQuery,
-  entities: readonly ShortcodeEntity[],
-) =>
-  query.records
-    ?.filter((record) => entities.includes(record.entity))
-    .map((record) => record.id);
-
-export const runCode = (query: SuggestionFamilyQuery) => query.filters.runId;
 
 // ---------------------------------------------------------------- field
 
@@ -272,32 +270,12 @@ export function statementAcceptApplication(
   };
 }
 
-const owesFamily = (entity: ShortcodeEntity, family: SuggestionListFamily) =>
-  entityRoster[entity].suggestionFamilies.some((owed) => owed === family);
-const entitiesOwing = (family: SuggestionListFamily) =>
-  shortcodeEntities.filter((entity) => owesFamily(entity, family));
-const STATEMENT_ENTITIES = entitiesOwing("statement_transaction");
-const TRANSFER_ENTITIES = entitiesOwing("transfer_pair");
-
 export function statementScope(
   query: SuggestionFamilyQuery,
 ): StatementSuggestionScope | null {
-  const { filters } = query;
-  const status = filters.status;
+  const { status, runId } = query.filters;
   if (status !== "pending" && status !== "applied") return null;
-  if (
-    filters.recordEntity &&
-    !STATEMENT_ENTITIES.includes(filters.recordEntity)
-  )
-    return null;
-  const recordUuids = recordIdsOf(query, STATEMENT_ENTITIES);
-  if (recordUuids?.length === 0) return null;
-  return {
-    recordUuids,
-    runCode: runCode(query),
-    status,
-    suggestionIds: query.suggestionIds,
-  };
+  return { runCode: runId, status, suggestionIds: query.suggestionIds };
 }
 
 // ------------------------------------------------------------ recommendation
@@ -369,104 +347,25 @@ export async function transferPairRows(
   query: SuggestionFamilyQuery,
   ids?: readonly string[],
 ) {
-  if (
-    query.filters.recordEntity &&
-    !TRANSFER_ENTITIES.includes(query.filters.recordEntity)
-  )
-    return [];
-  if (
-    query.records &&
-    !query.records.some((record) => TRANSFER_ENTITIES.includes(record.entity))
-  )
-    return [];
   const { rows } = await unwrapDb(db).execute<{
     id: string;
     fingerprint: string | null;
     createdAt: Date | string;
     judgment: unknown;
-    data: unknown;
   }>(sql`
-    SELECT s.id, s.fingerprint, s."createdAt", s.judgment, s.data
+    SELECT s.id, s.fingerprint, s."createdAt", s.judgment
     FROM "Suggestion" s
     WHERE s.family = ${suggestionFamily.enum.transfer_pair} AND s.status = ${query.filters.status}
       AND ${suggestionIdScope(query.suggestionIds, sql`s.id`)}
       ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}
       ${query.filters.status === "pending" ? sql`AND s.active` : sql``}
-      ${runCode(query) ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runCode(query)})` : sql``}
+      ${query.filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${query.filters.runId})` : sql``}
   `);
-  if (!rows.length) return [];
-  // Browse pages list stored pairs; apply rechecks the evidence with its fence.
-  const current =
-    query.filters.status === "pending" && !ids && !query.suggestionIds
-      ? new Map(
-          await Promise.all(
-            (
-              await currentTransferPairs(
-                db,
-                rows.map(
-                  (row) => transferPairStateData.parse(row.data).pairKey,
-                ),
-              )
-            ).map(
-              async (pair) =>
-                [
-                  pair.key,
-                  await transferPairEvidenceFingerprint(pair),
-                ] as const,
-            ),
-          ),
-        )
-      : null;
-  return rows.flatMap((row) => {
-    const evidence = transferPairJudgment.parse(row.judgment);
-    if (
-      current &&
-      current.get(evidence.key) !==
-        transferPairStateData.parse(row.data).evidenceFingerprint
-    )
-      return [];
-    const records = [
-      { entity: "financialAccount", id: evidence.outflow.accountId },
-      { entity: "financialAccount", id: evidence.inflow.accountId },
-      ...(evidence.outflow.transactionId
-        ? [
-            {
-              entity: "financialTransaction",
-              id: evidence.outflow.transactionId,
-            },
-          ]
-        : []),
-      ...(evidence.inflow.transactionId
-        ? [
-            {
-              entity: "financialTransaction",
-              id: evidence.inflow.transactionId,
-            },
-          ]
-        : []),
-      ...(evidence.outflow.owner
-        ? [{ entity: "ledgerParty", id: evidence.outflow.owner.id }]
-        : []),
-      ...(evidence.inflow.owner
-        ? [{ entity: "ledgerParty", id: evidence.inflow.owner.id }]
-        : []),
-    ];
-    if (
-      query.filters.recordEntity &&
-      !records.some((record) => record.entity === query.filters.recordEntity)
-    )
-      return [];
-    if (
-      query.records &&
-      !query.records.some((record) =>
-        records.some(
-          (ref) => ref.entity === record.entity && ref.id === record.code,
-        ),
-      )
-    )
-      return [];
-    return [{ ...row, evidence, createdAt: new Date(row.createdAt) }];
-  });
+  return rows.map((row) => ({
+    ...row,
+    evidence: transferPairJudgment.parse(row.judgment),
+    createdAt: new Date(row.createdAt),
+  }));
 }
 
 export const TRANSFER_WEAK_BLOCKERS = [

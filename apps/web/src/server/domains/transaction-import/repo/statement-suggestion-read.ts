@@ -398,18 +398,3 @@ export async function readStatementSuggestions(
 }
 
 /** Statement outcome counts by Suggestion status, optionally for one Run. */
-export async function statementSuggestionStatusCounts(
-  db: Database,
-  runCode?: string,
-) {
-  const { rows } = await unwrapDb(db).execute<{
-    status: string;
-    count: number;
-  }>(sql`
-    SELECT s.status, count(*)::int AS count FROM "Suggestion" s
-    WHERE s.family = ${suggestionFamily.enum.statement_transaction}
-      ${runCode ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runCode})` : sql``}
-    GROUP BY s.status
-  `);
-  return rows;
-}

@@ -3,11 +3,7 @@ import {
   connectionCandidate,
   type ConnectionProposal,
 } from "@cubby/schemas/entity-connections";
-import {
-  suggestionFamily,
-  suggestionSubjects,
-  suggestionProjectionTargets,
-} from "@cubby/schemas/suggestion";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import {
   recommendationSuggestionRow,
   type SuggestionListRow,
@@ -19,13 +15,16 @@ import { alias } from "drizzle-orm/pg-core";
 import { unwrapDb } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import { readStoredConnectionProposals } from "~/server/domains/connection/repo/entity-connections";
-import { recommendationScopes } from "~/server/generic/suggestions/repo/pending-admission";
+import {
+  pendingRecommendationEligibility,
+  recommendationScopes,
+} from "~/server/generic/suggestions/repo/pending-admission";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
+import { outcomes } from "~/server/generic/suggestions/repo/suggestion-outcomes";
 import {
   suggestionIdScope,
   keyBase,
-  runCode,
   shortcodeEntity,
   connectionImpact,
   RETRIEVED_REASON,
@@ -34,7 +33,6 @@ import {
   connectionImpactCount,
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import {
-  pendingRecommendationEligibility,
   reviewSuggestion,
   one,
   reviewQueryBuilder,
@@ -53,7 +51,7 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
     const has = (...names: string[]) => names.some((name) => needs.has(name));
     const target = (key: "entityKind" | "entityId") =>
       sql`s.data->'connectionTarget'->>${key}`;
-    const { recordEntity, runId } = query.filters;
+    const { runId } = query.filters;
     const reasons = sql`s.evidence#>'{candidate,evidence,reasons}'`;
     const retrieved = sql`EXISTS (SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(${reasons}) = 'array' THEN ${reasons} ELSE '[]'::jsonb END) reason(value)
       WHERE starts_with(reason.value, ${RETRIEVED_REASON}))`;
@@ -86,25 +84,13 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
       where: sql`s.family = ${suggestionFamily.enum.recommendation} AND s.active
         AND s.status = ${suggestionStatus.enum.pending}
         AND ${suggestionIdScope(query.suggestionIds, sql`s.id`)}
-        ${recordEntity ? sql`AND (s.entity = ${recordEntity} OR ${target("entityKind")} = ${recordEntity})` : sql``}
         ${runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${runId})` : sql``}`,
     };
   },
   keys: async (db, query) => {
-    const { filters, records } = query;
+    const { filters } = query;
     if (filters.status !== "pending") return [];
-    if (records?.length === 0) return [];
-    const side = (end: "source" | "target", key: "entityKind" | "entityId") =>
-      sql`(s.evidence->'candidate'->${end}->>${key})`;
-    const endpoint = (end: "source" | "target") =>
-      sql`${side(end, "entityKind")} || ':' || ${side(end, "entityId")}`;
-    const roster = records
-      ? sql.join(
-          records.map((record) => sql`${`${record.entity}:${record.code}`}`),
-          sql`, `,
-        )
-      : null;
-    const run = runCode(query);
+    const run = query.filters.runId;
     // Mirrors readEntityConnectionsBatch's selection; hydration rechecks evidence.
     const { rows } = await unwrapDb(db).execute<{
       id: string;
@@ -119,8 +105,6 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
         AND s.status = ${suggestionStatus.enum.pending}
         AND ${reviewFamilyDeclarations.recommendation.scopes.connection}
         AND ${pendingRecommendationEligibility()}
-        ${roster ? sql`AND (${endpoint("source")} IN (${roster}) OR ${endpoint("target")} IN (${roster}))` : sql``}
-        ${filters.recordEntity ? sql`AND (${side("source", "entityKind")} = ${filters.recordEntity} OR ${side("target", "entityKind")} = ${filters.recordEntity})` : sql``}
         ${run ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${run})` : sql``}
     `);
     const connectionKeys = rows.flatMap((row) => {
@@ -197,27 +181,7 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
       addProposal(proposal);
     return found;
   },
-  outcomes: async (db, filters) => {
-    const { rows } = await unwrapDb(db).execute<{
-      status: string;
-      count: number;
-    }>(sql`
-      SELECT s.status, count(*)::int AS count
-      FROM "Suggestion" s
-      WHERE s.family = ${suggestionFamily.enum.recommendation}
-        ${filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}
-      GROUP BY s.status
-    `);
-    const of = (status: string) =>
-      rows.find((row) => row.status === status)?.count ?? 0;
-    return {
-      applied: of("applied"),
-      rejected: of("rejected"),
-      superseded: of("superseded"),
-      resolved: of("resolved"),
-      fields: [],
-    };
-  },
+  outcomes: outcomes("recommendation"),
   acceptAsIs: () => null,
   ...suggestionReviewFamilies.recommendation,
   scopes: recommendationScopes,
@@ -289,10 +253,7 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
     },
   }),
   actionable: sql`(${sql.join(Object.values(recommendationScopes), sql` OR `)})`,
-  subject: suggestionSubjects.recommendation,
-  target: suggestionProjectionTargets.recommendation,
   transactionBound: false,
-  actions: ["correct", "wrong", "uncertain", "dismissed"],
   apply: async (db, context, state, input) => {
     const { applyEntityConnection } =
       await import("~/server/domains/connection/repo/entity-connections");

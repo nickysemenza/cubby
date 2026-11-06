@@ -1,7 +1,3 @@
-import {
-  suggestionSubjects,
-  suggestionProjectionTargets,
-} from "@cubby/schemas/suggestion";
 import { productPairSuggestionRow } from "@cubby/schemas/suggestion-list";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { sql } from "drizzle-orm";
@@ -112,15 +108,12 @@ export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
     ],
   }),
   actionable: sql`s.judgment->'actionable' = 'true'::jsonb`,
-  subject: suggestionSubjects.product_pair,
-  target: suggestionProjectionTargets.product_pair,
   transactionBound: false,
   currentFingerprint: async (db, state) => {
     const { reviewedProductPairFingerprint } =
       await import("~/server/domains/product/repo/match/product-match-candidate");
     return reviewedProductPairFingerprint(db, state);
   },
-  actions: ["correct", "wrong", "uncertain", "dismissed"],
   apply: async (db, context, state, input) => {
     if (input.verdict !== "correct" || input.correction.present)
       throw new Error("Product merging requires an accepted pair");
