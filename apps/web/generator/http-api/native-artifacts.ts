@@ -11,10 +11,10 @@ import { collectNativeContract } from "./native-contract.ts";
 import { renderNativeCommands } from "./native-commands.ts";
 import { CLIENT_PASSTHROUGH_METHODS } from "./native-methods.ts";
 import { renderNativeOperations, swiftId } from "./native-operations.ts";
-import { pascal, registerSchemaNames } from "./schema-names.ts";
+import { registerSchemaNames } from "./schema-names.ts";
 import { scanSwiftCallers } from "./swift-callers.ts";
 import { renderSwiftModels } from "./swift-models.ts";
-import { NATIVE_TYPED_RECORDS, TYPE_OVERRIDES } from "./type-overrides.ts";
+import { NATIVE_TYPED_RECORDS } from "./type-overrides.ts";
 
 type EntityOutputs = ReadonlyMap<string, string | null>;
 
@@ -28,7 +28,7 @@ const ALWAYS_TYPED_OPERATIONS = new Set([
 export async function renderDirectNativeArtifacts(
   actions: KernelActions,
   operationIds: readonly string[],
-  entityOutputs: EntityOutputs,
+  _entityOutputs: EntityOutputs,
 ): Promise<EntityArtifacts[]> {
   const named = await registerSchemaNames(
     new URL("../../src/", import.meta.url),
@@ -99,44 +99,10 @@ export async function renderDirectNativeArtifacts(
       (passthrough[id] !== undefined &&
         callers.tokens.has(passthrough[id].method)),
   );
-  const fullModels = renderSwiftModels(contract);
+  const fullModels = renderSwiftModels(contract, callers.tokens);
   const modelOf = (reference: string) =>
     fullModels.types.get(`native://${reference}`);
-  const photoAliases = {
-    PhotoImportContentType: "PhotoImportStageInputItemsItemContentType",
-    PhotoImportSourceEntity: "PhotoImportCommitInputImagesItemSourceEntity",
-    PhotoImportStageItem: "PhotoImportStageInputItemsItem",
-    PhotoImportStageResult: "PhotoImportStageOutputItemsItem",
-    PhotoImportStageExisting: "PhotoImportStageOutputItemsItemVariant1",
-    PhotoImportStageUpload: "PhotoImportStageOutputItemsItemVariant2",
-    PhotoImportCommitImage: "PhotoImportCommitInputImagesItem",
-    PhotoImportSourcePayload: "PhotoImportCommitInputImagesItemSource",
-    PhotoImportDuplicateDecisionPayload:
-      "PhotoImportCommitInputImagesItemDuplicateDecision",
-    PhotoImportCommitDestination: "PhotoImportCommitInputImagesItemDestination",
-    PhotoImportExistingDestination:
-      "PhotoImportCommitInputImagesItemDestinationVariant1",
-    PhotoImportCreateDestination:
-      "PhotoImportCommitInputImagesItemDestinationVariant2",
-    PhotoImportAnalysisPayload: "PhotoImportCommitInputImagesItemAnalysis",
-    PhotoImportClassificationPayload:
-      "PhotoImportCommitInputImagesItemAnalysisClassificationsItem",
-    PhotoImportRecognizedTextPayload:
-      "PhotoImportCommitInputImagesItemAnalysisRecognizedTextItem",
-    PhotoImportFeaturePrintPayload:
-      "PhotoImportCommitInputImagesItemAnalysisFeaturePrint",
-    PhotoImportProvenancePayload:
-      "PhotoImportCommitInputImagesItemAnalysisProvenance",
-    PhotoImportCreatePayload: "PhotoImportCommitInputCreatesItem",
-  };
-  for (const model of Object.values(photoAliases))
-    if (!fullModels.names.includes(model))
-      throw new Error(`Missing native photo model ${model}`);
-  const entityAlias = (entity: string) => {
-    const base = pascal(entity);
-    return base === "Task" || base === "Image" ? `${base}Record` : base;
-  };
-  // Roots: what kept operations reach, record roots, and any model or alias named
+  // Roots: what kept operations reach, record roots, and any model named
   // in handwritten Swift. Inferred types are reached through the operation closure.
   const models = fullModels.prune(
     [
@@ -146,50 +112,13 @@ export async function renderDirectNativeArtifacts(
       ]),
       ...contract.records.map(modelOf),
       ...fullModels.names.filter((name) => callers.tokens.has(name)),
-      ...Object.entries(photoAliases)
-        .filter(([alias]) => callers.tokens.has(alias))
-        .map(([, model]) => model),
-      ...[...entityOutputs].flatMap(([entity, output]) =>
-        output !== null && callers.tokens.has(entityAlias(entity))
-          ? [modelOf(`output/${pascal(output)}`)]
-          : [],
-      ),
     ].filter((name) => name !== undefined),
   );
-  const aliases = models.names.map(
-    (name) => `public typealias ${name} = CubbyAPI.${name}`,
-  );
-  // Record roots can share a registered schema with a differently named operation
-  // output. Keep the requested native API name without projecting a second model.
-  for (const [index, alias] of [...records.keys()].entries()) {
-    const reference = contract.records[index];
-    const model = reference && models.types.get(`native://${reference}`);
-    if (!model) throw new Error(`Missing native record model ${alias}`);
-    if (model !== alias && !models.names.includes(alias))
-      aliases.push(`public typealias ${alias} = CubbyAPI.${model}`);
-  }
-  for (const [alias, model] of Object.entries(photoAliases))
-    if (models.names.includes(model))
-      aliases.push(`public typealias ${alias} = CubbyAPI.${model}`);
-  for (const [name, type] of Object.entries(TYPE_OVERRIDES)) {
-    if (
-      models.types.has(`native://input/${name}`) ||
-      models.types.has(`native://output/${name}`)
-    )
-      aliases.push(`public typealias ${name} = ${type}`);
-  }
-  for (const [entity, output] of entityOutputs) {
-    if (output === null) continue;
-    const model = models.types.get(`native://output/${pascal(output)}`);
-    const alias = entityAlias(entity);
-    if (model && models.names.includes(model) && !models.names.includes(alias))
-      aliases.push(`public typealias ${alias} = CubbyAPI.${model}`);
-  }
   const identifiable = [...models.types].flatMap(([ref, name]) => {
     if (!ref.startsWith("native://output/") || ref.includes("#")) return [];
     const schema = contract.models[ref.slice("native://".length)];
     return schema?.properties?.id && models.names.includes(name)
-      ? [`extension CubbyAPI.${name}: Identifiable {}`]
+      ? [`extension ${name}: Identifiable {}`]
       : [];
   });
   return [
@@ -203,8 +132,8 @@ export async function renderDirectNativeArtifacts(
     ...renderEntityKernelArtifacts(actions, operationIds),
     {
       relativePath:
-        "apps/apple/CubbyKit/Sources/CubbyKit/Generated/APITypes.swift",
-      source: `${generatedHeader}// swift-format-ignore-file\nimport CubbyAPI\nimport CubbyAPISupport\n\n${aliases.join("\n")}\n\n${[...new Set(identifiable)].join("\n")}\n`,
+        "apps/apple/CubbyKit/Sources/CubbyAPI/Models/native-identifiable.gen.swift",
+      source: `${generatedHeader}// swift-format-ignore-file\n${[...new Set(identifiable)].join("\n")}\n`,
     },
   ];
 }
