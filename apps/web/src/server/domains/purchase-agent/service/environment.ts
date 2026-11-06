@@ -90,6 +90,15 @@ export interface RunServices {
   }>;
   canDispatchCoordinator(eventId: string): Promise<boolean>;
   acknowledgeCoordinator(eventId: string): Promise<boolean>;
+  mailAttempt(
+    input: z.input<
+      typeof import("@cubby/schemas/purchase-agent-services").mailAttemptInput
+    >,
+  ): Promise<
+    z.infer<
+      typeof import("@cubby/schemas/purchase-agent-services").mailAttemptResult
+    >
+  >;
   claimNextWork(input: OperationRef): Promise<RunServiceResult>;
   /**
    * One request to Cubby's MCP server, in process. The host mints a fresh

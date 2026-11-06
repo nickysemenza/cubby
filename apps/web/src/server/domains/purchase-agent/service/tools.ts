@@ -1,3 +1,4 @@
+import { MAIL_READ_RESPONSE_MAX_BYTES } from "@cubby/schemas/mailbox-research";
 import { photoInventoryToolInputs } from "@cubby/schemas/purchase-agent-services";
 import type { RunProgressStamp } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -192,6 +193,16 @@ function tool<N extends ToolName>(
     // Every typed tool is replay-safe: its effects are memoized steps keyed
     // by the durable tool task.
     replay: "safe",
+    // A complete mail read may be 200 KB. Pi's default 50 KB cap must not
+    // silently cut its item lines while the claim still says complete.
+    ...(name === "claim_next_import_work"
+      ? {
+          outputLimits: {
+            maxBytes: MAIL_READ_RESPONSE_MAX_BYTES * 2,
+            maxLines: 10_000,
+          },
+        }
+      : {}),
     ...definition,
     execute: async (args, api, context) => {
       // pi-durable resumes execute checkpoints without revalidating their
@@ -218,16 +229,18 @@ export function runAgentTools(
     context: Context,
   ) => Promise<RunProgressStamp>,
   /** Move the current work item to the escalation model (`escalation.ts`). */
-  escalate?: (reason: string) => Promise<object>,
+  escalate?: (
+    request: z.infer<ToolInputs["escalate_import_work"]>,
+  ) => Promise<object>,
 ): ToolRegistration[] {
   return [
     tool("escalate_import_work", {
       description:
-        "Hand the current Email to the stronger escalation model when its identity, attribution, meaning or amounts stay unclear after reading its evidence. A refusal that names its next step is not a reason: take that step. That model continues this Email; claiming another Email returns to you. Returns escalated: false when this Email is already escalated, or with `unavailable` (the reason) when the escalation model cannot be funded now: settle it yourself.",
+        "Classify the current Email blocker and request stronger reasoning only for extraction, identity, contradictions or an unclassified reasoning gap. Missing evidence, member decisions, held sources and transient failures are refused without escalation. A refusal that names its next step is not a reason: take that step. That model continues this Email; claiming another Email returns to you. Returns escalated: false when this Email is already escalated, or with `unavailable` (the reason) when the escalation model cannot be funded now: settle it yourself.",
       execute: async (args, api, context) => {
         if (!escalate) throw new Error("This Run has no escalation model");
         return result(
-          await step(api, context, "escalate", () => escalate(args.reason)),
+          await step(api, context, "escalate", () => escalate(args)),
         );
       },
     }),

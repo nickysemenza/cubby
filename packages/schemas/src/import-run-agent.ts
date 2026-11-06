@@ -50,9 +50,11 @@ const RUN_AGENT_TOOLS = [
 ] as const;
 /** Mounted only while a purpose's escalation model differs from its primary. */
 export const ESCALATE_TOOL = "escalate_import_work";
+export const EXTRACT_ORDER_TOOL = "import_extracted_order";
 export type ImportRunAgentToolName =
   | (typeof RUN_AGENT_TOOLS)[number]
-  | typeof ESCALATE_TOOL;
+  | typeof ESCALATE_TOOL
+  | typeof EXTRACT_ORDER_TOOL;
 
 /** Mail import reads Email and writes through the same public tools a member uses. */
 const MAIL_IMPORT_MCP_ACTIONS = [
@@ -99,11 +101,13 @@ export type ImportRunAgentConfig = {
   model: SupportedChatModel;
   /**
    * The model one work item escalates to (Mail import: an `escalate_import_work`
-   * call, a second `purchase_import.prepare` refusal, or an `unresolved`
-   * resolution the primary would record). Absent, or equal to `model`, turns
+   * call with a repairable reasoning gap). Unresolved outcomes and prepare
+   * refusals do not force escalation. Absent, or equal to `model`, turns
    * escalation off: no tool is mounted and no request changes.
    */
   escalationModel?: SupportedChatModel;
+  /** Existing provider-ladder alternative, selected only with free funding. */
+  escalationAlternative?: SupportedChatModel;
   effort: "low" | "medium" | "high";
   agentTools: readonly ImportRunAgentToolName[];
   /**
@@ -183,8 +187,9 @@ export const importRunAgentManifest = {
   mail_import: {
     model: "gpt-6-luna",
     escalationModel: "claude-opus-5-5",
+    escalationAlternative: "gpt-6-sol",
     effort: "medium",
-    agentTools: [...RUN_AGENT_TOOLS, ESCALATE_TOOL],
+    agentTools: [...RUN_AGENT_TOOLS, ESCALATE_TOOL, EXTRACT_ORDER_TOOL],
     mcpActions: MAIL_IMPORT_MCP_ACTIONS,
     mcpTools: toolsOf(MAIL_IMPORT_MCP_ACTIONS),
     workItemContext: "current",

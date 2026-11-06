@@ -274,6 +274,8 @@ export async function transferMailRunSources(
   fromRunId: RunId,
   toRunId: RunId,
   selected?: readonly string[],
+  /** Evidence recovery alone may transfer an explicitly revalidated new checksum. */
+  revisedSources?: ReadonlyMap<string, string>,
 ) {
   const sources = (await readMailRunSources(tx, fromRunId)).filter(
     (source) =>
@@ -283,7 +285,14 @@ export async function transferMailRunSources(
     throw new Error(
       "This Run no longer holds any of those Emails; Mail discovery or another Run has them.",
     );
-  if (sources.some((source) => !source.unchanged))
+  if (
+    sources.some(
+      (source) =>
+        !source.unchanged &&
+        (source.email.status !== "pending" ||
+          revisedSources?.get(source.orderMailId) !== source.email.checksum),
+    )
+  )
     throw new Error(
       "Mail restart evidence changed; reconcile the original Run.",
     );

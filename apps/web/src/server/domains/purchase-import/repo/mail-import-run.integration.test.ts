@@ -1,4 +1,5 @@
 import {
+  type ShortcodeFor,
   parseEntityId,
   runShortcode,
   vendorShortcode,
@@ -25,6 +26,8 @@ import {
   run,
   runOperation,
   emailReview,
+  vendorAccount,
+  purchase,
 } from "~/server/db/schema";
 import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -41,10 +44,18 @@ import {
   callMcpTool,
   kernelRequestContext,
 } from "~/server/testing/mcp-test-utils";
+import {
+  createProductIdentityFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { discoverPurchases } from "~/server/workflows/catch-up";
 
 import { startControlledMailImport } from "../operations/gmail/controlled-import";
+import {
+  preparePurchaseImport,
+  commitPurchaseImport,
+} from "../operations/import-orders";
 import {
   readMailImportOutcomes,
   searchMail,
@@ -52,14 +63,21 @@ import {
 } from "../operations/mail-tool";
 import { retainedMailFixture } from "../operations/order-import.fixtures";
 import { reconcileSettledRun } from "../operations/run-review";
-import { startAgentRunFixture } from "../service/import-run.fixtures";
+import {
+  startAgentRunFixture,
+  startImportRunFixture,
+} from "../service/import-run.fixtures";
 import { writeOutcomeReceipts } from "../service/run-outcome.fixtures";
 import {
   retainedControlledMailIds,
   waitForActiveMailboxImports,
 } from "./controlled-mail-import";
 import * as gmailProvider from "./gmail/provider";
-import { importPendingEmails, startMailImport } from "./mail-import-run";
+import {
+  admitMailImport,
+  importPendingEmails,
+  startMailImport,
+} from "./mail-import-run";
 import {
   readMailImportSettings,
   resumeControlledMailImport,
@@ -91,7 +109,7 @@ describe("mail research admission", () => {
       .where(eq(run.id, parseEntityId("run", runId)));
     return mailResearchRunInput.parse(saved?.input).sources;
   };
-  async function source() {
+  async function source(options: { subject?: string; bodyText?: string } = {}) {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Research admission member",
       kind: "member",
@@ -102,18 +120,229 @@ describe("mail research admission", () => {
       mailboxId: "synthetic-mailbox",
       messageId: "synthetic-message",
       sender: "receipts@shop.example",
-      subject: "Your receipt",
+      subject: options.subject ?? "Your receipt",
       receivedAt: new Date("2026-09-01T18:00:00Z"),
       checksum: "a".repeat(64),
       content: {
         snippet: null,
-        bodyText: "Workshop admission: $24",
+        bodyText: options.bodyText ?? "Workshop admission: $24",
         bodyHtml: null,
       },
     });
     if (!mail) throw new Error("Synthetic mail fixture did not persist");
     return { party, mail };
   }
+  it("reopens an untouched gap once for new accepted evidence of its exact own-account order", async () => {
+    const { party, mail } = await source({
+      subject: "Order SYN-RECOVERY-42 shipped",
+      bodyText:
+        "Order SYN-RECOVERY-42 shipped. Original itemization is missing.",
+    });
+    const seller = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic recovery shop",
+      orderEmailSenders: ["receipts@shop.example"],
+    });
+    const accountResult = await createRepoEntity(ctx, "vendorAccount", {
+      vendorId: seller.output.id,
+      ledgerPartyId: party.shortcode,
+    });
+    const [vendorAccountRow] = await getDb(ctx.db)
+      .select({ id: vendorAccount.id })
+      .from(vendorAccount)
+      .where(eq(vendorAccount.shortcode, accountResult.output.id));
+    if (!vendorAccountRow)
+      throw new Error("Synthetic recovery account missing");
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: mail.mailboxId,
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: true });
+    const [original] = await admitMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      mailboxId: mail.mailboxId,
+      messageIds: [mail.id],
+      automatic: true,
+      senderRecheck: {
+        sender: "receipts@shop.example",
+        vendorId: seller.output.id,
+      },
+    });
+    if (!original) throw new Error("Synthetic unresolved owner missing");
+    const block = async (ownerId: string) => {
+      await settleMail(ctx.db, {
+        mail,
+        importRunId: parseEntityId("run", ownerId),
+        status: "blocked",
+        detail: "Synthetic missing original",
+      });
+      await getDb(ctx.db)
+        .update(run)
+        .set({ status: "needs_review", endedAt: new Date() })
+        .where(eq(run.id, parseEntityId("run", ownerId)));
+    };
+    const good = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic recovery mug" }),
+      ctx.actor,
+    );
+    const purchases = new Map<string, ShortcodeFor<"purchase">>();
+    const history = async (orderId: string, revision: string) => {
+      const capture = await startImportRunFixture(ctx.db, {
+        ledgerPartyId: party.id,
+        vendorAccountId: vendorAccountRow.id,
+        trigger: "manual",
+      });
+      const stableOrderId = `synthetic-recovery-${orderId}-${revision}`;
+      const prepared = await preparePurchaseImport(
+        ctx.db,
+        {
+          _runExecution: {
+            runId: capture.id,
+            operationId: `prepare:${stableOrderId}`,
+          },
+          orders: [
+            {
+              stableOrderId,
+              itemOperationId: `item:${stableOrderId}`,
+              vendorId: seller.output.id,
+              targetPurchaseId: purchases.get(orderId),
+              source: {
+                kind: "vendor_export",
+                externalKey: `synthetic-recovery:${orderId}:${revision}`,
+                checksum: revision.repeat(64),
+              },
+              evidenceChecksum: revision.repeat(64),
+              extractionRevision: "synthetic-recovery@1",
+              extraction: {
+                status: "ready",
+                candidate: {
+                  orderId,
+                  orderedAt: "2026-09-01",
+                  merchant: "Synthetic recovery shop",
+                  currency: "USD",
+                  printedGrandTotal: 12,
+                  lines: [
+                    {
+                      title: "Synthetic recovery mug",
+                      amount: 12,
+                      quantity: 1,
+                      lineKind: "principal",
+                    },
+                  ],
+                  payments: [],
+                },
+              },
+              lineIds: ["synthetic-mug"],
+              primaryDocumentImageId: null,
+              screenshotImageId: null,
+            },
+          ],
+        },
+        ctx.actor,
+      );
+      const imported = await commitPurchaseImport(
+        ctx.db,
+        {
+          _runExecution: {
+            runId: capture.id,
+            operationId: `commit:${stableOrderId}`,
+          },
+          prepareOperationId: prepared.operationId,
+          defaultTrade: "other",
+          resolutions: [
+            {
+              stableOrderId,
+              stableLineId: "synthetic-mug",
+              resolution: { kind: "existing", productId: good.id },
+            },
+          ],
+        },
+        ctx.actor,
+      );
+      const result = imported.items[0];
+      expect(result?.outcome).not.toBe("conflict");
+      if (!result?.purchaseId)
+        throw new Error("Synthetic accepted receipt missing");
+      purchases.set(orderId, result.purchaseId);
+    };
+    await history("SYN-RECOVERY-42", "a");
+    await block(original.row.id);
+    const owner = async () =>
+      (
+        await getDb(ctx.db)
+          .select({ runId: emailTable.runId })
+          .from(emailTable)
+          .where(eq(emailTable.orderMailId, mail.id))
+      )[0]?.runId;
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+    expect(await owner()).toBe(original.row.id);
+    await history("SYN-OTHER-ORDER", "b");
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+    expect(await owner()).toBe(original.row.id);
+    await history("SYN-RECOVERY-42", "c");
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+    const successor = await owner();
+    expect(successor).not.toBe(original.row.id);
+    if (!successor)
+      throw new Error("New exact evidence must admit a successor");
+    expect(await frozenSources(original.row.id)).toEqual([
+      { orderMailId: mail.id, checksum: mail.rawChecksum },
+    ]);
+    await block(successor);
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+    expect(await owner()).toBe(successor);
+    // A Purchase edit is not new source evidence and cannot reset reasoning.
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ statedTotal: 1300n })
+      .where(eq(purchase.orderId, "SYN-RECOVERY-42"));
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+    expect(await owner()).toBe(successor);
+    const refreshedChecksum = "d".repeat(64);
+    await getDb(ctx.db)
+      .update(orderMail)
+      .set({
+        rawChecksum: refreshedChecksum,
+        content: {
+          snippet: null,
+          bodyText:
+            "Order SYN-RECOVERY-42 now includes a complete revised receipt.",
+          bodyHtml: null,
+        },
+      })
+      .where(eq(orderMail.id, mail.id));
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({
+        checksum: refreshedChecksum,
+        status: "pending",
+        updatedAt: new Date(),
+      })
+      .where(eq(emailTable.orderMailId, mail.id));
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+    const refreshedOwner = await owner();
+    expect(refreshedOwner).not.toBe(successor);
+    if (!refreshedOwner)
+      throw new Error("New retained bytes must admit a successor");
+    expect(await frozenSources(successor)).toEqual([
+      { orderMailId: mail.id, checksum: mail.rawChecksum },
+    ]);
+    expect(await frozenSources(refreshedOwner)).toEqual([
+      { orderMailId: mail.id, checksum: refreshedChecksum },
+    ]);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ trigger: run.trigger })
+          .from(run)
+          .where(eq(run.id, refreshedOwner))
+      )[0]?.trigger,
+    ).toBe("discovery");
+  });
   it("rechecks the automatic switch at admission without stopping explicit or admitted work", async () => {
     const { party, mail } = await source();
     const input = {

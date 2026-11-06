@@ -1,4 +1,8 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { liveReplayBudget } from "./live-replay-budget";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import liveGateway from "./live-gateway";
 
 // Failure modes: the agent keeps its pinned model; the swap drops other
@@ -26,6 +30,296 @@ const responsesBody = {
 };
 
 const upstream = vi.fn<typeof fetch>();
+beforeEach(async () => {
+  await liveGateway.fetch(new Request("https://model.test/reset"), env);
+});
+
+const actualFetch = globalThis.fetch;
+const books: {
+  book: Awaited<ReturnType<typeof liveReplayBudget>>;
+  directory: string;
+}[] = [];
+type Receipt = {
+  gatewayLogId: string;
+  model: string;
+  status: string;
+  standardCost: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+};
+async function guardedPeer() {
+  const directory = await mkdtemp(join(tmpdir(), "synthetic-replay-"));
+  const ledger = join(directory, "ledger.json");
+  const catalog = join(directory, "catalog.json");
+  // Synthetic prices yield a $0.60 full-window reservation, not live rates.
+  await writeFile(
+    catalog,
+    JSON.stringify({
+      openai: {
+        id: "openai",
+        env: [],
+        npm: "",
+        name: "Synthetic OpenAI",
+        doc: "",
+        models: {
+          "gpt-6-luna": {
+            id: "gpt-6-luna",
+            name: "Synthetic Luna",
+            description: "",
+            attachment: false,
+            reasoning: false,
+            tool_call: true,
+            release_date: "2026-01",
+            last_updated: "2026-01",
+            modalities: { input: ["text"], output: ["text"] },
+            open_weights: false,
+            limit: { context: 1_000_000, output: 100_000 },
+            cost: { input: 0.5, output: 1, cache_read: 0.05, cache_write: 0.5 },
+          },
+        },
+      },
+    }),
+  );
+  await writeFile(
+    ledger,
+    JSON.stringify({
+      limitUsd: 1,
+      accountedUsd: 0,
+      outstandingUsd: 0,
+      stopped: false,
+    }),
+  );
+  vi.stubEnv("MAIL_REPLAY_BUDGET_FILE", ledger);
+  vi.stubEnv("MAIL_REPLAY_PRICING_FILE", catalog);
+  const book = await liveReplayBudget({ receiptWaitMs: 20 });
+  books.push({ book, directory });
+  let rows: Receipt[] = [];
+  let afterRead: (() => void) | undefined;
+  const read = async () => {
+    const snapshot = [...rows];
+    const effect = afterRead;
+    afterRead = undefined;
+    effect?.();
+    return snapshot;
+  };
+  const vars = book.begin(read);
+  vi.stubGlobal("fetch", upstream);
+  upstream.mockImplementation(async (url, init) =>
+    String(url).startsWith("http://127.0.0.1:")
+      ? actualFetch(url, init)
+      : new Response("synthetic stream"),
+  );
+  const gatewayEnv = { ...env, ...vars.agent };
+  const send = () =>
+    liveGateway.fetch(
+      new Request("https://model.test/openai/responses", {
+        method: "POST",
+        headers: {
+          "cf-aig-byok-alias": "subscriber-credit",
+          "cf-aig-no-wholesale": "true",
+        },
+        body: JSON.stringify({ model: "gpt-6-luna" }),
+      }),
+      gatewayEnv,
+    );
+  const record = (
+    response: Response,
+    status = "succeeded",
+    override: Partial<Receipt> = {},
+  ) => {
+    const id = response.headers.get("cf-aig-log-id");
+    if (!id) throw new Error("Synthetic physical receipt missing");
+    rows.push({
+      gatewayLogId: id,
+      model: "gpt-6-luna",
+      status,
+      standardCost: status === "succeeded" ? 0.01 : null,
+      inputTokens: status === "succeeded" ? 1 : null,
+      outputTokens: status === "succeeded" ? 1 : null,
+      cacheReadTokens: status === "succeeded" ? 0 : null,
+      cacheWriteTokens: status === "succeeded" ? 0 : null,
+      ...override,
+    });
+  };
+  return {
+    book,
+    gatewayEnv,
+    send,
+    record,
+    recordOnNextRead: (response: Response, status: string) => {
+      afterRead = () => record(response, status);
+    },
+    ledger: async () => JSON.parse(await readFile(ledger, "utf8")),
+    nextCase: () => {
+      rows = [];
+      return book.begin(read);
+    },
+  };
+}
+
+// The actual host admission server owns concurrency, receipt reconciliation
+// and cumulative accounting; only the external provider is replaced here.
+it("shares reservations across peers and cases and releases only matched stored receipts", async () => {
+  const peer = await guardedPeer();
+  const responses = await Promise.all([peer.send(), peer.send()]);
+  expect(responses.map((response) => response.status).sort()).toEqual([
+    200, 429,
+  ]);
+  const first = responses.find((response) => response.status === 200);
+  if (!first) throw new Error("First physical call was not admitted");
+  peer.record(first);
+  const second = await peer.send();
+  expect(second.status).toBe(200);
+  peer.recordOnNextRead(second, "succeeded");
+  await peer.book.finish();
+  expect(await peer.ledger()).toMatchObject({
+    accountedUsd: 0.02,
+    outstandingUsd: 0,
+    stopped: false,
+    reservations: [],
+  });
+  // Finalization closes physical admission until the next case is bound.
+  expect((await peer.send()).status).toBe(403);
+  peer.nextCase();
+  const third = await peer.send();
+  peer.record(third);
+  await peer.book.finish();
+  expect(await peer.ledger()).toMatchObject({
+    accountedUsd: 0.03,
+    outstandingUsd: 0,
+  });
+  expect(
+    (
+      await liveGateway.fetch(
+        new Request("https://model.test/reset"),
+        peer.gatewayEnv,
+      )
+    ).status,
+  ).toBe(409);
+});
+
+it("never transmits paid frontier calls under the replay guard", async () => {
+  vi.stubGlobal("fetch", upstream);
+  const response = await liveGateway.fetch(
+    new Request("https://model.test/openai/responses", {
+      method: "POST",
+      headers: { "x-cubby-inference-funding": "paid" },
+      body: JSON.stringify({ model: "gpt-6-luna" }),
+    }),
+    { ...env, EVAL_BUDGET_URL: "http://127.0.0.1:9/synthetic" },
+  );
+  expect(response.status).toBe(403);
+  expect(upstream).not.toHaveBeenCalled();
+});
+
+it("releases a fully read credit refusal only after its exact failed no-usage receipt", async () => {
+  const peer = await guardedPeer();
+  let refused = true;
+  upstream.mockImplementation(async (url, init) =>
+    String(url).startsWith("http://127.0.0.1:")
+      ? actualFetch(url, init)
+      : refused
+        ? Response.json(
+            { error: { code: "insufficient_quota" } },
+            { status: 400 },
+          )
+        : new Response("synthetic stream"),
+  );
+  const response = await peer.send();
+  expect(response.status).toBe(400);
+  expect(await peer.ledger()).toMatchObject({
+    outstandingUsd: 0.6,
+    stopped: false,
+    reservations: [
+      {
+        id: response.headers.get("cf-aig-log-id"),
+        model: "gpt-6-luna",
+        maxCostUsd: 0.6,
+        refused: true,
+      },
+    ],
+  });
+  // The funding fallback arrives before asynchronous telemetry is visible.
+  peer.recordOnNextRead(response, "failed");
+  refused = false;
+  const recovered = await peer.send();
+  expect(recovered.status).toBe(200);
+  peer.record(recovered);
+  await peer.book.finish();
+  expect(await peer.ledger()).toMatchObject({
+    accountedUsd: 0.01,
+    outstandingUsd: 0,
+    stopped: false,
+  });
+});
+
+it.each([null, Number.NaN])(
+  "stops on an unpriced physical receipt (%s)",
+  async (standardCost) => {
+    const peer = await guardedPeer();
+    const response = await peer.send();
+    peer.record(response, "succeeded", { standardCost });
+    expect((await peer.send()).status).toBe(403);
+    expect(await peer.ledger()).toMatchObject({
+      accountedUsd: 0,
+      outstandingUsd: 0.6,
+      stopped: true,
+    });
+    await expect(peer.book.finish()).rejects.toThrow("Unpriced or ambiguous");
+  },
+);
+
+it("does not release a physical reservation for an unrelated application-cache row", async () => {
+  const peer = await guardedPeer();
+  const response = await peer.send();
+  peer.record(response, "succeeded", {
+    gatewayLogId: "synthetic-cached-result",
+    standardCost: 0,
+  });
+  expect((await peer.send()).status).toBe(429);
+  await expect(peer.book.finish()).rejects.toThrow(
+    "Missing physical-call receipts",
+  );
+  expect(await peer.ledger()).toMatchObject({
+    accountedUsd: 0,
+    outstandingUsd: 0.6,
+    stopped: true,
+  });
+});
+
+it.each(["transport", "http500"])(
+  "retains unknown %s reservations and refuses another transmission",
+  async (failure) => {
+    const peer = await guardedPeer();
+    upstream.mockImplementation(async (url, init) => {
+      if (String(url).startsWith("http://127.0.0.1:"))
+        return actualFetch(url, init);
+      if (failure === "http500")
+        return new Response("synthetic upstream error", { status: 500 });
+      throw new Error("synthetic disconnected stream");
+    });
+    const result = await peer.send().then(
+      (response) => response.status,
+      (error: unknown) =>
+        error instanceof Error ? error.message : "unknown failure",
+    );
+    expect(result).toBe(
+      failure === "transport" ? "synthetic disconnected stream" : 500,
+    );
+    expect((await peer.send()).status).toBe(403);
+    expect(() => peer.book.assertActive()).toThrow("Replay allowance stopped");
+    expect(await peer.ledger()).toMatchObject({
+      accountedUsd: 0,
+      outstandingUsd: 0.6,
+      stopped: true,
+    });
+    await expect(peer.book.finish()).rejects.toThrow(
+      "Missing physical-call receipts",
+    );
+  },
+);
 
 // The live peer has no connected ChatGPT session; a subscription-only attempt
 // must refuse explicitly rather than silently purchase OpenAI inference.
@@ -48,7 +342,12 @@ it("refuses unavailable subscription attempts without a paid transmission", asyn
   });
   expect(upstream).not.toHaveBeenCalled();
 });
-afterEach(() => {
+afterEach(async () => {
+  for (const { book, directory } of books.splice(0)) {
+    await book.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+  vi.unstubAllEnvs();
   upstream.mockReset();
   vi.unstubAllGlobals();
 });

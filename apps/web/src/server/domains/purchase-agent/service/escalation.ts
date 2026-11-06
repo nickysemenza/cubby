@@ -1,5 +1,6 @@
 import type { CoordinatorModels } from "@cubby/schemas/coordinator-models";
 import type { ImportRunAgentConfig } from "@cubby/schemas/import-run-agent";
+import type { photoInventoryToolInputs } from "@cubby/schemas/purchase-agent-services";
 import {
   supportedChatModelSchema,
   type SupportedChatModel,
@@ -8,9 +9,6 @@ import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import { z } from "zod";
 
 const CLAIM_TOOL = "claim_next_import_work";
-const PURCHASE_IMPORT_TOOL = "mcp__cubby__purchase_import";
-/** The refusal of one Email's `prepare` that escalates it. */
-const PREPARE_REFUSAL_LIMIT = 2;
 
 /** A purpose's models: the harness override when present, else its manifest. */
 export function coordinatorModelsFor(
@@ -32,30 +30,23 @@ export interface EscalationStore {
 }
 
 type ToolCall = { id: string; name: string; arguments: unknown };
-type Trigger = "requested" | "prepare_refused" | "unresolved";
-
+type EscalationRequest = z.infer<
+  typeof photoInventoryToolInputs.escalate_import_work
+>;
+// Old decisions remain readable when a running coordinator resumes after cutover.
 const escalationRecord = z.object({
   trigger: z.enum(["requested", "prepare_refused", "unresolved"]),
   detail: z.string(),
-  /** The tool call that escalated, so its recovery repeats the same note. */
   callId: z.string().nullable(),
+  /** Retained when a funded alternative was selected before transmission. */
+  model: supportedChatModelSchema.optional(),
 });
 const modelConfiguration = z.object({
   model: supportedChatModelSchema,
   status: z.enum(["pending", "applied"]),
 });
-const refusedCalls = z.array(z.string());
 const claimedEmail = z.looseObject({
   email: z.looseObject({ mailboxId: z.string(), messageId: z.string() }),
-});
-const disposition = z
-  .looseObject({ kind: z.string(), reason: z.string().optional() })
-  .optional();
-// Generated tools take {action, input}; flat arguments remain accepted.
-const toolArguments = z.looseObject({
-  action: z.string().optional(),
-  disposition,
-  input: z.looseObject({ disposition }).optional(),
 });
 
 const KEYS = {
@@ -63,8 +54,6 @@ const KEYS = {
   item: "escalation:work-item",
   escalated: (item: string) => `escalation:escalated:${item}`,
   unavailable: (item: string) => `escalation:unavailable:${item}`,
-  refused: (item: string) => `escalation:refused:${item}`,
-  blocked: (callId: string) => `escalation:blocked:${callId}`,
 };
 
 /**
@@ -75,11 +64,12 @@ const KEYS = {
  * escalated: keyed by the claim call, each re-claim reset it to the primary,
  * which escalated again in a loop (2026-10-19, 194 calls on one Email). The model changes by
  * reconfiguring the conversation, so pi's request checkpoint records which
- * model each request used and a recovered request reuses it. Every decision
- * is keyed by its tool call id, so a recovered call decides as it first did.
+ * model each request used and a recovered request reuses it. The decision
+ * belongs to the Email, so a new claim cannot reset its escalation.
  */
 export function coordinatorEscalation(input: {
   models: CoordinatorModels;
+  fundedAlternative?: SupportedChatModel;
   store: EscalationStore;
   /** Configure the conversation's model for its next request. */
   useModel: (model: SupportedChatModel) => Promise<void>;
@@ -100,21 +90,23 @@ export function coordinatorEscalation(input: {
     const raw = store.read(KEYS.escalated(key));
     return raw ? escalationRecord.parse(JSON.parse(raw)) : undefined;
   };
-  const note = (detail: string) =>
-    `Cubby escalated this Email to ${target} (${detail}); ${target} settles it from here.`;
-
   /** Decided once per work item, so a recovered call decides as it first did. */
-  async function unavailableReason(): Promise<string | null> {
-    const key = KEYS.unavailable(item());
+  async function unavailableReason(model = target): Promise<string | null> {
+    const key =
+      model === target
+        ? KEYS.unavailable(item())
+        : `${KEYS.unavailable(item())}:${model}`;
     const recorded = store.read(key);
     if (recorded !== undefined) return recorded || null;
-    const reason = (await input.unavailable?.(target)) ?? null;
+    const reason = (await input.unavailable?.(model)) ?? null;
     store.write(key, reason ?? "");
     return reason;
   }
 
-  const desiredModel = (): SupportedChatModel =>
-    active && escalated() ? target : primary;
+  const desiredModel = (): SupportedChatModel => {
+    const saved = escalated();
+    return active && saved ? (saved.model ?? target) : primary;
+  };
   function configurationIsCurrent() {
     const desired = desiredModel();
     const raw = store.read(KEYS.configuration);
@@ -142,34 +134,62 @@ export function coordinatorEscalation(input: {
     );
   }
 
-  async function escalate(request: {
-    reason: Trigger;
-    detail: string;
-    callId?: string;
-  }): Promise<{
+  async function escalate(request: EscalationRequest): Promise<{
     escalated: boolean;
     model: SupportedChatModel;
     unavailable?: string;
   }> {
     if (!active) return { escalated: false, model: primary };
+    if (
+      [
+        "missing_evidence",
+        "member_decision",
+        "source_held",
+        "transient_failure",
+      ].includes(request.category)
+    ) {
+      return {
+        escalated: false,
+        model: desiredModel(),
+        unavailable:
+          "This blocker needs evidence, authority or execution recovery, not a stronger model. Resolve or defer it under the owning policy.",
+      };
+    }
     if (escalated()) {
       await reconcileConfiguration();
-      return { escalated: false, model: target };
+      return { escalated: false, model: desiredModel() };
     }
-    const unavailable = await unavailableReason();
+    let unavailable = await unavailableReason();
+    let selected = target;
+    if (
+      unavailable &&
+      input.fundedAlternative &&
+      input.fundedAlternative !== primary
+    ) {
+      const alternativeRefusal = await unavailableReason(
+        input.fundedAlternative,
+      );
+      if (alternativeRefusal)
+        unavailable = `${unavailable}; ${alternativeRefusal}`;
+      else {
+        selected = input.fundedAlternative;
+        unavailable = null;
+      }
+    }
     if (unavailable) return { escalated: false, model: primary, unavailable };
     store.write(
       KEYS.escalated(item()),
       JSON.stringify(
         escalationRecord.parse({
-          trigger: request.reason,
-          detail: request.detail,
-          callId: request.callId ?? null,
+          trigger: "requested",
+          detail: `${request.category}: ${request.reason}`,
+          callId: null,
+          model: selected,
         }),
       ),
     );
     await reconcileConfiguration();
-    return { escalated: true, model: target };
+    return { escalated: true, model: selected };
   }
 
   return {
@@ -177,41 +197,11 @@ export function coordinatorEscalation(input: {
     /** The model this Run's next request uses. */
     model: desiredModel,
     escalate,
-    /** Hold a primary model's `unresolved` resolution for one escalated try. */
-    async beforeTool(call: ToolCall): Promise<{ block: string } | undefined> {
-      if (!active || call.name !== PURCHASE_IMPORT_TOOL) return undefined;
-      const args = toolArguments.safeParse(call.arguments).data;
-      const resolution = args?.input?.disposition ?? args?.disposition;
-      if (args?.action !== "mail_resolve" || resolution?.kind !== "unresolved")
-        return undefined;
-      const blocked = store.read(KEYS.blocked(call.id));
-      if (blocked) {
-        await escalate({
-          reason: "unresolved",
-          detail: resolution.reason ?? "unresolved",
-          callId: call.id,
-        });
-        return { block: blocked };
-      }
-      if (escalated() && configurationIsCurrent()) return undefined;
-      if (!escalated() && (await unavailableReason())) return undefined;
-      // Pi can complete a failed beforeTool call as an error and let the
-      // primary retry with a new ID. Persist its hold before reconciliation,
-      // so recovery cannot mistake that primary-authored call for a stronger turn.
-      const block = `${note("before resolving it unresolved")} Review its evidence before resolving it.`;
-      store.write(KEYS.blocked(call.id), block);
-      await escalate({
-        reason: "unresolved",
-        detail: resolution.reason ?? "unresolved",
-        callId: call.id,
-      });
-      return { block };
-    },
-    /** Start a work item at each claim; count refused prepares per item. */
+    /** A claim changes the active item; unresolved writes never force escalation. */
     async afterTool(
       call: ToolCall,
       result: ToolExecutionResult,
-    ): Promise<ToolExecutionResult | undefined> {
+    ): Promise<undefined> {
       if (!active) return undefined;
       if (call.name === CLAIM_TOOL) {
         const text = result.output?.find((part) => part.type === "text");
@@ -229,65 +219,9 @@ export function coordinatorEscalation(input: {
         await reconcileConfiguration();
         return undefined;
       }
-      if (
-        call.name !== PURCHASE_IMPORT_TOOL ||
-        toolArguments.safeParse(call.arguments).data?.action !== "prepare" ||
-        result.isError !== true ||
-        heldByAnotherRun(result) ||
-        hasInputContract(result)
-      )
-        return undefined;
-      const current = escalated();
-      const withNote = () => ({
-        ...result,
-        output: [
-          ...(result.output ?? []),
-          { type: "text" as const, text: note("prepare refused twice") },
-        ],
-      });
-      if (current) {
-        await reconcileConfiguration();
-        return current.callId === call.id ? withNote() : undefined;
-      }
-      const raw = store.read(KEYS.refused(item()));
-      const refused = new Set(raw ? refusedCalls.parse(JSON.parse(raw)) : []);
-      refused.add(call.id);
-      store.write(KEYS.refused(item()), JSON.stringify([...refused]));
-      if (refused.size < PREPARE_REFUSAL_LIMIT) return undefined;
-      const outcome = await escalate({
-        reason: "prepare_refused",
-        detail: "prepare refused twice",
-        callId: call.id,
-      });
-      return outcome.escalated ? withNote() : undefined;
+      return undefined;
     },
   };
 }
 
-/**
- * Another Run holding a supporting original is not a hard Email: the stronger
- * model meets the same refusal, so it never counts toward escalation.
- */
-function heldByAnotherRun(result: ToolExecutionResult) {
-  return (result.output ?? []).some(
-    (part) =>
-      part.type === "text" && part.text.includes("MAIL_SOURCE_HELD_BY_RUN"),
-  );
-}
-
 export type CoordinatorEscalation = ReturnType<typeof coordinatorEscalation>;
-
-/** Schema repair has an exact next step; a stronger model adds no authority. */
-function hasInputContract(result: ToolExecutionResult) {
-  return (result.output ?? []).some((part) => {
-    if (part.type !== "text") return false;
-    try {
-      return z
-        .object({ recovery: z.literal("input_schema") })
-        .safeParse(JSON.parse(part.text)).success;
-    } catch {
-      // Ordinary diagnostic text is not a schema-recovery record.
-      return false;
-    }
-  });
-}

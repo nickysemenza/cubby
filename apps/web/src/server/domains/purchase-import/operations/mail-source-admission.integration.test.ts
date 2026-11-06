@@ -303,7 +303,11 @@ describe("Mail import source admission", () => {
           mailboxId,
           messageId: found.messageId,
           checksum: found.rawChecksum,
-          disposition: { kind: "unresolved", reason: "Synthetic context" },
+          disposition: {
+            kind: "unresolved",
+            category: "unknown" as const,
+            reason: "Synthetic context",
+          },
         },
         actor,
       ),

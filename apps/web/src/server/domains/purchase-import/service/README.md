@@ -87,6 +87,20 @@ pending: nothing here starts Product research.
    a `purchase.dispatch` Job in the admission transaction (`dispatch.ts`). Each paid call checks
    the Run is still executable and draws from the household AI budget
    (`run/service/execution-transport.ts`, `server/ai/budget.ts`).
+   Existing discovery wakes also recover untouched automatic unresolved work
+   when its retained original changes, its sender becomes verified, or accepted
+   source evidence now establishes its exact order on the member's own Vendor
+   account. Source and accepted-evidence fingerprints deduplicate attempts;
+   Purchase edits and unchanged evidence do not reopen work. Accepted source
+   publication must be newer than the latest unresolved outcome;
+   older evidence does not trigger a cutover retry. Recovery first pages bounded
+   untouched gaps, then reads only Purchases for their printed identifiers and
+   verified Vendors. It does not build a sender-by-Purchase cross product or
+   search every imported original's full body. Admission rechecks
+   literal identifiers, current source bytes, source ownership, live dispatch
+   leases and retained member intent under the existing evidence-write scope.
+   A successor retains the predecessor's frozen roster/outcomes and records the
+   ownership transfer. Foreground, retired, reviewed and excluded work stays held.
 3. **Pi** (`agent-host.ts`, `server/domains/purchase-agent/`) runs on the generic agent
    tools (`claim_next_import_work`, `report_agent_progress`,
    `stop_import_run_for_review`) plus the MCP actions its manifest mounts
@@ -94,8 +108,62 @@ pending: nothing here starts Product research.
    MCP handler with a run-bound delegation (`agent-services.ts`
    `mcpFetch`). Instructions: `.agents/skills/purchase-import/references/mail-import.md`
    via `server/domains/purchase-agent/service/import-run-workflows.ts`.
+   Stronger-model escalation is explicitly requested with a blocker category.
+   Missing evidence, member decisions, held sources and transient failures do
+   not escalate. An unresolved disposition or refused preparation does not
+   automatically spend a stronger-model turn; repairable extraction, identity,
+   contradictory evidence or an unclassified reasoning gap may request one.
+   Its durable per-Email decision survives re-claims and coordinator recovery.
+   When Claude escalation credit is already known unavailable, production
+   checks Sol's free funding before selecting it directly; it does not spend a
+   failed Claude request to reach the existing provider-ladder alternative.
+   The selected model is retained in the escalation receipt across recovery.
+   The RunOperation ledger owns claim-evidence extraction budgets across Runs: two
+   primary submissions (initial plus repair) and one escalation submission.
+   Identical extraction replay does not consume another attempt; repeated claims
+   and successor Runs retain the budget. The claim binds the original checksum,
+   sender proof and accepted order-source context; display-name and Purchase-date
+   edits do not reset it. Writer classification uses trusted MCP error metadata,
+   never Email text. Held-source refusals are exempt. Confirmed writer refusals
+   return for changed input without automatic replay; repeating an identical refused
+   commit encounters its retained uncertain receipt. A preparation deadline asks for
+   identical retry. Explicitly uncertain receipts are not retried inside the tool.
+   Preparation failures cannot leave
+   uncertain money writes. Commit failures without a server verdict, deadlines,
+   and explicitly uncertain operation outcomes retain their reservation until
+   exact writer recovery. After a predecessor is terminal or retired, only identical
+   extraction facts can replay under the successor's locked, unchanged Email.
+   Ordinary attempts retain their validated proposal before execution; a claim
+   returns an unreconciled terminal proposal as `recovery` for exact tool replay,
+   so retiring the coordinator cannot lose the input needed to recover.
+   Canonical source writers preserve earlier effects; the successor retains its
+   own pending receipt, and replay identities count once across Runs. Changed
+   input remains blocked until that recovery has a known outcome. Generation response hooks only
+   account for submissions; they never publish dispositions.
+   Unresolved judgments retain a typed gap category alongside the explanation;
+   older uncategorized judgments read as unknown. Exhaustion uses `attempt_limit`.
+   Exhaustion records an unresolved gap through the delegated mail-resolve writer,
+   using a stable operation ID and the issuing generation fence.
+   `import_extracted_order` handles complete, admitted, attachment-free Email.
+   Ordinary candidates retain literal source excerpts for identifiers, dates,
+   totals, lines and payments. The tool checks their coverage and occurrence in
+   the current complete compact original before preparation. Excerpts establish
+   traceability; existing writers still own money and identity validation.
+   It generates stable IDs and runs the existing prepare/commit tools as durable
+   nested calls. Newly discovered Product candidates return the preparation for
+   review instead of creating a possible duplicate. Incomplete source views and
+   complex originals retain the exception path.
+   After a known, non-conflicting publication, the same durable tool claims and
+   returns the next Email with its evidence. The model does not spend a separate
+   turn coordinating that claim. Unknown writes and conflicts do not advance.
    A Mail import claim (`operations/mail-import-claim.ts`) returns the
-   claimed Email's compact read (`readMail`, bounded by `fitMailRead`). Before
+   claimed Email's compact read (`readMail`, bounded by `fitMailRead`). Coordinator
+   claims also include up to20 Product candidates from exact printed ASIN-shaped link
+   identifiers under the verified sender's registered issuer, and live Products
+   recorded on up to5 matching own-account Purchases at that Vendor. Ambiguous
+   identifier hits stay separate candidates; omission is explicit. These hints
+   grant no identity authority and deterministic rule-only claims skip the lookup.
+   Before
    claiming, it settles leading roster Emails a Mail import rule decides
    (`service/mail-import-rule.ts`, revision `MAIL_IMPORT_RULE_REVISION`)
    through `purchase_import.mail_resolve`'s own writer, with no model call: a shipped,
@@ -223,7 +291,56 @@ until a session itemizes it.
 | Pi host and services                       | `agent-host.ts`, `agent-services.ts`, `server/domains/purchase-agent/` |
 | Findings and their fixes                   | `findings.ts`                                                          |
 
+## Measured Email comparison
+
+On 2026-11-06, the six synthetic originals in
+`apps/web/tooling/ai/mail-import-comparison.json` were replayed serially through
+legacy coordinator bdfcf91179 and candidate abaef5a166, with identical current
+writers, Luna primary/Sol escalation and credit-only all-feature accounting.
+Standard cost fell from $0.149689794 to $0.035178209; summed processing time
+fell from 188s to 167s (median36s to28s), excluding runtime startup. Both arms
+matched the four itemized imports and retained two explicit gaps; their common
+unavailable-Gmail gap category differed from the missing-source expectation.
+Every priced report total reconciled with the allowance ledger. One observation
+per case, rounded timings, cache effects and serial order limit generalization;
+two cases were slower. No additional cache or concurrency machinery is justified.
+Use the existing `eval:mail-replay:stdin` with this JSON and the documented
+pricing/allowance environment; live replay requires explicit spending authority.
+
 ## Hidden dependencies
+
+Live `eval:mail-replay` requires `MAIL_REPLAY_PRICING_FILE` (an official
+models.dev `?type=all` snapshot) and `MAIL_REPLAY_BUDGET_FILE`.
+The exclusive JSON ledger records `limitUsd`, `accountedUsd`, `outstandingUsd`,
+`stopped`, and outstanding physical `reservations` (ID, model, maximum cost and
+refusal proof).
+One loopback admission server serializes full catalog-window reservations for
+both peers before every physical call. It reconciles exact stored receipts
+between requests, so sequential calls can reuse unused capacity without
+partitioning the allowance between coordinator and other features.
+Frontier requests require the subscriber-credit alias and no-wholesale flag;
+paid forwarding is disabled. Uncertain calls retain their reservations and
+stop further evaluation. Only exact reconciliation of successful physical
+requests with priced stored usage releases unused capacity. A fully read
+credit refusal also requires its exact failed receipt with no token usage
+before its reservation is released. A funding fallback can wait up to five seconds
+for that queued receipt; expiry stops the evaluation and retains the reservation.
+The replay checks a stopped allowance while observing the Run, and finalization
+closes physical admission before reading the last receipts, allowing the same
+bounded wait for final queued usage. Outstanding cost is derived from retained
+reservations, so subtraction residue cannot block the next case. Unknown failures
+remain reserved with their physical IDs. The ledger spans
+fresh databases, peer isolates and launcher invocations. A stale lock or
+outstanding reservation requires reconciliation before another launch.
+
+The existing `eval:mail-replay` reports all Run-scoped AI usage, including
+extraction and audit, with raw token/cache counts, duration and unknown prices.
+Known cost subtotals are not complete costs when calls are unpriced. Version 2 synthetic
+replays fail on disposition, total, line-cost or supported-link disagreements;
+free-form line names and unresolved wording remain review differences. Re-capture
+baselines using this all-Run-feature cost scope before comparing performance. Private replay
+disagreements remain report-only evidence for member grading. Scripted replay
+proves execution plumbing, not model quality or speed.
 
 - Pi's instructions are skill Markdown (`mail-import.md`, `extraction.md`, the
   settlement rules) selected in `import-run-workflows.ts`; editing them changes

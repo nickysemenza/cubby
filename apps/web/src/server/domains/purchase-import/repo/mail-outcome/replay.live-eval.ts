@@ -1,5 +1,8 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { importRunAgentManifest } from "@cubby/schemas/import-run-agent";
+import {
+  importRunAgentManifest,
+  EXTRACT_ORDER_TOOL,
+} from "@cubby/schemas/import-run-agent";
 import { mailAttributionHeaders } from "@cubby/schemas/mailbox-research";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { mailImportOutcome } from "@cubby/schemas/suggestion";
@@ -10,6 +13,7 @@ import {
 import { supportedChatModelSchema } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq } from "drizzle-orm";
+import { liveReplayBudget } from "tooling/ai/live-replay-budget";
 import { localSecret } from "tooling/local-secret";
 import { call, from, mcp } from "tooling/purchase-agent-script";
 import { withTestDb } from "tooling/test-setup";
@@ -30,6 +34,7 @@ import {
 } from "../../operations/order-import.fixtures";
 import {
   observeMailReplayAttempt,
+  mailReplayDisagreement,
   type MailReplayCaseReport,
 } from "../../service/mail-replay-report";
 import { startMailImport } from "../mail-import-run";
@@ -82,6 +87,7 @@ const replayCases = z
   .min(1)
   .max(100);
 const scripted = process.env.MAIL_REPLAY_SCRIPTED === "1";
+const evaluationBudget = scripted ? null : await liveReplayBudget();
 const inputUrl = process.env.MAIL_REPLAY_INPUT_URL;
 if (process.env.CI && inputUrl)
   throw new Error("Private replay input is session-only");
@@ -124,10 +130,19 @@ const syntheticOwnOrder = {
     ],
   },
 };
-// The scripted coordinator resolves every Email unresolved.
-const synthetic = scripted
-  ? [syntheticInquiry]
-  : [syntheticInquiry, syntheticOwnOrder];
+const syntheticAttemptLimit = {
+  ...syntheticInquiry,
+  subject: "Synthetic malformed extraction limit",
+  baseline: {
+    ...syntheticInquiry.baseline,
+    category: "attempt_limit",
+  },
+};
+const synthetic = [
+  syntheticInquiry,
+  syntheticOwnOrder,
+  ...(scripted ? [syntheticAttemptLimit] : []),
+];
 async function readInput() {
   if (!inputUrl) return synthetic;
   const url = new URL(inputUrl);
@@ -180,7 +195,8 @@ const unavailable = (caseNumber: number, failure: string) => ({
 // ledger writes; comparison publishes grades; a missing outcome counts as parity.
 describe("isolated Mail coordinator replay", () => {
   const ctx = withTestDb(); // A fresh throwaway database for each case.
-  afterAll(() => {
+  afterAll(async () => {
+    await evaluationBudget?.close();
     for (const [index] of cases.entries()) {
       if (!reports.some((report) => report.case === index + 1))
         reports.push(
@@ -195,6 +211,8 @@ describe("isolated Mail coordinator replay", () => {
     console.log(
       JSON.stringify({
         kind: "mail-import-replay",
+        reportVersion: 2,
+        costScope: "all_run_features",
         synthetic: !inputUrl,
         scripted,
         primary,
@@ -208,8 +226,27 @@ describe("isolated Mail coordinator replay", () => {
           report.actualModels.includes(primary),
         ).length,
         disagreements,
-        /** Standard (list-price) coordinator cost per case, every case. */
-        usd: reports.map((report) => ({
+        measurements: reports.map((report) => ({
+          case: report.case,
+          seconds: report.seconds ?? null,
+          usage: report.usage ?? null,
+          // A known subtotal is not a complete cost when usage is unpriced.
+          unpricedCalls:
+            report.usage?.filter(
+              (row) =>
+                row.standardCost === null &&
+                // Match AI accounting's failed-without-usage distinction.
+                !(
+                  row.status === "failed" &&
+                  row.inputTokens === null &&
+                  row.outputTokens === null &&
+                  row.cacheReadTokens === null &&
+                  row.cacheWriteTokens === null
+                ),
+            ).length ?? null,
+        })),
+        /** Known standard cost of every Run-scoped feature, not just coordination. */
+        knownStandardUsd: reports.map((report) => ({
           case: report.case,
           total: Object.values(report.usd).reduce((sum, usd) => sum + usd, 0),
           byModel: report.usd,
@@ -287,6 +324,7 @@ describe("isolated Mail coordinator replay", () => {
             admittedAt = Date.now();
             await waitFor(
               async () => {
+                evaluationBudget?.assertActive();
                 const [row] = await getDb(ctx.db)
                   .select({ status: runTable.status })
                   .from(runTable)
@@ -317,19 +355,22 @@ describe("isolated Mail coordinator replay", () => {
                   .limit(1);
                 const usage = await getDb(ctx.db)
                   .select({
+                    feature: aiUsage.feature,
                     model: aiUsage.model,
                     status: aiUsage.status,
                     transport: aiUsage.transport,
                     failure: aiUsage.failure,
                     standardCost: aiUsage.standardCost,
+                    chargedCost: aiUsage.chargedCost,
+                    gatewayLogId: aiUsage.gatewayLogId,
+                    inputTokens: aiUsage.inputTokens,
+                    outputTokens: aiUsage.outputTokens,
+                    cacheReadTokens: aiUsage.cacheReadTokens,
+                    cacheWriteTokens: aiUsage.cacheWriteTokens,
+                    durationMs: aiUsage.durationMs,
                   })
                   .from(aiUsage)
-                  .where(
-                    and(
-                      eq(aiUsage.runId, runId),
-                      eq(aiUsage.feature, "purchase_import_agent"),
-                    ),
-                  )
+                  .where(eq(aiUsage.runId, runId))
                   .orderBy(aiUsage.createdAt);
                 const [failed] = await getDb(ctx.db)
                   .select({
@@ -349,7 +390,11 @@ describe("isolated Mail coordinator replay", () => {
                         ?.mailOutcome.judgment ?? null)
                     : null,
                   actualModels: usage
-                    .filter((row) => row.status === "succeeded")
+                    .filter(
+                      (row) =>
+                        row.status === "succeeded" &&
+                        row.feature === "purchase_import_agent",
+                    )
                     .map((row) => row.model),
                   failedAttempts: usage
                     .filter((row) => row.status !== "succeeded")
@@ -360,6 +405,19 @@ describe("isolated Mail coordinator replay", () => {
                       ),
                     ),
                   diagnostics: await diagnose(),
+                  usage: usage.map((row) => ({
+                    feature: row.feature,
+                    model: row.model,
+                    status: row.status,
+                    standardCost: row.standardCost,
+                    chargedCost: row.chargedCost,
+                    gatewayLogId: row.gatewayLogId,
+                    inputTokens: row.inputTokens,
+                    outputTokens: row.outputTokens,
+                    cacheReadTokens: row.cacheReadTokens,
+                    cacheWriteTokens: row.cacheWriteTokens,
+                    durationMs: row.durationMs,
+                  })),
                   usd: usage.reduce<Record<string, number>>(
                     (byModel, row) => ({
                       ...byModel,
@@ -386,24 +444,123 @@ describe("isolated Mail coordinator replay", () => {
             const scenario = await startScenarioHarness(
               ctx.databaseUrl,
               {
-                steps: [
-                  call("claim", "claim_next_import_work"),
-                  mcp("resolve", "purchase_import", started.runId, {
-                    action: "mail_resolve",
-                    mailboxId,
-                    messageId: from("claim", "email.messageId"),
-                    checksum: from("claim", "read.checksum"),
-                    disposition: {
-                      kind: "unresolved",
-                      reason: "Synthetic missing itemization",
-                    },
-                  }),
-                  call("done", "claim_next_import_work"),
-                ],
+                steps:
+                  sample.subject === syntheticAttemptLimit.subject
+                    ? [
+                        call("claim", "claim_next_import_work"),
+                        call("invalid-extract-1", EXTRACT_ORDER_TOOL),
+                        call("invalid-extract-2", EXTRACT_ORDER_TOOL),
+                        call("invalid-extract-3", EXTRACT_ORDER_TOOL),
+                        call("done", "claim_next_import_work"),
+                      ]
+                    : sample.baseline.kind === "imported"
+                      ? [
+                          call("claim", "claim_next_import_work"),
+                          call("extract", EXTRACT_ORDER_TOOL, {
+                            mail: {
+                              mailboxId,
+                              messageId: from("claim", "email.messageId"),
+                              checksum: from("claim", "read.checksum"),
+                            },
+                            vendor: { name: "Synthetic Shop" },
+                            extraction: {
+                              status: "ready",
+                              candidate: {
+                                orderId: "SYN-1001",
+                                sourceReferences: {
+                                  orderId: "Order SYN-1001",
+                                  orderedAt: "placed September 20, 2026",
+                                  printedGrandTotal: "Order total: $22.89",
+                                  lines: [
+                                    "1 x Synthetic ceramic mug: $12.00",
+                                    "2 x Synthetic tea towel at $4.50: $9.00",
+                                    "Sales tax: $1.89",
+                                  ],
+                                  payments: [],
+                                },
+                                orderedAt: "2026-09-20",
+                                merchant: "Synthetic Shop",
+                                currency: "USD",
+                                printedGrandTotal: 22.89,
+                                lines: [
+                                  {
+                                    title: "Synthetic ceramic mug",
+                                    amount: 12,
+                                    quantity: 1,
+                                    lineKind: "principal",
+                                    costType: "tools",
+                                  },
+                                  {
+                                    title: "Synthetic tea towel",
+                                    amount: 9,
+                                    quantity: 2,
+                                    lineKind: "principal",
+                                    costType: "materials",
+                                  },
+                                  {
+                                    title: "Sales tax",
+                                    amount: 1.89,
+                                    lineKind: "tax",
+                                    costType: "services",
+                                  },
+                                ],
+                                payments: [],
+                              },
+                            },
+                            products: [{ kind: "new" }, { kind: "new" }, null],
+                          }),
+                          {
+                            check: "extract",
+                            includes: '"nextWork":{"kind":"none"}',
+                          },
+                        ]
+                      : [
+                          call("claim", "claim_next_import_work"),
+                          mcp("resolve", "purchase_import", started.runId, {
+                            action: "mail_resolve",
+                            mailboxId,
+                            messageId: from("claim", "email.messageId"),
+                            checksum: from("claim", "read.checksum"),
+                            disposition: {
+                              kind: "unresolved",
+                              reason: "Synthetic missing itemization",
+                            },
+                          }),
+                          call("done", "claim_next_import_work"),
+                        ],
               },
               "purchase-agent",
               { coordinatorModels: { primary } },
             );
+            diagnose = async () => {
+              const attempts = await getDb(ctx.db)
+                .select({
+                  state: runOperation.state,
+                  error: runOperation.error,
+                  result: runOperation.result,
+                })
+                .from(runOperation)
+                .where(
+                  and(
+                    eq(runOperation.runId, runId),
+                    eq(runOperation.kind, "mail_extraction_attempt"),
+                  ),
+                )
+                .limit(4);
+              return [
+                ...scenario.harness
+                  .getLogs()
+                  .filter((entry) => entry.level === "error")
+                  .slice(-DIAGNOSTIC_LOGS)
+                  .map((entry) => entry.message.slice(0, DIAGNOSTIC_CHARS)),
+                `script emitted: ${JSON.stringify(await scenario.emitted())}`,
+                `script violations: ${JSON.stringify(await scenario.violations())}`,
+                `attempt receipts: ${JSON.stringify(attempts)}`.slice(
+                  0,
+                  DIAGNOSTIC_CHARS,
+                ),
+              ];
+            };
             try {
               observedOutcome = await observe(async () => {
                 await scenario.wake();
@@ -423,18 +580,40 @@ describe("isolated Mail coordinator replay", () => {
               vars: {
                 ACCOUNT_ID: CF_ACCOUNT_ID,
                 GATEWAY_ENVIRONMENT: testAiGatewayEnvironment(process.env.CI),
-                // Paid replay: ChatGPT plan attempts bill to Unified Billing.
-                ...(process.env.MAIL_REPLAY_PLAN_AS_PAID === "1" && {
-                  PLAN_AS_PAID: "1",
-                }),
               },
               secrets: { GATEWAY_TOKEN: token },
             };
+            if (!evaluationBudget)
+              throw new Error("Live replay requires guarded admission");
+            const allowances = evaluationBudget.begin(async () =>
+              getDb(ctx.db)
+                .select({
+                  gatewayLogId: aiUsage.gatewayLogId,
+                  model: aiUsage.model,
+                  status: aiUsage.status,
+                  standardCost: aiUsage.standardCost,
+                  inputTokens: aiUsage.inputTokens,
+                  outputTokens: aiUsage.outputTokens,
+                  cacheReadTokens: aiUsage.cacheReadTokens,
+                  cacheWriteTokens: aiUsage.cacheWriteTokens,
+                })
+                .from(aiUsage)
+                .where(eq(aiUsage.runId, runId)),
+            );
             await withWorkerdRuntime(
               {
                 profile: "purchase-agent",
                 database: { borrowed: ctx.databaseUrl },
-                models: { agent: peer, gateway: peer },
+                models: {
+                  agent: {
+                    ...peer,
+                    vars: { ...peer.vars, ...allowances.agent },
+                  },
+                  gateway: {
+                    ...peer,
+                    vars: { ...peer.vars, ...allowances.gateway },
+                  },
+                },
                 coordinatorModels: { primary, escalation },
               },
               async ({ harness }) => {
@@ -458,24 +637,36 @@ describe("isolated Mail coordinator replay", () => {
                     .fetch("https://model.test/usage");
                   return [...logs, `peer usage: ${await peer.text()}`];
                 };
-                observedOutcome = await observe(async () => {
-                  const response = await harness
-                    .getWorker("cubby-job-wake-producer")
-                    .fetch("https://queue.test/wake", {
-                      method: "POST",
-                      headers: { "content-type": "application/json" },
-                      body: "{}",
-                    });
-                  if (!response.ok)
-                    throw new Error(
-                      `Replay dispatch refused (${response.status})`,
-                    );
-                  await waitForSettlement();
-                });
+                try {
+                  observedOutcome = await observe(async () => {
+                    const response = await harness
+                      .getWorker("cubby-job-wake-producer")
+                      .fetch("https://queue.test/wake", {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: "{}",
+                      });
+                    if (!response.ok)
+                      throw new Error(
+                        `Replay dispatch refused (${response.status})`,
+                      );
+                    await waitForSettlement();
+                  });
+                } finally {
+                  await evaluationBudget.finish();
+                }
               },
             );
           }
           expect(observedOutcome).not.toBeNull();
+          // Private cases retain report-only grading. Synthetic facts must
+          // agree; free-form gap wording is not a different disposition.
+          const requiredDisagreements = inputUrl
+            ? []
+            : mailReplayDisagreement(sample.baseline, observedOutcome).filter(
+                (field) => field !== "reason" && field !== "lines",
+              );
+          expect(requiredDisagreements).toEqual([]);
         } catch (error) {
           if (!reports.some((report) => report.case === index + 1))
             reports.push(unavailable(index + 1, String(error)));

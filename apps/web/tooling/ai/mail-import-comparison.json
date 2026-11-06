@@ -1,0 +1,166 @@
+[
+  {
+    "subject": "Your Synthetic Shop order SYN-6001 is confirmed",
+    "sender": "Synthetic Shop <orders@shop.example>",
+    "receivedAt": "2026-11-04T18:00:00Z",
+    "headers": {
+      "From": "Synthetic Shop <orders@shop.example>",
+      "To": "Sam Synthetic <sam.synthetic@example.com>"
+    },
+    "owner": {
+      "name": "Sam Synthetic",
+      "address": "sam.synthetic@example.com"
+    },
+    "bodyText": "Hi Sam, thanks for your order!\nOrder SYN-6001, placed November 3, 2026.\n1 x Synthetic ceramic mug: $12.00\n2 x Synthetic tea towel at $4.50: $9.00\nSubtotal: $21.00\nSales tax: $1.89\nOrder total: $22.89, charged to Visa ending 0000.",
+    "bodyHtml": null,
+    "baseline": {
+      "kind": "imported",
+      "total": 22.89,
+      "lines": [
+        {
+          "name": "Synthetic ceramic mug",
+          "cost": 12
+        },
+        {
+          "name": "Synthetic tea towel",
+          "cost": 9
+        },
+        {
+          "name": "Sales tax",
+          "cost": 1.89
+        }
+      ]
+    }
+  },
+  {
+    "subject": "Receipt for Synthetic Shop order SYN-6002",
+    "sender": "Synthetic Shop <orders@shop.example>",
+    "receivedAt": "2026-11-04T18:00:00Z",
+    "headers": {
+      "From": "Synthetic Shop <orders@shop.example>",
+      "To": "Sam Synthetic <sam.synthetic@example.com>"
+    },
+    "owner": {
+      "name": "Sam Synthetic",
+      "address": "sam.synthetic@example.com"
+    },
+    "bodyText": "Hi Sam, your order SYN-6002 was placed November 3, 2026.\n2 x Synthetic refill tablet box at $18.00 each: $36.00\nSubtotal: $36.00\nOrder discount: -$5.00\nShipping: $5.00\nSales tax: $3.45\nOrder total: $39.45 paid by Visa ending 0000.",
+    "bodyHtml": null,
+    "baseline": {
+      "kind": "imported",
+      "total": 39.45,
+      "lines": [
+        {
+          "name": "Synthetic refill tablet box",
+          "cost": 36
+        },
+        {
+          "name": "Order discount",
+          "cost": -5
+        },
+        {
+          "name": "Shipping",
+          "cost": 5
+        },
+        {
+          "name": "Sales tax",
+          "cost": 3.45
+        }
+      ]
+    }
+  },
+  {
+    "subject": "Synthetic Shop receipt SYN-6003",
+    "sender": "Synthetic Shop <orders@shop.example>",
+    "receivedAt": "2026-11-04T18:00:00Z",
+    "headers": {
+      "From": "Synthetic Shop <orders@shop.example>",
+      "To": "Sam Synthetic <sam.synthetic@example.com>"
+    },
+    "owner": {
+      "name": "Sam Synthetic",
+      "address": "sam.synthetic@example.com"
+    },
+    "bodyText": "Hi Sam, order SYN-6003 was placed November 3, 2026.\n4 x Synthetic pantry container at $8.00 each: $32.00\nNo shipping, tax or discount.\nOrder total: $32.00.\nPayment: $10.00 from gift card balance and $22.00 charged to Visa ending 0000. The gift card is payment, not a discount.",
+    "bodyHtml": null,
+    "baseline": {
+      "kind": "imported",
+      "total": 32,
+      "lines": [
+        {
+          "name": "Synthetic pantry container",
+          "cost": 32
+        }
+      ]
+    }
+  },
+  {
+    "subject": "Synthetic order inquiry",
+    "sender": "Synthetic Shop <orders@shop.example>",
+    "receivedAt": "2026-11-04T18:00:00Z",
+    "headers": {
+      "From": "Synthetic Shop <orders@shop.example>",
+      "To": "Sam Synthetic <sam.synthetic@example.com>"
+    },
+    "owner": {
+      "name": "Sam Synthetic",
+      "address": "sam.synthetic@example.com"
+    },
+    "bodyText": "Hi Sam, thanks for contacting Synthetic Shop. We cannot locate an order or receipt from the information supplied. No order id, item names, quantities, prices or paid amount are included. Please supply the original receipt.",
+    "bodyHtml": null,
+    "baseline": {
+      "kind": "unresolved",
+      "category": "missing_evidence",
+      "reason": "The original order and priced itemization are missing."
+    }
+  },
+  {
+    "subject": "Synthetic Shop cancellation SYN-6005",
+    "sender": "Synthetic Shop <orders@shop.example>",
+    "receivedAt": "2026-11-04T18:00:00Z",
+    "headers": {
+      "From": "Synthetic Shop <orders@shop.example>",
+      "To": "Sam Synthetic <sam.synthetic@example.com>"
+    },
+    "owner": {
+      "name": "Sam Synthetic",
+      "address": "sam.synthetic@example.com"
+    },
+    "bodyText": "Hi Sam, we cancelled order SYN-6005. This notice does not include items or prices. The original order receipt is not attached. There is no posted transaction id, account association or refund amount in this notice.",
+    "bodyHtml": null,
+    "baseline": {
+      "kind": "unresolved",
+      "category": "missing_evidence",
+      "reason": "Cancellation notice has no original itemization or established Purchase."
+    }
+  },
+  {
+    "subject": "Your Synthetic Shop order SYN-6006",
+    "sender": "Synthetic Shop <orders@shop.example>",
+    "receivedAt": "2026-11-04T18:00:00Z",
+    "headers": {
+      "From": "Synthetic Shop <orders@shop.example>",
+      "To": "Sam Synthetic <sam.synthetic@example.com>"
+    },
+    "owner": {
+      "name": "Sam Synthetic",
+      "address": "sam.synthetic@example.com"
+    },
+    "bodyText": "",
+    "bodyHtml": "<html><body><p>Hi Sam, thanks for your order!</p><h2>Order SYN-6006</h2><p>Order date: November 3, 2026</p><table><tr><td>1 x Synthetic wool scarf</td><td>$24.00</td></tr><tr><td>Sales tax</td><td>$2.00</td></tr></table><p>Order total: $26.00, charged to Visa ending 0000.</p></body></html>",
+    "baseline": {
+      "kind": "imported",
+      "total": 26,
+      "lines": [
+        {
+          "name": "Synthetic wool scarf",
+          "cost": 24
+        },
+        {
+          "name": "Sales tax",
+          "cost": 2
+        }
+      ]
+    }
+  }
+]

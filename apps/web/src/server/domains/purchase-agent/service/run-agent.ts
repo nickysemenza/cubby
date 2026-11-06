@@ -10,9 +10,12 @@ import {
 import {
   agentImportRunPurpose,
   ESCALATE_TOOL,
+  EXTRACT_ORDER_TOOL,
   importRunAgentIdentity,
   importRunAgentManifest,
 } from "@cubby/schemas/import-run-agent";
+import { mailMessageRef } from "@cubby/schemas/mailbox-research";
+import { preparePurchaseImportInput } from "@cubby/schemas/purchase-import";
 import {
   runProgressStamp,
   type RunProgressStamp,
@@ -22,6 +25,7 @@ import type { GatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
 import { isPaidFundingUnavailable } from "@cubby/shared/ai/gateway-request";
 import type { SupportedChatModel } from "@cubby/shared/ai/models";
 import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
@@ -55,7 +59,11 @@ import {
   cubbyAgentModel,
   cubbyAgentProviders,
 } from "./cubby-ai-provider";
-import { cubbyMcpExtension } from "./cubby-mcp";
+import {
+  cubbyMcpExtension,
+  settleMailAttemptLimit,
+  mailWriterOutcome,
+} from "./cubby-mcp";
 import type {
   DispatchInput,
   PurchaseAgentEnvironment,
@@ -67,7 +75,12 @@ import {
   coordinatorModelsFor,
   type CoordinatorEscalation,
 } from "./escalation";
+import {
+  importExtractedOrderTool,
+  extractedOrderInput,
+} from "./import-order-tool";
 import { workflowForRun } from "./import-run-workflows";
+import { mailAttempts, isMailExtractionCall } from "./mail-attempts";
 import { readPiModelUsage } from "./model-usage";
 import { RunSettlement, SETTLEMENT_POLL_MS } from "./run-settlement";
 import { renderSignal } from "./signals";
@@ -229,13 +242,21 @@ export class PurchaseImportRunAgent
 
   /** The dispatch generation of the request that issued a tool call. */
   private async toolGeneration(
-    api: ToolExecutionApi,
+    api: Pick<ToolExecutionApi, "taskId">,
     context: Context,
   ): Promise<string | undefined> {
-    const task = await api.getTask(api.taskId, context);
-    return task?.owner
-      ? this.readState(`request-generation:${task.owner}`)
-      : undefined;
+    const direct = this.readState(`request-generation:${api.taskId}`);
+    if (direct) return direct;
+    const pi = await this.harness.pi();
+    let task = await pi.getTask(api.taskId, context);
+    // A nested writer belongs to its parent tool, then to the issuing
+    // generation. Keep the same generation fence at every depth.
+    while (task?.owner) {
+      const generation = this.readState(`request-generation:${task.owner}`);
+      if (generation) return generation;
+      task = await pi.getTask(task.owner, context);
+    }
+    return undefined;
   }
 
   private async toolProgressStamp(
@@ -244,10 +265,7 @@ export class PurchaseImportRunAgent
   ): Promise<RunProgressStamp> {
     const existing = await api.memo("progress-stamp", context);
     if (existing) return runProgressStamp.parse(existing);
-    const task = await api.getTask(api.taskId, context);
-    const generation = task?.owner
-      ? this.readState(`request-generation:${task.owner}`)
-      : undefined;
+    const generation = await this.toolGeneration(api, context);
     if (!generation)
       throw new Error("Progress tool has no originating request generation");
     const stamp = this.allocateProgressStamp(generation);
@@ -325,8 +343,18 @@ export class PurchaseImportRunAgent
     if (this.installed === identity.runId) return;
     const { runId, purpose } = identity;
     const manifest = importRunAgentManifest[purpose];
+    const models = coordinatorModelsFor(
+      manifest,
+      this.agentEnv.coordinatorModels,
+    );
     const escalation = coordinatorEscalation({
-      models: coordinatorModelsFor(manifest, this.agentEnv.coordinatorModels),
+      models,
+      // The provider ladder already reaches Sol after Claude credit refuses.
+      // Reuse that funded model without first sending a known-refused request.
+      fundedAlternative:
+        purpose === "mail_import" && !this.agentEnv.coordinatorModels
+          ? importRunAgentManifest.mail_import.escalationAlternative
+          : undefined,
       store: {
         read: (key) => this.readState(key),
         write: (key, value) => this.writeState(key, value),
@@ -334,6 +362,125 @@ export class PurchaseImportRunAgent
       useModel: (model) => this.useModel(model),
       unavailable: (model) => this.services().escalationUnavailable(model),
     });
+    const attempts =
+      purpose === "mail_import"
+        ? mailAttempts({
+            read: (key) => this.readState(key),
+            write: (key, value) => this.writeState(key, value),
+          })
+        : undefined;
+    const reserveExtraction = async (
+      call: Pick<
+        import("@earendil-works/pi-ai").ToolCall,
+        "id" | "name" | "arguments"
+      >,
+      api: Pick<ToolExecutionApi, "taskId">,
+      context: Context,
+      accountingOnly = false,
+    ) => {
+      if (!attempts) return;
+      const source = attempts.source();
+      const generation = await this.toolGeneration(api, context);
+      if (!source?.evidenceVersion || !generation)
+        return {
+          block: "Claim current trusted Email evidence before extracting.",
+        };
+      const named = z
+        .object({
+          mail: mailMessageRef.extend({ checksum: z.string().optional() }),
+        })
+        .safeParse(call.arguments);
+      const namedOrders = z
+        .object({
+          orders: z.array(
+            z.object({
+              source: z.unknown(),
+              evidenceChecksum: z.string().optional(),
+            }),
+          ),
+        })
+        .safeParse(call.arguments.input);
+      const foreignMail =
+        named.success &&
+        (named.data.mail.mailboxId !== source.mailboxId ||
+          named.data.mail.messageId !== source.messageId ||
+          (named.data.mail.checksum !== undefined &&
+            named.data.mail.checksum !== source.checksum));
+      const foreignOrder =
+        namedOrders.success &&
+        namedOrders.data.orders.some((order) => {
+          const mail = z
+            .object({
+              kind: z.literal("mail_message"),
+              externalKey: z.string(),
+              checksum: z.string().optional(),
+            })
+            .safeParse(order.source);
+          return (
+            mail.success &&
+            (mail.data.externalKey !==
+              `gmail:${source.mailboxId}:${source.messageId}` ||
+              (mail.data.checksum !== undefined &&
+                mail.data.checksum !== source.checksum) ||
+              (order.evidenceChecksum !== undefined &&
+                order.evidenceChecksum !== source.checksum))
+          );
+        });
+      if (foreignMail || foreignOrder)
+        return {
+          block:
+            "This extraction names a different Email or checksum. Claim its current evidence before extracting; no attempt was charged.",
+        };
+      this.writeState(`mail-attempt-source:${call.id}`, JSON.stringify(source));
+      const stage =
+        escalation.active && escalation.model() !== models.primary
+          ? "escalation"
+          : "primary";
+      const identity = await extractionIdentity(call);
+      const proposal =
+        call.name === EXTRACT_ORDER_TOOL
+          ? extractedOrderInput.safeParse(call.arguments)
+          : undefined;
+      const admitted = await this.services().mailAttempt({
+        source: { ...source, evidenceVersion: source.evidenceVersion },
+        generation,
+        identity,
+        invocation: call.id,
+        publicationPossible: validExtraction(call),
+        proposal: proposal?.success
+          ? z
+              .record(z.string(), z.json())
+              .parse(JSON.parse(JSON.stringify(proposal.data)))
+          : undefined,
+        stage,
+        action: "admit",
+      });
+      if (admitted.kind === "admitted") return;
+      if (admitted.kind === "pending")
+        return {
+          block:
+            "An earlier write outcome is pending. Claim the Email to recover its retained proposal, then replay its exact tool and arguments before changing extraction.",
+        };
+      if (accountingOnly) {
+        this.writeState("mail-attempt-limit-pending", JSON.stringify(source));
+        return;
+      }
+
+      const settlement = await settleMailAttemptLimit({
+        services: () => this.services(),
+        runId,
+        source,
+        generation,
+      });
+      if (settlement.kind === "refused")
+        return {
+          block: `Attempt exhaustion settlement was refused: ${settlement.diagnostic}. Re-claim the current evidence and resolve the supported gap through mail_resolve; do not retry extraction for this unchanged source.`,
+        };
+      return {
+        block:
+          "This Email reached its durable extraction attempt limit. Claim the next Email; do not prepare this source again.",
+      };
+    };
     this.escalation = escalation;
     const workflow = workflowForRun(purpose, runId, {
       escalation: escalation.active,
@@ -342,24 +489,96 @@ export class PurchaseImportRunAgent
     this.registry.install(
       defineExtension({
         name: "cubby.run",
-        tools: runAgentTools(
-          () => this.services(),
-          (api, context) => this.toolProgressStamp(api, context),
-          (reason) =>
-            escalation.escalate({ reason: "requested", detail: reason }),
-        ).filter(
+        tools: [
+          ...runAgentTools(
+            () => this.services(),
+            (api, context) => this.toolProgressStamp(api, context),
+            (request) => escalation.escalate(request),
+          ),
+          ...(attempts
+            ? [importExtractedOrderTool(runId, attempts.ordinaryEvidence)]
+            : []),
+        ].filter(
           (tool) =>
             agentTools.has(tool.name) &&
             (tool.name !== ESCALATE_TOOL || escalation.active),
         ),
         hooks: [
-          // Inert unless the escalation model differs from the primary.
-          ...(escalation.active
+          ...(attempts || escalation.active
             ? [
                 hook(ToolTask, {
-                  beforeTool: (call) => escalation.beforeTool(call),
-                  afterTool: (call, result) =>
-                    escalation.afterTool(call, result),
+                  beforeTool: (call, api, context) => {
+                    if (!attempts || call.parent || !isMailExtractionCall(call))
+                      return;
+                    return reserveExtraction(call, api, context);
+                  },
+                  afterTool: async (call, result, api, context) => {
+                    if (
+                      attempts &&
+                      !call.parent &&
+                      isMailExtractionCall(call)
+                    ) {
+                      const savedSource = this.readState(
+                        `mail-attempt-source:${call.id}`,
+                      );
+                      const source = savedSource
+                        ? z
+                            .object({
+                              mailboxId: z.string(),
+                              messageId: z.string(),
+                              checksum: z.string(),
+                              evidenceVersion: z.string(),
+                            })
+                            .parse(JSON.parse(savedSource))
+                        : undefined;
+                      const generation = await this.toolGeneration(
+                        api,
+                        context,
+                      );
+                      if (source?.evidenceVersion && generation) {
+                        const failure = z
+                          .object({ stage: z.enum(["prepare", "commit"]) })
+                          .safeParse(result.structuredOutput);
+                        const stage =
+                          call.name === EXTRACT_ORDER_TOOL
+                            ? (failure.data?.stage ?? "commit")
+                            : "prepare";
+                        const action = mailWriterOutcome({ result, stage });
+                        await this.services().mailAttempt({
+                          source: {
+                            ...source,
+                            evidenceVersion: source.evidenceVersion,
+                          },
+                          generation,
+                          identity: await extractionIdentity(call),
+                          invocation: call.id,
+                          publicationPossible: validExtraction(call),
+                          stage:
+                            escalation.active &&
+                            escalation.model() !== models.primary
+                              ? "escalation"
+                              : "primary",
+                          action,
+                        });
+                      }
+                    }
+                    if (attempts && call.name === "claim_next_import_work") {
+                      const text = result.output?.find(
+                        (part) => part.type === "text",
+                      );
+                      let value: unknown;
+                      try {
+                        value =
+                          text?.type === "text"
+                            ? JSON.parse(text.text)
+                            : undefined;
+                      } catch {
+                        // SILENT: an unreadable claim grants no source budget.
+                      }
+                      attempts.observeClaim(value);
+                    }
+                    return escalation.afterTool(call, result);
+                  },
                 }),
               ]
             : []),
@@ -395,14 +614,67 @@ export class PurchaseImportRunAgent
                 `request-generation:${api.taskId}`,
                 z.object({ generation: z.string() }).parse(memo).generation,
               );
+              let settlementRefusal: string | undefined;
+              const exhausted = this.readState("mail-attempt-limit-pending");
+              if (attempts && exhausted) {
+                const source = z
+                  .object({
+                    mailboxId: z.string(),
+                    messageId: z.string(),
+                    checksum: z.string(),
+                    evidenceVersion: z.string().optional(),
+                  })
+                  .parse(JSON.parse(exhausted));
+                const settlement = await settleMailAttemptLimit({
+                  services: () => this.services(),
+                  runId,
+                  source,
+                  generation,
+                });
+                if (settlement.kind === "refused")
+                  settlementRefusal = settlement.diagnostic;
+                this.writeState("mail-attempt-limit-pending", "");
+              }
               this.requestStartedAt = Date.now();
               this.requestTransport = "unknown";
               this.requestGateway = undefined;
+              const messages =
+                manifest.workItemContext === "current"
+                  ? currentWorkItemMessages(request.messages)
+                  : request.messages;
+              if (settlementRefusal)
+                return {
+                  messages: [
+                    ...messages,
+                    {
+                      role: "user" as const,
+                      timestamp: Date.now(),
+                      content: `Automatic exhaustion settlement was refused: ${settlementRefusal}. Re-claim the current evidence and resolve the supported gap through mail_resolve; do not retry extraction for this unchanged source.`,
+                    },
+                  ],
+                };
               return manifest.workItemContext === "current"
-                ? { messages: currentWorkItemMessages(request.messages) }
+                ? { messages }
                 : undefined;
             },
-            afterResponse: (message) => this.afterResponse(message),
+            afterResponse: async (message, api, context) => {
+              await this.afterResponse(message);
+              // ToolTask validates before beforeTool. Count malformed model
+              // submissions here too, but not transient failed generations.
+              if (attempts && message.stopReason === "toolUse") {
+                for (const part of message.content) {
+                  if (part.type === "toolCall" && isMailExtractionCall(part)) {
+                    try {
+                      await reserveExtraction(part, api, context, true);
+                    } catch (error) {
+                      // ToolTask repeats admission before any writer. Accounting
+                      // failure cannot authorize a write or strand the generation.
+                      this.report(error);
+                    }
+                  }
+                }
+              }
+            },
             onYield: (_answer, api, context) =>
               purpose === "mail_import"
                 ? continueMailImportOnYield({
@@ -732,3 +1004,43 @@ const eventStream = (body: ReadableStream<Uint8Array>) =>
       "cache-control": "no-store",
     },
   });
+
+// The writer owns envelope and cross-order validation. Identity only needs the
+// extraction facts; Zod cannot omit fields from the refined writer schema.
+const preparationFacts = z.object({
+  orders: preparePurchaseImportInput.shape.orders,
+});
+
+function validExtraction(
+  call: Pick<import("@earendil-works/pi-ai").ToolCall, "name" | "arguments">,
+) {
+  return call.name === EXTRACT_ORDER_TOOL
+    ? extractedOrderInput.safeParse(call.arguments).success
+    : preparationFacts.safeParse(call.arguments.input).success;
+}
+
+async function extractionIdentity(
+  call: Pick<
+    import("@earendil-works/pi-ai").ToolCall,
+    "id" | "name" | "arguments"
+  >,
+) {
+  const parsed = extractedOrderInput.safeParse(call.arguments);
+  if (parsed.success) return sha256Hex(JSON.stringify(parsed.data));
+  const prepared = preparationFacts.safeParse(call.arguments.input);
+  if (prepared.success)
+    return sha256Hex(
+      JSON.stringify(
+        prepared.data.orders.map((order) => ({
+          source: order.source,
+          evidenceChecksum: order.evidenceChecksum,
+          vendorId: order.vendorId,
+          vendor: order.vendor,
+          targetPurchaseId: order.targetPurchaseId,
+          extraction: order.extraction,
+        })),
+      ),
+    );
+  // Repeated malformed submissions consume distinct slots.
+  return call.id;
+}

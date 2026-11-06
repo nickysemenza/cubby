@@ -210,6 +210,25 @@ export async function completeOperation(
   });
 }
 
+/** Update mutable private-operation bookkeeping without changing replay identity or state. */
+export async function setOperationResult(
+  client: Client,
+  key: OperationKey,
+  result: OperationResult,
+) {
+  await client.transaction(async (tx) => {
+    if (await lockOperationRun(tx, key))
+      throw new Error("This Run is retired; its operations are closed.");
+    const rows = await tx
+      .update(runOperation)
+      .set({ result, updatedAt: new Date() })
+      .where(matchesKey(key))
+      .returning({ id: runOperation.id });
+    if (rows.length !== 1)
+      throw new Error("Run operation result has no owning receipt");
+  });
+}
+
 /** Mark the operation `failed` with a bounded diagnostic. */
 export async function failOperation(
   client: Client,

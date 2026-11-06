@@ -69,7 +69,14 @@ The local Mail replay evaluator copies supplied retained originals into a fresh
 throwaway database per case and runs the real coordinator and public writers.
 It publishes no production records. Its session-only stdin transport and reports
 keep originals and entity handles out of files; reports show parity counts and
-only disagreement case positions/fields. Existing Purchases, catalog, attachments
+disagreement case positions/fields, plus bounded diagnostics and explicit usage
+measurements. Version 2 labels cost as all Run-scoped AI features, reports known
+standard cost separately from charged cost and missing prices, and retains
+token/cache counts and durations without source text. Re-capture both comparison
+baselines under that version; older coordinator-only cost reports are not
+comparable. Synthetic parity gates disposition, totals, line-cost multisets and
+supported links; free-form line names and unresolved reasons remain review
+differences. These checks do not establish Product identity or full itemization. Existing Purchases, catalog, attachments
 and supporting Emails are not copied, so a replay with those dependencies is
 context-limited rather than evidence of a model regression. The decision-grading
 skill owns blind review and member-confirmed MCP grading. Replay observation runs
@@ -77,7 +84,7 @@ before Worker teardown on both completion and failure; timeouts retain observed
 successful-call models while their outcome remains unavailable rather than
 counting as parity.
 
-Production runs Luna as the primary and Opus as the escalation model. A graded
+Production runs Luna as the primary and Opus as the preferred escalation model. A graded
 replay of 20 held-out import Emails matched Opus on every total Luna imported
 (differences were line names, $0 shipping lines, and split rather than netted
 discounts), and 9 of 10 unresolved Emails agreed. Linking to existing Purchases
@@ -87,18 +94,36 @@ Haiku 5.5 as both primary and escalation model, on the same 20 Emails, imported
 9 (Luna 16), with 3 totals differing from Opus, and left 10 unresolved that
 Opus imported; at about $0.005 per Email it cost no less than Luna, so it is not
 a candidate.
-With distinct primary and escalation models, one Email escalates on an
-explicit request, two refused prepares, or before the primary records unresolved;
-a prepare refused because another live Run holds its supporting original
-(`MAIL_SOURCE_HELD_BY_RUN`) never counts, since the escalation model meets the
-same refusal, and the coordinator links the lifecycle notice instead;
-a claim that returns another Email returns to the primary (re-claiming the same
-unsettled Email keeps it escalated). While the escalation model's funding refuses
-(a recorded Claude credit refusal, a spent background window budget), the
-primary settles the Email itself; the decision is recorded once per Email. Coordinator model transitions retain a pending/applied configuration receipt.
-Recovery reconciles the desired model before accepting a replayed escalation,
-held resolution, refused prepare or next-Email reset. A failed configuration may
-already have taken effect, so pending transitions always reapply idempotently. A
-new unresolved call arriving while configuration is pending is held before
-reconciliation: changing the configuration does not establish that the escalation
-model authored the call. The subsequent escalation-model turn may settle it.
+With distinct primary and escalation models, an Email escalates only on an
+explicit request for a repairable extraction, identity or evidence-contradiction
+problem, or an unclassified reasoning gap. Missing originals, member decisions,
+held sources and transient execution failures do not justify stronger reasoning.
+This replaces blanket escalation on two refused preparations or before every
+unresolved disposition: stronger reasoning cannot recover absent evidence or
+supply authority. Source-specific gaps settle without stopping unrelated work.
+
+A claim returning another Email returns to the primary; re-claiming the same
+unsettled Email keeps its escalation. While escalation funding refuses, the
+primary handles the Email unless the existing Sol alternative can use free
+funding. A known Claude credit refusal selects funded Sol before transmission
+instead of spending a failed Claude call to reach the provider ladder's same
+alternative. The funding decision and selected model are retained per Email.
+Model transitions retain a pending/applied configuration receipt. Recovery
+reconciles the desired model before accepting a replayed escalation or next-Email
+reset. Pending transitions reapply idempotently because a failed configuration
+may already have taken effect. Existing stored escalation decisions survive the
+policy cutover. The coordinator mechanically bounds extraction submissions by
+source checksum: initial extraction plus one repair on the primary and one
+escalated submission. Invalid tool arguments count too; replaying the same call
+does not. Exhaustion publishes a gap through the ordinary checksum-bound writer.
+Attempt receipts live in Run operations and remain authoritative across successor
+Runs. Only the trusted claim establishes their evidence version; display names
+and Purchase date corrections do not renew it. Writer refusal classification
+uses server metadata, never matching error codes in Email text. Held-source
+refusals do not spend semantic attempts. An uncertain writer outcome retains its
+reservation and permits bounded identical-operation recovery before changed input.
+The bundled ordinary tool owns stable preparation/commit identities and returns
+the next durable claim after known publication. New retained source bytes or
+accepted evidence of the exact own-account order may reopen an untouched
+automatic gap through discovery, preserving earlier rosters, outcomes and member
+intent. Unchanged source/evidence fingerprints never schedule another attempt.

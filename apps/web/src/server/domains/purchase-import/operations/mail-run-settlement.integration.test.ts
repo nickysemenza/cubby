@@ -293,6 +293,7 @@ describe("Mail import settlement", () => {
             checksum: mail.rawChecksum,
             disposition: {
               kind: "unresolved",
+              category: "unknown" as const,
               reason:
                 "finance.converge review_required: needs a dated, confirmed funding account",
             },

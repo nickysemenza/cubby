@@ -12,11 +12,11 @@
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
+import { orderIdentifiers } from "../repo/mail-rule-evidence";
 import {
   carrierNotice,
   decideMailByRule,
   mailLifecycleEvent,
-  orderIdentifiers,
   type MailRuleEvidence,
 } from "./mail-import-rule";
 

@@ -165,7 +165,8 @@ export async function executeAtomicOperation<T>(
           "Operation id was replayed with different input. Reuse it only for the exact original request, or choose a new operation id for a changed request.",
         );
       if (recorded.state !== "completed")
-        throw new Error(
+        throw createAppError(
+          "RUN_OPERATION_OUTCOME_UNCERTAIN",
           `${operation.subject} outcome is uncertain; inspect operation status`,
         );
       return schema.parse(recorded.result);

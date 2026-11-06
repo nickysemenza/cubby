@@ -1138,6 +1138,7 @@ export async function pauseAuthorizedRuns(db: Database, actorUserId: string) {
  * never shown as Run evidence.
  */
 const PRIVATE_OPERATION_KINDS = [
+  "mail_extraction_attempt",
   "research_mail_scope",
   "research_mail_choice",
   "research_mail_page",

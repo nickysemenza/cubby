@@ -31,6 +31,15 @@ describe("Mail replay disagreement", () => {
         ...baseline,
         lines: [{ name: "Synthetic item", cost: 9 }],
       }),
+    ).toEqual(["line_costs", "lines"]);
+    expect(
+      mailReplayDisagreement(baseline, {
+        ...baseline,
+        lines: baseline.lines.map((line) => ({
+          ...line,
+          name: `${line.name} (renamed)`,
+        })),
+      }),
     ).toEqual(["lines"]);
   });
   it("compares linked order/vendor identity and never calls missing identity parity", () => {
@@ -70,6 +79,7 @@ describe("Mail replay disagreement", () => {
   it("reports absent outcomes and disposition/reason disagreements", () => {
     const baseline = {
       kind: "unresolved" as const,
+      category: "unknown" as const,
       reason: "Synthetic missing itemization",
     };
     expect(mailReplayDisagreement(baseline, null)).toEqual(["unavailable"]);
@@ -98,7 +108,11 @@ it("retains model usage and attempt errors before failed replay teardown", async
     await expect(
       observeMailReplayAttempt({
         caseIndex: 1,
-        baseline: { kind: "unresolved", reason: "Synthetic missing total" },
+        baseline: {
+          kind: "unresolved",
+          category: "unknown" as const,
+          reason: "Synthetic missing total",
+        },
         run: async () => {
           order.push("run");
           throw new Error("Synthetic coordinator timeout");
@@ -107,7 +121,11 @@ it("retains model usage and attempt errors before failed replay teardown", async
           order.push("read");
           return {
             status: "running",
-            outcome: { kind: "unresolved", reason: "Synthetic missing total" },
+            outcome: {
+              kind: "unresolved",
+              category: "unknown" as const,
+              reason: "Synthetic missing total",
+            },
             actualModels: ["claude-haiku-5-5", "claude-opus-5-5"],
             failure: "agent_failed: Coordinator unanswered: error",
             failedAttempts: [
@@ -115,6 +133,20 @@ it("retains model usage and attempt errors before failed replay teardown", async
             ],
             diagnostics: ["[purchase-agent] Synthetic operation failure"],
             usd: { "claude-haiku-5-5": 0.01 },
+            usage: [
+              {
+                feature: "purchase_import_extraction",
+                model: "gpt-6-luna",
+                status: "succeeded",
+                standardCost: null,
+                chargedCost: 0,
+                inputTokens: 100,
+                outputTokens: 20,
+                cacheReadTokens: 0,
+                cacheWriteTokens: 0,
+                durationMs: 200,
+              },
+            ],
           };
         },
         record: (report) => {
@@ -137,6 +169,15 @@ it("retains model usage and attempt errors before failed replay teardown", async
       ],
       diagnostics: ["[purchase-agent] Synthetic operation failure"],
       usd: { "claude-haiku-5-5": 0.01 },
+      usage: [
+        {
+          feature: "purchase_import_extraction",
+          standardCost: null,
+          inputTokens: 100,
+          outputTokens: 20,
+          durationMs: 200,
+        },
+      ],
     },
   ]);
 });

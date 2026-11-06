@@ -20,6 +20,7 @@ import {
   mailReadAgentText,
   mailReadOut,
 } from "@cubby/schemas/mailbox-research";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
@@ -31,6 +32,7 @@ import {
   shipment as shipmentTable,
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { readMailAttemptRecovery } from "~/server/domains/purchase-import/repo/mail-attempts";
 import { readMailRunSources } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { AppError } from "~/server/errors/app-error";
@@ -40,12 +42,14 @@ import { senderProofVendor } from "../repo/import-vendor";
 import {
   countRetainedMailAttachments,
   readMailRuleCandidates,
+  readMailProductCandidates,
+  type MailProductEvidence,
+  orderIdentifiers,
 } from "../repo/mail-rule-evidence";
 import {
   carrierNotice,
   decideMailByRule,
   MAIL_IMPORT_RULE_REVISION,
-  orderIdentifiers,
   type CarrierNotice,
 } from "../service/mail-import-rule";
 import { readMail, resolveMail } from "./mail-tool";
@@ -62,6 +66,7 @@ const KNOWN_PURCHASES_MAX = 5;
  * it prints, and the live Purchases holding one of those order ids.
  */
 type KnownForEmail = {
+  products: MailProductEvidence;
   senderVendor: { id: string; name: string } | null;
   orderIds: string[];
   purchases: Array<{
@@ -146,6 +151,7 @@ async function settleCarrierNotice(
           }
         : {
             kind: "unresolved",
+            category: "missing_evidence",
             reason: `Package retained as ${shipmentCode}; this ${notice.carrierName} notice names no order or Purchase.`,
           },
     },
@@ -167,7 +173,9 @@ async function settleByRule(
   source: MailRunSource,
   actor: ActorContext,
   memberSelected: boolean,
-): Promise<"settled" | { known: KnownForEmail | null }> {
+): Promise<
+  "settled" | { known: KnownForEmail | null; attemptContext?: string }
+> {
   const [mail] = await readRetainedMail(db, {
     ledgerPartyIds: [source.email.ledgerPartyId],
     orderMailIds: [source.orderMailId],
@@ -181,7 +189,7 @@ async function settleByRule(
     ledgerPartyId: mail.ledgerPartyId,
     orderIds,
   });
-  const known: KnownForEmail = {
+  const known: Omit<KnownForEmail, "products"> = {
     senderVendor: proof
       ? { id: proof.vendor.shortcode, name: proof.vendor.name }
       : null,
@@ -194,9 +202,36 @@ async function settleByRule(
       imported: candidate.importedSource,
     })),
   };
+  const attemptContext = JSON.stringify(
+    candidates
+      .map((candidate) => [
+        candidate.purchaseId,
+        candidate.acceptedSourceFingerprint,
+      ])
+      .sort(),
+  );
+  const knownForCoordinator = async (): Promise<KnownForEmail> => ({
+    ...known,
+    products: await readMailProductCandidates(db, {
+      ledgerPartyId: mail.ledgerPartyId,
+      vendorId: proof?.vendor.id ?? null,
+      purchaseIds: candidates
+        .filter(
+          (candidate) =>
+            candidate.ownAccount && candidate.vendorId === proof?.vendor.id,
+        )
+        .slice(0, KNOWN_PURCHASES_MAX)
+        .map((candidate) => candidate.purchaseId),
+      links: content.links,
+    }),
+  });
   // A later page or omitted evidence may reverse an apparent lifecycle notice.
   // The coordinator can page the read; a deterministic link cannot assume it.
-  if (content.truncated || content.nextOffset !== null) return { known };
+  if (content.truncated || content.nextOffset !== null)
+    return {
+      known: await knownForCoordinator(),
+      attemptContext,
+    };
   const decision = decideMailByRule({
     subject: mail.subject,
     text,
@@ -218,7 +253,11 @@ async function settleByRule(
         : null,
     }),
   });
-  if (decision.kind === "coordinator") return { known };
+  if (decision.kind === "coordinator")
+    return {
+      known: await knownForCoordinator(),
+      attemptContext,
+    };
   const ref = {
     mailboxId: mail.mailboxId,
     messageId: mail.messageId,
@@ -234,7 +273,7 @@ async function settleByRule(
         actor,
       ))
         ? "settled"
-        : { known };
+        : { known: await knownForCoordinator(), attemptContext };
     await resolveMail(
       db,
       {
@@ -248,7 +287,11 @@ async function settleByRule(
     );
   } catch (error) {
     // SILENT: a refusal `purchase_import.mail_resolve` would give the coordinator (a member's dismissal, another Purchase's link, changed evidence) hands it the Email instead.
-    if (error instanceof AppError) return { known };
+    if (error instanceof AppError)
+      return {
+        known: await knownForCoordinator(),
+        attemptContext,
+      };
     throw error;
   }
   return "settled";
@@ -306,12 +349,28 @@ export async function claimMailImportWork(db: Database, runId: string) {
     if (ruled === "settled") continue;
     const { email } = source;
     const ref = { mailboxId: email.mailboxId, messageId: email.messageId };
+    const evidenceVersion = await sha256Hex(
+      JSON.stringify({
+        checksum: email.checksum,
+        senderVendorId: ruled.known?.senderVendor?.id ?? null,
+        orderIds: ruled.known?.orderIds ?? [],
+        acceptedSources: ruled.attemptContext,
+      }),
+    );
+    const recovery = await readMailAttemptRecovery(db, {
+      ledgerPartyId: email.ledgerPartyId,
+      orderMailId: source.orderMailId,
+      source: { ...ref, checksum: email.checksum, evidenceVersion },
+    });
     return {
       kind: "email" as const,
+      evidenceVersion,
+      ...(recovery ? { recovery } : {}),
       runId: current.shortcode,
       remaining: pending.length - index,
       email: {
         ...ref,
+        checksum: email.checksum,
         sender: email.sender,
         subject: email.subject,
         receivedAt: email.receivedAt?.toISOString() ?? null,
