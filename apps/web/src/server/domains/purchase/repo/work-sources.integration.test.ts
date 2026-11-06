@@ -1,3 +1,4 @@
+import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -153,7 +154,7 @@ describe("financial Work sources", () => {
       accountId,
       kind: "account_transfer",
       status: "posted",
-      amount: -25,
+      amount: moneyToMinor(-25),
       transactionDate: "2026-10-09",
       postedDate: "2026-10-09",
     });

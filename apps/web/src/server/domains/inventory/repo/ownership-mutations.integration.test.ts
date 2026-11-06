@@ -432,7 +432,7 @@ describe("inventory ownership mutations", () => {
           accountId: paymentAccount.id,
           kind: "purchase",
           status: "posted",
-          amount: 200,
+          amount: moneyToMinor(200),
           transactionDate: "2026-09-01",
           postedDate: "2026-09-01",
         },

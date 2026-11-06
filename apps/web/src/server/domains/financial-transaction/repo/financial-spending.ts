@@ -51,6 +51,7 @@ import {
   financialSourceRefsIncluding,
 } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { paymentEvidenceDollars } from "~/server/domains/purchase-import/repo/payment-evidence";
 import {
   planPurchaseRetainedSettlement,
@@ -168,12 +169,16 @@ export async function prepareFinancialSpendingPage(
   },
 ) {
   const transactions = input.transactionIds.length
-    ? await getDb(db).query.financialTransaction.findMany({
-        where: and(
-          inArray(financialTransaction.id, [...new Set(input.transactionIds)]),
-          notDeleted(financialTransaction),
-        ),
-      })
+    ? await getDb(db)
+        .query.financialTransaction.findMany({
+          where: and(
+            inArray(financialTransaction.id, [
+              ...new Set(input.transactionIds),
+            ]),
+            notDeleted(financialTransaction),
+          ),
+        })
+        .then((rows) => rows.map(transactionDollars))
     : [];
   const accountIds = [
     ...new Set([
@@ -386,12 +391,14 @@ async function spendingFacts(
   const row = request.transactionId
     ? page
       ? page.transactions.get(request.transactionId)
-      : await getDb(db).query.financialTransaction.findFirst({
-          where: and(
-            eq(financialTransaction.shortcode, request.transactionId),
-            notDeleted(financialTransaction),
-          ),
-        })
+      : await getDb(db)
+          .query.financialTransaction.findFirst({
+            where: and(
+              eq(financialTransaction.shortcode, request.transactionId),
+              notDeleted(financialTransaction),
+            ),
+          })
+          .then((row) => (row ? transactionDollars(row) : row))
     : undefined;
   if (request.transactionId && !row)
     refuse("The spending transaction is no longer live.");
@@ -559,10 +566,10 @@ async function loadSpendingGraphBatch(
           account: unknown;
           owner: unknown;
         }>(sql`SELECT a."purchaseId", a."transactionId", f.shortcode AS "transactionCode", (a."amountMinor"::float8 / 100) AS amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
-    f.amount AS "transactionAmount", fa."deletedAt" AS "accountDeletedAt",
+    (f."amountMinor"::float8 / 100) AS "transactionAmount", fa."deletedAt" AS "accountDeletedAt",
     (SELECT sum(coverage."amountMinor"::float8 / 100) FROM "FinancialTransactionAllocation" coverage
       WHERE coverage."transactionId" = f.id AND ${notDeleted("coverage")}) AS "allocatedAmount",
-    to_jsonb(f) AS transaction, to_jsonb(fa) AS account, to_jsonb(lp) AS owner
+    (to_jsonb(f)-'amountMinor')||jsonb_build_object('amount',f."amountMinor"::float8/100) AS transaction, to_jsonb(fa) AS account, to_jsonb(lp) AS owner
     FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" f ON f.id = a."transactionId"
     JOIN "FinancialAccount" fa ON fa.id = f."accountId"
     LEFT JOIN "LedgerParty" lp ON lp.id = fa."ledgerPartyId"

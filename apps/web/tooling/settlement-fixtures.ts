@@ -1,4 +1,5 @@
 import { moneyToMinor } from "@cubby/shared";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import type { PurchaseId } from "@cubby/schemas/identifiers";
 import type { Database } from "~/server/db";
 import { financialTransactionAllocation } from "~/server/db/schema";
@@ -22,20 +23,22 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
  */
 export async function insertSettlementTransaction(
   db: Database,
-  values: Parameters<typeof insertWithShortcode<"financialTransaction">>[2] & {
+  values: Omit<
+    Parameters<typeof insertWithShortcode<"financialTransaction">>[2],
+    "amount"
+  > & {
     purchaseId: PurchaseId;
     amount: number;
   },
 ) {
-  const transaction = await insertWithShortcode(
-    db,
-    "financialTransaction",
-    values,
-  );
+  const transaction = await insertWithShortcode(db, "financialTransaction", {
+    ...values,
+    amount: moneyToMinor(values.amount),
+  });
   await insertAndReturn(db, financialTransactionAllocation, {
     transactionId: transaction.id,
     purchaseId: values.purchaseId,
     amountMinor: moneyToMinor(values.amount),
   });
-  return transaction;
+  return transactionDollars(transaction);
 }

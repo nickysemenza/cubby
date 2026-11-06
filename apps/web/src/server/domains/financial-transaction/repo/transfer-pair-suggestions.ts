@@ -307,7 +307,7 @@ async function loadTransactionLegs(
     ...(filter.from ? [sql`${day} >= ${filter.from}::date`] : []),
     ...(filter.to ? [sql`${day} <= ${filter.to}::date`] : []),
     ...(filter.amountsCents
-      ? [amountIn(sql`ft.amount`, filter.amountsCents)]
+      ? [amountIn(sql`(ft."amountMinor"::numeric / 100)`, filter.amountsCents)]
       : []),
     ...(filter.codes
       ? [
@@ -330,7 +330,7 @@ async function loadTransactionLegs(
     sourceCategory: string | null;
     notes: string | null;
   }>(sql`
-    SELECT ft.id, ft.shortcode, ft."accountId", ft.amount, ${day}::text AS date,
+    SELECT ft.id, ft.shortcode, ft."accountId", (ft."amountMinor"::numeric / 100)::float8 AS amount, ${day}::text AS date,
       ft.kind, ft.merchant, ft."rawDescription", ft."sourceCategory", ft.notes
     FROM "FinancialTransaction" ft
     WHERE ${notDeleted("ft")} AND ft.status IN (${sql.join(
@@ -978,7 +978,7 @@ async function potentialTransferSeeds(db: Database, keys: readonly string[]) {
   const selections = [
     ...(codes.length
       ? [
-          sql`SELECT 'ftx:' || ft.shortcode AS key, ft.amount,
+          sql`SELECT 'ftx:' || ft.shortcode AS key, (ft."amountMinor"::numeric / 100)::float8 AS amount,
           ft.kind AS "recordedKind", ft."sourceCategory"
         FROM "FinancialTransaction" ft
         WHERE ${notDeleted("ft")} AND ft.shortcode IN (${sql.join(

@@ -5,7 +5,9 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { financialAccount, financialTransaction } from "~/server/db/schema";
 
 export const financialTransactionWorkFacts = () => ({
-  amount: sql`${financialTransaction.amount}`,
+  amount: sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
+    Number,
+  ),
   date: sql`coalesce(${financialTransaction.postedDate}, ${financialTransaction.transactionDate})`,
 });
 export const financialTransactionWorkOwners = (id: SQL) =>

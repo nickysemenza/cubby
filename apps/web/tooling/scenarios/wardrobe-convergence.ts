@@ -166,7 +166,7 @@ async function readConvergenceFacts(
         transactionDate: string | null;
         sourceRefs: { source: string; externalId: string }[];
       }>(
-        `SELECT t.shortcode, a."purchaseId", t.amount::text AS amount,
+        `SELECT t.shortcode, a."purchaseId", (t."amountMinor"::float8 / 100)::text AS amount,
               (a."amountMinor"::float8 / 100)::text AS "allocatedAmount", t."postedDate",
               t."transactionDate",
               COALESCE((

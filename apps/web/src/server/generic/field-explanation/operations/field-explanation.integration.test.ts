@@ -1307,7 +1307,7 @@ describe("derived field explanations against canonical records", () => {
       "financialTransaction",
       {
         accountId: account.id,
-        amount: -10,
+        amount: moneyToMinor(-10),
         kind: "income",
         status: "posted",
         postedDate: "2026-09-01",
@@ -1367,7 +1367,7 @@ describe("derived field explanations against canonical records", () => {
       "financialTransaction",
       {
         accountId: account.id,
-        amount: 2,
+        amount: moneyToMinor(2),
         kind: "purchase",
         status: "posted",
         postedDate: "2026-09-01",
@@ -1531,7 +1531,7 @@ describe("derived field explanations against canonical records", () => {
       "financialTransaction",
       {
         accountId: account.id,
-        amount: 21,
+        amount: moneyToMinor(21),
         kind: "purchase",
         status: "posted",
         postedDate: "2026-09-01",

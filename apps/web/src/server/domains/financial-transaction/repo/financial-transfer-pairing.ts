@@ -140,7 +140,9 @@ const pairingColumns = {
   shortcode: financialTransaction.shortcode,
   accountId: financialTransaction.accountId,
   accountShortcode: financialAccount.shortcode,
-  amount: financialTransaction.amount,
+  amount: sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
+    Number,
+  ),
   date: effectiveDate,
   partyShortcode: ledgerParty.shortcode,
   partyName: ledgerParty.name,
@@ -254,7 +256,7 @@ export async function suggestFinancialTransferPairs(
         or(
           ...requestedAmounts.map(
             (amount) =>
-              sql`${transferPoolAmountSql(sql`${financialTransaction.amount}::numeric`)} = ${amount}`,
+              sql`${transferPoolAmountSql(sql`${sql`(${financialTransaction.amount}::numeric / 100)`}::numeric`)} = ${amount}`,
           ),
         ),
       ),

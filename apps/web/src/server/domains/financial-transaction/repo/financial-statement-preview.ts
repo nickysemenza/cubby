@@ -395,7 +395,10 @@ export async function previewFinancialTransactionImport(
         id: financialTransaction.id,
         shortcode: financialTransaction.shortcode,
         accountId: financialTransaction.accountId,
-        amount: financialTransaction.amount,
+        amount:
+          sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
+            Number,
+          ),
         postedDate: financialTransaction.postedDate,
         transactionDate: financialTransaction.transactionDate,
         status: financialTransaction.status,

@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { parseShortcodeFor } from "@cubby/shared";
-import { and, asc, eq } from "drizzle-orm";
+import { sql, and, asc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -459,7 +459,10 @@ export async function loadFinancialAccountTransactionEvidence(
   const rows = await unwrapDb(db)
     .select({
       shortcode: financialTransaction.shortcode,
-      amount: financialTransaction.amount,
+      amount:
+        sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
+          Number,
+        ),
       status: financialTransaction.status,
       transactionDate: financialTransaction.transactionDate,
       postedDate: financialTransaction.postedDate,

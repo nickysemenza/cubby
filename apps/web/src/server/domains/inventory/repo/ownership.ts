@@ -447,7 +447,7 @@ const loadPaymentDefaults = async (
         inArray(financialTransactionAllocation.purchaseId, purchaseIds),
         notDeleted(financialTransactionAllocation),
         sql`${financialTransaction.amount} > 0`,
-        sql`${sql`(${financialTransactionAllocation.amountMinor}::numeric / 100)`} > 0`,
+        sql`${financialTransactionAllocation.amountMinor} > 0`,
       ),
     );
 };

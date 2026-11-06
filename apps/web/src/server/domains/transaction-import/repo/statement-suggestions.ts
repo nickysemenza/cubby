@@ -53,13 +53,14 @@ import {
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { suggestionTable, financialTransaction } from "~/server/db/schema";
+import { suggestionTable } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   previewFinancialTransactionImport,
   prepareFinancialStatementPreview,
 } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
+import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   findTransferPairsForCharges,
   transferPairSourceCharges,
@@ -610,7 +611,7 @@ async function merchantHistory(
       AND ${notDeleted("ft")} AND ft.status <> ${financialTransactionStatus.enum.void}
       AND ft.merchant IS NOT NULL AND ${merchantKey(sql`ft.merchant`)} = p.merchant
       AND COALESCE(ft."postedDate", ft."transactionDate") < p.day
-      AND sign(ft.amount)::int = p.direction
+      AND sign((ft."amountMinor"::numeric / 100))::int = p.direction
     WHERE ft.id NOT IN (SELECT id FROM ruled)
     GROUP BY p.key
   `);
@@ -657,7 +658,7 @@ const diffFor = (
 function sourceCorrectionReason(
   priorTransaction:
     | Pick<
-        typeof financialTransaction.$inferSelect,
+        FinancialTransactionDollars,
         "amount" | "status" | "transactionDate" | "postedDate"
       >
     | undefined,
@@ -685,7 +686,7 @@ function sourceCorrectionReason(
 
 function sourceLifecycleDiffers(
   transaction: Pick<
-    typeof financialTransaction.$inferSelect,
+    FinancialTransactionDollars,
     "status" | "transactionDate" | "postedDate"
   >,
   observation: Pick<Observation, "providerStatus" | "statementDate">,
@@ -741,11 +742,11 @@ async function prepareChargePreviews(
         shortcode: string;
         accountId: string;
         amount: number;
-        status: typeof financialTransaction.$inferSelect.status;
+        status: FinancialTransactionDollars["status"];
         transactionDate: string | null;
         postedDate: string | null;
       }>(sql`
-    SELECT ft.shortcode, ft."accountId", ft.amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
+    SELECT ft.shortcode, ft."accountId", (ft."amountMinor"::numeric / 100)::float8 AS amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
     WHERE ${notDeleted("ft")} AND ft.shortcode IN (${sql.join(
       [...matchedByCharge.values()].map((code) => sql`${code}`),
       sql`,`,

@@ -1,4 +1,5 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
@@ -695,7 +696,7 @@ describe("data quality: finance and project entities", () => {
       accountId: fromAccount.id,
       kind: "account_transfer",
       status: "posted",
-      amount: 40,
+      amount: moneyToMinor(40),
       transactionDate: "2026-08-20",
       postedDate: "2026-08-20",
     });
@@ -703,7 +704,7 @@ describe("data quality: finance and project entities", () => {
       accountId: toAccount.id,
       kind: "account_transfer",
       status: "posted",
-      amount: -40,
+      amount: moneyToMinor(-40),
       transactionDate: "2026-08-20",
       postedDate: "2026-08-20",
     });

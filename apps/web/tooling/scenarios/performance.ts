@@ -404,7 +404,7 @@ export async function seedPerformanceCorpus(
           (typeof financialTransaction.$inferInsert)["kind"]
         >,
         status: charge.status,
-        amount: charge.amount,
+        amount: moneyToMinor(charge.amount),
         transactionDate: "2026-01-16",
         postedDate: charge.status === "posted" ? "2026-01-17" : null,
         merchant: `${label} supplier charge`,

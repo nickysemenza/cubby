@@ -102,7 +102,7 @@ export async function listPurchasesSettlementCandidates(
   );
   const effectiveDate = sql`coalesce("FinancialTransaction"."postedDate", "FinancialTransaction"."transactionDate")::date`;
   const days = sql`abs(${effectiveDate} - subject.date)`;
-  const residual = sql`("FinancialTransaction".amount - (
+  const residual = sql`(("FinancialTransaction"."amountMinor"::numeric / 100) - (
     SELECT coalesce(sum((a."amountMinor"::numeric / 100)), 0) FROM "FinancialTransactionAllocation" a
     WHERE a."transactionId" = "FinancialTransaction".id AND ${notDeleted("a")}
   ))`;
@@ -122,7 +122,7 @@ export async function listPurchasesSettlementCandidates(
   const amountWithin = (centsAllowed: number) => sql`(
     "FinancialTransaction".kind = ${financialTransactionKind.enum.purchase}
     AND subject.stated_cents IS NOT NULL
-    AND (${centsOff(sql`"FinancialTransaction".amount`)} <= ${centsAllowed}
+    AND (${centsOff(sql`("FinancialTransaction"."amountMinor"::numeric / 100)`)} <= ${centsAllowed}
       OR ${centsOff(residual)} <= ${centsAllowed})
   )`;
   const exactAmount = amountWithin(0);
@@ -162,7 +162,7 @@ export async function listPurchasesSettlementCandidates(
           AND "FinancialTransaction"."ledgerTransferId" IS NULL
           AND "FinancialTransaction".kind IN ('purchase', 'refund')
           AND ${days} <= ${SETTLEMENT_CANDIDATE_WINDOW_DAYS}
-          AND ((${residual} <> 0 AND sign(${residual}) = sign("FinancialTransaction".amount)) OR ${targetAllocation})
+          AND ((${residual} <> 0 AND sign(${residual}) = sign(("FinancialTransaction"."amountMinor"::numeric / 100))) OR ${targetAllocation})
       ) scored
       ORDER BY rank
       LIMIT ${SETTLEMENT_CANDIDATE_LIMIT}

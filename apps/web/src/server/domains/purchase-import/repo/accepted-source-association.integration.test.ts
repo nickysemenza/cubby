@@ -2089,7 +2089,7 @@ describe("reviewed accepted source Product association", () => {
         accountId: account.id,
         kind: "purchase",
         status: "posted",
-        amount: 40,
+        amount: moneyToMinor(40),
         postedDate: "2026-09-02",
         merchant: "Synthetic retailer",
       },

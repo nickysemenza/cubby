@@ -1922,7 +1922,7 @@ describe("shared purchase-import prepare and commit", () => {
         accountId: financialAccount.id,
         kind: "purchase",
         status: "posted",
-        amount: 12.34,
+        amount: moneyToMinor(12.34),
         transactionDate: null,
         postedDate: "2026-09-21",
       },

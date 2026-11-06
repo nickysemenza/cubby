@@ -11,6 +11,7 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { suggestionTable, financialTransaction } from "~/server/db/schema";
 import { previewFinancialSpending } from "~/server/domains/financial-transaction/repo/financial-spending";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 
 import {
   currentStatementApplication,
@@ -91,9 +92,11 @@ export async function previewStatementSuggestion(
     });
   }
   const target = targetId
-    ? await getDb(db).query.financialTransaction.findFirst({
-        where: eq(financialTransaction.shortcode, codeOf(targetId)),
-      })
+    ? await getDb(db)
+        .query.financialTransaction.findFirst({
+          where: eq(financialTransaction.shortcode, codeOf(targetId)),
+        })
+        .then((row) => (row ? transactionDollars(row) : row))
     : undefined;
   if (!target)
     throw refuseStatementApplication(

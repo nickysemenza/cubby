@@ -25,6 +25,7 @@ import {
 } from "~/server/domains/expense/repo/crud";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   readLedgerTransfer,
   updateLedgerTransfer,
@@ -102,12 +103,14 @@ export async function previewFinancialBookingCorrection(
     "financialTransaction",
     input.transactionId,
   );
-  const row = await getDb(db).query.financialTransaction.findFirst({
-    where: and(
-      eq(financialTransaction.id, id),
-      notDeleted(financialTransaction),
-    ),
-  });
+  const row = await getDb(db)
+    .query.financialTransaction.findFirst({
+      where: and(
+        eq(financialTransaction.id, id),
+        notDeleted(financialTransaction),
+      ),
+    })
+    .then((row) => (row ? transactionDollars(row) : row));
   if (!row || row.status !== "posted" || row.ledgerTransferId)
     return fail("Choose a live posted booking before correcting it.");
   const lineage = await loadFinancialBookingLineage(db, input.transactionId);
@@ -224,12 +227,14 @@ export async function commitFinancialBookingCorrection(
         "financialTransaction",
         review.transactionId,
       );
-      const current = await getDb(txDb).query.financialTransaction.findFirst({
-        where: and(
-          eq(financialTransaction.id, transactionId),
-          notDeleted(financialTransaction),
-        ),
-      });
+      const current = await getDb(txDb)
+        .query.financialTransaction.findFirst({
+          where: and(
+            eq(financialTransaction.id, transactionId),
+            notDeleted(financialTransaction),
+          ),
+        })
+        .then((row) => (row ? transactionDollars(row) : row));
       if (current?.bookingCorrectionReceipt) {
         const receipt = z
           .object({

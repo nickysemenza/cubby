@@ -353,7 +353,7 @@ describe("loadExpenseAllocations derived funders", () => {
         kind: split.kind ?? "purchase",
         status: "posted",
         postedDate: split.postedDate ?? "2026-08-10",
-        amount: split.amount,
+        amount: moneyToMinor(split.amount),
       });
       await unwrapDb(ctx.db)
         .insert(financialTransactionAllocation)
@@ -755,7 +755,7 @@ describe("loadExpenseAllocations derived funders", () => {
       kind: "purchase",
       status: "posted",
       postedDate: "2026-08-10",
-      amount: 30,
+      amount: moneyToMinor(30),
     });
     await unwrapDb(ctx.db)
       .insert(financialTransactionAllocation)

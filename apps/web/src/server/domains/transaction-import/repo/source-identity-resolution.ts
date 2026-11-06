@@ -19,6 +19,7 @@ import {
   financialEvidenceAmountMinor,
   lockFinancialEvidenceKeys,
 } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -69,6 +70,7 @@ export async function resolveSourceIdentity(
           .select()
           .from(financialTransaction)
           .where(eq(financialTransaction.shortcode, input.transactionId))
+          .then((rows) => rows.map(transactionDollars))
       : [];
   await lockFinancialEvidenceKeys(tx, "reviewed-booking", [
     ...initialOwners.flatMap((owner) =>
@@ -237,6 +239,7 @@ export async function resolveSourceIdentity(
         .from(financialTransaction)
         .where(eq(financialTransaction.id, targetId))
         .for("update")
+        .then((rows) => rows.map(transactionDollars))
     : [];
   if (
     targetId &&

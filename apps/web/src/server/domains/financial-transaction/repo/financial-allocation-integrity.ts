@@ -16,7 +16,7 @@ export const allocationIntegrityDefectSql = (transactionAlias: string) => {
   );
   const signSatisfied = purchaseSettlementSignSatisfiedExpression({
     kind: `${transactionAlias}.kind`,
-    amount: `${transactionAlias}.amount`,
+    amount: `${transactionAlias}."amountMinor"`,
   });
   return sql.raw(`EXISTS (
     SELECT 1
@@ -25,9 +25,9 @@ export const allocationIntegrityDefectSql = (transactionAlias: string) => {
       AND ${liveAliasSqlText("a")}
     GROUP BY a."transactionId"
     HAVING
-      (round((sum((a."amountMinor"::numeric / 100)) * 100)::numeric) IS DISTINCT FROM round((${transactionAlias}."amount" * 100)::numeric))
+      (sum(a."amountMinor") IS DISTINCT FROM ${transactionAlias}."amountMinor")
       OR NOT (${kindAllowed})
       OR NOT (${signSatisfied})
-      OR COALESCE(bool_or(sign((a."amountMinor"::numeric / 100)) <> sign(${transactionAlias}."amount")), false)
+      OR COALESCE(bool_or(sign(a."amountMinor") <> sign(${transactionAlias}."amountMinor")), false)
   )`);
 };
