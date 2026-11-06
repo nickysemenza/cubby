@@ -65,7 +65,10 @@ import {
   transferPairSourceCharges,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import { sourceOccurrenceSuppressed } from "~/server/domains/transaction-import/repo/source-observation-state";
-import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
+import {
+  sourceObservations,
+  sourceObservationIdentities,
+} from "~/server/domains/transaction-import/repo/source-observation-state";
 import { PROVIDER_IDENTITY_REVIEW } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
   chargeKeyOf,
@@ -3308,7 +3311,7 @@ async function statementLabelCandidates(
       : retryCharges.length
         ? sql`-- includes-deleted: retained aliases map prior work without establishing current financial ownership.
     EXISTS (
-    SELECT 1 FROM ${sourceObservations} observation
+    SELECT 1 FROM ${sourceObservationIdentities} observation
     WHERE observation.source=${suggestionField("source")} AND observation."chargeKey"=${suggestionField("chargeKey")}
       AND (${sql.join(
         retryCharges.map(
@@ -3430,7 +3433,9 @@ export async function suggestionsNeedingLabels(
 
 const labelIdentityScope = (scope: StatementSuggestionScope) =>
   scope.importId || scope.since
-    ? sql`(${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (${scopedStatementChargeKeys(scope)})`
+    ? sql`(${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (
+        WITH label_scope AS MATERIALIZED (${scopedStatementChargeKeys(scope)})
+        SELECT source,"chargeKey" FROM label_scope)`
     : sql`true`;
 
 /** Resolve only named cursor candidates or write-admission targets. */

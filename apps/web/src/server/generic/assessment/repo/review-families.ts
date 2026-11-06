@@ -38,7 +38,7 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { outer, type RelatedColumns } from "~/server/db/helpers/related";
 import { suggestionTable, run } from "~/server/db/schema";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
-import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
+import { sourceObservationIdentities } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import {
@@ -190,10 +190,10 @@ function statementRecordParts(
     AND ${chargeKeyOf("observed")} = s.data->>'chargeKey' AND ${notDeleted("observed")}`;
   if (includes(entities.sourceTransactionRecord))
     parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.sourceTransactionRecord}`, sql`observed.id::text`)})
-      FROM ${sourceObservations} observed WHERE ${sourceScope}), '[]'::jsonb)`);
+      FROM ${sourceObservationIdentities} observed WHERE ${sourceScope}), '[]'::jsonb)`);
   if (includes(entities.transactionImport))
     parts.push(sql`COALESCE((SELECT jsonb_agg(DISTINCT ${ref(sql`${entities.transactionImport}`, sql`member."importId"::text`)})
-      FROM ${sourceObservations} observed
+      FROM ${sourceObservationIdentities} observed
       JOIN ${transactionImportMembers} member ON member."statementRowId" = observed.id
       WHERE ${sourceScope}), '[]'::jsonb)`);
   add(entities.financialAccount, sql`s.data->>'accountId'`);
