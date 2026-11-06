@@ -32,7 +32,7 @@ final class PhotoImportRunFlow {
     private(set) var notificationError: String?
     var selectedOwnerID: LedgerPartyShortcode?
     var selectedOwnerName: String?
-    var selectedLocationID: LocationShortcode?
+    var selectedLocationID: LocationCode?
     var selectedLocationName: String?
     var ownsItemsNow = true
 
