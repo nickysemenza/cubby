@@ -1,3 +1,4 @@
+import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -178,11 +179,13 @@ describe("connection application through generic Feedback", () => {
       postedDate: "2026-09-03",
       merchant: "Synthetic tools",
     });
-    await getDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: transaction.entityId,
-      purchaseId: prior.entityId,
-      amount: 70,
-    });
+    await getDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: transaction.entityId,
+        purchaseId: prior.entityId,
+        amountMinor: moneyToMinor(70),
+      });
     const before = await getDb(ctx.db)
       .select()
       .from(financialTransactionAllocation);

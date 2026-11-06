@@ -31,7 +31,7 @@ export const purchasePurchasersSql = (purchases: SQL) => sql`
   WITH purchase AS MATERIALIZED (${purchases}),
   mail AS MATERIALIZED (${purchaseMailMembersSql(sql`SELECT * FROM purchase`)}),
   settled AS (
-    SELECT allocation."purchaseId", allocation.amount, purchase.date,
+    SELECT allocation."purchaseId", (allocation."amountMinor"::numeric / 100) AS amount, purchase.date,
       coalesce(ft."transactionDate", ft."postedDate") AS charge_date,
       account."deletedAt" AS account_deleted_at,
       account."authorizedUsers",

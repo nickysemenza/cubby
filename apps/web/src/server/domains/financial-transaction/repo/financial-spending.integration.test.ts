@@ -137,7 +137,12 @@ describe("shared spending booking", () => {
       ).toEqual([{ cost: 42.5, category: null }]);
       expect(
         await getDb(ctx.db)
-          .select({ amount: financialTransactionAllocation.amount })
+          .select({
+            amount:
+              sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
+                Number,
+              ),
+          })
           .from(financialTransactionAllocation),
       ).toEqual([{ amount: 42.5 }]);
     },
@@ -1895,7 +1900,12 @@ describe("shared spending booking", () => {
     ).toEqual([{ cost: -12 }, { cost: 100 }]);
     expect(
       await getDb(ctx.db)
-        .select({ amount: financialTransactionAllocation.amount })
+        .select({
+          amount:
+            sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
+              Number,
+            ),
+        })
         .from(financialTransactionAllocation),
     ).toEqual([{ amount: -12 }]);
   });

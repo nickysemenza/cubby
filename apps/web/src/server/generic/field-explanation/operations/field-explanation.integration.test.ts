@@ -4,6 +4,7 @@ import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import type { VendorSpendingProfile } from "@cubby/schemas/spending-classification";
+import { moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import {
@@ -1402,11 +1403,13 @@ describe("derived field explanations against canonical records", () => {
       id: purchaseRecord.entityId,
       shortcode: purchaseRecord.output.id,
     };
-    await getDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: transaction.id,
-      purchaseId: purchase.id,
-      amount: 1,
-    });
+    await getDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: transaction.id,
+        purchaseId: purchase.id,
+        amountMinor: moneyToMinor(1),
+      });
     const single = await explain();
     expect(single.envelope.result).toMatchObject({
       kind: "live",
@@ -1436,11 +1439,13 @@ describe("derived field explanations against canonical records", () => {
       id: secondRecord.entityId,
       shortcode: secondRecord.output.id,
     };
-    await getDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: transaction.id,
-      purchaseId: second.id,
-      amount: 1,
-    });
+    await getDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: transaction.id,
+        purchaseId: second.id,
+        amountMinor: moneyToMinor(1),
+      });
     const multiple = await explain();
     expect(multiple.envelope.result).toMatchObject({
       kind: "live",
@@ -1538,11 +1543,13 @@ describe("derived field explanations against canonical records", () => {
         vendorId: vendor.id,
         itemizationExpectation: index === 20 ? "required" : "not_expected",
       });
-      await getDb(ctx.db).insert(financialTransactionAllocation).values({
-        transactionId: transaction.id,
-        purchaseId: purchase.id,
-        amount: 1,
-      });
+      await getDb(ctx.db)
+        .insert(financialTransactionAllocation)
+        .values({
+          transactionId: transaction.id,
+          purchaseId: purchase.id,
+          amountMinor: moneyToMinor(1),
+        });
     }
     const explanation = await explainField(context(), {
       entityKind: "financialTransaction",

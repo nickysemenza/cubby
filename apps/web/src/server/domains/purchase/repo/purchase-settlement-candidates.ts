@@ -103,7 +103,7 @@ export async function listPurchasesSettlementCandidates(
   const effectiveDate = sql`coalesce("FinancialTransaction"."postedDate", "FinancialTransaction"."transactionDate")::date`;
   const days = sql`abs(${effectiveDate} - subject.date)`;
   const residual = sql`("FinancialTransaction".amount - (
-    SELECT coalesce(sum(a.amount), 0) FROM "FinancialTransactionAllocation" a
+    SELECT coalesce(sum((a."amountMinor"::numeric / 100)), 0) FROM "FinancialTransactionAllocation" a
     WHERE a."transactionId" = "FinancialTransaction".id AND ${notDeleted("a")}
   ))`;
   const targetAllocation = sql`EXISTS (

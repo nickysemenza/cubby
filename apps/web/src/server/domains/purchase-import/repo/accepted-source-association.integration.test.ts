@@ -5,6 +5,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ledgerSourceClaimInput } from "@cubby/schemas/ledger-transfer";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
+import { moneyToMinor } from "@cubby/shared";
 import { eq, inArray, sql } from "drizzle-orm";
 import { promoteHistoricalAcceptedOrders } from "tooling/historical-accepted-orders";
 import { withTestDb } from "tooling/test-setup";
@@ -2096,7 +2097,7 @@ describe("reviewed accepted source Product association", () => {
     await w.db.insert(financialTransactionAllocation).values({
       transactionId: transaction.id,
       purchaseId: w.association.purchaseId,
-      amount: 40,
+      amountMinor: moneyToMinor(40),
     });
     const shipped = await addAcceptedSibling(
       w,

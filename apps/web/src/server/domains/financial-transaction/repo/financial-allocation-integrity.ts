@@ -25,9 +25,9 @@ export const allocationIntegrityDefectSql = (transactionAlias: string) => {
       AND ${liveAliasSqlText("a")}
     GROUP BY a."transactionId"
     HAVING
-      (round((sum(a."amount") * 100)::numeric) IS DISTINCT FROM round((${transactionAlias}."amount" * 100)::numeric))
+      (round((sum((a."amountMinor"::numeric / 100)) * 100)::numeric) IS DISTINCT FROM round((${transactionAlias}."amount" * 100)::numeric))
       OR NOT (${kindAllowed})
       OR NOT (${signSatisfied})
-      OR COALESCE(bool_or(sign(a."amount") <> sign(${transactionAlias}."amount")), false)
+      OR COALESCE(bool_or(sign((a."amountMinor"::numeric / 100)) <> sign(${transactionAlias}."amount")), false)
   )`);
 };

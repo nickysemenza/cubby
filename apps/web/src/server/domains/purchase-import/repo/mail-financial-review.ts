@@ -19,6 +19,7 @@ import {
   financialTransactionAllocation,
   ledgerParty,
 } from "~/server/db/schema";
+import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -81,7 +82,8 @@ async function assertRefundAllocationsExplain(
       financialTransactionAllocation.transactionId,
       financialTransactionAllocation.purchaseId,
     )
-    .for("update");
+    .for("update")
+    .then((rows) => rows.map(allocationDollars));
   const allocatedPurchases = new Set(allocations.map((row) => row.purchaseId));
   if (
     allocatedPurchases.size !== purchaseIds.length ||

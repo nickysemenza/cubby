@@ -408,11 +408,13 @@ describe("settlement conflicts", () => {
       ledgerPartyId: otherMember.id,
     });
     const wrong = await charge(otherBank.id, 13.58);
-    await getDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: wrong.id,
-      purchaseId: order.id,
-      amount: 13.58,
-    });
+    await getDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: wrong.id,
+        purchaseId: order.id,
+        amountMinor: moneyToMinor(13.58),
+      });
     expect(await gaps(order.shortcode)).toContain("settlement_party_conflict");
     // The settling card's sole user is not the order's member: purchaser stays unknown.
     expect(

@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { moneyToMinor } from "@cubby/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
@@ -200,11 +201,13 @@ describe("consolidated household ledger", () => {
         postedDate: "2026-08-20",
       },
     );
-    await unwrapDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: allocated.id,
-      purchaseId: allocatedPurchase.id,
-      amount: 12,
-    });
+    await unwrapDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: allocated.id,
+        purchaseId: allocatedPurchase.id,
+        amountMinor: moneyToMinor(12),
+      });
     const expectInvalidEvidence = async (
       rows: Array<{ shortcode: string }>,
       message: string,

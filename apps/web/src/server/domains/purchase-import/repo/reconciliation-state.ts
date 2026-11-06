@@ -29,6 +29,7 @@ import {
   sourceOrderObservation,
   vendorAccount,
 } from "~/server/db/schema";
+import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { paymentEvidenceDollars } from "~/server/domains/purchase-import/repo/payment-evidence";
 import {
   isLiveSourceOrder,
@@ -264,7 +265,8 @@ export async function loadSourceReconciliationState(
       ),
     )
     .orderBy(asc(financialTransactionAllocation.id))
-    .for("update");
+    .for("update")
+    .then((rows) => rows.map(allocationDollars));
   const transactionIds = allocations.map((row) => row.transactionId);
   const transactions = transactionIds.length
     ? await tx

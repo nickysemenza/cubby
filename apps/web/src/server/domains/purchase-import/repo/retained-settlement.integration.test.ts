@@ -8,6 +8,8 @@ import {
   type PurchaseId,
 } from "@cubby/schemas/identifiers";
 import { commitPurchaseImportInput } from "@cubby/schemas/purchase-import";
+import { moneyToMinor } from "@cubby/shared";
+import { sql } from "drizzle-orm";
 import { and, eq, inArray } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -190,7 +192,10 @@ describe("settlement from retained order evidence", () => {
       .select({
         transactionId: financialTransactionAllocation.transactionId,
         purchaseId: financialTransactionAllocation.purchaseId,
-        amount: financialTransactionAllocation.amount,
+        amount:
+          sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
+            Number,
+          ),
       })
       .from(financialTransactionAllocation)
       .where(inArray(financialTransactionAllocation.purchaseId, purchaseIds));
@@ -1208,11 +1213,13 @@ describe("settlement from retained order evidence", () => {
     });
     // The second leg never arrived, so the order stays unsettled; record the
     // first leg by hand, as a reviewer would.
-    await getDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: settledLeg.id,
-      purchaseId: partly,
-      amount: 30,
-    });
+    await getDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: settledLeg.id,
+        purchaseId: partly,
+        amountMinor: moneyToMinor(30),
+      });
     await charge(card.id, { amount: 25, postedDate: "2026-09-03" });
     const other = await importOrder(run, {
       orderId: "FW-7002",

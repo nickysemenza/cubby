@@ -148,13 +148,13 @@ const purchaseFinancialComparisonTotal = (purchaseId: SQL) =>
       AND ${notDeleted("ft")} AND ft."kind" IN (${settlementKindList})
       AND ft."status" IN (${status.expected}, ${status.pending})
   ) THEN (
-    SELECT COALESCE(sum(a."amount"), 0)::double precision FROM "FinancialTransactionAllocation" a
+    SELECT COALESCE(sum((a."amountMinor"::numeric / 100)), 0)::double precision FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
     WHERE a."purchaseId" = ${purchaseId} AND ${notDeleted("a")}
       AND ${notDeleted("ft")} AND ft."kind" IN (${settlementKindList})
       AND ft."status" <> ${status.void}
   ) ELSE (
-    SELECT COALESCE(sum(a."amount"), 0)::double precision FROM "FinancialTransactionAllocation" a
+    SELECT COALESCE(sum((a."amountMinor"::numeric / 100)), 0)::double precision FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
     WHERE a."purchaseId" = ${purchaseId} AND ${notDeleted("a")}
       AND ${notDeleted("ft")} AND ft."kind" IN (${settlementKindList})
@@ -284,7 +284,7 @@ export const postedRefundTotal = (purchaseId: SQL) =>
         )
         .exists(),
     )
-    .sum((a) => a.amount);
+    .sum((a) => sql`${a.amountMinor}::numeric / 100`);
 
 /**
  * What makes a settlement row count as *evidence* for the

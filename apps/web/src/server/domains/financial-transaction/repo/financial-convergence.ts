@@ -39,6 +39,7 @@ import {
   paymentDateWindowSql,
   paymentFundingPartySql,
 } from "~/server/domains/financial-account/repo/funding-sql";
+import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { findSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
@@ -95,7 +96,10 @@ export async function acceptedAutomaticFacts(
   const allocations = await getDb(db)
     .select({
       purchaseId: financialTransactionAllocation.purchaseId,
-      amount: financialTransactionAllocation.amount,
+      amount:
+        sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
+          Number,
+        ),
     })
     .from(financialTransactionAllocation)
     .where(
@@ -441,7 +445,8 @@ async function runFinancialConvergence(
           ),
         )
         .orderBy(financialTransactionAllocation.purchaseId)
-        .for("update");
+        .for("update")
+        .then((rows) => rows.map(allocationDollars));
       if (
         allocations.length > 1 ||
         (allocations[0] && cents(allocations[0].amount) !== cents(row.amount))

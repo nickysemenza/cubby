@@ -1,6 +1,7 @@
 import type { FinancialTransactionStatus } from "@cubby/schemas/financial-transaction-fields";
 import type { VendorId } from "@cubby/schemas/identifiers";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
+import { moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -199,11 +200,13 @@ describe("purchase evidence policy", () => {
       postedDate: "2026-09-01",
       merchant: "Fixture instalment merchant",
     });
-    await unwrapDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: charge.id,
-      purchaseId: purchase.id,
-      amount: 1000,
-    });
+    await unwrapDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: charge.id,
+        purchaseId: purchase.id,
+        amountMinor: moneyToMinor(1000),
+      });
     const itemization = async () => {
       await publishQualityFixtures(ctx.db, "purchase");
       const result = await unwrapDb(ctx.db).execute(sql`
@@ -719,11 +722,13 @@ describe("vendor itemization default from order evidence", () => {
         postedDate: "2026-09-01",
         merchant: `Fixture merchant ${purchase.shortcode}`,
       });
-      await unwrapDb(ctx.db).insert(financialTransactionAllocation).values({
-        transactionId: charge.id,
-        purchaseId: purchase.id,
-        amount: 25,
-      });
+      await unwrapDb(ctx.db)
+        .insert(financialTransactionAllocation)
+        .values({
+          transactionId: charge.id,
+          purchaseId: purchase.id,
+          amountMinor: moneyToMinor(25),
+        });
       return async () => {
         const result = await unwrapDb(ctx.db).execute(sql`
           SELECT ${purchaseItemizationExpectationSql("p")} AS purchase,
@@ -813,11 +818,13 @@ describe("vendor itemization default from order evidence", () => {
       postedDate: "2026-09-01",
       merchant: "Fixture online merchant",
     });
-    await unwrapDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: charge.id,
-      purchaseId: onlinePurchase.id,
-      amount: 25,
-    });
+    await unwrapDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: charge.id,
+        purchaseId: onlinePurchase.id,
+        amountMinor: moneyToMinor(25),
+      });
     const coverage = await unwrapDb(ctx.db).execute(sql`
       SELECT ${financialTransactionCoverageSql("t")}->>'expectation' AS expectation
       FROM "FinancialTransaction" t WHERE t.id = ${charge.id}

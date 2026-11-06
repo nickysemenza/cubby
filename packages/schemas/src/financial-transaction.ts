@@ -5,7 +5,7 @@ import {
 } from "./generated/entity-field-envelope-fields.financialTransaction.gen";
 import { rawFinancialTransactionOut } from "./financial-transaction-raw-read";
 import { postedRequiresDate } from "./financial-transaction-fields";
-import { cents, dollars } from "@cubby/shared";
+import { cents, moneyToMinor } from "@cubby/shared";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { financialTransactionFilterFields as financialTransactionBaseFilterFields } from "@cubby/schemas/entities/financialTransaction";
@@ -252,12 +252,14 @@ export const allocationSumViolation = (
   transactionAmount: number,
 ): string | null => {
   const total = allocationAmounts.reduce(
-    (sum, amount) => sum + cents(amount),
-    0,
+    (sum, amount) => sum + moneyToMinor(amount),
+    0n,
   );
-  return total === cents(transactionAmount)
+  const magnitude = total < 0n ? -total : total;
+  const rendered = `${total < 0n ? "-" : ""}${magnitude / 100n}.${String(magnitude % 100n).padStart(2, "0")}`;
+  return total === moneyToMinor(transactionAmount)
     ? null
-    : `Allocations must sum to the transaction amount: got ${dollars(total).toFixed(2)}, expected ${transactionAmount.toFixed(2)}.`;
+    : `Allocations must sum to the transaction amount: got ${rendered}, expected ${transactionAmount.toFixed(2)}.`;
 };
 
 const validSettlementState = <T extends z.ZodType>(schema: T) =>

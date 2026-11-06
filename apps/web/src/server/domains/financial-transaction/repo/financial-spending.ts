@@ -45,6 +45,7 @@ import {
   financialAccountPurchaser,
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
+import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import {
   financialSourceRefsFor,
   financialSourceRefsIncluding,
@@ -201,13 +202,18 @@ export async function prepareFinancialSpendingPage(
   const transactionIds = transactions.map((row) => row.id);
   const references = await financialSourceRefsFor(db, transactionIds);
   const allocations = transactionIds.length
-    ? await getDb(db).query.financialTransactionAllocation.findMany({
-        where: and(
-          inArray(financialTransactionAllocation.transactionId, transactionIds),
-          notDeleted(financialTransactionAllocation),
-        ),
-        orderBy: financialTransactionAllocation.purchaseId,
-      })
+    ? await getDb(db)
+        .query.financialTransactionAllocation.findMany({
+          where: and(
+            inArray(
+              financialTransactionAllocation.transactionId,
+              transactionIds,
+            ),
+            notDeleted(financialTransactionAllocation),
+          ),
+          orderBy: financialTransactionAllocation.purchaseId,
+        })
+        .then((rows) => rows.map(allocationDollars))
     : [];
   const allocationsByTransaction = new Map<string, typeof allocations>();
   for (const allocation of allocations) {
@@ -432,13 +438,15 @@ async function spendingFacts(
   const allocations = row
     ? page
       ? (page.allocations.get(row.id) ?? [])
-      : await getDb(db).query.financialTransactionAllocation.findMany({
-          where: and(
-            eq(financialTransactionAllocation.transactionId, row.id),
-            notDeleted(financialTransactionAllocation),
-          ),
-          orderBy: financialTransactionAllocation.purchaseId,
-        })
+      : await getDb(db)
+          .query.financialTransactionAllocation.findMany({
+            where: and(
+              eq(financialTransactionAllocation.transactionId, row.id),
+              notDeleted(financialTransactionAllocation),
+            ),
+            orderBy: financialTransactionAllocation.purchaseId,
+          })
+          .then((rows) => rows.map(allocationDollars))
     : [];
   const graphs = [];
   for (const allocation of allocations)
@@ -549,9 +557,9 @@ async function loadSpendingGraphBatch(
           transaction: unknown;
           account: unknown;
           owner: unknown;
-        }>(sql`SELECT a."purchaseId", a."transactionId", f.shortcode AS "transactionCode", a.amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
+        }>(sql`SELECT a."purchaseId", a."transactionId", f.shortcode AS "transactionCode", (a."amountMinor"::numeric / 100) AS amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
     f.amount AS "transactionAmount", fa."deletedAt" AS "accountDeletedAt",
-    (SELECT sum(coverage.amount) FROM "FinancialTransactionAllocation" coverage
+    (SELECT sum((coverage."amountMinor"::numeric / 100)) FROM "FinancialTransactionAllocation" coverage
       WHERE coverage."transactionId" = f.id AND ${notDeleted("coverage")}) AS "allocatedAmount",
     to_jsonb(f) AS transaction, to_jsonb(fa) AS account, to_jsonb(lp) AS owner
     FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" f ON f.id = a."transactionId"

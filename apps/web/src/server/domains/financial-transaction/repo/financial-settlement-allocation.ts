@@ -2,7 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { FinancialSettlementAllocationInput } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionId } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
-import { and, eq, inArray } from "drizzle-orm";
+import { sql, and, eq, inArray } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -102,7 +102,10 @@ export async function applyFinancialSettlementAllocation(
       const current = await tx
         .select({
           purchaseId: purchase.shortcode,
-          amount: financialTransactionAllocation.amount,
+          amount:
+            sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
+              Number,
+            ),
           confirmsMerchant: financialTransactionAllocation.confirmsMerchant,
         })
         .from(financialTransactionAllocation)

@@ -138,7 +138,7 @@ async function queryAllocationDefects(
   options: { shortcodes?: readonly string[]; defectsOnly: boolean },
 ): Promise<AllocationDefectRow[]> {
   const allocationCount = sql`count(a.id)`;
-  const allocatedCents = sql`round((sum(a."amount") * 100)::numeric)`;
+  const allocatedCents = sql`round((sum((a."amountMinor"::numeric / 100)) * 100)::numeric)`;
   const amountCents = sql`round((ft."amount" * 100)::numeric)`;
   const kindAllowed = sql.raw(
     purchaseSettlementKindAllowedExpression("ft.kind"),
@@ -155,7 +155,7 @@ async function queryAllocationDefects(
   const sumMismatch = sql`(${allocationCount} > 0 AND ${allocatedCents} IS DISTINCT FROM ${amountCents})`;
   const nonSettlementKind = sql`(${allocationCount} > 0 AND NOT (${kindAllowed}))`;
   const kindSignViolation = sql`(${allocationCount} > 0 AND ${kindAllowed} AND NOT ${signSatisfied})`;
-  const allocationSignMismatch = sql`COALESCE(bool_or(sign(a."amount") <> sign(ft."amount")), false)`;
+  const allocationSignMismatch = sql`COALESCE(bool_or(sign((a."amountMinor"::numeric / 100)) <> sign(ft."amount")), false)`;
 
   const shortcodeWhere = options.shortcodes
     ? sql` AND ft.shortcode IN (${sql.join(
@@ -176,7 +176,7 @@ async function queryAllocationDefects(
       ft.kind AS kind,
       ft."amount" AS amount,
       ${allocationCount}::int AS "allocationCount",
-      COALESCE(sum(a."amount"), 0)::double precision AS "allocatedTotal",
+      COALESCE(sum((a."amountMinor"::numeric / 100)), 0)::double precision AS "allocatedTotal",
       array_remove(array_agg(p.shortcode), NULL) AS "purchaseIds",
       ${sumMismatch} AS "sumMismatch",
       ${nonSettlementKind} AS "nonSettlementKind",

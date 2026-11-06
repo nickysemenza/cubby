@@ -3,6 +3,7 @@ import {
   parseShortcodeFor,
   type LedgerPartyId,
 } from "@cubby/schemas/identifiers";
+import { moneyToMinor } from "@cubby/shared";
 import { eq, isNotNull, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -168,11 +169,13 @@ describe("acceptFinancialTransferPair", () => {
       .select({ id: financialTransaction.id })
       .from(financialTransaction)
       .where(eq(financialTransaction.shortcode, allocatedIn));
-    await unwrapDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: allocatedRow!.id,
-      purchaseId: purchase.id,
-      amount: -60,
-    });
+    await unwrapDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: allocatedRow!.id,
+        purchaseId: purchase.id,
+        amountMinor: moneyToMinor(-60),
+      });
     await insertWithShortcode(ctx.db, "expense", {
       name: "Synthetic booked refund",
       cost: -60,

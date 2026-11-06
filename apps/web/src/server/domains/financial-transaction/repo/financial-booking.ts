@@ -44,6 +44,7 @@ import {
   financialAccountPurchaser,
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
+import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { createPurchase } from "~/server/domains/purchase/repo/purchase";
@@ -244,13 +245,16 @@ async function bookingAction(
   const previous = graph.target
     ? await getDb(db)
         .select({
-          amount: sql<number>`COALESCE(SUM(a.amount), 0)`.mapWith(Number),
+          amount:
+            sql<number>`COALESCE(SUM((a."amountMinor"::numeric / 100)), 0)`.mapWith(
+              Number,
+            ),
         })
         .from(
           sql`"FinancialTransactionAllocation" a JOIN "FinancialTransaction" f ON f.id = a."transactionId"`,
         )
         .where(
-          sql`a."purchaseId" = ${graph.target.id} AND ${notDeleted("a")} AND ${notDeleted("f")} AND f.status <> 'void' AND f."ledgerTransferId" IS NULL AND f.kind <> 'income' AND f.id <> ${row.id} AND SIGN(a.amount) = SIGN(${row.amount}::numeric) AND NOT EXISTS (SELECT 1 FROM "Expense" e WHERE e."bookingTransactionCode" = f.shortcode AND ${notDeleted("e")} AND e."economicRole" = 'reimbursement')`,
+          sql`a."purchaseId" = ${graph.target.id} AND ${notDeleted("a")} AND ${notDeleted("f")} AND f.status <> 'void' AND f."ledgerTransferId" IS NULL AND f.kind <> 'income' AND f.id <> ${row.id} AND SIGN((a."amountMinor"::numeric / 100)) = SIGN(${row.amount}::numeric) AND NOT EXISTS (SELECT 1 FROM "Expense" e WHERE e."bookingTransactionCode" = f.shortcode AND ${notDeleted("e")} AND e."economicRole" = 'reimbursement')`,
         )
     : [];
   const settledCents = cents(previous[0]?.amount ?? 0);
@@ -364,13 +368,13 @@ export async function previewFinancialBooking(
     if (member?.kind !== "member")
       return fail("A purchaser override must name a live member LedgerParty.");
   }
-  const allocations = await getDb(
-    db,
-  ).query.financialTransactionAllocation.findMany({
-    where: (allocation, { eq }) =>
-      and(eq(allocation.transactionId, row.id), notDeleted(allocation)),
-    orderBy: (allocation, { asc }) => asc(allocation.purchaseId),
-  });
+  const allocations = await getDb(db)
+    .query.financialTransactionAllocation.findMany({
+      where: (allocation, { eq }) =>
+        and(eq(allocation.transactionId, row.id), notDeleted(allocation)),
+      orderBy: (allocation, { asc }) => asc(allocation.purchaseId),
+    })
+    .then((rows) => rows.map(allocationDollars));
   if (
     allocations.length &&
     !allocations.every((allocation) => allocation.purchaseId === purchaseId)
@@ -519,12 +523,12 @@ async function replayBooking(db: Database, review: FinancialBookingPreview) {
     (await digestValue({ account, purchaserProof }))
   )
     return fail("The approved account or purchaser evidence changed.");
-  const allocations = await getDb(
-    db,
-  ).query.financialTransactionAllocation.findMany({
-    where: (allocation, { eq }) =>
-      and(eq(allocation.transactionId, row.id), notDeleted(allocation)),
-  });
+  const allocations = await getDb(db)
+    .query.financialTransactionAllocation.findMany({
+      where: (allocation, { eq }) =>
+        and(eq(allocation.transactionId, row.id), notDeleted(allocation)),
+    })
+    .then((rows) => rows.map(allocationDollars));
   const allocation = allocations[0];
   if (
     allocations.length !== 1 ||

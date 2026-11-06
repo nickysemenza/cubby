@@ -31,6 +31,7 @@ import {
   prepareExpenseProjectRecommendationContexts,
   type RecommendationHistoryRow,
 } from "~/server/domains/expense/repo/project-recommendations";
+import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { suggestFinancialTransferPairs } from "~/server/domains/financial-transaction/repo/financial-transfer-pairing";
 import { getProductStockRows } from "~/server/domains/inventory/repo/scan";
 import { suggestProjectTools } from "~/server/domains/project/repo/tools";
@@ -519,7 +520,7 @@ async function readConnectionBases(
         ),
       )
       .orderBy(financialTransactionAllocation.id))
-      allocations.get(row.transactionId)?.push(row);
+      allocations.get(row.transactionId)?.push(allocationDollars(row));
   const purchaseProducts: PreparedConnectionBases["purchaseProducts"] = new Map(
     pairs.map((pair) => [
       pairKey(pair.purchaseId, pair.productId),
@@ -688,7 +689,8 @@ export async function captureConnectionEvidence(
                 notDeleted(financialTransactionAllocation),
               ),
             )
-            .orderBy(financialTransactionAllocation.id)),
+            .orderBy(financialTransactionAllocation.id)
+            .then((rows) => rows.map(allocationDollars))),
       });
       break;
     }

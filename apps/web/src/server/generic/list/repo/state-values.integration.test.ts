@@ -382,11 +382,13 @@ describe("state predicates re-declared as values", () => {
             postedDate: "2026-09-02",
           },
         );
-        await getDb(ctx.db).insert(financialTransactionAllocation).values({
-          transactionId: transaction.id,
-          purchaseId: row.id,
-          amount: refund,
-        });
+        await getDb(ctx.db)
+          .insert(financialTransactionAllocation)
+          .values({
+            transactionId: transaction.id,
+            purchaseId: row.id,
+            amountMinor: moneyToMinor(refund),
+          });
       }
       return row;
     };

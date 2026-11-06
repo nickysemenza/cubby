@@ -10,7 +10,7 @@ import {
   type PurchaseShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { cents } from "@cubby/shared";
+import { cents, moneyToMinor } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -63,7 +63,10 @@ export async function readAllocations(
       transactionId: financialTransactionAllocation.transactionId,
       purchaseId: financialTransactionAllocation.purchaseId,
       purchaseShortcode: purchase.shortcode,
-      amount: financialTransactionAllocation.amount,
+      amount:
+        sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
+          Number,
+        ),
       confirmsMerchant: financialTransactionAllocation.confirmsMerchant,
     })
     .from(financialTransactionAllocation)
@@ -284,19 +287,19 @@ export async function writeAllocationSet(
       await tx.insert(financialTransactionAllocation).values({
         transactionId,
         purchaseId: row.purchaseId,
-        amount: row.amount,
+        amountMinor: moneyToMinor(row.amount),
         confirmsMerchant,
       });
       continue;
     }
     if (
-      cents(prior.amount) !== cents(row.amount) ||
+      moneyToMinor(prior.amount) !== moneyToMinor(row.amount) ||
       prior.confirmsMerchant !== confirmsMerchant
     )
       await tx
         .update(financialTransactionAllocation)
         .set({
-          amount: row.amount,
+          amountMinor: moneyToMinor(row.amount),
           confirmsMerchant,
           updatedAt: new Date(),
         })

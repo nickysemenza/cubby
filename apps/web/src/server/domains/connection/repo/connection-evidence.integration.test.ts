@@ -2,6 +2,7 @@ import {
   type ConnectionCandidate,
   connectionCandidate,
 } from "@cubby/schemas/entity-connections";
+import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -127,11 +128,13 @@ describe("prepared connection bases", () => {
     });
     // Payload rows each relation reads: an allocation of the charge, and a
     // linked line of the Product on the order.
-    await getDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: charge.entityId,
-      purchaseId: order.entityId,
-      amount: 25,
-    });
+    await getDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({
+        transactionId: charge.entityId,
+        purchaseId: order.entityId,
+        amountMinor: moneyToMinor(25),
+      });
     await getDb(ctx.db)
       .insert(entityLink)
       .values({

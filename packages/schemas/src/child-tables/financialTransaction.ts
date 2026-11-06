@@ -25,7 +25,12 @@ export const financialTransactionChildren = [
         type: "PurchaseId",
         reference: { table: "purchase", column: "id" },
       },
-      { key: "amount", kind: "doublePrecision", notNull: true },
+      {
+        key: "amountMinor",
+        kind: "bigint",
+        bigintMode: "bigint",
+        notNull: true,
+      },
       {
         key: "confirmsMerchant",
         kind: "boolean",
@@ -85,8 +90,8 @@ export const financialTransactionChildren = [
       // ignores. Treat this expression as immutable — changing it later means a
       // hand-applied ALTER plus a pg_constraint re-read.
       {
-        name: "FinancialTransactionAllocation_amount_whole_cent_check",
-        sql: "{amount} <> 0 AND abs({amount} * 100 - round({amount} * 100)) < 0.0000001",
+        name: "FinancialTransactionAllocation_amount_minor_range_check",
+        sql: "{amountMinor} <> 0 AND abs({amountMinor}) <= 100000000000000",
       },
     ],
     relations: [
