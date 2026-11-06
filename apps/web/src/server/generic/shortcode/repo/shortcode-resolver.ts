@@ -21,9 +21,9 @@ import { z } from "zod";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+import { repositoryReadBinding } from "~/server/entity-kernel/read.boundary";
 import { describeUnresolvableCode } from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
-import { repositoryReadBinding } from "~/server/generated/entity-kernel-bindings.gen";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import type { ShortcodeTable } from "~/server/generic/shortcode/repo/shortcode-tables";
 
@@ -256,7 +256,7 @@ export async function lookupEntityLabels(
   const names = new Map<string, string>();
   await Promise.all(
     [...byEntity].map(async ([entity, ids]) => {
-      const nameColumn = await repositoryReadBinding(entity).title();
+      const nameColumn = await (await repositoryReadBinding(entity)).title();
       if (!nameColumn) throw new Error(`No repository title for ${entity}`);
       const table: ShortcodeTable = SHORTCODE_TABLE[entity];
       // includes-deleted: same reasoning as `lookupShortcodes` — an audit row
@@ -304,7 +304,7 @@ export async function lookupEntityReferences<E extends ShortcodeEntity>(
   >();
   if (wanted.length === 0) return result;
   const table: ShortcodeTable = SHORTCODE_TABLE[entity];
-  const nameColumn = await repositoryReadBinding(entity).title();
+  const nameColumn = await (await repositoryReadBinding(entity)).title();
   if (!nameColumn) throw new Error(`No repository title for ${entity}`);
   const rows = await unwrapDb(db)
     .select({

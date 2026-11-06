@@ -1378,9 +1378,10 @@ export function listScaffold<
       codes: readonly string[],
     ): Promise<PageFieldReadContexts> {
       if (!codes.length) return new Map();
+      const source: PgTable = table;
       const rows = await repositoryQueries(db)
-        .select()
-        .from(table)
+        .select(getTableColumns(source))
+        .from(source)
         .where(
           and(inArray(table.shortcode, [...codes]), scaffold.plan({}).where),
         );
