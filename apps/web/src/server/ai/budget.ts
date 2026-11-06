@@ -131,6 +131,20 @@ export async function assertAiBudget(db: Database, allowanceUsd = 0) {
     throw new AiBudgetExhaustedError(status);
 }
 
+/** The paid rung cannot answer at all: its Run, if any, pauses for the next window. */
+export async function paidFundingStop(
+  db: Database,
+  runId: RunId | undefined,
+  reason: string,
+) {
+  const stop = new AiBudgetExhaustedError(await readAiBudget(db), reason);
+  if (runId)
+    await (
+      await import("~/server/domains/run/repo/execution-context")
+    ).pauseForFunding(db, runId, stop);
+  return stop;
+}
+
 /**
  * Paid admission for a frontier call that has no Run-bound preflight: every
  * call, background included, spends within the paid budget, or past it by a
