@@ -2866,6 +2866,10 @@ completion, without record IDs or values, to correlate platform terminations. Dr
 purchase dispatch reconciliation. Search publication re-marks embeddings only for
 changed, embeddable documents, preserving unchanged documents' failure backoff.
 
+A member's Email link or dismissal republishes that Email's relationship snapshot
+inside the decision transaction, using the hourly pass's compute and publisher.
+Scoped list values and SQL predicates then agree with the saved decision immediately.
+
 Quality's 28 declared evaluators publish `QualitySnapshot` check states, rules
 version and publication time. Browse, gap-count ordering, filters and Work use
 the same snapshot. `DataException` owns waivers. SearchDocument, Recipe totals
