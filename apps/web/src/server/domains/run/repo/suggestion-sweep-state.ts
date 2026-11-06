@@ -58,7 +58,6 @@ export const sweepSuggestionSchema = z.object({
   runnerUpValue: suggestionValueSchema,
   runnerUpConfidence: z.number().nullable(),
   model: z.string(),
-  served: z.boolean(),
 });
 export type SweepSuggestion = z.infer<typeof sweepSuggestionSchema>;
 
@@ -332,7 +331,6 @@ export async function saveSweepSuggestions(
             model: entry.model,
             kind: entry.kind,
             data: {
-              served: entry.served,
               liveInputFingerprint,
               reviewKey: entry.reviewKey ?? null,
             },

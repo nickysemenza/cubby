@@ -1,6 +1,6 @@
 import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { seedProductPrerequisite } from "./fixtures/catalog";
-import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
@@ -156,7 +156,7 @@ test("Suggestions lists every family with named records and category pills, and 
   await generateStatementSuggestions(db, importId);
   await drainDerivedRefreshFrontier(db);
   const seedCategoryAdvice = async () =>
-    publishFieldSuggestion(
+    seedFieldSuggestion(
       db,
       {
         runId,
@@ -662,7 +662,7 @@ test("list pills accept immediately without unloading another row's suggestion",
   await drainDerivedRefreshFrontier(db);
   await Promise.all(
     recordIds.map(async (recordId) =>
-      publishFieldSuggestion(
+      seedFieldSuggestion(
         db,
         {
           runId,

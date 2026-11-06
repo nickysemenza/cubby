@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   fieldSuggestionPublication,
   publishSuggestions,
@@ -98,7 +99,7 @@ export async function seedFieldSuggestion(
   projection: Parameters<typeof fieldSuggestionPublication>[0],
   _served = true,
 ) {
-  const data = { ...projection.data };
+  const data = z.record(z.string(), z.json()).parse(projection.data ?? {});
   if (!("connectionEvidence" in data) && !("liveInputFingerprint" in data))
     data.liveInputFingerprint = await fieldInputFingerprint(
       db,

@@ -4496,13 +4496,12 @@ The `/suggestions` page lists actionable proposals from fields,
 statement transactions, connections and recommendations (including tag additions
 and placement moves), Product pairs, image descriptions and transfer pairs on one server-filtered table
 (`suggestions.list` over the family registry in
-`server/generic/assessment/repo/suggestion-families.ts`): family chips with counts, each family's own columns,
+`server/generic/suggestions/repo/suggestion-families.ts`): family chips with counts, each family's own columns,
 inline evidence, keyboard review (↑/↓, →, A, D), a confirmed "Accept N clean"
 that re-lists before each chunk, bulk Dismiss and Never suggest (no bulk
-Wrong), and Find suggestions, which estimates and starts a Sweep. A
-collapsible Automatic rules section lists each rule's state, measured
-precision and member switch (`suggestions_read.rules`/`setRule`; On only when
-eligible, Off after a confirm). Its `family`, `record` (`<kind>:<CODE>`) and `runId` params scope it.
+Wrong), and Find suggestions, which estimates and starts a Sweep.
+The Automatic decisions tab retains application history and Wrong grading.
+The page's `family`, `record` (`<kind>:<CODE>`) and `runId` params scope the queue.
 Every multiselect filter, including Clean, offers **is / is not** through the
 shared filter editor. Excluded column values use the shared `__not__:` state
 prefix and `<column>Exclude` URL parameter. Quick pickers edit included values

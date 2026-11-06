@@ -34,12 +34,10 @@ describe("image Suggestions in Work", () => {
   async function propose(
     id: string,
     name: string,
-    served = true,
     description = "Synthetic image description",
   ) {
     return publishSuggestion(ctx.db, {
       publicationKey: `synthetic:image-work:${name}`,
-      served,
       family: "image_description",
       subject: {
         kind: "image_description",
@@ -77,8 +75,7 @@ describe("image Suggestions in Work", () => {
     ]);
     await propose(first.id, "first-a");
     await propose(first.id, "first-b");
-    await propose(first.id, "trial", false);
-    await propose(first.id, "blank", true, "  ");
+    await propose(first.id, "blank", "  ");
     const inactive = await propose(first.id, "inactive");
     await getDb(ctx.db)
       .update(suggestionTable)

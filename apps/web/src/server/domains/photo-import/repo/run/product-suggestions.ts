@@ -123,7 +123,6 @@ export async function photoProductSuggestions(
           memberDecisionRevision:
             input.review.fieldDecisionRevisions?.[field] ?? null,
         },
-        served: true,
       },
       {
         entity: "product",

@@ -206,7 +206,7 @@ export function fieldSuggestionPublication(
     field: string;
     recordId: string;
   },
-) {
+): Parameters<typeof publishSuggestions>[1][number] {
   const data = z.record(z.string(), z.json()).parse(projection.data ?? {});
   const model = projection.model ?? "unknown";
   return {

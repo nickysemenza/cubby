@@ -28,7 +28,7 @@ const scopeSearchSchema = z.object({
   family: suggestionListFamily.optional().catch(undefined),
   auditFamily: suggestionFamily.optional().catch(undefined),
   /**
-   * The page tab: absent lists pending work; history and rules share its scope.
+   * The page tab: absent lists pending work; automatic history shares its scope.
    * Legacy `applied_automatically` URLs redirect to the automatic tab.
    */
   status: z

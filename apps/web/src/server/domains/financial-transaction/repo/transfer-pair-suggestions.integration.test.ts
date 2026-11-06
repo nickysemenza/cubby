@@ -68,6 +68,7 @@ import {
   countTransferPairSeeds,
   countTransferPairsNeedingLabels,
   currentTransferPair,
+  currentTransferPairs,
   findTransferPairForCharge,
   fingerprintTransferPair,
   generateTransferPairSuggestionsPage,
@@ -81,10 +82,13 @@ async function discoverTransferPairs(
   db: Parameters<typeof generateTransferPairSuggestions>[0],
 ) {
   await generateTransferPairSuggestions(db, { runId: null });
-  const { rows } = await getDb(db).execute<{ judgment: unknown }>(sql`
+  const { rows } = await unwrapDb(db).execute<{ judgment: unknown }>(sql`
     SELECT judgment FROM "Suggestion" WHERE family = ${suggestionFamily.enum.transfer_pair} AND active AND status = ${suggestionStatus.enum.pending}
   `);
-  return rows.map((row) => transferPairJudgment.parse(row.judgment));
+  return currentTransferPairs(
+    db,
+    rows.map((row) => transferPairJudgment.parse(row.judgment).key),
+  );
 }
 
 /*
@@ -1381,7 +1385,7 @@ describe("transfer-pair suggestions", () => {
 
     const [distant] = of(90);
     expect(distant!.judgment).toMatchObject({ dateGapDays: 4, clean: false });
-    expect(distant!.judgment.blockers).toEqual(["date_gap"]);
+    expect(distant!.judgment.blockers).toEqual(["date_gap", "weak_movement"]);
     expect(of(60)).toEqual([]);
 
     const shared = of(120);
