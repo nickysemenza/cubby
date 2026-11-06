@@ -280,10 +280,6 @@ describe("consolidated household ledger", () => {
         data: { amount: 12 },
       }),
     ).toMatchObject({ action: "update", item: { amount: 12 } });
-    await unwrapDb(ctx.db)
-      .update(financialTransaction)
-      .set({ amount: 12.000000000000002 })
-      .where(eq(financialTransaction.id, outflow.id));
     await expect(
       updateLedgerTransfer(
         ctx.db,
@@ -292,10 +288,6 @@ describe("consolidated household ledger", () => {
         ctx.actor,
       ),
     ).resolves.toMatchObject({ output: { amount: 12 } });
-    await unwrapDb(ctx.db)
-      .update(financialTransaction)
-      .set({ amount: 12 })
-      .where(eq(financialTransaction.id, outflow.id));
     expect(transfer.output?.classification).toBe("reimbursement");
     expect(transfer.output).toMatchObject({
       fromPartyName: member.output.name,
