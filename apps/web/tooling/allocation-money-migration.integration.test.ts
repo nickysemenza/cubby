@@ -60,6 +60,39 @@ it("preserves signed allocation edges and refuses noisy originals without changi
     await client.query(
       `CREATE TABLE "AllocationConsumer" ("allocationId" uuid REFERENCES "FinancialTransactionAllocation"(id)); INSERT INTO "AllocationConsumer" SELECT id FROM "FinancialTransactionAllocation"`,
     );
+    const run = uuid(90);
+    await client.query(
+      `INSERT INTO "user" (id,name,email) VALUES ('allocation-member','Synthetic member','allocation@example.test')`,
+    );
+    await client.query(
+      `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'run','RUN-SYNALLOC')`,
+      [run],
+    );
+    await client.query(
+      `INSERT INTO "Run" (id,shortcode,"actorName",trigger,"actorUserId","actorEmail",purpose,status) VALUES ($1,'RUN-SYNALLOC','Synthetic member','manual','allocation-member','allocation@example.test','sweep','running')`,
+      [run],
+    );
+    await client.query(
+      `INSERT INTO "RunStep" ("runId",key,label,position,state) VALUES ($1,'statement_generate','Synthetic refresh',0,'running')`,
+      [run],
+    );
+    await client.query(
+      `INSERT INTO "Job" (key,kind,state,"runId",input) VALUES ('allocation-refresh','run.execute','queued',$1,'{}')`,
+      [run],
+    );
+    await expect(
+      migrateDatabase(db, { through: "0104_allocation_minor_units" }),
+    ).rejects.toThrow("Financial refresh has unfinished steps");
+    await client.query(
+      `UPDATE "Run" SET status='failed',"failureCode"='user_cancelled',"endedAt"=now() WHERE id=$1`,
+      [run],
+    );
+    await expect(
+      migrateDatabase(db, { through: "0104_allocation_minor_units" }),
+    ).rejects.toThrow("Financial refresh has unfinished steps");
+    await client.query(
+      `UPDATE "Job" SET state='cancelled' WHERE key='allocation-refresh'`,
+    );
     const before = (
       await client.query(
         `SELECT jsonb_agg(to_jsonb(a) ORDER BY id) AS rows FROM "FinancialTransactionAllocation" a`,
