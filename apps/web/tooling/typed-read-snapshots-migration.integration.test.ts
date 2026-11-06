@@ -91,7 +91,7 @@ it("refuses legacy derived decisions and drops only the retired cache on replay"
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
     await migrateDatabase(db, {
-      through: "0096_retire_derived_source_triggers",
+      through: "0100_payment_evidence_minor_units",
     });
     const product = "00000000-0000-4000-8000-000000000091";
     await client.query(
@@ -127,7 +127,7 @@ it("refuses legacy derived decisions and drops only the retired cache on replay"
       ).rows;
     const before = await retained();
     await expect(
-      migrateDatabase(db, { through: "0097_drop_legacy_derived_values" }),
+      migrateDatabase(db, { through: "0101_drop_legacy_derived_values" }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",
@@ -144,11 +144,11 @@ it("refuses legacy derived decisions and drops only the retired cache on replay"
     await client.query(
       `UPDATE "DerivedValue" SET "decidedBy"='{"outcome":{"kind":"value"},"provenance":{"kind":"computed"}}'`,
     );
-    await migrateDatabase(db, { through: "0097_drop_legacy_derived_values" });
+    await migrateDatabase(db, { through: "0101_drop_legacy_derived_values" });
     // Simulate a committed DROP whose journal receipt was lost, so the SQL itself replays.
     await client.query(`DELETE FROM drizzle.__drizzle_migrations
       WHERE created_at = (SELECT max(created_at) FROM drizzle.__drizzle_migrations)`);
-    await migrateDatabase(db, { through: "0097_drop_legacy_derived_values" });
+    await migrateDatabase(db, { through: "0101_drop_legacy_derived_values" });
     expect(
       (
         await client.query(

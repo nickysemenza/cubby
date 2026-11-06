@@ -708,6 +708,13 @@
       "when": 1793921921817,
       "tag": "0100_payment_evidence_minor_units",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1793926357322,
+      "tag": "0101_drop_legacy_derived_values",
+      "breakpoints": true
     }
   ]
 }
