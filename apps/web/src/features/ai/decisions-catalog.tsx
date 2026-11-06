@@ -27,7 +27,6 @@ import { Badge } from "~/ui/reui/badge";
 import { Description } from "~/ui/text/description";
 import { NoneValue } from "~/ui/text/none-value";
 
-
 const helper = createCubbyColumnHelper<DecisionCatalogRow>();
 const decisionScope = (row: DecisionCatalogRow) =>
   row.entity ? entityRoster[row.entity].singular : "Feature";
