@@ -2,17 +2,17 @@ import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
+import { repositoryReadBinding } from "~/server/generated/entity-kernel-bindings.gen";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 
 const dialect = new PgDialect();
 
 describe("repository labels", () => {
-  it("provides a title for every public entity", () => {
+  it("provides a title for every public entity", async () => {
     for (const entity of shortcodeEntities) {
       expect({
         entity,
-        title: Boolean(kernelScaffold(entity)?.title()),
+        title: Boolean(await repositoryReadBinding(entity).title()),
       }).toEqual({
         entity,
         title: true,
