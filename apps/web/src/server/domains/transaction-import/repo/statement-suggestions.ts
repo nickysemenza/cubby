@@ -3433,7 +3433,9 @@ export async function suggestionsNeedingLabels(
 
 const labelIdentityScope = (scope: StatementSuggestionScope) =>
   scope.importId || scope.since
-    ? sql`(${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (${scopedStatementChargeKeys(scope)})`
+    ? sql`(${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (
+        WITH label_scope AS MATERIALIZED (${scopedStatementChargeKeys(scope)})
+        SELECT source,"chargeKey" FROM label_scope)`
     : sql`true`;
 
 /** Resolve only named cursor candidates or write-admission targets. */
