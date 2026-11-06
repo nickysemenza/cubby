@@ -174,7 +174,7 @@ export async function readEntityGraph(
     await options.beforeQuery?.();
     // Append-only roots have no deletedAt column; liveness belongs to the manifest.
     const rootRows = await unwrapDb(db).execute(sql`
-      SELECT "id" AS "dbId", "shortcode" AS "id", ${labelSql(rootEntity, "")} AS "label",
+      SELECT "id" AS "dbId", "shortcode" AS "id", ${await labelSql(rootEntity, "")} AS "label",
         ${metadataFor(rootEntity, "")} AS "metadata"
       FROM ${sql.raw(`"${rootTable}"`)}
       WHERE "shortcode" IN (${sql.join(
@@ -233,17 +233,18 @@ export async function readEntityGraph(
       ),
     );
     if (relationSources.length === 0) continue;
-    const sourceRows = relationSources.map(({ relationship, source }) => {
-      const traversal = compileTraversal(
-        rootEntity,
-        source.provenance.steps,
-        `graph_${source.key.replaceAll(/[^a-zA-Z0-9]/g, "_")}`,
-        { root: "s", leaf: "t", to: relationship.target },
-      );
-      return sql`
+    const sourceRows = await Promise.all(
+      relationSources.map(async ({ relationship, source }) => {
+        const traversal = compileTraversal(
+          rootEntity,
+          source.provenance.steps,
+          `graph_${source.key.replaceAll(/[^a-zA-Z0-9]/g, "_")}`,
+          { root: "s", leaf: "t", to: relationship.target },
+        );
+        return sql`
             SELECT s."shortcode" AS "rootShortcode", ${relationship.key}::text AS "relationshipKey", ${relationship.target}::text AS "targetEntity",
               t."id"::text AS "targetId", t."shortcode" AS "targetShortcode",
-              ${labelSql(relationship.target, "t")} AS "label",
+              ${await labelSql(relationship.target, "t")} AS "label",
               ${metadataFor(relationship.target)} AS "metadata", ${source.key}::text AS "sourceKey"
             FROM ${sql.raw(`"${traversal.rootTable}"`)} s
             ${traversal.joins}
@@ -253,7 +254,8 @@ export async function readEntityGraph(
             )})
               ${entityManifest[rootEntity].softDelete ? sql`AND ${notDeleted("s")}` : sql``}
         `;
-    });
+      }),
+    );
     await options.beforeQuery?.();
     const result = await unwrapDb(db).execute(sql`
           WITH raw_related AS (${sql.join(sourceRows, sql` UNION ALL `)}), related AS (

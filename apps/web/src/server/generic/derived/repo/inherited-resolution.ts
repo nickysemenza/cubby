@@ -82,12 +82,12 @@ function publicValue(chain: GeneratedInherit, value: SQL): SQL {
   return sql`to_jsonb(${code(sql`${value} #>> '{}'`)})`;
 }
 
-function resolutionSql(
+async function resolutionSql(
   entity: Entity,
   field: string,
   chain: GeneratedInherit,
   alias: string,
-): SQL {
+): Promise<SQL> {
   const model = entityFieldByKey(entity, field);
   if (!model?.resolution)
     throw new Error(`${entity}.${field} has no resolution model`);
@@ -95,10 +95,12 @@ function resolutionSql(
   const source = sql`facts.fallback->${decisionKeys.source}`;
   const sourceId = sql`${source}->>${sourceKeys.entityId}`;
   const sourceKind = sql`${source}->>${sourceKeys.entityKind}`;
-  const identities = sourceEntities(entity, chain).map((target) => {
-    const { table, from } = referenceTable(target);
-    return sql`WHEN ${sourceKind} = ${target} THEN (SELECT jsonb_build_object(${sourceKeys.entityKind}::text, ${target}::text, ${sourceKeys.entityId}::text, ${table.shortcode}, ${sourceKeys.name}::text, ${labelSql(target, "r")}) FROM ${from} WHERE ${table.id}::text = ${sourceId} AND ${notDeleted(table)})`;
-  });
+  const identities = await Promise.all(
+    sourceEntities(entity, chain).map(async (target) => {
+      const { table, from } = referenceTable(target);
+      return sql`WHEN ${sourceKind} = ${target} THEN (SELECT jsonb_build_object(${sourceKeys.entityKind}::text, ${target}::text, ${sourceKeys.entityId}::text, ${table.shortcode}, ${sourceKeys.name}::text, ${await labelSql(target, "r")}) FROM ${from} WHERE ${table.id}::text = ${sourceId} AND ${notDeleted(table)})`;
+    }),
+  );
   const hierarchy = chain.from.find((item) => item.kind === "hierarchy");
   const sourceLabel = sql`CASE ${sql.join(
     sourceEntities(entity, chain).map((target) => {
@@ -132,13 +134,18 @@ function resolutionSql(
 }
 
 /** No per-entity roster: every declared inherited field participates. */
-export function inheritedFieldResolutionsSql(entity: Entity, alias: string) {
+export async function inheritedFieldResolutionsSql(
+  entity: Entity,
+  alias: string,
+) {
   const entries = Object.entries(generatedEntityListFields[entity].inherit);
-  return sql`jsonb_build_object(${sql.join(
-    entries.flatMap(([field, chain]) => [
+  const values = await Promise.all(
+    entries.map(async ([field, chain]) => [
       sql`${field}::text`,
-      resolutionSql(entity, field, chain, alias),
+      await resolutionSql(entity, field, chain, alias),
     ]),
-    sql`, `,
-  )})`.mapWith((value: unknown) => fieldResolutionsSchema.parse(value));
+  );
+  return sql`jsonb_build_object(${sql.join(values.flat(), sql`, `)})`.mapWith(
+    (value: unknown) => fieldResolutionsSchema.parse(value),
+  );
 }

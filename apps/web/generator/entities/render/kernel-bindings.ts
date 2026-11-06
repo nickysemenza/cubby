@@ -214,6 +214,27 @@ export const renderKernelBindingsArtifacts = (
         `  ${JSON.stringify(e.key)}: () => import(${JSON.stringify(e.ports.reports!.module)}).then(m => m.${e.ports.reports!.export}),`,
     )
     .join("\n");
+  const readBindings = kernelEntities
+    .map((entity) => {
+      const key = JSON.stringify(entity.key);
+      const adapter = entity.ports.repository;
+      const load = ["inventory", "meal", "run"].includes(entity.key)
+        ? `import("~/server/domains/${entity.key}/repo/${entity.key === "run" ? "run" : "crud"}").then(m => m.${entity.key}Scaffold)`
+        : adapter
+          ? `import(${JSON.stringify(adapter.module)}).then(m => m.${adapter.export}.repository.scaffold)`
+          : `import("~/server/generated/entity-kernel-runtime.gen").then(m => m.ENTITY_KERNEL_BINDINGS[${key}].repository.scaffold)`;
+      const title = entity.fieldModel.storage.find(
+        (field) =>
+          field.key ===
+          entity.fieldModel.fields.find(
+            (field) => field.readKey === entity.inspector.titleField,
+          )?.key,
+      );
+      const composed =
+        !title || ["inventory", "meal", "run"].includes(entity.key);
+      return `  ${key}: { title: ${composed ? `async () => (await ${load}).title()` : title && entity.table ? `() => sql.raw(${JSON.stringify(`"${entity.table.name}"."${title.column}"::text`)})` : `() => undefined`}, fieldReads: async (db: RepositoryQueryInput, codes: readonly string[]) => (await (await ${load}).get(db, codes)).fieldReads },`;
+    })
+    .join("\n");
   const runtimeBindings = kernelEntities
     .map((entity) => `  ${JSON.stringify(entity.key)}: ${adapterName(entity)},`)
     .join("\n");
@@ -316,6 +337,9 @@ export const renderKernelBindingsArtifacts = (
         "apps/web/src/server/generated/entity-kernel-bindings.gen.ts",
       source: rawSource(
         generatedHeader +
+          'import { sql } from "drizzle-orm";\n' +
+          'import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";\n' +
+          `export const ENTITY_READ_BINDINGS = {\n${readBindings}\n};\n` +
           `export const ENTITY_REPORT_BINDINGS = {\n${reportBindings}\n};\n`,
       ),
     },

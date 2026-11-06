@@ -33,7 +33,7 @@ export async function shortcodeLabels(
       const { dbTable, softDelete } = entityManifest[kind];
       if (!dbTable) return;
       const rows = await unwrapDb(db).execute(sql`
-        SELECT t."shortcode" AS code, ${labelSql(kind, "t")} AS label
+        SELECT t."shortcode" AS code, ${await labelSql(kind, "t")} AS label
         FROM ${sql.identifier(dbTable)} t
         WHERE t."shortcode" IN (${sql.join(
           [...set].map((code) => sql`${code}`),

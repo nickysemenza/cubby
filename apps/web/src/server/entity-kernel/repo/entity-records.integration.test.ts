@@ -44,7 +44,7 @@ describe("combined entity records", () => {
       );
     }
     const result = await getDb(ctx.db).execute(sql`
-      EXPLAIN (ANALYZE, FORMAT JSON) ${buildEntityRecordsQuery(
+      EXPLAIN (ANALYZE, FORMAT JSON) ${await buildEntityRecordsQuery(
         entityRecordsInputSchema.parse({ kind: "product", pageSize: 3 }),
       )}
     `);

@@ -63,12 +63,11 @@ read fact is stated once:
   before request validation; column IDs are not wire filter keys. Server reads
   use generated filter codecs without picker presentation or option renderers.
 
-Canonical scaffold construction with an explicit read declaration publishes its
-title and field-context read ports; query-only and aliased scaffolds cannot
-replace the entity's public reader. Domain
-operation entry points can therefore use public field envelopes without first
-loading the complete kernel repository graph. Read compilers must not rely on
-`defineRepository` import order to make those ports available.
+Generated kernel bindings compile stored title SQL from the declaration's
+`titleField` and lazily load each entity's composed title and field-context
+reader. There is no mutable read-port registry. Missing ports fail explicitly;
+callers await composed labels without loading the complete repository graph at
+queue or cron entry initialization.
 Borrowed-image SQL branches compile lazily after the module graph initializes;
 traversal and list-filter imports must not observe a partly initialized roster.
 

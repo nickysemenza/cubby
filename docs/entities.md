@@ -2090,9 +2090,10 @@ WHERE because allocation shares apply those filters themselves.
 Repository `read.title` owns computed SQL labels; otherwise the scaffold
 resolves the declared stored title field. Shortcode lookups, reference pickers
 and record graphs share that title, including Inventory's product and location.
-Repository initialization publishes title and field-context ports separately from
-the complete registry, so SQL compilers and public envelope readers use declared
-reads without importing repositories during their initialization.
+The existing generated kernel bindings compile stored titles from `titleField` and
+lazily import each repository for composed titles and field contexts. Missing ports
+throw; reads never depend on registration or repository initialization order.
+Queue and scheduled entry points must retain their lazy repository boundary.
 Picker count and kind projections are declared by their repository, with counts
 compiled from the entity's declared rollup. The shortcode table registry stays
 independent of repositories so identity writers can use it without a cycle.

@@ -20,8 +20,8 @@ describe("repository labels", () => {
     }
   });
 
-  it("uses the inventory product and location title for graph labels", () => {
-    const query = dialect.sqlToQuery(labelSql("inventory", "t")).sql;
+  it("uses the inventory product and location title for graph labels", async () => {
+    const query = dialect.sqlToQuery(await labelSql("inventory", "t")).sql;
     expect(query).toContain('t."id"');
     expect(query).toContain('FROM "Product" p INNER JOIN "Location" l');
     expect(query).toContain('l."name"');

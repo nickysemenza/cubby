@@ -22,8 +22,8 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { describeUnresolvableCode } from "~/server/entity-kernel/repo/entity-identity";
-import { repositoryReadPorts } from "~/server/entity-kernel/repo/read-ports";
 import { createAppError } from "~/server/errors/app-error";
+import { ENTITY_READ_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import type { ShortcodeTable } from "~/server/generic/shortcode/repo/shortcode-tables";
 
@@ -256,8 +256,8 @@ export async function lookupEntityLabels(
   const names = new Map<string, string>();
   await Promise.all(
     [...byEntity].map(async ([entity, ids]) => {
-      const nameColumn = repositoryReadPorts(entity)?.title();
-      if (!nameColumn) return;
+      const nameColumn = await ENTITY_READ_BINDINGS[entity].title();
+      if (!nameColumn) throw new Error(`No repository title for ${entity}`);
       const table: ShortcodeTable = SHORTCODE_TABLE[entity];
       // includes-deleted: same reasoning as `lookupShortcodes` — an audit row
       // or other assembled payload can legitimately name a row deleted after
@@ -304,12 +304,13 @@ export async function lookupEntityReferences<E extends ShortcodeEntity>(
   >();
   if (wanted.length === 0) return result;
   const table: ShortcodeTable = SHORTCODE_TABLE[entity];
-  const nameColumn = repositoryReadPorts(entity)?.title();
+  const nameColumn = await ENTITY_READ_BINDINGS[entity].title();
+  if (!nameColumn) throw new Error(`No repository title for ${entity}`);
   const rows = await unwrapDb(db)
     .select({
       id: table.id,
       shortcode: table.shortcode,
-      name: nameColumn ?? table.shortcode,
+      name: nameColumn,
       emoji: getTableColumns(table).emoji ?? sql<null>`NULL::text`,
     })
     .from(table)
