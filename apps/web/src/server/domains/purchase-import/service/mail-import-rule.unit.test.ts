@@ -13,6 +13,7 @@ import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import {
+  carrierNotice,
   decideMailByRule,
   mailLifecycleEvent,
   orderIdentifiers,
@@ -264,5 +265,79 @@ describe("mail import rule", () => {
     ],
   ])("hands the coordinator %s", (_case, overrides) => {
     expect(decideMailByRule(evidence(overrides)).kind).toBe("coordinator");
+  });
+});
+
+describe("carrierNotice", () => {
+  const notice = (sender: string, subject: string, text = subject) =>
+    carrierNotice({ sender, subject, text, notificationDay: "2026-03-20" });
+  const usps = "USPS <auto-reply@usps.com>";
+  const fedex = "FedEx Tracking <TrackingUpdates@fedex.com>";
+  const number = "9400111111111111111111";
+
+  it("keeps a USPS forecast as an estimate on its stated day", () => {
+    expect(
+      notice(
+        usps,
+        `USPS® Expected Delivery on Friday, March 27, 2026 arriving by 9:00pm ${number}`,
+      ),
+    ).toMatchObject({
+      carrierName: "USPS",
+      trackingNumber: number,
+      kind: "unknown",
+      day: "2026-03-27",
+      timeBasis: "estimate",
+    });
+  });
+
+  it("dates FedEx wording from the notification, never asserting delivery", () => {
+    expect(
+      notice(fedex, "Your shipment is on the way 100000000001"),
+    ).toMatchObject({
+      kind: "in_transit",
+      day: "2026-03-20",
+      timeBasis: "notification_received",
+    });
+    expect(
+      notice(
+        fedex,
+        "Your shipment is scheduled for delivery tomorrow 100000000001",
+      ),
+    ).toMatchObject({ kind: "unknown", timeBasis: "notification_received" });
+  });
+
+  it.each([
+    [
+      "another sender",
+      "Shop <ship@fedex.example.test>",
+      "Your shipment is on the way 100000000001",
+    ],
+    [
+      "a lookalike domain",
+      "FedEx <ship@notfedex.com>",
+      "Your shipment is on the way 100000000001",
+    ],
+    [
+      "other wording",
+      fedex,
+      "Part of your shipment is scheduled for delivery tomorrow 100000000001",
+    ],
+    [
+      "an impossible date",
+      usps,
+      `USPS® Expected Delivery on Friday, March 32, 2026 arriving by 9:00pm ${number}`,
+    ],
+  ])("leaves %s to the coordinator", (_name, sender, subject) => {
+    expect(notice(sender, subject)).toBeNull();
+  });
+
+  it("needs the body to repeat the tracking number", () => {
+    expect(
+      notice(
+        fedex,
+        "Your shipment is on the way 100000000001",
+        "No number here",
+      ),
+    ).toBeNull();
   });
 });

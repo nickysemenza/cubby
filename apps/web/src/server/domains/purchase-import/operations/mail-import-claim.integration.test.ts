@@ -7,7 +7,9 @@
  * a rule outcome; a first-page order match hides a cancellation on a later
  * page and is incorrectly settled without the coordinator; the claim omits
  * the sender's proven Vendor or the recorded Purchases its printed order id
- * names, so the coordinator spends a model call looking each up.
+ * names, so the coordinator spends a model call looking each up; an exact
+ * carrier notice reaches the coordinator, invents a Purchase link or settles
+ * with its package held for review.
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { PurchaseId, RunId } from "@cubby/schemas/identifiers";
@@ -28,6 +30,7 @@ import {
   orderMail,
   orderMailEvent,
   runOperation,
+  shipment,
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -222,6 +225,67 @@ describe("Mail import claim", () => {
       target,
     };
   }
+
+  it("records an exact carrier notice without the coordinator and links only the Shipment's Purchase", async () => {
+    const { party, order, retain } = await world();
+    const fedex = "FedEx Tracking <TrackingUpdates@fedex.com>";
+    const body = (number: string) => `Tracking details\nTracking ID\n${number}`;
+    const unmatched = await retain(
+      "carrier-unmatched",
+      "Your shipment is on the way 100000000001",
+      body("100000000001"),
+      fedex,
+    );
+    const inexact = await retain(
+      "carrier-inexact",
+      "Part of your shipment is scheduled for delivery tomorrow 100000000003",
+      body("100000000003"),
+      fedex,
+    );
+    const first = await admit(party, [unmatched, inexact]);
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ classification: "related", classificationStage: "decision" })
+      .where(eq(emailTable.runId, first.owner.id));
+
+    expect(await claimMailImportWork(ctx.db, first.owner.id)).toMatchObject({
+      kind: "email",
+      email: { messageId: inexact.messageId },
+    });
+    expect((await emailOf(unmatched)).status).toBe("blocked");
+    expect((await linkRows(unmatched)).links).toEqual([]);
+    expect((await emailOf(inexact)).status).toBe("researching");
+    const packages = await getDb(ctx.db)
+      .select({
+        tracking: shipment.trackingNumber,
+        purchase: shipment.purchaseId,
+      })
+      .from(shipment);
+    expect(packages).toEqual([{ tracking: "100000000001", purchase: null }]);
+
+    // A later notice for the same package links only the Purchase it holds.
+    const target = await order("SYN-CARRIER");
+    await getDb(ctx.db).update(shipment).set({ purchaseId: target.id });
+    const later = await retain(
+      "carrier-later",
+      "Your shipment is scheduled for delivery tomorrow 100000000001",
+      body("100000000001"),
+      fedex,
+    );
+    const second = await admit(party, [later]);
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ classification: "related", classificationStage: "decision" })
+      .where(eq(emailTable.runId, second.owner.id));
+
+    expect(await claimMailImportWork(ctx.db, second.owner.id)).toEqual({
+      kind: "none",
+    });
+    expect((await emailOf(later)).status).toBe("completed");
+    expect((await linkRows(later)).links).toEqual([
+      expect.objectContaining({ decision: "linked", proposedBy: "heuristic" }),
+    ]);
+  });
 
   it("claims an incomplete lifecycle read instead of settling its first-page match", async () => {
     const { party, seller, order, retain } = await world();

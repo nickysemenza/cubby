@@ -107,6 +107,9 @@ pending: nothing here starts Product research.
    no retained attachment bytes and an accepted import source (an unitemized
    Purchase goes to the coordinator, which can itemize it from the notice),
    links as that event (proposer `heuristic`, Assessment producer `rule`); an
+   exact USPS or FedEx carrier notice classified related records its package,
+   then links only the Purchase that Shipment already holds or settles
+   unresolved, and goes to the coordinator if the writer holds the package; an
    Email the classifier confidently called unrelated (stage `rule`,
    `decision` or `model`, in a Run the member did not select, from a sender
    that proves no Vendor) resolves
