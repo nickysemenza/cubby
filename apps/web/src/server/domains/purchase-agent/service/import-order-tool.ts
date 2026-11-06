@@ -106,7 +106,7 @@ export function importExtractedOrderTool(
   return defineTool({
     name: EXTRACT_ORDER_TOOL,
     description:
-      "Import one ordinary itemized Email in one call: provide the exact extraction, candidate.sourceReferences with literal Email excerpts, and Product decisions. Cubby generates stable operation/line IDs and uses its normal prepare/commit writers. Incomplete evidence stays incomplete. A needs_resolution result returns the prepared receipt for targeted Product resolution; never re-prepare it. On writer_refusal, correct the diagnostic; a commit refusal can reuse its preparation with a repaired Product decision. On operation_error, the commit outcome is unknown: replay identical input to recover its durable result before changing it.",
+      "Import one ordinary itemized Email in one call: provide the exact extraction, candidate.sourceReferences with literal Email excerpts, and Product decisions. Cubby generates stable operation/line IDs and uses its normal prepare/commit writers. Incomplete evidence stays incomplete. A needs_resolution result returns the prepared receipt for targeted Product resolution; never re-prepare it. On writer_refusal, change the refused extraction or Product decision; do not resubmit identical input. A commit refusal can reuse its preparation with a repaired Product decision. On operation_error at prepare, no money was written: retry identical input. At commit the outcome is unknown: replay identical input to recover its durable result before changing it.",
     parameters: Type.Unsafe<JsonObject>(parameters),
     structuredOutputSchema: Type.Unsafe<JsonObject>(resultSchema),
     replay: "safe",
@@ -241,7 +241,13 @@ export function importExtractedOrderTool(
       if (preparedResult.isError || !prepared.success)
         return finish(
           {
-            kind: "writer_refusal",
+            kind:
+              mailWriterOutcome({
+                result: preparedResult,
+                stage: "prepare",
+              }) === "exempt"
+                ? "operation_error"
+                : "writer_refusal",
             stage: "prepare",
             operationId: _runExecution.operationId,
             diagnostic: (
@@ -310,7 +316,10 @@ export function importExtractedOrderTool(
       if (
         (committedResult.isError &&
           mailWriterOutcome({ result: committedResult, stage: "commit" }) ===
-            "pending") ||
+            "pending" &&
+          !committedResult.diagnostics?.some(
+            (item) => item.code === "cubby:RUN_OPERATION_OUTCOME_UNCERTAIN",
+          )) ||
         (!committedResult.isError && !committed.success)
       ) {
         committedResult = await api.executeTool(
@@ -335,9 +344,15 @@ export function importExtractedOrderTool(
             stage: "commit",
             operationId: commitId,
             diagnostic: (
-              JSON.stringify(
+              (mailWriterOutcome({
+                result: committedResult,
+                stage: "commit",
+              }) === "invalid"
+                ? "Repair the refused extraction or Product decision. Do not resubmit identical input: the retained failed operation will report uncertain. "
+                : "") +
+              (JSON.stringify(
                 committedResult.structuredOutput ?? committedResult.diagnostics,
-              ) ?? "No commit verdict"
+              ) ?? "No commit verdict")
             ).slice(0, 8_000),
           },
           committedResult.diagnostics,

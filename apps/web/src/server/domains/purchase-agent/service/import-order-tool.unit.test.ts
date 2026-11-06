@@ -57,6 +57,7 @@ function writerPeer(
     candidate?: boolean;
     conflict?: boolean;
     unknownCommit?: boolean;
+    uncertainCommit?: boolean;
     refusal?: string;
   } = {},
 ) {
@@ -146,6 +147,16 @@ function writerPeer(
         operation: parsed._runExecution.operationId,
       });
       commits.push(parsed.prepareOperationId);
+      if (options.uncertainCommit)
+        return fromPartial({
+          isError: true,
+          diagnostics: [
+            {
+              code: "cubby:RUN_OPERATION_OUTCOME_UNCERTAIN",
+              message: "Synthetic uncertain receipt",
+            },
+          ],
+        });
       if (options.unknownCommit && commits.length === 1)
         return fromPartial({
           isError: true,
@@ -232,6 +243,29 @@ describe("ordinary Email extraction", () => {
     ]);
     expect(refused.effects.map((effect) => effect.action)).toEqual(["prepare"]);
     expect(refused.claims).toEqual([]);
+    const deadline = writerPeer({ refusal: "MCP_TOOL_DEADLINE_EXCEEDED" });
+    const retryable = await importExtractedOrderTool(
+      runId,
+      () => ordinaryMail,
+    ).execute(extraction, deadline.api, BACKGROUND_CONTEXT);
+    expect(retryable.structuredOutput).toMatchObject({
+      kind: "operation_error",
+      stage: "prepare",
+    });
+    const uncertain = writerPeer({ uncertainCommit: true });
+    const held = await importExtractedOrderTool(
+      runId,
+      () => ordinaryMail,
+    ).execute(extraction, uncertain.api, BACKGROUND_CONTEXT);
+    expect(held.structuredOutput).toMatchObject({
+      kind: "operation_error",
+      stage: "commit",
+    });
+    expect(uncertain.effects.map((effect) => effect.action)).toEqual([
+      "prepare",
+      "commit",
+    ]);
+    expect(uncertain.claims).toEqual([]);
   });
 
   it("does not create a new Product before reviewing preparation candidates", async () => {

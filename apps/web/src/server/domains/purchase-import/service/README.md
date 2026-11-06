@@ -125,7 +125,10 @@ pending: nothing here starts Product research.
    sender proof and accepted order-source context; display-name and Purchase-date
    edits do not reset it. Writer classification uses trusted MCP error metadata,
    never Email text. Held-source refusals are exempt. Confirmed writer refusals
-   return for repair without automatic replay. Preparation failures cannot leave
+   return for changed input without automatic replay; repeating an identical refused
+   commit encounters its retained uncertain receipt. A preparation deadline asks for
+   identical retry. Explicitly uncertain receipts are not retried inside the tool.
+   Preparation failures cannot leave
    uncertain money writes. Commit failures without a server verdict, deadlines,
    and explicitly uncertain operation outcomes retain their reservation until
    exact writer recovery. After a predecessor is terminal or retired, only identical
