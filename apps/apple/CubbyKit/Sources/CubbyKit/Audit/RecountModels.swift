@@ -59,23 +59,10 @@ public struct RecountRow: Sendable, Hashable, Identifiable {
     }
 
     public init(_ out: InventoryDetail) throws {
-        let amount: Amount
-        switch out.fields.amount.result {
-        case .live(let result):
-            guard case .value(let outcome) = result.decision.outcome else {
-                throw Self.missingAmount()
-            }
-            amount = Amount(
-                value: outcome.value.value, unit: outcome.value.unit, upperValue: outcome.value.upperValue)
-        case .cached(let result):
-            guard case .value(let outcome) = result.decision.outcome else {
-                throw Self.missingAmount()
-            }
-            amount = Amount(
-                value: outcome.value.value, unit: outcome.value.unit, upperValue: outcome.value.upperValue)
-        case .missing, .unrecognized:
+        guard let value = FieldEnvelope(out.fields.amount)?.result.value else {
             throw Self.missingAmount()
         }
+        let amount = try value.decoded(Amount.self)
         var barcodes: Set<String> = []
         for external in out.product.externalIds where external.kind == .gtin14 {
             barcodes.insert(external.externalId)
