@@ -324,6 +324,7 @@ describe("isolated Mail coordinator replay", () => {
             admittedAt = Date.now();
             await waitFor(
               async () => {
+                evaluationBudget?.assertActive();
                 const [row] = await getDb(ctx.db)
                   .select({ status: runTable.status })
                   .from(runTable)

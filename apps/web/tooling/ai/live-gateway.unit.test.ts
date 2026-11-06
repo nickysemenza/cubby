@@ -96,7 +96,15 @@ async function guardedPeer() {
   const book = await liveReplayBudget();
   books.push({ book, directory });
   let rows: Receipt[] = [];
-  const vars = book.begin(async () => rows);
+  let afterRead: (() => void) | undefined;
+  const read = async () => {
+    const snapshot = [...rows];
+    const effect = afterRead;
+    afterRead = undefined;
+    effect?.();
+    return snapshot;
+  };
+  const vars = book.begin(read);
   vi.stubGlobal("fetch", upstream);
   upstream.mockImplementation(async (url, init) =>
     String(url).startsWith("http://127.0.0.1:")
@@ -140,10 +148,13 @@ async function guardedPeer() {
     gatewayEnv,
     send,
     record,
+    recordOnNextRead: (response: Response, status: string) => {
+      afterRead = () => record(response, status);
+    },
     ledger: async () => JSON.parse(await readFile(ledger, "utf8")),
     nextCase: () => {
       rows = [];
-      return book.begin(async () => rows);
+      return book.begin(read);
     },
   };
 }
@@ -167,7 +178,10 @@ it("shares reservations across peers and cases and releases only matched stored 
     accountedUsd: 0.02,
     outstandingUsd: 0,
     stopped: false,
+    reservations: [],
   });
+  // Finalization closes physical admission until the next case is bound.
+  expect((await peer.send()).status).toBe(403);
   peer.nextCase();
   const third = await peer.send();
   peer.record(third);
@@ -218,8 +232,17 @@ it("releases a fully read credit refusal only after its exact failed no-usage re
   expect(await peer.ledger()).toMatchObject({
     outstandingUsd: 0.6,
     stopped: false,
+    reservations: [
+      {
+        id: response.headers.get("cf-aig-log-id"),
+        model: "gpt-6-luna",
+        maxCostUsd: 0.6,
+        refused: true,
+      },
+    ],
   });
-  peer.record(response, "failed");
+  // The funding fallback arrives before asynchronous telemetry is visible.
+  peer.recordOnNextRead(response, "failed");
   refused = false;
   const recovered = await peer.send();
   expect(recovered.status).toBe(200);
@@ -286,6 +309,7 @@ it.each(["transport", "http500"])(
       failure === "transport" ? "synthetic disconnected stream" : 500,
     );
     expect((await peer.send()).status).toBe(403);
+    expect(() => peer.book.assertActive()).toThrow("Replay allowance stopped");
     expect(await peer.ledger()).toMatchObject({
       accountedUsd: 0,
       outstandingUsd: 0.6,

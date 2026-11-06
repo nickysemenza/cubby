@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   closeSync,
   openSync,
@@ -20,6 +21,16 @@ const ledgerSchema = z.object({
   accountedUsd: z.number().finite().nonnegative(),
   outstandingUsd: z.number().finite().nonnegative(),
   stopped: z.boolean(),
+  reservations: z
+    .array(
+      z.object({
+        id: z.string(),
+        model: z.string(),
+        maxCostUsd: z.number().finite().nonnegative(),
+        refused: z.boolean(),
+      }),
+    )
+    .default([]),
 });
 const requestSchema = z.discriminatedUnion("action", [
   z.object({
@@ -65,7 +76,11 @@ export async function liveReplayBudget() {
     const ledger = ledgerSchema.parse(
       JSON.parse(readFileSync(ledgerPath, "utf8")),
     );
-    if (ledger.stopped || ledger.outstandingUsd > 0)
+    if (
+      ledger.stopped ||
+      ledger.outstandingUsd > 0 ||
+      ledger.reservations.length > 0
+    )
       throw new Error(
         "Reconcile the stopped or outstanding replay allowance before another transmission",
       );
@@ -82,7 +97,13 @@ export async function liveReplayBudget() {
     >();
     const settled = new Set<string>();
     let readUsage: (() => Promise<Usage[]>) | undefined;
+    let accepting = false;
     const save = () => {
+      // Preserve the physical identity even when runtime shutdown loses its SQL receipt.
+      ledger.reservations = [...pending].map(([id, receipt]) => ({
+        id,
+        ...receipt,
+      }));
       writeFileSync(
         `${ledgerPath}.tmp`,
         `${JSON.stringify(ledger, null, 2)}\n`,
@@ -198,9 +219,11 @@ export async function liveReplayBudget() {
             const receipt = pending.get(input.id);
             if (!receipt) stop("Refused call has no reservation");
             receipt.refused = true;
+            save();
             return { id: input.id };
           }
-          if (ledger.stopped) throw new Error("Replay allowance stopped");
+          if (ledger.stopped || !accepting)
+            throw new Error("Replay allowance stopped");
           await reconcile();
           const declaration = Object.entries(AI_MODELS).find(
             ([model]) => model === input.model,
@@ -221,10 +244,25 @@ export async function liveReplayBudget() {
                 : null;
           if (!quote || (declaration?.role === "chat" && input.count !== 1))
             stop("Physical call has no conservative catalog quote");
-          if (
-            ledger.accountedUsd + ledger.outstandingUsd + quote.maxCostUsd >
-            ledger.limitUsd
-          )
+          const fits = () =>
+            ledger.accountedUsd + ledger.outstandingUsd + quote.maxCostUsd <=
+            ledger.limitUsd;
+          const refusedPending = () =>
+            [...pending.values()].some((receipt) => receipt.refused);
+          if (!fits() && refusedPending()) {
+            // Refusal telemetry is queued. Let that exact no-usage SQL receipt
+            // arrive before deciding whether the next funding step can fit.
+            const deadline = Date.now() + 5_000;
+            while (!fits() && refusedPending() && Date.now() < deadline) {
+              await delay(100);
+              await reconcile();
+            }
+            if (!fits() && refusedPending())
+              stop(
+                "Refused physical-call receipt did not arrive; reservation retained",
+              );
+          }
+          if (!fits())
             throw pending.size
               ? new PendingReceipts(
                   "Waiting for physical-call receipts before another full-window reservation",
@@ -232,6 +270,8 @@ export async function liveReplayBudget() {
               : new Error(
                   "Full-window reservation cannot fit the remaining replay allowance",
                 );
+          if (ledger.stopped || !accepting)
+            throw new Error("Replay allowance stopped");
           const id = `synthetic-eval:${crypto.randomUUID()}`;
           pending.set(id, {
             model: input.model,
@@ -274,9 +314,19 @@ export async function liveReplayBudget() {
         )
           throw new Error("Replay allowance cannot admit another case");
         readUsage = read;
+        accepting = true;
         return { agent: vars, gateway: vars };
       },
+      assertActive() {
+        if (ledger.stopped)
+          throw new Error(
+            "Replay allowance stopped; inspect retained reservations before continuing",
+          );
+      },
       async finish() {
+        // Close admission before reconciling, so background audit work cannot
+        // reserve a new physical call after the final receipt snapshot.
+        accepting = false;
         await serial(async () => {
           await reconcile();
           if (pending.size)
