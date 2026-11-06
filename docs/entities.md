@@ -748,6 +748,16 @@ workflow rather than a universal detail action. A list gets `bulkEdit` (bulk upd
 `detail.quickActions` and `list.quickActions` promote one or two of those
 declared verbs (generation fails on any other); each client's DESIGN.md owns
 their placement, and they leave the More menu.
+`entity.detail` and every `entity.list` row carry `actions: [{ id, enabled,
+reason }]` for the union of hero and list verbs. The server evaluates them in
+`server/generic/actions/entity-action-states.ts` from the per-verb rules in
+`@cubby/schemas/action-availability` (`requires` a present value, or
+`unlessValue` for a preset write the record already holds); a page costs no
+extra query, and a narrow `fields` read adds the rule fields. Clients render
+`enabled`/`reason` and derive no availability. `entity.mergePreview` returns
+the kernel merge's suggested survivor (most live incoming connections, then
+oldest, then lowest code) and every scalar update field the candidates disagree
+on; keeping a loser's value is an update of the survivor before the merge.
 Web record-level slot actions render once in the detail header through
 `DetailActionTarget` (`apps/web/src/entity/entity-detail/detail-action-bar.tsx`).
 `reportDetailActions` identifies record-level report commands and diagnostic
@@ -1830,7 +1840,9 @@ the Pivot view id and keeps the grouped list.
 
 A `presentation.list.totals` entry with `group: true` also sums its key
 per group, and section headers show the mean over records with a value
-(`sum / presentCount`) beside the sum; there is no separate metrics list. The compiler emits labels and display formats and rejects unsupported or mixed-unit
+(`sum / presentCount`) beside the sum; there is no separate metrics list.
+`listGroupMetricKeys` (`entity-definitions/list-group-metrics.ts`) builds that
+roster from group totals and rail fields declaring `total: "sum"`. The compiler emits labels and display formats and rejects unsupported or mixed-unit
 sources. Monetary values retain authoritative `SUM(Expense.cost)` provenance;
 field names never imply currency. Per-prefix metrics distinguish unknown sums
 from zero and include present/total counts and coverage. Date grouping with a

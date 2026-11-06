@@ -194,7 +194,7 @@ describe("EntityRelationTable", () => {
       }),
     );
     const list = entityList.list.withTransport(async () => ({
-      items: rows,
+      items: rows.map((row) => ({ ...row, actions: [] })),
       meta: {
         hasNextPage: false,
         pageIndex: 0,
@@ -265,7 +265,7 @@ describe("EntityRelationTable", () => {
       },
     });
     const list = entityList.list.withTransport(async () => ({
-      items: [row],
+      items: [{ ...row, actions: [] }],
       meta: {
         hasNextPage: false,
         pageIndex: 0,
@@ -381,7 +381,7 @@ describe("EntityRelationTable", () => {
       status: "not_started" as const,
     };
     const list = entityList.list.withTransport(async () => ({
-      items: [task],
+      items: [{ ...task, actions: [] }],
       meta: {
         hasNextPage: false,
         pageIndex: 0,

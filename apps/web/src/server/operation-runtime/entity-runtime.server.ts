@@ -24,6 +24,7 @@ import {
 } from "~/server/entity-kernel/contracts";
 import { listEntityRecords } from "~/server/entity-kernel/repo/entity-records";
 import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
+import { entityActionStates } from "~/server/generic/actions/entity-action-states";
 import {
   getDetailActivity,
   getMonthlyExpenseSpend,
@@ -40,6 +41,7 @@ import { getEntityConnections } from "~/server/generic/entity-links/repo/entity-
 import { runEntityTimeline } from "~/server/generic/entity-timeline/service/entity-timeline.ts";
 import { buildIntegrityCatalog } from "~/server/generic/integrity/repo/entity-integrity";
 import { getFilterOptions } from "~/server/generic/list/repo/filter-options";
+import { previewEntityMerge } from "~/server/generic/merge/repo/merge-preview";
 import { executeSearchDocumentSql } from "~/server/generic/search/repo/search-document";
 import { liveAliasSql } from "~/server/lib/live-row";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
@@ -67,7 +69,10 @@ export const entityDetailHandlers = implementOperationDomain(
         });
         return result.item === null
           ? null
-          : schemas.detailOutput.parse(result.item);
+          : schemas.detailOutput.parse({
+              ...result.item,
+              actions: entityActionStates(input.entity, result.item),
+            });
       },
     },
   },
@@ -119,6 +124,15 @@ export const entityGraphHandlers = implementOperationDomain(
       withGraphPreviews(context, await getEntityGraphPaths(context.db, input)),
     connections: (context, input) =>
       getEntityConnections(context.db, input, kernelScaffold),
+    mergePreview: (context, input) =>
+      previewEntityMerge(context.db, input, async (entity, code) => {
+        const result = await executeEntityAs(context, "get", {
+          entity,
+          id: code,
+          missing: "null",
+        });
+        return result.item;
+      }),
     relation: async (context, input) => {
       // The parse brands the ids; the input's entity is a union, so the
       // parsed command (not the raw input) is what executeEntityAs accepts.

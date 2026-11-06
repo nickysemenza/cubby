@@ -61,6 +61,60 @@ export const entityConnectionsOut = z.object({
 });
 export type EntityConnectionsOut = z.infer<typeof entityConnectionsOut>;
 
+/**
+ * The kernel merge preview for a selection of one kind: the survivor the
+ * server suggests and the fields the selection disagrees on. Advisory, like
+ * `entityConnectionsInput`'s merge dispositions; `entity.mutate` merge
+ * re-validates. A merged-away code is refused with the survivor's code.
+ */
+export const entityMergePreviewInput = z.object({
+  entity: entitySchema,
+  ids: z
+    .array(z.string().min(1))
+    .min(2)
+    .max(20)
+    .refine((ids) => new Set(ids).size === ids.length, "ids must be distinct"),
+});
+export type EntityMergePreviewInput = z.input<typeof entityMergePreviewInput>;
+
+export const entityMergeCandidate = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  /** Live incoming physical connections: the edges a merge repoints. */
+  connectionCount: z.number().int().nonnegative(),
+  createdAt: z.iso.datetime(),
+});
+
+export const entityMergeConflictValue = z.object({
+  /** The candidate holding this value. */
+  id: z.string(),
+  /** The value as the update contract writes it. */
+  value: z.unknown(),
+  /** Member-facing text for the value. */
+  display: z.string(),
+});
+
+export const entityMergeConflict = z.object({
+  field: z.string(),
+  label: z.string(),
+  /** One entry per candidate with a value, in `candidates` order. */
+  values: z.array(entityMergeConflictValue).min(2),
+});
+
+export const entityMergePreviewOut = z.object({
+  entity: entitySchema,
+  /** Most connections, then oldest, then code: deterministic for a selection. */
+  suggestedKeepId: z.string(),
+  candidates: z.array(entityMergeCandidate),
+  /**
+   * Update fields where two or more candidates hold different values. The
+   * merge keeps the survivor's value; another value is chosen by updating
+   * the survivor before merging.
+   */
+  conflicts: z.array(entityMergeConflict),
+});
+export type EntityMergePreviewOut = z.infer<typeof entityMergePreviewOut>;
+
 /** Entities with no live physical connection, for the Problems page. */
 export const orphanEntitiesOut = z.object({
   items: z.array(entityConnectionItem),

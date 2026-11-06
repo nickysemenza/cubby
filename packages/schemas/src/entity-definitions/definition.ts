@@ -22,6 +22,7 @@ import {
 import { fieldPolicyValue } from "../field-policy-fields";
 import { photoCategoryKeys } from "../photo-categories";
 import { childTableMetadataSchema } from "./child-definition";
+import { listGroupMetricKeys } from "./list-group-metrics";
 import { createRelationships } from "./relationships";
 import { entityRelationMetadataSchema } from "./relationship-shape";
 
@@ -2035,13 +2036,7 @@ const buildMetadataSchemas = () => {
           views,
           viewAliases,
           totals,
-          // Grouped reads sum these per group: grouped totals, then summed rail columns.
-          metrics: [
-            ...new Set([
-              ...totals.flatMap((total) => (total.group ? total.keys : [])),
-              ...rail.flatMap((item) => (item.total ? [item.field] : [])),
-            ]),
-          ],
+          metrics: listGroupMetricKeys(totals, rail),
           shelf:
             shelfSubtitleOverride === undefined
               ? null
