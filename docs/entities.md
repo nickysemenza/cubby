@@ -231,6 +231,10 @@ the root. Traversal follows only supplied, bounded topology and batches current
 facts across all its levels. Explicit embedded paths can name a governed container
 such as Location's installed Product; its effective result retains the nested
 Product envelopes. Compact identity leaves validate without fabricated fields.
+Web reference readers normalize effective expanded records and scalar IDs once;
+display consumers enrich normalized targets with allocation and provenance labels
+without reparsing effective values. Expanded targets retain their selected identity,
+label and emoji; explicit empty results never fall back to a nested target.
 Live Image leaves are marked in their owning schemas and require explicit `fields.embedded` edges; generation rejects an undeclared leaf. Embedded parents inherit their target’s declared Image edges. Image attachments use a bounded generated Image projection without another media decorator, so Image attachments cannot recursively attach themselves. The compiler uses raw media decorators; public decorators use the generated projection. Specialist responses collect their declared entity nodes into one heterogeneous batch, deduplicating current-fact loads by entity and identity while retaining each node’s projection, order and duplicates. Frozen review proposals and provenance evidence are not live entity nodes.
 Child schemas import target field-schema leaves rather than full parent reads. A field may declare
 `validation.publicRead` when repository calculation inputs contain additional
