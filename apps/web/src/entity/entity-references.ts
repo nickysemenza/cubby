@@ -169,6 +169,10 @@ export function readReferenceField<TRecord extends object>(
       : readRecordField(record, field.readKey, unknownValue);
   const assigned = storedReference(record, field, intent);
   if (assigned) return assigned;
+  // An explicitly empty effective result must not resurrect a nested target.
+  const envelope = fieldEnvelopeFor(record, field.readKey ?? field.key);
+  if (envelope && fieldValueOf(envelope) === null)
+    return { entity: reference.entity, items: [] };
   // A reference whose read key carries a count (recipe `meals` reads
   // `meals`) names related records without listing them; it renders as
   // the scalar it is.
@@ -214,10 +218,10 @@ export function readDisplayReferenceField<TRecord extends object>(
       unclassifiedAllocations?: { amount?: number | null }[];
     })
   | null {
-  const stored = readReferenceField(record, field, "display");
-  if (stored === null || field.reference?.multiple) return stored;
+  const normalized = readReferenceField(record, field, "display");
+  if (normalized === null || field.reference?.multiple) return normalized;
   const envelope = fieldEnvelopeFor(record, field.readKey ?? field.key);
-  if (!envelope) return stored;
+  if (!envelope) return normalized;
   const decision = fieldDecisionOf(envelope);
   const stem = field.key.replace(/Ids?$/u, "");
   const allocations = readRecordField(
@@ -240,7 +244,7 @@ export function readDisplayReferenceField<TRecord extends object>(
         items.set(share.id, item);
       }
     return {
-      entity: stored.entity,
+      entity: normalized.entity,
       items: [...items.values()],
       unclassifiedAllocations: shares
         .filter((share) => !share.id)
@@ -250,19 +254,23 @@ export function readDisplayReferenceField<TRecord extends object>(
         shares.some((share) => !share.id || share.incomplete),
     };
   }
-  const effectiveID = nullableString.parse(fieldValueOf(envelope));
-  if (effectiveID === null) return { entity: stored.entity, items: [] };
-  const sameTarget = stored.items.find((item) => item.id === effectiveID);
   const provenance = decision?.provenance;
   const source =
     provenance?.kind === "inherited" || provenance?.kind === "default"
       ? provenance.source
       : null;
-  const name =
-    shares.find((share) => share.id === effectiveID)?.name ??
-    sameTarget?.name ??
-    (source?.entityKind === stored.entity && source.entityId === effectiveID
-      ? source.name
-      : null);
-  return { entity: stored.entity, items: [{ id: effectiveID, name }] };
+  // Identity and shape are normalized once by readReferenceField. Display only
+  // enriches those targets with allocation or provenance labels.
+  return {
+    ...normalized,
+    items: normalized.items.map((item) => ({
+      ...item,
+      name:
+        shares.find((share) => share.id === item.id)?.name ??
+        item.name ??
+        (source?.entityKind === normalized.entity && source.entityId === item.id
+          ? source.name
+          : null),
+    })),
+  };
 }
