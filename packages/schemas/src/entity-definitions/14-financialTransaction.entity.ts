@@ -1445,7 +1445,6 @@ export const { definition, readSchemas } = defineEntityModel(
           placeholder: "Filter by amount...",
           deriveSchema: true,
           stored: true,
-          range: { finite: true },
           options: [
             {
               value: "gte1000",

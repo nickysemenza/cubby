@@ -310,7 +310,7 @@ export function RecordMore({
   onClick,
 }: {
   label: string;
-  link?: Pick<LinkProps, "to" | "search" | "params">;
+  link?: Pick<LinkProps, "to" | "search" | "params" | "hash">;
   /** A prebuilt list URL (filters and sort encoded) when no typed route fits. */
   href?: string;
   onClick?: () => void;

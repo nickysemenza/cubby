@@ -97,7 +97,6 @@ export type FilterDescriptor = Readonly<{
     kind: "number" | "date";
     int: boolean;
     nonnegative: boolean;
-    finite: boolean;
     describe: Readonly<{ lower: string; upper: string }> | null;
   }> | null;
   /** The Any value / No value request key (`presenceFilter`). */

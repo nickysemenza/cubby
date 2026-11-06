@@ -2632,7 +2632,6 @@ const buildMetadataSchemas = () => {
         kind: z.enum(["number", "date"]).optional(),
         int: z.boolean({ error: "must be a boolean" }).optional(),
         nonnegative: z.boolean({ error: "must be a boolean" }).optional(),
-        finite: z.boolean({ error: "must be a boolean" }).optional(),
         /** MCP prose for the two bounds the range derives. */
         describe: z
           .object({ lower: nonEmptyString(), upper: nonEmptyString() })

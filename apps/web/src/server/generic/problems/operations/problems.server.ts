@@ -1,4 +1,5 @@
 import { problemsTypeSliceOut } from "@cubby/schemas/mcp";
+import { referentialLivenessViolationsMcpOut } from "@cubby/schemas/problems";
 import { z } from "zod";
 
 import {
@@ -52,39 +53,37 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
   report: async (context, input) => {
     if (problemReportWantsCounts(input) || input.type === undefined)
       return readProblemCounts(context);
-    if (input.type !== undefined) {
-      const { expectedProblemKeys, problemQuery } =
-        await import("@cubby/schemas/entity-definitions/problems/problem-registry");
-      const key = z.enum(expectedProblemKeys).safeParse(input.type);
-      if (!key.success)
-        return {
-          error: `Unknown problem type '${input.type}'`,
-          availableTypes: expectedProblemKeys,
-        };
-      const definition = problemQuery(key.data);
-      if (!definition) throw new Error("Problem query registry is incomplete");
-      const slice = await publicProblemSlice(
-        context.db,
-        await (
-          await problemExecution()
-        ).findProblemByType(
-          context.db,
-          definition.key,
-          context.upcLookupClient,
-          context.usdaClient,
-        ),
-        input,
-      );
+    const { expectedProblemKeys, problemQuery } =
+      await import("@cubby/schemas/entity-definitions/problems/problem-registry");
+    const key = z.enum(expectedProblemKeys).safeParse(input.type);
+    if (!key.success)
       return {
-        ...projectProblemTypeSlice(slice),
-        meta: {
-          pageIndex: input.pageIndex,
-          pageSize: input.pageSize,
-          totalCount: slice.total,
-          hasNextPage: (input.pageIndex + 1) * input.pageSize < slice.total,
-        },
+        error: `Unknown problem type '${input.type}'`,
+        availableTypes: expectedProblemKeys,
       };
-    }
+    const definition = problemQuery(key.data);
+    if (!definition) throw new Error("Problem query registry is incomplete");
+    const slice = await publicProblemSlice(
+      context.db,
+      await (
+        await problemExecution()
+      ).findProblemByType(
+        context.db,
+        definition.key,
+        context.upcLookupClient,
+        context.usdaClient,
+      ),
+      input,
+    );
+    return {
+      ...projectProblemTypeSlice(slice),
+      meta: {
+        pageIndex: input.pageIndex,
+        pageSize: input.pageSize,
+        totalCount: slice.total,
+        hasNextPage: (input.pageIndex + 1) * input.pageSize < slice.total,
+      },
+    };
   },
 });
 

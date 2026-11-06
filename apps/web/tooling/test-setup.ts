@@ -628,7 +628,7 @@ export async function seedEntity<E extends EntityKernelEntity>(
     // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/generated/entity-bindings.gen"),
     // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
-    import("../src/server/generated/entity-kernel-bindings.gen"),
+    import("../src/server/generated/entity-kernel-runtime.gen"),
     // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/entity-kernel/contracts"),
   ]);

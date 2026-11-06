@@ -133,13 +133,9 @@ export function ConnectedRecordsSection({
                 <RecordMore
                   label={`${view.totalCount - view.items.length} more`}
                   link={{
-                    to: "/connections",
-                    search: {
-                      source,
-                      id: sourceId,
-                      view: view.viewKey,
-                      mode: "records",
-                    },
+                    to: "/$shortcode",
+                    params: { shortcode: sourceId },
+                    hash: "relationships",
                   }}
                 />
               ) : null

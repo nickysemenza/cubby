@@ -392,12 +392,8 @@ function EntityRelationsContent(
   model: ReturnType<typeof useEntityRelationsModel>,
 ) {
   const {
-    root,
     router,
     current,
-    trail,
-    cursor,
-    selectedKey,
     change,
     initial,
     loading,
@@ -479,25 +475,6 @@ function EntityRelationsContent(
         <span className="text-xs text-muted-foreground">
           Depth counts declared relationship hops.
         </span>
-        <Link
-          to="/entities"
-          search={{
-            tab: "explore",
-            entity: root.entityKind,
-            root: root.entityId,
-            view: "graph",
-            layout: current.layout,
-            selected: selectedKey,
-            trail,
-            cursor,
-            collapsed: current.collapsed,
-            destination: current.destination,
-            depth: current.depth,
-          }}
-          className="text-sm text-primary hover:underline"
-        >
-          Open explorer
-        </Link>
       </Row>
       <Row wrap gap="sm">
         <Input

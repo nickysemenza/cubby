@@ -1198,16 +1198,14 @@ const resolveFilterRange = (
       `${context} range needs range.kind or a numeric/date model field ${value.columnId}.`,
     );
   const int = options.int ?? false;
-  const finite = options.finite ?? false;
-  if (rangeKind === "date" && (int || finite))
+  if (rangeKind === "date" && int)
     throw new EntityDeclarationError(
-      `${context} range.int/finite apply only to numeric ranges.`,
+      `${context} range.int apply only to numeric ranges.`,
     );
   return {
     kind: rangeKind,
     int,
     nonnegative: options.nonnegative ?? false,
-    finite,
     describe: options.describe ?? null,
   };
 };

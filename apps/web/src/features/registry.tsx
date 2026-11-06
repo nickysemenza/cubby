@@ -160,9 +160,6 @@ const detailSlots = {
     "unit-mappings": slot(() =>
       named(import("~/features/product/slots"), "ProductUnitMappings"),
     ),
-    "fits-with": slot(() =>
-      named(import("~/features/product/slots"), "ProductFitsWith"),
-    ),
     cookbooks: slot(
       () => named(import("~/features/product/slots"), "ProductCookbooks"),
       (product) => product.cookbooks.length > 0,
