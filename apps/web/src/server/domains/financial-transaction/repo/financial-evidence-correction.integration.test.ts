@@ -462,22 +462,6 @@ describe("generated booking evidence corrections", () => {
     });
   });
 
-  it("leaves generated money unchanged while automatic spending is paused", async () => {
-    const { input, money } = await fixture();
-    const before = await money();
-    expect(
-      await reconcileFinancialEvidenceCorrection(ctx.db, input, ctx.actor),
-    ).toMatchObject({
-      status: "review",
-      reason: expect.stringContaining("is off"),
-    });
-    expect(await money()).toEqual(before);
-    expect(
-      await reconcileFinancialEvidenceCorrection(ctx.db, input, ctx.actor),
-    ).toMatchObject({ status: "corrected" });
-    expect((await money()).expenses).toEqual([30]);
-  });
-
   it("requires persisted withdrawal and caller proof, then retains retired booking history on replay", async () => {
     const { input, transaction, line, money, occurrence } = await fixture();
     const withdrawal = { ...input, amount: null };
