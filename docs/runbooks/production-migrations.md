@@ -650,10 +650,13 @@ rollups.dateWindow.derivedStart. Its four predecessor startDate columns in
 ProjectReadSnapshot have no remaining read or writer. Keep the typed table,
 rollups, completion year, diagnostics and the authored Project.startDate.
 
-Follow the schema-declaration-first boundary: set PRODUCTION_MIGRATION_THROUGH
-to the exact preceding tag before merging this contraction, freeze other merges,
-deploy its declaration removal and verify the view, then take a named manual
-snapshot and apply the contraction alone through Actions. Record the boundary,
-snapshot id, zero legacy-decision/catalog-dependency counts, view coverage and
-preservation read-back. Remove the boundary after verification. This is a separate
-column contraction; it does not authorize a table or retained-work drop.
+The live reader has already moved to ProjectStartDateView. The generic publisher
+writes only each declaration's explicit columns and skips view declarations; it
+never selects or returns this table's full schema. No runtime caller imports the
+ProjectReadSnapshot Drizzle table. Removing the four unused schema declarations
+therefore adds no reader cutover or migration pin. Verify the deployed view and
+zero old-column readers/writers, take a named manual snapshot immediately before
+merge, then apply this contraction through Actions. Record zero legacy-decision
+and catalog-dependency counts, live view coverage and preservation read-back.
+Keep the typed table and authored dates. This separate column contraction does
+not authorize a table or retained-work drop.

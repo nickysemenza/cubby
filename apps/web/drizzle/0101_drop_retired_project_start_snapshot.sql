@@ -1,6 +1,6 @@
 -- cubby:transaction-per-statement
--- HOLD: deploy the declaration removal first using the exact preceding journal
--- boundary, verify the view, then snapshot and apply this contraction alone.
+-- The ProjectStartDateView reader is already deployed; no runtime reader/writer
+-- uses these four predecessor columns. Take a named snapshot immediately before merge.
 SET lock_timeout = '2s';--> statement-breakpoint
 DO $$
 DECLARE
