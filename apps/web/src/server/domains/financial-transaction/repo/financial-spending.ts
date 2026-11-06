@@ -540,6 +540,7 @@ async function loadSpendingGraphBatch(
   `)
       ).rows
     : [];
+  // These raw fields enter retained snapshots: preserve pg float8 values and legacy accumulation.
   const settlements = ids.length
     ? (
         await getDb(db).execute<{

@@ -109,14 +109,14 @@ it("preserves signed allocation edges and refuses noisy originals without changi
       [run],
     );
     await expect(
-      migrateDatabase(db, { through: "0104_allocation_minor_units" }),
+      migrateDatabase(db, { through: "0105_allocation_minor_units" }),
     ).rejects.toThrow("Financial refresh has unfinished steps");
     await client.query(
       `UPDATE "Run" SET status='failed',"failureCode"='user_cancelled',"endedAt"=now() WHERE id=$1`,
       [run],
     );
     await expect(
-      migrateDatabase(db, { through: "0104_allocation_minor_units" }),
+      migrateDatabase(db, { through: "0105_allocation_minor_units" }),
     ).rejects.toThrow("Financial refresh has unfinished steps");
     await client.query(
       `UPDATE "Job" SET state='cancelled' WHERE key='allocation-refresh'`,
