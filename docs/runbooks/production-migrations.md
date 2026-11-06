@@ -737,4 +737,4 @@ Before integration, run the migration in a transaction on synthetic predecessor
 data, verify text/hash/time/provenance and full archived JSON, exercise refusal,
 and roll back. After the matching deployment, verify the four Image columns,
 archive parity, absence of live family rows, selected description reads and
-`image.confirmDescription`. Old Suggestion review requests for images are unsupported.
+`image.confirm_description`. Old Suggestion review requests for images are unsupported.
