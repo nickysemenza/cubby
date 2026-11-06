@@ -36,6 +36,7 @@ export const repositoryOwners = [
   "src/server/domains/transaction-import/repo/statement-charge.ts",
   "src/server/domains/transaction-import/repo/source-observation-state.ts",
   "src/server/domains/financial-transaction/repo/financial-source-evidence.ts",
+  "src/server/domains/financial-transaction/repo/transaction-money.ts",
   "src/server/domains/financial-transaction/repo/transfer-pair-input.ts",
   "src/server/generic/derived/repo/read.ts",
   "src/server/generic/derived/repo/rebuild.ts",

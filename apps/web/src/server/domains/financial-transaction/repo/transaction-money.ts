@@ -1,6 +1,6 @@
 import { minorToMoney } from "@cubby/shared";
 
-import type { financialTransaction } from "~/server/db/schema";
+import type { financialTransaction } from "~/server/db/retained-tables";
 export type FinancialTransactionDollars = Omit<
   typeof financialTransaction.$inferSelect,
   "amount"
