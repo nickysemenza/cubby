@@ -393,7 +393,11 @@ export async function seedPerformanceCorpus(
         { status: "posted", amount: 45 },
       ],
     ] satisfies Array<
-      Array<Pick<typeof financialTransaction.$inferInsert, "status" | "amount">>
+      Array<
+        Pick<typeof financialTransaction.$inferInsert, "status"> & {
+          amount: number;
+        }
+      >
     >;
     const settlement = settlements[bundle % settlements.length]!;
     for (const charge of settlement) {

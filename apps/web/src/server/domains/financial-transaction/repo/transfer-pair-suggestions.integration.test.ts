@@ -34,6 +34,7 @@ import {
   sourceOccurrence,
 } from "~/server/db/schema";
 import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   transferPairSeedKeys,
   transferPairSeedPage,
@@ -663,7 +664,8 @@ describe("transfer-pair suggestions", () => {
     unwrapDb(ctx.db)
       .select()
       .from(financialTransaction)
-      .where(isNull(financialTransaction.deletedAt));
+      .where(isNull(financialTransaction.deletedAt))
+      .then((rows) => rows.map(transactionDollars));
   const transfers = () =>
     unwrapDb(ctx.db)
       .select()
