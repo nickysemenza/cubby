@@ -16,9 +16,11 @@ import {
   type ModelsApiStreamOptions,
 } from "@earendil-works/pi-ai";
 import { fromPartial } from "@total-typescript/shoehorn";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { gatewayEgressInput } from "~/server/ai/gateway-egress-contract";
 import {
   ENTITY_EMBEDDING_FEATURE,
@@ -33,7 +35,7 @@ import {
   type StructuredRunPorts,
 } from "~/server/ai/run-feature";
 import { getDb } from "~/server/db/helpers";
-import { aiUsage } from "~/server/db/schema";
+import { aiUsage, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { processTelemetryQueueBatch } from "~/server/observability/telemetry-queue";
@@ -564,6 +566,51 @@ describe("AiUsage accounting", () => {
       inputTokens: null,
       outputTokens: null,
       chargedCost: 0,
+    });
+  });
+
+  it("pauses the Run for the next window when the paid rung has no key", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ purpose: "suggestion_sweep", status: "running", endedAt: null })
+      .where(eq(run.id, runId));
+    const faux = fauxProvider();
+    const reason =
+      "HTTP 400: Provider 'openai' has no BYOK credential named 'default'";
+    const ports: StructuredRunPorts = {
+      callTarget: () => ({
+        model: faux.getModel(),
+        complete: async () => {
+          throw new Error(reason);
+        },
+      }),
+    };
+
+    await expect(
+      runStructuredFeature(
+        LOCATION_DESCRIPTION_FEATURE,
+        {
+          systemPrompts: ["frame"],
+          messages: [{ role: "user", content: "x" }],
+        },
+        { db: ctx.db, runId, operation: "locationDescription" },
+        ports,
+      ),
+    ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
+
+    const [paused] = await getDb(ctx.db)
+      .select({
+        status: run.status,
+        failureCode: run.failureCode,
+        dispatchError: run.dispatchError,
+      })
+      .from(run)
+      .where(eq(run.id, runId));
+    expect(paused).toMatchObject({
+      status: "paused_auth",
+      failureCode: "execution_limit",
+      dispatchError: expect.stringContaining(reason),
     });
   });
 

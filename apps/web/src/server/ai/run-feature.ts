@@ -1,10 +1,11 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import { getErrorMessage } from "@cubby/shared";
-import type {
-  GatewayResponseFailure,
-  GatewayResponseInfo,
-  GatewayResponseWire,
+import {
+  isPaidFundingUnavailable,
+  type GatewayResponseFailure,
+  type GatewayResponseInfo,
+  type GatewayResponseWire,
 } from "@cubby/shared/ai/gateway-request";
 import type { OpenAiEffort } from "@cubby/shared/ai/models";
 import {
@@ -62,7 +63,11 @@ import {
   type PiCallTarget,
   type SharedEffort,
 } from "~/server/ai/adapters";
-import { withAiBudget, withFreeBudget } from "~/server/ai/budget";
+import {
+  paidFundingStop,
+  withAiBudget,
+  withFreeBudget,
+} from "~/server/ai/budget";
 import type { GatewayCallOptions, GatewayMetadata } from "~/server/ai/gateway";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import { MODEL_FOR_TIER } from "~/server/ai/policy/feature-identity";
@@ -999,7 +1004,7 @@ export async function runStructuredFeature<T>(
         );
       const answered = answeredBy(response);
       const model = getChatModelConfig(answered);
-      throw wrapAiGatewayError(
+      const failure = wrapAiGatewayError(
         error,
         {
           model: answered,
@@ -1013,6 +1018,11 @@ export async function runStructuredFeature<T>(
         },
         responseFailure,
       );
+      // ADR 0017: a paid rung with no balance or no key waits for the next
+      // window. Failing would release the Run's Emails to a pass that fails too.
+      if (ctx.db && isPaidFundingUnavailable(failure.message))
+        throw await paidFundingStop(ctx.db, ctx.runId, failure.message);
+      throw failure;
     }
   };
 
