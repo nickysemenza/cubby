@@ -155,13 +155,7 @@ private actor GraphExplorerClient: EntityRelationshipsClient {
     func relationshipPage(root: EntityRef, relationshipKey: String, offset: Int, limit: Int) throws
         -> EntityGraphOutput
     { throw URLError(.unsupportedURL) }
-    func recommendations(for source: EntityRef) throws -> EntityRecommendationsOut {
-        throw URLError(.unsupportedURL)
-    }
-    func assignExpense(_ expenseID: String, toProject projectID: String) throws {
-        throw URLError(.unsupportedURL)
-    }
-    func moveInventory(_ inventoryID: String, to locationID: String) throws -> EntityRef {
+    func relatedness(for source: EntityRef) throws -> RecommendationWorkbenchOut {
         throw URLError(.unsupportedURL)
     }
 }

@@ -86,38 +86,6 @@ extension EntityGraphPath: Identifiable {
     public var destination: EntityRef? { nodeRefs.last }
 }
 
-extension ExpenseProjectProposal: Identifiable {
-    public var id: String { "expense-project:\(expenseId):\(target.id)" }
-}
-
-extension InventoryPlacementProposal: Identifiable {
-    public var id: String { "inventory-placement:\(inventoryId.rawValue):\(target.id.rawValue)" }
-}
-
-extension ProductRelatedProposal: Identifiable {
-    public var id: String { "product-related:\(target.id.rawValue)" }
-}
-
-extension EntityRecommendationGroup: Identifiable {
-    public var id: JSONValue {
-        switch self {
-        case .expenseProject: .string("expense-project")
-        case .inventoryPlacement: .string("inventory-placement")
-        case .productRelated: .string("product-related")
-        case .unrecognized(let raw): raw
-        }
-    }
-
-    public var status: EmbeddingReadiness? {
-        switch self {
-        case .expenseProject(let group): group.status
-        case .inventoryPlacement(let group): group.status
-        case .productRelated(let group): group.status
-        case .unrecognized: nil
-        }
-    }
-}
-
 // MARK: - Scanning
 
 extension ScanStrayOut: Identifiable {

@@ -424,16 +424,12 @@ private actor ConnectionClient: EntityRelationshipsClient {
             truncated: false)
     }
 
-    func recommendations(for source: EntityRef) -> EntityRecommendationsOut {
-        .init(source: .init(source), basisKey: "fixture", groups: [])
+    func relatedness(for source: EntityRef) -> RecommendationWorkbenchOut {
+        .init(status: .ready, items: [])
     }
     func relationshipPage(root: EntityRef, relationshipKey: String, offset: Int, limit: Int) throws
         -> EntityGraphOutput
     { throw URLError(.unsupportedURL) }
-    func assignExpense(_ expenseID: String, toProject projectID: String) {}
-    func moveInventory(_ inventoryID: String, to locationID: String) -> EntityRef {
-        .init(entity: .inventory, id: inventoryID)
-    }
 
     private func document(_ input: EntityGraphRootInput) throws -> ConnectionDiscoveryOut {
         let proposal = inventoryMode ? try Self.inventoryProposal() : try Self.proposal(kind: proposalKind)

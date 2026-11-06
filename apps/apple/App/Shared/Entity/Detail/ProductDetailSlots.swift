@@ -82,7 +82,7 @@ struct ProductUnitMappingsDetailSlot: View {
 struct ProductSimilarityDetailSlot: View {
     let productID: String
     @Environment(AppModel.self) private var appModel
-    @State private var group: EntityRecommendationGroupProductRelated?
+    @State private var group: RecommendationWorkbenchOut?
     @State private var error: String?
     @State private var visibleCount = 12
 
@@ -97,11 +97,11 @@ struct ProductSimilarityDetailSlot: View {
                     )
                     .font(.caption).foregroundStyle(.secondary)
                 }
-                ForEach(Array(group.proposals.prefix(visibleCount).enumerated()), id: \.offset) { indexed in
+                ForEach(Array(group.items.prefix(visibleCount).enumerated()), id: \.offset) { indexed in
                     let proposal = indexed.element
-                    NavigationLink(value: Route.entityDetail(.product, id: proposal.target.id.rawValue)) {
+                    NavigationLink(value: Route.entityDetail(proposal.entity, id: proposal.shortcode)) {
                         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                            Text(proposal.target.name)
+                            Text(proposal.title)
                             Text(
                                 proposal.evidence.map { evidence in
                                     evidence.detail.map { "\(evidence.signal): \($0)" } ?? evidence.signal
@@ -116,12 +116,12 @@ struct ProductSimilarityDetailSlot: View {
                         .frame(minHeight: FieldGuideTokens.touchTarget)
                     }
                 }
-                if group.proposals.count > visibleCount {
-                    Button("Show \(min(12, group.proposals.count - visibleCount)) more products") {
+                if group.items.count > visibleCount {
+                    Button("Show \(min(12, group.items.count - visibleCount)) more products") {
                         visibleCount += 12
                     }
                 }
-                if group.proposals.isEmpty && group.status == .ready {
+                if group.items.isEmpty && group.status == .ready {
                     Text("No related products yet.").foregroundStyle(.secondary)
                 }
             } else if error == nil {
@@ -139,14 +139,10 @@ struct ProductSimilarityDetailSlot: View {
     private func load() async {
         error = nil
         do {
-            let document = try await appModel.client.recommendations(
+            let document = try await appModel.client.relatedness(
                 for: EntityRef(entity: .product, id: productID))
             guard !Task.isCancelled else { return }
-            group =
-                document.groups.compactMap { candidate in
-                    if case .productRelated(let group) = candidate { return group }
-                    return nil
-                }.first
+            group = document
         } catch {
             guard !Task.isCancelled else { return }
             Diagnostics.report(error, context: "Product similarity")
