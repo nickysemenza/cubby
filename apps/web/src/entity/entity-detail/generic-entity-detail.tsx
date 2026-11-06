@@ -249,7 +249,10 @@ function declaredSections<E extends GenericDetailEntity>(
         const plan = planRelationSection(queryClient, entity, section);
         const contextFields = unsummarized(section.contextFields);
         const createLabel =
-          detail.variant === "journal" ? verbDef("logEntry").label : undefined;
+          section.createLabel ??
+          (detail.variant === "journal"
+            ? verbDef("logEntry").label
+            : undefined);
         return [
           {
             ...base,
@@ -782,8 +785,11 @@ function FullEntityDetail<E extends GenericDetailEntity>({
       section.kind === "relation" ? [[section.id, section.relation]] : [],
     ),
   );
-  // The first relation streams with the page, so only later ones wait on counts.
-  const firstRelation = sections.find((section) => relationOf.has(section.id));
+  // Match declaredSections: lead tables and the first remaining relation stream
+  // immediately, so a Work fragment has a mounted destination before counts load.
+  const firstRelation = sections.find(
+    (section) => relationOf.has(section.id) && !leadIds.has(section.id),
+  );
   const partnerOf = new Map<string, string>(detail.pairs);
   const placed = sections.map((section): DetailSection => {
     const relation = relationOf.get(section.id);
@@ -796,6 +802,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
       knownCount: typeof count === "number" ? count : undefined,
       knownEmpty: count === 0,
       countPending:
+        !lead &&
         relation !== undefined &&
         section !== firstRelation &&
         relationCounts.pending,

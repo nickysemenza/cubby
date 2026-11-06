@@ -3,6 +3,7 @@ import {
   classificationFieldRefusal,
 } from "@cubby/schemas/classification-field-policy";
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
+import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import {
   onDetailSurface,
   type DetailSummarySlot,
@@ -26,7 +27,11 @@ import {
   renderDetailFieldValue,
   referenceMediaRefs,
 } from "~/entity/display/entity-display";
-import { entities, isBrowserRoutedEntity } from "~/entity/entities";
+import {
+  entities,
+  entityDetailParams,
+  isBrowserRoutedEntity,
+} from "~/entity/entities";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
@@ -679,6 +684,14 @@ function SummaryRecords({
   id: string;
   slot: Extract<DetailSummarySlot, { kind: "records" }>;
 }) {
+  const detail: CompiledEntityPresentation["detail"] =
+    useEntityMetadata(entity).summary.detail;
+  const section = detail.sections.find(
+    (candidate) =>
+      candidate.kind === "relation" &&
+      onDetailSurface(candidate, "web") &&
+      slot.viewKey === `relation:${candidate.relation}`,
+  );
   const query = useSuspenseQuery(
     entityGraph.connectedRecords.queryOptions({
       source: { entityKind: entity, entityId: id },
@@ -686,18 +699,21 @@ function SummaryRecords({
       limit: 2,
     }),
   );
-  if (!query.data.totalCount && !query.error) return null;
+  if (query.error)
+    return (
+      <ErrorDisplay
+        error={query.error}
+        title={slot.title}
+        onRetry={() => {
+          void query.refetch();
+        }}
+      />
+    );
+  // Lead tables stay available when empty; their summary must remain a way in.
+  if (!query.data.totalCount && !(section && detail.lead.includes(section.id)))
+    return null;
   return (
     <>
-      {query.error ? (
-        <ErrorDisplay
-          error={query.error}
-          title={slot.title}
-          onRetry={() => {
-            void query.refetch();
-          }}
-        />
-      ) : null}
       <RecordList>
         {query.data.items.map((item) => (
           <RecordRow
@@ -724,7 +740,20 @@ function SummaryRecords({
           />
         ))}
       </RecordList>
-      {query.data.totalCount > query.data.items.length ? (
+      {section && isBrowserRoutedEntity(entity) ? (
+        <Link
+          to={entities[entity].routes.detail}
+          params={entityDetailParams(id)}
+          hash={section.id}
+          aria-label={`${slot.title}: ${query.data.totalCount}`}
+          className="mt-2 inline-block text-link hover:underline"
+        >
+          View all{" "}
+          <span className="font-mono tabular-nums">
+            {query.data.totalCount}
+          </span>
+        </Link>
+      ) : (
         <Link
           to="/connections"
           search={{
@@ -737,7 +766,7 @@ function SummaryRecords({
         >
           View all {query.data.totalCount}
         </Link>
-      ) : null}
+      )}
     </>
   );
 }

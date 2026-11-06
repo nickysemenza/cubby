@@ -731,6 +731,25 @@ export function IndexedSections({
         (target) => target.id === jumpTargetRef.current?.id,
       );
       const jumpedRect = jumped?.getBoundingClientRect();
+      // Suspense can hide a focused destination and return focus to the body.
+      // Retain the jump through that reveal, until member navigation takes over.
+      const jumpId = jumpTargetRef.current?.id;
+      if (
+        jumpId &&
+        !scrollIntentRef.current &&
+        (document.activeElement?.id === jumpId ||
+          document.activeElement === document.body)
+      ) {
+        if (
+          jumpedRect &&
+          (document.activeElement === document.body ||
+            jumpedRect.bottom <= 0 ||
+            jumpedRect.top >= window.innerHeight)
+        )
+          focusTarget(jumpId);
+        setActiveId(jumpId);
+        return;
+      }
       if (
         jumped &&
         jumpedRect &&
@@ -812,7 +831,8 @@ export function IndexedSections({
             if (
               id &&
               !scrollIntentRef.current &&
-              document.activeElement?.id === id
+              (document.activeElement?.id === id ||
+                document.activeElement === document.body)
             )
               focusTarget(id);
             schedule();
