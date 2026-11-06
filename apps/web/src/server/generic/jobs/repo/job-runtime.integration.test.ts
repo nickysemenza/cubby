@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { getDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
 import { job } from "~/server/db/schema";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { failJob, claimJob } from "~/server/generic/jobs/repo/queue";
@@ -61,6 +61,47 @@ describe("Job retry policy", () => {
         maxAttempts: null,
       });
     }
+  });
+
+  // Database contention may exhaust the in-request transaction replay, but must not
+  // abandon durable work or duplicate committed publication on its later retry.
+  it("recovers a serialization failure after the Job attempt budget", async () => {
+    const saved = await enqueueJob(ctx.db, {
+      key: "synthetic.serialization-recovery",
+      kind: "synthetic.serialization-recovery",
+      input: {},
+      maxAttempts: 1,
+    });
+    let calls = 0;
+    const handlers = {
+      "synthetic.serialization-recovery": {
+        prepare: async () => {
+          calls++;
+          if (calls <= 2)
+            await withSnapshotWriteDatabase(
+              ctx.db,
+              async () => {
+                throw new Error("Synthetic query wrapper", {
+                  cause: Object.assign(
+                    new Error("Synthetic concurrent update"),
+                    { code: "40001" },
+                  ),
+                });
+              },
+              { isolationLevel: "serializable" },
+            );
+          return { page: { done: true } };
+        },
+      },
+    };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await advanceJob(ctx.db, saved.id, handlers);
+      expect(await read(saved.id)).toMatchObject({ state: "retry_wait" });
+      await makeDue(saved.id);
+    }
+    await advanceJob(ctx.db, saved.id, handlers);
+    expect(await read(saved.id)).toMatchObject({ state: "completed" });
+    expect(calls).toBe(3);
   });
 
   it("defers without spending an attempt", async () => {

@@ -31,7 +31,8 @@
     "./ai/pricing": "./src/ai/pricing.ts",
     "./ai/gateway-request": "./src/ai/gateway-request.ts",
     "./ai/gateway-metadata": "./src/ai/gateway-metadata.ts",
-    "./ai/pi-providers": "./src/ai/pi-providers.ts"
+    "./ai/pi-providers": "./src/ai/pi-providers.ts",
+    "./ai/embedding-input": "./src/ai/embedding-input.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/ensure.ts generate && node ../../scripts/tsc.ts --noEmit",
@@ -42,6 +43,7 @@
     "@opencode-ai/models": "0.0.105",
     "eventsource-parser": "4.1.2",
     "ipaddr.js": "^2.5.0",
+    "js-tiktoken": "^1.0.21",
     "nanoid": "^6.0.2",
     "pluralize": "^8.0.0",
     "zod": "^4.6.7"

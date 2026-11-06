@@ -1,6 +1,7 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import { getErrorMessage } from "@cubby/shared";
+import { prepareEmbeddingText } from "@cubby/shared/ai/embedding-input";
 import {
   isPaidFundingUnavailable,
   type GatewayResponseFailure,
@@ -50,10 +51,10 @@ import {
   type ToolCall,
   type UserMessage,
 } from "@earendil-works/pi-ai";
-import { isTokenValid, parse as parseContentType } from "content-type";
 import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
+import { analysisImageUrl, originalImageUrl } from "~/lib/image-url";
 import {
   chatCompletionOptionsFor,
   cachedCall,
@@ -84,6 +85,7 @@ import {
 } from "~/server/ai/response-cache";
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
+import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 
 import { isGatewayAdmissionWait } from "./gateway-egress-client";
@@ -420,7 +422,17 @@ const MAX_AI_IMAGE_BYTES = 20 * 1024 * 1024;
 
 async function resolveImageContent(
   part: AiImagePart | AiDocumentPart,
+  db?: Database,
 ): Promise<ImageContent> {
+  let bytes: Uint8Array;
+  const { isOurBucketUrl, extractKeyFromUrl, getR2PublicUrl } =
+    await import("~/server/clients/r2-public-url");
+  const sourceUrl =
+    part.source.type === "url" &&
+    part.type === "image" &&
+    isOurBucketUrl(part.source.value)
+      ? originalImageUrl(part.source.value)
+      : part.source.value;
   if (part.source.type === "inline") {
     if (
       part.source.value.length > Math.ceil(MAX_AI_IMAGE_BYTES / 3) * 4 ||
@@ -429,43 +441,78 @@ async function resolveImageContent(
       throw new Error(
         "Inline AI input exceeds the byte bound or is not base64.",
       );
-    const bytes = Buffer.from(part.source.value, "base64");
+    bytes = Buffer.from(part.source.value, "base64");
     if (
       bytes.byteLength > MAX_AI_IMAGE_BYTES ||
-      bytes.toString("base64") !== part.source.value
+      Buffer.from(bytes).toString("base64") !== part.source.value
     )
       throw new Error(
         "Inline AI input exceeds the byte bound or has invalid base64 encoding.",
       );
-    return {
-      type: "image",
-      data: part.source.value,
-      mimeType: part.source.mimeType,
-    };
+  } else {
+    const response = await fetchExternalResponse(sourceUrl);
+    if (!response.ok)
+      throw new Error(
+        `Failed to fetch AI ${part.type} input (HTTP ${response.status} ${response.statusText}): ${part.source.value}`,
+      );
+    bytes = await readResponseWithLimit(response, MAX_AI_IMAGE_BYTES);
   }
-  const response = await fetchExternalResponse(part.source.value);
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch AI ${part.type} input (HTTP ${response.status} ${response.statusText}): ${part.source.value}`,
-    );
+  // Preserve already-normalized evidence exactly. Headers and explicit MIME
+  // overrides are not proof of format; only unsupported bytes need conversion.
+  let inspected = await inspectImageFile(bytes, "application/octet-stream");
+  const supportedImages = [
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+  ];
+  if (
+    part.type === "image" &&
+    !supportedImages.includes(inspected.detectedContentType) &&
+    part.source.type === "url"
+  ) {
+    if (isOurBucketUrl(sourceUrl)) {
+      const sourceKey = extractKeyFromUrl(sourceUrl);
+      const retained =
+        db && sourceKey
+          ? await (
+              await import("~/server/domains/image/repo/image-identification")
+            ).getVerifiedImageRendition(db, {
+              sourceKey,
+              sourceHash: inspected.sha256,
+            })
+          : null;
+      // AVIF normalization already belongs to the device image pipeline. Do
+      // not pay for an unsupported request or repeatedly ask the refusing edge.
+      if (!retained && inspected.detectedContentType === "image/avif")
+        throw new JobDeferredError(
+          "AI image is waiting for device JPEG normalization",
+          new Date(Date.now() + 15 * 60_000),
+          "device",
+        );
+      const url = retained
+        ? getR2PublicUrl(retained.key)
+        : analysisImageUrl(sourceUrl, 2048);
+      const response = await fetchExternalResponse(url);
+      if (!response.ok)
+        throw new Error(
+          `Failed to fetch normalized AI image (HTTP ${response.status} ${response.statusText}): ${url}`,
+        );
+      bytes = await readResponseWithLimit(response, MAX_AI_IMAGE_BYTES);
+      inspected = await inspectImageFile(bytes, "application/octet-stream");
+      if (retained && inspected.sha256 !== retained.sha256)
+        throw new Error(
+          "Retained AI image bytes do not match their recorded hash",
+        );
+    }
   }
-  const rawContentType =
-    part.source.mimeType ??
-    response.headers.get("content-type") ??
-    "application/octet-stream";
-  const mimeType = part.source.mimeType
-    ? rawContentType
-    : (() => {
-        // The parser is lenient; only forward a valid type/subtype to AI providers.
-        const { type } = parseContentType(rawContentType);
-        const separator = type.indexOf("/");
-        return separator > 0 &&
-          isTokenValid(type, 0, separator) &&
-          isTokenValid(type, separator + 1)
-          ? type
-          : "application/octet-stream";
-      })();
-  const bytes = await readResponseWithLimit(response, MAX_AI_IMAGE_BYTES);
+  const mimeType = inspected.detectedContentType;
+  if (
+    part.type === "document"
+      ? mimeType !== "application/pdf"
+      : !supportedImages.includes(mimeType)
+  )
+    throw new Error(`Unsupported AI ${part.type} input format: ${mimeType}`);
   return {
     type: "image",
     data: Buffer.from(bytes).toString("base64"),
@@ -475,14 +522,13 @@ async function resolveImageContent(
 
 /**
  * A request's media as the provider receives it (`sent`) and as the
- * application cache keys it (`keyed`). Our bucket's object keys are unique per
- * write, so their URL names the bytes. Any other URL can change behind the
- * same address: its bytes are fetched once, sent inline and keyed by digest.
+ * application cache keys it (`keyed`). Admission can select a retained JPEG
+ * for an original, so media is keyed by actual admitted bytes, not a source URL.
  */
 export async function identifyMedia(
   request: AiChatRequest,
+  db?: Database,
 ): Promise<{ sent: AiChatRequest; keyed: AiChatRequest }> {
-  const { isOurBucketUrl } = await import("~/server/clients/r2-public-url");
   const sent: AiMessage[] = [];
   const keyed: AiMessage[] = [];
   for (const message of request.messages) {
@@ -494,21 +540,13 @@ export async function identifyMedia(
     const sentParts: AiContentPart[] = [];
     const keyedParts: AiContentPart[] = [];
     for (const part of message.content) {
-      if (
-        part.type === "text" ||
-        (part.source.type === "url" && isOurBucketUrl(part.source.value))
-      ) {
+      if (part.type === "text") {
         sentParts.push(part);
         keyedParts.push(part);
         continue;
       }
-      const source =
-        part.source.type === "inline"
-          ? { value: part.source.value, mimeType: part.source.mimeType }
-          : await resolveImageContent(part).then((content) => ({
-              value: content.data,
-              mimeType: content.mimeType,
-            }));
+      const content = await resolveImageContent(part, db);
+      const source = { value: content.data, mimeType: content.mimeType };
       const inline = {
         ...part,
         source: { type: "inline" as const, ...source },
@@ -540,6 +578,7 @@ function isTextOnlyContent(content: AiMessage["content"]): content is string {
 
 async function toPiMessages(
   messages: readonly AiMessage[],
+  db?: Database,
 ): Promise<UserMessage[]> {
   const result: UserMessage[] = [];
   for (const message of messages) {
@@ -556,7 +595,7 @@ async function toPiMessages(
       content.push(
         part.type === "text"
           ? { type: "text", text: part.content }
-          : await resolveImageContent(part),
+          : await resolveImageContent(part, db),
       );
     }
     result.push({ role: "user", content, timestamp: Date.now() });
@@ -788,6 +827,7 @@ async function placeStructuredCall<T>(args: {
   call: GatewayCallOptions;
   funded?: FundedCall;
   request: AiChatRequest;
+  db?: Database;
   schema: z.ZodType<T>;
   maxTokens: number;
   effort?: OpenAiEffort | AnthropicEffort;
@@ -803,7 +843,7 @@ async function placeStructuredCall<T>(args: {
       ...args.request.systemPrompts,
       `Give your final answer only by calling the ${tool.name} tool.`,
     ].join("\n\n"),
-    messages: await toPiMessages(args.request.messages),
+    messages: await toPiMessages(args.request.messages, args.db),
     tools: [tool],
   };
   const options = chatCompletionOptionsFor(
@@ -955,6 +995,7 @@ export async function runStructuredFeature<T>(
         call,
         funded,
         request: callRequest,
+        db: ctx.db,
         schema: spec.schema,
         maxTokens: spec.maxTokens,
         effort: spec.effort,
@@ -1037,7 +1078,7 @@ export async function runStructuredFeature<T>(
   };
   const cached = spec.cache && ports === productionStructuredRunPorts;
   const media = cached
-    ? await identifyMedia(request)
+    ? await identifyMedia(request, ctx.db)
     : { sent: request, keyed: request };
   let hitModel: SupportedChatModel | undefined;
   const answer = await withAiResponseCache<Answered<T>>({
@@ -1181,7 +1222,10 @@ export async function runEmbeddingFeature(
   ctx: AiRunContext,
 ): Promise<number[][]> {
   const usageCtx = ctx.db ? ctx : null;
-  const texts = [...new Set(args.texts)];
+  const preparedTexts = await Promise.all(
+    args.texts.map((text) => prepareEmbeddingText(text, spec.model)),
+  );
+  const texts = [...new Set(preparedTexts)];
   const vector = z
     .array(z.number().finite())
     .length(
@@ -1248,7 +1292,7 @@ export async function runEmbeddingFeature(
     result.status === "fulfilled" ? [result.value] : [],
   );
   const byText = new Map(texts.map((text, index) => [text, vectors[index]!]));
-  return args.texts.map((text) => byText.get(text)!);
+  return preparedTexts.map((text) => byText.get(text)!);
 }
 
 /** Place one embedding request and record its usage row. */

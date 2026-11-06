@@ -1,6 +1,7 @@
 import CoreGraphics
 import CryptoKit
 import Foundation
+import FoundationModels
 import ImageIO
 import Testing
 
@@ -8,6 +9,32 @@ import Testing
 
 @Suite("Companion image processor")
 struct CompanionImageProcessorTests {
+    // A context failure must change the next request, not replay the same greedy loop.
+    @Test("Recovers context exhaustion with smaller image and response budgets")
+    func recoversDescriptionContextExhaustion() async throws {
+        let context = try #require(
+            CGContext(
+                data: nil, width: 2048, height: 2048, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        let image = try #require(context.makeImage())
+        var attempts: [(Int, Int?)] = []
+        let result = try await FoundationModelsImageDescriber.describeWithRecovery(image, contextSize: 8192) {
+            input, maximum in
+            attempts.append((input.width, maximum))
+            if attempts.count == 1 {
+                throw LanguageModelError.contextSizeExceeded(
+                    .init(contextSize: 8192, tokenCount: 8193, debugDescription: "Synthetic context overflow")
+                )
+            }
+            return CompanionImageDescription(
+                description: "Synthetic geometric shapes", cutoutEligibility: .ineligible, claims: [])
+        }
+        #expect(attempts.count == 2)
+        #expect(attempts[0].0 == 1024 && attempts[0].1 == 512)
+        #expect(attempts[1].0 == 512 && attempts[1].1 == 256)
+        #expect(result.cutoutEligibility == .ineligible)
+    }
+
     @Test("Decodes a checksum-verified AVIF catalog source")
     func decodesAVIFCatalogSource() async throws {
         // Synthetic 2 × 3 white image; exercises ImageIO rather than a MIME-only check.

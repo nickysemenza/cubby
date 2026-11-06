@@ -22,6 +22,7 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { isSerializationFailure } from "~/server/errors/db-errors";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
@@ -283,7 +284,7 @@ describe("statement spending review and re-import", () => {
           exhausted: async () => {
             await expect(
               reviewAssessment(ctx.db, kernelCtx(ctx), command),
-            ).rejects.toMatchObject({ cause: { code: "40001" } });
+            ).rejects.toSatisfy(isSerializationFailure);
             expect(calls).toBe(3);
             expect(builds).toBe(3);
             expect(await read()).toEqual({

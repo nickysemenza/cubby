@@ -1,7 +1,7 @@
 import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { runStepState } from "@cubby/schemas/run-step";
-import { and, or, eq, getTableColumns, isNull, sql } from "drizzle-orm";
+import { and, or, not, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 
 import {
   describeErrorCauses,
@@ -13,9 +13,12 @@ import {
   withTransactionDatabase,
   runAfterCommit,
 } from "~/server/db/helpers/core";
+import { related, outer } from "~/server/db/helpers/related";
 import { run as runTable } from "~/server/db/retained-tables";
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
+import { findPgError } from "~/server/errors/db-errors";
 import { currentJobExecution } from "~/server/generic/jobs/context";
+import { JobRetryableError } from "~/server/generic/jobs/errors";
 import {
   lockUnchangedJob,
   stoppedRunExecutions,
@@ -186,6 +189,73 @@ export async function launchWorkflowRun(
   });
 }
 
+function currentRunClaim(params: WorkflowRunParams) {
+  const current = currentJobExecution();
+  if (
+    !current ||
+    current.claim.kind !== "run.execute" ||
+    current.claim.input === null ||
+    typeof current.claim.input !== "object" ||
+    !("runId" in current.claim.input) ||
+    current.claim.input.runId !== params.runId
+  )
+    throw new Error(
+      "Background Run execution requires its universal Job claim",
+    );
+  return current.claim.generation === params.attempt ? current : null;
+}
+
+/** A recovered universal Job restores only its own reconciled failure, under its fence. */
+export async function resumeClaimedWorkflowRun(
+  db: Database,
+  params: WorkflowRunParams,
+): Promise<void> {
+  const current = currentRunClaim(params);
+  if (
+    !current ||
+    (current.claim.generation === 1 && current.claim.attempts === 0)
+  )
+    return;
+  try {
+    await withTransactionDatabase(db, async (tx) => {
+      const successor = related(runTable, (next) =>
+        eq(next.predecessorRunId, outer(runTable.id)),
+      ).exists();
+      const [resumed] = await getDb(tx)
+        .update(runTable)
+        .set({
+          status: "running",
+          endedAt: null,
+          failureCode: null,
+          dispatchError: null,
+          progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || jsonb_build_object('attempt', ${current.claim.generation}::int)`,
+        })
+        .where(
+          and(
+            eq(runTable.id, runEntityId.parse(params.runId)),
+            eq(runTable.status, "failed"),
+            eq(runTable.failureCode, "job_failed"),
+            isNull(runTable.deletedAt),
+            isNull(runTable.retiredAt),
+            not(successor),
+          ),
+        )
+        .returning({ id: runTable.id });
+      // Run-before-Job ordering matches launch/control. A member stop or stale
+      // generation rolls the restoration back before any domain work can run.
+      if (resumed) await assertWorkflowEffect(tx);
+    });
+  } catch (error) {
+    const pg = findPgError(error);
+    if (pg?.code === "23505" && pg.constraint?.startsWith("Run_one_active_"))
+      throw new JobRetryableError(
+        "Run recovery is waiting for another active Run",
+        { cause: error },
+      );
+    throw error;
+  }
+}
+
 export function claimWorkflowRun(
   db: Database,
   params: WorkflowRunParams,
@@ -201,19 +271,8 @@ export async function claimWorkflowRun(
   projection?: "id",
 ) {
   await assertWorkflowEffect(db);
-  const current = currentJobExecution();
-  if (
-    !current ||
-    current.claim.kind !== "run.execute" ||
-    current.claim.input === null ||
-    typeof current.claim.input !== "object" ||
-    !("runId" in current.claim.input) ||
-    current.claim.input.runId !== params.runId
-  )
-    throw new Error(
-      "Background Run execution requires its universal Job claim",
-    );
-  if (current.claim.generation !== params.attempt) return null;
+  const current = currentRunClaim(params);
+  if (!current) return null;
   const [row] = await getDb(db)
     .select(
       projection === "id" ? { id: runTable.id } : getTableColumns(runTable),

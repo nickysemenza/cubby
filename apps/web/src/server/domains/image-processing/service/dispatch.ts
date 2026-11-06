@@ -30,7 +30,7 @@ import {
   assignImageProcessingExecutor,
   deferImageProcessingJob,
 } from "~/server/domains/image-processing/repo/image-processing-history";
-import { getVerifiedImageRenditionKey } from "~/server/domains/image/repo/image-identification";
+import { getVerifiedImageRendition } from "~/server/domains/image/repo/image-identification";
 import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activity-input";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { withJobFence } from "~/server/workflows/runs/execution";
@@ -89,7 +89,7 @@ export async function dispatchImageProcessingWakeup(
       if (claimed.kind === "identify_image") {
         if (
           claimed.originalContentType === "image/avif" &&
-          !(await getVerifiedImageRenditionKey(db, claimed.imageId))
+          !(await getVerifiedImageRendition(db, claimed.imageId))
         ) {
           await deferImageProcessingJob(db, {
             jobId: claimed.id,

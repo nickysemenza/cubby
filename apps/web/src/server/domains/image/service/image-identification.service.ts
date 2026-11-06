@@ -38,7 +38,7 @@ import {
   imageIdentificationCandidates,
   imageIdentificationCategories,
   readImageIdentification,
-  getVerifiedImageRenditionKey,
+  getVerifiedImageRendition,
 } from "~/server/domains/image/repo/image-identification";
 import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 import { fetchAnalysisRendition } from "~/server/domains/image/service/image-description.service";
@@ -89,14 +89,14 @@ export async function identifyOriginalImage(
   const key = imageAnalysisKey("input", input.attemptId);
   if (!(await reserveImageAnalysisInput(db, input.attemptId, key)))
     throw new Error("Image identification attempt is no longer current");
-  const normalizedKey =
+  const normalizedRendition =
     source.contentType === "image/avif"
-      ? await getVerifiedImageRenditionKey(db, input.imageId)
+      ? await getVerifiedImageRendition(db, input.imageId)
       : null;
-  if (source.contentType === "image/avif" && !normalizedKey)
+  if (source.contentType === "image/avif" && !normalizedRendition)
     throw new Error("Waiting for verified Apple JPEG normalization");
   const original = await readImageIdentificationRendition(
-    getR2PublicUrl(normalizedKey ?? source.key),
+    getR2PublicUrl(normalizedRendition?.key ?? source.key),
   );
   await uploadToS3({
     key,
