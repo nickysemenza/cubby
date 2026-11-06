@@ -70,6 +70,18 @@ export async function continueMailImportOnYield({
   };
 }
 
+/**
+ * One Email's failure settles as that Email's `unresolved` outcome, which the
+ * Run's review finding lists. Ending the Run would strand the rest of the batch
+ * under a Run that keeps owning them. Only a provider failure blocks them all.
+ */
+const MAIL_STOP_REFUSAL =
+  "This Run was not stopped. Resolve the current Email with purchase_import mail_resolve as unresolved, naming the blocker and any operation id whose outcome is unknown, then claim the next Email. Use reason provider_failure only when the same failure has now blocked two Emails in a row.";
+
+async function mailBatchContinues(services: () => RunServices) {
+  return (await services().loadScope()).purpose === "mail_import";
+}
+
 function result(
   output: JsonValue,
   terminate = false,
@@ -247,6 +259,12 @@ export function runAgentTools(
               detail: args.detail,
             }))(),
         );
+        if (args.phase === "review" && (await mailBatchContinues(services)))
+          return result({
+            recorded: true,
+            stopped: false,
+            next: MAIL_STOP_REFUSAL,
+          });
         // A `review` report ends the run's submission, so it must also move
         // the run: a progress row alone left runs `running` with no
         // coordinator behind them.
@@ -271,13 +289,19 @@ export function runAgentTools(
     tool("stop_import_run_for_review", {
       description:
         "Stop on ambiguous or unreadable evidence without speculative writes. The server creates one run-scoped finding, runs required audits, fences the run, and records needs_review.",
-      execute: async (args, api, context) =>
-        result(
+      execute: async (args, api, context) => {
+        if (
+          args.reason !== "provider_failure" &&
+          (await mailBatchContinues(services))
+        )
+          return result({ stopped: false, next: MAIL_STOP_REFUSAL });
+        return result(
           await step(api, context, `stop-review:${args.operationId}`, () =>
             services().stopForReview(args),
           ),
           true,
-        ),
+        );
+      },
     }),
   ];
 }

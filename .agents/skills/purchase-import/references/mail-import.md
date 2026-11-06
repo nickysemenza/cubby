@@ -130,8 +130,10 @@ Claude or Codex session researches it later through the Research queue.
    another live Run's Email cannot join yours, so say "held by RUN-…" in the
    unresolved reason, never "not admitted". `retryableMessageIds` lost a
    contention race: search again before treating them as missing.
-5. Claim the next Email. Stop with `stop_import_run_for_review` only for
-   ambiguity that blocks every remaining Email. Once every admitted Email is
+5. Claim the next Email. One Email's failure never ends the batch: resolve it
+   `unresolved` and continue. Stop with `stop_import_run_for_review` and reason
+   `provider_failure` only when the same failure has blocked two Emails in a
+   row; Cubby refuses any other stop for a Mail import. Once every admitted Email is
    imported, linked, excluded or resolved, the Run completes; any `unresolved`
    Email instead puts it in review under one `unresolved_targets` finding that
    lists each Email with your reason.
@@ -173,8 +175,8 @@ prepared (a retried coordinator) returns that earlier preparation, whose
 Line `candidates` list only Products sharing the item's identity; tax,
 shipping and other non-principal lines have none.
 Input rejection has not prepared an order. For an interrupted write whose
-outcome is unknown, stop for member review with the original operation id and
-diagnostic. The member can read its durable result through
-`purchase_import_read.operation_status`; this Run's tools do not expose that action.
-Stop for review when the valid contract cannot express the source evidence,
-and retain the exact diagnostic and evidence gap.
+outcome is unknown, `purchase_import` `mail_resolve` the Email `unresolved` with
+the original operation id and diagnostic, then continue. The member can read its
+durable result through `purchase_import_read.operation_status`; this Run's tools
+do not expose that action. When the valid contract cannot express the source
+evidence, resolve the Email `unresolved` with the exact diagnostic and evidence gap.
