@@ -1,7 +1,7 @@
 import type { SQL } from "drizzle-orm";
 
 /**
- * A drain Job pages through its work items (docs/jobs.md#coarse-jobs-and-work-items): claim
+ * A drain pages through items its domain's rows owe (docs/jobs.md#coarse-jobs-and-work-items): claim
  * ready items, prepare them outside any transaction, then publish fenced
  * chunks. Each item fails, backs off or exhausts alone; pause, defer and lease
  * loss stop the whole page. A domain supplies only prepare and publish.
@@ -10,17 +10,14 @@ import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { withJobPhase } from "~/server/generic/jobs/context";
-import type { DrainClaim, DrainStore } from "~/server/generic/jobs/drain-store";
+import type {
+  DrainClaim,
+  DrainItem,
+  DrainStore,
+} from "~/server/generic/jobs/drain-store";
 import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import type { JobBackoff } from "~/server/generic/jobs/kind-policy";
-import {
-  claimWork,
-  clearWork,
-  deferWork,
-  nextWorkReadyAt,
-} from "~/server/generic/jobs/repo/work-claims";
-import { lockWork, type WorkItem } from "~/server/generic/jobs/repo/work-items";
 
 import type { JobContext, PreparedJobPage } from "../types";
 
@@ -39,27 +36,19 @@ const DRAIN_PUBLISH_CHUNK = 25;
 type DrainPreparation<P> = {
   prepared: P;
   /** Items whose preparation failed, with their errors; the rest publish. */
-  failed?: ReadonlyMap<WorkItem, unknown>;
+  failed?: ReadonlyMap<DrainItem, unknown>;
 };
 
 type DrainPublication = {
   /** Items held with `postponeWork` or `waitForWork`; their tickets stay owed. */
-  retain?: readonly WorkItem[];
+  retain?: readonly DrainItem[];
   /** Bounded extra ready marks whose identical effect this publication already applied. */
-  covered?: readonly WorkItem[];
+  covered?: readonly DrainItem[];
 };
 
-const workItemStore = (drain: string): DrainStore => ({
-  claim: (db, limit, eligible) => claimWork(db, drain, limit, eligible),
-  lock: (tx, items, options) => lockWork(tx, items, options),
-  clear: (tx, items) => clearWork(tx, items),
-  defer: (tx, items, error, backoff) => deferWork(tx, items, error, backoff),
-  nextReadyAt: (db) => nextWorkReadyAt(db, drain),
-});
-
 export type DrainSpec<P> = {
-  /** Owed items in a domain's own rows; omitted, they are `WorkItem`s of the claim's key. */
-  store?: DrainStore;
+  /** Owed items, in the domain's own rows. */
+  store: DrainStore;
   /** Failure backoff when the claim's kind declares none. */
   backoff?: JobBackoff;
   /** Items claimed per page. */
@@ -67,9 +56,9 @@ export type DrainSpec<P> = {
   /** Admission against the current work frontier, before limiting the page. */
   eligible?: (target: SQL) => SQL;
   /** Keep an ordered preparation prefix; omitted items stay owed unless covered by an identical applied effect. */
-  admit?: (items: readonly WorkItem[]) => readonly WorkItem[];
+  admit?: (items: readonly DrainItem[]) => readonly DrainItem[];
   /** Publication weight of an item (default 1); a chunk holds at most `chunk`. */
-  weight?: (item: WorkItem, prepared: P) => number;
+  weight?: (item: DrainItem, prepared: P) => number;
   /** Weight one publication transaction holds (default 25). */
   chunk?: number;
   isolationLevel?: "serializable";
@@ -77,7 +66,7 @@ export type DrainSpec<P> = {
   maxAttempts?: number;
   prepare(
     db: Database,
-    items: readonly WorkItem[],
+    items: readonly DrainItem[],
     context: DrainContext,
   ): Promise<DrainPreparation<P>>;
   /**
@@ -89,13 +78,13 @@ export type DrainSpec<P> = {
    */
   lock?(
     tx: Database,
-    items: readonly WorkItem[],
+    items: readonly DrainItem[],
     prepared: P,
-  ): Promise<void | readonly WorkItem[]>;
+  ): Promise<void | readonly DrainItem[]>;
   /** Database writes for items still current and locked; never network work. */
   publish(
     tx: Database,
-    items: readonly WorkItem[],
+    items: readonly DrainItem[],
     prepared: P,
   ): Promise<void | DrainPublication>;
   /** Fenced writes when a page finds nothing ready (derived clock expiry). */
@@ -103,7 +92,7 @@ export type DrainSpec<P> = {
   /** Record the terminal outcome of items that ran out of attempts. */
   exhaust?(
     tx: Database,
-    items: readonly WorkItem[],
+    items: readonly DrainItem[],
     error: string,
   ): Promise<void>;
 };
@@ -124,13 +113,13 @@ const message = (error: unknown) => {
 };
 
 const chunked = <P>(
-  items: readonly WorkItem[],
+  items: readonly DrainItem[],
   prepared: P,
   weight: DrainSpec<P>["weight"],
   size: number,
 ) => {
-  const chunks: WorkItem[][] = [];
-  let current: WorkItem[] = [];
+  const chunks: DrainItem[][] = [];
+  let current: DrainItem[] = [];
   let load = 0;
   for (const item of items) {
     const cost = Math.max(1, weight?.(item, prepared) ?? 1);
@@ -160,7 +149,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): DrainHandler {
     async prepare(db, claim, context) {
       const backoff =
         spec.backoff ?? jobKindPolicy(claim.kind ?? claim.key).backoff;
-      const store = spec.store ?? workItemStore(claim.key);
+      const { store } = spec;
       const observed = await withJobPhase("drain.claim", () =>
         store.claim(db, spec.limit, spec.eligible),
       );
@@ -182,7 +171,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): DrainHandler {
       // its own counts and the page adds them only after that fence commits.
       const settleFailed = async (
         tx: Database,
-        entries: readonly (readonly [WorkItem, unknown])[],
+        entries: readonly (readonly [DrainItem, unknown])[],
       ) => {
         let settled = 0;
         for (const [item, error] of entries) {
@@ -212,7 +201,7 @@ export function defineDrain<P>(spec: DrainSpec<P>): DrainHandler {
           settleFailed(tx, [...preparationFailures]),
         );
       // A rolled-back chunk splits; committed siblings never replay.
-      const publish = async (chunk: readonly WorkItem[]): Promise<void> => {
+      const publish = async (chunk: readonly DrainItem[]): Promise<void> => {
         try {
           const committed = await withJobPhase("drain.publish", () =>
             context.fenced(

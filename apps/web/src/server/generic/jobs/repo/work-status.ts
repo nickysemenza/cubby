@@ -17,7 +17,6 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { DERIVED_REBUILD_KEY } from "~/server/db/derived-rebuild-schema";
-import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-rebuild-schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import {
@@ -36,8 +35,6 @@ export const STUCK_WINDOW_MINUTES = 30;
 const BEHIND_MINUTES = 15;
 /** A failure this old with no retry stays in `/jobs` instead of warning forever. */
 export const FAILURE_LOOKBACK_DAYS = 7;
-/** `WorkItem.priority`: member demand, background, reconcile. */
-const WORK_PRIORITIES = [0, 1, 2] as const;
 /** A scheduled Run retries on its own; this many failures in a row is not a blip. */
 const REPEATED_RUN_FAILURES = 3;
 const MINUTE_MS = 60_000;
@@ -128,115 +125,17 @@ type StatusFacts = {
   lastFinishedAt: Date | null;
 };
 
-/**
- * Drains keep their work in `WorkItem` and their Job never reaches a terminal
- * state, so their completions are published values and the page results on the
- * Job. Each read is one index probe per drain and priority, never a scan of the
- * queue; the walk past tickets no drain claims is bounded by their retained count.
- */
-async function readDrains(
+/** The hourly derived pass: one row, whose kind reports here rather than as a Job. */
+async function readDerivedPass(
   db: Database,
   now: Date,
 ): Promise<StatusFacts & { kinds: Set<string> }> {
-  const at = stamp(now);
-  const priorities = sql.raw(`ARRAY[${WORK_PRIORITIES.join(",")}]`);
-  const { rows } = await getDb(db).execute<{
-    drain: string;
-    kind: string | null;
-    jobUpdatedAt: string | null;
-    published: number | null;
-    jobAttempts: number | null;
-    jobError: string | null;
-    dueSince: string | null;
-    dueError: string | null;
-    failingError: string | null;
-    failingAttempts: number | null;
-    failingAt: string | null;
-  }>(sql`
-    WITH RECURSIVE drains(drain) AS (
-      (SELECT drain FROM "WorkItem" ORDER BY drain LIMIT 1)
-      UNION ALL
-      SELECT (SELECT w.drain FROM "WorkItem" w WHERE w.drain > d.drain ORDER BY w.drain LIMIT 1)
-      FROM drains d WHERE d.drain IS NOT NULL
-    )
-    SELECT d.drain, j.kind, j."updatedAt" AS "jobUpdatedAt",
-      (j.result->>'published')::int AS published,
-      j.attempts AS "jobAttempts", j.error AS "jobError",
-      due."readyAt" AS "dueSince", due."lastError" AS "dueError",
-      failing."lastError" AS "failingError", failing.attempts AS "failingAttempts",
-      failing."dirtiedAt" AS "failingAt"
-    FROM (SELECT drain FROM drains WHERE drain <> ${DERIVED_DRAIN_JOB_KEY}) d
-    LEFT JOIN "Job" j ON j.key = d.drain
-    LEFT JOIN LATERAL (
-      SELECT oldest."readyAt", oldest."lastError"
-      FROM unnest(${priorities}) p(priority)
-      CROSS JOIN LATERAL (
-        SELECT w."readyAt", w."lastError" FROM "WorkItem" w
-        WHERE w.drain = d.drain AND w.priority = p.priority AND w."readyAt" <= ${at}
-        ORDER BY w."readyAt" LIMIT 1
-      ) oldest
-      ORDER BY oldest."readyAt" LIMIT 1
-    ) due ON true
-    LEFT JOIN LATERAL (
-      SELECT backoff."lastError", backoff.attempts, backoff."dirtiedAt"
-      FROM unnest(${priorities}) p(priority)
-      CROSS JOIN LATERAL (
-        SELECT w."lastError", w.attempts, w."dirtiedAt" FROM "WorkItem" w
-        WHERE w.drain = d.drain AND w.priority = p.priority AND w."readyAt" > ${at}
-          AND w."waitCause" IS NULL AND w."lastError" IS NOT NULL
-          AND w.attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
-        ORDER BY w."readyAt" LIMIT 1
-      ) backoff
-      ORDER BY backoff.attempts DESC LIMIT 1
-    ) failing ON true
-    WHERE d.drain IS NOT NULL`);
   const facts: StatusFacts & { kinds: Set<string> } = {
     stuck: [],
     behind: false,
     lastFinishedAt: null,
     kinds: new Set(["derived.drain"]),
   };
-  for (const row of rows) {
-    if (row.drain === DERIVED_DRAIN_JOB_KEY) continue;
-    const kind = row.kind ?? row.drain;
-    facts.kinds.add(kind);
-    const lastCompletion = latest(
-      // Claims touch `updatedAt` and failures keep the old result, but only a
-      // landed page resets attempts: a failing drain must not read as moving.
-      row.published && row.jobAttempts === 0 ? utc(row.jobUpdatedAt) : null,
-    );
-    facts.lastFinishedAt = latest(facts.lastFinishedAt, lastCompletion);
-    const dueSince = utc(row.dueSince);
-    const stopped =
-      dueSince !== null &&
-      dueSince <= minutesAgo(now, STUCK_WINDOW_MINUTES) &&
-      !(
-        lastCompletion && lastCompletion > minutesAgo(now, STUCK_WINDOW_MINUTES)
-      );
-    if (stopped) {
-      facts.stuck.push(
-        stoppedItem(
-          kind,
-          lastCompletion ?? dueSince,
-          now,
-          row.jobError ?? row.dueError,
-        ),
-      );
-      continue;
-    }
-    if (dueSince && dueSince <= minutesAgo(now, BEHIND_MINUTES))
-      facts.behind = true;
-    if (row.failingError)
-      facts.stuck.push(
-        failingItem(
-          kind,
-          utc(row.failingAt) ?? now,
-          row.failingAttempts ?? 1,
-          row.failingError,
-          false,
-        ),
-      );
-  }
   const rebuild = await getDb(db).execute<{
     createdAt: string;
     startedAt: string | null;
@@ -714,7 +613,7 @@ async function readStoppedRuns(db: Database, now: Date) {
 }
 
 export async function readBackgroundWorkStatus(db: Database, now = new Date()) {
-  const drains = await readDrains(db, now);
+  const drains = await readDerivedPass(db, now);
   const [kinds, images, embeddings, evaluations, runs] = await Promise.all([
     readJobKinds(db, now, drains.kinds),
     readImageWork(db, now),

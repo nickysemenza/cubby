@@ -10,10 +10,6 @@ import { repositoryTransactionDatabase } from "~/server/db/repository-access.bou
 import { isDerivedSink } from "~/server/generic/derived/repo/compute";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
-  deleteWorkItems,
-  insertWorkItems,
-} from "~/server/generic/jobs/jobs.fixtures";
-import {
   buildPrefixTsQuery,
   findLexicalSearchCandidates,
 } from "~/server/generic/search/service/search.service";
@@ -43,10 +39,6 @@ describe("search source selection", () => {
   // work anywhere is pending.
   it("confirms coverage for a kind unless that kind's search documents are pending", async () => {
     const config = getSemanticEmbeddingConfig();
-    const mark = (target: string) =>
-      insertWorkItems(ctx.db, [{ target, ref: crypto.randomUUID() }]);
-    await deleteWorkItems(ctx.db);
-    await mark("expense.searchDocument");
     expect(await searchCoverageIncomplete(ctx.db, config, ["product"])).toBe(
       false,
     );
@@ -60,7 +52,6 @@ describe("search source selection", () => {
     );
     // Retained tickets do not establish coverage; an eligible source still needs its embedding.
     await refreshSearchDocument(ctx.db, "product", product.entityId);
-    await mark("product.searchDocument");
     expect(await searchCoverageIncomplete(ctx.db, config, ["product"])).toBe(
       true,
     );

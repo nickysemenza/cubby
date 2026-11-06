@@ -542,25 +542,22 @@ _Avoid_: phase (a progress sample), child Run
 
 **Job**:
 The durable unit of execution: one keyed Postgres row with a lease, cursor,
-attempts and generation. A `run.execute` Job pages a Run; a drain Job works
-through many work items. Jobs are coarse: a Job is not one household record.
+attempts and generation. A `run.execute` Job pages a Run. Jobs are coarse: a Job is not one household record.
 _Avoid_: task, workflow instance
 
 **Drain Job**:
-A long-lived Job (`derived:drain`) that claims pages of work items and
-publishes their results. It completes when nothing is ready and wakes when
-more is marked.
+Bounded pages over items a domain's own rows owe, with no Job row per item, publishing
+their results. It sleeps until its next item is due.
 _Avoid_: batch Job, page claim, per-item Job
 
 **Work item**:
-One record a drain Job still owes, a `WorkItem` row keyed by target and ref,
-carrying only scheduling state: ticket, priority, readiness, attempts and last
-error. The drain Job's lease fences it; it has no lease of its own.
+One record a drain still owes, held on the row that owes it, with scheduling state such as a
+ticket, readiness, attempts and last error.
 _Avoid_: dirty mark (its derived-value origin), Job, task
 
 **Wake**:
-An append-only capture that makes a Job due again without restarting a pass
-in progress; the pass finishes and publishes, then the Job runs again.
+A Queue message that makes the drain look for due work sooner. It holds no state, and the
+hourly cron recovers a lost one.
 _Avoid_: invalidation, restart
 
 **External claim**:

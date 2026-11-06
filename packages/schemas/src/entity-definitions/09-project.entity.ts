@@ -1090,7 +1090,6 @@ Rules:
             "MealRecipe",
             "MealRecipePortion",
             "PhotoGroupProposal",
-            "PhotoGroupSourceEvidence",
             "PhotoRunImage",
             "Plant",
             "Planting",

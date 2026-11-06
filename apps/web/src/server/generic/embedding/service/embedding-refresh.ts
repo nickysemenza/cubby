@@ -19,11 +19,11 @@ import {
   postponeEmbeddingRefresh,
   type EmbeddingRefreshStore,
 } from "~/server/generic/embedding/repo/embedding-work";
+import type { DrainItem } from "~/server/generic/jobs/drain-store";
 import {
   JobRetryableError,
   JobSupersededError,
 } from "~/server/generic/jobs/errors";
-import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 import { defineDrain } from "~/server/generic/jobs/service/drain";
 import type { JobContext } from "~/server/generic/jobs/types";
 import {
@@ -81,7 +81,7 @@ async function prepareRefreshPage(
   port: EmbeddingRefreshPort,
   store: EmbeddingRefreshStore,
   db: Database,
-  items: readonly WorkItem[],
+  items: readonly DrainItem[],
   context: JobContext,
 ) {
   const config = port.config();
@@ -92,7 +92,7 @@ async function prepareRefreshPage(
       stageEmbeddingDrainArtifacts(tx, store, items, page),
     );
 
-  const failures = new Map<WorkItem, unknown>();
+  const failures = new Map<DrainItem, unknown>();
   const submitted = page.submitted.filter(
     (entry) => entry.status === "poll" && entry.artifactId,
   );

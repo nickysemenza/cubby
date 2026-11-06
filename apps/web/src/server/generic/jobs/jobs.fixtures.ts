@@ -1,20 +1,15 @@
 /**
- * Test support for Job and WorkItem state the drain owns: tests seed, age,
- * lock and inspect rows here instead of importing the tables. Reads go
- * through `job-reads.ts` and `work-items.ts`.
+ * Test support for Job state the queue owns: tests seed, age, lock and inspect
+ * rows here instead of importing the table. Reads go through `job-reads.ts`.
  */
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import type { PgInsertValue, PgUpdateSetSource } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import {
   repositoryQueries,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
-import {
-  job,
-  jobInvalidationCapture,
-  workItem,
-} from "~/server/db/retained-tables";
+import { job } from "~/server/db/retained-tables";
 import {
   jobWhere,
   type JobFilter,
@@ -59,59 +54,6 @@ export const replaceJobGeneration = (
     .update(job)
     .set({ generation: sql`${job.generation} + 1` })
     .where(jobWhere(filter));
-
-/** Invalidation captures per Job key (all keys, or one), in key order. */
-export const jobInvalidationCaptureCounts = (
-  db: RepositoryQueryInput,
-  key?: string,
-) =>
-  repositoryQueries(db)
-    .select({
-      key: jobInvalidationCapture.key,
-      captures: sql<number>`count(*)::int`,
-    })
-    .from(jobInvalidationCapture)
-    .where(key === undefined ? undefined : eq(jobInvalidationCapture.key, key))
-    .groupBy(jobInvalidationCapture.key)
-    .orderBy(jobInvalidationCapture.key);
-
-/** WorkItems by drain, target and refs; every key narrows, an empty filter is every item. */
-type WorkItemFilter = {
-  drain?: string;
-  target?: string;
-  refs?: readonly string[];
-};
-
-const workItemWhere = (filter: WorkItemFilter) =>
-  and(
-    filter.drain === undefined ? undefined : eq(workItem.drain, filter.drain),
-    filter.target === undefined
-      ? undefined
-      : eq(workItem.target, filter.target),
-    filter.refs ? inArray(workItem.ref, [...filter.refs]) : undefined,
-  );
-
-/** Matching WorkItems with their full retry state, by target and ref. */
-export const readWorkItems = (
-  db: RepositoryQueryInput,
-  filter: WorkItemFilter = {},
-) =>
-  repositoryQueries(db)
-    .select()
-    .from(workItem)
-    .where(workItemWhere(filter))
-    .orderBy(asc(workItem.target), asc(workItem.ref));
-
-/** Seed items as a writer that predates the triggers (or a fixed mark time) would. */
-export const insertWorkItems = (
-  db: RepositoryQueryInput,
-  rows: PgInsertValue<typeof workItem>[],
-) => repositoryQueries(db).insert(workItem).values(rows);
-
-export const deleteWorkItems = (
-  db: RepositoryQueryInput,
-  filter: WorkItemFilter = {},
-) => repositoryQueries(db).delete(workItem).where(workItemWhere(filter));
 
 /** Claim, hand back and settle a Job in a test, as the drain executor would. */
 export {

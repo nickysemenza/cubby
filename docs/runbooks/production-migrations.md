@@ -224,9 +224,7 @@ in one transaction, so a cutover's copy and retirement stay atomic.
 The typed reader/writer removal must deploy before destructive retirement.
 The parent serializes all migration merges. Until deployment and live coverage
 readback, retain every derived ticket and trigger: test output and a frozen copy
-comparison are insufficient. B3 owns assessment.reviewFacts; B1 owns the other
-WorkItem drains and the eventual WorkItem drop. Derived execution itself no
-longer claims WorkItem. ProductConversionCoverage remains its typed table.
+comparison are insufficient. ProductConversionCoverage remains its typed table.
 
 After three full Worker rebuilds, record their durations against 15 minutes;
 require each full pass under 45 minutes and inspect CPU/memory termination logs.
@@ -313,8 +311,7 @@ After deployment, request a Worker rebuild and require all live legacy identitie
 for each converted key to have a replacement publication (including successful
 empty output). Investigate missing rows against current sources: deleted or
 inapplicable results may correctly disappear. Keep the scoped 16-minute repair
-procedure below for predecessor invocations. No broad WorkItem retirement is
-part of this migration. ProductConversionCoverage is unchanged.
+procedure below for predecessor invocations. ProductConversionCoverage is unchanged.
 
 ## Quality snapshot cutover
 

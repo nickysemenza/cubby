@@ -8,7 +8,7 @@ import {
   jobState,
   type EnqueueJobInput,
 } from "@cubby/schemas/job";
-import { and, eq, inArray, not, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import {
@@ -16,12 +16,11 @@ import {
   repositoryTransactionDatabase,
   repositoryTransactionOn,
   type RepositoryQueryInput,
-  type RepositoryQueryTransaction,
 } from "~/server/db/repository-access.boundary";
-import { job, jobInvalidationCapture } from "~/server/db/retained-tables";
+import { job } from "~/server/db/retained-tables";
 
 import { jobKindPolicy } from "../kind-policy";
-import { unobservedJobInvalidation, type JobRow } from "./queue";
+import type { JobRow } from "./queue";
 
 const rowValues = (input: EnqueueJobInput) => ({
   key: input.key,
@@ -149,36 +148,6 @@ export async function enqueueJobs(
   });
 }
 
-/**
- * Wake a Job in the source transaction: append an independent capture, and
- * create the Job on its first wake. Writers never update each other's capture
- * or the execution row, and a wake during a pass is never lost: the pass
- * finishes, and the unobserved capture makes the Job due again.
- */
-export async function wakeJob(
-  db: RepositoryQueryInput,
-  input: Omit<EnqueueJobInput, "invalidate">,
-) {
-  const current = repositoryQueries(db);
-  // SAFETY: the query projection preserves the actual native object. Its
-  // rollback discriminator identifies the transaction behind a Database facade.
-  const source =
-    "rollback" in current ? (current as RepositoryQueryTransaction) : db;
-  await repositoryTransactionOn(source, async (tx) => {
-    await repositoryQueries(tx)
-      .insert(jobInvalidationCapture)
-      .values({ key: input.key, capturedAt: new Date() });
-    const [existing] = await repositoryQueries(tx)
-      .select({ id: job.id })
-      .from(job)
-      // Retention must either skip this identity or finish deleting it before
-      // this read, in which case enqueue recreates it in the source transaction.
-      .where(eq(job.key, input.key))
-      .for("key share");
-    if (!existing) await enqueueJob(tx, input);
-  });
-}
-
 /** Routine passes can repeat completed work, but never revive a member control or exhausted failure. */
 export async function repeatJob(
   db: RepositoryQueryInput,
@@ -205,14 +174,7 @@ export async function repeatJob(
       availableAt: input.availableAt ?? new Date(),
       updatedAt: new Date(),
     })
-    .where(
-      and(
-        eq(job.id, row.id),
-        eq(job.state, "completed"),
-        // A wake already made it due; requeueing would only move its availability.
-        not(unobservedJobInvalidation()),
-      ),
-    )
+    .where(and(eq(job.id, row.id), eq(job.state, "completed")))
     .returning();
   return repeated ?? row;
 }

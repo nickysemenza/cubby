@@ -32,7 +32,7 @@ import type { Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { aiEvaluation } from "~/server/db/retained-tables";
 import type { DrainClaim, DrainStore } from "~/server/generic/jobs/drain-store";
-import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
+import type { DrainItem } from "~/server/generic/jobs/drain-store";
 
 /** Items name evaluations; a page serves one feature. */
 const AI_EVALUATION_TARGET = "ai.evaluation";
@@ -238,7 +238,7 @@ export async function aiEvaluationPageHeld(db: Database, token: string) {
 /** Hold items waiting on upstream coverage, without spending an attempt. */
 export async function waitAiEvaluations(
   tx: Database,
-  items: readonly WorkItem[],
+  items: readonly DrainItem[],
   token: string,
   cause: string,
   delayMs: number,
@@ -269,7 +269,7 @@ export const aiEvaluationStore = (
   feature: string,
   token: string,
 ): DrainStore => {
-  const held = (items: readonly WorkItem[]) =>
+  const held = (items: readonly DrainItem[]) =>
     and(
       inArray(
         aiEvaluation.id,
@@ -321,7 +321,7 @@ export const aiEvaluationStore = (
             (a.runAt?.getTime() ?? 0) - (b.runAt?.getTime() ?? 0) ||
             a.id.localeCompare(b.id),
         )
-        .map((row): WorkItem => ({
+        .map((row): DrainItem => ({
           target: AI_EVALUATION_TARGET,
           ref: row.id,
           ticket: 0,

@@ -5,17 +5,14 @@ import {
   type JobLane,
   type JobWaitingOn,
   type JobWaitingOnReason,
-  type WorkWaitCause,
 } from "@cubby/schemas/job";
 import { sql, type SQL } from "drizzle-orm";
 
-import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import {
   JOB_KIND_POLICY,
   jobKindPolicy,
 } from "~/server/generic/jobs/kind-policy";
 import { type JobRow } from "~/server/generic/jobs/repo/queue";
-import { drainNextWaitCauses } from "~/server/generic/jobs/repo/work-items";
 
 type WaitingFacts = Pick<
   JobRow,
@@ -42,7 +39,6 @@ function deriveJobWaitingOn(
     now: Date;
     executor?: string | null;
     executorDeviceId?: string | null;
-    workWait?: WorkWaitCause;
   },
 ): JobWaitingOn | null {
   const lane = jobKindPolicy(job.kind).lane;
@@ -89,7 +85,7 @@ function deriveJobWaitingOn(
         job.waitReason === jobWaitReason.enum.rate_limit ||
         job.waitReason === jobWaitReason.enum.provider_capacity
           ? job.waitReason
-          : (context.workWait ?? null),
+          : null,
     };
   if (lane === "apple_device") return waitingForDevice();
   return { reason: "due", lane };
@@ -148,10 +144,9 @@ export const jobWaitingOnReasonSql = (
  * Waiting-on for listed Jobs. A lease handed off externally names its holder
  * (a device); Job ETA is intentionally not derived.
  */
-function loadJobWaitingOn(
+export function loadJobWaitingOn(
   jobs: readonly JobRow[],
   now = new Date(),
-  workWaits: ReadonlyMap<string, WorkWaitCause> = new Map(),
 ): Map<string, JobWaitingOn | null> {
   const out = new Map<string, JobWaitingOn | null>();
   for (const row of jobs) {
@@ -161,36 +156,8 @@ function loadJobWaitingOn(
         now,
         executor: "Cubby server",
         executorDeviceId: null,
-        workWait: workWaits.get(row.key),
       }),
     );
   }
   return out;
-}
-
-/**
- * Waiting-on for Jobs that can be drains. A healthy drain sleeps until its next
- * item with no cause of its own; that item's stored wait explains the time.
- */
-export async function loadDrainJobWaitingOn(
-  db: RepositoryQueryInput,
-  jobs: readonly JobRow[],
-  now = new Date(),
-): Promise<Map<string, JobWaitingOn | null>> {
-  const sleeping = jobs.filter(
-    (row) =>
-      (row.state === jobState.enum.queued ||
-        row.state === jobState.enum.retry_wait) &&
-      row.attempts === 0 &&
-      row.waitReason === null &&
-      row.availableAt.getTime() > now.getTime(),
-  );
-  return loadJobWaitingOn(
-    jobs,
-    now,
-    await drainNextWaitCauses(
-      db,
-      sleeping.map((row) => row.key),
-    ),
-  );
 }

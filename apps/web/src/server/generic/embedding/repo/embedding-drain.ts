@@ -20,7 +20,7 @@ import {
 } from "~/server/generic/embedding/repo/embedding-work";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
-import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
+import type { DrainItem } from "~/server/generic/jobs/drain-store";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
 import {
   SHORTCODE_TABLE,
@@ -44,7 +44,7 @@ type Artifact = {
 };
 
 export type EmbeddingDrainEntry = {
-  item: WorkItem;
+  item: DrainItem;
   ref: SearchableEntityRef | null;
   text: string;
   hash: string;
@@ -57,7 +57,7 @@ export type EmbeddingDrainEntry = {
 };
 
 export type EmbeddingDrainPage = {
-  byItem: Map<WorkItem, EmbeddingDrainEntry>;
+  byItem: Map<DrainItem, EmbeddingDrainEntry>;
   artifacts: readonly Artifact[];
   uploads: EmbeddingDrainEntry[];
   submitted: EmbeddingDrainEntry[];
@@ -147,10 +147,10 @@ function findPendingArtifact(
 
 export async function prepareEmbeddingDrainPage(
   db: Database,
-  items: readonly WorkItem[],
+  items: readonly DrainItem[],
   config: SemanticEmbeddingConfig,
 ): Promise<EmbeddingDrainPage> {
-  const byItem = new Map<WorkItem, EmbeddingDrainEntry>();
+  const byItem = new Map<DrainItem, EmbeddingDrainEntry>();
   const identityRows = items.length
     ? await getDb(db)
         .select({ id: entityIdentity.id, kind: entityIdentity.kind })
@@ -272,7 +272,7 @@ export async function prepareEmbeddingDrainPage(
 export async function stageEmbeddingDrainArtifacts(
   tx: Database,
   store: EmbeddingRefreshStore,
-  items: readonly WorkItem[],
+  items: readonly DrainItem[],
   page: EmbeddingDrainPage,
 ) {
   const held = await store.lock(tx, items);
@@ -494,7 +494,7 @@ async function lockPublicationSources(
 /** Source writers lock identities before marking their documents. */
 export async function lockEmbeddingDrainSources(
   tx: Database,
-  items: readonly WorkItem[],
+  items: readonly DrainItem[],
   page: EmbeddingDrainPage,
 ) {
   return lockPublicationSources(
@@ -509,7 +509,7 @@ export async function lockEmbeddingDrainSources(
 export async function publishEmbeddingDrainSelections(
   tx: Database,
   store: EmbeddingRefreshStore,
-  items: readonly WorkItem[],
+  items: readonly DrainItem[],
   page: EmbeddingDrainPage,
 ) {
   const entries = items.flatMap((item) => {

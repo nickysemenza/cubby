@@ -31,7 +31,7 @@ import { retryJobsNow } from "~/server/generic/jobs/repo/operator";
 import { type JobRow } from "~/server/generic/jobs/repo/queue";
 import {
   jobWaitingOnReasonSql,
-  loadDrainJobWaitingOn,
+  loadJobWaitingOn,
 } from "~/server/generic/jobs/repo/waiting-on";
 
 /** A Run whose live Jobs saw no claim or completion for this long is stalled. */
@@ -147,7 +147,7 @@ export async function jobFactsOf(
     ...new Set(rows.flatMap((row) => (row.runId ? [row.runId] : []))),
   ];
   const [waiting, runs] = await Promise.all([
-    loadDrainJobWaitingOn(db, rows, now),
+    loadJobWaitingOn(rows, now),
     runIds.length
       ? getDb(db)
           .select({ id: run.id, shortcode: run.shortcode })

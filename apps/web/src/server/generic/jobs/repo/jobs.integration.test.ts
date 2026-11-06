@@ -7,8 +7,7 @@ import { job } from "~/server/db/schema";
 
 import { JOB_HEARTBEAT_MS } from "../limits";
 import { advanceJob } from "../service/jobs";
-import { enqueueJob, wakeJob } from "./producer";
-import { dueJobs } from "./queue";
+import { enqueueJob } from "./producer";
 
 describe("generic Job execution", () => {
   const ctx = withTestDb();
@@ -40,45 +39,6 @@ describe("generic Job execution", () => {
       .from(job)
       .where(eq(job.id, saved.id));
     expect(stored?.result).toEqual({ isolation: "serializable" });
-  });
-
-  it("keeps a pass publication and makes a wake during that pass due again", async () => {
-    const input = {
-      key: "synthetic.wake-during-pass",
-      kind: "synthetic.wake",
-      input: {},
-    };
-    const saved = await enqueueJob(ctx.db, input);
-    const entered = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    const pass = advanceJob(ctx.db, saved.id, {
-      "synthetic.wake": {
-        prepare: async () => {
-          entered.resolve();
-          await release.promise;
-          return {
-            page: { done: true },
-            publish: async () => ({ published: "first pass" }),
-          };
-        },
-      },
-    });
-    await entered.promise;
-    await wakeJob(ctx.db, input);
-    release.resolve();
-
-    await expect(pass).resolves.toBe("succeeded");
-    const [completed] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.id, saved.id));
-    expect(completed).toMatchObject({
-      state: "completed",
-      result: { published: "first pass" },
-    });
-    expect((await dueJobs(ctx.db)).map((candidate) => candidate.id)).toContain(
-      saved.id,
-    );
   });
 
   it("aborts the execution signal and fences publication after lease loss", async () => {

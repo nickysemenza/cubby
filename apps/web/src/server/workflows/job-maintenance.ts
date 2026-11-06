@@ -3,10 +3,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { repairImageProcessingExecution } from "~/server/domains/image-processing/repo/image-processing";
-import {
-  pruneFinishedJobs,
-  pruneObservedInvalidationCaptures,
-} from "~/server/generic/jobs/repo/job-retention";
+import { pruneFinishedJobs } from "~/server/generic/jobs/repo/job-retention";
 import { repeatJob } from "~/server/generic/jobs/repo/producer";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 
@@ -42,19 +39,13 @@ export const jobMaintenanceHandler = defineJobHandler(
       now.getTime() - Date.parse(retainedAt) >= RETENTION_INTERVAL_MS;
     const repair = await repairImageProcessingExecution(db, IMAGE_REPAIR_BATCH);
     let pruned = 0;
-    let captures = 0;
     let nextRetainedAt = retainedAt;
     if (retentionDue) {
       pruned = await pruneFinishedJobs(db, { limit: RETENTION_BATCH, now });
-      captures = await pruneObservedInvalidationCaptures(db, {
-        limit: RETENTION_BATCH,
-      });
-      if (pruned < RETENTION_BATCH && captures < RETENTION_BATCH)
-        nextRetainedAt = now.toISOString();
+      if (pruned < RETENTION_BATCH) nextRetainedAt = now.toISOString();
     }
-    const more =
-      repair.more || pruned >= RETENTION_BATCH || captures >= RETENTION_BATCH;
-    log.info("job maintenance", { repair, pruned, captures });
+    const more = repair.more || pruned >= RETENTION_BATCH;
+    log.info("job maintenance", { repair, pruned });
     return {
       page: {
         done: !more,

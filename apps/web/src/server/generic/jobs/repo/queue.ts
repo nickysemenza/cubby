@@ -19,7 +19,7 @@ import {
   repositoryTransactionDatabase,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
-import { job, jobInvalidationCapture, run } from "~/server/db/retained-tables";
+import { job, run } from "~/server/db/retained-tables";
 
 import { JobSupersededError } from "../errors";
 import { classifyJobFailure } from "../failure";
@@ -45,19 +45,7 @@ const ownsLease = (
   row.leaseExpiresAt !== null &&
   row.leaseExpiresAt.getTime() > Date.now();
 
-/**
- * A wake this Job has not observed yet. OFFSET keeps the finite key set out
- * of a correlated nested-loop plan.
- */
-export const unobservedJobInvalidation = () =>
-  sql<boolean>`${job.key} IN (SELECT DISTINCT capture.key FROM "JobInvalidationCapture" capture
-    WHERE NOT capture.observed OFFSET 0)`;
-
-/** Key membership for predicates that scan many Jobs (reaches woken rows by `Job_key_unique`). */
-const unobservedJobInvalidationKey = () =>
-  sql<boolean>`${job.key} = ANY (ARRAY(SELECT DISTINCT c.key FROM ${jobInvalidationCapture} c WHERE NOT c.observed))`;
-
-const scheduledDue = (now: Date) =>
+export const jobDue = (now: Date) =>
   or(
     and(
       inArray(job.state, ["queued", "retry_wait"]),
@@ -70,24 +58,8 @@ const scheduledDue = (now: Date) =>
   );
 
 /**
- * A wake makes finished work and a sleeping pass due at once. Failure backoff,
- * typed waits and member stops (paused, cancelled, failed) never wake.
- */
-const wakeDue = () =>
-  or(
-    eq(job.state, "completed"),
-    and(eq(job.state, "queued"), sql`${job.waitReason} IS NULL`),
-  );
-
-const due = (now: Date) =>
-  or(scheduledDue(now), and(wakeDue(), unobservedJobInvalidationKey()));
-
-/** Whether a Job is claimable now: the one predicate the drain, claims and diagnostics share. */
-export const jobDue = (now: Date) => due(now);
-
-/**
  * One fair batch. Run-owned Jobs lead; then kinds take turns, least recently
- * claimed first (only a claim is service, so wakes and enqueues leave
+ * claimed first (only a claim is service, so enqueues leave
  * `lastClaimedAt`); within a kind, priority then age.
  */
 export async function dueJobs(
@@ -107,18 +79,9 @@ export async function dueJobs(
         sql`, `,
       )}) AS visible
       FROM "Run" WHERE status = ${runStatus.enum.running} AND ${notDeleted(run)}
-    ), pending AS MATERIALIZED (
-      SELECT DISTINCT key FROM "JobInvalidationCapture" WHERE NOT observed
     ), due AS MATERIALIZED (
-      -- Timed work and wakes scan separately: terminal history never enters
-      -- the timed scan just to test the wake predicate.
       SELECT id, kind, priority, "updatedAt", "runId" FROM "Job"
-      WHERE ${scheduledDue(now)}
-      UNION ALL
-      SELECT "Job".id, "Job".kind, "Job".priority, "Job"."updatedAt", "Job"."runId"
-      FROM pending JOIN "Job" USING (key)
-      WHERE ${wakeDue()}
-        AND (${scheduledDue(now)}) IS NOT TRUE
+      WHERE ${jobDue(now)}
     ), candidates AS (
       SELECT due.id, due.kind, due.priority, due."updatedAt",
         (due.kind = 'run.execute' OR coalesce(active_runs.visible, false)) AS run_owned
@@ -193,20 +156,13 @@ export async function claimJob(
   const token = crypto.randomUUID();
   return repositoryTransactionDatabase(db, async (tx) => {
     const [candidate] = await repositoryQueries(tx)
-      .select({
-        row: job,
-        woken: unobservedJobInvalidation(),
-      })
+      .select({ row: job })
       .from(job)
-      .where(and(eq(job.id, recordId), due(now)))
+      .where(and(eq(job.id, recordId), jobDue(now)))
       .for("update", { of: job, skipLocked: true });
     if (!candidate) return null;
     const { row } = candidate;
-    // A woken finished Job starts a fresh pass.
-    const fresh = candidate.woken && row.state === "completed";
-    const attempts = fresh
-      ? 0
-      : row.attempts + (row.state === "running" ? 1 : 0);
+    const attempts = row.attempts + (row.state === "running" ? 1 : 0);
     if (row.maxAttempts !== null && attempts >= row.maxAttempts) {
       await repositoryQueries(tx)
         .update(job)
@@ -235,22 +191,9 @@ export async function claimJob(
         attempts,
         lastClaimedAt: now,
         updatedAt: now,
-        ...(fresh && { cursor: null, result: null, error: null }),
       })
       .where(eq(job.id, recordId))
       .returning();
-    // This exact visible set is observed; a capture committed later stays
-    // pending and makes the Job due again after this pass.
-    if (claimed && candidate.woken)
-      await repositoryQueries(tx)
-        .update(jobInvalidationCapture)
-        .set({ observed: true })
-        .where(
-          and(
-            eq(jobInvalidationCapture.key, claimed.key),
-            eq(jobInvalidationCapture.observed, false),
-          ),
-        );
     return claimed
       ? { ...claimed, leaseToken: token, leaseExpiresAt: expires }
       : null;

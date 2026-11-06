@@ -6,7 +6,7 @@ import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { findErrorCause, scrubErrorMessage } from "~/lib/error-diagnostics";
 /**
  * The AI evaluation drain (docs/jobs.md#ai-evaluation-drains): pages through the
- * evaluations each feature owes, with no Job or `WorkItem` row. Product and
+ * evaluations each feature owes, with no Job or `DrainItem` row. Product and
  * connection refresh evaluate a whole page and publish it in fenced chunks; other
  * features run each item's own guarded transactions under their lease. Activation,
  * pending state and generation are checked here; requester Runs and feature
@@ -57,13 +57,13 @@ import {
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
+import type { DrainItem } from "~/server/generic/jobs/drain-store";
 import {
   JobDeferredError,
   JobSupersededError,
   JobTargetError,
 } from "~/server/generic/jobs/errors";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
-import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 import {
   defineDrain,
   type DrainContext,
@@ -249,7 +249,7 @@ function aiEvaluationPage(
     async prepare(db, items, context) {
       const targets = new Map<string, EvaluationPageTarget>();
       const entries = new Map<string, Entry>();
-      const failed = new Map<WorkItem, unknown>();
+      const failed = new Map<DrainItem, unknown>();
       const rows = new Map(
         (
           await readAiEvaluations(
