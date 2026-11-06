@@ -1,10 +1,10 @@
 import {
-  assessmentReviewInput,
-  assessmentSubjects,
-} from "@cubby/schemas/assessment";
+  suggestionReviewInput,
+  suggestionSubjects,
+} from "@cubby/schemas/suggestion";
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
-  connectionAssessmentEvidence,
+  connectionSuggestionEvidence,
   connectionCandidate,
   connectionEdgeKey as edgeKey,
   connectionProposal,
@@ -35,14 +35,14 @@ import { moveInventoryEntries } from "~/server/domains/inventory/repo/bulk";
 import { setProjectToolUsage } from "~/server/domains/project/repo/tools";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { publishAssessments } from "~/server/generic/assessment/repo/assessment";
+import { publishSuggestions } from "~/server/generic/suggestions/repo/suggestion";
 import {
   suggestionStateColumns,
   pruneReplacedSuggestions,
-  transitionAssessmentStates,
-} from "~/server/generic/assessment/repo/assessment-state";
-import { assessmentCandidateKey } from "~/server/generic/assessment/repo/assessment-state";
-import { memberRejectedSql } from "~/server/generic/assessment/repo/suggestion-decisions";
+  transitionSuggestionStates,
+} from "~/server/generic/suggestions/repo/suggestion-state";
+import { suggestionCandidateKey } from "~/server/generic/suggestions/repo/suggestion-state";
+import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import {
   lookupEntityLabels,
   resolveShortcodes,
@@ -68,15 +68,15 @@ import {
 } from "./connection-evidence";
 import { applyEmailConnection } from "./email-connections";
 import {
-  readExistingConnectionAssessments,
-  readSelectedConnectionAssessmentIds,
-} from "./existing-assessments";
+  readExistingConnectionSuggestions,
+  readSelectedConnectionSuggestionIds,
+} from "./existing-suggestions";
 
 const sourceKey = (ref: EntityRef) => `${ref.entityKind}:${ref.entityId}`;
 const scopeFor = (candidate: ConnectionCandidate) =>
   `connection.${candidate.relation}`;
 const keyFor = (candidate: ConnectionCandidate) =>
-  assessmentCandidateKey(scopeFor(candidate), [
+  suggestionCandidateKey(scopeFor(candidate), [
     sourceKey(candidate.source),
     sourceKey(candidate.target),
   ]);
@@ -85,7 +85,7 @@ const keyFor = (candidate: ConnectionCandidate) =>
 export class ConnectionEvidenceInvalidatedError extends Error {}
 
 export type PreparedEntityConnection = z.infer<
-  typeof connectionAssessmentEvidence
+  typeof connectionSuggestionEvidence
 >;
 
 /** Capture immutable retrieval evidence before any subsequent provider wait. */
@@ -158,7 +158,7 @@ export async function publishPreparedEntityConnections(
           "Retained Email evidence changed; discover again before publishing",
         );
       const fingerprint = await sha256CanonicalJson(
-        connectionAssessmentEvidence.parse({ version: 1, candidate, basis }),
+        connectionSuggestionEvidence.parse({ version: 1, candidate, basis }),
       );
       // Review hashes the current basis against this fingerprint, so the basis
       // itself is not kept: it averaged 200 kB a row.
@@ -181,7 +181,7 @@ export async function publishPreparedEntityConnections(
         evidence,
       });
     }
-    const predictions = await publishAssessments(
+    const predictions = await publishSuggestions(
       db,
       entries.map((entry) => ({
         input: {
@@ -221,7 +221,7 @@ export async function publishPreparedEntityConnections(
       ),
       sql`, `,
     );
-    const replaced = await transitionAssessmentStates(
+    const replaced = await transitionSuggestionStates(
       db,
       and(
         eq(suggestionTable.family, "recommendation"),
@@ -234,7 +234,7 @@ export async function publishPreparedEntityConnections(
           ...new Set(entries.map((entry) => entry.recordId)),
         ]),
         // Scope the indexed live subjects first, then join immutable evidence
-        // once. An OR of per-slot Assessment subqueries replans/scans history
+        // once. An OR of per-slot Suggestion subqueries replans/scans history
         // for every candidate and dominated production-copy publication time.
         sql`EXISTS (
           SELECT 1 FROM (VALUES ${wanted}) wanted(entity, record_id, scope, candidate_key, current_id)
@@ -257,7 +257,7 @@ export async function publishPreparedEntityConnections(
         ...entry.candidate,
         fingerprint: entry.fingerprint,
         review: {
-          assessmentId: predictions[index]!.id,
+          suggestionId: predictions[index]!.id,
           suppression: {
             scope: entry.scope,
             candidateKey: entry.candidateKey,
@@ -286,7 +286,7 @@ function storedConnectionProposal(prediction: {
   evidence: unknown;
 }) {
   const evidence = connectionReadEvidence.safeParse(prediction.evidence);
-  const subject = assessmentSubjects.recommendation.safeParse(
+  const subject = suggestionSubjects.recommendation.safeParse(
     prediction.subject,
   );
   if (!evidence.success || !subject.success || !prediction.fingerprint)
@@ -296,7 +296,7 @@ function storedConnectionProposal(prediction: {
       ...evidence.data.candidate,
       fingerprint: prediction.fingerprint,
       review: {
-        assessmentId: prediction.id,
+        suggestionId: prediction.id,
         suppression: {
           scope: subject.data.scope,
           candidateKey: subject.data.candidateKey,
@@ -308,7 +308,7 @@ function storedConnectionProposal(prediction: {
   ];
 }
 
-/** Batched Assessment selection; freshness also rereads family-owned evidence. */
+/** Batched Suggestion selection; freshness also rereads family-owned evidence. */
 export async function readEntityConnectionsBatch(
   db: Database,
   raw: readonly EntityRef[],
@@ -316,7 +316,7 @@ export async function readEntityConnectionsBatch(
   observeBasis?: (
     id: string,
     candidate: ConnectionCandidate,
-    basis: z.infer<typeof connectionAssessmentEvidence>["basis"],
+    basis: z.infer<typeof connectionSuggestionEvidence>["basis"],
   ) => void,
 ): Promise<ConnectionProposal[][]> {
   const sources = z.array(entityGraphRootSchema).max(250).parse(raw);
@@ -325,7 +325,7 @@ export async function readEntityConnectionsBatch(
   let selectedEdgeIds: string[] | undefined;
   if (reviewIds) {
     if (!reviewIds.length) return sources.map(() => []);
-    selectedEdgeIds = await readSelectedConnectionAssessmentIds(db, reviewIds);
+    selectedEdgeIds = await readSelectedConnectionSuggestionIds(db, reviewIds);
     if (!selectedEdgeIds.length) return sources.map(() => []);
   }
   const rows = await getDb(db)
@@ -376,7 +376,7 @@ export async function readEntityConnectionsBatch(
       liveKeys.has(sourceKey(proposal.target)),
   );
   const selectedExisting = selectedEdgeIds
-    ? await readExistingConnectionAssessments(db, sources)
+    ? await readExistingConnectionSuggestions(db, sources)
     : undefined;
   // A selected read proves each edge's winner, not every candidate's freshness:
   // an existing proposal replaces the edge's recommendations, otherwise the newest
@@ -397,7 +397,7 @@ export async function readEntityConnectionsBatch(
     async ({ candidate: proposal }, basis) => {
       // A stale result still needs the inputs that could make it current again.
       observeBasis?.(
-        proposal.review.assessmentId,
+        proposal.review.suggestionId,
         connectionCandidate.parse(proposal),
         basis,
       );
@@ -418,7 +418,7 @@ export async function readEntityConnectionsBatch(
   const fresh = liveProposals.filter((proposal) => admitted.has(proposal));
   // Unbounded callers retain the original freshness-before-existing read order.
   const existing =
-    selectedExisting ?? (await readExistingConnectionAssessments(db, sources));
+    selectedExisting ?? (await readExistingConnectionSuggestions(db, sources));
   const grouped = sources.map((source, index) => [
     ...fresh.filter(
       (p) =>
@@ -458,7 +458,7 @@ export async function readEntityConnectionsBatch(
 }
 
 /**
- * Stored proposals for a page of pending Assessments, read without rechecking
+ * Stored proposals for a page of pending Suggestions, read without rechecking
  * their basis. Review revalidates the fingerprint when one is accepted, so a
  * stale row can be listed but not applied. Deleted or merged endpoints drop out.
  */
@@ -512,10 +512,10 @@ export async function readEntityConnections(
 }
 
 type ApplyInput = Pick<
-  z.infer<typeof assessmentReviewInput>,
+  z.infer<typeof suggestionReviewInput>,
   "verdict" | "expectedFingerprint" | "correction"
 >;
-/** Called only by reviewAssessment, which owns the atomic application receipt. */
+/** Called only by reviewSuggestion, which owns the atomic application receipt. */
 export async function applyEntityConnection(
   db: Database,
   context: EntityKernelContext,
@@ -533,8 +533,8 @@ export async function applyEntityConnection(
       .where(eq(suggestionTable.id, state.id))
       .limit(1);
     if (!prediction || prediction.family !== "recommendation")
-      throw new Error("Connection Assessment not found");
-    const subject = assessmentSubjects.recommendation.parse(prediction.subject);
+      throw new Error("Connection Suggestion not found");
+    const subject = suggestionSubjects.recommendation.parse(prediction.subject);
     const evidence = connectionReadEvidence.parse(prediction.evidence);
     const { candidate } = evidence;
     if (
@@ -549,7 +549,7 @@ export async function applyEntityConnection(
         ))
     )
       throw new Error(
-        "Connection Assessment does not match its declared endpoints",
+        "Connection Suggestion does not match its declared endpoints",
       );
     const basis = await captureConnectionBasis(db, candidate, true);
     const [freshState] = await getDb(db)
@@ -559,7 +559,7 @@ export async function applyEntityConnection(
       .limit(1)
       .for("update");
     if (!freshState?.active || freshState.status !== "pending")
-      throw new Error("Connection Assessment is no longer pending");
+      throw new Error("Connection Suggestion is no longer pending");
     if (
       !input.expectedFingerprint ||
       input.expectedFingerprint !== prediction.fingerprint ||
@@ -705,7 +705,7 @@ export async function applyEntityConnection(
       }
       default:
         throw new Error(
-          `Connection ${candidate.relation} requires its existing family Assessment action`,
+          `Connection ${candidate.relation} requires its existing family Suggestion action`,
         );
     }
   });

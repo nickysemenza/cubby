@@ -21,7 +21,7 @@ import { repointEmailDecisionTargetsTx } from "~/server/domains/email/repo/email
 import { repointRunFindingTargetsTx } from "~/server/domains/purchase-import/repo/run-finding";
 import { recordMergeRedirects } from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
-import { repointAssessmentTargetsTx } from "~/server/generic/assessment/repo/assessment-state";
+import { repointSuggestionTargetsTx } from "~/server/generic/suggestions/repo/suggestion-state";
 import type { AuditEntryInput } from "~/server/generic/audit-log/repo/audit-log";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { parseLinkEdgeKey } from "~/server/generic/entity-links/repo/entity-links";
@@ -175,7 +175,7 @@ export const finalizeMerge = async <E extends RemovableEntity>(
   await assertNoOrdinaryReferences(tx, entity, ids);
   // Field, Email link and import finding projections follow the survivor; a
   // duplicate open finding is retired there, never deleted.
-  await repointAssessmentTargetsTx(tx, entity, keepId, loserIds);
+  await repointSuggestionTargetsTx(tx, entity, keepId, loserIds);
   await repointRunFindingTargetsTx(tx, entity, keepId, loserIds);
   if (entity === "purchase")
     await repointEmailDecisionTargetsTx(

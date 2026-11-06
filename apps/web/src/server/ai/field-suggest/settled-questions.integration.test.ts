@@ -15,8 +15,8 @@ import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { aiAnalysis, run } from "~/server/db/schema";
 import {
-  inferFieldAssessments,
-  inferFieldAssessmentsBatch,
+  inferFieldSuggestions,
+  inferFieldSuggestionsBatch,
 } from "~/server/domains/run/operations/ai.server";
 import {
   categoryPorts,
@@ -24,7 +24,7 @@ import {
   productFixture,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
@@ -68,7 +68,7 @@ describe("settled suggestion questions", () => {
   };
   const ask = (
     question: Question,
-    ports: Parameters<typeof inferFieldAssessments>[2] = {
+    ports: Parameters<typeof inferFieldSuggestions>[2] = {
       decisionPort: declines,
     },
     extra: Pick<
@@ -76,7 +76,7 @@ describe("settled suggestion questions", () => {
       "decisionModel" | "entityId" | "savedRecord"
     > = {},
   ) =>
-    inferFieldAssessments(
+    inferFieldSuggestions(
       kernelCtx(ctx),
       {
         entity: question.entity,
@@ -115,7 +115,7 @@ describe("settled suggestion questions", () => {
 
   // A deferred list decision must retain its own captured evidence so a
   // singleton revisit reuses that publication, not another row's judgment.
-  it("preserves each batch item's assessment identity across a singleton revisit", async () => {
+  it("preserves each batch item's suggestion identity across a singleton revisit", async () => {
     const items = ["Synthetic batch Alpha", "Synthetic batch Beta"].map(
       (name) => ({
         entity: "product" as const,
@@ -125,14 +125,14 @@ describe("settled suggestion questions", () => {
         runKey: crypto.randomUUID(),
       }),
     );
-    const batch = await inferFieldAssessmentsBatch(
+    const batch = await inferFieldSuggestionsBatch(
       kernelCtx(ctx),
       { items },
       fakeRoster,
     );
     const singles = await Promise.all(
       items.map((item) =>
-        inferFieldAssessments(kernelCtx(ctx), item, fakeRoster),
+        inferFieldSuggestions(kernelCtx(ctx), item, fakeRoster),
       ),
     );
     expect(
@@ -207,10 +207,10 @@ describe("settled suggestion questions", () => {
       await read(gadget("Synthetic unplaceable gadget"), fakeRoster),
     ).toEqual(outcome);
 
-    if (outcome?.kind !== "evaluated" || !outcome.assessmentId)
-      throw new Error("Synthetic decline has no assessment");
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: outcome.assessmentId,
+    if (outcome?.kind !== "evaluated" || !outcome.suggestionId)
+      throw new Error("Synthetic decline has no suggestion");
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: outcome.suggestionId,
       operationId: "synthetic:settled-miss",
       verdict: "wrong",
       intent: "history",
@@ -355,10 +355,10 @@ describe("settled suggestion questions", () => {
     };
     const answer = await ask(question);
     const outcome = answer.outcomes?.locationId;
-    if (outcome?.kind !== "evaluated" || !outcome.assessmentId)
-      throw new Error("Synthetic decline has no assessment");
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: outcome.assessmentId,
+    if (outcome?.kind !== "evaluated" || !outcome.suggestionId)
+      throw new Error("Synthetic decline has no suggestion");
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: outcome.suggestionId,
       operationId: "synthetic:location-miss",
       verdict: "wrong",
       intent: "history",
@@ -366,7 +366,7 @@ describe("settled suggestion questions", () => {
     const missed = await readAnswer(question);
     expect(missed.outcome).toBeNull();
     expect(missed.revision).toMatch(/^miss:/u);
-    // The live retry repeats the rejected assessment and is withheld.
+    // The live retry repeats the rejected suggestion and is withheld.
     const retry = await ask(question);
     expect(retry.outcomes?.locationId).toMatchObject({
       reviewStatus: "rejected",
@@ -451,7 +451,7 @@ describe("settled suggestion questions", () => {
     const savedAsk = (
       question: Question,
       entityId: string,
-      ports: Parameters<typeof inferFieldAssessments>[2],
+      ports: Parameters<typeof inferFieldSuggestions>[2],
       extra: Pick<FieldSuggestionsInput, "decisionModel" | "savedRecord"> = {
         savedRecord: true,
       },
@@ -551,7 +551,7 @@ describe("settled suggestion questions", () => {
       );
     });
 
-    it("drops a preview once a member marks its assessment wrong", async () => {
+    it("drops a preview once a member marks its suggestion wrong", async () => {
       const product = await productFixture(ctx, "Synthetic reviewed gadget");
       const question = gadget("Synthetic reviewed gadget");
       const answer = await savedAsk(
@@ -560,11 +560,11 @@ describe("settled suggestion questions", () => {
         categoryPorts(0.5).suggestPorts,
       );
       const outcome = answer.outcomes?.categoryId;
-      if (outcome?.kind !== "evaluated" || !outcome.assessmentId)
-        throw new Error("Synthetic weak pick has no assessment");
+      if (outcome?.kind !== "evaluated" || !outcome.suggestionId)
+        throw new Error("Synthetic weak pick has no suggestion");
       expect(await readPreview(question, product.id)).not.toBeNull();
-      await reviewAssessment(ctx.db, kernelCtx(ctx), {
-        assessmentId: outcome.assessmentId,
+      await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+        suggestionId: outcome.suggestionId,
         operationId: "synthetic:preview-miss",
         verdict: "wrong",
         intent: "history",

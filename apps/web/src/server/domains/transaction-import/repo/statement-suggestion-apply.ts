@@ -41,8 +41,8 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type SuggestionStateRow,
-  transitionAssessmentState,
-} from "~/server/generic/assessment/repo/assessment-state";
+  transitionSuggestionState,
+} from "~/server/generic/suggestions/repo/suggestion-state";
 
 import {
   currentStatementApplication,
@@ -127,7 +127,7 @@ export async function applyStatementTransactionSuggestion(
         }),
       );
     }
-    await transitionAssessmentState(tx, state.id, { status: "applied" });
+    await transitionSuggestionState(tx, state.id, { status: "applied" });
   });
 
   const charge = { source: subject.source, chargeKey: subject.chargeKey };

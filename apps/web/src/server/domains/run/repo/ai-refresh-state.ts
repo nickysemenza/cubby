@@ -51,8 +51,8 @@ import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-
 import {
   type SuggestionStateRow,
   suggestionStateColumns,
-  transitionAssessmentStates,
-} from "~/server/generic/assessment/repo/assessment-state";
+  transitionSuggestionStates,
+} from "~/server/generic/suggestions/repo/suggestion-state";
 
 import {
   hasAiRefreshRunCapacity,
@@ -61,13 +61,13 @@ import {
 import { readAutomaticAiStop } from "./automatic-ai-stop";
 import { ensureRun } from "./ensure-run";
 
-export type AssessmentStateRow = SuggestionStateRow;
+export type SuggestionStateRow = SuggestionStateRow;
 export type FieldRefreshCursor = Pick<
-  AssessmentStateRow,
+  SuggestionStateRow,
   "entity" | "field"
 > & { recordId: string };
 
-const withSavedRecord = (rows: readonly AssessmentStateRow[]) =>
+const withSavedRecord = (rows: readonly SuggestionStateRow[]) =>
   rows.flatMap((row) =>
     row.recordId === null ? [] : [{ ...row, recordId: row.recordId }],
   );
@@ -508,7 +508,7 @@ export async function settleAppliedFieldRefresh(
   fingerprint: string,
   provenance: AiProvenance,
 ) {
-  await transitionAssessmentStates(
+  await transitionSuggestionStates(
     db,
     and(eq(suggestion.id, id), eq(suggestion.family, "field")),
     (row) => {
@@ -640,9 +640,9 @@ export async function emailClassificationObservations(
     .orderBy(desc(emailClassificationObservation.createdAt));
 }
 
-export async function assessmentStatesById(
+export async function suggestionStatesById(
   db: Database,
-  ids: readonly AssessmentStateRow["id"][],
+  ids: readonly SuggestionStateRow["id"][],
 ) {
   return getDb(db)
     .select(suggestionStateColumns)

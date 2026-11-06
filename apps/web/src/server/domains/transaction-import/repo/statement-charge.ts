@@ -1,5 +1,5 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { assessmentFamily } from "@cubby/schemas/assessment";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { type SQL, sql } from "drizzle-orm";
@@ -75,7 +75,7 @@ export const suggestionField = (
  * Account-scoped readers use indexed probes and short-circuit on eligibility.
  */
 export const pendingSuggestion = (alias = "s") =>
-  sql`${sql.raw(`"${alias}"`)}.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.statement_transaction)}
+  sql`${sql.raw(`"${alias}"`)}.family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.statement_transaction)}
     AND ${sql.raw(`"${alias}"`)}.active
     AND ${sql.raw(`"${alias}"`)}.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
     AND EXISTS (SELECT 1 FROM ${sourceObservationFacts} observation

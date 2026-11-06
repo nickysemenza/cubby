@@ -1,4 +1,4 @@
-import { assessmentReviewBatchInput } from "@cubby/schemas/assessment";
+import { suggestionReviewBatchInput } from "@cubby/schemas/suggestion";
 import {
   MutationCache,
   QueryClient,
@@ -19,13 +19,13 @@ afterEach(() => vi.unstubAllGlobals());
 // Losing catalog metadata bypasses invalidation; losing scope overlaps Run writes.
 it("serializes scoped operations while publishing their exact bodies and metadata", async () => {
   // Load the real command before timing scope scheduling, independently of cold imports.
-  await loadWorkflowCommandOptions("assessment.reviewBatch");
+  await loadWorkflowCommandOptions("suggestion.reviewBatch");
   const gate = Promise.withResolvers<void>();
   const fetchResponse = vi.fn(async () => {
     await gate.promise;
     return Response.json({
       ok: true,
-      data: [{ assessmentId: null, ok: false, error: "Synthetic refusal" }],
+      data: [{ suggestionId: null, ok: false, error: "Synthetic refusal" }],
     });
   });
   vi.stubGlobal("fetch", fetchResponse);
@@ -33,7 +33,7 @@ it("serializes scoped operations while publishing their exact bodies and metadat
   const client = new QueryClient({
     mutationCache: new MutationCache({
       onSuccess: (_data, variables, _context, mutation) => {
-        if (mutation.options.meta?.operation === "assessment.reviewBatch")
+        if (mutation.options.meta?.operation === "suggestion.reviewBatch")
           observed(variables);
       },
     }),
@@ -46,7 +46,7 @@ it("serializes scoped operations while publishing their exact bodies and metadat
       ),
     },
   );
-  const body = assessmentReviewBatchInput.parse({
+  const body = suggestionReviewBatchInput.parse({
     items: [{ operationId: "synthetic-receipt", verdict: "dismissed" }],
   });
   const pending: Promise<unknown>[] = [];
@@ -54,14 +54,14 @@ it("serializes scoped operations while publishing their exact bodies and metadat
     pending.push(
       result.current.mutateAsync({
         kind: "operation",
-        operation: "assessment.reviewBatch",
+        operation: "suggestion.reviewBatch",
         body,
       }),
     );
     pending.push(
       result.current.mutateAsync({
         kind: "operation",
-        operation: "assessment.reviewBatch",
+        operation: "suggestion.reviewBatch",
         body,
       }),
     );
@@ -73,7 +73,7 @@ it("serializes scoped operations while publishing their exact bodies and metadat
         .getAll()
         .filter(
           (mutation) =>
-            mutation.options.meta?.operation === "assessment.reviewBatch",
+            mutation.options.meta?.operation === "suggestion.reviewBatch",
         ),
     ).toHaveLength(2),
   );
@@ -96,7 +96,7 @@ it("patches before catalog invalidation and finishes while refresh is pending", 
     vi.fn(async () =>
       Response.json({
         ok: true,
-        data: [{ assessmentId: null, ok: false, error: "Synthetic refusal" }],
+        data: [{ suggestionId: null, ok: false, error: "Synthetic refusal" }],
       }),
     ),
   );
@@ -140,7 +140,7 @@ it("patches before catalog invalidation and finishes while refresh is pending", 
       result.current
         .mutateAsync({
           kind: "operation",
-          operation: "assessment.reviewBatch",
+          operation: "suggestion.reviewBatch",
           body: {
             items: [{ operationId: "synthetic-refresh", verdict: "dismissed" }],
           },

@@ -689,7 +689,7 @@ function StatementEvidence({ row }: { row: SourceTransactionRecord }) {
   const choice = statementChoice(row);
   const preview = useQuery({
     ...sourceTransactionRecord.previewSuggestion.queryOptions({
-      assessmentId: row.assessmentId,
+      suggestionId: row.suggestionId,
       expectedFingerprint: row.fingerprint ?? "",
       application: statementApplication(
         charge,

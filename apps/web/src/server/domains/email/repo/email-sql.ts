@@ -1,4 +1,4 @@
-import { feedbackAuthority } from "@cubby/schemas/assessment";
+import { feedbackAuthority } from "@cubby/schemas/suggestion";
 import { emailPurchaseLinkState } from "@cubby/schemas/email-fields";
 import {
   mailboxClassificationStage,

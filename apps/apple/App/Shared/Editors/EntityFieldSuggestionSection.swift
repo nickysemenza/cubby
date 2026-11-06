@@ -178,7 +178,7 @@ struct EntityFieldSuggestionSection: View {
             review: FieldSuggestionReviewModel(
                 editor: editor, fetch: { _ in .init(suggestions: []) },
                 saveCategory: { _ in throw CancellationError() },
-                reviewAssessment: { _ in throw CancellationError() }),
+                reviewSuggestion: { _ in throw CancellationError() }),
             pickedTitles: [:], onSavedCategory: { _, _, _ in })
     }
     .formStyle(.grouped)

@@ -196,7 +196,7 @@ struct ConnectionReviewTests {
         let proposal = try #require(model.connectionDocument?.proposals.first)
         #expect(await model.reviewConnection(proposal, verdict: .correct))
         let input = try #require(await client.reviews.first)
-        #expect(input.assessmentId == proposal.review.assessmentId)
+        #expect(input.suggestionId == proposal.review.suggestionId)
         #expect(input.expectedFingerprint == .value(proposal.fingerprint))
         #expect(input.intent == .apply)
         #expect(UUID(uuidString: input.operationId) != nil)
@@ -342,7 +342,7 @@ private actor ConnectionClient: EntityRelationshipsClient {
     var discoveries = 0
     var reads = 0
     var graphReads = 0
-    var reviews: [AssessmentReviewInput] = []
+    var reviews: [SuggestionReviewInput] = []
     let discoveryGate: Gate?
     let reviewGate: Gate?
     let readGate: Gate?
@@ -402,12 +402,12 @@ private actor ConnectionClient: EntityRelationshipsClient {
         ])
     }
 
-    func reviewAssessment(_ input: AssessmentReviewInput) async throws -> AssessmentReviewOut {
+    func reviewSuggestion(_ input: SuggestionReviewInput) async throws -> SuggestionReviewOut {
         reviews.append(input)
         if let reviewGate { await reviewGate.hold() }
-        let assessmentID = try #require(input.assessmentId)
-        var result = AssessmentReviewOut(
-            assessmentId: assessmentID, feedbackId: UUID().uuidString,
+        let suggestionID = try #require(input.suggestionId)
+        var result = SuggestionReviewOut(
+            suggestionId: suggestionID, feedbackId: UUID().uuidString,
             status: "reviewed", applied: input.intent == .apply)
         if let inventoryDestination {
             result.applicationResult = .init(
@@ -471,7 +471,7 @@ private actor ConnectionClient: EntityRelationshipsClient {
                 {"relation":"\(relation)","source":{"entityKind":"\(sourceKind)","entityId":"\(sourceID)"},
                 "target":{"entityKind":"\(targetKind)","entityId":"\(targetID)"},"label":"Assign project",
                 "evidence":{"reasons":["Shared work"],"contradictions":[],"unknowns":[]},
-                "review":{"assessmentId":"00000000-0000-4000-8000-000000000001","suppression":\(handle)},
+                "review":{"suggestionId":"00000000-0000-4000-8000-000000000001","suppression":\(handle)},
                 "fingerprint":"current-evidence","integration":{"kind":"\(kind)"\(field)}}
                 """.utf8))
     }

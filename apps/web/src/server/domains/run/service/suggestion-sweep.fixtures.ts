@@ -28,8 +28,8 @@ import {
   suggestionTable,
 } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
-import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
-import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
+import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import {
   lookupShortcodes,
   resolveLiveShortcode,
@@ -143,7 +143,7 @@ export async function seedPending(
     trigger: "manual",
     status: "completed",
   });
-  const saved = await publishFieldAssessment(
+  const saved = await publishFieldSuggestion(
     ctx.db,
     {
       runId,
@@ -168,7 +168,7 @@ export async function seedPending(
 /** Eligibility follows current field inputs; historical state need not be rewritten. */
 export async function isSuggestionReviewable(db: Database, id: string) {
   const { listSuggestions } =
-    await import("~/server/generic/assessment/repo/suggestion-review");
+    await import("~/server/generic/suggestions/repo/suggestion-review");
   return (await listSuggestions(db, { minConfidence: 0 })).some(
     (row) => row.id === id,
   );

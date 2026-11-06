@@ -1,7 +1,7 @@
 import {
-  assessmentReviewBatchOut,
-  type AssessmentReviewOut,
-} from "@cubby/schemas/assessment";
+  suggestionReviewBatchOut,
+  type SuggestionReviewOut,
+} from "@cubby/schemas/suggestion";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
 import type { StatementTransactionAction } from "@cubby/schemas/statement-suggestion";
@@ -19,7 +19,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { assessmentContract } from "~/contracts/assessment.contract";
+import { suggestionContract } from "~/contracts/suggestion.contract";
 import { operationCommandRequest } from "~/contracts/define";
 import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 
@@ -29,7 +29,7 @@ import type {
   StatementTransactionField,
 } from "./suggestion-review";
 
-/** `assessment.reviewBatch` takes at most this many items per call. */
+/** `suggestion.reviewBatch` takes at most this many items per call. */
 const REVIEW_BATCH_MAX = 100;
 
 type RowOutcome = { state: "pending" } | { state: "failed"; error: string };
@@ -103,7 +103,7 @@ export function SuggestionReviewProvider({
   scope: string;
   children: ReactNode;
   onApplied?: (
-    result: NonNullable<AssessmentReviewOut["applicationResult"]>,
+    result: NonNullable<SuggestionReviewOut["applicationResult"]>,
   ) => Promise<void>;
 }) {
   const { mutateAsync: executeCommand } = useWorkflowCommand();
@@ -132,11 +132,11 @@ export function SuggestionReviewProvider({
       for (const batch of chunk(pairs, REVIEW_BATCH_MAX)) {
         try {
           const { result } = await executeCommand(
-            operationCommandRequest(assessmentContract, "reviewBatch", {
+            operationCommandRequest(suggestionContract, "reviewBatch", {
               items: batch.map(({ item }) => item),
             }),
           );
-          const results = assessmentReviewBatchOut.parse(result);
+          const results = suggestionReviewBatchOut.parse(result);
           for (const [index, result] of results.entries()) {
             const pair = batch[index];
             if (pair && !result.ok)

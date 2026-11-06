@@ -21,9 +21,9 @@ import { workRunReviewOwners } from "~/server/domains/run/repo/work-owners";
 import { workRecordFactsFor } from "~/server/domains/work/repo/record-facts";
 import {
   pendingSuggestionRecordsSql,
-  touchingAssessmentIds,
+  touchingSuggestionIds,
   UNAPPLIED_CORRECTION_REASON,
-} from "~/server/generic/assessment/repo/review-families";
+} from "~/server/generic/suggestions/repo/review-families";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
@@ -83,7 +83,7 @@ const source: WorkSource = {
   candidates: async (db, scope) => {
     // A record read discovers its own suggestions; the unscoped queue reads State.
     const ids = scope.record
-      ? await touchingAssessmentIds(db, {
+      ? await touchingSuggestionIds(db, {
           entity: scope.record.entity,
           records: [
             {

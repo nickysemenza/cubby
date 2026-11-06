@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import {
   listEmailReviewsByKind,
   seedEmailClassificationFeedback,
-} from "tooling/shared-assessment-fixtures";
+} from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -24,8 +24,8 @@ import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { productionMailTriage } from "~/server/domains/purchase-import/service/gmail/triage-model";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
-import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
+import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
+import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -167,10 +167,10 @@ describe("immutable Email observations", () => {
       decision: { classification: "unrelated", stage: "decision" },
     });
     const pending = await listSuggestionPage(ctx.db, {});
-    expect(pending.items.map((row) => row.assessmentId)).not.toContain(
+    expect(pending.items.map((row) => row.suggestionId)).not.toContain(
       outcomeId,
     );
-    expect(pending.items.map((row) => row.assessmentId)).not.toContain(
+    expect(pending.items.map((row) => row.suggestionId)).not.toContain(
       legacy.id,
     );
     for (const codes of [

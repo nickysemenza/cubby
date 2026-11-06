@@ -1,4 +1,4 @@
-import { assessmentFamily } from "@cubby/schemas/assessment";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { entitySchema } from "@cubby/schemas/entity";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
@@ -42,11 +42,11 @@ export async function productIdentityEvidenceFences(
     ), orders AS MATERIALIZED (
       SELECT DISTINCT b.key, o.id, o."sourceClaimId", o."purchaseId" FROM bindings b JOIN "ImportSourceOrder" o ON o.id = b."sourceOrderId"
     ), history AS MATERIALIZED (
-      SELECT t.key, s.id, s.evidence FROM targets t JOIN "Suggestion" s ON s.family = ${assessmentFamily.enum.product_pair}
+      SELECT t.key, s.id, s.evidence FROM targets t JOIN "Suggestion" s ON s.family = ${suggestionFamily.enum.product_pair}
         AND s.subject->>'recordId' = t.first::text AND s.subject->>'otherId' = t.second::text
       WHERE t.second IS NOT NULL
       UNION SELECT t.key, s.id, s.evidence FROM targets t JOIN "Suggestion" s ON s."recordId" = t.first AND s.data->>'otherId' = t.second::text
-        AND s.family = ${assessmentFamily.enum.product_pair} WHERE t.second IS NOT NULL
+        AND s.family = ${suggestionFamily.enum.product_pair} WHERE t.second IS NOT NULL
     ), history_ids AS MATERIALIZED (
       SELECT key, id::text AS id FROM history
       UNION SELECT key, jsonb_array_elements_text(CASE WHEN jsonb_typeof(evidence->'signals'->'conflictLineage') = 'array' THEN evidence->'signals'->'conflictLineage' ELSE '[]'::jsonb END) FROM history
@@ -66,7 +66,7 @@ export async function productIdentityEvidenceFences(
       UNION ALL SELECT h.key, 'state', s.id::text, s.xmin::text FROM history h JOIN "Suggestion" s ON s.id = h.id
       UNION ALL SELECT t.key, 'state', s.id::text, s.xmin::text FROM photos t JOIN "Suggestion" s ON s."recordId" = t.id
       -- Keep the exact text recheck: non-canonical lineage must not gain membership.
-      UNION ALL SELECT h.key, 'identity-assessment', s.id::text, s.xmin::text FROM history_ids h JOIN "Suggestion" s
+      UNION ALL SELECT h.key, 'identity-suggestion', s.id::text, s.xmin::text FROM history_ids h JOIN "Suggestion" s
         ON s.id = CASE WHEN pg_input_is_valid(h.id, ${"uuid"}) THEN h.id::uuid END AND s.id::text = h.id
       UNION ALL SELECT t.key, 'binding', b.id::text, b.xmin::text FROM bindings t JOIN "ImportSourceProduct" b ON b.id = t.id
       UNION ALL SELECT t.key, 'identity-expense', e.id::text, e.xmin::text FROM target_products t JOIN "Expense" e ON e."productId" = t.id

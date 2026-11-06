@@ -1,7 +1,7 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { z } from "zod";
-import { assessmentReviewBatchOut } from "@cubby/schemas/assessment";
+import { suggestionReviewBatchOut } from "@cubby/schemas/suggestion";
 import { and, eq } from "drizzle-orm";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
@@ -80,18 +80,18 @@ test("RTable connection review commits the chosen Expense", async ({
   await expect(review).toContainText("This Expense acquired this Product");
   const [application] = await Promise.all([
     page.waitForResponse((response) =>
-      dispatchesOperation(response.request(), "assessment.reviewBatch"),
+      dispatchesOperation(response.request(), "suggestion.reviewBatch"),
     ),
     review.getByRole("button", { name: "Confirm", exact: true }).click(),
   ]);
   expect(
     await operationResult(
       application,
-      "assessment.reviewBatch",
-      assessmentReviewBatchOut,
+      "suggestion.reviewBatch",
+      suggestionReviewBatchOut,
     ),
   ).toMatchObject([
-    { ok: true, assessmentId: proposal.review.assessmentId, applied: true },
+    { ok: true, suggestionId: proposal.review.suggestionId, applied: true },
   ]);
   await expect
     .poll(async () => {
@@ -159,18 +159,18 @@ test("Purchase title column exposes inverse acquisition review", async ({
   await expect.poll(() => readEntityConnections(db, source)).not.toEqual([]);
   const [application] = await Promise.all([
     page.waitForResponse((response) =>
-      dispatchesOperation(response.request(), "assessment.reviewBatch"),
+      dispatchesOperation(response.request(), "suggestion.reviewBatch"),
     ),
     review.getByRole("button", { name: "Confirm", exact: true }).click(),
   ]);
   expect(
     await operationResult(
       application,
-      "assessment.reviewBatch",
-      assessmentReviewBatchOut,
+      "suggestion.reviewBatch",
+      suggestionReviewBatchOut,
     ),
   ).toMatchObject([
-    { ok: true, assessmentId: proposal.review.assessmentId, applied: true },
+    { ok: true, suggestionId: proposal.review.suggestionId, applied: true },
   ]);
   await expect.poll(() => readEntityConnections(db, source)).toEqual([]);
   expect(await acquisition()).toMatchObject({ acquisitionConfirmed: true });

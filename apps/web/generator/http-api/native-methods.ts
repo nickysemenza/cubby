@@ -45,8 +45,8 @@ export const CLIENT_PASSTHROUGH_METHODS = {
   // The collection-section actions' operations (`nativeCollectionActionPlans`), decoded from the
   // runner's form values into these typed inputs.
   "ai.describeLocation": { method: "describeLocation", doc: null },
-  "assessment.review": { method: "reviewAssessment", doc: null },
-  "assessment.reviewBatch": { method: "reviewAssessments", doc: null },
+  "suggestion.review": { method: "reviewSuggestion", doc: null },
+  "suggestion.reviewBatch": { method: "reviewSuggestions", doc: null },
   "connection.read": { method: "readConnections", doc: null },
   "connection.discover": { method: "discoverConnections", doc: null },
   "image.attachExisting": { method: "attachExistingImage", doc: null },

@@ -1,7 +1,7 @@
 import { entityReportOut } from "@cubby/schemas/entity-report";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
-import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
+import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 

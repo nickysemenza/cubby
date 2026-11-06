@@ -18,7 +18,7 @@ import { deriveReceivingGuidance } from "./receiving-guidance";
 
 /**
  * Read-only: what already counts for a Product before an Expense is received.
- * Reuses the focused Product match read (stored assessments, dismissed pairs
+ * Reuses the focused Product match read (stored suggestions, dismissed pairs
  * excluded) so a photo-created stocked Product that may be the same item
  * surfaces before the operator adds units. Never writes stock.
  */

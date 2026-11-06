@@ -34,7 +34,7 @@ export const mailDecisionChildren = [
       /** The current Email target; a removed Email leaves the retained event. */
       { key: "emailId", kind: "uuid" },
       { key: "originalId", kind: "uuid", notNull: true },
-      { key: "producer", kind: "jsonb", type: "AssessmentProducer" },
+      { key: "producer", kind: "jsonb", type: "SuggestionProducer" },
       {
         key: "createdAt",
         kind: "timestamp",
@@ -55,7 +55,7 @@ export const mailDecisionChildren = [
         module: "@cubby/schemas/email-fields",
         exports: ["EmailLinkProposer", "EmailPurchaseDecisionValue"],
       },
-      { module: "@cubby/schemas/assessment", exports: ["AssessmentProducer"] },
+      { module: "@cubby/schemas/suggestion", exports: ["SuggestionProducer"] },
     ],
     indexes: [
       {
@@ -104,7 +104,7 @@ export const mailDecisionChildren = [
         primaryKey: true,
         default: { sql: "gen_random_uuid()" },
       },
-      { key: "family", kind: "text", notNull: true, type: "AssessmentFamily" },
+      { key: "family", kind: "text", notNull: true, type: "SuggestionFamily" },
       /** The reviewed handle: an observation, decision, or outcome id. */
       { key: "subjectId", kind: "uuid", notNull: true },
       { key: "emailId", kind: "uuid" },
@@ -122,7 +122,7 @@ export const mailDecisionChildren = [
         key: "correction",
         kind: "jsonb",
         notNull: true,
-        type: "AssessmentCorrection",
+        type: "SuggestionCorrection",
       },
       { key: "reason", kind: "text" },
       { key: "evidence", kind: "jsonb" },
@@ -141,8 +141,8 @@ export const mailDecisionChildren = [
     ],
     types: [
       {
-        module: "@cubby/schemas/assessment",
-        exports: ["AssessmentCorrection", "AssessmentFamily"],
+        module: "@cubby/schemas/suggestion",
+        exports: ["SuggestionCorrection", "SuggestionFamily"],
       },
       {
         module: "@cubby/schemas/mailbox-research",

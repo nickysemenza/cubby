@@ -30,7 +30,7 @@ import {
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 
-import { assessment } from "~/integrations/tanstack-query/generated/domains/assessment.gen";
+import { suggestion as suggestionApi } from "~/integrations/tanstack-query/generated/domains/suggestion.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Button } from "~/ui/primitives/button";
 
@@ -219,20 +219,20 @@ export function FieldSuggestionProvider({
   useEntityMetadata(entity);
   const form = useFormContext();
   const reviewedDrafts = useRef(
-    new Map<string, { assessmentId: string; proposal: FieldSuggestion }>(),
+    new Map<string, { suggestionId: string; proposal: FieldSuggestion }>(),
   );
   const reviewDraft = useCallback(
     async (field: string, proposal: FieldSuggestion) => {
-      if (!proposal.assessmentId)
-        throw new Error("Suggestion Assessment is missing");
-      await assessment.review.call({
-        assessmentId: proposal.assessmentId,
+      if (!proposal.suggestionId)
+        throw new Error("Suggestion Suggestion is missing");
+      await suggestionApi.review.call({
+        suggestionId: proposal.suggestionId,
         operationId: crypto.randomUUID(),
         verdict: "correct",
         intent: "draft",
       });
       reviewedDrafts.current.set(field, {
-        assessmentId: proposal.assessmentId,
+        suggestionId: proposal.suggestionId,
         proposal,
       });
     },
@@ -249,8 +249,8 @@ export function FieldSuggestionProvider({
           savedValue !== reviewed.proposal.value
         )
           continue;
-        await assessment.review.call({
-          assessmentId: reviewed.assessmentId,
+        await suggestionApi.review.call({
+          suggestionId: reviewed.suggestionId,
           operationId: crypto.randomUUID(),
           verdict: "correct",
           intent: "apply",
@@ -627,11 +627,11 @@ export function FieldSuggestionProvider({
       acknowledgeSaved,
       applyFinanceCategory: async (suggestion) => {
         try {
-          if (!suggestion.assessmentId)
-            throw new Error("Suggestion Assessment is missing");
+          if (!suggestion.suggestionId)
+            throw new Error("Suggestion Suggestion is missing");
           const saved = await applyFinanceCategory(suggestion);
-          const receipt = await assessment.review.call({
-            assessmentId: suggestion.assessmentId,
+          const receipt = await suggestionApi.review.call({
+            suggestionId: suggestion.suggestionId,
             operationId: crypto.randomUUID(),
             verdict: "correct",
             intent: "apply",
@@ -698,10 +698,10 @@ export function FieldSuggestionProvider({
         batch.map(({ proposal }) => proposal),
       );
       for (const { key, proposal } of batch) {
-        if (!proposal.assessmentId)
-          throw new Error("Suggestion Assessment is missing");
-        const receipt = await assessment.review.call({
-          assessmentId: proposal.assessmentId,
+        if (!proposal.suggestionId)
+          throw new Error("Suggestion Suggestion is missing");
+        const receipt = await suggestionApi.review.call({
+          suggestionId: proposal.suggestionId,
           operationId: crypto.randomUUID(),
           verdict: "correct",
           intent: "apply",

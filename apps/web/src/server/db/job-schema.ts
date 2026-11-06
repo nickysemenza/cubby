@@ -75,7 +75,7 @@ export const job = pgTable(
     ),
     check(
       "Job_kind_retired_check",
-      sql`${table.kind} NOT IN ('image.cloud', 'image.device', 'image.device.wake', 'embedding.refresh', 'embedding.cleanup', 'ai.evaluation', 'assessment.correction', 'ai-refresh.activate')`,
+      sql`${table.kind} NOT IN ('image.cloud', 'image.device', 'image.device.wake', 'embedding.refresh', 'embedding.cleanup', 'ai.evaluation', 'suggestion.correction', 'ai-refresh.activate')`,
     ),
     check(
       "Job_waitReason_check",

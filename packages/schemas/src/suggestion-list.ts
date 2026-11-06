@@ -6,12 +6,12 @@ import {
 import { transferPairJudgment } from "./transfer-pair-suggestion";
 
 import { suggestionReviewRowSchema, suggestionStatus } from "./ai";
-import { assessmentChildHandle } from "./assessment-reference";
+import { suggestionChildHandle } from "./suggestion-reference";
 import {
-  assessmentReviewBatchOut,
-  assessmentReviewInput,
-  assessmentSuppression,
-} from "./assessment";
+  suggestionReviewBatchOut,
+  suggestionReviewInput,
+  suggestionSuppression,
+} from "./suggestion";
 import { dataCheck } from "./data-quality";
 import { connectionProposal } from "./entity-connections";
 import { shortcodeEntities } from "./generated/entity-roster.gen";
@@ -23,7 +23,7 @@ import {
 } from "./identifiers";
 import { statementSuggestionOut } from "./statement-suggestion";
 
-/** Assessment families the Suggestions page lists. */
+/** Suggestion families the Suggestions page lists. */
 export const suggestionListFamily = z.enum([
   "field",
   "statement_transaction",
@@ -100,17 +100,17 @@ export const suggestionColumnValue = z.union([
 export type SuggestionColumnValue = z.infer<typeof suggestionColumnValue>;
 
 const rowBase = {
-  /** The Assessment id: stable for a row until its evidence republishes. */
-  id: assessmentChildHandle,
-  assessmentId: assessmentChildHandle,
+  /** The Suggestion id: stable for a row until its evidence republishes. */
+  id: suggestionChildHandle,
+  suggestionId: suggestionChildHandle,
   /** Pass as `expectedFingerprint` when reviewing. */
   fingerprint: z.string().nullable(),
   record: suggestionRecordRef,
   other: suggestionRecordRef.optional(),
   review: z
     .object({
-      application: assessmentReviewInput.shape.application,
-      suppression: assessmentSuppression.optional(),
+      application: suggestionReviewInput.shape.application,
+      suppression: suggestionSuppression.optional(),
       correction: z.object({ label: z.string(), value: z.string() }).optional(),
       merge: z
         .object({
@@ -304,7 +304,7 @@ export const acceptCleanSuggestionsInput = z.object({
   limit: z.number().int().min(1).max(SUGGESTION_ACCEPT_CLEAN_MAX).default(100),
   /** Already attempted ids; a failed accept stays pending and clean. */
   skip: z
-    .array(assessmentChildHandle)
+    .array(suggestionChildHandle)
     .max(SUGGESTION_ACCEPT_SKIP_MAX)
     .default([]),
 });
@@ -312,9 +312,9 @@ export const acceptCleanSuggestionsInput = z.object({
 /** An overlapping suggestion is settled by the pair accepted in this batch, without a second review. */
 export const acceptCleanSuggestionsOut = z.array(
   z.union([
-    assessmentReviewBatchOut.element,
+    suggestionReviewBatchOut.element,
     z.object({
-      assessmentId: assessmentChildHandle,
+      suggestionId: suggestionChildHandle,
       ok: z.literal(true),
       applied: z.literal(false),
       status: z.literal("settled_by_pair"),

@@ -3,7 +3,7 @@
  * identities collide; provider/auth failures become negative classifications;
  * persisted classification-only retries escalate uncertainty to Luna or lose headers. */
 import { eq } from "drizzle-orm";
-import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
+import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 

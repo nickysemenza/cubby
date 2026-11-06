@@ -1,4 +1,4 @@
-import type { mailImportOutcome } from "@cubby/schemas/assessment";
+import type { mailImportOutcome } from "@cubby/schemas/suggestion";
 import { isEqual } from "es-toolkit";
 import type { z } from "zod";
 

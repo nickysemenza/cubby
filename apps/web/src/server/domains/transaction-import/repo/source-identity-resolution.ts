@@ -30,7 +30,7 @@ import {
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { providerIdentityClaims } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import { createAppError } from "~/server/errors/app-error";
-import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 
@@ -427,7 +427,7 @@ export async function resolveSourceIdentity(
       .update(financialEvidenceAlias)
       .set({ occurrenceId: owner.id })
       .where(eq(financialEvidenceAlias.occurrenceId, originalOwner.id));
-    await transitionAssessmentStates(
+    await transitionSuggestionStates(
       databaseForTransaction(tx),
       and(
         eq(suggestionTable.family, "statement_transaction"),

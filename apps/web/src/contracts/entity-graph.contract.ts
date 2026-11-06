@@ -133,7 +133,7 @@ export const connectionContract = defineContract(
     discover: mutation({
       exposure: "capability",
       description:
-        "Discover proposed relationships for an existing record using bounded typed matchers. Publishes Assessments, without accepting new links. Repeated purchases remain eligible. Review the exact proposed effect before acceptance.",
+        "Discover proposed relationships for an existing record using bounded typed matchers. Publishes Suggestions, without accepting new links. Repeated purchases remain eligible. Review the exact proposed effect before acceptance.",
       modelBacked: true,
       input: entityGraphRootSchema,
       output: connectionDiscoveryOut,

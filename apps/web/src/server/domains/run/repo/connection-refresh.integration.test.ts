@@ -482,7 +482,7 @@ describe("connection discovery source freshness", () => {
       }),
     );
     const fresh = await publishEntityConnection(ctx.db, candidate);
-    expect(fresh.review.assessmentId).not.toBe(proposal.review.assessmentId);
+    expect(fresh.review.suggestionId).not.toBe(proposal.review.suggestionId);
     expect(await readEntityConnections(ctx.db, ref)).toEqual([
       expect.objectContaining({ review: fresh.review }),
     ]);

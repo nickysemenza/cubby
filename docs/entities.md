@@ -4464,6 +4464,13 @@ review.
 
 ### Shared proposal queue and automatic decisions
 
+The review implementation and wire use Suggestion names (`suggestionId`,
+`suggestionIds`, `targetSuggestionId`). The generic owner is
+`generic/suggestions`; field-resolution evidence belongs to
+`generic/field-explanation`. Immutable publication keys and receipt kinds keep
+their original spelling so retries and existing decisions retain their identity.
+Apple writes require version 2.71.0 after this wire cutover.
+
 The `/suggestions` page lists actionable proposals from fields,
 statement transactions, connections and recommendations (including tag additions
 and placement moves), Product pairs, image descriptions and transfer pairs on one server-filtered table

@@ -1,5 +1,5 @@
 import { entityIdSchema } from "./identifier-fields";
-import { assessmentChildHandle } from "./assessment-reference";
+import { suggestionChildHandle } from "./suggestion-reference";
 import { z } from "zod";
 
 /** Public confidence labels and eligible empty-field filling share one boundary. */
@@ -85,7 +85,7 @@ export const aiEvaluationTarget = z.discriminatedUnion("kind", [
     entity: z.string(),
     recordId: z.uuid(),
     field: z.null(),
-    assessmentIds: z.array(assessmentChildHandle).max(0),
+    suggestionIds: z.array(suggestionChildHandle).max(0),
   }),
   z.object({
     kind: z.literal(aiEvaluationTargetKind.enum.product_pair),
@@ -93,28 +93,28 @@ export const aiEvaluationTarget = z.discriminatedUnion("kind", [
     recordId: z.uuid(),
     otherId: z.uuid(),
     field: z.null(),
-    assessmentIds: z.array(assessmentChildHandle).max(0),
+    suggestionIds: z.array(suggestionChildHandle).max(0),
   }),
   z.object({
     kind: z.literal(aiEvaluationTargetKind.enum.product),
     entity: z.literal("product"),
     recordId: z.uuid(),
     field: z.null(),
-    assessmentIds: z.array(assessmentChildHandle).max(0),
+    suggestionIds: z.array(suggestionChildHandle).max(0),
   }),
   z.object({
     kind: z.literal(aiEvaluationTargetKind.enum.field),
     entity: z.string(),
     recordId: z.uuid(),
     field: z.string(),
-    assessmentIds: z.array(assessmentChildHandle),
+    suggestionIds: z.array(suggestionChildHandle),
   }),
   z.object({
     kind: z.literal(aiEvaluationTargetKind.enum.email),
     entity: z.literal("email"),
     recordId: entityIdSchema("email"),
     field: z.null(),
-    assessmentIds: z.array(assessmentChildHandle).max(0),
+    suggestionIds: z.array(suggestionChildHandle).max(0),
   }),
 ]);
 export type AiEvaluationTarget = z.infer<typeof aiEvaluationTarget>;

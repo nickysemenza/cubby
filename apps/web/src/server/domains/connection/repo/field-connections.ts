@@ -1,7 +1,7 @@
 import type { AiProvenance } from "@cubby/schemas/ai-evaluation";
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
-  connectionAssessmentEvidence,
+  connectionSuggestionEvidence,
   type ConnectionCandidate,
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
@@ -20,7 +20,7 @@ import {
 import { suggestionTable } from "~/server/db/schema";
 import { saveSweepSuggestions } from "~/server/domains/run/repo/suggestion-sweep-state";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
@@ -151,7 +151,7 @@ export async function saveConnectionFieldGuard(
     canonicalJson(servedTarget) !== canonicalJson(parsedBasis.target)
   )
     throw new Error("Connection target changed during inference");
-  const evidence = connectionAssessmentEvidence.parse({
+  const evidence = connectionSuggestionEvidence.parse({
     version: 1,
     candidate,
     basis,
@@ -183,7 +183,7 @@ export async function saveConnectionFieldGuard(
           ...context,
           db,
         });
-        await transitionAssessmentStates(
+        await transitionSuggestionStates(
           db,
           and(
             eq(suggestionTable.runId, runId),
@@ -199,10 +199,10 @@ export async function saveConnectionFieldGuard(
   };
 }
 
-/** Root calls this before a field application; ordinary field Assessments are untouched. */
+/** Root calls this before a field application; ordinary field Suggestions are untouched. */
 export async function assertConnectionFieldFresh(
   db: Database,
-  assessmentId: string,
+  suggestionId: string,
 ) {
   const [state] = await getDb(db)
     .select({
@@ -211,20 +211,20 @@ export async function assertConnectionFieldFresh(
       ),
     })
     .from(suggestionTable)
-    .where(eq(suggestionTable.id, assessmentId))
+    .where(eq(suggestionTable.id, suggestionId))
     .limit(1);
-  if (!state) throw new Error("Field Assessment not found");
+  if (!state) throw new Error("Field Suggestion not found");
   const data = connectionReadEvidence.safeParse(state.connectionEvidence);
   if (!data.success) return;
   const current = await captureConnectionBasis(db, data.data.candidate, true);
-  if (!(await connectionBasisIsCurrent(db, assessmentId, current)))
+  if (!(await connectionBasisIsCurrent(db, suggestionId, current)))
     throw new Error("Connection field evidence changed before acceptance");
   const [fresh] = await getDb(db)
     .select({ active: suggestionTable.active, status: suggestionTable.status })
     .from(suggestionTable)
-    .where(eq(suggestionTable.id, assessmentId))
+    .where(eq(suggestionTable.id, suggestionId))
     .limit(1)
     .for("update");
   if (!fresh?.active || fresh.status !== "pending")
-    throw new Error("Connection field Assessment is no longer pending");
+    throw new Error("Connection field Suggestion is no longer pending");
 }

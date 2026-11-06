@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { assessmentFamily } from "./assessment";
+import { suggestionFamily } from "./suggestion";
 import {
-  assessmentReviewReference,
-  assessmentSuppression,
-} from "./assessment-reference";
+  suggestionReviewReference,
+  suggestionSuppression,
+} from "./suggestion-reference";
 import { entityGraphRootSchema } from "./entity-graph";
 
 import { entitySchema } from "./entity-core";
@@ -165,10 +165,10 @@ export type ConnectionCandidate = z.infer<typeof connectionCandidate>;
 export const connectionProposal = connectionCandidate.safeExtend({
   sourceName: z.string().optional(),
   targetName: z.string().optional(),
-  review: assessmentReviewReference.extend({
-    suppression: assessmentSuppression.nullable(),
-    /** The stored Assessment family; entity-pair families flag list rows. */
-    family: assessmentFamily.optional(),
+  review: suggestionReviewReference.extend({
+    suppression: suggestionSuppression.nullable(),
+    /** The stored Suggestion family; entity-pair families flag list rows. */
+    family: suggestionFamily.optional(),
   }),
   fingerprint: z.string().min(1),
   integration: z.discriminatedUnion("kind", [
@@ -180,8 +180,8 @@ export const connectionProposal = connectionCandidate.safeExtend({
 });
 export type ConnectionProposal = z.infer<typeof connectionProposal>;
 
-/** Immutable payload in recommendation Assessment evidence; no separate ledger. */
-export const connectionAssessmentEvidence = z.object({
+/** Immutable payload in recommendation Suggestion evidence; no separate ledger. */
+export const connectionSuggestionEvidence = z.object({
   version: z.literal(1),
   candidate: connectionCandidate,
   basis: z.json(),

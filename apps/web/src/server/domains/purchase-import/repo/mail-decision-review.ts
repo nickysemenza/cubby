@@ -1,10 +1,10 @@
 import {
-  assessmentJudgments,
-  assessmentReviewInput,
-  assessmentReviewOut,
-  assessmentSubjects,
+  suggestionJudgments,
+  suggestionReviewInput,
+  suggestionReviewOut,
+  suggestionSubjects,
   type MailDecisionFamily,
-} from "@cubby/schemas/assessment";
+} from "@cubby/schemas/suggestion";
 import { correctEmailRelevanceInput } from "@cubby/schemas/email-actions";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { mailboxClassification } from "@cubby/schemas/mailbox-research";
@@ -44,7 +44,7 @@ import {
 } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 
-type Review = z.infer<typeof assessmentReviewInput>;
+type Review = z.infer<typeof suggestionReviewInput>;
 
 /** One reviewable mail decision, whichever owner holds it. */
 export type MailDecisionHandle = {
@@ -69,7 +69,7 @@ const observationHandle = (
 ): MailDecisionHandle => ({
   family: "email_relevance",
   id: row.id,
-  subject: assessmentSubjects.email_relevance.parse({
+  subject: suggestionSubjects.email_relevance.parse({
     kind: "email_relevance",
     entity: "email",
     recordId: row.emailId,
@@ -85,7 +85,7 @@ const observationHandle = (
 
 /**
  * Resolve a stored review handle to its owner. Carried decisions keep their old
- * Assessment id; a prediction's Assessment handle resolves through its subject.
+ * Suggestion id; a prediction's Suggestion handle resolves through its subject.
  */
 export async function resolveMailDecisionHandle(
   db: Database,
@@ -123,7 +123,7 @@ export async function resolveMailDecisionHandle(
     return {
       family: "mail_import_outcome",
       id: stored.mailOutcome.id,
-      subject: assessmentSubjects.mail_import_outcome.parse({
+      subject: suggestionSubjects.mail_import_outcome.parse({
         kind: "mail_import_outcome",
         entity: "email",
         recordId: stored.target.entityId,
@@ -150,7 +150,7 @@ export async function resolveMailDecisionHandle(
     .limit(1);
   // Problems findings are resolved by their own path.
   if (finding)
-    throw new Error("run_finding Assessments are not reviewed as Suggestions");
+    throw new Error("run_finding Suggestions are not reviewed as Suggestions");
   const [retained] = await client
     .select({ subject: suggestionTable.subject })
     .from(suggestionTable)
@@ -161,7 +161,7 @@ export async function resolveMailDecisionHandle(
       ),
     )
     .limit(1);
-  const predictionId = assessmentSubjects.email_relevance.safeParse(
+  const predictionId = suggestionSubjects.email_relevance.safeParse(
     retained?.subject,
   ).data?.observationId;
   if (!predictionId) return null;
@@ -174,7 +174,7 @@ export async function resolveMailDecisionHandle(
 }
 
 function emailRelevanceApplication(
-  subject: z.infer<typeof assessmentSubjects.email_relevance>,
+  subject: z.infer<typeof suggestionSubjects.email_relevance>,
   input: Review,
 ) {
   if (!input.correction.present)
@@ -185,7 +185,7 @@ function emailRelevanceApplication(
     expectedChecksum: subject.checksum,
     reviewedChecksum: subject.checksum,
     classification: input.correction.value,
-    reason: input.reason ?? "Member reviewed the Assessment",
+    reason: input.reason ?? "Member reviewed the Suggestion",
   });
 }
 
@@ -202,7 +202,7 @@ function assertReviewable(handle: MailDecisionHandle, input: Review) {
         "Suppression requires history-only Dismissal or Wrong Feedback",
       );
     throw new Error(
-      "This Assessment does not declare a presentation suppression scope",
+      "This Suggestion does not declare a presentation suppression scope",
     );
   }
   if (
@@ -216,17 +216,17 @@ function assertReviewable(handle: MailDecisionHandle, input: Review) {
   if (input.intent !== "history" && family === "mail_import_outcome")
     throw new Error("Mail import outcome grades are history only");
   if (input.intent === "draft")
-    throw new Error("Only field Assessments support draft acceptance");
+    throw new Error("Only field Suggestions support draft acceptance");
   if (input.intent === "apply" && family === "email_relevance")
     emailRelevanceApplication(
-      assessmentSubjects.email_relevance.parse(handle.subject),
+      suggestionSubjects.email_relevance.parse(handle.subject),
       input,
     );
   if (input.correction.present) {
     if (family === "mail_import_outcome")
-      assessmentJudgments.mail_import_outcome.parse(input.correction.value);
+      suggestionJudgments.mail_import_outcome.parse(input.correction.value);
     if (family === "email_link")
-      assessmentJudgments.email_link.parse(input.correction.value);
+      suggestionJudgments.email_link.parse(input.correction.value);
     if (family === "email_relevance")
       mailboxClassification.parse(input.correction.value);
   }
@@ -238,7 +238,7 @@ function reviewedClassification(handle: MailDecisionHandle, input: Review) {
   const value = input.correction.present
     ? input.correction.value
     : input.verdict === "correct"
-      ? assessmentJudgments.email_relevance.parse(handle.judgment)
+      ? suggestionJudgments.email_relevance.parse(handle.judgment)
           .classification
       : null;
   return mailboxClassification.safeParse(value).data ?? null;
@@ -265,7 +265,7 @@ async function applicationReceipt(
   return receipt;
 }
 
-type Outcome = z.infer<typeof assessmentReviewOut>;
+type Outcome = z.infer<typeof suggestionReviewOut>;
 
 /** Domain mutation, then its receipt, in the caller's one transaction. */
 async function applyReview(
@@ -278,14 +278,14 @@ async function applyReview(
   scope: EmailEvidenceWriteScope | null,
 ): Promise<Outcome> {
   const outcome: Outcome = {
-    assessmentId: handle.id,
+    suggestionId: handle.id,
     feedbackId: command.id,
     status: "applied",
     applied: true,
   };
   // Serialize commands without taking row locks ahead of the domain's parents.
   await getDb(db).execute(
-    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`assessment-review:${handle.id}`},0))`,
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`suggestion-review:${handle.id}`},0))`,
   );
   const prior = await applicationReceipt(db, handle, input.operationId);
   if (prior) {
@@ -294,7 +294,7 @@ async function applyReview(
       .safeParse(prior.metadata);
     if (receipt.data?.commandFeedbackId !== command.id)
       throw new Error("Invalid immutable application receipt for this command");
-    return assessmentReviewOut.parse(prior.receipt);
+    return suggestionReviewOut.parse(prior.receipt);
   }
   if (handle.family === "email_link") {
     const [current] = await getDb(db)
@@ -304,18 +304,18 @@ async function applyReview(
       .limit(1);
     if (!current?.active || current.status === "superseded")
       throw new Error(
-        "Assessment evidence is stale; request a fresh assessment before applying",
+        "Suggestion evidence is stale; request a fresh suggestion before applying",
       );
     if (current.status === "applied")
       throw new Error(
-        "Assessment already resolved by another command; request a fresh assessment",
+        "Suggestion already resolved by another command; request a fresh suggestion",
       );
     if (
       input.expectedFingerprint !== undefined &&
       input.expectedFingerprint !== current.evidenceChecksum
     )
-      throw new Error("Assessment evidence fingerprint changed");
-    const subject = assessmentSubjects.email_link.parse(handle.subject);
+      throw new Error("Suggestion evidence fingerprint changed");
+    const subject = suggestionSubjects.email_link.parse(handle.subject);
     if (!subject.recordId)
       throw new Error("Historical Email event has no current Email target");
     const [mail] = await getDb(db)
@@ -323,7 +323,7 @@ async function applyReview(
       .from(email)
       .where(eq(email.id, parseEntityId("email", subject.recordId)))
       .limit(1);
-    const decision = assessmentJudgments.email_link.parse(
+    const decision = suggestionJudgments.email_link.parse(
       input.correction.present ? input.correction.value : handle.judgment,
     ).decision;
     const [target] = await getDb(db)
@@ -371,13 +371,13 @@ async function applyReview(
       .limit(1);
     if (resolved)
       throw new Error(
-        "Assessment already resolved by another command; request a fresh assessment",
+        "Suggestion already resolved by another command; request a fresh suggestion",
       );
     if (
       input.expectedFingerprint !== undefined &&
       input.expectedFingerprint !== handle.fingerprint
     )
-      throw new Error("Assessment evidence fingerprint changed");
+      throw new Error("Suggestion evidence fingerprint changed");
     if (!scope)
       throw new Error("Email application requires its outer write scope");
     if (!prepared || prepared.emailId !== handle.emailId)
@@ -423,7 +423,7 @@ async function prepareAndApplyRelevance(
   const hasReceipt = async () =>
     Boolean(await applicationReceipt(db, handle, input.operationId));
   if (await hasReceipt()) return execute(null);
-  const subject = assessmentSubjects.email_relevance.parse(handle.subject);
+  const subject = suggestionSubjects.email_relevance.parse(handle.subject);
   const correction = emailRelevanceApplication(subject, input);
   const [source] = await getDb(db)
     .select({ code: email.shortcode })
@@ -455,7 +455,7 @@ async function prepareAndApplyRelevance(
 }
 
 /**
- * `assessment.review` of a mail decision. History settles first: a stale or
+ * `suggestion.review` of a mail decision. History settles first: a stale or
  * refused application cannot erase the review.
  */
 export async function settleMailDecisionReview(
@@ -569,7 +569,7 @@ export async function settleMailDecisionReview(
     emailScope,
   );
   return {
-    assessmentId: handle.id,
+    suggestionId: handle.id,
     feedbackId: event.id,
     status,
     applied: false,

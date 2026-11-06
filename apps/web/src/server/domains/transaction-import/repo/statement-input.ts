@@ -1,5 +1,5 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { assessmentFamily } from "@cubby/schemas/assessment";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import {
   financialTransactionKind,
   financialTransactionStatus,
@@ -110,7 +110,7 @@ export const statementInputCharges = (
           AND (NOT EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" allocation
               WHERE allocation."transactionId" = ft.id AND ${notDeleted("allocation")})
             OR EXISTS (SELECT 1 FROM "Suggestion" existing
-              WHERE existing.family = ${assessmentFamily.enum.statement_transaction} AND existing.active
+              WHERE existing.family = ${suggestionFamily.enum.statement_transaction} AND existing.active
                 AND existing.status = ${suggestionStatus.enum.pending}
                 AND existing.data->>${"source"} = cs.source AND existing.data->>${"chargeKey"} = cs."chargeKey"
                 AND existing.data->>${"recommended"} = ${statementTransactionAction.enum.book}))))

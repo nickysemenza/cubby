@@ -1,10 +1,10 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import {
-  assessmentFamily,
-  type assessmentReviewInput,
-  assessmentSubjects,
-  type AssessmentProducer,
-} from "@cubby/schemas/assessment";
+  suggestionFamily,
+  type suggestionReviewInput,
+  suggestionSubjects,
+  type SuggestionProducer,
+} from "@cubby/schemas/suggestion";
 import {
   type FinancialTransactionImportRow,
   type FinancialTransactionKind,
@@ -78,16 +78,16 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type SuggestionStateRow,
-  transitionAssessmentState,
-  transitionAssessmentStates,
-} from "~/server/generic/assessment/repo/assessment-state";
+  transitionSuggestionState,
+  transitionSuggestionStates,
+} from "~/server/generic/suggestions/repo/suggestion-state";
 import {
   countSuggestionLabelBacklog,
   publishSuggestion,
   type SuggestionFamily,
   suggestionLabelBacklog,
   type SuggestionLabelCursor,
-} from "~/server/generic/assessment/repo/suggestion-publication";
+} from "~/server/generic/suggestions/repo/suggestion-publication";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import {
@@ -1263,7 +1263,7 @@ const transferPairNeedsLabels = (judgment: TransferPairJudgment) =>
   (judgment.outflow.movementLabel === null ||
     judgment.inflow.movementLabel === null);
 
-const isRule = (producer: AssessmentProducer) => producer.kind === "rule";
+const isRule = (producer: SuggestionProducer) => producer.kind === "rule";
 
 const pairLock = (key: string) =>
   sql`SELECT pg_advisory_xact_lock(hashtextextended(${`transfer-pair:${key}`}, 0))`;
@@ -1287,7 +1287,7 @@ export type TransferPairPublishOutcome =
  * re-run would drop.
  */
 const transferPairSuggestions: SuggestionFamily<Pair> = {
-  family: assessmentFamily.enum.transfer_pair,
+  family: suggestionFamily.enum.transfer_pair,
   slot: ({ judgment }) => ({
     lock: `transfer-pair:${judgment.key}`,
     fields: { pairKey: judgment.key },
@@ -1355,7 +1355,7 @@ const transferPairSuggestions: SuggestionFamily<Pair> = {
 export async function publishTransferPair(
   db: Database,
   pair: Pair,
-  producer: AssessmentProducer,
+  producer: SuggestionProducer,
 ): Promise<TransferPairPublishOutcome> {
   const published = await publishSuggestion(
     db,
@@ -1377,7 +1377,7 @@ export async function refreshTransferPairStatements(
   db: Database,
   pairKey: string,
 ) {
-  const pending = sql`family = ${assessmentFamily.enum.transfer_pair}
+  const pending = sql`family = ${suggestionFamily.enum.transfer_pair}
     AND data->>'pairKey' = ${pairKey} AND coalesce((data->>'statementRefreshPending')::boolean, false)`;
   const { rows } = await unwrapDb(db).execute(sql`
     SELECT 1 FROM "Suggestion" WHERE ${pending} LIMIT 1
@@ -1410,7 +1410,7 @@ export async function refreshTransferPairStatements(
         runId: null,
         evaluationId: null,
       });
-    await transitionAssessmentStates(
+    await transitionSuggestionStates(
       tx,
       inArray(
         suggestionTable.id,
@@ -1427,7 +1427,7 @@ export async function refreshTransferPairStatements(
   });
 }
 
-const ruleProducer = (runId: RunId | null): AssessmentProducer => ({
+const ruleProducer = (runId: RunId | null): SuggestionProducer => ({
   kind: "rule",
   model: null,
   revision: TRANSFER_PAIR_REVISION,
@@ -1467,7 +1467,7 @@ type TransferPairGenerationPage = {
   next: TransferPairGenerationCursor | null;
 };
 
-/** Upstream outcomes that leave no Assessment; a Sweep step keeps them as reason counts. */
+/** Upstream outcomes that leave no Suggestion; a Sweep step keeps them as reason counts. */
 const NO_RESULTS = [
   "not_transfer_like",
   "no_candidate",
@@ -1537,7 +1537,7 @@ const retireScope = (
     // eslint-disable-next-line cubby/no-raw-enum-literal-in-sql -- date is a TransferPairJudgment JSON property, not an enum value.
     sinceScope = sql`AND s.data->>'date' >= ${scope.since}`;
   }
-  return sql`s.family = ${assessmentFamily.enum.transfer_pair}
+  return sql`s.family = ${suggestionFamily.enum.transfer_pair}
         ${accountScope} ${sinceScope}
         ${createdBefore ? sql`AND s."createdAt" <= ${createdBefore}::timestamptz` : sql``}`;
 };
@@ -1700,7 +1700,7 @@ export async function generateTransferPairSuggestionsPage(
             const retired = await withTransactionDatabase(db, async (tx) => {
               await assertWorkflowEffect(tx);
               await getDb(tx).execute(pairLock(row.pairKey));
-              const retiredRows = await transitionAssessmentStates(
+              const retiredRows = await transitionSuggestionStates(
                 tx,
                 and(
                   eq(suggestionTable.id, row.id),
@@ -1991,7 +1991,7 @@ async function storedPairs(
   }>(sql`
     SELECT s.id::text AS id, s.fingerprint, s.data, s.judgment
     FROM "Suggestion" s
-    WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.active
+    WHERE s.family = ${suggestionFamily.enum.transfer_pair} AND s.active
       ${status === "pending" ? sql`AND s.status = ${suggestionStatus.enum.pending}` : sql``}
       AND ${where}
     ORDER BY s.data->>'pairKey'
@@ -2240,9 +2240,9 @@ export async function applyTransferPair(
     );
     if (!accepted.canProceed) throw refused(accepted.reason);
     // Every other pending pair naming either leg lost it.
-    await transitionAssessmentStates(
+    await transitionSuggestionStates(
       tx,
-      sql`${suggestionTable.family} = ${assessmentFamily.enum.transfer_pair} AND ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}
+      sql`${suggestionTable.family} = ${suggestionFamily.enum.transfer_pair} AND ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}
         AND ${suggestionTable.data}->'legKeys' ?| ARRAY[${sql.join(
           legKeys.map((key) => sql`${key}`),
           sql`, `,
@@ -2264,7 +2264,7 @@ export async function applyTransferPairSuggestion(
   db: Database,
   context: EntityKernelContext,
   state: SuggestionStateRow,
-  input: Pick<z.infer<typeof assessmentReviewInput>, "expectedFingerprint">,
+  input: Pick<z.infer<typeof suggestionReviewInput>, "expectedFingerprint">,
 ) {
   return withTransactionDatabase(db, async (tx) => {
     await assertWorkflowEffect(tx);
@@ -2276,11 +2276,11 @@ export async function applyTransferPairSuggestion(
       .from(suggestionTable)
       .where(eq(suggestionTable.id, state.id))
       .limit(1);
-    const subject = assessmentSubjects.transfer_pair.parse(prediction?.subject);
+    const subject = suggestionSubjects.transfer_pair.parse(prediction?.subject);
     const published = transferPairJudgment.parse(prediction?.judgment);
     if (state.status !== "pending" || !state.fingerprint)
       throw refused("This transfer pair suggestion is no longer pending.");
-    await transitionAssessmentState(tx, state.id, { status: "applied" });
+    await transitionSuggestionState(tx, state.id, { status: "applied" });
     await applyTransferPair(tx, context, {
       key: subject.pairKey,
       expectedFingerprint: input.expectedFingerprint ?? state.fingerprint,

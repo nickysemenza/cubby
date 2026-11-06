@@ -13,8 +13,8 @@ import {
 } from "~/server/db/schema";
 import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
-import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
+import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import { recordFeedback } from "~/server/generic/suggestions/repo/suggestion";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -85,7 +85,7 @@ describe("Run detail reports", () => {
       done: 3,
     });
     const publish = (key: string) =>
-      publishAssessment(
+      publishSuggestion(
         ctx.db,
         {
           publicationKey: key,
@@ -142,7 +142,7 @@ describe("Run detail reports", () => {
       }),
     );
     await recordFeedback(ctx.db, {
-      assessmentId: first.id,
+      suggestionId: first.id,
       operationId: "synthetic:later-manual",
       verdict: "correct",
       correction: { present: false },

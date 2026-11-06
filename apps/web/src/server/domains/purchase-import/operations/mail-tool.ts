@@ -1,4 +1,4 @@
-import { mailImportOutcome } from "@cubby/schemas/assessment";
+import { mailImportOutcome } from "@cubby/schemas/suggestion";
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 /**
  * The public `mail` tool: read a member's retained Email and record what it
@@ -308,7 +308,7 @@ export async function readMailImportOutcomes(
     items: rows.slice(0, input.limit).map((row) => {
       const { mailOutcome } = storedMailOutcome.parse(row.result);
       return {
-        assessmentId: mailOutcome.id,
+        suggestionId: mailOutcome.id,
         judgment: mailOutcome.judgment,
         producer: mailOutcome.producer
           ? {

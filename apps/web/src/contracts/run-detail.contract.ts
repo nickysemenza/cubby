@@ -1,4 +1,4 @@
-import { assessmentFamily } from "@cubby/schemas/assessment";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import { sweepRunInput } from "@cubby/schemas/run-fields";
 import { runStepErrors, runStepState } from "@cubby/schemas/run-step";
@@ -37,7 +37,7 @@ const runDetailStepsOut = z.object({
 });
 export type RunDetailStepsOut = z.infer<typeof runDetailStepsOut>;
 
-/** Assessments a Run published in one family, newest first, bounded. */
+/** Suggestions a Run published in one family, newest first, bounded. */
 export const RUN_DECISION_LIMIT = 500;
 /** A Suggestion's stored statuses (`resolved`: answered without applying). */
 export const runDecisionStatus = z.enum([
@@ -50,7 +50,7 @@ export const runDecisionStatus = z.enum([
 export type RunDecisionStatus = z.infer<typeof runDecisionStatus>;
 const runDecision = z.object({
   id: z.uuid(),
-  family: assessmentFamily,
+  family: suggestionFamily,
   status: runDecisionStatus,
   /** False once a later publication replaced it. */
   active: z.boolean(),
@@ -133,7 +133,7 @@ export const runDetailContract = defineContract(
       cache: { tags: [["run"]], profile: "live-status" },
     }),
     decisions: query({
-      input: z.strictObject({ runId: runShortcode, family: assessmentFamily }),
+      input: z.strictObject({ runId: runShortcode, family: suggestionFamily }),
       output: runDecisionsOut,
       cache: { tags: [["run"], ["suggestions"]] },
     }),

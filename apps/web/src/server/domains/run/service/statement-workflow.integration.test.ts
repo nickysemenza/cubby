@@ -1,4 +1,4 @@
-import { assessmentFamily } from "@cubby/schemas/assessment";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { fromPartial } from "@total-typescript/shoehorn";
@@ -183,7 +183,7 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
     }>(sql`
       SELECT count(*) FILTER (WHERE NOT coalesce((data->>'needsLabel')::boolean, false))::int AS complete,
         count(*) FILTER (WHERE coalesce((data->>'needsLabel')::boolean, false))::int AS pending
-      FROM "Suggestion" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
+      FROM "Suggestion" WHERE family = ${suggestionFamily.enum.statement_transaction} AND active
     `);
     expect(steps.flatMap((step) => step.errors)).toEqual([]);
     expect(saved?.status).toBe("completed");

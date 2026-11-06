@@ -1,15 +1,15 @@
 import { z } from "zod";
 import {
-  assessmentFamily,
-  assessmentChildHandle,
+  suggestionFamily,
+  suggestionChildHandle,
   feedbackVerdict,
-} from "./assessment";
+} from "./suggestion";
 import {
   suggestionRecordRef,
   SUGGESTION_RECORD_IDS_MAX,
 } from "./suggestion-list";
 
-export const automaticDecisionFamily = assessmentFamily;
+export const automaticDecisionFamily = suggestionFamily;
 
 export const automaticDecisionFilters = z.object({
   family: automaticDecisionFamily.optional(),
@@ -26,7 +26,7 @@ export const automaticDecisionListInput = automaticDecisionFilters.extend({
   limit: z.number().int().min(1).max(200).default(50),
 });
 export const automaticDecisionRow = z.object({
-  id: assessmentChildHandle,
+  id: suggestionChildHandle,
   family: automaticDecisionFamily,
   records: z.array(suggestionRecordRef),
   decision: z.json(),
@@ -37,7 +37,7 @@ export const automaticDecisionRow = z.object({
   automaticRule: z.string().nullable(),
   verdict: feedbackVerdict.nullable(),
   reviewedAt: z.iso.datetime().nullable(),
-  /** Retained for explicit assessment-review clients; the web audit records feedback only. */
+  /** Retained for explicit suggestion-review clients; the web audit records feedback only. */
   correction: z
     .object({
       label: z.string(),

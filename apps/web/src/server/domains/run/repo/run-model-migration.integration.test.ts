@@ -32,7 +32,7 @@ describe("evaluation page admission cutover", () => {
             entity: "product" as const,
             recordId: crypto.randomUUID(),
             field: null,
-            assessmentIds: [],
+            suggestionIds: [],
           },
           provenance: {
             dependencies: [],

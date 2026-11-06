@@ -124,7 +124,7 @@ async function decideOnce(
     if (options.originalId && orderMailId !== options.originalId)
       throw createAppError(
         "MAIL_EVIDENCE_STALE",
-        "Email original changed; request a fresh Assessment",
+        "Email original changed; request a fresh Suggestion",
       );
     if (!orderMailId)
       throw createAppError(

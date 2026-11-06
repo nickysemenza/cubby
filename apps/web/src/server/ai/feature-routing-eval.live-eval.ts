@@ -185,10 +185,10 @@ const suites: Array<{
             },
             ports,
           ).then((plan) => {
-            const assessment = assessRecipeFlowCandidate(entry.recipe, plan);
-            return assessment.ok
-              ? { plan: assessment.plan, issues: [] }
-              : new Error(assessment.issues.join("; "));
+            const suggestion = assessRecipeFlowCandidate(entry.recipe, plan);
+            return suggestion.ok
+              ? { plan: suggestion.plan, issues: [] }
+              : new Error(suggestion.issues.join("; "));
           }),
         );
         return scoreRecipeFlow(

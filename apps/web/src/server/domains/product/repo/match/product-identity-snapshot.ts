@@ -318,7 +318,7 @@ async function enqueuePreparedProductIdentityPair(
       recordId: pair.productIds[0],
       otherId: pair.productIds[1],
       field: null,
-      assessmentIds: [],
+      suggestionIds: [],
     },
     provenance: frozen,
     snapshot: z.json().parse(pair),

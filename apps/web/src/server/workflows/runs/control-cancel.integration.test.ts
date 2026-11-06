@@ -48,7 +48,7 @@ describe("Run AI work cancel", () => {
           // One open evaluation per target slot: each is its own target.
           recordId: index === 0 ? product.entityId : crypto.randomUUID(),
           field: "categoryId",
-          assessmentIds: [],
+          suggestionIds: [],
         },
         provenance: {
           dependencies: [],
@@ -80,7 +80,7 @@ describe("Run AI work cancel", () => {
         entity: "email" as const,
         recordId: parseEntityId("email", crypto.randomUUID()),
         field: null,
-        assessmentIds: [],
+        suggestionIds: [],
       },
       provenance: {
         dependencies: [],

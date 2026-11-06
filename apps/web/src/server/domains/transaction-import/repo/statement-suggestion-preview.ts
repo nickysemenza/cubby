@@ -29,7 +29,7 @@ export async function previewStatementSuggestion(
   const input = statementSuggestionPreviewInput.parse(raw);
   const state = await getDb(db).query.suggestionTable.findFirst({
     where: and(
-      eq(suggestionTable.id, input.assessmentId),
+      eq(suggestionTable.id, input.suggestionId),
       eq(suggestionTable.family, "statement_transaction"),
     ),
   });
@@ -39,7 +39,7 @@ export async function previewStatementSuggestion(
     );
   if (!state.fingerprint || state.fingerprint !== input.expectedFingerprint)
     throw refuseStatementApplication(
-      "Assessment evidence fingerprint changed. Refresh suggestions and review again.",
+      "Suggestion evidence fingerprint changed. Refresh suggestions and review again.",
     );
   const loaded = await loadStatementApplication(db, state);
   const current = await currentStatementApplication(db, loaded);
@@ -51,7 +51,7 @@ export async function previewStatementSuggestion(
     application,
   );
   const basis = {
-    assessmentId: state.id,
+    suggestionId: state.id,
     fingerprint: state.fingerprint,
     action: application.action,
   };

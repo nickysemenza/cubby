@@ -1,4 +1,4 @@
-import type { AssessmentFamily } from "@cubby/schemas/assessment";
+import type { SuggestionFamily } from "@cubby/schemas/suggestion";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { StackIcon } from "@phosphor-icons/react/dist/csr/Stack";
 import { useQueryClient } from "@tanstack/react-query";
@@ -49,7 +49,7 @@ const live = (status: string) =>
  */
 const facetByRun = new Map<string, string | null>();
 const facetListeners = new Set<() => void>();
-const familyByRun = new Map<string, AssessmentFamily>();
+const familyByRun = new Map<string, SuggestionFamily>();
 function useRunFamily(runId: string) {
   const family = useSyncExternalStore(
     (listener) => {
@@ -60,7 +60,7 @@ function useRunFamily(runId: string) {
     () => null,
   );
   const setFamily = useCallback(
-    (next: AssessmentFamily) => {
+    (next: SuggestionFamily) => {
       familyByRun.set(runId, next);
       facetByRun.set(runId, null);
       for (const listener of facetListeners) listener();
@@ -119,7 +119,7 @@ function useRunDetail(record: RunOut) {
     ),
   ];
   // Start with the latest publication; earlier families remain selectable.
-  const family: AssessmentFamily | null =
+  const family: SuggestionFamily | null =
     selectedFamily && families.includes(selectedFamily)
       ? selectedFamily
       : (overview?.steps
@@ -227,7 +227,7 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
       groups.push({
         id: "candidates",
         title: "Per result",
-        note: `${formatCount(decisions.data?.total ?? rows.length)} Assessments published`,
+        note: `${formatCount(decisions.data?.total ?? rows.length)} Suggestions published`,
         rows: [
           {
             id: "all",
@@ -304,7 +304,7 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
   );
 }
 
-/** The Assessments the Run published in its current family, with evidence. */
+/** The Suggestions the Run published in its current family, with evidence. */
 export function RunDecisions({ record }: { record: RunOut }) {
   const { decisions, presenter, rows, family, families, setFamily } =
     useRunDetail(record);

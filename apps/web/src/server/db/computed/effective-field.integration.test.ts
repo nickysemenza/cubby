@@ -14,7 +14,7 @@ import { productCategoryScaffold } from "~/server/domains/product-category/repo/
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { loadFieldResolutionEvidence } from "~/server/generic/suggestions/repo/field-resolution-evidence";
+import { loadFieldResolutionEvidence } from "~/server/generic/field-explanation/repo/field-resolution-evidence";
 import {
   createInventoryFixture,
   createLocationFixture,

@@ -1,7 +1,7 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
   connectionCandidate,
-  connectionAssessmentEvidence,
+  connectionSuggestionEvidence,
   type ConnectionCandidate,
   CONNECTION_TRANSFER_WINDOW_DAYS,
 } from "@cubby/schemas/entity-connections";
@@ -186,7 +186,7 @@ function freezeSnapshot(value: ConnectionJson): ConnectionJson {
 const relevantSnapshot = (value: unknown) =>
   relevantDependencyEvidence(snapshotJson(value));
 
-export const connectionReadEvidence = connectionAssessmentEvidence.omit({
+export const connectionReadEvidence = connectionSuggestionEvidence.omit({
   basis: true,
 });
 
@@ -199,7 +199,7 @@ export const connectionReadEvidenceSql = (evidence: SQL) => sql<unknown>`CASE
 /** JSONB equality preserves canonical object/array semantics without downloading the snapshot. */
 export async function connectionBasisIsCurrent(
   db: Database,
-  assessmentId: string,
+  suggestionId: string,
   basis: Awaited<ReturnType<typeof captureConnectionBasis>>,
 ) {
   const [match] = await getDb(db)
@@ -207,7 +207,7 @@ export async function connectionBasisIsCurrent(
     .from(suggestionTable)
     .where(
       and(
-        eq(suggestionTable.id, assessmentId),
+        eq(suggestionTable.id, suggestionId),
         sql`${suggestionTable.data}->'connectionEvidence'->'basis' = ${JSON.stringify(basis)}::jsonb`,
       ),
     )

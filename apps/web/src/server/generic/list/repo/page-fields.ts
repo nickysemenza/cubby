@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
-import { loadCurrentFieldOwnership } from "~/server/generic/assessment/repo/automatic-fields";
+import { loadCurrentFieldOwnership } from "~/server/generic/suggestions/repo/automatic-fields";
 import { loadCurrentAssignmentFacts } from "~/server/generic/derived/repo/assignment-read";
 import {
   loadPageStoredMeta,

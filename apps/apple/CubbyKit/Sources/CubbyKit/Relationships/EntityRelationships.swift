@@ -197,7 +197,7 @@ public protocol EntityRelationshipsClient: Sendable {
     func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut
     func discoverConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut
     func discoveryRunSnapshot(runID: RunShortcode) async throws -> RunSnapshot
-    func reviewAssessment(_ input: AssessmentReviewInput) async throws -> AssessmentReviewOut
+    func reviewSuggestion(_ input: SuggestionReviewInput) async throws -> SuggestionReviewOut
     func exploreRelationships(root: EntityRef, depth: Int) async throws -> EntityGraph
     func relationshipPage(
         root: EntityRef,
@@ -244,7 +244,7 @@ public final class EntityRelationshipsModel {
     private var recommendationTask: Task<EntityRecommendationsOut, Error>?
     private var acceptTask: Task<RelationshipAcceptance, Error>?
     private var connectionTask: Task<ConnectionDiscoveryOut, Error>?
-    private var connectionReviewTask: Task<AssessmentReviewOut, Error>?
+    private var connectionReviewTask: Task<SuggestionReviewOut, Error>?
     private var discoveryObservationTask: Task<Void, Error>?
     private let waitForDiscoveryPoll: @Sendable () async throws -> Void
 
@@ -417,7 +417,7 @@ public final class EntityRelationshipsModel {
     ) async -> Bool {
         guard !connectionControlsDisabled, let source,
             connectionDocument?.proposals.contains(where: {
-                $0.review.assessmentId == proposal.review.assessmentId
+                $0.review.suggestionId == proposal.review.suggestionId
                     && $0.fingerprint == proposal.fingerprint
             }) == true,
             !persistent || (verdict == .dismissed && proposal.review.suppression != nil),
@@ -425,13 +425,13 @@ public final class EntityRelationshipsModel {
                 || (!proposal.requiresIdentityReview && proposal.evidence.contradictions.isEmpty)
         else { return false }
         let generation = requestGeneration
-        reviewingConnectionID = proposal.review.assessmentId
+        reviewingConnectionID = proposal.review.suggestionId
         connectionError = nil
-        var input = AssessmentReviewInput(
+        var input = SuggestionReviewInput(
             operationId: UUID().uuidString, verdict: .dismissed,
             correction: .value1(.init(present: .falseValue)),
             intent: verdict == .correct ? .apply : .history,
-            assessmentId: proposal.review.assessmentId, expectedFingerprint: .value(proposal.fingerprint))
+            suggestionId: proposal.review.suggestionId, expectedFingerprint: .value(proposal.fingerprint))
         switch verdict {
         case .correct: input.verdict = .correct
         case .wrong: input.verdict = .wrong
@@ -448,7 +448,7 @@ public final class EntityRelationshipsModel {
         let reviewInput = input
         let task = Task {
             try Task.checkCancellation()
-            return try await client.reviewAssessment(reviewInput)
+            return try await client.reviewSuggestion(reviewInput)
         }
         connectionReviewTask = task
         do {
@@ -716,7 +716,7 @@ private enum ConnectionReviewError: LocalizedError {
         case .notApplied: "Connection review returned applied=false for an explicit apply request."
         case .missingApplicationResult: "Inventory connection review returned no applicationResult."
         case .invalidApplicationResult:
-            "Assessment applicationResult does not match the reviewed connection endpoints."
+            "Suggestion applicationResult does not match the reviewed connection endpoints."
         case .discoveryRunMismatch: "Run status response does not match the connection discovery Run."
         case .discoveryStopped(let message): message
         }

@@ -2,7 +2,7 @@ import { financialTransactionUpdateData } from "@cubby/schemas/financial-transac
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
-import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
+import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 

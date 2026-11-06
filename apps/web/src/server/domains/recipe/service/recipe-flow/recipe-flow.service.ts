@@ -82,7 +82,7 @@ type RecipeFlowGenerateRequest = Omit<RecipeFlowGenerateInput, "id"> & {
   id: RecipeId;
 };
 
-type RecipeFlowCandidateAssessment =
+type RecipeFlowCandidateSuggestion =
   | {
       ok: true;
       plan: RecipeFlowPlan;
@@ -96,7 +96,7 @@ type RecipeFlowCandidateAssessment =
 export function assessRecipeFlowCandidate(
   recipe: RecipeOut,
   candidate: RecipeFlowAiPlan,
-): RecipeFlowCandidateAssessment {
+): RecipeFlowCandidateSuggestion {
   const normalized = safeNormalizeRecipeFlowAiPlan(candidate);
   if (!normalized.success) {
     return {
@@ -205,14 +205,14 @@ export async function generateRecipeFlow(
       },
     },
   );
-  const assessment = assessRecipeFlowCandidate(recipe, candidate);
-  if (!assessment.ok) {
+  const suggestion = assessRecipeFlowCandidate(recipe, candidate);
+  if (!suggestion.ok) {
     // Unreachable in practice — `validate` above is the same pure function
     // applied to the same candidate, so the runner would already have
     // thrown. Kept so a future change to this extraction can't silently
     // persist something `assessRecipeFlowCandidate` disagrees with.
     throw new Error(
-      `Generated recipe flow is invalid: ${assessment.issues.join("; ")}`,
+      `Generated recipe flow is invalid: ${suggestion.issues.join("; ")}`,
     );
   }
   return await persistFlowArtifact(
@@ -223,8 +223,8 @@ export async function generateRecipeFlow(
       answeredModel,
       fingerprint,
       guidance,
-      plan: assessment.plan,
-      warnings: assessment.warnings,
+      plan: suggestion.plan,
+      warnings: suggestion.warnings,
     },
     ports,
   );

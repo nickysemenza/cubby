@@ -67,7 +67,7 @@ const NON_ENTITY_FK_TARGETS = {
     "package tracking observations retained as Shipment child evidence",
   ShipmentSourcePackage:
     "stable source package identities for retained tracking evidence",
-  Assessment:
+  Suggestion:
     "immutable typed judgment history shared by current projections and Feedback",
   AiEvaluation:
     "durable per-target inference and publication bookkeeping owned by a Run",

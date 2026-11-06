@@ -460,7 +460,7 @@
         "packages/schemas/src/project-tool-raw-read.ts",
         "packages/schemas/src/scan-raw-read.ts",
         "packages/schemas/src/ai-evaluation.ts",
-        "packages/schemas/src/assessment-reference.ts",
+        "packages/schemas/src/suggestion-reference.ts",
         "packages/schemas/src/workflow-runs.ts",
         "packages/schemas/src/job.ts",
         "packages/schemas/src/mailbox-research.ts",

@@ -1,4 +1,4 @@
-import type { assessmentReviewInput } from "@cubby/schemas/assessment";
+import type { suggestionReviewInput } from "@cubby/schemas/suggestion";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
 import type {
@@ -14,7 +14,7 @@ import type {
 import { omitBy } from "es-toolkit";
 import type { z } from "zod";
 
-export type ReviewItem = z.input<typeof assessmentReviewInput>;
+export type ReviewItem = z.input<typeof suggestionReviewInput>;
 export type StatementTransactionField = z.infer<
   typeof statementTransactionField
 >;
@@ -101,7 +101,7 @@ export function statementApplyItem(
   const application = statementApplication(suggestion, choice);
   const asIs = isRecommendedAsIs(suggestion, application);
   return {
-    assessmentId: suggestion.assessmentId,
+    suggestionId: suggestion.suggestionId,
     operationId: crypto.randomUUID(),
     verdict: asIs ? "correct" : "wrong",
     correction: asIs
@@ -120,7 +120,7 @@ export function statementDismissItem(
   suggestion: StatementSuggestionOut,
 ): ReviewItem {
   return {
-    assessmentId: suggestion.assessmentId,
+    suggestionId: suggestion.suggestionId,
     operationId: crypto.randomUUID(),
     verdict: "dismissed",
     correction: { present: false },
@@ -137,7 +137,7 @@ export function statementDismissItem(
 }
 
 const base = (row: SuggestionListRow) => ({
-  assessmentId: row.assessmentId,
+  suggestionId: row.suggestionId,
   operationId: crypto.randomUUID(),
   correction: { present: false as const },
   ...(row.fingerprint ? { expectedFingerprint: row.fingerprint } : {}),

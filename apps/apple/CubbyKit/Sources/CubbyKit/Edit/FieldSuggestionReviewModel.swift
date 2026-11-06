@@ -19,9 +19,9 @@ public final class FieldSuggestionReviewModel {
     private var ticket: FieldSuggestionReviewScope.Ticket?
     private var reviewedValues: [String: JSONValue] = [:]
     private var dismissed: Set<String> = []
-    private var acceptedAssessments: [String: (id: String, value: String)] = [:]
+    private var acceptedSuggestions: [String: (id: String, value: String)] = [:]
     private let runKey = UUID().uuidString
-    private let reviewAssessment: (AssessmentReviewInput) async throws -> AssessmentReviewOut
+    private let reviewSuggestion: (SuggestionReviewInput) async throws -> SuggestionReviewOut
     private let fetch: (FieldSuggestionsInput) async throws -> FieldSuggestionsReviewOut
     private let saveCategory: (FinanceCategoryApplyInput) async throws -> FinanceCategoryApplyOut
 
@@ -29,12 +29,12 @@ public final class FieldSuggestionReviewModel {
         editor: GenericEntityEditModel,
         fetch: @escaping (FieldSuggestionsInput) async throws -> FieldSuggestionsReviewOut,
         saveCategory: @escaping (FinanceCategoryApplyInput) async throws -> FinanceCategoryApplyOut,
-        reviewAssessment: @escaping (AssessmentReviewInput) async throws -> AssessmentReviewOut
+        reviewSuggestion: @escaping (SuggestionReviewInput) async throws -> SuggestionReviewOut
     ) {
         self.editor = editor
         self.fetch = fetch
         self.saveCategory = saveCategory
-        self.reviewAssessment = reviewAssessment
+        self.reviewSuggestion = reviewSuggestion
     }
 
     public var fields: [FieldDescriptor] {
@@ -115,7 +115,7 @@ public final class FieldSuggestionReviewModel {
             isApplying = true
             defer { isApplying = false }
             do {
-                try await recordDraftAcceptance(assessmentId: proposed.assessmentId)
+                try await recordDraftAcceptance(suggestionId: proposed.suggestionId)
                 let saved = try await saveCategory(
                     .init(
                         // Both generated enums come from financeCategoryReviewSchema.
@@ -135,7 +135,7 @@ public final class FieldSuggestionReviewModel {
                 else { throw ReviewError.unexpectedAcceptance }
                 editor.acknowledgeSavedField(key, value: .string(value), reviewedDraftValue: reviewedDraft)
                 try await recordApplication(
-                    key, value: value, recordId: saved.entityId, assessmentId: proposed.assessmentId)
+                    key, value: value, recordId: saved.entityId, suggestionId: proposed.suggestionId)
                 response = nil
                 return .saved(field: key, value: .string(value))
             } catch {
@@ -143,11 +143,11 @@ public final class FieldSuggestionReviewModel {
                 throw error
             }
         }
-        guard let assessmentId = proposed.assessmentId else { throw ReviewError.missingAssessment }
-        try await recordDraftAcceptance(assessmentId: assessmentId)
+        guard let suggestionId = proposed.suggestionId else { throw ReviewError.missingSuggestion }
+        try await recordDraftAcceptance(suggestionId: suggestionId)
         editor.draft[key] = .string(value)
         editor.markEdited(key)
-        acceptedAssessments[key] = (assessmentId, value)
+        acceptedSuggestions[key] = (suggestionId, value)
         dismissed.insert(key)
         return .draft
     }
@@ -168,11 +168,11 @@ public final class FieldSuggestionReviewModel {
         let values = Dictionary(
             uniqueKeysWithValues: keys.compactMap { key in proposal(key)?.value.map { (key, $0) } })
         let drafts = Dictionary(uniqueKeysWithValues: keys.map { ($0, currentValue($0)) })
-        let assessmentIds = Dictionary(uniqueKeysWithValues: keys.map { ($0, proposal($0)?.assessmentId) })
+        let suggestionIds = Dictionary(uniqueKeysWithValues: keys.map { ($0, proposal($0)?.suggestionId) })
         isApplying = true
         defer { isApplying = false }
         for key in keys {
-            try await recordDraftAcceptance(assessmentId: proposal(key)?.assessmentId)
+            try await recordDraftAcceptance(suggestionId: proposal(key)?.suggestionId)
         }
         let saved = try await saveCategory(
             .init(
@@ -195,7 +195,7 @@ public final class FieldSuggestionReviewModel {
             }
             editor.acknowledgeSavedField(key, value: .string(value), reviewedDraftValue: drafts[key] ?? .null)
             try await recordApplication(
-                key, value: value, recordId: saved.entityId, assessmentId: assessmentIds[key] ?? nil)
+                key, value: value, recordId: saved.entityId, suggestionId: suggestionIds[key] ?? nil)
             accepted.append(.saved(field: key, value: .string(value)))
         }
         response = nil
@@ -203,20 +203,20 @@ public final class FieldSuggestionReviewModel {
     }
 
     public func dismiss(_ key: String) async throws {
-        guard let assessmentId = proposal(key)?.assessmentId else { throw ReviewError.missingAssessment }
-        _ = try await reviewAssessment(
+        guard let suggestionId = proposal(key)?.suggestionId else { throw ReviewError.missingSuggestion }
+        _ = try await reviewSuggestion(
             .init(
                 operationId: UUID().uuidString, verdict: .wrong,
                 correction: .value1(.init(present: .falseValue)),
-                intent: .history, assessmentId: assessmentId))
+                intent: .history, suggestionId: suggestionId))
         dismissed.insert(key)
     }
 
     /// Receipt follows the editor's confirmed save and only names a field that still has
     /// the value explicitly accepted in this draft.
     public func recordSavedApplications(recordId: String) async throws {
-        for key in acceptedAssessments.keys.sorted() {
-            guard let accepted = acceptedAssessments[key],
+        for key in acceptedSuggestions.keys.sorted() {
+            guard let accepted = acceptedSuggestions[key],
                 currentValue(key) == .string(accepted.value)
             else { continue }
             try await recordApplication(key, value: accepted.value, recordId: recordId)
@@ -224,42 +224,42 @@ public final class FieldSuggestionReviewModel {
     }
 
     private func recordApplication(
-        _ key: String, value: String, recordId: String, assessmentId: String? = nil
+        _ key: String, value: String, recordId: String, suggestionId: String? = nil
     ) async throws {
-        guard let accepted = acceptedAssessments[key] else {
+        guard let accepted = acceptedSuggestions[key] else {
             // Immediate finance application is explicit and has not entered the draft map.
-            guard let assessmentId = assessmentId ?? proposal(key)?.assessmentId else {
-                throw ReviewError.missingAssessment
+            guard let suggestionId = suggestionId ?? proposal(key)?.suggestionId else {
+                throw ReviewError.missingSuggestion
             }
-            let receipt = try await reviewAssessment(
+            let receipt = try await reviewSuggestion(
                 .init(
                     operationId: UUID().uuidString, verdict: .correct,
                     correction: .value1(.init(present: .falseValue)),
-                    intent: .apply, assessmentId: assessmentId,
+                    intent: .apply, suggestionId: suggestionId,
                     application: .savedField(.init(kind: .savedField, recordId: recordId))))
             guard receipt.applied else { throw ReviewError.unexpectedAcceptance }
             return
         }
         guard accepted.value == value else { return }
-        let receipt = try await reviewAssessment(
+        let receipt = try await reviewSuggestion(
             .init(
                 operationId: UUID().uuidString, verdict: .correct,
                 correction: .value1(.init(present: .falseValue)),
-                intent: .apply, assessmentId: accepted.id,
+                intent: .apply, suggestionId: accepted.id,
                 application: .savedField(.init(kind: .savedField, recordId: recordId))))
         guard receipt.applied else { throw ReviewError.unexpectedAcceptance }
-        if acceptedAssessments[key]?.id == accepted.id, acceptedAssessments[key]?.value == accepted.value {
-            acceptedAssessments.removeValue(forKey: key)
+        if acceptedSuggestions[key]?.id == accepted.id, acceptedSuggestions[key]?.value == accepted.value {
+            acceptedSuggestions.removeValue(forKey: key)
         }
     }
 
-    private func recordDraftAcceptance(assessmentId: String?) async throws {
-        guard let assessmentId else { throw ReviewError.missingAssessment }
-        _ = try await reviewAssessment(
+    private func recordDraftAcceptance(suggestionId: String?) async throws {
+        guard let suggestionId else { throw ReviewError.missingSuggestion }
+        _ = try await reviewSuggestion(
             .init(
                 operationId: UUID().uuidString, verdict: .correct,
                 correction: .value1(.init(present: .falseValue)),
-                intent: .draft, assessmentId: assessmentId))
+                intent: .draft, suggestionId: suggestionId))
     }
 
     public func invalidate() {
@@ -269,11 +269,11 @@ public final class FieldSuggestionReviewModel {
 
     private enum ReviewError: LocalizedError {
         case unexpectedAcceptance
-        case missingAssessment
+        case missingSuggestion
         var errorDescription: String? {
             switch self {
             case .unexpectedAcceptance: "The saved response does not match the reviewed suggestion."
-            case .missingAssessment: "The field suggestion is missing its assessment."
+            case .missingSuggestion: "The field suggestion is missing its suggestion."
             }
         }
     }

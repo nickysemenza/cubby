@@ -1,4 +1,4 @@
-import { assessmentCorrection } from "@cubby/schemas/assessment";
+import { suggestionCorrection } from "@cubby/schemas/suggestion";
 import type { MailboxClassification } from "@cubby/schemas/mailbox-research";
 import { and, eq } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
@@ -29,7 +29,7 @@ type Input = Pick<
 > & {
   /** A carried command keeps its Feedback id as this row's id. */
   id?: string;
-  correction?: z.infer<typeof assessmentCorrection>;
+  correction?: z.infer<typeof suggestionCorrection>;
   classification?: MailboxClassification | null;
   reason?: string | null;
   evidence?: unknown;
@@ -72,7 +72,7 @@ export async function appendEmailReviewWithInsertion(
 ): Promise<{ event: Row; inserted: boolean }> {
   const values = {
     ...input,
-    correction: assessmentCorrection.parse(
+    correction: suggestionCorrection.parse(
       input.correction ?? { present: false },
     ),
     classification: input.classification ?? null,

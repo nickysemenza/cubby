@@ -1,4 +1,4 @@
-import { mailImportOutcome } from "@cubby/schemas/assessment";
+import { mailImportOutcome } from "@cubby/schemas/suggestion";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { importRunAgentManifest } from "@cubby/schemas/import-run-agent";
 import { mailAttributionHeaders } from "@cubby/schemas/mailbox-research";

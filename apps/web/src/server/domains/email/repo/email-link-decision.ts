@@ -1,4 +1,4 @@
-import type { AssessmentProducer } from "@cubby/schemas/assessment";
+import type { SuggestionProducer } from "@cubby/schemas/suggestion";
 import type { EmailLinkProposer } from "@cubby/schemas/email-fields";
 import { parseEntityId, type PurchaseId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
@@ -88,7 +88,7 @@ export async function publishEmailLinkDecision(
         reviewed.evidenceChecksum !== input.evidenceChecksum
       )
         throw new Error(
-          "Assessment evidence is stale; request a fresh assessment before applying",
+          "Suggestion evidence is stale; request a fresh suggestion before applying",
         );
     }
     const previous = current.find((row) => row.purchaseId === input.purchaseId);
@@ -101,7 +101,7 @@ export async function publishEmailLinkDecision(
       previous.authority === authority
     )
       return previous;
-    const producer: AssessmentProducer | null =
+    const producer: SuggestionProducer | null =
       input.proposedBy && input.proposedBy !== "member"
         ? {
             kind: input.proposedBy === "heuristic" ? "rule" : "agent",

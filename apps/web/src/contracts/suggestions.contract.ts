@@ -21,7 +21,7 @@ import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
-/** Pending Suggestions of every family; review goes through `assessment.review(Batch)`. */
+/** Pending Suggestions of every family; review goes through `suggestion.review(Batch)`. */
 export const suggestionsContract = defineContract(
   "suggestions",
   {

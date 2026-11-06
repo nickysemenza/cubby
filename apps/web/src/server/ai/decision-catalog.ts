@@ -45,7 +45,7 @@ import {
   EXTERNAL_ID_KIND_RULES,
 } from "~/server/ai/vocabularies";
 import type { Database } from "~/server/db";
-import { suggestionCountsByFamily } from "~/server/generic/assessment/repo/suggestion-list";
+import { suggestionCountsByFamily } from "~/server/generic/suggestions/repo/suggestion-list";
 
 import { productIdentityPrompt } from "./product-identity";
 

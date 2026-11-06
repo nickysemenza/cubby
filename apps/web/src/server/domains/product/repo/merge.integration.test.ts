@@ -36,7 +36,7 @@ import {
 } from "~/server/domains/product/repo/product-components";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   createPlantFixture,
@@ -511,8 +511,8 @@ describe("mergeProducts", () => {
         evidence: "Synthetic preference",
         sourceUrls: [],
       });
-      await reviewAssessment(ctx.db, kernelCtx(ctx), {
-        assessmentId: preference.id,
+      await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+        suggestionId: preference.id,
         operationId: crypto.randomUUID(),
         verdict: "dismissed",
         suppression: {

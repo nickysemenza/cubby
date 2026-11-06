@@ -180,7 +180,7 @@ describe("connection discovery pacing", () => {
               entity: "task" as const,
               recordId: crypto.randomUUID(),
               field: null,
-              assessmentIds: [],
+              suggestionIds: [],
             },
             provenance: {
               dependencies: [],

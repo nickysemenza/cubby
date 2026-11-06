@@ -1,4 +1,4 @@
-import type { AssessmentFamily } from "@cubby/schemas/assessment";
+import type { SuggestionFamily } from "@cubby/schemas/suggestion";
 import {
   type TransferPairBlocker,
   type TransferPairJudgment,
@@ -44,7 +44,7 @@ type DecisionColumn = {
 };
 
 /**
- * How one Assessment family reads in the ledger and evidence drawer. Every
+ * How one Suggestion family reads in the ledger and evidence drawer. Every
  * family gets the generic presenter; a family with a stored judgment schema
  * adds its own columns and evidence.
  */
@@ -110,7 +110,7 @@ const STATUS_FACETS = {
     label: DECISION_STATUS_LABEL.resolved,
     tone: "neutral",
     description:
-      "Review is complete; no pending action remains on this assessment.",
+      "Review is complete; no pending action remains on this suggestion.",
   },
 } as const satisfies Record<RunDecision["status"], DecisionFacetDef>;
 
@@ -119,7 +119,7 @@ const NOT_CURRENT: DecisionFacetDef = {
   label: "No longer current",
   tone: "neutral",
   description:
-    "This assessment is no longer current. Review the latest recommendation instead; this one cannot be applied.",
+    "This suggestion is no longer current. Review the latest recommendation instead; this one cannot be applied.",
 };
 
 const statusFacet = (row: RunDecision) =>
@@ -134,7 +134,7 @@ function Attribution({ row }: { row: RunDecision }) {
   return (
     <SidePanelSection title="Attribution">
       <dl className="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-2.5 gap-y-1 text-xs">
-        <dt className="text-muted-foreground">Assessment</dt>
+        <dt className="text-muted-foreground">Suggestion</dt>
         <dd className="font-mono break-all">{row.id}</dd>
         <dt className="text-muted-foreground">Producer</dt>
         <dd>
@@ -178,8 +178,8 @@ const summaryOf = (judgment: unknown): string => {
   );
 };
 
-const genericPresenter = (family: AssessmentFamily): DecisionPresenter => ({
-  noun: `${humanizeKey(family).toLowerCase()} Assessments`,
+const genericPresenter = (family: SuggestionFamily): DecisionPresenter => ({
+  noun: `${humanizeKey(family).toLowerCase()} Suggestions`,
   facets: [...Object.values(STATUS_FACETS), NOT_CURRENT],
   facetOf: statusFacet,
   explanation: (row) => statusFacet(row).description,
@@ -681,5 +681,5 @@ const transferPairPresenter: DecisionPresenter = {
 };
 
 /** The family's presenter: its own when it declares one, the generic otherwise. */
-export const presenterFor = (family: AssessmentFamily): DecisionPresenter =>
+export const presenterFor = (family: SuggestionFamily): DecisionPresenter =>
   family === "transfer_pair" ? transferPairPresenter : genericPresenter(family);

@@ -8,7 +8,7 @@ import {
   sha256CanonicalJson,
 } from "./canonical-json";
 
-// Fingerprints already stored in Assessments must retain identical bytes when
+// Fingerprints already stored in Suggestions must retain identical bytes when
 // JSON serialization stops revalidating and cloning each nested subtree.
 describe("canonical JSON fingerprint bytes", () => {
   it("sorts nested object keys while preserving arrays, nulls and scalar encoding", () => {

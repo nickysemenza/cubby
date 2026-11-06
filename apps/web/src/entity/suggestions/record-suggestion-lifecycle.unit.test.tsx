@@ -79,7 +79,7 @@ const baseRecord = {
   categoryId: null,
 };
 const proposal = {
-  assessmentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  suggestionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   value: categoryId,
   label: "Synthetic food",
   detail: null,
@@ -92,8 +92,8 @@ const proposal = {
 };
 const stored: StoredSuggestionOperations = {
   list: async () => ({ items: [] }),
-  review: async ({ assessmentId, intent }) => ({
-    assessmentId,
+  review: async ({ suggestionId, intent }) => ({
+    suggestionId,
     feedbackId: "55555555-5555-4555-8555-555555555555",
     status: "recorded",
     applied: intent === "apply",

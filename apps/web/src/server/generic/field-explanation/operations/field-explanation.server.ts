@@ -74,7 +74,7 @@ import { withFieldExplanationSnapshot } from "~/server/generic/field-explanation
 import { inheritedResetPreview } from "~/server/generic/field-explanation/repo/inherited-reset-preview";
 import { specialistResetPreview } from "~/server/generic/field-explanation/service/specialist-reset-preview";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { loadFieldResolutionEvidence } from "~/server/generic/suggestions/repo/field-resolution-evidence";
+import { loadFieldResolutionEvidence } from "~/server/generic/field-explanation/repo/field-resolution-evidence";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { derivedComputes } from "~/server/workflows/derived-computes";
 

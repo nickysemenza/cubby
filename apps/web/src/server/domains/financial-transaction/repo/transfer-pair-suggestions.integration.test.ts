@@ -1,5 +1,5 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { assessmentFamily } from "@cubby/schemas/assessment";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import type { FinancialAccountIdentity } from "@cubby/schemas/financial-account-fields";
 import {
   parseShortcodeFor,
@@ -52,8 +52,8 @@ import { recordSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { previewStatementSuggestion } from "~/server/domains/transaction-import/repo/statement-suggestion-preview";
 import { readStatementSuggestions } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import {
@@ -292,16 +292,16 @@ describe("transfer-pair suggestions", () => {
   /** Pending, active publications with their labelled judgments. */
   const pending = async () => {
     const { rows } = await unwrapDb(ctx.db).execute<{
-      assessmentId: string;
+      suggestionId: string;
       judgment: unknown;
       fingerprint: string;
     }>(sql`
-      SELECT s.id AS "assessmentId", s.judgment, s.fingerprint FROM "Suggestion" s
-      WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.active
+      SELECT s.id AS "suggestionId", s.judgment, s.fingerprint FROM "Suggestion" s
+      WHERE s.family = ${suggestionFamily.enum.transfer_pair} AND s.active
         AND s.status = ${suggestionStatus.enum.pending}
     `);
     return rows.map((row) => ({
-      assessmentId: row.assessmentId,
+      suggestionId: row.suggestionId,
       judgment: transferPairJudgment.parse(row.judgment),
       fingerprint: String(row.fingerprint),
     }));
@@ -700,7 +700,7 @@ describe("transfer-pair suggestions", () => {
     await unwrapDb(ctx.db).execute(sql`
       CREATE FUNCTION synthetic_transfer_publication_failure() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN
-        IF NEW.family = '${sql.raw(assessmentFamily.enum.transfer_pair)}' AND (NEW.data->>'amount')::numeric = 80 THEN
+        IF NEW.family = '${sql.raw(suggestionFamily.enum.transfer_pair)}' AND (NEW.data->>'amount')::numeric = 80 THEN
           RAISE EXCEPTION 'synthetic independent transfer publication failure';
         END IF;
         RETURN NEW;
@@ -821,7 +821,7 @@ describe("transfer-pair suggestions", () => {
     await unwrapDb(ctx.db).execute(sql`
       CREATE FUNCTION synthetic_transfer_refresh_failure() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN
-        IF NEW.family = '${sql.raw(assessmentFamily.enum.statement_transaction)}' THEN
+        IF NEW.family = '${sql.raw(suggestionFamily.enum.statement_transaction)}' THEN
           RAISE EXCEPTION 'synthetic dependent statement publication failure';
         END IF;
         RETURN NEW;
@@ -1707,7 +1707,7 @@ describe("transfer-pair suggestions", () => {
       action: "create",
     });
     const command = {
-      assessmentId: suggestion.assessmentId,
+      suggestionId: suggestion.suggestionId,
       expectedFingerprint: suggestion.fingerprint,
       operationId: "synthetic-guarded-transfer-a",
       verdict: "correct" as const,
@@ -1716,7 +1716,7 @@ describe("transfer-pair suggestions", () => {
     };
     {
       await previewStatementSuggestion(ctx.db, {
-        assessmentId: suggestion.assessmentId,
+        suggestionId: suggestion.suggestionId,
         expectedFingerprint: suggestion.fingerprint,
         application,
       });
@@ -1728,14 +1728,14 @@ describe("transfer-pair suggestions", () => {
       .from(sourceObservationFrom)
       .orderBy(sourceTransactionRecord.id);
     await expect(
-      reviewAssessment(ctx.db, kernelCtx(ctx), command),
+      reviewSuggestion(ctx.db, kernelCtx(ctx), command),
     ).rejects.toThrow(
       /provider identity|evidence changed|candidate|occurrence/i,
     );
     expect(suggestion.clean).toBe(true);
     await expect(
       previewStatementSuggestion(ctx.db, {
-        assessmentId: suggestion.assessmentId,
+        suggestionId: suggestion.suggestionId,
         expectedFingerprint: suggestion.fingerprint,
         application,
       }),
@@ -1829,8 +1829,8 @@ describe("transfer-pair suggestions", () => {
       .items;
     const results = await Promise.allSettled(
       rows.map((row) =>
-        reviewAssessment(ctx.db, kernelCtx(ctx), {
-          assessmentId: row.assessmentId,
+        reviewSuggestion(ctx.db, kernelCtx(ctx), {
+          suggestionId: row.suggestionId,
           operationId: crypto.randomUUID(),
           expectedFingerprint: row.fingerprint!,
           verdict: "correct",

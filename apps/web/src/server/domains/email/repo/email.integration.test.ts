@@ -3,7 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import {
   seedEmailClassificationFeedback,
   seedEmailLinkDecision,
-} from "tooling/shared-assessment-fixtures";
+} from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 

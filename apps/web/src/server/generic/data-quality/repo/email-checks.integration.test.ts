@@ -2,7 +2,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { workQueueInput } from "@cubby/schemas/work-queue";
 import { eq, sql } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
-import { seedEmailClassificationFeedback } from "tooling/shared-assessment-fixtures";
+import { seedEmailClassificationFeedback } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";

@@ -32,7 +32,7 @@ import {
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
-import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
+import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import {
   type DerivedAdapter,
   derivedSink,
@@ -152,7 +152,7 @@ describe("deterministic cache rebuild", () => {
       .from(product)
       .limit(1);
     if (!subject) throw new Error("Synthetic Product was not created");
-    await publishFieldAssessment(
+    await publishFieldSuggestion(
       ctx.db,
       {
         entity: "product",

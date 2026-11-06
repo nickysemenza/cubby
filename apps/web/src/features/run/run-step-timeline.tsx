@@ -59,7 +59,7 @@ export type BreakdownGroup = {
 
 /**
  * "Where the inputs went": upstream reason counts stored on the step, then
- * per-candidate outcomes from its published Assessments. Shares are of the
+ * per-candidate outcomes from its published Suggestions. Shares are of the
  * group's first row.
  */
 export function ReasonBreakdown({

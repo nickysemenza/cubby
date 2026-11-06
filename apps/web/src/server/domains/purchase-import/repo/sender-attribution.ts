@@ -12,7 +12,7 @@ import { notDeleted, unwrapDb, isTransaction } from "~/server/db/helpers";
 import { databaseForTransaction } from "~/server/db/helpers";
 import { vendor } from "~/server/db/retained-tables";
 import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
-import { lockCorrectionKey } from "~/server/generic/assessment/repo/correction-lock";
+import { lockCorrectionKey } from "~/server/generic/suggestions/repo/correction-lock";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 type Db = Database | DrizzleTransaction;

@@ -109,7 +109,7 @@ import {
 } from "~/server/domains/photo-import/repo/run/product-suggestions";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { currentMemberLedgerParty } from "~/server/http/member-login";
@@ -1034,11 +1034,11 @@ async function recordPhotoBrandRejection(
           ![...rejectedVendors].some((id) => id === suggestion.value)
         )
           continue;
-        await reviewAssessment(
+        await reviewSuggestion(
           txDb,
           { ...crud, actorContext: actor },
           {
-            assessmentId: suggestion.id,
+            suggestionId: suggestion.id,
             operationId: `photo-brand-rejection:${run.id}:${entry.group.groupKey}:${suggestion.id}`,
             verdict: "wrong",
             intent: "history",

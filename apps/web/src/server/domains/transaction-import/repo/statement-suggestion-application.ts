@@ -1,4 +1,4 @@
-import { assessmentSubjects } from "@cubby/schemas/assessment";
+import { suggestionSubjects } from "@cubby/schemas/suggestion";
 import type { FinancialTransactionUpdateData } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -18,7 +18,7 @@ import {
   statementSuggestionSourceHeld,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { createAppError } from "~/server/errors/app-error";
-import type { SuggestionStateRow } from "~/server/generic/assessment/repo/assessment-state";
+import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";
 
 import {
   buildChargeProposals,
@@ -59,7 +59,7 @@ export async function loadStatementApplication(
   if (published.reviewReason)
     throw refuseStatementApplication(published.reviewReason);
   return {
-    subject: assessmentSubjects.statement_transaction.parse(
+    subject: suggestionSubjects.statement_transaction.parse(
       prediction?.subject,
     ),
     published,

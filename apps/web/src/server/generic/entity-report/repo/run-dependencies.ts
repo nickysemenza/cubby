@@ -24,7 +24,7 @@ import { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
 import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import { identityShortcodes } from "~/server/entity-kernel/repo/entity-identity";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
-import { suggestionCountsByFamily } from "~/server/generic/assessment/repo/suggestion-list";
+import { suggestionCountsByFamily } from "~/server/generic/suggestions/repo/suggestion-list";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
 import { runResultsBlocks } from "~/server/generic/entity-report/repo/run-results";
 import { listRunJobs } from "~/server/generic/jobs/repo/job-diagnostics";

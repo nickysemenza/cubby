@@ -1,7 +1,7 @@
 import {
   mailImportOutcome,
-  type AssessmentProducer,
-} from "@cubby/schemas/assessment";
+  type SuggestionProducer,
+} from "@cubby/schemas/suggestion";
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
   mailOutcomeSnapshot,
@@ -74,7 +74,7 @@ export async function mailOutcomeSnapshotFor(input: {
   ruleRevision?: string;
   createdAt: Date;
 }): Promise<MailOutcomeSnapshot> {
-  const producer: AssessmentProducer = {
+  const producer: SuggestionProducer = {
     kind: input.ruleRevision ? "rule" : "agent",
     model: null,
     revision: input.ruleRevision ?? null,

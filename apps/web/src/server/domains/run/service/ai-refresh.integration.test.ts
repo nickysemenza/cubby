@@ -4,7 +4,7 @@ import {
   aiProvenance,
   suggestionAcceptanceReceipt,
 } from "@cubby/schemas/ai-evaluation";
-import { assessmentFamily } from "@cubby/schemas/assessment";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -46,7 +46,7 @@ import {
   appSettings,
 } from "~/server/db/schema";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
-import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
+import { inferFieldSuggestions } from "~/server/domains/run/operations/ai.server";
 import { writeRunningAttemptProgress as writeRunningAttemptProgressImplementation } from "~/server/domains/run/repo/ai-work-state";
 import {
   resumeAutomaticAi,
@@ -60,12 +60,12 @@ import {
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import {
   acceptSuggestion,
   canAutomaticallyFillField,
-} from "~/server/generic/assessment/repo/suggestion-review";
+} from "~/server/generic/suggestions/repo/suggestion-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   drainDerivedRefreshFrontier,
@@ -334,13 +334,13 @@ describe("targeted prompt refresh", () => {
       targets: ["categoryId"],
       basis: { name: "Synthetic client-only draft", categoryId: null },
     };
-    await inferFieldAssessments(kernelCtx(ctx), draft, ports.suggestPorts);
-    await inferFieldAssessments(
+    await inferFieldSuggestions(kernelCtx(ctx), draft, ports.suggestPorts);
+    await inferFieldSuggestions(
       kernelCtx(ctx),
       { ...draft, entityId: item.id, basisMode: "provided", savedRecord: true },
       ports.suggestPorts,
     );
-    await inferFieldAssessments(
+    await inferFieldSuggestions(
       kernelCtx(ctx),
       { ...draft, entityId: item.id },
       ports.suggestPorts,
@@ -348,7 +348,7 @@ describe("targeted prompt refresh", () => {
     expect(
       await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget),
     ).toEqual([]);
-    await inferFieldAssessments(
+    await inferFieldSuggestions(
       kernelCtx(ctx),
       { ...draft, entityId: item.id, savedRecord: true },
       ports.suggestPorts,
@@ -368,7 +368,7 @@ describe("targeted prompt refresh", () => {
     expect(await productCategoryId(ctx.db, item.id)).toBeNull();
     await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
     expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
-    await inferFieldAssessments(
+    await inferFieldSuggestions(
       kernelCtx(ctx),
       { ...draft, entityId: item.id, savedRecord: true },
       ports.suggestPorts,
@@ -396,7 +396,7 @@ describe("targeted prompt refresh", () => {
         manifest,
       });
       if (state === "capacity") await fillAutomaticBacklog(ctx.db);
-      const output = await inferFieldAssessments(
+      const output = await inferFieldSuggestions(
         kernelCtx(ctx),
         {
           entity: "product",
@@ -624,8 +624,8 @@ describe("targeted prompt refresh", () => {
       .from(suggestion)
       .where(eq(suggestion.status, "pending"));
     expect(pending).toBeDefined();
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: pending!.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: pending!.id,
       operationId: crypto.randomUUID(),
       verdict: "wrong",
       intent: "history",
@@ -750,8 +750,8 @@ describe("targeted prompt refresh", () => {
         state === "corrected" ? "pending" : "applied",
       );
       if (state === "corrected") {
-        await reviewAssessment(ctx.db, kernelCtx(ctx), {
-          assessmentId: initial!.id,
+        await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+          suggestionId: initial!.id,
           operationId: crypto.randomUUID(),
           verdict: "wrong",
           correction: { present: true, value: taxonomyShortcode("tools") },
@@ -998,8 +998,8 @@ describe("targeted prompt refresh", () => {
       .from(suggestion)
       .where(eq(suggestion.status, "pending"));
     expect(pending).toBeDefined();
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: pending!.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: pending!.id,
       operationId: crypto.randomUUID(),
       verdict: "wrong",
       intent: "history",
@@ -1079,8 +1079,8 @@ describe("targeted prompt refresh", () => {
     await expect(
       withTransactionDatabase(ctx.db, async (transactionDb) => {
         const context = kernelCtx({ ...ctx, db: transactionDb });
-        await reviewAssessment(transactionDb, context, {
-          assessmentId: pending!.id,
+        await reviewSuggestion(transactionDb, context, {
+          suggestionId: pending!.id,
           operationId: crypto.randomUUID(),
           verdict: "wrong",
           correction: { present: true, value: taxonomyShortcode("tools") },
@@ -1382,7 +1382,7 @@ describe("targeted prompt refresh", () => {
       await getDb(ctx.db)
         .select({ id: suggestion.id })
         .from(suggestion)
-        .where(eq(suggestion.family, assessmentFamily.enum.product_pair)),
+        .where(eq(suggestion.family, suggestionFamily.enum.product_pair)),
     ).toHaveLength(0);
   });
 
@@ -1640,7 +1640,7 @@ describe("targeted prompt refresh", () => {
             entity: "email",
             recordId: crypto.randomUUID(),
             field: null,
-            assessmentIds: [],
+            suggestionIds: [],
           }),
           provenance: aiProvenance.parse({
             dependencies: [],
@@ -1736,8 +1736,8 @@ describe("targeted prompt refresh", () => {
       { context: kernelCtx(ctx), ...categoryPorts(0.6) },
     );
     const [original] = await getDb(ctx.db).select().from(suggestion);
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: original!.id,
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: original!.id,
       operationId: crypto.randomUUID(),
       verdict: "wrong",
       intent: "history",

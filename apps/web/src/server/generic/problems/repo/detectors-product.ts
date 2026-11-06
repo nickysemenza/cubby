@@ -338,7 +338,7 @@ export const findDuplicateProductIdentities = async (
     if (!first || members.length < 2) return [];
     return [
       {
-        assessmentId: first.id,
+        suggestionId: first.id,
         fingerprint: first.fingerprint,
         identityConflict: group.some((row) => row.conflict),
         brandName: headers.get(first.productAId)?.brandName ?? "",
@@ -355,7 +355,7 @@ export const findDuplicateProductIdentities = async (
           return a && b
             ? [
                 {
-                  assessmentId: row.id,
+                  suggestionId: row.id,
                   fingerprint: row.fingerprint,
                   identityConflict: row.conflict,
                   productIds: z

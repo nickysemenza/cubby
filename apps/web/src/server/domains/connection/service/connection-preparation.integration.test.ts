@@ -30,7 +30,7 @@ import {
   type ConnectionFieldGuardTargets,
 } from "~/server/domains/connection/repo/field-connections";
 import { publishProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
-import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
+import { inferFieldSuggestions } from "~/server/domains/run/operations/ai.server";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
 import type { AiEvaluationPorts } from "~/server/domains/run/service/ai-evaluation-execution";
 import {
@@ -40,7 +40,7 @@ import {
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import * as selectedRead from "~/server/entity-kernel/selected-read";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
@@ -284,7 +284,7 @@ describe("connection preparation and publication authority", () => {
           .from(aiEvaluation)
           .where(eq(aiEvaluation.id, id))
       )[0];
-    const fieldAssessments = (recordId: typeof task.entityId) =>
+    const fieldSuggestions = (recordId: typeof task.entityId) =>
       getDb(ctx.db)
         .select({ id: suggestionTable.id })
         .from(suggestionTable)
@@ -327,7 +327,7 @@ describe("connection preparation and publication authority", () => {
     // its answer again. The unavailable target stays owed with its own attempt.
     expect((await settled(siblingId))?.state).toBe("completed");
     expect(await aiEvaluationItem(ctx.db, siblingId)).toBeUndefined();
-    expect(await fieldAssessments(siblingTask.entityId)).not.toEqual([]);
+    expect(await fieldSuggestions(siblingTask.entityId)).not.toEqual([]);
     expect((await settled(unavailableId))?.state).toBe("queued");
     expect(await aiEvaluationItem(ctx.db, unavailableId)).toMatchObject({
       attempts: 1,
@@ -335,7 +335,7 @@ describe("connection preparation and publication authority", () => {
         "Suggestion target field result is unavailable",
       ),
     });
-    expect(await fieldAssessments(task.entityId)).toEqual([]);
+    expect(await fieldSuggestions(task.entityId)).toEqual([]);
 
     await drainAiEvaluations(ctx.db, [unavailableId], ports, { pages: 2 });
     expect(await settled(unavailableId)).toMatchObject({
@@ -345,11 +345,11 @@ describe("connection preparation and publication authority", () => {
       ),
     });
     expect(await aiEvaluationItem(ctx.db, unavailableId)).toBeUndefined();
-    expect(await fieldAssessments(task.entityId)).toEqual([]);
+    expect(await fieldSuggestions(task.entityId)).toEqual([]);
   });
 
   for (const change of ["cancel", "obsolete"] as const)
-    it(`publishes no actionable Assessment when an in-flight attempt becomes ${change}`, async () => {
+    it(`publishes no actionable Suggestion when an in-flight attempt becomes ${change}`, async () => {
       const { source, task } = await fixture();
       const activation = await activateAiRefresh(
         ctx.db,
@@ -797,7 +797,7 @@ describe("connection preparation and publication authority", () => {
       decisionModel: PRIMARY_MODEL,
       decisionPort: chooseFirst,
     };
-    const inline = await inferFieldAssessments(
+    const inline = await inferFieldSuggestions(
       context,
       {
         entity: "task",
@@ -809,10 +809,10 @@ describe("connection preparation and publication authority", () => {
       },
       suggestPorts,
     );
-    const id = inline.suggestions.subjectProductId?.assessmentId;
-    if (!id) throw new Error("Synthetic inline field Assessment is missing");
-    await reviewAssessment(ctx.db, context, {
-      assessmentId: id,
+    const id = inline.suggestions.subjectProductId?.suggestionId;
+    if (!id) throw new Error("Synthetic inline field Suggestion is missing");
+    await reviewSuggestion(ctx.db, context, {
+      suggestionId: id,
       operationId: "synthetic-inline-wrong",
       verdict: "wrong",
       intent: "history",

@@ -1,4 +1,4 @@
-import type { AssessmentFamily } from "@cubby/schemas/assessment";
+import type { SuggestionFamily } from "@cubby/schemas/suggestion";
 import { sweepRunInput } from "@cubby/schemas/run-fields";
 import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -60,13 +60,13 @@ export async function readRunDetailSteps(
 }
 
 /**
- * The Assessments a Run published in one family, newest first: every
+ * The Suggestions a Run published in one family, newest first: every
  * candidate, blocked ones included, with its stored judgment and status.
  */
 export async function readRunDecisions(
   db: Database,
   code: string,
-  family: AssessmentFamily,
+  family: SuggestionFamily,
 ): Promise<RunDecisionsOut> {
   const runId = await resolveOrThrow(db, "run", code);
   const scope = and(

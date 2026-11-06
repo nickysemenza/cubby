@@ -694,12 +694,12 @@ describe("MCP catalog schemas", () => {
       "nutrition.save_food.id",
       "nutrition.save_preparation.mealRecipeId",
       "nutrition.update_recipe.id",
-      // Photo review carries shared Assessment child handles for provenance.
+      // Photo review carries shared Suggestion child handles for provenance.
       "photo_run.commit_group.review.fieldSuggestions[].id",
       "photo_run.propose_groups.groups[].review.fieldSuggestions[].id",
       "photo_run.save_groups.groups[].review.fieldSuggestions[].id",
       "photo_run.reject_candidate.operationId",
-      "product_enrichment.merge_product_match.assessmentId",
+      "product_enrichment.merge_product_match.suggestionId",
       "purchase_import.commit.prepareOperationId",
       "purchase_import.commit.resolutions[].stableOrderId",
       "purchase_import.commit.resolutions[].stableLineId",
@@ -740,11 +740,11 @@ describe("MCP catalog schemas", () => {
       "suggestions_read.automatic_decisions.recordIds",
       "suggestions_read.list.recordIds",
       "suggestions.review.operationId",
-      // Preview consumes the same opaque Assessment review handle as acceptance.
-      "finance_read.preview_suggestion.assessmentId",
-      "suggestions.review.assessmentId",
+      // Preview consumes the same opaque Suggestion review handle as acceptance.
+      "finance_read.preview_suggestion.suggestionId",
+      "suggestions.review.suggestionId",
       "suggestions.review_batch.items[].operationId",
-      "suggestions.review_batch.items[].assessmentId",
+      "suggestions.review_batch.items[].suggestionId",
     ]);
     const freeTextIds = new Set([
       "orderId",

@@ -1,0 +1,76 @@
+import {
+  suggestionReviewInput,
+  suggestionReviewOut,
+  suggestionReviewBatchInput,
+  suggestionReviewBatchOut,
+} from "@cubby/schemas/suggestion";
+
+import { defineContract, mutation } from "~/contracts/define";
+
+export const suggestionContract = defineContract(
+  "suggestion",
+  {
+    review: mutation({
+      description:
+        "Review immutable evidence as correct, wrong, uncertain or a presentation dismissal. Draft review does not apply; saved application is revalidated.",
+      input: suggestionReviewInput,
+      output: suggestionReviewOut,
+      invalidates: [
+        "product",
+        "expense",
+        "purchase",
+        "vendor",
+        "email",
+        "image",
+        "recommendations",
+        "settledSuggestions",
+        "suggestions",
+        "connections",
+        "task",
+        "project",
+        "inventory",
+        "location",
+        "meal",
+        "planting",
+        "gardenEntry",
+        "productCategory",
+        "spendingCategory",
+        "cookbook",
+        "sourceTransactionRecord",
+        "financialTransaction",
+      ],
+    }),
+    reviewBatch: mutation({
+      description:
+        "Review Suggestions independently; each item returns its own outcome.",
+      command: { label: "Review suggestions", confirmation: null },
+      input: suggestionReviewBatchInput,
+      output: suggestionReviewBatchOut,
+      invalidates: [
+        "product",
+        "expense",
+        "purchase",
+        "vendor",
+        "email",
+        "image",
+        "recommendations",
+        "settledSuggestions",
+        "suggestions",
+        "connections",
+        "task",
+        "project",
+        "inventory",
+        "location",
+        "meal",
+        "planting",
+        "gardenEntry",
+        "productCategory",
+        "spendingCategory",
+        "cookbook",
+        "sourceTransactionRecord",
+        "financialTransaction",
+      ],
+    }),
+  },
+  { exposure: "capability", mcpToolGroup: "suggestions" },
+);

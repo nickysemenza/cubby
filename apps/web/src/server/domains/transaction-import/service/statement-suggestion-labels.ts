@@ -1,4 +1,4 @@
-import { assessmentSubjects } from "@cubby/schemas/assessment";
+import { suggestionSubjects } from "@cubby/schemas/suggestion";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
@@ -74,11 +74,11 @@ import {
   repairStatementApplicationReceipts,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
-import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { applyAutomaticRulesForCharge } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
 import {
   importOnlyStatementRuleStamps,
   matchStatementRules,
-} from "~/server/generic/assessment/repo/automatic-rules";
+} from "~/server/generic/suggestions/repo/automatic-rules";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import type { PageWork } from "~/server/generic/jobs/page-work";
 import { canonicalJson } from "~/server/lib/canonical-json";
@@ -489,11 +489,11 @@ async function completeNoActionTargets(
     // The ordered application loop already treats these charges as settled.
     // They need no receipt lock and must not split the remaining ready prefix.
     if (input.skipped.has(key)) continue;
-    const assessmentId = input.receipts.get(key);
+    const suggestionId = input.receipts.get(key);
     const evidenceFingerprint = input.published.get(key);
     if (
       input.failedCharges.has(key) ||
-      !assessmentId ||
+      !suggestionId ||
       !evidenceFingerprint ||
       // A nonempty hint only declines batching. Absence still needs locked proof.
       matchStatementRules(next.row.judgment).some(
@@ -501,7 +501,7 @@ async function completeNoActionTargets(
       )
     )
       break;
-    window.push({ assessmentId, charge: next.charge, evidenceFingerprint });
+    window.push({ suggestionId, charge: next.charge, evidenceFingerprint });
     positions.push(index);
   }
   const settled = await completeNoActionStatementPrefix(
@@ -810,7 +810,7 @@ async function runStatementLabelBatch(
   };
   let waitingUntil: number | null = null;
   let targets = page.flatMap((row) => {
-    const subject = assessmentSubjects.statement_transaction.safeParse(
+    const subject = suggestionSubjects.statement_transaction.safeParse(
       row.subject,
     );
     if (!subject.success) {
@@ -830,7 +830,7 @@ async function runStatementLabelBatch(
     await repairStatementApplicationReceipts(
       db,
       pendingReceipts.map((target) => ({
-        assessmentId: target.row.id,
+        suggestionId: target.row.id,
         charge: target.charge,
       })),
     );
@@ -1209,8 +1209,8 @@ async function runStatementLabelBatch(
         }
         if (outcome.origin === "published") labelled.add(key);
         published.set(key, outcome.receipt.evidenceFingerprint);
-        receipts.set(key, outcome.receipt.assessmentId);
-        target.row.id = outcome.receipt.assessmentId;
+        receipts.set(key, outcome.receipt.suggestionId);
+        target.row.id = outcome.receipt.suggestionId;
         target.row.judgment = item.input.proposal.judgment;
         target.row.applicationPending = true;
       } catch (error) {

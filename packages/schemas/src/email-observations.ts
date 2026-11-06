@@ -1,7 +1,7 @@
 import { entityIdSchema } from "./identifier-fields";
 import { aiProvenance, capturedFieldInput } from "./ai-evaluation";
 import { z } from "zod";
-import { assessmentChildHandle } from "./assessment-reference";
+import { suggestionChildHandle } from "./suggestion-reference";
 import { emailId, ledgerPartyId } from "./identifier-fields.js";
 import {
   mailboxClassification,
@@ -72,7 +72,7 @@ export const emailProtectingIntentFrontier = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("captured"),
     emailId,
-    feedbackIds: z.array(assessmentChildHandle),
+    feedbackIds: z.array(suggestionChildHandle),
   }),
   z.object({
     status: z.literal("held"),
@@ -82,7 +82,7 @@ export const emailProtectingIntentFrontier = z.discriminatedUnion("status", [
 ]);
 export const emailReviewFrontierReceipt = z.object({
   version: z.literal("email-review-frontier-v1"),
-  commandFeedbackId: assessmentChildHandle,
+  commandFeedbackId: suggestionChildHandle,
   frontier: emailProtectingIntentFrontier,
 });
 export type EmailProtectingIntentFrontier = z.infer<

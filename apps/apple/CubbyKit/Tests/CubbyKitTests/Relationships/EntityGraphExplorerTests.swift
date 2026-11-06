@@ -126,7 +126,7 @@ private actor GraphExplorerClient: EntityRelationshipsClient {
     func discoverConnections(_ input: EntityGraphRootInput) throws -> ConnectionDiscoveryOut {
         throw URLError(.unsupportedURL)
     }
-    func reviewAssessment(_ input: AssessmentReviewInput) throws -> AssessmentReviewOut {
+    func reviewSuggestion(_ input: SuggestionReviewInput) throws -> SuggestionReviewOut {
         throw URLError(.unsupportedURL)
     }
 

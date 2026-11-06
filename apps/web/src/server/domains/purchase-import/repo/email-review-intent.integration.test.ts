@@ -12,10 +12,10 @@ import { emailReview, ledgerParty } from "~/server/db/schema";
 import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import {
-  publishAssessment,
+  publishSuggestion,
   recordFeedback,
-} from "~/server/generic/assessment/repo/assessment";
-import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+} from "~/server/generic/suggestions/repo/suggestion";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { withEmailEvidenceWrite } from "./email-evidence-write-scope";
@@ -52,7 +52,7 @@ describe("command-bound Email intent frontier", () => {
       });
     const prediction = await publish(mail.checksum ?? "synthetic-current");
     const input = {
-      assessmentId: prediction.id,
+      suggestionId: prediction.id,
       operationId: crypto.randomUUID(),
       verdict: "wrong",
       intent: "history",
@@ -103,7 +103,7 @@ describe("command-bound Email intent frontier", () => {
     const f = await fixture();
     await withTransactionDatabase(ctx.db, async (db) => {
       await expect(
-        reviewAssessment(db, kernelCtx(ctx), f.input),
+        reviewSuggestion(db, kernelCtx(ctx), f.input),
       ).rejects.toThrow("root Database");
     });
     expect(await getDb(ctx.db).select().from(emailReview)).toEqual([]);
@@ -115,7 +115,7 @@ describe("command-bound Email intent frontier", () => {
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const first = withEmailEvidenceWrite(ctx.db, async (db, scope) => {
-      const result = await reviewAssessment(
+      const result = await reviewSuggestion(
         db,
         kernelCtx(ctx),
         f.input,
@@ -136,9 +136,9 @@ describe("command-bound Email intent frontier", () => {
         ).rows[0]?.pid;
       if (!pid) throw new Error("Synthetic review connection missing PID");
       started.resolve(pid);
-      return reviewAssessment(connection, kernelCtx(ctx), {
+      return reviewSuggestion(connection, kernelCtx(ctx), {
         ...f.input,
-        assessmentId: newer.id,
+        suggestionId: newer.id,
         operationId: "synthetic-second-command",
       });
     });
@@ -200,7 +200,7 @@ describe("command-bound Email intent frontier", () => {
       authority: "automatic",
       actorUserId: null,
     });
-    const result = await reviewAssessment(ctx.db, kernelCtx(ctx), f.input);
+    const result = await reviewSuggestion(ctx.db, kernelCtx(ctx), f.input);
     const events = await reviewsOf(f.prediction.id);
     const capture = events.find(
       (row) => row.operationId === `email-review-frontier:${result.feedbackId}`,
@@ -219,12 +219,12 @@ describe("command-bound Email intent frontier", () => {
     });
     expect(JSON.stringify(proof)).not.toContain(model.id);
     const later = await f.publish("synthetic-current");
-    const newer = await reviewAssessment(ctx.db, kernelCtx(ctx), {
+    const newer = await reviewSuggestion(ctx.db, kernelCtx(ctx), {
       ...f.input,
-      assessmentId: later.id,
+      suggestionId: later.id,
       operationId: crypto.randomUUID(),
     });
-    expect(await reviewAssessment(ctx.db, kernelCtx(ctx), f.input)).toEqual(
+    expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), f.input)).toEqual(
       result,
     );
     expect(await reviewsOf(f.prediction.id)).toEqual(events);
@@ -238,7 +238,7 @@ describe("command-bound Email intent frontier", () => {
       feedbackIds: expect.arrayContaining([newer.feedbackId]),
     });
     await expect(
-      reviewAssessment(ctx.db, kernelCtx(ctx), {
+      reviewSuggestion(ctx.db, kernelCtx(ctx), {
         ...f.input,
         verdict: "correct",
       }),
@@ -264,7 +264,7 @@ describe("command-bound Email intent frontier", () => {
       },
     });
     const publishConnection = (source: string) =>
-      publishAssessment(ctx.db, {
+      publishSuggestion(ctx.db, {
         publicationKey: `synthetic-connection:${source}`,
         family: "recommendation",
         subject: {
@@ -288,9 +288,9 @@ describe("command-bound Email intent frontier", () => {
         },
       });
     const connection = await publishConnection(f.mail.shortcode);
-    const review = await reviewAssessment(ctx.db, kernelCtx(ctx), {
+    const review = await reviewSuggestion(ctx.db, kernelCtx(ctx), {
       ...f.input,
-      assessmentId: connection.id,
+      suggestionId: connection.id,
     });
     expect(
       await readEmailProtectingIntent(ctx.db, emailId.parse(f.mail.id)),
@@ -300,7 +300,7 @@ describe("command-bound Email intent frontier", () => {
     });
     const ambiguous = await publishConnection("EML-ZZZZZ");
     await recordFeedback(ctx.db, {
-      assessmentId: ambiguous.id,
+      suggestionId: ambiguous.id,
       operationId: "synthetic-legacy-connection",
       verdict: "wrong",
       authority: "member",
@@ -317,11 +317,11 @@ describe("command-bound Email intent frontier", () => {
 
   it("commits a review and its frontier capture atomically", async () => {
     const f = await fixture();
-    await reviewAssessment(ctx.db, kernelCtx(ctx), f.input);
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), f.input);
     const before = await reviewsOf(f.prediction.id);
     await expect(
       withEmailEvidenceWrite(ctx.db, async (db, scope) => {
-        await reviewAssessment(
+        await reviewSuggestion(
           db,
           kernelCtx(ctx),
           {
