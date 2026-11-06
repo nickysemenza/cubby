@@ -106,7 +106,7 @@ export async function applyAutomaticRules(
     /** Kernel services for field writes; the actor is always the system's. */
     context?: EntityKernelContext;
     onFailure?: (suggestionId: string, message: string) => void;
-    /** An import authorizes clean spending plans while their rule is enabled. */
+    /** An import authorizes automatic clean spending plans. */
     importClean?: boolean;
     /** Selection constraints survive regeneration and are rechecked by write admission. */
     statementScope?: StatementSuggestionScope;
