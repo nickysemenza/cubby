@@ -289,7 +289,6 @@ const owesFamily = (entity: ShortcodeEntity, family: SuggestionListFamily) =>
 const entitiesOwing = (family: SuggestionListFamily) =>
   shortcodeEntities.filter((entity) => owesFamily(entity, family));
 const STATEMENT_ENTITIES = entitiesOwing("statement_transaction");
-const TRANSFER_ENTITIES = entitiesOwing("transfer_pair");
 
 export function statementScope(
   query: SuggestionFamilyQuery,
@@ -381,16 +380,6 @@ export async function transferPairRows(
   query: SuggestionFamilyQuery,
   ids?: readonly string[],
 ) {
-  if (
-    query.filters.recordEntity &&
-    !TRANSFER_ENTITIES.includes(query.filters.recordEntity)
-  )
-    return [];
-  if (
-    query.records &&
-    !query.records.some((record) => TRANSFER_ENTITIES.includes(record.entity))
-  )
-    return [];
   const { rows } = await unwrapDb(db).execute<{
     id: string;
     fingerprint: string | null;
@@ -435,46 +424,6 @@ export async function transferPairRows(
       current &&
       current.get(evidence.key) !==
         transferPairStateData.parse(row.data).evidenceFingerprint
-    )
-      return [];
-    const records = [
-      { entity: "financialAccount", id: evidence.outflow.accountId },
-      { entity: "financialAccount", id: evidence.inflow.accountId },
-      ...(evidence.outflow.transactionId
-        ? [
-            {
-              entity: "financialTransaction",
-              id: evidence.outflow.transactionId,
-            },
-          ]
-        : []),
-      ...(evidence.inflow.transactionId
-        ? [
-            {
-              entity: "financialTransaction",
-              id: evidence.inflow.transactionId,
-            },
-          ]
-        : []),
-      ...(evidence.outflow.owner
-        ? [{ entity: "ledgerParty", id: evidence.outflow.owner.id }]
-        : []),
-      ...(evidence.inflow.owner
-        ? [{ entity: "ledgerParty", id: evidence.inflow.owner.id }]
-        : []),
-    ];
-    if (
-      query.filters.recordEntity &&
-      !records.some((record) => record.entity === query.filters.recordEntity)
-    )
-      return [];
-    if (
-      query.records &&
-      !query.records.some((record) =>
-        records.some(
-          (ref) => ref.entity === record.entity && ref.id === record.code,
-        ),
-      )
     )
       return [];
     return [{ ...row, evidence, createdAt: new Date(row.createdAt) }];
