@@ -102,6 +102,7 @@ const actionCapability = {
   "ai.resume_automatic_work": "member_decision",
   "ai.resume_suggestion_sweep": "member_decision",
   "ai.start_suggestion_sweep": "member_decision",
+  "image.confirm_description": "member_decision",
   "suggestions.review": "member_decision",
   "suggestions.review_batch": "member_decision",
   "finance.commit_booking": "member_decision",
