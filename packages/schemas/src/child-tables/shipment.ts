@@ -63,6 +63,17 @@ export const shipmentChildren = [
         unique: true,
         on: ["sourceKey", "checksum"],
       },
+      {
+        // Must match captureText in carrier-evidence.ts. Shipment writes search
+        // this text while holding the shipment-evidence-intake lock.
+        name: "ShipmentSourceCapture_text_gin_idx",
+        using: "gin",
+        on: [
+          {
+            sql: "(upper(regexp_replace(coalesce({originalContent}->>'bodyText', '') || ' ' || coalesce({originalContent}->>'bodyHtml', '') || ' ' || coalesce({source}->>'content', '') || ' ' || coalesce({source}->>'url', ''), '[[:space:]]', '', 'g'))) gin_trgm_ops",
+          },
+        ],
+      },
     ],
   }),
   defineChildTable({
