@@ -225,7 +225,7 @@ export function runAgentTools(
   return [
     tool("escalate_import_work", {
       description:
-        "Classify the current Email blocker and request stronger reasoning only for extraction, identity, contradictions or an unknown reasoning gap. Missing evidence, member decisions, held sources and transient failures are refused without escalation. A refusal that names its next step is not a reason: take that step. That model continues this Email; claiming another Email returns to you. Returns escalated: false when this Email is already escalated, or with `unavailable` (the reason) when the escalation model cannot be funded now: settle it yourself.",
+        "Classify the current Email blocker and request stronger reasoning only for extraction, identity, contradictions or an unclassified reasoning gap. Missing evidence, member decisions, held sources and transient failures are refused without escalation. A refusal that names its next step is not a reason: take that step. That model continues this Email; claiming another Email returns to you. Returns escalated: false when this Email is already escalated, or with `unavailable` (the reason) when the escalation model cannot be funded now: settle it yourself.",
       execute: async (args, api, context) => {
         if (!escalate) throw new Error("This Run has no escalation model");
         return result(

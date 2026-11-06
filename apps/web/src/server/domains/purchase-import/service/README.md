@@ -233,9 +233,10 @@ until a session itemizes it.
 
 The existing `eval:mail-replay` reports all Run-scoped AI usage, including
 extraction and audit, with raw token/cache counts, duration and unknown prices.
-Known cost subtotals are not complete costs when calls are unpriced. Synthetic
-replays fail on disposition, amount, line or supported-link disagreements;
-free-form unresolved wording remains a review difference. Private replay
+Known cost subtotals are not complete costs when calls are unpriced. Version 2 synthetic
+replays fail on disposition, total, line-cost or supported-link disagreements;
+free-form line names and unresolved wording remain review differences. Re-capture
+baselines using this all-Run-feature cost scope before comparing performance. Private replay
 disagreements remain report-only evidence for member grading. Scripted replay
 proves execution plumbing, not model quality or speed.
 

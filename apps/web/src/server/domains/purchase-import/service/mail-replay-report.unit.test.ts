@@ -31,6 +31,15 @@ describe("Mail replay disagreement", () => {
         ...baseline,
         lines: [{ name: "Synthetic item", cost: 9 }],
       }),
+    ).toEqual(["line_costs", "lines"]);
+    expect(
+      mailReplayDisagreement(baseline, {
+        ...baseline,
+        lines: baseline.lines.map((line) => ({
+          ...line,
+          name: `${line.name} (renamed)`,
+        })),
+      }),
     ).toEqual(["lines"]);
   });
   it("compares linked order/vendor identity and never calls missing identity parity", () => {
@@ -121,6 +130,7 @@ it("retains model usage and attempt errors before failed replay teardown", async
                 model: "gpt-6-luna",
                 status: "succeeded",
                 standardCost: null,
+                chargedCost: 0,
                 inputTokens: 100,
                 outputTokens: 20,
                 cacheReadTokens: 0,

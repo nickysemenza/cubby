@@ -124,7 +124,7 @@ export const photoInventoryToolInputs = {
         "extraction",
         "identity",
         "contradiction",
-        "unknown",
+        "unclassified",
         "missing_evidence",
         "member_decision",
         "source_held",

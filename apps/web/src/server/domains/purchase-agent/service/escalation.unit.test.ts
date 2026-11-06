@@ -1,3 +1,5 @@
+// Guard model-configuration recovery, escalation leaking to the next Email,
+// same-Email re-claim loops, unavailable funding and equal-model no-ops.
 import type { SupportedChatModel } from "@cubby/shared/ai/models";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vitest";

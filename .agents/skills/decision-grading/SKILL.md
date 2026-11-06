@@ -133,7 +133,13 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    writes occur. Existing Purchases, catalog, attachments and supporting Emails
    are absent, so report that context gap before interpreting differences.
 4. Repeat the same cases under the baseline and candidate model. The report
-   contains parity counts and disagreement case positions/field names only.
+   includes parity counts, disagreement positions/fields and bounded diagnostics.
+   Its versioned measurements retain token/cache counts, durations, charged cost,
+   missing prices and known standard cost for all Run-scoped AI features. Compare
+   only reports using the same version and cost scope; older coordinator-only
+   cost baselines must be re-captured. Usage rows contain no source text or raw
+   provider errors. Free-form line names and gap wording are review differences;
+   synthetic disposition, total, line-cost and supported-link differences fail.
    Join those positions to the session worklist, then review only disagreements
    from the originals via authenticated MCP. Inspect `actualModels`: funding
    recovery can substitute a model. A failed case carries the Run's `failure`,

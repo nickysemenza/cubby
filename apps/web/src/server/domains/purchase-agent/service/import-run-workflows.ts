@@ -45,7 +45,7 @@ const ESCALATION_INSTRUCTIONS = `## Escalation
 
 This Run can hand one Email at a time to a stronger escalation model. Classify
 the blocker in \`escalate_import_work\`'s category: extraction, identity,
-contradiction, or unknown when you cannot classify it reliably. Request this
+contradiction, or unclassified when you cannot classify it reliably. Request this
 only when stronger reasoning could resolve the source evidence. A missing
 original, a member-only decision, a source held by another Run or a transient
 provider failure is not a reasoning problem: follow its owning recovery policy

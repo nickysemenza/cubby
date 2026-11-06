@@ -69,7 +69,14 @@ The local Mail replay evaluator copies supplied retained originals into a fresh
 throwaway database per case and runs the real coordinator and public writers.
 It publishes no production records. Its session-only stdin transport and reports
 keep originals and entity handles out of files; reports show parity counts and
-only disagreement case positions/fields. Existing Purchases, catalog, attachments
+disagreement case positions/fields, plus bounded diagnostics and explicit usage
+measurements. Version 2 labels cost as all Run-scoped AI features, reports known
+standard cost separately from charged cost and missing prices, and retains
+token/cache counts and durations without source text. Re-capture both comparison
+baselines under that version; older coordinator-only cost reports are not
+comparable. Synthetic parity gates disposition, totals, line-cost multisets and
+supported links; free-form line names and unresolved reasons remain review
+differences. These checks do not establish Product identity or full itemization. Existing Purchases, catalog, attachments
 and supporting Emails are not copied, so a replay with those dependencies is
 context-limited rather than evidence of a model regression. The decision-grading
 skill owns blind review and member-confirmed MCP grading. Replay observation runs
@@ -87,18 +94,21 @@ Haiku 5.5 as both primary and escalation model, on the same 20 Emails, imported
 9 (Luna 16), with 3 totals differing from Opus, and left 10 unresolved that
 Opus imported; at about $0.005 per Email it cost no less than Luna, so it is not
 a candidate.
-With distinct primary and escalation models, one Email escalates on an
-explicit request, two refused prepares, or before the primary records unresolved;
-a prepare refused because another live Run holds its supporting original
-(`MAIL_SOURCE_HELD_BY_RUN`) never counts, since the escalation model meets the
-same refusal, and the coordinator links the lifecycle notice instead;
-a claim that returns another Email returns to the primary (re-claiming the same
-unsettled Email keeps it escalated). While the escalation model's funding refuses
-(a recorded Claude credit refusal, a spent background window budget), the
-primary settles the Email itself; the decision is recorded once per Email. Coordinator model transitions retain a pending/applied configuration receipt.
-Recovery reconciles the desired model before accepting a replayed escalation,
-held resolution, refused prepare or next-Email reset. A failed configuration may
-already have taken effect, so pending transitions always reapply idempotently. A
-new unresolved call arriving while configuration is pending is held before
-reconciliation: changing the configuration does not establish that the escalation
-model authored the call. The subsequent escalation-model turn may settle it.
+With distinct primary and escalation models, an Email escalates only on an
+explicit request for a repairable extraction, identity or evidence-contradiction
+problem, or an unclassified reasoning gap. Missing originals, member decisions,
+held sources and transient execution failures do not justify stronger reasoning.
+This replaces blanket escalation on two refused preparations or before every
+unresolved disposition: stronger reasoning cannot recover absent evidence or
+supply authority. Source-specific gaps settle without stopping unrelated work.
+
+A claim returning another Email returns to the primary; re-claiming the same
+unsettled Email keeps its escalation. While escalation funding refuses, the
+primary handles the Email; that funding decision is recorded once per Email.
+Model transitions retain a pending/applied configuration receipt. Recovery
+reconciles the desired model before accepting a replayed escalation or next-Email
+reset. Pending transitions reapply idempotently because a failed configuration
+may already have taken effect. Existing stored escalation decisions survive the
+policy cutover. The bounded extraction/repair pipeline must enforce its persisted
+attempt budget before production cutover; prompt instructions alone are not a
+mechanical limit.

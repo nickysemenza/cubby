@@ -196,6 +196,8 @@ describe("isolated Mail coordinator replay", () => {
     console.log(
       JSON.stringify({
         kind: "mail-import-replay",
+        reportVersion: 2,
+        costScope: "all_run_features",
         synthetic: !inputUrl,
         scripted,
         primary,
@@ -215,11 +217,21 @@ describe("isolated Mail coordinator replay", () => {
           usage: report.usage ?? null,
           // A known subtotal is not a complete cost when usage is unpriced.
           unpricedCalls:
-            report.usage?.filter((row) => row.standardCost === null).length ??
-            null,
+            report.usage?.filter(
+              (row) =>
+                row.standardCost === null &&
+                // Match AI accounting's failed-without-usage distinction.
+                !(
+                  row.status === "failed" &&
+                  row.inputTokens === null &&
+                  row.outputTokens === null &&
+                  row.cacheReadTokens === null &&
+                  row.cacheWriteTokens === null
+                ),
+            ).length ?? null,
         })),
         /** Known standard cost of every Run-scoped feature, not just coordination. */
-        usd: reports.map((report) => ({
+        knownStandardUsd: reports.map((report) => ({
           case: report.case,
           total: Object.values(report.usd).reduce((sum, usd) => sum + usd, 0),
           byModel: report.usd,
@@ -333,6 +345,7 @@ describe("isolated Mail coordinator replay", () => {
                     transport: aiUsage.transport,
                     failure: aiUsage.failure,
                     standardCost: aiUsage.standardCost,
+                    chargedCost: aiUsage.chargedCost,
                     inputTokens: aiUsage.inputTokens,
                     outputTokens: aiUsage.outputTokens,
                     cacheReadTokens: aiUsage.cacheReadTokens,
@@ -375,7 +388,18 @@ describe("isolated Mail coordinator replay", () => {
                       ),
                     ),
                   diagnostics: await diagnose(),
-                  usage,
+                  usage: usage.map((row) => ({
+                    feature: row.feature,
+                    model: row.model,
+                    status: row.status,
+                    standardCost: row.standardCost,
+                    chargedCost: row.chargedCost,
+                    inputTokens: row.inputTokens,
+                    outputTokens: row.outputTokens,
+                    cacheReadTokens: row.cacheReadTokens,
+                    cacheWriteTokens: row.cacheWriteTokens,
+                    durationMs: row.durationMs,
+                  })),
                   usd: usage.reduce<Record<string, number>>(
                     (byModel, row) => ({
                       ...byModel,
@@ -497,7 +521,7 @@ describe("isolated Mail coordinator replay", () => {
           const requiredDisagreements = inputUrl
             ? []
             : mailReplayDisagreement(sample.baseline, observedOutcome).filter(
-                (field) => field !== "reason",
+                (field) => field !== "reason" && field !== "lines",
               );
           expect(requiredDisagreements).toEqual([]);
         } catch (error) {

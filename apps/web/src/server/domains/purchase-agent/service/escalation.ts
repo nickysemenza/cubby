@@ -62,8 +62,8 @@ const KEYS = {
  * escalated: keyed by the claim call, each re-claim reset it to the primary,
  * which escalated again in a loop (2026-10-19, 194 calls on one Email). The model changes by
  * reconfiguring the conversation, so pi's request checkpoint records which
- * model each request used and a recovered request reuses it. Every decision
- * is keyed by its tool call id, so a recovered call decides as it first did.
+ * model each request used and a recovered request reuses it. The decision
+ * belongs to the Email, so a new claim cannot reset its escalation.
  */
 export function coordinatorEscalation(input: {
   models: CoordinatorModels;

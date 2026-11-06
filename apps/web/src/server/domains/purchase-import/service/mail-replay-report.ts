@@ -12,6 +12,12 @@ export function mailReplayDisagreement(
   if (!replay) return ["unavailable"];
   if (baseline.kind !== replay.kind) return ["kind"];
   if (baseline.kind === "imported" && replay.kind === "imported") {
+    const amounts = (outcome: typeof baseline) =>
+      outcome.lines
+        .map((line) =>
+          line.cost === null ? null : Math.round(line.cost * 100),
+        )
+        .sort((a, b) => (a ?? -Infinity) - (b ?? -Infinity));
     const lines = (outcome: typeof baseline) =>
       outcome.lines
         .map((line) =>
@@ -25,6 +31,7 @@ export function mailReplayDisagreement(
       outcome.total === null ? null : Math.round(outcome.total * 100);
     return [
       ...(total(baseline) === total(replay) ? [] : ["total"]),
+      ...(isEqual(amounts(baseline), amounts(replay)) ? [] : ["line_costs"]),
       ...(isEqual(lines(baseline), lines(replay)) ? [] : ["lines"]),
     ];
   }
@@ -66,6 +73,7 @@ export type MailReplayCaseReport = {
     model: string;
     status: string;
     standardCost: number | null;
+    chargedCost: number | null;
     inputTokens: number | null;
     outputTokens: number | null;
     cacheReadTokens: number | null;
