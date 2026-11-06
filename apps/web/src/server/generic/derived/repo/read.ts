@@ -2,10 +2,12 @@ import { dateTime } from "@cubby/schemas/codec";
 import { storedFieldDecision } from "@cubby/schemas/derived-value";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 /**
  * Reading stored derived values. Lists compile a stored field to one indexed
  * primary-key lookup, so sorting, filtering and the footer read the same
- * figure the row shows; freshness is one EXISTS on the dirty marks.
+ * figure the row shows. Publication existence distinguishes missing output from
+ * a successful empty value, including optional typed snapshot members.
  */
 import {
   fieldDecision,
@@ -61,29 +63,37 @@ export function storedDerivedSql(
   const field = entityFieldModels[entity].fields.find(
     (field) => field.key === key,
   );
-  const storedKey = field?.storedKey ?? key;
+  const derived = Object.entries(
+    generatedEntityListFields[entity].derived,
+  ).find(([name]) => name === key)?.[1];
+  const fromResult =
+    derived && "fromResult" in derived ? derived.fromResult : undefined;
+  const storedKey = field?.storedKey ?? fromResult?.key ?? key;
   const declaration = requireStored(entity, storedKey);
-  const path = field && "storedPath" in field ? field.storedPath : undefined;
+  const path =
+    (field && "storedPath" in field ? field.storedPath : undefined) ??
+    fromResult?.path;
+  const kind =
+    field?.kind ?? (derived && "type" in derived ? derived.type : undefined);
   const projected = path
     ? sql`value #>> ARRAY[${sql.join(
-        path.map((part) => sql`${part}`),
+        path.map((part: string) => sql`${part}`),
         sql`, `,
       )}]::text[]`
     : null;
-  const column =
-    projected && field
-      ? field.kind === "number"
-        ? sql`(${projected})::double precision`
-        : field.kind === "date" || field.kind === "timestamp"
-          ? sql`(${projected})::timestamptz`
-          : field.kind === "boolean"
-            ? sql`(${projected})::boolean`
-            : projected
-      : declaration.sort === "date"
-        ? sql.raw(`"sortDate"::date`)
-        : declaration.sort === "text"
-          ? sql.raw(`"sortText"`)
-          : sql.raw(`"sortNumber"`);
+  const column = projected
+    ? kind === "number"
+      ? sql`(${projected})::double precision`
+      : kind === "date" || kind === "timestamp"
+        ? sql`(${projected})::timestamptz`
+        : kind === "boolean"
+          ? sql`(${projected})::boolean`
+          : projected
+    : declaration.sort === "date"
+      ? sql.raw(`"sortDate"::date`)
+      : declaration.sort === "text"
+        ? sql.raw(`"sortText"`)
+        : sql.raw(`"sortNumber"`);
   const cached = sql`(SELECT ${column} FROM (${storedSourceSql(declaration, sql`${id}`)}) projected
     WHERE "decidedBy"#>>'{outcome,kind}' = 'value'
     ${
@@ -107,11 +117,28 @@ export function storedFieldAvailableSql(
   const field = entityFieldModels[entity].fields.find(
     (field) => field.key === key,
   );
-  const declaration = storedDerived(entity, field?.storedKey ?? key);
+  const derived = Object.entries(
+    generatedEntityListFields[entity].derived,
+  ).find(([name]) => name === key)?.[1];
+  const fromResult =
+    derived && "fromResult" in derived ? derived.fromResult : undefined;
+  const path = fromResult?.path;
+  const declaration = storedDerived(
+    entity,
+    field?.storedKey ?? fromResult?.key ?? key,
+  );
   return declaration &&
     (declaration.publishes === "derivedValue" || declaration.snapshotSource)
     ? sql`EXISTS (SELECT 1 FROM (${storedSourceSql(declaration, sql`${id}`)}) v
       WHERE v."computedAt" IS NOT NULL AND v."decidedBy"#>>'{outcome,kind}' IN (${publishedOutcome.value}, ${publishedOutcome.empty})
+      ${
+        path
+          ? sql`AND v.value #> ARRAY[${sql.join(
+              path.map((part: string) => sql`${part}`),
+              sql`, `,
+            )}]::text[] IS NOT NULL`
+          : sql``
+      }
       ${currentValue ? sql`AND (${currentValue} IS NOT NULL OR v."decidedBy"#>>'{outcome,kind}' = ${publishedOutcome.empty})` : sql``})`
     : null;
 }

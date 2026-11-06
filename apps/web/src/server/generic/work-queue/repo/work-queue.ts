@@ -178,8 +178,16 @@ async function queryWorkQueue(
   const ctes = new Map<string, WorkCte>();
   for (const candidates of prepared)
     for (const cte of candidates.ctes ?? []) ctes.set(cte.name, cte);
-  const queries: SQLWrapper[] = prepared.length
-    ? prepared.flatMap((candidates) => [
+  const relations = [
+    ...new Map(
+      prepared.map((candidate) => [
+        candidate.relationKey ?? candidate.declaration.id,
+        candidate,
+      ]),
+    ).values(),
+  ];
+  const queries: SQLWrapper[] = relations.length
+    ? relations.flatMap((candidates) => [
         sql`SELECT candidate.*, false AS input_incomplete FROM (${candidates.query}) candidate`,
         ...(candidates.missingInputs
           ? [
@@ -415,6 +423,7 @@ async function queryWorkQueue(
         'shared', shared, 'amount', amount, 'date', date
       ) ORDER BY position) FROM page), '[]'::jsonb) AS items
   `);
+
   const pageRow = z.object({
     source: z.string(),
     entity: z.string().nullable(),

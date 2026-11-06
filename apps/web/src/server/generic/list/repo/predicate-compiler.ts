@@ -170,7 +170,9 @@ export const descriptorAvailabilitySql = (
     : undefined;
   const available = storedFieldAvailableSql(
     entity,
-    key,
+    field?.shape === "value" && field.fromResult && descriptor.derived
+      ? descriptor.derived
+      : key,
     table.id,
     value ? { currentValue: value } : {},
   );

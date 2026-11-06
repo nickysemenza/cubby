@@ -368,9 +368,18 @@ export const declaredResultProjections = (
   id: AnyColumn,
 ): AnyDerivedSql =>
   Object.fromEntries(
-    entityFieldModels[entity].fields.flatMap((field) =>
-      field.storedPath && derivedFieldsOf(entity)[field.key]?.shape === "value"
-        ? [[field.key, storedDerivedSql(entity, field.key, id)]]
+    [
+      ...new Set([
+        ...entityFieldModels[entity].fields
+          .filter((field) => field.storedPath)
+          .map((field) => field.key),
+        ...Object.entries(derivedFieldsOf(entity)).flatMap(([key, field]) =>
+          "fromResult" in field && field.fromResult ? [key] : [],
+        ),
+      ]),
+    ].flatMap((key) =>
+      derivedFieldsOf(entity)[key]?.shape === "value"
+        ? [[key, storedDerivedSql(entity, key, id)]]
         : [],
     ),
   );

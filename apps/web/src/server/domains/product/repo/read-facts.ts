@@ -3,7 +3,9 @@ import { isServiceProductCategory } from "@cubby/schemas/product-category-fields
 import { productReadFacts } from "@cubby/schemas/product-read-fields";
 import { foodSummary } from "@cubby/usda";
 import { and, getTableColumns, inArray, sql } from "drizzle-orm";
+import { QueryBuilder } from "drizzle-orm/pg-core";
 
+import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import {
   categoryStockTrackingSql,
   categorySummarySql,
@@ -15,7 +17,7 @@ import {
   unwrapDb,
   uuidArrayParam,
 } from "~/server/db/helpers";
-import { inventoryEntry, location, product } from "~/server/db/schema";
+import { expense, inventoryEntry, location, product } from "~/server/db/schema";
 import { loadPrimaryGtins } from "~/server/domains/product/repo/gtin";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
@@ -24,10 +26,26 @@ import type { DerivedCompute } from "~/server/generic/derived/repo/compute";
 import { deriveProductQuantitySummary } from "~/server/lib/product-quantity-summary";
 
 import { productFieldResolutions } from "./mappers";
+import { ownershipExitExpensePredicate } from "./ownership";
 import { loadProductOwnershipEvidenceBatch } from "./ownership-evidence";
 import { loadProductPricing } from "./pricing";
+import { onHandUnitsSql } from "./quantity-ledger";
 import { enrichProductRowsWithQuantityLedger } from "./quantity-ledger";
 import { productStockContext } from "./stock-context";
+
+const partsAccountedKitsSql = sql`(SELECT min(floor(COALESCE(${sql.raw(onHandUnitsSql("kac_p"))}, 0) / kac."quantity"))
+       FROM "EntityLink" kac
+       JOIN "Product" kac_p
+         ON kac_p."id" = kac."toEntityId" AND ${notDeleted("kac_p")}
+      WHERE kac."fromEntityId" = ${product.id}
+        AND ${notDeleted("kac")} AND kac."kind" = 'productComponent')`;
+
+const recordedDisposal = new QueryBuilder()
+  .select({ id: expense.productId })
+  .from(expense)
+  .where(
+    and(notDeleted(expense), actualExpense(), ownershipExitExpensePredicate()),
+  );
 
 /** The drain evaluates authoritative inputs; page readers only use its publication. */
 export const computeProductReadFacts: DerivedCompute = async (db, ids) => {
@@ -35,6 +53,10 @@ export const computeProductReadFacts: DerivedCompute = async (db, ids) => {
   const rows = await unwrapDb(db)
     .select({
       ...getTableColumns(product),
+      accountedKits: sql<
+        number | null
+      >`${partsAccountedKitsSql}::double precision`,
+      recordedDisposal: inArray(product.id, recordedDisposal),
       category: categorySummarySql(sql`${product.categoryId}`),
       categoryStockTracking: categoryStockTrackingSql(
         sql`${product.categoryId}`,
@@ -103,6 +125,28 @@ export const computeProductReadFacts: DerivedCompute = async (db, ids) => {
         service,
       );
       const value = productReadFacts.parse({
+        workFacts: {
+          priced: !service && price.effectivePrice !== null,
+          accountedKits: row.accountedKits,
+          unknownAcquisition: row.quantityLedger.unknownAcquisitionLines > 0,
+          kitAccounting:
+            quantity.onHandUnits !== null &&
+            quantity.onHandUnits > 0 &&
+            row.accountedKits !== null &&
+            row.accountedKits > 0 &&
+            quantity.onHandUnits + row.accountedKits >
+              row.quantityLedger.expectedQuantity,
+          ownershipReconciliation:
+            row.recordedDisposal &&
+            quantity.onHandUnits !== null &&
+            quantity.onHandUnits > 0 &&
+            row.quantityLedger.expectedQuantity <= 0 &&
+            row.quantityLedger.unknownAcquisitionLines === 0,
+          unknownQuantityLines:
+            row.quantityLedger.unknownAcquisitionLines +
+              row.quantityLedger.unknownExitLines >
+            0,
+        },
         pricing: price,
         ...quantity,
         pickerOnHand:

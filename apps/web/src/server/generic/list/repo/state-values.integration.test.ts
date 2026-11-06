@@ -30,7 +30,6 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import { effectiveProductPriceSql } from "~/server/domains/product/repo/pricing";
 import {
-  expectedQuantityReadSql,
   expectedQuantitySql,
   quantityVarianceSql,
 } from "~/server/domains/product/repo/quantity-ledger";
@@ -274,30 +273,6 @@ describe("state predicates re-declared as values", () => {
       sorted(fixture.filter((id) => !matched.includes(id))),
     );
 
-    // The set the filter reads agrees with the scalar the column shows.
-    const scalar = await getDb(ctx.db)
-      .select({
-        id: product.id,
-        value: sql<number>`${sql.raw(expectedQuantitySql('"Product"'))}`,
-      })
-      .from(product)
-      .where(inArray(product.id, fixtureIds));
-    const set = await getDb(ctx.db)
-      .select({
-        id: sql<string>`expected_set."id"`,
-        value: sql<number>`expected_set."value"`,
-      })
-      .from(sql`(${expectedQuantityReadSql()}) expected_set`)
-      .where(
-        sql`expected_set."id" IN (${sql.join(
-          fixtureIds.map((id) => sql`${id}::uuid`),
-          sql`, `,
-        )})`,
-      );
-    const byId = (rows: ReadonlyArray<{ id: string; value: number }>) =>
-      Object.fromEntries(rows.map(({ id, value }) => [id, Number(value)]));
-    expect(byId(set)).toEqual(byId(scalar));
-
     // The retired `expectedQuantityRange` predicate, preset by preset.
     for (const [from, to] of [
       [undefined, -1],
@@ -305,14 +280,12 @@ describe("state predicates re-declared as values", () => {
       [1, undefined],
       [5, undefined],
     ] as const) {
+      const expected = sql.raw(expectedQuantitySql('"Product"'));
       const old = await retired(
-        sql`${product.id} IN (SELECT quantity_range."id" FROM (${expectedQuantityReadSql()}) quantity_range
-          WHERE ${and(
-            from === undefined
-              ? undefined
-              : sql`quantity_range."value" >= ${from}`,
-            to === undefined ? undefined : sql`quantity_range."value" <= ${to}`,
-          )})`,
+        and(
+          from === undefined ? undefined : sql`${expected} >= ${from}`,
+          to === undefined ? undefined : sql`${expected} <= ${to}`,
+        )!,
       );
       expect(
         await listed({ expectedQuantityMin: from, expectedQuantityMax: to }),
