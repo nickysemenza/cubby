@@ -79,8 +79,8 @@ struct ProductUnitMappingsDetailSlot: View {
     }
 }
 
-struct ProductSimilarityDetailSlot: View {
-    let productID: String
+struct RelatedRecordsDetailSlot: View {
+    let source: EntityRef
     @Environment(AppModel.self) private var appModel
     @State private var group: RecommendationWorkbenchOut?
     @State private var error: String?
@@ -117,21 +117,21 @@ struct ProductSimilarityDetailSlot: View {
                     }
                 }
                 if group.items.count > visibleCount {
-                    Button("Show \(min(12, group.items.count - visibleCount)) more products") {
+                    Button("Show \(min(12, group.items.count - visibleCount)) more records") {
                         visibleCount += 12
                     }
                 }
                 if group.items.isEmpty && group.status == .ready {
-                    Text("No related products yet.").foregroundStyle(.secondary)
+                    Text("No related records yet.").foregroundStyle(.secondary)
                 }
             } else if error == nil {
-                LoadingIndicator(label: "Loading similar products")
+                LoadingIndicator(label: "Loading related records")
             }
             if let error {
                 InlineLoadFailure(message: error) { await load() }
             }
         }
-        .task(id: productID) {
+        .task(id: source) {
             visibleCount = 12; await load()
         }
     }
@@ -140,12 +140,12 @@ struct ProductSimilarityDetailSlot: View {
         error = nil
         do {
             let document = try await appModel.client.relatedness(
-                for: EntityRef(entity: .product, id: productID))
+                for: source)
             guard !Task.isCancelled else { return }
             group = document
         } catch {
             guard !Task.isCancelled else { return }
-            Diagnostics.report(error, context: "Product similarity")
+            Diagnostics.report(error, context: "Related records")
             self.error = error.localizedDescription
         }
     }
@@ -153,6 +153,7 @@ struct ProductSimilarityDetailSlot: View {
 
 #Preview("Nutrition") { Form { ProductNutritionDetailSlot(row: PreviewFixtures.sampleDetailRow) } }
 #Preview("Unit mappings") { Form { ProductUnitMappingsDetailSlot(row: PreviewFixtures.sampleDetailRow) } }
-#Preview("Similar products") {
-    Form { ProductSimilarityDetailSlot(productID: "PRD-2345") }.environment(PreviewFixtures.signedInModel())
+#Preview("Related records") {
+    Form { RelatedRecordsDetailSlot(source: .init(entity: .product, id: "PRD-2345")) }.environment(
+        PreviewFixtures.signedInModel())
 }

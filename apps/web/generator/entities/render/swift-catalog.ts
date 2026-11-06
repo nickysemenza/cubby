@@ -798,6 +798,9 @@ const entityJSON = (
     recordIconEntityField: entity.inspector.recordIconEntityField,
     searchable,
     nativeBrowse: entity.inspector.nativeBrowse,
+    hasRelatedness:
+      Array.isArray(entity.descriptor.relatednessSignals) &&
+      entity.descriptor.relatednessSignals.length > 0,
     emptyState: {
       title: entity.inspector.emptyState.title,
       description: entity.inspector.emptyState.description,

@@ -556,6 +556,12 @@ struct EntityDetailContent: View {
                             ForEach(presentation.detailSections) { section in
                                 if section.id != journalSection?.id { macDeclared(section) }
                             }
+                            if descriptor.hasRelatedness {
+                                macDisclosure("Related records", id: "related-records") {
+                                    RelatedRecordsDetailSlot(
+                                        source: .init(entity: descriptor.key, id: row.id))
+                                }
+                            }
                             if let connectedRecords, connectedHasRows || connectedRecords.error != nil {
                                 DisclosureGroup(isExpanded: $connectedExpanded) {
                                     ConnectedRecordsSection(model: connectedRecords)
@@ -722,6 +728,12 @@ struct EntityDetailContent: View {
             if activityInsertionSectionID == nil {
                 phoneActivitySection
             }
+            if descriptor.hasRelatedness {
+                Section("Related records") {
+                    RelatedRecordsDetailSlot(source: .init(entity: descriptor.key, id: row.id))
+                }
+                .detailContentsAnchor("related-records")
+            }
             if let connectedRecords {
                 if connectedHasRows || connectedRecords.error != nil {
                     DisclosureGroup("Connected records", isExpanded: $connectedExpanded) {
@@ -844,6 +856,9 @@ struct EntityDetailContent: View {
             return DetailContentsEntry(id: section.id, title: section.title ?? section.id, group: "Record")
         }
         return sections
+            + (descriptor.hasRelatedness
+                ? [DetailContentsEntry(id: "related-records", title: "Related records", group: "Relations")]
+                : [])
             + (connectedHasRows
                 ? [
                     DetailContentsEntry(

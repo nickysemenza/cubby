@@ -293,7 +293,7 @@ public actor CubbyClient {
 
     public func relatedness(for source: EntityRef) async throws -> RecommendationWorkbenchOut {
         let entity = EmbeddableEntity(rawValue: source.entityKind.rawValue)
-        guard EmbeddableEntity.allCases.contains(entity) else {
+        guard EntityCatalog[source.entity].hasRelatedness, EmbeddableEntity.allCases.contains(entity) else {
             return .init(status: .unavailable, items: [])
         }
         return try await native_relatedness_forEntity(body: .init(entity: entity, id: source.entityId))

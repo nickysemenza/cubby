@@ -15,8 +15,6 @@ enum DetailSlotRegistry {
             return AnyView(ProductNutritionDetailSlot(row: row))
         case .productUnitMappings:
             return AnyView(ProductUnitMappingsDetailSlot(row: row))
-        case .productFitsWith:
-            return AnyView(ProductSimilarityDetailSlot(productID: row.id))
         case .productRuns:
             return reportSlot(.productRuns, row)
         case .productOwnership:
