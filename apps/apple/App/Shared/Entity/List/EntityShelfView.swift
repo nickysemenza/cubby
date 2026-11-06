@@ -265,7 +265,7 @@ struct EntityCard: View {
     NavigationStack {
         ScrollView {
             EntityShelfView(
-                descriptor: EntityCatalog[.product], rows: PreviewFixtures.sampleRows,
+                descriptor: EntityCatalog[.product], rows: EntityScreenFixture.product.listPage.items,
                 density: .cards)
         }
         .fieldGuideScreen()
@@ -298,7 +298,7 @@ struct EntityCard: View {
     NavigationStack {
         ScrollView {
             EntityShelfView(
-                descriptor: EntityCatalog[.product], rows: PreviewFixtures.sampleRows,
+                descriptor: EntityCatalog[.product], rows: EntityScreenFixture.product.listPage.items,
                 density: .compact)
         }
         .fieldGuideScreen()

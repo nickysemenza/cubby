@@ -206,7 +206,7 @@ private struct SummarySpendCell: View {
 #Preview("Summary cells") {
     NavigationStack {
         ScrollView {
-            DetailSummaryGrid(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow)
+            DetailSummaryGrid(descriptor: EntityCatalog[.task], row: EntityScreenFixture.task.detailRow)
                 .padding(FieldGuideTokens.Space.md)
         }
     }

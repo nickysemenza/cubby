@@ -10,7 +10,7 @@ import Testing
 /// wire-shape decode regression.
 @Suite struct PreviewFixturesDecodingTests {
     nonisolated enum Fixture: CaseIterable, Sendable {
-        case timeline, todayTasks, todayMeals, mealNutrition
+        case timeline, todayTasks, todayMeals, mealNutrition, entityScreens
     }
 
     @Test(arguments: Fixture.allCases)
@@ -22,6 +22,13 @@ import Testing
             try decode([JSONValue].self, "sampleTodayMeals")
             #expect(PreviewFixtures.sampleTodayMeals.allSatisfy { !$0.id.isEmpty && !$0.title.isEmpty })
         case .mealNutrition: try decode(MealNutritionOut.self, "sampleMealNutrition")
+        case .entityScreens:
+            for screen in EntityScreenFixture.allCases {
+                #expect(!screen.listPage.items.isEmpty)
+                #expect(screen.detailRow.raw["actions"]?.arrayValue?.isEmpty == false)
+                #expect(screen.relationPages.values.allSatisfy { !$0.items.isEmpty })
+            }
+            _ = PreviewFixtures.productSuggestions
         }
     }
 

@@ -958,7 +958,7 @@ private struct HeroEditorRequest: Identifiable {
 #Preview {
     NavigationStack {
         EntityDetailContent(
-            descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow
+            descriptor: EntityCatalog[.product], row: EntityScreenFixture.product.detailRow
         )
         .navigationTitle("Cast Iron Skillet")
     }
@@ -968,9 +968,9 @@ private struct HeroEditorRequest: Identifiable {
 #Preview("Developer overlays on") {
     NavigationStack {
         EntityDetailContent(
-            descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow
+            descriptor: EntityCatalog[.expense], row: EntityScreenFixture.expense.detailRow
         )
-        .navigationTitle("Cast Iron Skillet")
+        .navigationTitle("Expense")
     }
     .environment(PreviewFixtures.signedInModel())
     .environment(\.developerOverlays, true)
@@ -978,6 +978,6 @@ private struct HeroEditorRequest: Identifiable {
 
 #Preview("Connections entry") {
     NavigationStack {
-        EntityDetailContent(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow)
+        EntityDetailContent(descriptor: EntityCatalog[.product], row: EntityScreenFixture.product.detailRow)
     }.environment(PreviewFixtures.signedInModel())
 }
