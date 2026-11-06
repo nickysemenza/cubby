@@ -385,6 +385,10 @@ export class PurchaseImportRunAgent
         return {
           block: "Claim current trusted Email evidence before extracting.",
         };
+      // A route handoff is not a failed extraction. Apply this before both
+      // malformed-call accounting and writer admission so exception repair keeps its budget.
+      const extractionBlock = attempts.extractionBlock(call.name);
+      if (extractionBlock) return { block: extractionBlock };
       const named = z
         .object({
           mail: mailMessageRef.extend({ checksum: z.string().optional() }),

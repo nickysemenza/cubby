@@ -61,6 +61,11 @@ export function mailAttempts(store: EscalationStore) {
 
   return {
     source: () => current()?.source,
+    extractionBlock: (toolName: string) => {
+      if (toolName === EXTRACT_ORDER_TOOL && !current()?.complete)
+        return "This Email requires the exception flow because its admitted evidence is incomplete or contains attachments. Use purchase_import.prepare with the available evidence; this handoff consumes no extraction attempt.";
+      return undefined;
+    },
     ordinaryEvidence: () => {
       const value = current();
       return value?.complete && value.text
