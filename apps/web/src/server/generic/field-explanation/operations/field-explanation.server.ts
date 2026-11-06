@@ -1,3 +1,5 @@
+import { dataCheck, scoredEntities } from "@cubby/schemas/data-quality";
+import { entityQualityCheckState } from "@cubby/schemas/data-quality-shape";
 import { type Entity, entityRefSchema } from "@cubby/schemas/entity";
 import {
   fieldEnvelopeReadSchema,
@@ -53,6 +55,12 @@ import {
 } from "~/server/entity-kernel/repo/entity-display-image";
 import type { EntitySchemaBindingEntity } from "~/server/generated/entity-bindings.gen";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
+import {
+  buildQualityBreakdown,
+  loadQualityBreakdown,
+} from "~/server/generic/data-quality/repo/hydrate";
+import { evaluateRow } from "~/server/generic/data-quality/repo/presentation";
+import { loadPublishedQuality } from "~/server/generic/data-quality/repo/stored";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { readPublicEntityRow } from "~/server/generic/derived/service/public-read";
 import { explanationReferenceValues } from "~/server/generic/field-explanation/repo/explanation-reference-values";
@@ -613,6 +621,37 @@ function matchesDisplayedPublication(
   );
 }
 
+/** Exception actions follow durable decisions, independently of cached check states. */
+async function loadCurrentQualityControls(
+  db: EntityKernelContext["db"],
+  entity: Entity,
+  internalId: string,
+) {
+  const scored = z.enum(scoredEntities).safeParse(entity);
+  if (!scored.success) return undefined;
+  const row = (await loadPublishedQuality(db, scored.data, [internalId]))[0];
+  if (!row) return undefined;
+  const recorded = evaluateRow(scored.data, row).exceptions;
+  const entries = Object.entries(row.checks);
+  return buildQualityBreakdown(
+    [
+      ...new Set([
+        ...entries
+          .filter(([, state]) => state !== "not_applicable")
+          .map(([check]) => dataCheck.parse(check)),
+        ...recorded.map((exception) => dataCheck.parse(exception.check)),
+      ]),
+    ],
+    entries
+      .filter(([, state]) => state === "gap")
+      .map(([check]) => dataCheck.parse(check)),
+    entries
+      .filter(([, state]) => state === "waived")
+      .map(([check]) => dataCheck.parse(check)),
+    recorded,
+  ).checks;
+}
+
 /** Resolve the publication owner inside the explanation's existing MVCC snapshot. */
 async function loadPublishedExplanationFacts({
   db,
@@ -688,6 +727,8 @@ async function loadExplanationSnapshot(
       resolutionEvidence: null,
       resolutionEvidenceTruncated: false,
       resetPreview: null,
+      qualityBreakdown: undefined,
+      currentQualityControls: undefined,
     };
   }
   return withFieldExplanationSnapshot(context.db, async (snapshotDb) => {
@@ -794,9 +835,24 @@ async function loadExplanationSnapshot(
       currentEnvelope.current.controls.reset.kind === "available"
         ? await inheritedResetPreview(snapshotDb, entity, fieldKey, internalId)
         : null;
+    const currentQualityControls =
+      publicationOnly && fieldKey === "dataQuality" && internalId
+        ? await loadCurrentQualityControls(snapshotDb, entity, internalId)
+        : undefined;
     return {
       projection,
       resetPreview,
+      currentQualityControls,
+      qualityBreakdown:
+        !publicationOnly &&
+        fieldKey === "dataQuality" &&
+        z.enum(scoredEntities).safeParse(entity).success
+          ? await loadQualityBreakdown(
+              snapshotDb,
+              z.enum(scoredEntities).parse(entity),
+              input.entityId,
+            )
+          : undefined,
       sourceProjection:
         storedResult?.resultExists &&
         currentEnvelope?.result.kind === "cached" &&
@@ -908,6 +964,7 @@ function explainPublication({
   publishedEvidence,
   explanation,
   label,
+  currentQualityControls,
 }: {
   input: ExplainFieldInput;
   envelope: z.output<typeof fieldExplanationOutput>["envelope"];
@@ -915,6 +972,9 @@ function explainPublication({
   publishedEvidence: Json | undefined;
   explanation: Explanation;
   label: string;
+  currentQualityControls: z.output<
+    typeof fieldExplanationOutput
+  >["currentQualityControls"];
 }) {
   const subject = { entityKind: input.entityKind, entityId: input.entityId };
   const displayed = input.displayedResult;
@@ -963,6 +1023,28 @@ function explainPublication({
         ]
       : []),
   ]);
+  const checks =
+    input.field === "dataQuality"
+      ? z
+          .object({ checks: z.record(z.string(), entityQualityCheckState) })
+          .safeParse(publishedFacts)
+      : null;
+  const checkEntries = checks?.success
+    ? Object.entries(checks.data.checks)
+    : null;
+  const qualityBreakdown = checkEntries
+    ? buildQualityBreakdown(
+        checkEntries
+          .filter(([, state]) => state !== "not_applicable")
+          .map(([check]) => dataCheck.parse(check)),
+        checkEntries
+          .filter(([, state]) => state === "gap")
+          .map(([check]) => dataCheck.parse(check)),
+        checkEntries
+          .filter(([, state]) => state === "waived")
+          .map(([check]) => dataCheck.parse(check)),
+      )
+    : undefined;
   return fieldExplanationOutput.parse({
     subject,
     field: input.field,
@@ -976,13 +1058,14 @@ function explainPublication({
             "The displayed value has been replaced. Refresh the value and its explanation together.",
         }
       : (publishedFacts != null || publishedEvidence != null) &&
-          capturedDependencies.length > 0 &&
-          capturedDependencies.length ===
-            explanation.sourceDependencies?.length &&
-          capturedDependencies.every(
-            (dependency) =>
-              readExplanationPath(capturedProjection, dependency.path).found,
-          )
+          ((capturedDependencies.length > 0 &&
+            capturedDependencies.length ===
+              explanation.sourceDependencies?.length &&
+            capturedDependencies.every(
+              (dependency) =>
+                readExplanationPath(capturedProjection, dependency.path).found,
+            )) ||
+            qualityBreakdown)
         ? { kind: "current" }
         : {
             kind: "unavailable",
@@ -995,6 +1078,8 @@ function explainPublication({
       description: explanation.description,
     },
     sources: matches ? bounded.sources : [],
+    qualityBreakdown: matches ? qualityBreakdown : undefined,
+    currentQualityControls: matches ? currentQualityControls : undefined,
     resolutionEvidence: null,
     truncated: matches && bounded.truncated,
     actions: explanationActions(subject, null),
@@ -1105,6 +1190,7 @@ export async function explainField(
       envelope,
       explanation,
       label: field.label,
+      currentQualityControls: snapshot.currentQualityControls,
       publishedFacts: sourceProjection.storedResult,
       publishedEvidence:
         "storedEvidence" in sourceProjection
@@ -1179,6 +1265,7 @@ export async function explainField(
       description: explanation.description,
     },
     sources: linkedSources,
+    qualityBreakdown: snapshot.qualityBreakdown,
     resolutionEvidence: snapshot.resolutionEvidence,
     truncated: [
       finalSources.truncated,

@@ -218,6 +218,10 @@ identities across projections. These weak caches contain schemas only, never
 assignments, controls, results or other record data. Repeated nested reads must
 not rebuild the same validation graph for every list, detail and MCP occurrence.
 
+Reset previews use the field's declared `resolution.resetSource` or inheritance
+chain and apply its ordinary reset patch without writing. Expense Project uses
+the same draft resolver as an edit, preserving stored intent in other fields.
+
 One shared Why this value experience owns source stacks, assignment/reset,
 suggestion review and explanations across web and Apple. Image stacks use the
 same ordered source primitive with view-only thumbnail strips. Allocation
@@ -4613,12 +4617,8 @@ reads, not a new eligibility cache; any future stored projection must retain
 dynamic old/new memberships and complete invalidation.
 Non-actionable Product pairs remain ordinary history. A merge still requires
 explicit survivor and impact confirmation, and identity conflicts cannot merge.
-Tag proposals retain the source and every supporting Product's revision; listing,
-publication and confirmation recheck those revisions and the supporting tags.
-Older count-only and stale tag advice stays stored with its existing status and is
-excluded from the queue; a later Sweep may publish a proposal with a new basis.
-Project, placement and tag proposals appear after a Sweep publishes them; passive
-record reads never discover or publish new advice.
+Tag-propagation suggestions are retired. Project and placement proposals appear
+after a Sweep publishes them; passive record reads never discover or publish new advice.
 Similar-Product browsing stays informational; photo-import choices stay in their Run.
 
 Suggestions' **Automatic decisions** tab is the optional generic audit, newest
@@ -4736,6 +4736,9 @@ Food feature transitions require a broader Project/Trade review and are refused
 by the spending-only workflow; identity normalization cannot substitute a target
 different from the reviewed one. Lazy field explanations return bounded hierarchy
 and fallback-source evidence so clients do not reconstruct these rules.
+
+Quality explanations render published check states with current durable exception
+controls. Keeping those controls does not recompute or compare a cached result.
 
 Web field explanations keep one compact hierarchy across quality, derived values,
 and inheritance: the result and interpretation lead, followed by applicable checks

@@ -759,6 +759,7 @@ Rules:
         },
         resolution: {
           reset: { projectId: null },
+          resetSource: "expenseInheritance",
           redundancy: "eligible",
         },
         explanation: {

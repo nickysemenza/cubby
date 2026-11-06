@@ -725,13 +725,14 @@ const buildMetadataSchemas = () => {
         .strictObject({
           /** Absent for a field that only inherits: clients get no actions. */
           reset: z.record(z.string(), z.json()).optional(),
-          /** Canonical SQL resolution evaluated over the declared reset patch. */
+          /** Canonical resolution evaluated over the declared reset patch. */
           resetSource: z
             .enum([
               "vendorEvidence",
               "purchaseEvidence",
               "transactionEvidence",
               "expenseCategory",
+              "expenseInheritance",
             ])
             .optional(),
           /**
