@@ -412,6 +412,9 @@ struct EntityDetailView: View {
             }
         case .delete, .operation, .setField, .editField:
             heroAction = HeroActionModel(plan: plan, entity: key, row: row, runner: runner)
+        case .flow, .handoff:
+            // TODO(native-redesign detail lane): route declared native flows and web handoffs.
+            return
         }
     }
 
