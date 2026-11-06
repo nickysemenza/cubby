@@ -413,6 +413,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         resolution: {
           reset: { itemizationExpectation: null },
+          resetSource: "vendorEvidence",
           redundancy: "eligible",
           // Receipt-only or unrecorded evidence implies no policy, so the
           // Purchase ladder falls through to the spending category.

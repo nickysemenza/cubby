@@ -330,7 +330,15 @@ Inherited-field previews run the existing SQL source ladder with only the local
 assignment removed, inside the explanation snapshot. They preserve terminal
 source identity and distinguish an ancestor's explicit None from no decision;
 the bounded evidence display never limits the counterfactual. Lists and saves
-do not compute this preview. Specialist fields do not compute reset previews and are skipped by bulk redundant-override reset. Blocked ownership
+do not compute this preview. A field may declare `resolution.resetSource` when
+its canonical SQL resolution can evaluate a typed counterfactual row. Explanation
+reads apply the entire declared reset patch with `jsonb_populate_record`, without
+writing, and run the same SQL used by ordinary reads. The source port preserves
+blocked/empty outcomes and normalizes both values and source identities. This
+currently covers Vendor, Purchase and FinancialTransaction itemization policy
+and Expense spending category. Domain-only resolvers without a declared SQL
+source have no exact reset preview; bulk redundant-override reset continues to
+skip them. Blocked ownership
 or category evidence stays a successful blocked outcome, not an invented fallback.
 Assignment facts load the declared governed storage columns in a page batch;
 reference identities normalize in one set lookup, without treating an effective

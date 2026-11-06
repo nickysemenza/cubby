@@ -178,6 +178,9 @@ export type EntityField = Readonly<
   Omit<ProjectedEntityField, "requiredOnCreate" | "resolution"> & {
     resolution: Readonly<{
       reset?: Readonly<Record<string, EntityFieldResolutionValue>>;
+      resetSource?: NonNullable<
+        ProjectedEntityField["resolution"]
+      >["resetSource"];
       none: Readonly<Record<string, EntityFieldResolutionValue>> | null;
       redundancy: "eligible" | "intentional";
       confirm: Readonly<Record<string, EntityFieldResolutionValue>> | null;
