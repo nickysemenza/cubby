@@ -257,6 +257,7 @@ export const { definition, readSchemas } = defineEntityModel({
       extraActions: ["complete"],
       quickActions: ["complete"],
       rowCommand: "complete",
+      rail: [{ field: "due" }],
       timeline: {
         fields: ["due.start", "due.end"],
         lifecycle: {
@@ -287,14 +288,7 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "status",
         kind: "enum",
-        control: {
-          kind: "select",
-          options: selectControlOptions.taskStatus.map((option) =>
-            option.value === "not_started"
-              ? { ...option, quiet: true as const }
-              : option,
-          ),
-        },
+        control: { kind: "select", options: selectControlOptions.taskStatus },
         display: {
           columnGroup: "Work",
           mobile: { slot: "subtitle", priority: 10 },

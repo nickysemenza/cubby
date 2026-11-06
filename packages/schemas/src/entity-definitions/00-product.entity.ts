@@ -153,6 +153,7 @@ export const { definition, readSchemas } = defineEntityModel(
       },
       icons: { phosphor: "Barcode", sfSymbol: "shippingbox", emoji: "📦" },
       detail: {
+        quickActions: ["addToInventory"],
         summary: [
           {
             kind: "report",
@@ -362,6 +363,11 @@ export const { definition, readSchemas } = defineEntityModel(
         ],
       },
       list: {
+        rail: [
+          { field: "onHandUnits" },
+          { field: "expenseTotal", sub: "purchaseDate", total: "sum" },
+        ],
+        quickActions: ["addToInventory"],
         titleSubtitle: true,
         savedViews: [
           // `@me` is the viewing member (ADR 0018).

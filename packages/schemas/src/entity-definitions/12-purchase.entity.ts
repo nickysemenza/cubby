@@ -243,6 +243,7 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
+      rail: [{ field: "expenseTotal", sub: "date", total: "sum" }],
       titleSubtitle: true,
       shelfSubtitleOverride: ["vendorId", "displayLabel"],
       savedViews: [
@@ -972,6 +973,7 @@ export const { definition, readSchemas } = defineEntityModel({
           valueOptions: [
             {
               value: "match",
+              quiet: true,
               label: "Reconciles",
               color: "positive",
             },

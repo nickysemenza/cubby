@@ -28,6 +28,7 @@ import {
 import type { CollectionActionId } from "./entity-definitions/collection-actions";
 import type { SectionActionId } from "./entity-section-actions";
 import { TRADE_LABELS, tradeValues } from "./task-fields";
+import { purchaseSettlementKinds } from "./financial-transaction-fields";
 import type { Entity } from "./entity-core";
 import type {
   ControlRendererId,
@@ -334,6 +335,7 @@ export const nativeCoverage = {
       "markPurchased",
       "fetchLogo",
       "moveTo",
+      "receive",
       "recordSale",
       "setStatus",
     ]),
@@ -628,6 +630,14 @@ type HeroActionField = {
 };
 
 /**
+ * Native flows a plan may present. Each is a screen the app already owns over existing
+ * operations (`ReceivingModel` over `inventory.receiveExpense`, the location photo pass), so a
+ * flow never adds a write path; the generated `NativeFlowID` makes the app switch over all of them.
+ */
+export const NATIVE_FLOWS = ["receiveExpense", "locationPhotoPass"] as const;
+export type NativeFlowId = (typeof NATIVE_FLOWS)[number];
+
+/**
  * What the one generic native hero-action runner (`HeroActionRunner`) does for a verb. The verb
  * is the manifest's hero action id; the plan names the operation (an HTTP operation id, so the
  * client is generated and `pnpm generate` fails when it is not flagged `native:`), the confirmation
@@ -689,6 +699,18 @@ export type NativeHeroActionPlan = {
       readonly field: string;
       /** Writes this option on one tap instead of asking (a task's Done). */
       readonly value?: string;
+      /**
+       * Also offered on a list selection, written through the one atomic kernel bulk update web's
+       * bulk edit uses; a failure changes no row.
+       */
+      readonly bulk?: true;
+    }
+  | {
+      /** Presents a native flow the app owns (`NATIVE_FLOWS`); the flow does its own writes. */
+      readonly kind: "flow";
+      readonly flow: NativeFlowId;
+      readonly entities: readonly Entity[];
+      readonly requires?: { readonly path: string; readonly reason: string };
     }
   | {
       /** Edits one update field's current value in the single-field form, then updates the row. */
@@ -833,6 +855,20 @@ export const nativeHeroActionPlans = {
     entities: ["task"],
     field: "status",
     value: "done",
+    bulk: true,
+  },
+  receive: {
+    label: "Receive into inventory",
+    symbol: "tray.and.arrow.down",
+    kind: "flow",
+    // The same review `inventory.receiveExpense` drives from a Purchase's receiving section:
+    // already-counted stock is shown before any units are added.
+    flow: "receiveExpense",
+    entities: ["expense"],
+    requires: {
+      path: "productId",
+      reason: "Link a Product to receive this line into inventory.",
+    },
   },
   moveTo: {
     label: "Move to",
@@ -862,6 +898,7 @@ export const nativeHeroActionPlans = {
     kind: "setField",
     entities: ["project"],
     field: "status",
+    bulk: true,
   },
   markPurchased: {
     label: "Mark purchased",
@@ -872,6 +909,56 @@ export const nativeHeroActionPlans = {
     stateField: "acquiredAt",
   },
 } as const satisfies Partial<Record<HeroActionId, NativeHeroActionPlan>>;
+
+/** A record condition: the value at `path` (`readPath` grammar) is, or is not, one of these. */
+export type NativeRecordCondition = {
+  readonly path: string;
+  readonly oneOf?: readonly string[];
+  readonly noneOf?: readonly string[];
+};
+
+/**
+ * Record affordances native offers that are not web hero verbs: a native flow, or a web
+ * handoff tied to one detail section. `entities` places each on those records; `when` limits it
+ * to records it applies to (otherwise it is absent, not disabled). Server availability for the
+ * same id, when a read carries one, wins over `when`.
+ */
+export type NativeRecordActionPlan = {
+  readonly label: string;
+  readonly symbol: string;
+  readonly entities: readonly Entity[];
+  readonly when?: readonly NativeRecordCondition[];
+} & (
+  | { readonly kind: "flow"; readonly flow: NativeFlowId }
+  | {
+      readonly kind: "handoff";
+      /** `section` must be a detail section every listed entity declares. */
+      readonly web: NativeWebHandoff & { readonly section: string };
+    }
+);
+
+export const nativeRecordActionPlans = {
+  photoPass: {
+    label: "Photo pass from this location",
+    symbol: "camera.on.rectangle",
+    kind: "flow",
+    flow: "locationPhotoPass",
+    entities: ["location"],
+  },
+  // Booking a charge into the Expense ledger, and correcting a recorded booking, are web's:
+  // both sit with the allocations in the transaction's overview.
+  reviewBooking: {
+    label: "Review booking on web",
+    symbol: "safari",
+    kind: "handoff",
+    web: { section: "overview", label: "Review booking on web" },
+    entities: ["financialTransaction"],
+    when: [
+      { path: "status", noneOf: ["void"] },
+      { path: "kind", oneOf: purchaseSettlementKinds },
+    ],
+  },
+} as const satisfies Record<string, NativeRecordActionPlan>;
 
 /**
  * Plans for the verbs a `collection` detail section offers (`COLLECTION_ACTION_SCOPES`), run by

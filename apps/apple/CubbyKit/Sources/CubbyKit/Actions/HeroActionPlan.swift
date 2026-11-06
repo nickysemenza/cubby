@@ -96,6 +96,29 @@ public struct HeroEditorContext: Decodable, Sendable, Hashable {
     public let description: String
 }
 
+/// A record condition from a record action's `when`: the value at `path` (`readPath` grammar) is,
+/// or is not, one of the listed strings. A record that fails one has no such action.
+public struct HeroActionCondition: Decodable, Sendable, Hashable {
+    public let path: String
+    public let oneOf: [String]?
+    public let noneOf: [String]?
+
+    public func holds(in raw: JSONValue) -> Bool {
+        let value = raw.planValue(path)?.stringValue
+        if let oneOf, !oneOf.contains(where: { $0 == value }) { return false }
+        if let noneOf, let value, noneOf.contains(value) { return false }
+        return true
+    }
+}
+
+extension JSONValue {
+    /// A plan path against a row: a bare field key reads through its field envelope, a longer
+    /// path walks the raw record.
+    func planValue(_ path: String) -> JSONValue? {
+        path.contains(where: { $0 == "." || $0 == "[" }) ? pathValue(path) : recordValue(path)
+    }
+}
+
 /// What the one generic runner does for a manifest hero action, decoded from
 /// `native-coverage.json`'s `heroActionPlan`. The verb is the manifest's; nothing is per entity
 /// except the `entities` gate.
@@ -113,6 +136,10 @@ public struct HeroActionPlan: Decodable, Sendable, Hashable {
         case editField(field: String)
         /// Flips a boolean update field whose current state is read from `stateField`.
         case toggleField(field: String, stateField: String)
+        /// Presents a native flow the app owns; the flow makes its own writes.
+        case flow(NativeFlowID, requires: HeroOperationPlan.Requirement?)
+        /// Opens the record's web page at a declared detail section (a native record action).
+        case handoff(section: String, label: String)
     }
 
     public let kind: Kind
@@ -121,6 +148,10 @@ public struct HeroActionPlan: Decodable, Sendable, Hashable {
     public let symbol: String
     /// Entities that may offer the verb; nil means any entity whose declaration names it.
     public let entities: [EntityKey]?
+    /// Record actions only: the record conditions under which the action exists at all.
+    public let when: [HeroActionCondition]
+    /// Also offered on a list selection, as one atomic kernel bulk update.
+    public let bulk: Bool
 
     /// The form's fields; empty for verbs with no input beyond a confirmation.
     public var fields: [HeroActionField] {
@@ -140,7 +171,16 @@ public struct HeroActionPlan: Decodable, Sendable, Hashable {
         case .operation(let plan):
             return plan.fields.isEmpty && plan.preview == nil && plan.confirmation == .none
         case .setField(_, let value): return value != nil
-        case .delete, .create, .editField, .toggleField: return false
+        case .delete, .create, .editField, .toggleField, .flow, .handoff: return false
+        }
+    }
+
+    /// The availability requirement the record must meet, from an operation or flow plan.
+    public var requirement: HeroOperationPlan.Requirement? {
+        switch kind {
+        case .operation(let plan): plan.requires
+        case .flow(_, let requires): requires
+        case .delete, .create, .setField, .editField, .toggleField, .handoff: nil
         }
     }
 
@@ -148,19 +188,23 @@ public struct HeroActionPlan: Decodable, Sendable, Hashable {
         switch kind {
         case .delete: .destructive
         case .operation(let plan): plan.confirmation
-        case .create, .setField, .editField, .toggleField: .none
+        case .create, .setField, .editField, .toggleField, .flow, .handoff: .none
         }
     }
 
     private enum CodingKeys: String, CodingKey {
         case kind, label, symbol, entities, entity, seed, editor, field, value, stateField
+        case flow, requires, web, when, bulk
     }
+    private enum WebKeys: String, CodingKey { case section, label }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         label = try container.decode(String.self, forKey: .label)
         symbol = try container.decode(String.self, forKey: .symbol)
         entities = try container.decodeIfPresent([EntityKey].self, forKey: .entities)
+        when = try container.decodeIfPresent([HeroActionCondition].self, forKey: .when) ?? []
+        bulk = try container.decodeIfPresent(Bool.self, forKey: .bulk) ?? false
         switch try container.decode(String.self, forKey: .kind) {
         case "delete":
             kind = .delete
@@ -181,6 +225,15 @@ public struct HeroActionPlan: Decodable, Sendable, Hashable {
             kind = .toggleField(
                 field: try container.decode(String.self, forKey: .field),
                 stateField: try container.decode(String.self, forKey: .stateField))
+        case "flow":
+            kind = .flow(
+                try container.decode(NativeFlowID.self, forKey: .flow),
+                requires: try container.decodeIfPresent(HeroOperationPlan.Requirement.self, forKey: .requires))
+        case "handoff":
+            let web = try container.nestedContainer(keyedBy: WebKeys.self, forKey: .web)
+            kind = .handoff(
+                section: try web.decode(String.self, forKey: .section),
+                label: try web.decode(String.self, forKey: .label))
         case let other:
             throw DecodingError.dataCorruptedError(
                 forKey: .kind, in: container, debugDescription: "Unknown hero action plan kind \(other)")

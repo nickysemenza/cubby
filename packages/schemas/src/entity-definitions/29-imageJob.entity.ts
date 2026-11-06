@@ -1,4 +1,5 @@
 import { timestampField, readOnly } from "./field-policy";
+import { withQuiet } from "./select-control-options.js";
 import type { EnumIcon } from "@cubby/shared/enum-palette";
 import { z } from "zod";
 import { dateTime } from "../codec";
@@ -164,6 +165,7 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
+      rail: [{ field: "createdAt" }],
       // The thumbnail borrows the Image the job processes; quality is the job's own checks.
 
       savedViews: [
@@ -228,6 +230,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "enum",
         control: { kind: "select", options: kindOptions },
         display: {
+          mobile: { slot: "subtitle", priority: 10 },
           columnGroup: "Execution",
           optionRole: "category",
           optionColor: "neutral-status",
@@ -237,8 +240,9 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "state",
         kind: "enum",
-        control: { kind: "select", options: stateOptions },
+        control: { kind: "select", options: withQuiet(stateOptions, "ready") },
         display: {
+          mobile: { slot: "meta", priority: 20 },
           columnGroup: "Execution",
           width: "sm",
           optionRole: "status",
@@ -295,7 +299,10 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "waitingOn",
         kind: "text",
         nullable: true,
-        display: { columnGroup: "Execution" },
+        display: {
+          mobile: { slot: "meta", priority: 30 },
+          columnGroup: "Execution",
+        },
         provenance: {
           kind: "derived",
           sources: [{ label: "The job's execution Job" }],

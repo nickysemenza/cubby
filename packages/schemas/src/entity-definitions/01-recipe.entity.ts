@@ -153,6 +153,7 @@ export const { definition, readSchemas } = defineEntityModel(
         ],
       },
       list: {
+        rail: [{ field: "totalMinutes" }, { field: "servings" }],
         savedViews: [
           {
             id: "no-instructions",

@@ -37,6 +37,7 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     icons: { phosphor: "Heart", sfSymbol: "star", emoji: "⭐" },
     detail: {
+      quickActions: ["markPurchased"],
       summary: [
         {
           kind: "fields",
@@ -92,6 +93,9 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
+      rail: [{ field: "candidateCount" }],
+      quickActions: ["markPurchased"],
+      rowCommand: "markPurchased",
       savedViews: [
         {
           id: "hide-acquired",
@@ -129,7 +133,11 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { columnGroup: "Decision", width: "xl" },
+        display: {
+          mobile: { slot: "meta", priority: 30 },
+          columnGroup: "Decision",
+          width: "xl",
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -172,6 +180,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "timestamp",
         nullable: true,
         display: {
+          mobile: { slot: "subtitle", priority: 10 },
           columnGroup: "Decision",
           valueOptions: [
             {
@@ -181,6 +190,7 @@ export const { definition, readSchemas } = defineEntityModel({
             },
             {
               value: "wanted",
+              quiet: true,
               label: "Wanted",
               color: "neutral-status",
             },

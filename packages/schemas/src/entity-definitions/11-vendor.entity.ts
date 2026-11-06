@@ -205,6 +205,10 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
+      rail: [
+        { field: "spend", sub: "latestPurchaseDate", total: "sum" },
+        { field: "purchaseCount" },
+      ],
       extraActions: ["fetchLogo", "refreshLogo"],
       titleSubtitle: true,
       shelfSubtitleOverride: ["defaultSpendingCategoryId"],

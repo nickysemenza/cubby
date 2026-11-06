@@ -108,6 +108,17 @@ public struct HeroActionRunner: Sendable {
         return plan
     }
 
+    /// The native record actions (`recordActionPlan`) that apply to `raw` on `entity`, by id: each
+    /// plan's entity gate and `when` conditions hold.
+    public static func recordActions(on entity: EntityKey, raw: JSONValue) -> [(String, HeroActionPlan)] {
+        NativeCoverageManifest.shared.recordActionPlan
+            .filter { _, plan in
+                (plan.entities?.contains(entity) ?? false) && plan.when.allSatisfy { $0.holds(in: raw) }
+            }
+            .sorted { $0.key < $1.key }
+            .map { ($0.key, $0.value) }
+    }
+
     /// The quick actions `row` offers, in declared order (at most two): each with a plan for
     /// `entity` whose requirement the record meets. A preset write the record already carries
     /// (Done on a done task) is left out rather than offered as a no-op.
@@ -128,6 +139,7 @@ public struct HeroActionRunner: Sendable {
         switch plan.kind {
         case .operation(let operation): return operation.operation
         case .delete, .create, .setField, .editField, .toggleField: return "entity.mutate"
+        case .flow, .handoff: return nil
         }
     }
 
@@ -209,8 +221,8 @@ public struct HeroActionRunner: Sendable {
 
     /// Why the record cannot take the plan yet (the plan's `requires` is unmet), or nil when it can.
     public static func unmet(_ plan: HeroActionPlan, in raw: JSONValue) -> String? {
-        guard let requirement = plan.operation?.requires else { return nil }
-        switch raw.pathValue(requirement.path) {
+        guard let requirement = plan.requirement else { return nil }
+        switch raw.planValue(requirement.path) {
         case nil, .null?: return requirement.reason
         case .array(let items)?: return items.isEmpty ? requirement.reason : nil
         case .string(let text)?: return text.isEmpty ? requirement.reason : nil
@@ -252,7 +264,7 @@ public struct HeroActionRunner: Sendable {
                             } ?? .absent)))
             default: throw HeroActionError.unsupported(preview.operation)
             }
-        case .create, .setField, .editField, .toggleField:
+        case .create, .setField, .editField, .toggleField, .flow, .handoff:
             return nil
         }
     }
@@ -329,6 +341,9 @@ public struct HeroActionRunner: Sendable {
             try await client.update(
                 descriptor, id: row.id, patch: EntityPatch(values: [field: .bool(!isSet)]))
             return .completed("\(descriptor.singular) updated", changed: [entity])
+        case .flow, .handoff:
+            // The screen presents these itself; there is nothing for the runner to send.
+            throw HeroActionError.unsupported(plan.label)
         }
     }
 

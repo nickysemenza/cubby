@@ -107,6 +107,7 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     icons: { phosphor: "Tag", sfSymbol: "tag", emoji: "🏷️" },
     list: {
+      rail: [{ field: "productCount" }],
       savedViews: [
         {
           id: "needs-classification",

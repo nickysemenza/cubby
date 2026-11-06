@@ -125,7 +125,10 @@ export const { definition, readSchemas } = defineEntityModel({
 
       hero: {
         when: { field: "date", label: "Paid" },
+        extraActions: ["receive"],
       },
+      quickActions: ["receive"],
+      quickFields: ["spendingCategoryId"],
       omitRelations: {
         transactions:
           "The settlement slot renders the transactions that settle this expense.",
@@ -186,6 +189,10 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
+      extraActions: ["receive"],
+      quickActions: ["receive"],
+      rowCommand: "receive",
+      rail: [{ field: "cost", sub: "date", total: "sum" }],
       titleSubtitle: true,
       // A project page's embedded expense list: expenses with any allocation
       // share in a project its project filters select.
@@ -1836,6 +1843,9 @@ Rules:
         },
         {
           relationPath: ["purchase"],
+        },
+        {
+          relationPath: ["purchase", "vendor"],
         },
       ],
       ingress: [

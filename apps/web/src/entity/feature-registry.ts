@@ -70,6 +70,7 @@ export interface FeatureRegistry {
     recipe: readonly EntityActionDefinition[];
     inventoryLocation: readonly EntityActionDefinition[];
     markExpensePurchased: EntityActionDefinition;
+    receiveExpense: EntityActionDefinition;
     createProjectFromTasks: EntityActionDefinition;
   };
   /** Feature components and hooks the generic entity surfaces render. */

@@ -116,7 +116,21 @@ type Presentation = {
   role: "status" | "category";
   color: import("@cubby/shared/enum-palette").ColorToken;
   glyph?: Glyph;
+  /** The expected value native rows leave unsaid. */
+  quiet?: true;
 };
+/**
+ * Marks `value` as the roster's quiet option. Controls carry it; filter presets share the
+ * plain roster, which has no quiet value.
+ */
+export const withQuiet = <Option extends { value: string }>(
+  options: readonly Option[],
+  value: Option["value"],
+) =>
+  options.map((option) =>
+    option.value === value ? { ...option, quiet: true as const } : option,
+  );
+
 const labeled = <Value extends string>(
   values: readonly Value[],
   labels: Record<Value, string>,
@@ -257,7 +271,7 @@ export const selectControlOptions = {
   projectStatus: labeled(projectStatusValues, PROJECT_STATUS_LABELS, {
     planning: { role: "status", color: "neutral-status" },
     not_started: { role: "status", color: "neutral-status" },
-    in_progress: { role: "status", color: "info" },
+    in_progress: { role: "status", color: "info", quiet: true },
     done: { role: "status", color: "positive" },
   }),
   projectKind: labeled(
@@ -274,7 +288,7 @@ export const selectControlOptions = {
     project_kindDescriptions,
   ),
   taskStatus: labeled(taskStatusValues, TASK_STATUS_LABELS, {
-    not_started: { role: "status", color: "neutral-status" },
+    not_started: { role: "status", color: "neutral-status", quiet: true },
     later: { role: "status", color: "warning" },
     in_progress: { role: "status", color: "info" },
     blocked: { role: "status", color: "destructive" },

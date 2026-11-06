@@ -33,7 +33,9 @@ export const { definition, readSchemas } = defineEntityModel({
         },
       ],
     },
-    list: {},
+    list: {
+      rail: [{ field: "amount", sub: "date" }],
+    },
     titleField: "fromPartyName",
     domain: "finance",
     description: "Transfers recorded between ledger parties.",

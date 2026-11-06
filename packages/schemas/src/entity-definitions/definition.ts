@@ -363,6 +363,7 @@ const buildMetadataSchemas = () => {
               glyph: enumOptionIconSchema.optional(),
               /** Explicit option role, otherwise the declared roster role. */
               role: z.enum(enumRoles).optional(),
+              /** The expected value native rows leave unsaid; one per roster. */
               quiet: z.literal(true).optional(),
             })
             .strict(),
@@ -543,6 +544,7 @@ const buildMetadataSchemas = () => {
        */
       referencePreviewLimit: orNull(z.number().int().positive()),
       listHidden: flag(false),
+      /** `false` keeps a simple field out of native tap-to-edit on detail. */
       inlineEdit: z.literal(false).nullable().optional().default(null),
       /**
        * A table header's short form when the label is longer than its
@@ -571,6 +573,7 @@ const buildMetadataSchemas = () => {
               glyph: enumOptionIconSchema.optional(),
               /** Explicit option role, otherwise the declared roster role. */
               role: z.enum(enumRoles).optional(),
+              /** The expected value native rows leave unsaid; one per roster. */
               quiet: z.literal(true).optional(),
             })
             .strict(),
@@ -1614,7 +1617,12 @@ const buildMetadataSchemas = () => {
          * record's leading buttons, ahead of the More menu.
          */
         quickActions: z.array(actionKey).max(4).optional().default([]),
+        /**
+         * Updatable fields offered as tonal action-bar tiles after the quick
+         * actions (four tiles in all); each opens the field's inline editor.
+         */
         quickFields: z.array(fieldKey).optional().default([]),
+        /** Native phone hero image: a tile beside the title, or a full-width banner. */
         heroMedia: z.enum(["tile", "banner"]).optional().default("tile"),
         /** Only these relations contribute dated records to merged activity. */
         activityRelations: z
@@ -1931,6 +1939,12 @@ const buildMetadataSchemas = () => {
          * swipe and the first row-menu items.
          */
         quickActions: z.array(actionKey).max(2).optional().default([]),
+        /**
+         * Up to two aligned trailing columns on native rows (number, money,
+         * amount or date fields), each with an optional secondary `sub` value.
+         * `total: "sum"` adds the field to grouped metrics so group headers and
+         * selections show server totals.
+         */
         rail: z
           .array(
             z.strictObject({
@@ -1942,7 +1956,12 @@ const buildMetadataSchemas = () => {
           .max(2)
           .optional()
           .default([]),
+        /** A list verb drawn as the row's leading control (a task's Done). */
         rowCommand: actionKey.nullable().optional().default(null),
+        /**
+         * Replaces the derived native swipe actions with these list verbs, or
+         * `false` for none. Unset derives them from quick and one-tap verbs.
+         */
         swipe: z
           .union([
             z.literal(false),
@@ -2016,7 +2035,13 @@ const buildMetadataSchemas = () => {
           views,
           viewAliases,
           totals,
-          metrics: totals.flatMap((total) => (total.group ? total.keys : [])),
+          // Grouped reads sum these per group: grouped totals, then summed rail columns.
+          metrics: [
+            ...new Set([
+              ...totals.flatMap((total) => (total.group ? total.keys : [])),
+              ...rail.flatMap((item) => (item.total ? [item.field] : [])),
+            ]),
+          ],
           shelf:
             shelfSubtitleOverride === undefined
               ? null

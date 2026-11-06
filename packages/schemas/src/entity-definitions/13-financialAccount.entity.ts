@@ -44,7 +44,9 @@ export const { definition, readSchemas } = defineEntityModel({
         },
       ],
     },
-    list: {},
+    list: {
+      rail: [{ field: "transactionCount" }],
+    },
     titleField: "name",
     domain: "finance",
     description: "Accounts that provide settlement evidence.",

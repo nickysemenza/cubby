@@ -36,6 +36,7 @@ export const { definition, readSchemas } = defineEntityModel(
       },
       icons: { phosphor: "Carrot", sfSymbol: "leaf", emoji: "🥕" },
       detail: {
+        quickFields: ["usuallyOnHand"],
         summary: [
           {
             kind: "records",

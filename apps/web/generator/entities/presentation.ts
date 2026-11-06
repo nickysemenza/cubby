@@ -529,6 +529,24 @@ const isPlacementField = (field: EntityFieldModel["fields"][number]) => {
   return read instanceof z.ZodObject && "locationId" in read.shape;
 };
 
+const RAIL_FORMATS = new Set([
+  "currency",
+  "signedCurrency",
+  "amount",
+  "count",
+  "bytes",
+  "plainDate",
+  "timestamp",
+]);
+const isRailValue = (field: EntityField) =>
+  field.kind === "number" ||
+  field.kind === "date" ||
+  field.kind === "timestamp" ||
+  field.kind === "dateRange" ||
+  RAIL_FORMATS.has(field.display.format ?? "") ||
+  // A server-worded figure (a meal's estimated cost) reads as one value.
+  (field.kind === "json" && field.display.labelPath !== null);
+
 const checkHero = (
   hero: EntityPresentation["detail"]["hero"],
   lookup: FieldLookup,
@@ -990,6 +1008,15 @@ export const compilePresentation = (
     list: list.quickActions,
     listActions: list.actions,
   });
+  // The action bar holds at most four tiles: quick actions first, then quick fields.
+  if (new Set(detail.quickFields).size !== detail.quickFields.length)
+    throw new EntityDeclarationError(
+      `${lookup.context}.detail.quickFields repeats a field.`,
+    );
+  if (detail.quickActions.length + detail.quickFields.length > 4)
+    throw new EntityDeclarationError(
+      `${lookup.context}.detail quickActions and quickFields exceed the four action-bar tiles.`,
+    );
   for (const key of detail.quickFields) {
     const field = lookup.edit(key, "detail.quickFields");
     if (field.validation.update === null)
@@ -997,13 +1024,25 @@ export const compilePresentation = (
         `${lookup.context}.detail.quickFields ${key} is not updatable.`,
       );
   }
+  const railFields = new Set<string>();
   for (const item of list.rail) {
-    const field = lookup.read(item.field, "list.rail");
+    const field = listLookup.read(item.field, "list.rail");
+    if (railFields.has(item.field))
+      throw new EntityDeclarationError(
+        `${lookup.context}.list.rail repeats ${item.field}.`,
+      );
+    railFields.add(item.field);
+    // A rail column aligns figures down the list: quantities, money and dates.
+    if (!isRailValue(field))
+      throw new EntityDeclarationError(
+        `${lookup.context}.list.rail ${item.field} must be a number, money, amount or date field.`,
+      );
+    // `total: "sum"` joins the grouped metric roster, which checks additivity.
     if (item.total && field.kind !== "number")
       throw new EntityDeclarationError(
         `${lookup.context}.list.rail total requires a numeric field.`,
       );
-    if (item.sub) lookup.read(item.sub, "list.rail.sub");
+    if (item.sub) listLookup.read(item.sub, "list.rail.sub");
   }
   for (const verb of [
     list.rowCommand,

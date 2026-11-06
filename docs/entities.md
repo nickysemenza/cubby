@@ -533,15 +533,6 @@ precision and use the event id to break ties. Data-only web consumers use
 
 ## Declaration contracts
 
-Native presentation declarations can name up to two `list.rail` entries with a
-readable `field`, optional readable `sub`, and optional numeric `total: "sum"`.
-`list.rowCommand` names a list verb; `list.swipe` overrides leading and trailing
-verb IDs, or `false` removes swipes. `detail.quickFields` names editable fields;
-`detail.heroMedia` selects `tile` (default) or `banner`. `display.inlineEdit:
-false` opts a field out of inline editing. An option can declare `quiet: true`;
-at most one option in a field roster may do so. These are presentation facts;
-server reads own availability and aggregate figures.
-
 Detail sections are authored for reading (`detail.sections` below); nothing is
 derived from edit groups. A section keeps its declared `workspace`, else a
 timeline joins Evidence and a relation Work. Web detail renders sections in declaration order after any declared `detail.lead`
@@ -648,6 +639,45 @@ roots without recursively applying their mutation ripples or scheduling Jobs.
 
 List responses share one metadata schema across entities and clients, including
 pagination, grouping, totals and derived-state sidecars.
+
+### Native row and action declarations
+
+These knobs are presentation facts; server reads own availability, figures and
+totals. Every browsable entity declares what applies to it.
+
+- `list.rail`: at most two list-readable number, money, amount, date or
+  server-worded (`labelPath`) fields, each with an optional `sub`. Rail fields
+  are not repeated as row facts. `total: "sum"` joins the grouped metric roster,
+  so the compiler's additivity rules apply (money must be Expense-derived).
+- Option `quiet: true` marks the expected value (a task's Not started) that rows
+  leave unsaid; one per roster. Put it on the control roster (`withQuiet`), not on
+  filter presets.
+- `list.rowCommand` draws one `list.extraActions` verb as the row's leading
+  control. `list.swipe` replaces the derived swipe verbs, or `false` removes them.
+- `detail.quickActions` (filled) and `detail.quickFields` (tonal, updatable fields
+  that open their inline editor) share four action-bar tiles.
+  `detail.heroMedia` is `tile` (default) or `banner`. `display.inlineEdit: false`
+  keeps a simple field out of tap-to-edit.
+- Thumbnails borrow through `capabilities.images.displaySources` (an Expense
+  shows its Product, then its Purchase, then that Purchase's Vendor).
+
+CubbyKit `ActionPlacement` is the one native derivation of where actions appear.
+Leading swipe: list quick actions, then one-tap non-destructive verbs, at most
+two. Trailing swipe: Delete, destructive verbs, More. Context menu: verbs and
+flows, Edit and Select, Copy link / Share / Open on web, destructive last. The
+selection bar holds Bulk edit, Merge (two or more), verbs whose native plan sets
+`bulk`, and Delete. Detail tiles come from quick actions, then one-tap verbs,
+native flows and quick fields; never destructive. Detail More groups verbs,
+create (flows, Add photo), share, web handoffs and destructive actions.
+Unavailable actions are hidden in swipes and context menus and dimmed with their
+reason elsewhere. Availability is the row's server `actions: [{id, enabled,
+reason}]`; without it, placement falls back to the plan's `requires`.
+
+`native-coverage.ts` owns native execution. A `flow` plan presents a screen the
+app already owns (`NATIVE_FLOWS`: receiving an Expense, the location photo
+pass). `nativeRecordActionPlans` adds record affordances that are not web
+verbs: a flow, or a handoff to a declared detail section, limited by `when`
+record conditions. Expense `receive` is a declared verb on both clients.
 
 ## One declaration, several consumers
 

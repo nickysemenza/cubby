@@ -31,10 +31,13 @@ import {
 import {
   type NativeCoverageEntry,
   type NativeHeroActionPlan,
+  type NativeRecordActionPlan,
   nativeCollectionActionPlans,
   nativeCoverage,
   requireNativeCoverage,
   nativeHeroActionPlans,
+  nativeRecordActionPlans,
+  NATIVE_FLOWS,
 } from "@cubby/schemas/compiler/native-coverage";
 import { onDetailSurface } from "@cubby/schemas/entity-detail-summary";
 import { SECTION_ACTION_IDS } from "@cubby/schemas/entity-section-actions";
@@ -1006,6 +1009,27 @@ export const renderSwiftEntityCatalog = (
       throw new Error(
         `native-coverage.ts: collection action ${JSON.stringify(action)} needs an operation plan`,
       );
+  // A record action places only on declared entities, and a handoff opens a section each declares.
+  const recordPlans: Readonly<Record<string, NativeRecordActionPlan>> =
+    nativeRecordActionPlans;
+  for (const [id, plan] of Object.entries(recordPlans)) {
+    for (const key of plan.entities) {
+      const entity = entities.find((candidate) => candidate.key === key);
+      if (entity === undefined)
+        throw new Error(
+          `native-coverage.ts: record action ${JSON.stringify(id)} names ${key}, which is not a declared entity`,
+        );
+      if (
+        plan.kind === "handoff" &&
+        !entity.inspector.detail.sections.some(
+          (section) => section.id === plan.web.section,
+        )
+      )
+        throw new Error(
+          `native-coverage.ts: record action ${JSON.stringify(id)} hands off to section ${JSON.stringify(plan.web.section)}, which ${key} does not declare`,
+        );
+    }
+  }
   const nativeCoverageJSON = {
     control: classified("control", coverageVocabulary.control),
     list: classified("list", coverageVocabulary.list),
@@ -1024,6 +1048,7 @@ export const renderSwiftEntityCatalog = (
     heroActionPlan: nativeHeroActionPlans,
     collectionActionPlan: nativeCollectionActionPlans,
     collectionActionScope: COLLECTION_ACTION_SCOPES,
+    recordActionPlan: nativeRecordActionPlans,
   };
   const idsWithStatus = (
     coverage: Readonly<Record<string, NativeCoverageEntry>>,
@@ -1093,6 +1118,11 @@ export const renderSwiftEntityCatalog = (
       name: "CollectionActionID",
       doc: "The verbs a report `records` block offers; each has a plan in `native-coverage.json`'s\n`collectionActionPlan` that `HeroActionRunner` executes.",
       cases: vocabularyCases(COLLECTION_ACTIONS),
+    },
+    {
+      name: "NativeFlowID",
+      doc: "Native flows a plan presents (`NATIVE_FLOWS` in `native-coverage.ts`); the app switches over every case.",
+      cases: vocabularyCases(NATIVE_FLOWS),
     },
     {
       name: "SectionActionID",
