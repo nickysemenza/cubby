@@ -2,6 +2,7 @@ import type {
   FinancialTransactionId,
   PurchaseId,
 } from "@cubby/schemas/identifiers";
+import { moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
@@ -89,7 +90,7 @@ const allocate = (
   insertAndReturn(db, financialTransactionAllocation, {
     transactionId,
     purchaseId,
-    amount,
+    amountMinor: moneyToMinor(amount),
   });
 
 const liveDefects = async (db: Database) =>

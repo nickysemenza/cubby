@@ -1,3 +1,4 @@
+import { moneyToMinor } from "@cubby/shared";
 import type { PurchaseId } from "@cubby/schemas/identifiers";
 import type { Database } from "~/server/db";
 import { financialTransactionAllocation } from "~/server/db/schema";
@@ -34,7 +35,7 @@ export async function insertSettlementTransaction(
   await insertAndReturn(db, financialTransactionAllocation, {
     transactionId: transaction.id,
     purchaseId: values.purchaseId,
-    amount: values.amount,
+    amountMinor: moneyToMinor(values.amount),
   });
   return transaction;
 }
