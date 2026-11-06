@@ -232,7 +232,7 @@ export const renderKernelBindingsArtifacts = (
       );
       const composed =
         !title || ["inventory", "meal", "run"].includes(entity.key);
-      return `  ${key}: { title: ${composed ? `async () => (await ${load}).title()` : title && entity.table ? `() => sql.raw(${JSON.stringify(`"${entity.table.name}"."${title.column}"::text`)})` : `() => undefined`}, fieldReads: async (db: RepositoryQueryInput, codes: readonly string[]) => (await (await ${load}).get(db, codes)).fieldReads },`;
+      return `  ${key}: { title: ${composed ? `async () => (await ${load}).title()` : title && entity.table ? `() => sql.raw(${JSON.stringify(`"${entity.table.name}"."${title.column}"::text`)})` : `() => undefined`}, fieldReads: async (db: RepositoryQueryInput, codes: readonly string[]) => (await ${load}).fieldReads(db, codes) },`;
     })
     .join("\n");
   const runtimeBindings = kernelEntities
@@ -338,8 +338,10 @@ export const renderKernelBindingsArtifacts = (
       source: rawSource(
         generatedHeader +
           'import { sql } from "drizzle-orm";\n' +
+          'import type { Entity } from "@cubby/schemas/entity";\n' +
           'import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";\n' +
-          `export const ENTITY_READ_BINDINGS = {\n${readBindings}\n};\n` +
+          `const ENTITY_READ_BINDINGS = {\n${readBindings}\n};\n` +
+          `export function repositoryReadBinding(entity: Entity) { const binding = Object.entries(ENTITY_READ_BINDINGS).find(([key]) => key === entity)?.[1]; if (!binding) throw new Error(\`No repository read binding for \${entity}\`); return binding; }\n` +
           `export const ENTITY_REPORT_BINDINGS = {\n${reportBindings}\n};\n`,
       ),
     },

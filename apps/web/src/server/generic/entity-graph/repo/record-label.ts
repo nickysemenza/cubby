@@ -2,13 +2,13 @@ import type { Entity } from "@cubby/schemas/entity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { sql } from "drizzle-orm";
 
-import { ENTITY_READ_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import { repositoryReadBinding } from "~/server/generated/entity-kernel-bindings.gen";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 
 export const labelSql = async (entity: Entity, alias: string) => {
   const prefix = alias ? `${alias}.` : "";
   const column = (name: string) => sql.raw(`${prefix}"${name}"`);
-  const title = await ENTITY_READ_BINDINGS[entity].title();
+  const title = await repositoryReadBinding(entity).title();
   const table = Object.entries(SHORTCODE_TABLE).find(
     ([key]) => key === entity,
   )?.[1];

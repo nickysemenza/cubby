@@ -277,6 +277,7 @@ const predicateValue = (
 
 /** Derived SQL and prepared request data a scaffold passes to its filters. */
 interface DerivedFilterInput {
+  readonly project?: (value: SQL) => SQL;
   readonly derived: AnyDerivedSql;
   /** Repository row sets' relations. */
   readonly rows?: AnyRowsSql;
@@ -297,15 +298,15 @@ const derivedValueTest =
   (condition) => {
     const derived = input?.derived ?? {};
     const set = derivedValueSet(derived, key);
-    if (set === null)
-      return condition(
-        derivedValueSql(
-          entity,
-          derived,
-          key,
-          input?.context ?? ListContext.empty,
-        ),
+    if (set === null) {
+      const value = derivedValueSql(
+        entity,
+        derived,
+        key,
+        input?.context ?? ListContext.empty,
       );
+      return condition(input?.project ? input.project(value) : value);
+    }
     const matched = condition(sql`value_set."value"`);
     return matched === undefined
       ? undefined
@@ -400,20 +401,19 @@ const derivedFilterPredicates = (
   if (field.shape === "predicate") {
     const parsed = predicateValue(descriptor, values, value, presence);
     if (parsed === undefined) return [];
-    return [
-      derivedPredicateSql(
-        entity,
-        derived,
-        derivedKey,
-        context,
-        descriptor.kind === "idMulti" && typeof parsed === "object"
-          ? {
-              ...parsed,
-              includeDescendants: subtreeToggle(entity, key, values),
-            }
-          : parsed,
-      ),
-    ];
+    const predicate = derivedPredicateSql(
+      entity,
+      derived,
+      derivedKey,
+      context,
+      descriptor.kind === "idMulti" && typeof parsed === "object"
+        ? {
+            ...parsed,
+            includeDescendants: subtreeToggle(entity, key, values),
+          }
+        : parsed,
+    );
+    return [predicate && input?.project ? input.project(predicate) : predicate];
   }
   if (field.shape === "value") {
     const test = derivedValueTest(entity, table, derivedKey, input);
@@ -956,7 +956,15 @@ export function declaredFilterPredicates<Filters extends object>(
     {
       label: entity,
       descriptors: descriptorsFor(entity),
-      column: (descriptor, key) => storedColumn(entity, table, descriptor, key),
+      column: (descriptor, key) => {
+        const column = storedColumn(entity, table, descriptor, key);
+        return derivedInput?.project &&
+          descriptorValueKeys(descriptor).some(
+            (key) => values[key] !== undefined,
+          )
+          ? { ...column, value: derivedInput.project(sql`${column.value}`) }
+          : column;
+      },
       subtree: entitySubtreeToggle(entity),
       extra: (values, excluding, mode) => {
         const input =
@@ -989,12 +997,16 @@ export function declaredFilterPredicates<Filters extends object>(
                   !field
                 )
                   return predicate;
-                const available = descriptorAvailabilitySql(
+                const readiness = descriptorAvailabilitySql(
                   entity,
                   table,
                   descriptor,
                   input,
                 );
+                const available =
+                  readiness && input?.project
+                    ? input.project(readiness)
+                    : readiness;
                 const outcome = available
                   ? sql`CASE WHEN ${available} THEN COALESCE(${predicate}, false) ELSE NULL::boolean END`
                   : predicate;

@@ -2069,9 +2069,12 @@ Only an explicit contextual `storedProjection` may replace its default stored
 path; its declaration still owns availability and provenance. Filter-only
 `fromResult` members use the same typed path SQL as visible stored fields.
 
-Work Problems share one materialized base per entity in each request. Compact
-reason arms read its membership columns, with a shared lateral reason relation
-where routing is identical. Reason declarations still own actions and ordering;
+Work Problems project filter values, readiness and related predicates into a
+materialized facts relation per entity and request, then compute membership and
+shared label/authority columns once in its base. Expression reuse includes bound
+values so distinct prepared Problem contexts retain their own semantics. Compact
+reason arms only filter that base, with a shared lateral reason relation where
+routing is identical. Reason declarations still own actions and ordering;
 possible matches with missing publications contribute completeness warnings and
 never actionable rows. Preparation is shared only inside that request.
 
