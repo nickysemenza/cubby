@@ -95,6 +95,20 @@ export const emptyPendingCounts = (): SuggestionPendingCounts => ({
 });
 
 type ReviewItem = z.input<typeof suggestionReviewInput>;
+
+export const cleanAcceptance = (
+  row: Pick<SuggestionKey, "suggestionId" | "fingerprint">,
+) =>
+  ({
+    suggestionId: row.suggestionId,
+    operationId: crypto.randomUUID(),
+    verdict: "correct",
+    correction: { present: false },
+    intent: "apply",
+    expectedFingerprint: row.fingerprint,
+    reason: null,
+    evidence: null,
+  }) satisfies ReviewItem;
 type Action = z.infer<typeof suggestionAction>;
 type RowOf<F extends SuggestionListFamily> = Extract<
   SuggestionListRow,

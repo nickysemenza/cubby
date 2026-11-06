@@ -12,6 +12,7 @@ import {
   verbs,
   qualityImpact,
   keyBase,
+  cleanAcceptance,
   runCode,
   fieldChecks,
   fieldStrength,
@@ -122,16 +123,7 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
       fields,
     };
   },
-  acceptAsIs: (row) => ({
-    suggestionId: row.suggestionId,
-    operationId: crypto.randomUUID(),
-    verdict: "correct",
-    correction: { present: false },
-    intent: "apply",
-    expectedFingerprint: row.fingerprint,
-    reason: null,
-    evidence: null,
-  }),
+  acceptAsIs: cleanAcceptance,
   ...suggestionReviewFamilies.field,
   ...declareAffectedRecords({
     roles: ["subject", "current", "proposed"],

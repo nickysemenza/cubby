@@ -98,6 +98,7 @@ import {
   verbs,
   outcome,
   keyBase,
+  cleanAcceptance,
   transferPairRows,
   TRANSFER_WEAK_BLOCKERS,
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
@@ -1448,14 +1449,7 @@ export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair
   acceptAsIs: (row) =>
     row.evidence.clean
       ? {
-          suggestionId: row.suggestionId,
-          operationId: crypto.randomUUID(),
-          verdict: "correct",
-          correction: { present: false },
-          intent: "apply",
-          expectedFingerprint: row.fingerprint,
-          reason: null,
-          evidence: null,
+          ...cleanAcceptance(row),
           application: { kind: "transfer_pair" },
         }
       : null,

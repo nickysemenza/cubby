@@ -123,6 +123,7 @@ import {
   stamps,
   verbs,
   keyBase,
+  cleanAcceptance,
   statementImpact,
   statementStrength,
   otherTransaction,
@@ -2190,14 +2191,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
     const application = statementAcceptApplication(row.evidence);
     return application
       ? {
-          suggestionId: row.suggestionId,
-          operationId: crypto.randomUUID(),
-          verdict: "correct",
-          correction: { present: false },
-          intent: "apply",
-          expectedFingerprint: row.fingerprint,
-          reason: null,
-          evidence: null,
+          ...cleanAcceptance(row),
           application,
         }
       : null;
