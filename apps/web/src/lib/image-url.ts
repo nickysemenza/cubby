@@ -56,8 +56,9 @@ export const analysisImageUrl = (url: string, maxEdge: number): string => {
   } catch {
     return url;
   }
-  if (!isTransformable(parsed, true)) return url;
-  return `${parsed.origin}/cdn-cgi/image/width=${maxEdge},height=${maxEdge},fit=scale-down,format=jpeg${parsed.pathname}${parsed.search}`;
+  // Analysis owns its rendition even when a caller passed a negotiated UI URL.
+  const path = parsed.pathname.replace(/^\/cdn-cgi\/image\/[^/]+/, "");
+  return `${parsed.origin}/cdn-cgi/image/width=${maxEdge},height=${maxEdge},fit=scale-down,format=jpeg${path}${parsed.search}`;
 };
 
 /**

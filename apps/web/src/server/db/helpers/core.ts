@@ -12,7 +12,10 @@ import {
 import { databaseRequestId } from "~/server/db/db-observability";
 import { notifyDatabaseChanges } from "~/server/db/freshness/client";
 import type { RepositoryQueryTransaction } from "~/server/db/repository-access.boundary";
-import { isSerializationFailure } from "~/server/errors/db-errors";
+import {
+  isSerializationFailure,
+  SnapshotWriteConflictError,
+} from "~/server/errors/db-errors";
 import {
   databaseTraceCaller,
   TraceNames,
@@ -311,7 +314,11 @@ const withTransactionAttempts = async <T>(
         retry,
         retryDelayMs: retry ? 200 * attempt : 0,
       });
-      if (!retry) throw error;
+      if (!retry) {
+        if (!callerOwned && attempts > 1)
+          throw new SnapshotWriteConflictError(error);
+        throw error;
+      }
       // Immediate retries can collide with the same background publication page.
       await sleep(200 * attempt);
       continue;

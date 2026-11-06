@@ -43,6 +43,13 @@ must use aliases.
 
 ## Architecture
 
+The shared AI runner admits image bytes by detected format, not transport or
+caller-supplied MIME labels. Bucket image inputs use full-frame, 2048-pixel JPEG
+renditions (including already-negotiated UI URLs), preserving original attachments
+and avoiding the purchase-evidence compression profile. External and inline images
+must contain provider-supported JPEG, PNG, GIF or WebP bytes; unsupported or invalid
+bytes retain a diagnostic failure. PDF document parts stay documents.
+
 ```
 TanStack Start  →  Entity Kernel  →  Repo  →  Database
 Start workflows ───────────────↗

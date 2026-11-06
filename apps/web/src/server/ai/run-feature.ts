@@ -1,6 +1,7 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import { getErrorMessage } from "@cubby/shared";
+import { prepareEmbeddingText } from "@cubby/shared/ai/embedding-input";
 import {
   isPaidFundingUnavailable,
   type GatewayResponseFailure,
@@ -50,10 +51,10 @@ import {
   type ToolCall,
   type UserMessage,
 } from "@earendil-works/pi-ai";
-import { isTokenValid, parse as parseContentType } from "content-type";
 import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
+import { analysisImageUrl } from "~/lib/image-url";
 import {
   chatCompletionOptionsFor,
   cachedCall,
@@ -84,6 +85,7 @@ import {
 } from "~/server/ai/response-cache";
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
+import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 
 import { isGatewayAdmissionWait } from "./gateway-egress-client";
@@ -421,6 +423,7 @@ const MAX_AI_IMAGE_BYTES = 20 * 1024 * 1024;
 async function resolveImageContent(
   part: AiImagePart | AiDocumentPart,
 ): Promise<ImageContent> {
+  let bytes: Uint8Array;
   if (part.source.type === "inline") {
     if (
       part.source.value.length > Math.ceil(MAX_AI_IMAGE_BYTES / 3) * 4 ||
@@ -429,43 +432,40 @@ async function resolveImageContent(
       throw new Error(
         "Inline AI input exceeds the byte bound or is not base64.",
       );
-    const bytes = Buffer.from(part.source.value, "base64");
+    bytes = Buffer.from(part.source.value, "base64");
     if (
       bytes.byteLength > MAX_AI_IMAGE_BYTES ||
-      bytes.toString("base64") !== part.source.value
+      Buffer.from(bytes).toString("base64") !== part.source.value
     )
       throw new Error(
         "Inline AI input exceeds the byte bound or has invalid base64 encoding.",
       );
-    return {
-      type: "image",
-      data: part.source.value,
-      mimeType: part.source.mimeType,
-    };
+  } else {
+    const { isOurBucketUrl } = await import("~/server/clients/r2-public-url");
+    // Our image edge decodes HEIF/AVIF and applies orientation without replacing
+    // the original. External origins need not offer Cloudflare transformations.
+    const url =
+      part.type === "image" && isOurBucketUrl(part.source.value)
+        ? analysisImageUrl(part.source.value, 2048)
+        : part.source.value;
+    const response = await fetchExternalResponse(url);
+    if (!response.ok)
+      throw new Error(
+        `Failed to fetch AI ${part.type} input (HTTP ${response.status} ${response.statusText}): ${url}`,
+      );
+    bytes = await readResponseWithLimit(response, MAX_AI_IMAGE_BYTES);
   }
-  const response = await fetchExternalResponse(part.source.value);
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch AI ${part.type} input (HTTP ${response.status} ${response.statusText}): ${part.source.value}`,
-    );
-  }
-  const rawContentType =
-    part.source.mimeType ??
-    response.headers.get("content-type") ??
-    "application/octet-stream";
-  const mimeType = part.source.mimeType
-    ? rawContentType
-    : (() => {
-        // The parser is lenient; only forward a valid type/subtype to AI providers.
-        const { type } = parseContentType(rawContentType);
-        const separator = type.indexOf("/");
-        return separator > 0 &&
-          isTokenValid(type, 0, separator) &&
-          isTokenValid(type, separator + 1)
-          ? type
-          : "application/octet-stream";
-      })();
-  const bytes = await readResponseWithLimit(response, MAX_AI_IMAGE_BYTES);
+  // Header metadata (including explicit MIME overrides) is not proof of format.
+  const inspected = await inspectImageFile(bytes, "application/octet-stream");
+  const mimeType = inspected.detectedContentType;
+  if (
+    part.type === "document"
+      ? mimeType !== "application/pdf"
+      : !["image/jpeg", "image/png", "image/gif", "image/webp"].includes(
+          mimeType,
+        )
+  )
+    throw new Error(`Unsupported AI ${part.type} input format: ${mimeType}`);
   return {
     type: "image",
     data: Buffer.from(bytes).toString("base64"),
@@ -1181,7 +1181,10 @@ export async function runEmbeddingFeature(
   ctx: AiRunContext,
 ): Promise<number[][]> {
   const usageCtx = ctx.db ? ctx : null;
-  const texts = [...new Set(args.texts)];
+  const preparedTexts = await Promise.all(
+    args.texts.map((text) => prepareEmbeddingText(text, spec.model)),
+  );
+  const texts = [...new Set(preparedTexts)];
   const vector = z
     .array(z.number().finite())
     .length(
@@ -1248,7 +1251,7 @@ export async function runEmbeddingFeature(
     result.status === "fulfilled" ? [result.value] : [],
   );
   const byText = new Map(texts.map((text, index) => [text, vectors[index]!]));
-  return args.texts.map((text) => byText.get(text)!);
+  return preparedTexts.map((text) => byText.get(text)!);
 }
 
 /** Place one embedding request and record its usage row. */

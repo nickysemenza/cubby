@@ -1,9 +1,11 @@
+import { prepareEmbeddingText } from "@cubby/shared/ai/embedding-input";
+import type { SupportedEmbeddingModel } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
 
 export async function embeddingTextHash(opts: {
   entityKind: string;
   provider: string;
-  model: string;
+  model: SupportedEmbeddingModel;
   dimensions: number;
   text: string;
 }): Promise<string> {
@@ -13,7 +15,7 @@ export async function embeddingTextHash(opts: {
       provider: opts.provider,
       model: opts.model,
       dimensions: opts.dimensions,
-      text: opts.text,
+      text: await prepareEmbeddingText(opts.text, opts.model),
     }),
   );
 }

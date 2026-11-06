@@ -9,6 +9,7 @@ import {
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
+import { SnapshotWriteConflictError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   lockJobs,
@@ -167,7 +168,7 @@ describe("snapshot write recovery", () => {
         },
         { isolationLevel: "repeatable read" },
       ),
-    ).rejects.toMatchObject({ cause: { code: "40001" } });
+    ).rejects.toBeInstanceOf(SnapshotWriteConflictError);
     expect(attempts).toBe(3);
     expect(publications).toEqual([]);
   });

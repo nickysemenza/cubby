@@ -1,7 +1,10 @@
 import type { JobWaitReason } from "@cubby/schemas/job";
 
 import type { UnparsedError } from "~/lib/error-utils";
-import { findPgError } from "~/server/errors/db-errors";
+import {
+  findPgError,
+  SnapshotWriteConflictError,
+} from "~/server/errors/db-errors";
 
 import {
   JobDeferredError,
@@ -60,7 +63,12 @@ export function classifyJobFailure(
     (publication && isTargetDataError(error))
   )
     return { kind: "isolated" };
-  if (chain.some((cause) => cause instanceof JobRetryableError))
+  // A fresh durable attempt can recover after bounded whole-transaction replay.
+  // Classification never replays a committed transaction or its effects here.
+  if (
+    chain.some((cause) => cause instanceof JobRetryableError) ||
+    chain.some((cause) => cause instanceof SnapshotWriteConflictError)
+  )
     return { kind: "transient" };
   return { kind: "failed" };
 }

@@ -104,7 +104,7 @@ describe("semantic hash", () => {
       model: "text-embedding-3-small",
       dimensions: 1536,
       text: "blue tarp",
-    };
+    } satisfies Omit<Parameters<typeof embeddingTextHash>[0], "provider">;
     const openai = await embeddingTextHash({ ...base, provider: "openai" });
     const other = await embeddingTextHash({ ...base, provider: "workers-ai" });
 

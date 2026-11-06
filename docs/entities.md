@@ -2301,6 +2301,15 @@ their own `locationPath` string.
 
 ## Filters and search
 
+Semantic embedding inputs use the model's token limit before provider submission
+and application-cache identity. Builders put identifying fields ahead of free-form
+notes; exceptionally long inputs keep a bounded prefix for one-vector retrieval.
+Source text and lexical search stay complete. Artifact hashes use the same prepared
+input, while retained source text continues to identify the source evidence. Short
+inputs keep their previous identity. Tokenizer work is bounded to the first four
+times the token limit in UTF-16 code units; literal special-token strings are ordinary
+text. No multi-vector or chunk-averaging retrieval is implied.
+
 Exact name/alias resolution trims lookup input and compares case-insensitively
 through the shared name matcher. Stored names and aliases are not rewritten;
 ordinary exact SQL preserves the indexed `lower(column)` expression. Brand

@@ -48,6 +48,11 @@ const db = createDatabase(() => {
 });
 const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
+const syntheticPng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aOtQAAAAASUVORK5CYII=",
+  "base64",
+);
+
 const request: AiChatRequest = {
   systemPrompts: ["frame"],
   messages: [{ role: "user", content: "subject" }],
@@ -174,7 +179,10 @@ it("keys a structured answer by its output schema", async () => {
 // Regression: an external image changed behind the same URL replayed the
 // answer to its old bytes. Our bucket's write-unique keys need no download.
 it("keys external media by its bytes and our bucket's media by URL", async () => {
-  const bodies = ["synthetic image one", "synthetic image two"];
+  const bodies = [
+    Buffer.concat([syntheticPng, Buffer.from("one")]),
+    Buffer.concat([syntheticPng, Buffer.from("two")]),
+  ];
   const fetch = vi
     .spyOn(externalFetch, "fetchExternalResponse")
     .mockImplementation(
@@ -487,15 +495,16 @@ it("keeps paid admission refusal as the terminal cause after a recovered subscri
 
 describe("runStructuredFeature", () => {
   it.each([
-    ["invalid", "application/octet-stream"],
+    ["invalid", "image/png"],
+    ["image/avif", "image/png", "http://localhost:9000/synthetic/source.avif"],
     ["image/png; charset=utf-8", "image/png"],
   ])(
-    "normalizes upstream content type %s with a binary MIME fallback",
-    async (contentType, mimeType) => {
+    "uses image bytes instead of upstream content type %s",
+    async (contentType, mimeType, url = "https://example.com/image") => {
       const fetch = vi
         .spyOn(externalFetch, "fetchExternalResponse")
         .mockResolvedValue(
-          new Response("synthetic image bytes", {
+          new Response(syntheticPng, {
             headers: { "content-type": contentType },
           }),
         );
@@ -513,7 +522,7 @@ describe("runStructuredFeature", () => {
                 content: [
                   {
                     type: "image",
-                    source: { type: "url", value: "https://example.com/image" },
+                    source: { type: "url", value: url, mimeType: "image/avif" },
                   },
                 ],
               },
@@ -525,6 +534,11 @@ describe("runStructuredFeature", () => {
         expect(calls[0]?.context.messages[0]?.content).toEqual([
           expect.objectContaining({ mimeType }),
         ]);
+        expect(fetch).toHaveBeenCalledWith(
+          url.startsWith("http://localhost:9000")
+            ? "http://localhost:9000/cdn-cgi/image/width=2048,height=2048,fit=scale-down,format=jpeg/synthetic/source.avif"
+            : url,
+        );
       } finally {
         fetch.mockRestore();
       }
@@ -799,4 +813,42 @@ describe("modelOptionsFor", () => {
       toolChoice: { type: "function", name: RESPOND_TOOL_NAME },
     });
   });
+});
+
+// Oversized notes must not poison a provider batch or change source text. Query
+// and background callers share this admission boundary and preserve input order.
+it("budgets oversized embedding inputs before provider submission", async () => {
+  const { Tiktoken } = await import("js-tiktoken/lite");
+  const { default: ranks } = await import("js-tiktoken/ranks/cl100k_base");
+  const encoder = new Tiktoken(ranks);
+  const original =
+    "product: Synthetic cabinet\nnotes: " +
+    "工具🙂 <|endoftext|> ".repeat(4000);
+  const batches: string[][] = [];
+  const result = await runEmbeddingFeature(
+    { feature: "synthetic-budget", model: DEFAULT_EMBEDDING_MODEL },
+    {
+      texts: [original, "small", original],
+      dimensions: 1,
+      cache: false,
+      embed: async (texts) => {
+        batches.push(texts);
+        for (const text of texts) {
+          expect(encoder.encode(text, [], []).length).toBeLessThanOrEqual(8191);
+          expect(original.startsWith(text) || text === "small").toBe(true);
+        }
+        return {
+          embeddings: texts.map((text, index) => ({
+            index,
+            vector: [text === "small" ? 2 : 1],
+          })),
+        };
+      },
+    },
+    { operation: "synthetic-budget" },
+  );
+  expect(batches.flat()).toHaveLength(2);
+  expect(batches.flat()[0]).toMatch(/^product: Synthetic cabinet/);
+  expect(result).toEqual([[1], [2], [1]]);
+  expect(original.length).toBeGreaterThan(batches.flat()[0]!.length);
 });

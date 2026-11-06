@@ -97,6 +97,37 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
         guard model.availability == .available, model.capabilities.contains(.vision) else {
             throw CompanionImageDescriptionFailure.unavailable
         }
+        return try await Self.describeWithRecovery(image, contextSize: model.contextSize) {
+            image, maximumResponseTokens in
+            try await Self.generate(image, model: model, maximumResponseTokens: maximumResponseTokens)
+        }
+    }
+
+    // The session call is an external model seam; recovery must change the input budget.
+    static func describeWithRecovery(
+        _ image: CGImage, contextSize: Int,
+        isolation: isolated (any Actor)? = #isolation,
+        generate: (CGImage, Int?) async throws -> CompanionImageDescription
+    ) async throws -> CompanionImageDescription {
+        let responseBudget = min(512, max(32, contextSize / 8))
+        for (index, edge) in [1024, 512].enumerated() {
+            try Task.checkCancellation()
+            let prepared = try ImageEncoding.downscaled(image, maxPixelSize: edge)
+            do {
+                return try await generate(prepared, max(32, responseBudget / (index + 1)))
+            } catch let error as LanguageModelError {
+                // A fresh session alone repeats a deterministic greedy failure. Reduce
+                // both image and output budgets once; never invent a partial description.
+                if case .contextSizeExceeded = error, index == 0 { continue }
+                throw Self.failure(error)
+            }
+        }
+        preconditionFailure("Every description attempt returns or throws")
+    }
+
+    private static func generate(
+        _ image: CGImage, model: SystemLanguageModel, maximumResponseTokens: Int?
+    ) async throws -> CompanionImageDescription {
         let session = LanguageModelSession(
             model: model,
             instructions: """
@@ -106,16 +137,12 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
                 is eligible only when the image has one clear tangible foreground object.
                 """)
         let response: LanguageModelSession.Response<GeneratedCompanionImageDescription>
-        do {
-            response = try await session.respond(
-                generating: GeneratedCompanionImageDescription.self,
-                options: GenerationOptions(samplingMode: .greedy)
-            ) {
-                "Evaluate this image for Cubby's catalog."
-                Attachment(image).label("source image")
-            }
-        } catch let error as LanguageModelError {
-            throw Self.failure(error)
+        response = try await session.respond(
+            generating: GeneratedCompanionImageDescription.self,
+            options: GenerationOptions(samplingMode: .greedy, maximumResponseTokens: maximumResponseTokens)
+        ) {
+            "Evaluate this image for Cubby's catalog."
+            Attachment(image).label("source image")
         }
         let generated = response.content
         let eligibility: CompanionCutoutEligibility =
@@ -129,8 +156,7 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
             claims: generated.claims.map { CompanionImageClaim(text: $0) })
     }
 
-    /// Greedy sampling makes a model failure deterministic for the same image and prompt, so only
-    /// capacity failures are worth another attempt.
+    /// After the bounded context recovery, leave further attempts to durable server backoff.
     private static func failure(_ error: LanguageModelError) -> CompanionImageDescriptionFailure {
         let (code, retryable): (String, Bool) =
             switch error {
@@ -145,7 +171,13 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
             case .timeout: ("timeout", true)
             @unknown default: ("model_error", true)
             }
-        return .model(reason: "\(code): \(error.localizedDescription)", retryable: retryable)
+        let budgetDetails: String
+        if case .contextSizeExceeded(let context) = error {
+            budgetDetails = " (contextSize=\(context.contextSize), tokenCount=\(context.tokenCount))"
+        } else {
+            budgetDetails = ""
+        }
+        return .model(reason: "\(code): \(error.localizedDescription)\(budgetDetails)", retryable: retryable)
     }
 }
 
