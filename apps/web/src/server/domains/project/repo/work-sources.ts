@@ -1,7 +1,6 @@
 import { projectFiltersSchema } from "@cubby/schemas/project";
 import { and, getTableName, sql } from "drizzle-orm";
 
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { project as table } from "~/server/db/schema";
 import {
   projectAttention,
@@ -9,6 +8,7 @@ import {
 } from "~/server/domains/project/repo/lookup";
 import type { ProjectWorkContext } from "~/server/domains/project/repo/work-context";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import {
   entityProblemSources,
   recordScope,

@@ -4,7 +4,6 @@ import { workQueueInput } from "@cubby/schemas/work-queue";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import {
   createExpense,
   updateExpense,
@@ -22,6 +21,7 @@ import {
   readRecordWorkQueue,
   readWorkQueue,
 } from "~/server/domains/work/service/work-queue-read";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   storedQuality,

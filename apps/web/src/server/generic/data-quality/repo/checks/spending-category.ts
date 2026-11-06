@@ -1,11 +1,15 @@
-import { and, sql } from "drizzle-orm";
-
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { spendingCategory } from "~/server/db/retained-tables";
-import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
+
+const loadSpendingCategoryQualityRecords = qualityCheck.records(
+  "spendingCategory",
+  spendingCategory,
+  {
+    itemizationExpectation: spendingCategory.itemizationExpectation,
+    productExpectation: spendingCategory.productExpectation,
+  },
+);
 
 /** Bump when the rules or their declared scoring metadata change. */
 const SPENDING_CATEGORY_QUALITY_RULES_VERSION = 1;
@@ -33,25 +37,3 @@ export const spendingCategoryChecks = defineStoredEntityChecks({
       ),
   },
 });
-
-async function loadSpendingCategoryQualityRecords(
-  db: Database | DrizzleTransaction,
-  ids: readonly string[],
-) {
-  if (!ids.length) return [];
-  return unwrapDb(db)
-    .select({
-      id: spendingCategory.id,
-      shortcode: spendingCategory.shortcode,
-      itemizationExpectation: spendingCategory.itemizationExpectation,
-      productExpectation: spendingCategory.productExpectation,
-      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("spendingCategory", sql`${spendingCategory.id}`)}`,
-    })
-    .from(spendingCategory)
-    .where(
-      and(
-        notDeleted(spendingCategory),
-        sql`${spendingCategory.id} = ANY(${uuidArrayParam(ids)})`,
-      ),
-    );
-}

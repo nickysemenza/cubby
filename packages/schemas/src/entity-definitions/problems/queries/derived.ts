@@ -3,7 +3,7 @@ import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import {
   defineProblem,
   type ProblemQuery,
-} from "~/entity/problems/problem-query";
+} from "@cubby/schemas/entity-definitions/problems/problem-query";
 
 /**
  * Diagnostics whose result grain is not an entity-list row.

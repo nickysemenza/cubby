@@ -14,6 +14,8 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
 export const repositoryOwners = [
+  "src/server/generic/problems/repo/problem-filter-semantics.ts",
+  "src/server/generic/problems/repo/problem-registry-validation.ts",
   "src/server/wasm.ts",
   "src/server/domains/vendor/repo/vendor-name-match.ts",
   "src/server/domains/shipment/repo/carrier-evidence.ts",

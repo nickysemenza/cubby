@@ -1,7 +1,5 @@
-import { and, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { outer, quotedTable, related } from "~/server/db/helpers/related";
 import {
   financialTransaction,
@@ -14,9 +12,28 @@ import {
   financialTransactionItemizationExpectationSql,
   financialTransactionRequiresBookingSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
+
+const loadFinancialTransactionQualityRecords = qualityCheck.records(
+  "financialTransaction",
+  financialTransaction,
+  {
+    status: financialTransaction.status,
+    kind: financialTransaction.kind,
+    merchant: financialTransaction.merchant,
+    allocationDefect: sql<boolean>`${allocationIntegrityDefectSql(quotedTable(financialTransaction))}`,
+    hasAllocation: related(
+      financialTransactionAllocation,
+      (a) => sql`${a.transactionId} = ${outer(financialTransaction.id)}`,
+    ).exists(),
+    requiresBooking: sql<boolean>`${financialTransactionRequiresBookingSql("FinancialTransaction")}`,
+    expectation: sql<string>`${financialTransactionItemizationExpectationSql("FinancialTransaction")}`,
+    booking: sql<string>`${financialTransactionBookingSql("FinancialTransaction")}`,
+    itemization: sql<string>`${financialTransactionCoverageAxisSql("FinancialTransaction", "itemization")}`,
+    products: sql<string>`${financialTransactionCoverageAxisSql("FinancialTransaction", "products")}`,
+  },
+);
 
 /** Bump when the rules or their declared scoring metadata change. */
 const FINANCIAL_TRANSACTION_QUALITY_RULES_VERSION = 3;
@@ -70,38 +87,3 @@ export const financialTransactionChecks = defineStoredEntityChecks({
     ),
   },
 });
-
-async function loadFinancialTransactionQualityRecords(
-  db: Database | DrizzleTransaction,
-  ids: readonly string[],
-) {
-  if (!ids.length) return [];
-  // The domain owners retain signed allocation and mixed Purchase policy semantics.
-  // These inputs are read for this ID page only; list and queue reads use stored rows.
-  return unwrapDb(db)
-    .select({
-      id: financialTransaction.id,
-      shortcode: financialTransaction.shortcode,
-      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("financialTransaction", sql`${sql.identifier("FinancialTransaction")}.${sql.identifier("id")}`)}`,
-      status: financialTransaction.status,
-      kind: financialTransaction.kind,
-      merchant: financialTransaction.merchant,
-      allocationDefect: sql<boolean>`${allocationIntegrityDefectSql(quotedTable(financialTransaction))}`,
-      hasAllocation: related(
-        financialTransactionAllocation,
-        (a) => sql`${a.transactionId} = ${outer(financialTransaction.id)}`,
-      ).exists(),
-      requiresBooking: sql<boolean>`${financialTransactionRequiresBookingSql("FinancialTransaction")}`,
-      expectation: sql<string>`${financialTransactionItemizationExpectationSql("FinancialTransaction")}`,
-      booking: sql<string>`${financialTransactionBookingSql("FinancialTransaction")}`,
-      itemization: sql<string>`${financialTransactionCoverageAxisSql("FinancialTransaction", "itemization")}`,
-      products: sql<string>`${financialTransactionCoverageAxisSql("FinancialTransaction", "products")}`,
-    })
-    .from(financialTransaction)
-    .where(
-      and(
-        notDeleted(financialTransaction),
-        sql`${financialTransaction.id} = ANY(${uuidArrayParam(ids)})`,
-      ),
-    );
-}

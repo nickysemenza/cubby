@@ -1,10 +1,10 @@
 import { inventoryFiltersSchema } from "@cubby/schemas/inventory";
 import { and, eq, getTableName, sql } from "drizzle-orm";
 
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { inventoryEntry as table, product, location } from "~/server/db/schema";
 import { inventoryScaffold } from "~/server/domains/inventory/repo/crud";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import {
   entityProblemSources,
   recordScope,

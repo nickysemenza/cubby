@@ -1,11 +1,13 @@
-import { and, sql } from "drizzle-orm";
-
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { project } from "~/server/db/retained-tables";
-import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
+
+const loadProjectQualityRecords = qualityCheck.records("project", project, {
+  kind: project.kind,
+  status: project.status,
+  startDate: project.startDate,
+  endDate: project.endDate,
+});
 
 /** Bump when the rules or their declared scoring metadata change. */
 const PROJECT_QUALITY_RULES_VERSION = 1;
@@ -45,27 +47,3 @@ export const projectChecks = defineStoredEntityChecks({
     ),
   },
 });
-
-async function loadProjectQualityRecords(
-  db: Database | DrizzleTransaction,
-  ids: readonly string[],
-) {
-  if (!ids.length) return [];
-  return unwrapDb(db)
-    .select({
-      id: project.id,
-      shortcode: project.shortcode,
-      kind: project.kind,
-      status: project.status,
-      startDate: project.startDate,
-      endDate: project.endDate,
-      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("project", sql`${project.id}`)}`,
-    })
-    .from(project)
-    .where(
-      and(
-        notDeleted(project),
-        sql`${project.id} = ANY(${uuidArrayParam(ids)})`,
-      ),
-    );
-}

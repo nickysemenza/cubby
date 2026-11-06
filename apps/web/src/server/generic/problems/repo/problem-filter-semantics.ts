@@ -8,43 +8,49 @@
  */
 import { scoredEntities } from "@cubby/schemas/data-quality";
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
-import { parseRangeBounds, resolveRelativeDate } from "@cubby/shared";
-
-import { householdLocalDate } from "~/lib/household-date";
-
-import { problemFilterSemantics } from "../filter-search-fields";
 import {
   buildFiltersFromManifest,
   type FilterPatch,
   type FilterSpecCore,
   filterUrlKey,
-} from "../filters";
-import { entityFilterUrlKeys } from "../generated/entity-search.gen";
-import type { FilterAssembly } from "./problem-query";
+} from "@cubby/schemas/entity-definitions/list-filters";
+import { problemFilterSemantics } from "@cubby/schemas/entity-definitions/problems/filter-fields";
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
+import { parseRangeBounds, resolveRelativeDate } from "@cubby/shared";
+
+import { householdLocalDate } from "~/lib/household-date";
+
+const entityFilterUrlKeys = (entity: Entity): readonly string[] =>
+  generatedEntityListFields[entity].filterUrlKeys;
+import type { FilterAssembly } from "@cubby/schemas/entity-definitions/problems/problem-query";
 
 /** Every scored entity with a list surface exposes the generated quality-gap filter. */
-export const problemFilterSpecs = Object.fromEntries(
-  entitySchema.options.map((entity) => {
-    const declared =
-      Object.entries(problemFilterSemantics).find(
-        ([key]) => key === entity,
-      )?.[1] ?? [];
-    const hasQuality =
-      scoredEntities.some((key) => key === entity) &&
-      entityFilterUrlKeys(entity).includes("dataGaps");
-    const quality: FilterSpecCore = {
-      columnId: "dataGaps",
-      field: "dataGap",
-      kind: "multiselect",
-    };
-    return [
-      entity,
-      hasQuality
-        ? [...declared.filter((spec) => spec.columnId !== "dataGaps"), quality]
-        : declared,
-    ] satisfies [Entity, readonly FilterSpecCore[]];
-  }),
-);
+export const problemFilterSpecs: Record<string, readonly FilterSpecCore[]> =
+  Object.fromEntries(
+    entitySchema.options.map((entity) => {
+      const declared =
+        Object.entries(problemFilterSemantics).find(
+          ([key]) => key === entity,
+        )?.[1] ?? [];
+      const hasQuality =
+        scoredEntities.some((key) => key === entity) &&
+        entityFilterUrlKeys(entity).includes("dataGaps");
+      const quality: FilterSpecCore = {
+        columnId: "dataGaps",
+        field: "dataGap",
+        kind: "multiselect",
+      };
+      return [
+        entity,
+        hasQuality
+          ? [
+              ...declared.filter((spec) => spec.columnId !== "dataGaps"),
+              quality,
+            ]
+          : declared,
+      ] satisfies [Entity, readonly FilterSpecCore[]];
+    }),
+  );
 
 /**
  * The first declared range filter whose preset expands to an empty patch, or

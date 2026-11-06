@@ -1,6 +1,8 @@
+import {
+  defineProblem,
+  validateProblemQueries,
+} from "@cubby/schemas/entity-definitions/problems/problem-query";
 import { describe, expect, it } from "vitest";
-
-import { defineProblem, validateProblemQueries } from "./problem-query";
 
 const entityProblem = defineProblem({
   key: "productsMissingPrice",

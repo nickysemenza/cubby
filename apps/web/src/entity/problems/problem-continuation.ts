@@ -7,7 +7,7 @@ const readProblemContinuation = createServerFn({ method: "GET" })
   .validator(z.string())
   .handler(async ({ data }) => {
     const { problemQueryDeclarations } =
-      await import("~/entity/problems/problem-registry");
+      await import("@cubby/schemas/entity-definitions/problems/problem-registry");
     const query = problemQueryDeclarations().find(
       (candidate) => candidate.key === data,
     );

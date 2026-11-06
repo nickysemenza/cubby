@@ -66,7 +66,6 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
     .sort((left, right) => left.localeCompare(right));
   const entityKeys: string[] = [];
   const prefixes: Record<string, string> = {};
-  const lengths: Record<string, number> = {};
   const imageStorage: Record<string, string> = {};
   for (const name of files) {
     const path = resolve(SPEC_DIRECTORY, name);
@@ -127,14 +126,6 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
       `${name} identifiers.shortcode`,
     );
     if (shortcode !== null) prefixes[key] = shortcode;
-    const length = valueOf(identifiers, "shortcodeLength");
-    if (length !== undefined) {
-      lengths[key] = z
-        .int()
-        .min(5)
-        .max(32)
-        .parse(length.type === "Literal" ? length.value : undefined);
-    }
     const storage = directImageStorage(declaration, name);
     if (storage !== null) imageStorage[key] = storage;
   }
@@ -179,8 +170,7 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
             comment:
               "// Generated shortcode registry stays one entity per line.",
           }) +
-          "export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;\n" +
-          `export const SHORTCODE_LENGTH: Partial<Record<ShortcodeType, number>> = ${JSON.stringify(lengths)};\n`,
+          "export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;\n",
       ),
     },
     {

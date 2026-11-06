@@ -1,7 +1,18 @@
 import { entitySchema } from "@cubby/schemas/entity";
+import type { DiagnosticKey } from "@cubby/schemas/entity-definitions/problems/problem-query";
+import {
+  problemQuery,
+  problemQueryDeclarations,
+} from "@cubby/schemas/entity-definitions/problems/problem-registry";
 import { describe, expect, it } from "vitest";
 
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
+import {
+  compileProblemFilters,
+  problemFilterPatch,
+  problemFilterSpecs,
+} from "~/server/generic/problems/repo/problem-filter-semantics";
+import { validateCompleteProblemRegistry } from "~/server/generic/problems/repo/problem-registry-validation";
 import { diagnosticModules } from "~/server/generic/problems/service/problem-diagnostics.service";
 
 import { getEntityFilters } from "../filter-manifest";
@@ -12,14 +23,6 @@ import {
 } from "../filters";
 import type { FilterSpecCore } from "../filters";
 import { entityFilterUrlKeys } from "../generated/entity-search.gen";
-import {
-  compileProblemFilters,
-  problemFilterPatch,
-  problemFilterSpecs,
-} from "./problem-filter-semantics";
-import type { DiagnosticKey } from "./problem-query";
-import { problemQuery, problemQueryDeclarations } from "./problem-registry";
-import { validateCompleteProblemRegistry } from "./problem-registry-validation";
 
 const queryClient = await metadataQueryClient();
 

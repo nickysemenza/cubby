@@ -2,7 +2,6 @@ import { purchaseFiltersSchema } from "@cubby/schemas/purchase";
 import { workExecutor } from "@cubby/schemas/work-queue";
 import { and, sql } from "drizzle-orm";
 
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { outer, quotedTable } from "~/server/db/helpers/related";
 import { purchase as table } from "~/server/db/schema";
 import { purchaseScaffold } from "~/server/domains/purchase/repo/purchase";
@@ -15,6 +14,7 @@ import {
   workPurchaseOwners,
   workPurchaseSourceOwners,
 } from "~/server/domains/purchase/repo/work-owners";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import {
   entityProblemSources,
   gapDeclaration,

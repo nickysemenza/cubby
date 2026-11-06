@@ -1624,18 +1624,16 @@ export const compileListFields = (
         ...inferred,
         ...inferredDerived,
       ]),
-    ]
-      .filter((key) => !entity.fieldModel.groupingOmit?.includes(key))
-      .map((key) =>
-        compileGroupChoice(
-          entity,
-          key,
-          derived,
-          filterDescriptors,
-          byKey,
-          context,
-        ),
-      );
+    ].map((key) =>
+      compileGroupChoice(
+        entity,
+        key,
+        derived,
+        filterDescriptors,
+        byKey,
+        context,
+      ),
+    );
     if (
       new Set(entity.inspector.list.metrics).size !==
       entity.inspector.list.metrics.length

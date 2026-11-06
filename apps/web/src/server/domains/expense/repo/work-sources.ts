@@ -1,7 +1,6 @@
 import { expenseFiltersSchema } from "@cubby/schemas/project";
 import { and, sql } from "drizzle-orm";
 
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { outer } from "~/server/db/helpers/related";
 import { expense as table } from "~/server/db/schema";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
@@ -10,6 +9,7 @@ import {
   workExpenseOwners,
   workExpenseSourceOwners,
 } from "~/server/domains/expense/repo/work-owners";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import {
   entityProblemSources,
   gapDeclaration,

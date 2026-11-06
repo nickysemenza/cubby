@@ -37,12 +37,12 @@ beforeEach(() => {
 });
 afterEach(() => backgroundQueue.restore());
 
+import { viewProblemDeclarations } from "@cubby/schemas/entity-definitions/problems/view-problems";
 import {
   taxonomyId,
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
 
-import { viewProblemDeclarations } from "~/entity/model/view-problems";
 import { householdDaysAgo } from "~/lib/household-date";
 import { getDb } from "~/server/db/helpers";
 import {

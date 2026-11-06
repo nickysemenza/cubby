@@ -1,10 +1,10 @@
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 
-import { FILTER_ANY } from "~/entity/filters";
+import { FILTER_ANY } from "@cubby/schemas/filter-sentinel-fields";
 import {
   defineProblem,
   type ProblemQuery,
-} from "~/entity/problems/problem-query";
+} from "@cubby/schemas/entity-definitions/problems/problem-query";
 
 /**
  * Exact entity continuations for the two persisted conversion diagnostics.

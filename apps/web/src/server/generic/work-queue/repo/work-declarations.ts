@@ -5,6 +5,12 @@ import {
   type DataCheck,
 } from "@cubby/schemas/data-quality";
 import { entityQualityCheckState } from "@cubby/schemas/data-quality-shape";
+import {
+  problemActionId,
+  problemActionsFor,
+} from "@cubby/schemas/entity-definitions/problems/problem-actions";
+import type { FilterAssembly } from "@cubby/schemas/entity-definitions/problems/problem-query";
+import { problemQueryDeclarations } from "@cubby/schemas/entity-definitions/problems/problem-registry";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { oneOrManyValues } from "@cubby/schemas/pagination";
@@ -17,17 +23,11 @@ import { workQueueGapChecks } from "@cubby/schemas/work-queue-policy";
 import { eq, isNull, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import {
-  problemActionId,
-  problemActionsFor,
-} from "~/entity/problems/problem-actions";
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
-import type { FilterAssembly } from "~/entity/problems/problem-query";
-import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import type { Database } from "~/server/db";
 import { qualitySnapshot } from "~/server/db/retained-tables";
 import { storedEntryFor } from "~/server/generic/data-quality/repo/entry";
 import { relatedGapCondition } from "~/server/generic/data-quality/repo/sql";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 
 import {
   admittedReasons,

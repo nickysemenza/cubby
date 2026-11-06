@@ -4,11 +4,10 @@ import {
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import { problemQueryDeclarations } from "@cubby/schemas/entity-definitions/problems/problem-registry";
+import { viewManifest } from "@cubby/schemas/entity-definitions/problems/view-problems";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-
-import { viewManifest } from "./model/view-problems";
-import { problemQueryDeclarations } from "./problems/problem-registry";
 
 /**
  * Every `dataGaps` filter value pinned anywhere in the manifest has to name a

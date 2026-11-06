@@ -1,10 +1,16 @@
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import { viewManifest } from "@cubby/schemas/entity-definitions/problems/view-problems";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { recipeSourceValues } from "@cubby/schemas/recipe";
 import { describe, expect, it } from "vitest";
 
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
+import {
+  compileProblemFilters,
+  findUnexpandedRangeFilter,
+  problemFilterPatch,
+} from "~/server/generic/problems/repo/problem-filter-semantics";
 
 import { getEntityFilters } from "../filter-manifest";
 import {
@@ -13,13 +19,7 @@ import {
   FILTER_NONE,
   isMultiFilterKind,
 } from "../filters";
-import {
-  compileProblemFilters,
-  findUnexpandedRangeFilter,
-  problemFilterPatch,
-} from "../problems/problem-filter-semantics";
 import { isViewActive, viewsForEntity } from "./view-manifest";
-import { viewManifest } from "./view-problems";
 
 const queryClient = await metadataQueryClient();
 

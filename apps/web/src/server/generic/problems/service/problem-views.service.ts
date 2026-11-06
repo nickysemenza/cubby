@@ -1,4 +1,18 @@
 import { amount, dateTime } from "@cubby/schemas/codec";
+import type {
+  DiagnosticKey,
+  EntityProblemSource,
+  FilterAssembly,
+  ProblemFreshness,
+} from "@cubby/schemas/entity-definitions/problems/problem-query";
+import {
+  problemQuery,
+  problemQueryDeclarations,
+} from "@cubby/schemas/entity-definitions/problems/problem-registry";
+import {
+  type ViewProblemDeclaration,
+  viewProblemDeclarations,
+} from "@cubby/schemas/entity-definitions/problems/view-problems";
 import type { SortParams } from "@cubby/schemas/pagination";
 import type {
   ProblemKey,
@@ -20,22 +34,6 @@ import {
   listEntities,
   type ListEntity,
 } from "~/entity/model/list-contracts";
-import {
-  type ViewProblemDeclaration,
-  viewProblemDeclarations,
-} from "~/entity/model/view-problems";
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
-import type {
-  DiagnosticKey,
-  EntityProblemSource,
-  FilterAssembly,
-  ProblemFreshness,
-} from "~/entity/problems/problem-query";
-import {
-  problemQuery,
-  problemQueryDeclarations,
-} from "~/entity/problems/problem-registry";
-import { validateCompleteProblemRegistry } from "~/entity/problems/problem-registry-validation";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
@@ -46,6 +44,8 @@ import { projectAttention } from "~/server/domains/project/repo/lookup";
 import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { selectListReadRows } from "~/server/generic/list/repo/list-read-schema";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
+import { validateCompleteProblemRegistry } from "~/server/generic/problems/repo/problem-registry-validation";
 import { diagnosticAdapters } from "~/server/generic/problems/service/problem-diagnostics.service";
 import {
   executeProblem,

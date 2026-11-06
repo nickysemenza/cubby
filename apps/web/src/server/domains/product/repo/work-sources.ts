@@ -1,11 +1,11 @@
 import { productFiltersSchema } from "@cubby/schemas/product";
 import { and, getTableName, sql } from "drizzle-orm";
 
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { product as table } from "~/server/db/schema";
 import { productScaffold } from "~/server/domains/product/repo/crud";
 import { productWorkReadContext } from "~/server/domains/product/repo/work-read-context";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import {
   entityProblemSources,
   gapDeclaration,

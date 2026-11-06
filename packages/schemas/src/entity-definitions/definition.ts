@@ -1276,8 +1276,6 @@ const buildMetadataSchemas = () => {
       hierarchy: entityHierarchyMetadataSchema.optional(),
       /** Explicit menu order and opt-in text choices; bounded scalar and reference choices are inferred. */
       grouping: z.array(nonEmptyString()).optional().default([]),
-      /** Suppress an otherwise inferred grouping choice. */
-      groupingOmit: z.array(nonEmptyString()).optional().default([]),
       intents: entityFieldModelIntentsMetadataSchema.optional(),
     })
     .transform((model) => ({
@@ -1356,7 +1354,6 @@ const buildMetadataSchemas = () => {
   const entityIdentifiersMetadataSchema = z.strictObject({
     brand: nonEmptyString().nullable(),
     shortcode: nonEmptyString().nullable(),
-    shortcodeLength: z.int().min(5).max(32).optional(),
     /** References to this entity may select the requesting member. */
     currentMember: z.literal(true).optional(),
   });

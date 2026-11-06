@@ -1,14 +1,14 @@
 import { PROBLEM_CLASS, type ProblemKey } from "@cubby/schemas/problems";
 
-import { entityProblemDeclarations } from "~/entity/model/view-problems";
+import { entityProblemDeclarations } from "@cubby/schemas/entity-definitions/problems/view-problems";
 import {
   type ProblemQuery,
   validateProblemQueries,
-} from "~/entity/problems/problem-query";
-import { basicProblemQueries } from "~/entity/problems/queries/basic";
-import { derivedProblemQueries } from "~/entity/problems/queries/derived";
-import { productCoverageProblemQueries } from "~/entity/problems/queries/product-coverage";
-import { trackerProblemQueries } from "~/entity/problems/queries/tracker";
+} from "@cubby/schemas/entity-definitions/problems/problem-query";
+import { basicProblemQueries } from "@cubby/schemas/entity-definitions/problems/queries/basic";
+import { derivedProblemQueries } from "@cubby/schemas/entity-definitions/problems/queries/derived";
+import { productCoverageProblemQueries } from "@cubby/schemas/entity-definitions/problems/queries/product-coverage";
+import { trackerProblemQueries } from "@cubby/schemas/entity-definitions/problems/queries/tracker";
 
 /**
  * The one canonical roster for Problems presentation and continuation.

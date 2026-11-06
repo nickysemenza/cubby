@@ -1,10 +1,10 @@
 import { taskFiltersSchema } from "@cubby/schemas/project";
 import { and, getTableName, sql } from "drizzle-orm";
 
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { task as table } from "~/server/db/schema";
 import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import {
   entityProblemSources,
   recordScope,

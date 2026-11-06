@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 
-import type { FilterSpecCore } from "./filters";
+import type { FilterSpecCore } from "@cubby/schemas/entity-definitions/list-filters";
 
 /**
  * Server-safe semantic entries used by Problem Query assemblies.
