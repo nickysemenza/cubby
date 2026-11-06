@@ -14,15 +14,14 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { executeEntity } from "~/server/entity-kernel/execute";
 import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
-import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
-import { pendingRecommendationEligibility } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
-import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";
-
 import {
   keyBase,
   type SuggestionFamilyQuery,
   type SuggestionKey,
-} from "./suggestion-presentation";
+} from "~/server/generic/suggestions/repo/suggestion-presentation";
+import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
+import { pendingRecommendationEligibility } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
+import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";
 
 const candidateSchema = tagPropagationRecommendationOut.shape.proposals.element;
 const proposalSchema = candidateSchema.extend({

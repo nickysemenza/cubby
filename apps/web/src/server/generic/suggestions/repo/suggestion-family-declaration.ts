@@ -2,11 +2,11 @@ import type { SuggestionListFamily } from "@cubby/schemas/suggestion-list";
 import type { SQL } from "drizzle-orm";
 import type { z } from "zod";
 
+import type { recommendationScopes } from "~/server/generic/suggestions/repo/pending-admission";
+import type { SuggestionFamilyPresentation } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import { declareAffectedRecords } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 
-import type { recommendationScopes } from "./pending-admission";
 import type { Handler } from "./review";
-import type { SuggestionFamilyPresentation } from "./suggestion-presentation";
 export interface SuggestionFamilyDeclaration<F extends SuggestionListFamily>
   extends SuggestionFamilyPresentation<F>, Handler {
   family: F;

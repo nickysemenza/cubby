@@ -7,14 +7,13 @@ import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { currentProductPairPolicySql } from "~/server/domains/product/repo/match/product-match-candidate";
 import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
-import { pendingImageDescriptionEligibility } from "~/server/generic/suggestions/repo/suggestion-touching";
-
 import {
   suggestionIdScope,
   type SuggestionFamilyPresentation,
   type SuggestionFamilyQuery,
   type SuggestionKey,
-} from "./suggestion-presentation";
+} from "~/server/generic/suggestions/repo/suggestion-presentation";
+import { pendingImageDescriptionEligibility } from "~/server/generic/suggestions/repo/suggestion-touching";
 
 export const actions = (
   ...verbs: (

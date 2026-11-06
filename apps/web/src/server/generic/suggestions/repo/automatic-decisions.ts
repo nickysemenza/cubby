@@ -159,7 +159,7 @@ export async function listAutomaticDecisions(
         ? reviewFamilyDeclarations[family]
         : null;
     const summary =
-      presentation && "summarize" in presentation
+      presentation && "summarize" in presentation && presentation.summarize
         ? presentation.summarize(z.json().parse(row.judgment))
         : isReviewFamily(family)
           ? reviewFamilyDeclarations[family].label

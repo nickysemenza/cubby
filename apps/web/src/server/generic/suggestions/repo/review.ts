@@ -486,6 +486,7 @@ async function settleReview(
             .from(suggestionTable)
             .where(eq(suggestionTable.id, prediction.id))
             .limit(1);
+          // Two accepted reviews can race; serialize application on the Suggestion owner.
           const [state] = family.transactionBound
             ? await query.for("update")
             : await query;
