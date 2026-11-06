@@ -11,6 +11,7 @@ import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity, createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -54,11 +55,7 @@ import {
 
 import { listAutomaticDecisions } from "./automatic-decisions";
 import { reviewSuggestion } from "./review";
-import {
-  automaticApplicationRule,
-  publishFieldSuggestion,
-  recordFeedback,
-} from "./suggestion";
+import { automaticApplicationRule, recordFeedback } from "./suggestion";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
@@ -155,7 +152,7 @@ async function fieldSuggestion(
   confidence: number,
   createdAt: Date,
 ) {
-  const row = await publishFieldSuggestion(
+  const row = await seedFieldSuggestion(
     ctx.db,
     {
       entity: "product",

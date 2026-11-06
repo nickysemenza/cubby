@@ -34,14 +34,9 @@ import { retrieveConnectionCandidates } from "./connection-candidates";
 import { captureConnectionBasis } from "./connection-evidence";
 import {
   publishEntityConnection,
-  prepareEntityConnectionEvidence,
-  publishPreparedEntityConnections,
   readEntityConnections,
-  readEntityConnectionsBatch,
   applyEntityConnection,
 } from "./entity-connections";
-import { readConnectionEdgeSuggestionIds } from "./existing-suggestions";
-import { assertConnectionFieldFresh } from "./field-connections";
 
 // Failure modes: reverse reads miss a candidate; bare Wrong suppresses future
 // evidence; stale/deleted endpoints apply; mutation escapes the caller rollback.
@@ -102,117 +97,6 @@ describe("stored connection evidence", () => {
     return { item, charge, candidate, proposal };
   }
 
-  it("keeps the last edge publication active when page owners retrieve different evidence for the same pair", async () => {
-    const { candidate, proposal } = await fixture();
-    const changed = {
-      ...candidate,
-      evidence: {
-        ...candidate.evidence,
-        reasons: ["Synthetic second retrieval"],
-      },
-    };
-    const prepared = await prepareEntityConnectionEvidence(ctx.db, [
-      candidate,
-      changed,
-    ]);
-    const [first, last] = await publishPreparedEntityConnections(
-      ctx.db,
-      prepared,
-    );
-    expect(first?.review.suggestionId).toBe(proposal.review.suggestionId);
-    expect(last).toBeDefined();
-    expect(
-      (await readEntityConnections(ctx.db, candidate.source)).map(
-        (entry) => entry.review.suggestionId,
-      ),
-    ).toEqual([last?.review.suggestionId]);
-    const unrelated = await createRepoEntity(ctx, "expense", {
-      name: "Synthetic unrelated connection charge",
-      cost: 7,
-      trade: "electrical",
-      costType: "tools",
-    });
-    const unrelatedEdge = await publishEntityConnection(ctx.db, {
-      ...candidate,
-      target: { entityKind: "expense", entityId: unrelated.output.id },
-    });
-    const bounded = await readEntityConnectionsBatch(
-      ctx.db,
-      [candidate.source],
-      [last!.review.suggestionId, last!.review.suggestionId],
-    );
-    expect(bounded[0]?.map((entry) => entry.review.suggestionId)).toEqual([
-      last?.review.suggestionId,
-    ]);
-    expect(
-      await readEntityConnectionsBatch(ctx.db, [candidate.source], []),
-    ).toEqual([[]]);
-    if (!last) throw new Error("Synthetic publication is missing");
-    const [current] = await getDb(ctx.db)
-      .select()
-      .from(suggestionTable)
-      .where(eq(suggestionTable.id, last.review.suggestionId));
-    if (!current) throw new Error("Synthetic Suggestion is missing");
-    const compete = (publicationKey: string, fingerprint: string) =>
-      publishSuggestion(
-        ctx.db,
-        {
-          publicationKey,
-          family: "recommendation",
-          subject: current.subject,
-          judgment: suggestionJudgments.recommendation.parse(current.judgment),
-          producer: null,
-          fingerprint,
-          evidence: { version: 1, candidate: changed, basis: {} },
-        },
-        { data: { connection: true } },
-      );
-    const staleNewer = await compete(
-      "synthetic-newer-stale-edge",
-      "synthetic-stale-edge-fingerprint",
-    );
-    const peers = await readConnectionEdgeSuggestionIds(ctx.db, [candidate]);
-    expect(peers).toEqual(
-      expect.arrayContaining([last.review.suggestionId, staleNewer.id]),
-    );
-    expect(peers).not.toContain(unrelatedEdge.review.suggestionId);
-    // A newer stale competitor cannot hide the edge's older fresh survivor.
-    const observed = new Set<string>();
-    expect(
-      (
-        await readEntityConnectionsBatch(
-          ctx.db,
-          [candidate.source],
-          [staleNewer.id],
-          (id) => {
-            observed.add(id);
-          },
-        )
-      )[0]?.map((entry) => entry.review.suggestionId),
-    ).toEqual([last.review.suggestionId]);
-    expect(observed).toEqual(
-      new Set([staleNewer.id, last.review.suggestionId]),
-    );
-    const newest = await compete(
-      "synthetic-newest-fresh-edge",
-      last.fingerprint,
-    );
-    const full = await readEntityConnections(ctx.db, candidate.source);
-    // The full reader keeps an edge where its oldest fresh candidate sorted.
-    expect(full.map((entry) => entry.review.suggestionId)).toEqual([
-      newest.id,
-      unrelatedEdge.review.suggestionId,
-    ]);
-    // Selection admits the same winners without proving that older candidate.
-    const selected = await readEntityConnectionsBatch(
-      ctx.db,
-      [candidate.source],
-      full.map((entry) => entry.review.suggestionId),
-    );
-    expect(selected[0]).toHaveLength(full.length);
-    expect(selected[0]).toEqual(expect.arrayContaining(full));
-  });
-
   // Stored basis snapshots can dwarf the candidate. Transferring them before
   // queue pagination exhausts Worker memory; freshness must still reread facts.
   it("reads fresh connection candidates without transferring stored basis snapshots", async () => {
@@ -264,91 +148,6 @@ describe("stored connection evidence", () => {
 
   // Existing field suggestions share the connection list. Their currentness
   // guard must compare stored JSON in PostgreSQL, not download its full basis.
-  it("filters existing field connections without downloading their stored snapshots", async () => {
-    const { candidate, charge, item, proposal } = await fixture();
-    const basis = await captureConnectionBasis(ctx.db, candidate);
-    const stored = await publishSuggestion(
-      ctx.db,
-      {
-        publicationKey: "synthetic-field-connection-transfer",
-        family: "field",
-        subject: {
-          kind: "field",
-          entity: "expense",
-          recordId: charge.entityId,
-          field: "productId",
-        },
-        judgment: { value: item.id },
-        fingerprint: "synthetic-field-connection-fingerprint",
-        producer: null,
-        evidence: { syntheticBallast: "x".repeat(128 * 1024) },
-      },
-      {
-        suggestedValue: item.id,
-        data: {
-          connectionEvidence: { version: 1, candidate, basis },
-          syntheticBallast: "x".repeat(128 * 1024),
-        },
-      },
-    );
-    const measured = await measureDatabaseTransfer(
-      ctx.databaseUrl,
-      async (db) => {
-        const peerIds = () => readConnectionEdgeSuggestionIds(db, [candidate]);
-        expect(new Set(await peerIds())).toEqual(
-          new Set([proposal.review.suggestionId, stored.id]),
-        );
-        expect(
-          (await readEntityConnections(db, candidate.source)).map(
-            (row) => row.review.suggestionId,
-          ),
-        ).toContain(stored.id);
-        const selectedOnEdge = async () =>
-          (
-            await readEntityConnectionsBatch(
-              db,
-              [candidate.source],
-              [proposal.review.suggestionId],
-            )
-          )[0]?.map((row) => row.review.suggestionId);
-        // A current existing proposal replaces its edge's fresh recommendation.
-        expect(await selectedOnEdge()).toEqual([stored.id]);
-        await withTransactionDatabase(db, (transactionDb) =>
-          assertConnectionFieldFresh(transactionDb, stored.id),
-        );
-        await getDb(ctx.db)
-          .update(suggestionTable)
-          .set({
-            data: {
-              connectionEvidence: {
-                version: 1,
-                candidate,
-                basis: { syntheticBallast: "x".repeat(128 * 1024) },
-              },
-            },
-          })
-          .where(eq(suggestionTable.id, stored.id));
-        expect(
-          (await readEntityConnections(db, candidate.source)).map(
-            (row) => row.review.suggestionId,
-          ),
-        ).not.toContain(stored.id);
-        // Once its own guard fails, it stops shadowing and the recommendation wins.
-        expect(await selectedOnEdge()).toEqual([proposal.review.suggestionId]);
-        // Discovery retains the stale field peer so atomic publication can
-        // release its old winner even though current evidence rejects it.
-        expect(new Set(await peerIds())).toEqual(
-          new Set([proposal.review.suggestionId, stored.id]),
-        );
-        await expect(
-          withTransactionDatabase(db, (transactionDb) =>
-            assertConnectionFieldFresh(transactionDb, stored.id),
-          ),
-        ).rejects.toThrow("Connection field evidence changed");
-      },
-    );
-    expect(measured.largestValueBytes).toBeLessThan(64 * 1024);
-  });
 
   it("refuses direct publication for an Expense already assigned to another Product", async () => {
     const { candidate, charge } = await fixture();

@@ -91,16 +91,3 @@ export async function productIdentityEvidenceFences(
       .rows.map(({ key, fence }) => [key, fence]),
   );
 }
-
-/** Single-target callers use the same read set and digest as pages. */
-export async function productIdentityEvidenceFence(
-  db: Database,
-  ids: readonly [ProductId] | readonly [ProductId, ProductId],
-) {
-  const fences = await productIdentityEvidenceFences(db, [
-    { key: "target", productIds: ids },
-  ]);
-  const fence = fences.get("target");
-  if (!fence) throw new Error("Missing Product evidence fence");
-  return fence;
-}

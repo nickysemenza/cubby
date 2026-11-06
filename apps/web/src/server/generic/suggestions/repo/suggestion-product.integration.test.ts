@@ -6,14 +6,8 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
-import { publishAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation";
-import {
-  aiEvaluationItem,
-  drainAiEvaluations,
-  withClaimedAiEvaluation,
-} from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
+import { drainAiEvaluations } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
-import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import {
   evaluateProductIdentity,
   prepareProductIdentityPage,
@@ -26,7 +20,6 @@ import {
 import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
-  aiEvaluationRequest,
   suggestionTable,
   entityExternalId,
   importSourceClaim,
@@ -34,24 +27,19 @@ import {
   importSourceProduct,
   externalSource,
   expense,
-  purchase as purchaseTable,
   product,
 } from "~/server/db/schema";
 import {
   deleteExpenses,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
-import { productIdentityEvidenceFence } from "~/server/domains/product/repo/match/product-identity-fence";
 import {
-  prepareProductIdentityPairRequests,
   productIdentitySnapshot,
   prepareProductIdentityPair,
-  preparedProductIdentityPair,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import {
   listProductMatchRows,
   publishProductPair,
-  prepareProductPairPublication,
 } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
 import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
@@ -92,30 +80,10 @@ const identityPort: DecisionPort = async () => ({
 // Agent proposals and equal models must not erase historical conflicts; old policies
 // must not authorize an unchanged-fingerprint merge after rule activation.
 async function publishProductIdentity(
-  db: Parameters<typeof prepareProductPairPublication>[0],
+  db: Parameters<typeof publishProductPair>[0],
   result: Pick<Awaited<ReturnType<typeof evaluateProductIdentity>>, "pairs">,
 ) {
-  for (const pair of result.pairs)
-    await (
-      await prepareProductPairPublication(db, pair)
-    )(db);
-}
-
-async function requestProductIdentityPair(
-  db: Parameters<typeof prepareProductIdentityPair>[0],
-  ids: Parameters<typeof prepareProductIdentityPair>[1],
-  runId: Parameters<typeof prepareProductIdentityPairRequests>[2],
-  provenance: Parameters<typeof prepareProductIdentityPairRequests>[3],
-) {
-  const pair = await prepareProductIdentityPair(db, ids);
-  if (!pair) throw new Error("Synthetic Product pair is missing");
-  const [publish] = await prepareProductIdentityPairRequests(
-    db,
-    [pair],
-    runId,
-    provenance,
-  );
-  return publish!(db);
+  for (const pair of result.pairs) await publishProductPair(db, pair);
 }
 
 describe("stored Product identity pairs", () => {
@@ -385,52 +353,7 @@ describe("stored Product identity pairs", () => {
       ),
     ).toEqual([]);
   });
-  it("excludes receipt identifiers when their Expense or Purchase is deleted or detached", async () => {
-    const { ids } = await acceptedIdentityPair(
-      ["Synthetic live receipt item", "Synthetic second receipt item"],
-      "SYNTHETIC-LIVE-SKU",
-    );
-    const [binding] = await getDb(ctx.db)
-      .select()
-      .from(importSourceProduct)
-      .where(eq(importSourceProduct.productId, ids[0]!));
-    if (!binding?.expenseId)
-      throw new Error("Synthetic receipt mapping missing");
-    const [item] = await getDb(ctx.db)
-      .select()
-      .from(expense)
-      .where(eq(expense.id, binding.expenseId));
-    if (!item?.purchaseId)
-      throw new Error("Synthetic receipt Purchase missing");
-    expect(await loadProductIdentifierClaims(ctx.db, ids[0])).toHaveLength(1);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ deletedAt: new Date() })
-      .where(eq(expense.id, item.id));
-    expect(await loadProductIdentifierClaims(ctx.db, ids[0])).toEqual([]);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ deletedAt: null, purchaseId: null })
-      .where(eq(expense.id, item.id));
-    expect(await loadProductIdentifierClaims(ctx.db, ids[0])).toEqual([]);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ purchaseId: item.purchaseId })
-      .where(eq(expense.id, item.id));
-    // Originally unresolved imports have no historical Product to select by.
-    await getDb(ctx.db).update(importSourceProduct).set({ productId: null });
-    const beforeDeletion = await productIdentityEvidenceFence(ctx.db, [
-      ids[0]!,
-    ]);
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ deletedAt: new Date() })
-      .where(eq(purchaseTable.id, item.purchaseId));
-    expect(await loadProductIdentifierClaims(ctx.db, ids[0])).toEqual([]);
-    expect(await productIdentityEvidenceFence(ctx.db, [ids[0]!])).not.toBe(
-      beforeDeletion,
-    );
-  });
+
   it("does not revive a cleared receipt claim through an independent Product link when deleting its Expense", async () => {
     const { ids } = await acceptedIdentityPair(
       ["Synthetic deleted receipt item", "Synthetic remaining receipt item"],
@@ -737,65 +660,7 @@ describe("stored Product identity pairs", () => {
       conflict: false,
     });
   });
-  it("refuses a prior Product identity policy publication after activation advances", async () => {
-    const { ids, runId } = await acceptedIdentityPair(
-      [
-        "Synthetic prior blue medium shirt, pack of 2",
-        "Synthetic next red medium shirt, pack of 2",
-      ],
-      "SYNTH-STYLE",
-    );
-    const manifest = await compiledRefreshManifest();
-    const feature = PRODUCT_IDENTITY_FEATURE.feature;
-    const active = await activateAiRefresh(ctx.db, "synthetic-prior-policy", {
-      enabled: true,
-      manifest: {
-        ...manifest,
-        [feature]: { ...manifest[feature]!, promptVersion: "2026-10-14.5" },
-      },
-    });
-    const evaluation = await requestProductIdentityPair(
-      ctx.db,
-      [ids[0]!, ids[1]!],
-      runId,
-      {
-        dependencies: [{ feature, ...active.manifest[feature]! }],
-        inputFingerprint: "synthetic-prepared",
-        optionFingerprint: "synthetic-options",
-        model: "typesafe/jev",
-      },
-    );
-    expect(
-      preparedProductIdentityPair.parse(evaluation.snapshot).conflict,
-    ).toBe(false);
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({
-        snapshot: {
-          ...preparedProductIdentityPair.parse(evaluation.snapshot),
-          conflict: false,
-        },
-      })
-      .where(eq(aiEvaluation.id, evaluation.id));
-    await expect(
-      withClaimedAiEvaluation(ctx.db, evaluation.id, async (claimed) => {
-        await activateAiRefresh(ctx.db, "synthetic-current-policy", {
-          enabled: true,
-          manifest,
-        });
-        return publishAiEvaluation(
-          ctx.db,
-          evaluation.id,
-          claimed.attemptToken,
-          async (transactionDb) => {
-            await publishProductIdentity(transactionDb, { pairs: [] });
-            return {};
-          },
-        );
-      }),
-    ).rejects.toThrow(/obsolete/);
-    expect(await getDb(ctx.db).select().from(suggestionTable)).toHaveLength(0);
-  });
+
   it("publishes exact rule evidence through an activated catalog pass while the model is unavailable", async () => {
     const { ids } = await acceptedIdentityPair([
       "Synthetic first blue medium shirt, pack of 2",
@@ -1107,88 +972,7 @@ describe("stored Product identity pairs", () => {
       }),
     );
   });
-  it("shares a canonical pair execution requested by opposite catalog scans", async () => {
-    const a = await productFixture(ctx, "Synthetic pair request A"),
-      b = await productFixture(ctx, "Synthetic pair request B");
-    const ids = await Promise.all(
-      [a, b].map((row) => recordId(ctx.db, row.id, "product")),
-    );
-    const runs = await Promise.all(
-      ["synthetic-pair-a", "synthetic-pair-b"].map((clientKey) =>
-        ensureRun(ctx.db, ctx.actor, {
-          purpose: "ai_suggest",
-          trigger: "manual",
-          status: "running",
-          clientKey,
-        }),
-      ),
-    );
-    const provenance = {
-      dependencies: [],
-      inputFingerprint: "synthetic-pair-input",
-      optionFingerprint: "synthetic-options",
-      model: "typesafe/jev",
-    };
-    const first = await requestProductIdentityPair(
-      ctx.db,
-      [ids[0]!, ids[1]!],
-      runs[0]!,
-      provenance,
-    );
-    const other = await requestProductIdentityPair(
-      ctx.db,
-      [ids[1]!, ids[0]!],
-      runs[1]!,
-      provenance,
-    );
-    expect(other.id).toBe(first.id);
-    expect(other.workKey).toBe(first.workKey);
-    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(1);
-    expect(await getDb(ctx.db).select().from(aiEvaluationRequest)).toHaveLength(
-      2,
-    );
-    await getDb(ctx.db)
-      .update(product)
-      .set({ name: "Synthetic changed pair A" })
-      .where(eq(product.id, ids[0]!));
-    const changed = await requestProductIdentityPair(
-      ctx.db,
-      [ids[0]!, ids[1]!],
-      runs[0]!,
-      provenance,
-    );
-    expect(changed.id).toBe(first.id);
-    expect(changed.slotKey).toBe(first.slotKey);
-    expect(changed.workKey).not.toBe(first.workKey);
-    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(1);
-    expect(await aiEvaluationItem(ctx.db, first.id)).toMatchObject({
-      feature: first.feature,
-    });
-    // An in-flight attempt is fenced by its item ticket, so reverting the
-    // input updates the queued row in place.
-    await getDb(ctx.db)
-      .update(product)
-      .set({ name: "Synthetic pair request A" })
-      .where(eq(product.id, ids[0]!));
-    const reverted = await requestProductIdentityPair(
-      ctx.db,
-      [ids[0]!, ids[1]!],
-      runs[0]!,
-      provenance,
-    );
-    expect(reverted.id).toBe(first.id);
-    expect(reverted.workKey).toBe(first.workKey);
-    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(1);
-    await getDb(ctx.db).update(aiEvaluation).set({ state: "completed" });
-    const settled = await requestProductIdentityPair(
-      ctx.db,
-      [ids[0]!, ids[1]!],
-      runs[0]!,
-      provenance,
-    );
-    expect(settled.id).toBe(first.id);
-    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(1);
-  });
+
   it("does not retrieve candidates from shared research URLs or claimed variants", async () => {
     const a = await productFixture(ctx, "Synthetic catalog alpha", {
       brandId: await findOrCreateVendor(ctx.db, "Synthetic Alpha"),

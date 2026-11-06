@@ -14,10 +14,10 @@ import { purchase as purchaseTable } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { projectCreateFromTasksWorkflow } from "~/server/domains/project/operations.server";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { listSuggestions } from "~/server/generic/suggestions/repo/suggestion-review";
 import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 
+import { readReviewFields } from "./suggestion-sweep.fixtures";
 import {
   categoryPorts,
   expenseFixture,
@@ -225,7 +225,7 @@ describe("Suggestion supersede", () => {
         { context: kernelCtx(ctx), ...categoryPorts() },
       );
     const firstRun = await sweep();
-    const [first] = await listSuggestions(ctx.db, {
+    const [first] = await readReviewFields(ctx.db, {
       runId: await runCode(ctx.db, firstRun.id),
       minConfidence: 0,
     });

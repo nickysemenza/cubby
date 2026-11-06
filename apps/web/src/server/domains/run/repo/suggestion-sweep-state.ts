@@ -19,7 +19,10 @@ import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
 } from "~/server/generic/suggestions/repo/field-input-fence";
-import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import {
+  fieldSuggestionPublication,
+  publishSuggestions,
+} from "~/server/generic/suggestions/repo/suggestion";
 import {
   suggestionStateColumns,
   transitionSuggestionStates,
@@ -310,9 +313,8 @@ export async function saveSweepSuggestions(
       }
       const created: string[] = [];
       for (const entry of admissible) {
-        const row = await publishFieldSuggestion(
-          tx,
-          {
+        const [row] = await publishSuggestions(tx, [
+          fieldSuggestionPublication({
             runId,
             entity: input.entity,
             recordId: typedRecordId,
@@ -335,9 +337,9 @@ export async function saveSweepSuggestions(
               reviewKey: entry.reviewKey ?? null,
             },
             status: "pending",
-          },
-          entry.served,
-        );
+          }),
+        ]);
+        if (!row) throw new Error("Field publication returned no row");
         created.push(row.id);
       }
       // Proposals publish pending; a confident assignment then applies only

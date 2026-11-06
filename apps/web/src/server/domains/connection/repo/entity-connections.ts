@@ -309,7 +309,7 @@ function storedConnectionProposal(prediction: {
 }
 
 /** Batched Suggestion selection; freshness also rereads family-owned evidence. */
-export async function readEntityConnectionsBatch(
+async function readEntityConnectionsBatch(
   db: Database,
   raw: readonly EntityRef[],
   reviewIds?: readonly string[],

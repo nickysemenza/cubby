@@ -68,7 +68,6 @@ import {
   countTransferPairSeeds,
   countTransferPairsNeedingLabels,
   currentTransferPair,
-  discoverTransferPairs,
   findTransferPairForCharge,
   fingerprintTransferPair,
   generateTransferPairSuggestionsPage,
@@ -76,6 +75,17 @@ import {
   transferPairGenerationCursor,
   transferPairEvidenceFingerprint,
 } from "./transfer-pair-suggestions";
+
+/** Discovery journeys exercise the production paged generation path. */
+async function discoverTransferPairs(
+  db: Parameters<typeof generateTransferPairSuggestions>[0],
+) {
+  await generateTransferPairSuggestions(db, { runId: null });
+  const { rows } = await getDb(db).execute<{ judgment: unknown }>(sql`
+    SELECT judgment FROM "Suggestion" WHERE family = ${suggestionFamily.enum.transfer_pair} AND active AND status = ${suggestionStatus.enum.pending}
+  `);
+  return rows.map((row) => transferPairJudgment.parse(row.judgment));
+}
 
 /*
  * Failure modes this file guards (#2827):

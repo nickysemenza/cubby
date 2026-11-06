@@ -26,7 +26,6 @@ import { suggestionTable } from "~/server/db/retained-tables";
 import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
-import { fieldInputFingerprint } from "./field-input-fence";
 import {
   decisionForOperation,
   type StoredDecision,
@@ -198,9 +197,8 @@ export async function publishSuggestion(
   return row;
 }
 
-/** Field producers publish evidence before its live projection; serving is a producer decision. */
-export async function publishFieldSuggestion(
-  db: Database,
+/** Builds field evidence; publishSuggestions owns immutable publication and replay. */
+export function fieldSuggestionPublication(
   projection: Omit<
     typeof suggestionTable.$inferInsert,
     "id" | "family" | "publicationKey" | "subject" | "judgment"
@@ -208,23 +206,11 @@ export async function publishFieldSuggestion(
     field: string;
     recordId: string;
   },
-  _served: boolean,
 ) {
   const data = z.record(z.string(), z.json()).parse(projection.data ?? {});
-  if (projection.status === undefined || projection.status === "pending") {
-    if (!("connectionEvidence" in data) && !("liveInputFingerprint" in data)) {
-      data.liveInputFingerprint = await fieldInputFingerprint(
-        db,
-        projection.entity,
-        projection.recordId,
-        projection.field,
-      );
-    }
-  }
   const model = projection.model ?? "unknown";
-  return publishSuggestion(
-    db,
-    {
+  return {
+    input: {
       publicationKey: `field:${crypto.randomUUID()}`,
       family: "field",
       subject: {
@@ -259,8 +245,8 @@ export async function publishFieldSuggestion(
         provenance: projection.provenance ?? null,
       },
     },
-    { ...projection, data },
-  );
+    projection: { ...projection, data },
+  };
 }
 
 /** Recording a grade is independent of applying a correction or changing authority. */

@@ -9,6 +9,7 @@ import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { seedPerformanceCorpus } from "tooling/scenarios/performance";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { seedEntity, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -40,7 +41,6 @@ import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
 import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import {
   createProductFixture,
   makeProductInput,
@@ -154,7 +154,7 @@ describe("deterministic cache rebuild", () => {
       .from(product)
       .limit(1);
     if (!subject) throw new Error("Synthetic Product was not created");
-    await publishFieldSuggestion(
+    await seedFieldSuggestion(
       ctx.db,
       {
         entity: "product",

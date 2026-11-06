@@ -4865,3 +4865,9 @@ priority-zero Entity and Suggestion fan-out. The shared `derived_mark` function
 returns before ticket/capture writes for those declared targets and indexed
 fan-out addresses. Existing tickets remain until the hourly pass has published
 the replacement target; stopping admission alone does not prove coverage.
+
+The retired `connection.readBatch` transport has no client callers. Single-record
+connection reads remain; internal batch hydration remains private to that reader.
+Field publication builds an entry for `publishSuggestions`, whose immutable-key
+replay check also owns the field Sweep write. Field review tests hydrate through
+the same key and row readers used by the live queue.

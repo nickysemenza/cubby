@@ -1,9 +1,6 @@
-import { suggestionStatus } from "@cubby/schemas/ai";
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
   connectionProposal,
-  connectionEdgeKey,
-  type ConnectionEdge,
   type ConnectionProposal,
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
@@ -12,7 +9,6 @@ import {
   type SuggestionProducer,
   type EntityPairSuggestionFamily,
   entityPairSuggestionFamilies,
-  suggestionFamily,
   isEntityPairSuggestionFamily,
 } from "@cubby/schemas/suggestion";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
@@ -20,12 +16,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import {
-  getDb,
-  notDeleted,
-  uuidArrayParam,
-  sqlEnumConstant,
-} from "~/server/db/helpers";
+import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
 import { suggestionTable, entityIdentity } from "~/server/db/schema";
 import { currentProductPairPolicy } from "~/server/domains/product/repo/match/product-match-candidate";
@@ -228,114 +219,6 @@ export async function readSelectedConnectionSuggestionIds(
 }
 
 /** Exact current edge identities across families, before evidence admission. */
-export async function readConnectionEdgeSuggestionIds(
-  db: Database,
-  edges: readonly ConnectionEdge[],
-): Promise<string[]> {
-  if (!edges.length) return [];
-  const distinct = [
-    ...new Map(edges.map((edge) => [connectionEdgeKey(edge), edge])).values(),
-  ];
-  const fieldRequests = distinct.flatMap((edge) =>
-    [...fieldRelations].flatMap(([key, relation]) => {
-      if (relation !== edge.relation) return [];
-      const owner = relation === "product-expense" ? edge.target : edge.source;
-      const suggested =
-        relation === "product-expense" ? edge.source : edge.target;
-      return [{ owner, suggested, field: key.slice(key.indexOf(".") + 1) }];
-    }),
-  );
-  const pairRequests = distinct.flatMap((edge) =>
-    entityPairSuggestionFamilies.flatMap((family) =>
-      pairFamilies[family].relation === edge.relation ? [{ edge, family }] : [],
-    ),
-  );
-  // Both endpoint predicates stay inside each point probe. A source or target
-  // hub must not materialize unrelated proposals before the edge is checked.
-  // Match the grouping reader exactly: recommendation tokens remain raw;
-  // fields emit identity shortcodes; pair otherId requires canonical UUID text.
-  // includes-deleted: grouping retains tombstoned endpoint identities; canonical
-  // admission decides whether their proposals can still be shown.
-  const rows = await getDb(db).execute<{ id: string }>(sql`
-    WITH requested_edges(relation, "sourceKind", "sourceCode", "targetKind", "targetCode") AS MATERIALIZED (
-      VALUES ${sql.join(
-        distinct.map(
-          (edge) => sql`(${edge.relation}::text,
-        ${edge.source.entityKind}::text, ${edge.source.entityId}::text,
-        ${edge.target.entityKind}::text, ${edge.target.entityId}::text)`,
-        ),
-        sql`, `,
-      )}
-    ), requested_fields(entity, code, field, "targetKind", "targetCode") AS MATERIALIZED (
-      ${
-        fieldRequests.length
-          ? sql`VALUES ${sql.join(
-              fieldRequests.map(
-                ({ owner, suggested, field }) => sql`(
-        ${owner.entityKind}::text, ${owner.entityId}::text, ${field}::text,
-        ${suggested.entityKind}::text, ${suggested.entityId}::text)`,
-              ),
-              sql`, `,
-            )}`
-          : sql`SELECT NULL::text, NULL::text, NULL::text, NULL::text, NULL::text WHERE false`
-      }
-    ), requested_pairs(family, "sourceKind", "sourceCode", "targetKind", "targetCode") AS MATERIALIZED (
-      ${
-        pairRequests.length
-          ? sql`VALUES ${sql.join(
-              pairRequests.map(
-                ({ edge, family }) => sql`(
-        ${family}::text, ${edge.source.entityKind}::text, ${edge.source.entityId}::text,
-        ${edge.target.entityKind}::text, ${edge.target.entityId}::text)`,
-              ),
-              sql`, `,
-            )}`
-          : sql`SELECT NULL::text, NULL::text, NULL::text, NULL::text, NULL::text WHERE false`
-      }
-    )
-    SELECT DISTINCT peers.id FROM (
-      SELECT matched.id FROM requested_edges r
-      CROSS JOIN LATERAL (
-        SELECT s.id FROM ${suggestionTable} s
-        WHERE s.family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.recommendation)}
-          AND s.subject->>'scope' LIKE 'connection.%'
-          AND s.evidence #>> '{candidate,source,entityKind}' = r."sourceKind"
-          AND s.evidence #>> '{candidate,source,entityId}' = r."sourceCode"
-          AND s.evidence #>> '{candidate,target,entityKind}' = r."targetKind"
-          AND s.evidence #>> '{candidate,target,entityId}' = r."targetCode"
-          AND s.evidence #>> '{candidate,relation}' = r.relation
-          AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
-        OFFSET 0
-      ) matched
-      UNION ALL
-      SELECT matched.id FROM requested_fields r
-      JOIN ${entityIdentity} owner ON owner.kind = r.entity AND owner.shortcode = r.code
-      JOIN ${entityIdentity} target ON target.kind = r."targetKind" AND target.shortcode = r."targetCode"
-      CROSS JOIN LATERAL (
-        SELECT s.id FROM ${suggestionTable} s
-        WHERE s.entity = r.entity AND s."recordId" = owner.id AND s.field = r.field
-          AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)} AND s.family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.field)}
-          AND md5(s."suggestedValue" #>> '{}') = md5(target.shortcode)
-          AND s."suggestedValue" #>> '{}' = target.shortcode
-        OFFSET 0
-      ) matched
-      UNION ALL
-      SELECT matched.id FROM requested_pairs r
-      JOIN ${entityIdentity} owner ON owner.kind = r."sourceKind" AND owner.shortcode = r."sourceCode"
-      JOIN ${entityIdentity} target ON target.kind = r."targetKind" AND target.shortcode = r."targetCode"
-      CROSS JOIN LATERAL (
-        SELECT s.id FROM ${suggestionTable} s
-        WHERE s.family = r.family AND s.active AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
-          AND s.entity = owner.kind AND s."recordId" = owner.id
-          AND s.subject->>'otherId' IS NOT NULL
-          AND md5(s.subject->>'otherId') = md5(target.id::text)
-          AND s.subject->>'otherId' = target.id::text
-        OFFSET 0
-      ) matched
-    ) peers`);
-  return rows.rows.map((row) => row.id);
-}
-
 /** Keep the original family handle: its review handler owns evidence and writes. */
 export async function readExistingConnectionSuggestions(
   db: Database,

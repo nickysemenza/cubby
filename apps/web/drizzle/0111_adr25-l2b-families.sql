@@ -20,3 +20,11 @@ CREATE INDEX "Suggestion_served_other_id_idx" ON "Suggestion" USING btree (md5("
 CREATE INDEX "Suggestion_served_source_ref_idx" ON "Suggestion" USING btree (md5("judgment" #>> '{create,sourceRef,source}'),md5("judgment" #>> '{create,sourceRef,externalId}')) WHERE ("Suggestion"."judgment" #>> '{create,sourceRef,source}') IS NOT NULL AND ("Suggestion"."judgment" #>> '{create,sourceRef,externalId}') IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "Suggestion_reference_records_idx" ON "Suggestion" USING gin (("evidence"->'records'));--> statement-breakpoint
 ALTER TABLE "Suggestion" DROP COLUMN "served";
+--> statement-breakpoint
+CREATE INDEX "Suggestion_connection_source_ref_idx" ON "Suggestion"
+ ((evidence #>> '{candidate,source,entityKind}'), (evidence #>> '{candidate,source,entityId}')) INCLUDE (id)
+ WHERE subject->>'scope' LIKE 'connection.%';
+--> statement-breakpoint
+CREATE INDEX "Suggestion_connection_target_ref_idx" ON "Suggestion"
+ ((evidence #>> '{candidate,target,entityKind}'), (evidence #>> '{candidate,target,entityId}')) INCLUDE (id)
+ WHERE subject->>'scope' LIKE 'connection.%';
