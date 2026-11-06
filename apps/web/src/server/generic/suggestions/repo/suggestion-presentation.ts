@@ -11,7 +11,6 @@ import {
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { entityRoster } from "@cubby/schemas/entity-roster";
 import type {
   StatementSuggestionOut,
   StatementTransactionAction,
@@ -187,14 +186,6 @@ export const keyBase = (key: SuggestionKey) => ({
   columns: key.columns,
 });
 
-const recordIdsOf = (
-  query: SuggestionFamilyQuery,
-  entities: readonly ShortcodeEntity[],
-) =>
-  query.records
-    ?.filter((record) => entities.includes(record.entity))
-    .map((record) => record.id);
-
 // ---------------------------------------------------------------- field
 
 export const fieldChecks = new Map<string, DataCheck[]>();
@@ -284,31 +275,12 @@ export function statementAcceptApplication(
   };
 }
 
-const owesFamily = (entity: ShortcodeEntity, family: SuggestionListFamily) =>
-  entityRoster[entity].suggestionFamilies.some((owed) => owed === family);
-const entitiesOwing = (family: SuggestionListFamily) =>
-  shortcodeEntities.filter((entity) => owesFamily(entity, family));
-const STATEMENT_ENTITIES = entitiesOwing("statement_transaction");
-
 export function statementScope(
   query: SuggestionFamilyQuery,
 ): StatementSuggestionScope | null {
-  const { filters } = query;
-  const status = filters.status;
+  const { status, runId } = query.filters;
   if (status !== "pending" && status !== "applied") return null;
-  if (
-    filters.recordEntity &&
-    !STATEMENT_ENTITIES.includes(filters.recordEntity)
-  )
-    return null;
-  const recordUuids = recordIdsOf(query, STATEMENT_ENTITIES);
-  if (recordUuids?.length === 0) return null;
-  return {
-    recordUuids,
-    runCode: query.filters.runId,
-    status,
-    suggestionIds: query.suggestionIds,
-  };
+  return { runCode: runId, status, suggestionIds: query.suggestionIds };
 }
 
 // ------------------------------------------------------------ recommendation
