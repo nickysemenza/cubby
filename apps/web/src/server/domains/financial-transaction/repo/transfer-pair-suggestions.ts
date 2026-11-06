@@ -20,7 +20,6 @@ import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fi
 import {
   suggestionFamily,
   suggestionSubjects,
-  suggestionProjectionTargets,
   type suggestionReviewInput,
   type SuggestionProducer,
 } from "@cubby/schemas/suggestion";
@@ -1484,14 +1483,10 @@ export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair
       ]),
   }),
   actionable: sql`true`,
-  subject: suggestionSubjects.transfer_pair,
-  target: suggestionProjectionTargets.transfer_pair,
-  transactionBound: true,
   lockForApply: async (db, prediction) => {
     const subject = suggestionSubjects.transfer_pair.parse(prediction.subject);
     await lockTransferPairLegs(db, subject.pairKey);
   },
-  actions: ["correct", "wrong", "uncertain", "dismissed"],
   apply: async (db, context, state, input, automatic) => {
     if (
       automatic ||

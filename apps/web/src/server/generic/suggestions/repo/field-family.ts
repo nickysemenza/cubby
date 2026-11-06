@@ -1,8 +1,4 @@
-import {
-  suggestionJudgments,
-  suggestionSubjects,
-  suggestionProjectionTargets,
-} from "@cubby/schemas/suggestion";
+import { suggestionJudgments } from "@cubby/schemas/suggestion";
 import {
   fieldSuggestionRow,
   type SuggestionSummaryPart,
@@ -145,10 +141,6 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
   actionable: sql`true`,
   summarize: (value: unknown) =>
     `Set field to ${JSON.stringify(suggestionJudgments.field.parse(value).value)}`,
-  subject: suggestionSubjects.field,
-  target: suggestionProjectionTargets.field,
-  transactionBound: true,
-  actions: ["correct", "wrong", "uncertain", "dismissed"],
   apply: async (db, context, state, input, automatic) => {
     // The automatic mode keeps acceptSuggestion's requiresSuggestionReview refusal.
     if (input.verdict === "correct" && !input.correction.present)

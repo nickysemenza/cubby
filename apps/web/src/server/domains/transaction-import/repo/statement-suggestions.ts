@@ -29,7 +29,6 @@ import {
 import {
   suggestionJudgments,
   suggestionSubjects,
-  suggestionProjectionTargets,
   suggestionFamily,
   suggestionProducer,
   type SuggestionProducer,
@@ -2222,9 +2221,6 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
     return `Statement transaction: ${decision.recommended}`;
   },
   isolationLevel: "serializable",
-  subject: suggestionSubjects.statement_transaction,
-  target: suggestionProjectionTargets.statement_transaction,
-  transactionBound: true,
   lockForApply: async (db, prediction) => {
     const judgment = suggestionJudgments.statement_transaction.parse(
       prediction.judgment,
@@ -2242,7 +2238,6 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
         `stmt:${subject.source}:${subject.chargeKey}`,
     );
   },
-  actions: ["correct", "wrong", "uncertain", "dismissed"],
   apply: async (db, context, state, input) => {
     if (input.application?.kind !== "statement_transaction")
       throw new Error(

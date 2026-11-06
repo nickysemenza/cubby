@@ -3,11 +3,7 @@ import {
   connectionCandidate,
   type ConnectionProposal,
 } from "@cubby/schemas/entity-connections";
-import {
-  suggestionFamily,
-  suggestionSubjects,
-  suggestionProjectionTargets,
-} from "@cubby/schemas/suggestion";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import {
   recommendationSuggestionRow,
   type SuggestionListRow,
@@ -270,10 +266,7 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
     },
   }),
   actionable: sql`(${sql.join(Object.values(recommendationScopes), sql` OR `)})`,
-  subject: suggestionSubjects.recommendation,
-  target: suggestionProjectionTargets.recommendation,
   transactionBound: false,
-  actions: ["correct", "wrong", "uncertain", "dismissed"],
   apply: async (db, context, state, input) => {
     const { applyEntityConnection } =
       await import("~/server/domains/connection/repo/entity-connections");

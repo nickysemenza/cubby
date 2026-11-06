@@ -9,6 +9,7 @@ import {
   suggestionFamily,
   suggestionReviewBatchInput,
   suggestionSubjects,
+  suggestionProjectionTargets,
   suggestionReviewOut,
   mailDecisionFamily,
   type SuggestionFamily,
@@ -76,10 +77,10 @@ const automaticReviewInput = suggestionReviewInput.extend({
   operationId: z.string().regex(/^automatic:/),
 });
 export type Handler = {
-  subject: z.ZodType;
-  target: z.ZodType;
-  actions: readonly Review["verdict"][];
-  transactionBound: boolean;
+  subject?: z.ZodType;
+  target?: z.ZodType;
+  actions?: readonly Review["verdict"][];
+  transactionBound?: boolean;
   /** Snapshot-dependent domain planning owns the outer retry boundary. */
   isolationLevel?: "serializable";
   /** Domain parent locks must precede the suggestion's projection row lock. */
@@ -185,7 +186,16 @@ function assertReviewAction(
 ) {
   if (automatic && !AUTOMATIC_RULE_FAMILIES.some((rule) => rule === name))
     throw new Error(`${name} Suggestions have no Automatic rule; review them`);
-  if (!suggestionFamilies[name].actions.some((action) => action === verdict))
+  if (
+    !(
+      suggestionFamilies[name].actions ?? [
+        "correct",
+        "wrong",
+        "uncertain",
+        "dismissed",
+      ]
+    ).some((action) => action === verdict)
+  )
     throw new Error(`Unsupported ${name} review action ${verdict}`);
 }
 
@@ -309,7 +319,7 @@ async function settleReview(
   if (!isReviewFamily(name))
     throw new Error(`${name} Suggestions are not reviewed as Suggestions`);
   const family = suggestionFamilies[name];
-  family.subject.parse(prediction.subject);
+  (family.subject ?? suggestionSubjects[name]).parse(prediction.subject);
   assertReviewAction(name, input.verdict, automatic);
   if (
     prediction.subject.kind === "statement_transaction" &&
@@ -487,9 +497,10 @@ async function settleReview(
             .where(eq(suggestionTable.id, prediction.id))
             .limit(1);
           // Two accepted reviews can race; serialize application on the Suggestion owner.
-          const [state] = family.transactionBound
-            ? await query.for("update")
-            : await query;
+          const [state] =
+            family.transactionBound !== false
+              ? await query.for("update")
+              : await query;
           if (!state?.active || state.status === "superseded")
             throw new Error(
               "Suggestion evidence is stale; request a fresh suggestion before applying",
@@ -509,7 +520,7 @@ async function settleReview(
                 : state.fingerprint)
           )
             throw new Error("Suggestion evidence fingerprint changed");
-          family.target.parse(state);
+          (family.target ?? suggestionProjectionTargets[name]).parse(state);
           const applicationResult = await family.apply(
             transactionDb,
             { ...context, db: transactionDb, reviewFeedbackId: event.id },
@@ -518,7 +529,7 @@ async function settleReview(
             automatic,
           );
           if (applicationResult) outcome.applicationResult = applicationResult;
-          if (!family.transactionBound)
+          if (family.transactionBound === false)
             await transitionSuggestionStates(
               transactionDb,
               and(
