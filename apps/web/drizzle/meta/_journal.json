@@ -757,6 +757,13 @@
       "when": 1793938298369,
       "tag": "0107_source_judgment_owner_cutover",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1793945362433,
+      "tag": "0108_shipment_capture_text_index",
+      "breakpoints": true
     }
   ]
 }

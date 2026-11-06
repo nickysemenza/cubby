@@ -6,11 +6,11 @@ import type {
   ShipmentCarrierClaim,
 } from "@cubby/schemas/shipment-evidence";
 import { SHIPMENT_IDENTITY_PERIOD_DAYS } from "@cubby/schemas/shipment-fields";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
-import { notDeleted } from "~/server/db/helpers/predicates";
+import { escapeLike, notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   vendor,
@@ -499,8 +499,25 @@ export async function loadCarrierHistory(
     .omit({ id: true })
     .parse("window" in scope ? scope.window : current?.rows[0]);
   const bound = sql<boolean>`EXISTS (SELECT 1 FROM ${shipmentSourcePackage} p WHERE p."sourceKey" = ${shipmentSourceCapture}."sourceKey" AND p."shipmentId" = ${shipmentId}::uuid)`;
+  // Must match ShipmentSourceCapture_text_gin_idx. Separate UNION branches let
+  // each use its index: an OR with the package EXISTS scans every email body.
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- content is a retained source JSON key.
-  const text = sql`upper(regexp_replace(concat_ws(' ', ${shipmentSourceCapture.originalContent}->>'bodyText', ${shipmentSourceCapture.originalContent}->>'bodyHtml', ${shipmentSourceCapture.source}->>'content', ${shipmentSourceCapture.source}->>'url'), '[[:space:]]', '', 'g'))`;
+  const captureText = sql`upper(regexp_replace(coalesce(${shipmentSourceCapture.originalContent}->>'bodyText', '') || ' ' || coalesce(${shipmentSourceCapture.originalContent}->>'bodyHtml', '') || ' ' || coalesce(${shipmentSourceCapture.source}->>'content', '') || ' ' || coalesce(${shipmentSourceCapture.source}->>'url', ''), '[[:space:]]', '', 'g'))`;
+  const mentions = scope.references.map(
+    (number) =>
+      sql`${captureText} LIKE ${`%${escapeLike(normalizeCarrierReference(number))}%`}`,
+  );
+  const candidates = sql.join(
+    [
+      sql`SELECT c.id FROM ${shipmentSourceCapture} c JOIN ${shipmentSourcePackage} p ON p."sourceKey" = c."sourceKey" WHERE p."shipmentId" = ${shipmentId}::uuid`,
+      ...(mentions.length
+        ? [
+            sql`SELECT ${shipmentSourceCapture.id} FROM ${shipmentSourceCapture} WHERE ${sql.join(mentions, sql` OR `)}`,
+          ]
+        : []),
+    ],
+    sql` UNION `,
+  );
   const rows = await database
     .select({
       id: shipmentSourceCapture.id,
@@ -510,15 +527,7 @@ export async function loadCarrierHistory(
       events: sql<unknown>`coalesce((SELECT jsonb_agg(o.event) FROM ${shipmentObservationCapture} oc JOIN ${shipmentObservation} o ON o.id = oc."observationId" WHERE oc."captureId" = ${shipmentSourceCapture}."id" AND o."supersededById" IS NULL), '[]'::jsonb)`,
     })
     .from(shipmentSourceCapture)
-    .where(
-      or(
-        bound,
-        ...scope.references.map(
-          (number) =>
-            sql`position(${normalizeCarrierReference(number)} in ${text}) > 0`,
-        ),
-      ),
-    )
+    .where(sql`${shipmentSourceCapture.id} IN (${candidates})`)
     .limit(2001);
   const selected = rows.slice(0, 2000);
   // A capture can contain an admitted package and another held package. Only
