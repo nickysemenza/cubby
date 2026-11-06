@@ -157,6 +157,11 @@ const statementAcceptedSettlementFrom = sql`FROM "SourceTransactionRecord" ancho
 
 const statementAcceptedSettlementScope = sql`anchor.id=s."recordId" AND ${statementSettlementEligibility}`;
 
+const settlementPaths = [
+  [statementSettlementFrom, statementSettlementScope],
+  [statementAcceptedSettlementFrom, statementAcceptedSettlementScope],
+] as const;
+
 const statementSettlementRefs = [
   { entity: entities.financialTransaction, id: sql<string>`settled.id` },
   { entity: entities.purchase, id: sql<string>`booked.id` },
@@ -214,21 +219,14 @@ function statementRecordParts(
     ({ entity }) => withSettlements && includes(entity),
   );
   if (related.length) {
-    parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`related.kind`, sql`related.id`)})
-        ${statementSettlementFrom}
+    for (const [from, where] of settlementPaths)
+      parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`related.kind`, sql`related.id`)})
+        ${from}
         CROSS JOIN LATERAL (VALUES ${sql.join(
           related.map(({ entity, id }) => sql`(${entity},${id})`),
           sql`, `,
         )}) related(kind,id)
-        WHERE ${statementSettlementScope}
-          AND related.id IS NOT NULL), '[]'::jsonb)`);
-    parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`related.kind`, sql`related.id`)})
-        ${statementAcceptedSettlementFrom}
-        CROSS JOIN LATERAL (VALUES ${sql.join(
-          related.map(({ entity, id }) => sql`(${entity},${id})`),
-          sql`, `,
-        )}) related(kind,id)
-        WHERE ${statementAcceptedSettlementScope}
+        WHERE ${where}
           AND related.id IS NOT NULL), '[]'::jsonb)`);
   }
   if (includes(entities.purchase))
@@ -322,14 +320,11 @@ export function statementReferenceMatch(
     direct.length
       ? recordRefsMatch(scope, sql.join(direct, sql` || `))
       : undefined,
-    settled
-      ? sql`EXISTS (SELECT 1 ${statementSettlementFrom}
-          WHERE ${statementSettlementScope} AND ${settled})`
-      : undefined,
-    settled
-      ? sql`EXISTS (SELECT 1 ${statementAcceptedSettlementFrom}
-      WHERE ${statementAcceptedSettlementScope} AND ${settled})`
-      : undefined,
+    ...settlementPaths.map(([from, where]) =>
+      settled
+        ? sql`EXISTS (SELECT 1 ${from} WHERE ${where} AND ${settled})`
+        : undefined,
+    ),
   ];
 }
 
