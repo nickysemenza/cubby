@@ -310,7 +310,6 @@ describe("deterministic cache rebuild", () => {
     expect(await snapshot()).toEqual(incremental);
 
     // Clear only disposable projections, leaving all household inputs in place.
-    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedValue"`);
     for (const table of new Set(
       entityStoredDerivedDeclarations().flatMap((entry) =>
         entry.snapshotSource && !entry.snapshotSource.view
