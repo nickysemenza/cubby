@@ -10,7 +10,8 @@ Claude or Codex session researches it later through the Research queue.
    Email is settled. It takes no arguments. The host gives each call a durable
    identity; a new call observes current work, while retrying that same call
    preserves its result. Before claiming, Cubby settles confident unrelated
-   classifier outcomes. Related lifecycle and duplicate confirmation Emails
+   classifier outcomes and exact carrier notices whose package it can record
+   without conflict. Other related lifecycle and duplicate confirmation Emails
    reach you even when their Purchase is already itemized: inspect and record
    their package evidence before resolving them.
 2. The claim's `read` is the Email's first `mcp__cubby__purchase_import_read` `mail_read`
