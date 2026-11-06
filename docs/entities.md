@@ -4565,6 +4565,8 @@ Wrong), and Find suggestions, which estimates and starts a Sweep.
 The Automatic decisions tab retains application history and Wrong grading.
 Each family owns presentation, affected-record discovery and review commands in
 one typed declaration; generic readers compose the same static declarations.
+The registry exposes live accessors because family implementations depend on
+generic review; eager object values can capture an unfinished circular import.
 Reference resolution, touching-record queries and Work tokens have separate
 runtimes.
 The page's `family`, `record` (`<kind>:<CODE>`) and `runId` params scope the queue.
