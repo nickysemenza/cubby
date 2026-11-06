@@ -3,7 +3,7 @@ import {
   SETTLEMENT_CANDIDATE_LIMIT,
 } from "@cubby/schemas/financial-transaction";
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
-import { cents, parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared";
 import { and, inArray, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
@@ -95,7 +95,7 @@ export async function listPurchasesSettlementCandidates(
     dated.map(
       (subject, ordinal) =>
         sql`(${ordinal}::int, ${subject.code}::text, ${subject.date}::date,
-          ${subject.statedTotal === null ? null : cents(subject.statedTotal)}::numeric,
+          ${subject.statedTotal}::numeric,
           ${subject.vendorName}::text)`,
     ),
     sql`, `,

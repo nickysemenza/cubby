@@ -1,5 +1,6 @@
 import { financialTransactionUpdateData } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
@@ -82,7 +83,7 @@ describe("settlement conflicts", () => {
       vendorAccountId: vendorAccount.id,
       date: "2026-09-14",
       orderId: "SYN-1001",
-      statedTotal: 13.59,
+      statedTotal: moneyToMinor(13.59),
     });
     const charge = (accountId: typeof buyerCard.id, amount: number) =>
       insertWithShortcode(ctx.db, "financialTransaction", {
@@ -218,7 +219,7 @@ describe("settlement conflicts", () => {
       insertWithShortcode(ctx.db, "purchase", {
         vendorId: vendor.id,
         date: "2026-09-14",
-        statedTotal: 13.59,
+        statedTotal: moneyToMinor(13.59),
         ...fields,
       });
     const asserted = await accountless({ purchaserOverrideId: buyer.id });
@@ -311,7 +312,7 @@ describe("settlement conflicts", () => {
     const order = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-14",
-      statedTotal: 13.59,
+      statedTotal: moneyToMinor(13.59),
     });
     const original = await syntheticRetainedMail(ctx.db, {
       ledgerPartyId: buyer.id,

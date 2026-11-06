@@ -729,6 +729,13 @@
       "when": 1793928230292,
       "tag": "0103_drop_workitem_capture_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1793929296667,
+      "tag": "0104_purchase_total_minor_units",
+      "breakpoints": true
     }
   ]
 }

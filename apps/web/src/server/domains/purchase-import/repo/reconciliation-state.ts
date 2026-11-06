@@ -4,6 +4,7 @@ import type {
   ProposedImportFix,
   SourceOrderReconciliationResolution,
 } from "@cubby/schemas/purchase-import";
+import { minorToMoney } from "@cubby/shared";
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
@@ -377,7 +378,11 @@ export async function loadSourceReconciliationState(
     unpricedForeignExpenses,
     family,
     association,
-    target,
+    target: {
+      ...target,
+      statedTotal:
+        target.statedTotal === null ? null : minorToMoney(target.statedTotal),
+    },
     observation,
     currentOriginalReview,
     accepted,

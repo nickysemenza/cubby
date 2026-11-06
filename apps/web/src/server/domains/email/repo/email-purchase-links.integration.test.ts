@@ -7,6 +7,7 @@ import {
   purchaseId,
   type EmailShortcode,
 } from "@cubby/schemas/identifiers";
+import { moneyToMinor } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -1720,14 +1721,14 @@ describe("Email Purchase links", () => {
       orderId: "TS-SYN-1001",
       // Exact order identity is independent of the amount/date matching window.
       date: "2024-01-01",
-      statedTotal: 48,
+      statedTotal: moneyToMinor(48),
     });
     // Same total, another order number: never a suggestion.
     await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "TS-SYN-3003",
       date: "2026-09-08",
-      statedTotal: 48,
+      statedTotal: moneyToMinor(48),
     });
     const bodyText =
       "Order TS-SYN-1001. Example Trail Shop. Printed total 48 USD.";
@@ -1868,17 +1869,17 @@ describe("Email Purchase links", () => {
     const edge = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-08-03",
-      statedTotal: 12,
+      statedTotal: moneyToMinor(12),
     });
     await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-08-02",
-      statedTotal: 12,
+      statedTotal: moneyToMinor(12),
     });
     await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-17",
-      statedTotal: 99,
+      statedTotal: moneyToMinor(99),
     });
     const bodyText =
       "Order WS-SYN-2001. Example Window Shop. Printed total 12 USD.";

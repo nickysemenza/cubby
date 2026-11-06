@@ -13,7 +13,7 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor, type PurchaseId } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
-import { cents } from "@cubby/shared";
+import { minorToMoney, moneyToMinor, cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
 import type { z } from "zod";
@@ -140,7 +140,10 @@ export async function acceptedAutomaticFacts(
           vendorAccountId: target.vendorAccountId,
           date: target.date,
           orderId: target.orderId,
-          statedTotal: target.statedTotal,
+          statedTotal:
+            target.statedTotal === null
+              ? null
+              : minorToMoney(target.statedTotal),
           deletedAt: target.deletedAt,
         }
       : null,
@@ -325,7 +328,7 @@ async function automaticBookingPreview(
   if (preview.action === "create_aggregate" && target) {
     if (
       target.statedTotal !== null &&
-      cents(target.statedTotal) !== cents(row.amount)
+      target.statedTotal !== moneyToMinor(row.amount)
     )
       return review(
         "The Purchase's literal total differs from this payment; reconcile split or installment money before booking.",

@@ -1,6 +1,7 @@
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { PurchaseFilters } from "@cubby/schemas/purchase";
 import { rawPurchaseListItemOut } from "@cubby/schemas/purchase-raw-read";
+import { moneyToMinor } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -47,7 +48,7 @@ describe("purchase reconciliation=mismatch filter", () => {
     const purchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
-      statedTotal,
+      statedTotal: statedTotal === null ? null : moneyToMinor(statedTotal),
     });
     if (cost !== null) {
       await insertWithShortcode(ctx.db, "expense", {
@@ -138,7 +139,7 @@ describe("purchase list display labels", () => {
     const purchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
-      statedTotal: 100,
+      statedTotal: moneyToMinor(100),
     });
     await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",

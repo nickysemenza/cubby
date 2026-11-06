@@ -103,8 +103,8 @@ export const emailPurchaseEvidenceSql = (
     WHERE p."vendorId" = original."vendorId"
         ${purchaseIds ? sql`AND p."id" IN (${purchaseIds})` : sql``}
         AND (event."orderId" IS NULL OR p."orderId" IS NULL)
-        AND event."amount" IS NOT NULL AND p."statedTotal" IS NOT NULL
-        AND abs(event."amount" - p."statedTotal") < 0.01
+        AND event."amount" IS NOT NULL AND (p."statedTotalMinor"::numeric / 100) IS NOT NULL
+        AND abs(event."amount" - (p."statedTotalMinor"::numeric / 100)) < 0.01
         AND "Email"."receivedAt" IS NOT NULL AND p."date" IS NOT NULL
         AND p."date" BETWEEN
           ${sql.raw(householdDaySqlText(`"Email"."receivedAt"`))} - ${SUGGESTION_WINDOW_DAYS}::integer

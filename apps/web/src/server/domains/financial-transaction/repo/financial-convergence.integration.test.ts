@@ -55,6 +55,7 @@ describe("server verified financial convergence", () => {
       date: "2026-09-01",
       statedTotal: 25,
     });
+    expect(purchase.output).toMatchObject({ statedTotal: 25 });
     const transaction = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind,

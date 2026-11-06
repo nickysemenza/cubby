@@ -13,7 +13,7 @@ import {
 import { financialTransactionSettlementViolation } from "@cubby/schemas/financial-transaction";
 import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
 import { parseShortcodeFor, parseEntityId } from "@cubby/schemas/identifiers";
-import { cents } from "@cubby/shared";
+import { moneyToMinor, cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
@@ -1587,7 +1587,8 @@ async function prepareReadySpending(
           !empty ||
           candidate.graph.settlements.length ||
           (candidate.graph.target.statedTotal !== null &&
-            cents(candidate.graph.target.statedTotal) !== cents(source.amount))
+            moneyToMinor(candidate.graph.target.statedTotal) !==
+              moneyToMinor(source.amount))
         )
           return review(
             "Review existing spending and settlement capacity before linking this payment.",

@@ -1,5 +1,6 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import type { SearchableEntity } from "@cubby/schemas/search";
+import { moneyToMinor } from "@cubby/shared";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -724,7 +725,7 @@ describe("connection evaluation pages", () => {
       vendorId: base.vendor.id,
       orderId: "SYNTHETIC-PAGE-ORDER",
       date: "2026-10-01",
-      statedTotal: 24,
+      statedTotal: moneyToMinor(24),
     });
     const [withEvidence, deleted] = await emails(base, 2, "evidence");
     if (!withEvidence || !deleted) throw new Error("Synthetic Emails missing");

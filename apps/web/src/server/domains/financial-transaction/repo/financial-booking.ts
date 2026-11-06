@@ -142,11 +142,17 @@ export async function bookingGraphs(
   purchaseIds: readonly (typeof purchase.$inferSelect.id)[],
 ) {
   const ids = [...new Set(purchaseIds)];
-  const targets = ids.length
+  const storedTargets = ids.length
     ? await getDb(db).query.purchase.findMany({
         where: and(inArray(purchase.id, ids), notDeleted(purchase)),
       })
     : [];
+  // Retained booking fingerprints keep their original dollar-number shape.
+  const targets = storedTargets.map((row) => ({
+    ...row,
+    statedTotal:
+      row.statedTotal === null ? null : minorToMoney(row.statedTotal),
+  }));
   const lines = ids.length
     ? await getDb(db)
         .select()

@@ -20,7 +20,7 @@ import {
   type ProposedImportFix,
   type AcceptedSourceOrder,
 } from "@cubby/schemas/purchase-import";
-import { cents, minorToMoney } from "@cubby/shared";
+import { moneyToMinor, cents, minorToMoney } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
@@ -1646,7 +1646,9 @@ export async function importVendorOrder(
         displayLabel: candidate.merchant,
         date: orderDate,
         statedTotal:
-          candidate.currency === "USD" ? candidate.printedGrandTotal : null,
+          candidate.currency === "USD" && candidate.printedGrandTotal !== null
+            ? moneyToMinor(candidate.printedGrandTotal)
+            : null,
       });
     } else {
       // A null trade can be intentional Project inheritance. Filling a
@@ -1691,7 +1693,10 @@ export async function importVendorOrder(
           displayLabel: target.displayLabel ?? candidate.merchant,
           statedTotal:
             target.statedTotal ??
-            (candidate.currency === "USD" ? candidate.printedGrandTotal : null),
+            (candidate.currency === "USD" &&
+            candidate.printedGrandTotal !== null
+              ? moneyToMinor(candidate.printedGrandTotal)
+              : null),
         })
         .where(eq(purchase.id, target.id));
     }

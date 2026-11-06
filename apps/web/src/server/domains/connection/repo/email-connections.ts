@@ -110,7 +110,9 @@ export async function captureEmailConnectionBasis(
       vendorId: purchase.vendorId,
       vendorAccountId: purchase.vendorAccountId,
       date: purchase.date,
-      statedTotal: purchase.statedTotal,
+      statedTotal: sql<
+        number | null
+      >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
     })
     .from(purchase)
     .where(and(eq(purchase.id, purchaseId), notDeleted(purchase)))

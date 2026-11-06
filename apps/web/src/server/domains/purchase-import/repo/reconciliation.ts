@@ -17,7 +17,7 @@ import {
   type SourceOrderReconciliationResolution,
 } from "@cubby/schemas/purchase-import";
 import { tradeSchema } from "@cubby/schemas/task-fields";
-import { cents } from "@cubby/shared";
+import { moneyToMinor, cents } from "@cubby/shared";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -1015,7 +1015,10 @@ export async function commitSourceOrderReconciliation(
     await tx
       .update(purchase)
       .set({
-        statedTotal: candidate.printedGrandTotal,
+        statedTotal:
+          candidate.printedGrandTotal === null
+            ? null
+            : moneyToMinor(candidate.printedGrandTotal),
         updatedAt: new Date(),
       })
       .where(eq(purchase.id, state.target.id));

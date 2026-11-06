@@ -743,7 +743,9 @@ async function purchaseLinksBlock(
           shortcode: purchase.shortcode,
           orderId: purchase.orderId,
           date: purchase.date,
-          statedTotal: purchase.statedTotal,
+          statedTotal: sql<
+            number | null
+          >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
         })
         .from(purchase)
         .where(

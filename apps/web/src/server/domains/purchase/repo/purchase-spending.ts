@@ -153,7 +153,9 @@ const candidatePurchases = (
       uuid: purchase.id,
       shortcode: purchase.shortcode,
       date: purchase.date,
-      statedTotal: purchase.statedTotal,
+      statedTotal: sql<
+        number | null
+      >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
       displayLabel: purchase.displayLabel,
       orderId: purchase.orderId,
       vendorShortcode: vendor.shortcode,

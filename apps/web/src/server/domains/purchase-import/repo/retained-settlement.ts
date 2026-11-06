@@ -104,7 +104,9 @@ type RetainedPaymentRow = RetainedPayment &
 
 type RetainedSettlementDiscoveryFacts = Readonly<{
   target: Readonly<
-    Pick<typeof purchase.$inferSelect, "vendorId" | "statedTotal">
+    Pick<typeof purchase.$inferSelect, "vendorId"> & {
+      statedTotal: number | null;
+    }
   > | null;
   hasAllocation: boolean;
   hasNegativeAllocation: boolean;
@@ -212,7 +214,9 @@ export async function prepareRetainedSettlementDiscovery(
       .select({
         id: purchase.id,
         vendorId: purchase.vendorId,
-        statedTotal: purchase.statedTotal,
+        statedTotal: sql<
+          number | null
+        >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
       })
       .from(purchase)
       .where(and(inArray(purchase.id, batch), notDeleted(purchase)));
@@ -517,7 +521,9 @@ async function evidencedChargeGroup(
     .select({
       id: purchase.id,
       vendorId: purchase.vendorId,
-      statedTotal: purchase.statedTotal,
+      statedTotal: sql<
+        number | null
+      >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
     })
     .from(purchase)
     .where(and(inArray(purchase.id, members), notDeleted(purchase)))
@@ -672,7 +678,12 @@ export async function planPurchaseRetainedSettlement(
     ? discovery?.get(input.purchaseId)
     : undefined;
   const targetQuery = tx
-    .select({ vendorId: purchase.vendorId, statedTotal: purchase.statedTotal })
+    .select({
+      vendorId: purchase.vendorId,
+      statedTotal: sql<
+        number | null
+      >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
+    })
     .from(purchase)
     .where(and(eq(purchase.id, input.purchaseId), notDeleted(purchase)))
     .limit(1);
