@@ -553,6 +553,7 @@ export const { definition, readSchemas } = defineEntityModel(
             redundancy: "eligible",
           },
           explanation: {
+            evidence: { kind: "policyAggregate" },
             ruleId: "financialTransaction.effective-evidence-expectation",
             description:
               "Reviewed reimbursement expects no itemization. Otherwise an explicit transaction policy wins, followed by linked purchase policies and the transaction spending category.",
@@ -569,10 +570,6 @@ export const { definition, readSchemas } = defineEntityModel(
               {
                 path: "fields.itemizationExpectation.current.assignment.value",
                 label: "Stored override",
-              },
-              {
-                path: "fields.itemizationExpectation.current.controls.reset.preview.result.decision.outcome.value",
-                label: "Inherited value",
               },
             ],
           },

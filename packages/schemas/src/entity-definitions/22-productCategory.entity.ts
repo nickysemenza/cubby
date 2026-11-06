@@ -140,6 +140,7 @@ export const { definition, readSchemas } = defineEntityModel({
         display: { columnGroup: "Spending policy", columnLabel: "Spending" },
         explanation: {
           ruleId: "productCategory.effective-spending-category",
+          evidence: { kind: "scalar", inheritField: "spendingCategoryId" },
           description:
             "A category's own mapping (or block) wins; otherwise the nearest mapped ancestor within three levels supplies it.",
           projections: {

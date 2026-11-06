@@ -709,7 +709,7 @@ async function loadExplanationSnapshot(
           )
         : null;
     const projection =
-      rawDetail && hasFieldEnvelopeRead(entity) && entity !== "usda-food"
+      rawDetail && hasFieldEnvelopeRead(entity)
         ? asJsonRecord(
             await readPublicEntityRow({
               db: snapshotDb,

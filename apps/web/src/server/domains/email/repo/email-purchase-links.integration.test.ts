@@ -803,7 +803,6 @@ describe("Email Purchase links", () => {
     });
     expect(fieldValueOf(explanation.envelope)).toBe("failed");
     expect(explanation.envelope.result.kind).toBe("cached");
-    expect(explanation.comparison).toMatchObject({ kind: "unavailable" });
     expect(
       explanation.sources.some((source) =>
         JSON.stringify(source.value).includes(f.purchase.shortcode),
@@ -1652,7 +1651,6 @@ describe("Email Purchase links", () => {
       expect(fieldValueOf(explanation.envelope)).toEqual(
         field === "linkState" ? "linked" : expectedLinks,
       );
-      expect(explanation.comparison).toMatchObject({ kind: "unavailable" });
       expect(explanation.sources).toContainEqual(
         expect.objectContaining({
           label: "Requested list scope",

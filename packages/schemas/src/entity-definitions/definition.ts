@@ -660,6 +660,25 @@ const buildMetadataSchemas = () => {
       ),
       explanation: orNull(
         z.strictObject({
+          /** Selects reusable source/contributor evidence behavior for lazy explanations. */
+          evidence: z
+            .object({
+              kind: z.enum([
+                "ownership",
+                "yield",
+                "policy",
+                "category",
+                "contextProject",
+                "contextTrade",
+                "owners",
+                "price",
+                "policyAggregate",
+                "scalar",
+              ]),
+              inheritField: nonEmptyString().optional(),
+              allocated: z.boolean().optional(),
+            })
+            .optional(),
           ruleId: nonEmptyString(),
           version: z.number().int().positive().default(1),
           description: nonEmptyString(),

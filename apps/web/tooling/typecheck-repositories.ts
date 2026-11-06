@@ -51,6 +51,8 @@ export const repositoryOwners = [
   "src/server/generic/derived/repo/envelope.ts",
   "src/server/generic/derived/repo/public-read.ts",
   "src/server/generic/field-explanation/repo/inherited-reset-preview.ts",
+  "src/server/generic/inheritance/repo/evidence.ts",
+  "src/server/generic/field-explanation/repo/resolution-contributors.ts",
   "src/server/generic/list/repo/page-fields.ts",
   "src/server/domains/image-processing/repo/image-representations.ts",
   "src/server/generic/relatedness/repo/relationship-query.ts",

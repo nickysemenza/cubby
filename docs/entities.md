@@ -369,6 +369,8 @@ default → household food fallback. The canonical scalar SQL checks uncorrelate
 live-Project id sets, avoiding a Project scan per Expense while retaining null
 short-circuiting and soft-delete behavior.
 
+Lazy field evidence uses the field’s `explanation.evidence` strategy for specialist contributions and walks `resolution.inherit` directly for hierarchies and ordered reference paths. Strategies describe evidence semantics rather than entity callbacks.
+
 An inherited value has one implementation: the field's `resolution.inherit`
 declaration (`packages/schemas/src/entity-definitions/definition.ts`) and its
 generator, `server/db/computed/effective-field.ts`. `mode` says when the
@@ -2871,9 +2873,7 @@ folds a published result with current context. Its raw reader supplies a private
 constructor accepts the projected value only when that witness matches the
 loaded result's computation time; a concurrent publication leaves the value
 unavailable instead of attaching another revision's provenance. The witness is
-never part of public web, Apple or MCP reads. A `storedPath` supplies the default
-unscoped live comparison; contextual projections without one report that a
-standalone comparison is unavailable.
+never part of public web, Apple or MCP reads. A `storedPath` identifies the selected publication value.
 Embedded entity summaries carry the same private witness from their nested
 SELECT through raw mapping; Meal's Recipe totals must not omit it merely because
 the Recipe is rendered inside another record. Serialization removes the witness.
@@ -3033,12 +3033,10 @@ prices from the selected price, including when price is omitted from the public
 selection, without introducing a second physical-price cache. A cached result carries its deciding
 provenance, computation time and freshness; work status does not determine whether
 a usable result exists. Field explanations return that same envelope and add
-current source evidence and an optional live comparison for one record; they
-never publish it. Web and Apple explanations distinguish the published value
-from the live result, retain Updating and calculation failures, and show the
-publication time when known. Values use the field's formatter, with structured
-evidence retained for non-scalar results; an unavailable live computation stays
-explicit.
+source evidence for one record. They never recompute or publish a comparison.
+Web and Apple retain Updating and calculation failures, and show the publication
+time when known. Values use the field's formatter, with structured evidence
+retained for non-scalar results.
 
 Typed decision columns store outcome metadata and provenance beside the value
 in the same publication, without duplicating its payload. A compute may return
@@ -3290,8 +3288,7 @@ queue population reads pass `"stored"`. A single-record Work strip evaluates
 that record's quality live and reuses it for gap admission, messages and counts,
 so a record page does not wait for a household-wide refresh pass. This does not
 publish or repair the stored snapshot. Lazy explanations read the displayed
-publication's captured facts; live comparison is an explicit diagnostic action
-and never publishes repairs. SQL predicates (`generic/data-quality/repo/sql.ts`)
+publication's captured facts and never publish repairs. SQL predicates (`generic/data-quality/repo/sql.ts`)
 are primary-key lookups on the published value; the status predicate derives
 the same status as the TypeScript core from those check states.
 

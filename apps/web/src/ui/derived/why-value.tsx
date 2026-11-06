@@ -605,7 +605,6 @@ export function WhyValueContents({
   const queryClient = useQueryClient();
   const refresh = useMutation({
     mutationFn: async () => {
-      setDiagnostic(false);
       await invalidateOperationTags(queryClient, entityRipple(entity));
     },
   });
