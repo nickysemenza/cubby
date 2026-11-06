@@ -491,7 +491,7 @@ describe("connection evaluation pages", () => {
     ).mockImplementationOnce(async (db, prepared) => {
       await getDb(db)
         .update(purchaseTable)
-        .set({ statedTotal: 99 })
+        .set({ statedTotal: 9900n })
         .where(eq(purchaseTable.id, order.id));
       return publish(db, prepared);
     });

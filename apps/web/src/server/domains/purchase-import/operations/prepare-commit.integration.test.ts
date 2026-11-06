@@ -1198,7 +1198,7 @@ describe("caller-driven purchase import writes", () => {
       });
       expect(await purchaseByShortcode(saved.shortcode)).toMatchObject({
         date: "2026-09-01",
-        statedTotal: 24,
+        statedTotal: 2400n,
       });
       expect(
         (await purchaseLines(saved.id)).map(({ cost, productId }) => ({

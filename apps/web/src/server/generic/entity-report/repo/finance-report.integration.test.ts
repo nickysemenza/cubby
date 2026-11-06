@@ -1,6 +1,7 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import type { ProjectId, PurchaseId } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
+import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -52,7 +53,7 @@ describe("finance entity reports", () => {
     return insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
-      statedTotal,
+      statedTotal: statedTotal === null ? null : moneyToMinor(statedTotal),
     });
   };
   const addLine = (

@@ -109,7 +109,7 @@ describe("accepted source financial reconciliation", () => {
       where: eq(purchase.orderId, rewardReceipt.orderId!),
     });
     if (!recorded) throw new Error("Synthetic reward Purchase missing");
-    expect(recorded.statedTotal).toBe(196.57);
+    expect(recorded.statedTotal).toBe(19657n);
     const lines = await database
       .select()
       .from(expense)
@@ -1457,7 +1457,7 @@ describe("accepted source financial reconciliation", () => {
       .where(eq(purchase.shortcode, header.id));
     expect(laterPurchase).toMatchObject({
       date: "2026-10-01",
-      statedTotal: 40,
+      statedTotal: 4000n,
       notes: "Synthetic retained header note",
     });
     expect(

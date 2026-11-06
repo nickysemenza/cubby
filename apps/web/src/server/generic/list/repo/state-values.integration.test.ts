@@ -6,6 +6,7 @@ import {
   purchaseReconciliation,
   RECONCILIATION_TOLERANCE,
 } from "@cubby/schemas/purchase";
+import { moneyToMinor } from "@cubby/shared";
 import { cents } from "@cubby/shared";
 import { fromAny } from "@total-typescript/shoehorn";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
@@ -357,7 +358,7 @@ describe("state predicates re-declared as values", () => {
       const row = await insertWithShortcode(ctx.db, "purchase", {
         vendorId: vendor.id,
         date: "2026-09-01",
-        statedTotal,
+        statedTotal: statedTotal === null ? null : moneyToMinor(statedTotal),
       });
       for (const [index, cost] of costs.entries())
         await insertWithShortcode(ctx.db, "expense", {
@@ -417,8 +418,8 @@ describe("state predicates re-declared as values", () => {
     // The retired `reconciliation` predicate's per-verdict conditions.
     const tolerance = cents(RECONCILIATION_TOLERANCE);
     const total = vendorExpenseTotal(outer(purchase.id));
-    const gap = sql`abs(floor((${purchase.statedTotal} * 100)::numeric + 0.5) - floor((${total} * 100)::numeric + 0.5))`;
-    const delta = sql`(floor((${total} * 100)::numeric + 0.5) - floor((${purchase.statedTotal} * 100)::numeric + 0.5))`;
+    const gap = sql`abs(floor(((${purchase.statedTotal}::numeric / 100) * 100)::numeric + 0.5) - floor((${total} * 100)::numeric + 0.5))`;
+    const delta = sql`(floor((${total} * 100)::numeric + 0.5) - floor(((${purchase.statedTotal}::numeric / 100) * 100)::numeric + 0.5))`;
     const refundAdjusted = sql`${vendorUnpricedExpenseCount(outer(purchase.id))} = 0
       AND ${delta} < ${-tolerance}
       AND floor((${postedRefundTotal(outer(purchase.id))} * 100)::numeric + 0.5) = ${delta}`;
