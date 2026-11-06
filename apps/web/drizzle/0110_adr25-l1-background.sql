@@ -10,18 +10,18 @@ DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM "Job" WHERE kind = 'discovery.connections' AND key <> 'discovery:connections') THEN
     RAISE EXCEPTION 'Unrecognized connection discovery cursor owner';
   END IF;
-  IF EXISTS (SELECT 1 FROM "AppSettings" WHERE id = '00000000-0000-4000-8000-000000000076') THEN
+  IF EXISTS (SELECT 1 FROM "AppSettings" WHERE id = '0553199e-d21b-4325-8c52-cfb28fc26a2f') THEN
     RAISE EXCEPTION 'Connection discovery cursor destination already occupied';
   END IF;
 END $$;
 INSERT INTO "AppSettings" (id, metadata)
-SELECT '00000000-0000-4000-8000-000000000076'::uuid,
+SELECT '0553199e-d21b-4325-8c52-cfb28fc26a2f'::uuid,
   jsonb_build_object('after', cursor->'after', 'runId', cursor->'runId',
     'nextAt', to_char(greatest("availableAt", "waitUntil", "leaseExpiresAt"), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
     'stopped', state IN ('paused', 'failed', 'cancelled'), 'error', error)
 FROM "Job" WHERE kind = 'discovery.connections';
 DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM "Job" j LEFT JOIN "AppSettings" s ON s.id = '00000000-0000-4000-8000-000000000076'
+  IF EXISTS (SELECT 1 FROM "Job" j LEFT JOIN "AppSettings" s ON s.id = '0553199e-d21b-4325-8c52-cfb28fc26a2f'
     WHERE j.kind = 'discovery.connections' AND s.metadata IS DISTINCT FROM
       jsonb_build_object('after', j.cursor->'after', 'runId', j.cursor->'runId',
         'nextAt', to_char(greatest(j."availableAt", j."waitUntil", j."leaseExpiresAt"), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
