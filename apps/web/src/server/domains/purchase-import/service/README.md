@@ -124,7 +124,10 @@ pending: nothing here starts Product research.
    and successor Runs retain the budget. The claim binds the original checksum,
    sender proof and accepted order-source context; display-name and Purchase-date
    edits do not reset it. Writer classification uses trusted MCP error metadata,
-   never Email text. Held-source refusals are exempt. Confirmed writer refusals
+   never Email text. Held-source refusals are exempt. Ordinary-path calls on
+   incomplete compact evidence are blocked before either malformed-call accounting
+   or writer admission; this route handoff preserves the exception-flow budget.
+   Confirmed writer refusals
    return for changed input without automatic replay; repeating an identical refused
    commit encounters its retained uncertain receipt. A preparation deadline asks for
    identical retry. Explicitly uncertain receipts are not retried inside the tool.

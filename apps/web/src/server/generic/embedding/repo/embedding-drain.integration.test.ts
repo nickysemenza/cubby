@@ -336,6 +336,7 @@ describe("embedding refresh and cleanup drains", () => {
     ).toEqual([]);
   });
 
+  // Forty real writer fixtures exceed the default budget on shared CI runners.
   it("chunks provider requests by byte limits and isolates a long input", async () => {
     const refs: SearchableEntityRef[] = [];
     for (let index = 0; index < 39; index++) {
@@ -384,7 +385,7 @@ describe("embedding refresh and cleanup drains", () => {
         refs.slice(0, -1).map((ref) => ref.entityId),
       ),
     ).toHaveLength(39);
-  });
+  }, 60_000);
 
   it("keeps delayed cleanup bound to its retired vector after a replacement upload", async () => {
     const subject = await createProductFixture(

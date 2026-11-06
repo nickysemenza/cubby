@@ -1,3 +1,4 @@
+import { EXTRACT_ORDER_TOOL } from "@cubby/schemas/import-run-agent";
 import { describe, expect, it } from "vitest";
 
 import { mailAttempts } from "./mail-attempts";
@@ -42,6 +43,39 @@ describe("Mail extraction attempts", () => {
     expect(budget.ordinaryEvidence()).toMatchObject({
       checksum: "c".repeat(64),
     });
+    expect(budget.extractionBlock(EXTRACT_ORDER_TOOL)).toBeUndefined();
+    budget.observeClaim({
+      kind: "email",
+      evidenceVersion: "synthetic-version",
+      email: {
+        mailboxId: "synthetic-mailbox",
+        messageId: "synthetic-message",
+        checksum: "c".repeat(64),
+      },
+      read: {
+        checksum: "c".repeat(64),
+        boundToRun: true,
+        attachments: [],
+        content: {
+          bodyText: "Synthetic priced receipt with omitted decorative links",
+          truncated: false,
+          nextOffset: null,
+          bodyShortened: false,
+          headersOmitted: false,
+          linksOmitted: 1,
+          imagesOmitted: 0,
+          structuredDataOmitted: 0,
+        },
+      },
+    });
+    expect(budget.source()?.evidenceVersion).toBe("synthetic-version");
+    expect(budget.ordinaryEvidence()).toBeUndefined();
+    expect(budget.extractionBlock(EXTRACT_ORDER_TOOL)).toContain(
+      "consumes no extraction attempt",
+    );
+    expect(
+      budget.extractionBlock("mcp__cubby__purchase_import"),
+    ).toBeUndefined();
     budget.observeClaim({
       kind: "email",
       email: {
