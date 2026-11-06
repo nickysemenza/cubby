@@ -9,14 +9,14 @@
  * canonical relation internally, but count callers never invoke sample.
  */
 
+import type { DiagnosticKey } from "@cubby/schemas/entity-definitions/problems/problem-query";
+import { problemQueryDeclarations } from "@cubby/schemas/entity-definitions/problems/problem-registry";
 import {
   UpcEnrichmentFreshness,
   ProblemItem,
 } from "@cubby/schemas/problems-raw-read";
 import type { ProjectAttentionReport } from "@cubby/schemas/project";
 
-import type { DiagnosticKey } from "~/entity/problems/problem-query";
-import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import type { UpcLookupService } from "~/server/clients/upc";
 import type { Database } from "~/server/db";

@@ -1,8 +1,8 @@
-import { FILTER_NONE } from "~/entity/filters";
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import {
   defineProblem,
   type ProblemQuery,
-} from "~/entity/problems/problem-query";
+} from "@cubby/schemas/entity-definitions/problems/problem-query";
 
 /**
  * Canonical tracker declarations. The `attention` project filter delegates

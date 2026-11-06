@@ -3,7 +3,7 @@ import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import {
   defineProblem,
   type ProblemQuery,
-} from "~/entity/problems/problem-query";
+} from "@cubby/schemas/entity-definitions/problems/problem-query";
 
 /** Exact entity-grain Problems whose membership is a small reusable assembly. */
 export const basicProblemQueries = [

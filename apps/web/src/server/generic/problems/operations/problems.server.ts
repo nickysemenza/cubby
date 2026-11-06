@@ -59,7 +59,7 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
     if (problemReportWantsCounts(input)) return readProblemCounts(context);
     if (input.type !== undefined) {
       const { expectedProblemKeys, problemQuery } =
-        await import("~/entity/problems/problem-registry");
+        await import("@cubby/schemas/entity-definitions/problems/problem-registry");
       const key = z.enum(expectedProblemKeys).safeParse(input.type);
       if (!key.success)
         return {

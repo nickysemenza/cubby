@@ -4,7 +4,6 @@ import { purchaseFiltersSchema } from "@cubby/schemas/purchase";
 import { workExecutor } from "@cubby/schemas/work-queue";
 import { and, sql } from "drizzle-orm";
 
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { householdLocalDate } from "~/lib/household-date";
 import { related, quotedTable } from "~/server/db/helpers/related";
 import { expense, purchase } from "~/server/db/schema";
@@ -16,6 +15,7 @@ import {
 import { purchaseWorkFacts } from "~/server/domains/purchase/repo/work-facts";
 import { workPurchaseOwners } from "~/server/domains/purchase/repo/work-owners";
 import { gapCondition } from "~/server/generic/data-quality/repo/sql";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import { recordScope } from "~/server/generic/work-queue/repo/work-declarations";
 import {
   selectWorkCandidates,

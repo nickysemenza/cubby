@@ -1,3 +1,4 @@
+import { problemQueryDeclarations } from "@cubby/schemas/entity-definitions/problems/problem-registry";
 import type { ProblemKey } from "@cubby/schemas/problems";
 import { problemDetectors } from "@cubby/schemas/problems-raw-read";
 import type {
@@ -7,7 +8,6 @@ import type {
 import type { ParsedShortcode } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 
-import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import {
   loadWorkDiagnosticFacts,
   loadWorkDiagnosticComputeTargets,

@@ -1,9 +1,9 @@
+import type { ProblemSource } from "@cubby/schemas/entity-definitions/problems/problem-query";
+import { problemQuery } from "@cubby/schemas/entity-definitions/problems/problem-registry";
 import { isProjectAttentionProblemKey } from "@cubby/schemas/problems-raw-read";
 import type { ProblemKey } from "@cubby/schemas/problems-raw-read";
 import type { ProjectAttentionIncompleteIds } from "@cubby/schemas/project";
 
-import type { ProblemSource } from "~/entity/problems/problem-query";
-import { problemQuery } from "~/entity/problems/problem-registry";
 import type { Database } from "~/server/db";
 import type { ProductConversionCoverageFreshness } from "~/server/domains/product/repo/conversion-coverage";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";

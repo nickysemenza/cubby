@@ -56,7 +56,13 @@ Image routing names actual model fields; disabled create routes do not count as
 active alternatives. Counterfactual override comparisons use this same pass.
 
 Compiler renderers use bootstrap-safe entity and identifier leaves, never their
-own generated catalogs. The lean Problem classification is emitted from the
+own generated catalogs. Shared Problem query and action declarations live in `@cubby/schemas` under
+`entity-definitions/problems`. The runtime compiler and registry validation live
+in `server/generic/problems/repo`; browser Problem modules own rendering and
+continuation loading. The shared filter compiler lives in schemas and URL keys
+come from the generated list fields, so server readers import no browser filters.
+
+The lean Problem classification is emitted from the
 canonical detector catalog after entity schema artifacts exist, so a clean
 checkout needs no prior generated output.
 
@@ -105,10 +111,8 @@ same request filters for rows, facets and selection. `populationFilters` names
 request options consumed by that predicate instead of compared with each row;
 Job uses it for its internal-kinds toggle.
 
-`identifiers.shortcodeLength` optionally overrides the minted and accepted body
-length for an entity. The bootstrap registry carries that declaration to shared
-schema validation and `generateShortcode`; omitted lengths keep the existing
-four/five-character validation and five-character generation.
+All entities mint five-character shortcode bodies. Validation also accepts
+legacy four-character bodies; lengths are not entity declaration options.
 
 ## Generic by default
 
@@ -1705,8 +1709,7 @@ with the active search and filters rather than sorting the loaded page.
 
 `model.grouping` supplies the preferred ordered Group by choices, including
 explicit text fields and related paths. The compiler then infers eligible enum,
-reference, boolean, and calendar-date fields; `model.groupingOmit` removes
-choices. Generated choices carry their filter, no-value label,
+reference, boolean, and calendar-date fields. Generated choices carry their filter, no-value label,
 multivalue capability, ancestor levels, and supported date buckets. Unsupported
 SQL sources remain disabled with a reason; the kernel validates the same
 capabilities for every client.
@@ -3261,6 +3264,10 @@ shared `qualityCheck` builders (`required`, `observed`, `hasRelated`,
 Declarations in `packages/schemas` own check identity, whether it counts toward
 assessment, and placement. A record's quality is the list of its unresolved
 checks; `data-quality-score.ts` owns the status derived from them.
+
+`qualityCheck.records(entity, table, columns)` owns ordinary loader identity,
+liveness, bounded IDs and display-image presence. Checks with joins, aggregates
+or additional queries keep their entity-specific loaders.
 
 Related-row facts are loaded once per ID page; soft-deleted Recipes,
 Ingredients, Products, Purchases, attachments and Images do not count. Cookbook covers, Vendor logos and

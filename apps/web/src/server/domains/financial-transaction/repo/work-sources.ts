@@ -1,7 +1,6 @@
 import { financialTransactionFiltersSchema } from "@cubby/schemas/financial-transaction";
 import { and, sql } from "drizzle-orm";
 
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { outer } from "~/server/db/helpers/related";
 import { financialTransaction as table } from "~/server/db/schema";
 import { financialTransactionScaffold } from "~/server/domains/financial-transaction/repo/financial-transaction";
@@ -9,6 +8,7 @@ import {
   financialTransactionWorkOwners,
   financialTransactionWorkFacts,
 } from "~/server/domains/financial-transaction/repo/work-facts";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import {
   entityProblemSources,
   recordScope,

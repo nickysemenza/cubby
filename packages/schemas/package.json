@@ -299,7 +299,17 @@
     "./problem-identities": "./src/problem-identities.ts",
     "./connected-view-definitions": "./src/connected-view-definitions.ts",
     "./compiler/generated/entity-edit-validation/*": "./src/generated/entity-edit-validation.*.gen.ts",
-    "./entity-metadata-types": "./src/entity-metadata-types.ts"
+    "./entity-metadata-types": "./src/entity-metadata-types.ts",
+    "./entity-definitions/problems/problem-query": "./src/entity-definitions/problems/problem-query.ts",
+    "./entity-definitions/problems/problem-registry": "./src/entity-definitions/problems/problem-registry.ts",
+    "./entity-definitions/problems/queries/derived": "./src/entity-definitions/problems/queries/derived.ts",
+    "./entity-definitions/problems/queries/tracker": "./src/entity-definitions/problems/queries/tracker.ts",
+    "./entity-definitions/problems/queries/basic": "./src/entity-definitions/problems/queries/basic.ts",
+    "./entity-definitions/problems/queries/product-coverage": "./src/entity-definitions/problems/queries/product-coverage.ts",
+    "./entity-definitions/problems/view-problems": "./src/entity-definitions/problems/view-problems.ts",
+    "./entity-definitions/list-filters": "./src/entity-definitions/list-filters.ts",
+    "./entity-definitions/problems/filter-fields": "./src/entity-definitions/problems/filter-fields.ts",
+    "./entity-definitions/problems/problem-actions": "./src/entity-definitions/problems/problem-actions.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/ensure.ts generate && node ../../scripts/tsc.ts --noEmit",
@@ -308,6 +318,8 @@
   "dependencies": {
     "@cubby/shared": "workspace:*",
     "@cubby/usda": "workspace:*",
+    "es-toolkit": "^1.52.0",
+    "ts-pattern": "^5.9.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {

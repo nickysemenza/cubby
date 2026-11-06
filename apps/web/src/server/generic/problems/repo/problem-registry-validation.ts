@@ -1,15 +1,18 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
-
-import { problemActionsFor } from "./problem-actions";
-import { compileProblemFilters } from "./problem-filter-semantics";
-import type { DiagnosticKey, ProblemQuery } from "./problem-query";
-import { validateProblemQueries } from "./problem-query";
+import { problemActionsFor } from "@cubby/schemas/entity-definitions/problems/problem-actions";
+import type {
+  DiagnosticKey,
+  ProblemQuery,
+} from "@cubby/schemas/entity-definitions/problems/problem-query";
+import { validateProblemQueries } from "@cubby/schemas/entity-definitions/problems/problem-query";
 import {
   expectedProblemKeys,
   problemQueryDeclarations,
-} from "./problem-registry";
+} from "@cubby/schemas/entity-definitions/problems/problem-registry";
+import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
+
+import { compileProblemFilters } from "./problem-filter-semantics";
 
 // The browser registry's `getSortableFields`, without importing that client
 // module into this server-only validation path. The registry is declared

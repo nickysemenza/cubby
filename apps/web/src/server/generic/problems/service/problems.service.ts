@@ -1,5 +1,6 @@
 import { amount, dateTime } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
+import { problemQueryDeclarations } from "@cubby/schemas/entity-definitions/problems/problem-registry";
 import { displayGtin } from "@cubby/schemas/external-id";
 /** Problems service composes detector repos and cross-entity services without direct database access. */
 import {
@@ -58,7 +59,6 @@ import { sum, sumBy, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
 
 import { listEntities } from "~/entity/model/list-contracts";
-import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import {
   BASE_KINDS,
   conversionCoverage,

@@ -1,12 +1,17 @@
 import { imageProcessingJobState } from "@cubby/schemas/image-processing";
-import { and, sql } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { imageProcessingJob } from "~/server/db/retained-tables";
-import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
+
+const loadImageJobQualityRecords = qualityCheck.records(
+  "imageJob",
+  imageProcessingJob,
+  {
+    state: imageProcessingJob.state,
+    lastError: imageProcessingJob.lastError,
+  },
+);
 
 /** Bump when the rules or their declared scoring metadata change. */
 const IMAGE_JOB_QUALITY_RULES_VERSION = 1;
@@ -33,25 +38,3 @@ export const imageJobChecks = defineStoredEntityChecks({
     ),
   },
 });
-
-async function loadImageJobQualityRecords(
-  db: Database | DrizzleTransaction,
-  ids: readonly string[],
-) {
-  if (!ids.length) return [];
-  return unwrapDb(db)
-    .select({
-      id: imageProcessingJob.id,
-      shortcode: imageProcessingJob.shortcode,
-      state: imageProcessingJob.state,
-      lastError: imageProcessingJob.lastError,
-      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("imageJob", sql`${imageProcessingJob.id}`)}`,
-    })
-    .from(imageProcessingJob)
-    .where(
-      and(
-        notDeleted(imageProcessingJob),
-        sql`${imageProcessingJob.id} = ANY(${uuidArrayParam(ids)})`,
-      ),
-    );
-}

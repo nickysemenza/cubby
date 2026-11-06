@@ -1,10 +1,10 @@
 import { mealFiltersSchema } from "@cubby/schemas/meal";
 import { and, getTableName, sql } from "drizzle-orm";
 
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { meal as table } from "~/server/db/schema";
 import { mealScaffold } from "~/server/domains/meal/repo/crud";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import {
   entityProblemSources,
   recordScope,

@@ -2,21 +2,34 @@ import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 
-import { FILTER_NONE } from "~/entity/filters";
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 
 import {
   defineProblem,
   type EntityProblemSource,
   type ProblemQuery,
   validateProblemQueries,
-} from "../problems/problem-query";
-import { toViewDefinition, type ViewDefinition } from "./view-manifest";
+} from "./problem-query";
 
 /** Server Problems owns the aggregate declaration roster; browser views use one slice. */
-export const viewManifest = Object.fromEntries(
+type DeclaredView =
+  (typeof entitySummary)[Entity]["list"]["savedViews"][number];
+type ProblemView = Omit<DeclaredView, "filters" | "layout" | "problem"> & {
+  filters: { id: string; value: string | string[] }[];
+  layout: { columnVisibility: Record<string, boolean> } | null;
+  problem?: NonNullable<DeclaredView["problem"]>;
+};
+export const viewManifest: Record<string, ProblemView[]> = Object.fromEntries(
   entityKeys.map((entity) => [
     entity,
-    entitySummary[entity].list.savedViews.map(toViewDefinition),
+    entitySummary[entity].list.savedViews.map((view) => ({
+      ...view,
+      filters: view.filters.map(({ id, value }) => ({
+        id,
+        value: typeof value === "string" ? value : [...value],
+      })),
+      problem: view.problem ?? undefined,
+    })),
   ]),
 );
 const isEntity = (value: string): value is Entity =>
@@ -26,7 +39,7 @@ const isEntity = (value: string): value is Entity =>
 export interface ViewProblemDeclaration {
   entity: Entity;
   viewId: string;
-  sort: ViewDefinition["sort"];
+  sort: EntityProblemSource["sort"];
   problem: ProblemQuery;
 }
 
@@ -52,9 +65,12 @@ export function viewProblemDeclarations(): ViewProblemDeclaration[] {
             const source: EntityProblemSource = {
               kind: "entity",
               entity,
-              filters: view.filters,
+              filters: view.filters.map(({ id, value }) => ({
+                id,
+                value: typeof value === "string" ? value : [...value],
+              })),
             };
-            if (viewSort) source.sort = viewSort;
+            if (viewSort) source.sort = viewSort.map((sort) => ({ ...sort }));
             if (viewLayout?.columnVisibility) {
               source.columnVisibility = viewLayout.columnVisibility;
             }
@@ -62,7 +78,7 @@ export function viewProblemDeclarations(): ViewProblemDeclaration[] {
               {
                 entity,
                 viewId: view.id,
-                sort: viewSort,
+                sort: source.sort,
                 problem: defineProblem({
                   ...problem,
                   problemClass: PROBLEM_CLASS[problem.key],

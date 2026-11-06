@@ -1,7 +1,6 @@
 import { imageListFiltersSchema } from "@cubby/schemas/image";
 import { and, getTableName, sql } from "drizzle-orm";
 
-import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { outer } from "~/server/db/helpers/related";
 import { image as table } from "~/server/db/schema";
 import { imageScaffold } from "~/server/domains/image/repo/image";
@@ -10,6 +9,7 @@ import {
   workImageIsShared,
 } from "~/server/domains/image/repo/work-owners";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
+import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import {
   entityProblemSources,
   recordScope,
