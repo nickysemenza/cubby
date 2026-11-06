@@ -1,7 +1,3 @@
-import {
-  suggestionReviewInput,
-  suggestionSubjects,
-} from "@cubby/schemas/suggestion";
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
   connectionSuggestionEvidence,
@@ -14,6 +10,10 @@ import {
 import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  suggestionReviewInput,
+  suggestionSubjects,
+} from "@cubby/schemas/suggestion";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -35,19 +35,19 @@ import { moveInventoryEntries } from "~/server/domains/inventory/repo/bulk";
 import { setProjectToolUsage } from "~/server/domains/project/repo/tools";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import {
+  lookupEntityLabels,
+  resolveShortcodes,
+  resolveOrThrow,
+} from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { publishSuggestions } from "~/server/generic/suggestions/repo/suggestion";
+import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import {
   suggestionStateColumns,
   pruneReplacedSuggestions,
   transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
 import { suggestionCandidateKey } from "~/server/generic/suggestions/repo/suggestion-state";
-import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
-import {
-  lookupEntityLabels,
-  resolveShortcodes,
-  resolveOrThrow,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   canonicalJson,
   sha256CanonicalJson,

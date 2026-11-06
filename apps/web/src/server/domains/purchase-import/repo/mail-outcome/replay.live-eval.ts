@@ -1,8 +1,8 @@
-import { mailImportOutcome } from "@cubby/schemas/suggestion";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { importRunAgentManifest } from "@cubby/schemas/import-run-agent";
 import { mailAttributionHeaders } from "@cubby/schemas/mailbox-research";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { mailImportOutcome } from "@cubby/schemas/suggestion";
 import {
   CF_ACCOUNT_ID,
   testAiGatewayEnvironment,

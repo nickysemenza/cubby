@@ -32,7 +32,6 @@ import {
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
-import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import {
   type DerivedAdapter,
   derivedSink,
@@ -41,6 +40,7 @@ import { readDerivedRebuildStatus } from "~/server/generic/derived/repo/rebuild"
 import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import {
   createProductFixture,
   makeProductInput,

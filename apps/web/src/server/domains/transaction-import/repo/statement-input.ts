@@ -1,5 +1,4 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { suggestionFamily } from "@cubby/schemas/suggestion";
 import {
   financialTransactionKind,
   financialTransactionStatus,
@@ -7,6 +6,7 @@ import {
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";

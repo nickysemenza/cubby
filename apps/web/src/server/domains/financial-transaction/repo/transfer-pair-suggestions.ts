@@ -1,11 +1,5 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import {
-  suggestionFamily,
-  type suggestionReviewInput,
-  suggestionSubjects,
-  type SuggestionProducer,
-} from "@cubby/schemas/suggestion";
-import {
   type FinancialTransactionImportRow,
   type FinancialTransactionKind,
   financialTransactionCreateInput,
@@ -22,6 +16,12 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
+import {
+  suggestionFamily,
+  type suggestionReviewInput,
+  suggestionSubjects,
+  type SuggestionProducer,
+} from "@cubby/schemas/suggestion";
 import {
   transferPairJudgment,
   type StatementTransferPairRef,
@@ -76,11 +76,7 @@ import { statementTransactionKind } from "~/server/domains/transaction-import/re
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  type SuggestionStateRow,
-  transitionSuggestionState,
-  transitionSuggestionStates,
-} from "~/server/generic/suggestions/repo/suggestion-state";
+import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import {
   countSuggestionLabelBacklog,
   publishSuggestion,
@@ -88,7 +84,11 @@ import {
   suggestionLabelBacklog,
   type SuggestionLabelCursor,
 } from "~/server/generic/suggestions/repo/suggestion-publication";
-import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
+import {
+  type SuggestionStateRow,
+  transitionSuggestionState,
+  transitionSuggestionStates,
+} from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import {
   assertWorkflowEffect,
@@ -1252,13 +1252,11 @@ export const transferPairStateData = z.object({
 });
 type TransferPairStateData = z.infer<typeof transferPairStateData>;
 
-/**
- * Rule output a label could change: both legs real, each lacking a label,
- * and an apply that could proceed. A cross-owner, distant or competing pair
- * is labelled too, as review evidence; its other blockers remain.
- */
+/** Labels can resolve weak movement only; structural blockers stay for review. */
 const transferPairNeedsLabels = (judgment: TransferPairJudgment) =>
   judgment.apply.available &&
+  judgment.blockers.length === 1 &&
+  judgment.blockers[0] === "weak_movement" &&
   judgment.inflow.origin !== "cash" &&
   (judgment.outflow.movementLabel === null ||
     judgment.inflow.movementLabel === null);

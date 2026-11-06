@@ -15,12 +15,12 @@ import {
 import { discoverAcquisitionCandidates } from "~/server/domains/connection/service/acquisition-discovery";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
   publishSuggestion,
   recordFeedback,
 } from "~/server/generic/suggestions/repo/suggestion";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { measureDatabaseTransfer } from "~/server/testing/database-transfer.fixtures";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";

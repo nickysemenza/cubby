@@ -11,7 +11,7 @@ public final class FieldSuggestionReviewModel {
     }
 
     public let editor: GenericEntityEditModel
-    public private(set) var response: FieldSuggestionsReviewOut?
+    public private(set) var response: FieldSuggestionsOut?
     public private(set) var isLoading = false
     public private(set) var isApplying = false
 
@@ -22,12 +22,12 @@ public final class FieldSuggestionReviewModel {
     private var acceptedSuggestions: [String: (id: String, value: String)] = [:]
     private let runKey = UUID().uuidString
     private let reviewSuggestion: (SuggestionReviewInput) async throws -> SuggestionReviewOut
-    private let fetch: (FieldSuggestionsInput) async throws -> FieldSuggestionsReviewOut
+    private let fetch: (FieldSuggestionsInput) async throws -> FieldSuggestionsOut
     private let saveCategory: (FinanceCategoryApplyInput) async throws -> FinanceCategoryApplyOut
 
     public init(
         editor: GenericEntityEditModel,
-        fetch: @escaping (FieldSuggestionsInput) async throws -> FieldSuggestionsReviewOut,
+        fetch: @escaping (FieldSuggestionsInput) async throws -> FieldSuggestionsOut,
         saveCategory: @escaping (FinanceCategoryApplyInput) async throws -> FinanceCategoryApplyOut,
         reviewSuggestion: @escaping (SuggestionReviewInput) async throws -> SuggestionReviewOut
     ) {
@@ -55,7 +55,7 @@ public final class FieldSuggestionReviewModel {
             ([key] + (field.suggestion?.basis ?? [])).allSatisfy({
                 currentValue($0) == (reviewedValues[$0] ?? .null)
             }),
-            let proposed = response?.suggestions.first(where: { $0.field == key })?.suggestion,
+            let proposed = response?.suggestions[key] ?? nil,
             proposed.operation == .set, proposed.value != nil
         else { return nil }
         if let review = proposed.financeReview {

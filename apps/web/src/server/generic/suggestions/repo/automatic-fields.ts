@@ -1,10 +1,4 @@
 import { suggestionStatus, fieldSuggestionsInput } from "@cubby/schemas/ai";
-import {
-  suggestionFamily,
-  suggestionSubjects,
-  feedbackAuthority,
-  feedbackVerdict,
-} from "@cubby/schemas/suggestion";
 /** Current field decisions backed by Automatic rule applications, never model confidence alone. */
 import { auditLogActionSchema } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
@@ -13,6 +7,12 @@ import {
   entityFieldModels,
 } from "@cubby/schemas/entity-fields";
 import { fieldAssignmentOwnership } from "@cubby/schemas/field-envelope";
+import {
+  suggestionFamily,
+  suggestionSubjects,
+  feedbackAuthority,
+  feedbackVerdict,
+} from "@cubby/schemas/suggestion";
 import { sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -22,8 +22,8 @@ import { uuidArrayParam } from "~/server/db/helpers/query";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
-import { automaticApplicationRule } from "~/server/generic/suggestions/repo/suggestion";
 import type { CurrentFieldOwnership } from "~/server/generic/derived/repo/read-context";
+import { automaticApplicationRule } from "~/server/generic/suggestions/repo/suggestion";
 export type { CurrentFieldOwnership } from "~/server/generic/derived/repo/read-context";
 
 const currentOwnership = z.record(

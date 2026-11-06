@@ -1,9 +1,6 @@
 import { createServer } from "node:http";
 import { z } from "zod";
-import {
-  fieldSuggestionsInput,
-  fieldSuggestionsReviewOut,
-} from "@cubby/schemas/ai";
+import { fieldSuggestionsInput, fieldSuggestionsOut } from "@cubby/schemas/ai";
 
 /** Only AI inference is synthetic; native authentication, reads and saves reach Workerd. */
 export async function createNativeEmojiReviewPeer(
@@ -17,11 +14,11 @@ export async function createNativeEmojiReviewPeer(
       const body = Buffer.concat(chunks);
       if (
         request.method === "POST" &&
-        request.url === "/api/operations/ai.suggestFieldsReview"
+        request.url === "/api/operations/ai.suggestFields"
       ) {
         const envelope = z
           .object({
-            operation: z.literal("ai.suggestFieldsReview"),
+            operation: z.literal("ai.suggestFields"),
             input: z.unknown(),
           })
           .parse(JSON.parse(body.toString()));
@@ -36,24 +33,21 @@ export async function createNativeEmojiReviewPeer(
         response.end(
           JSON.stringify({
             ok: true,
-            data: fieldSuggestionsReviewOut.parse({
+            data: fieldSuggestionsOut.parse({
               eligibleTargets: ["emoji"],
-              suggestions: [
-                {
-                  field: "emoji",
-                  suggestion: {
-                    value: "🥕",
-                    label: "🥕",
-                    detail: null,
-                    confidence: "high",
-                    probability: 0.99,
-                    reasoning: "Synthetic category context",
-                    alternatives: [
-                      { value: "🍎", label: "🍎", probability: 0.01 },
-                    ],
-                  },
+              suggestions: {
+                emoji: {
+                  value: "🥕",
+                  label: "🥕",
+                  detail: null,
+                  confidence: "high",
+                  probability: 0.99,
+                  reasoning: "Synthetic category context",
+                  alternatives: [
+                    { value: "🍎", label: "🍎", probability: 0.01 },
+                  ],
                 },
-              ],
+              },
             }),
           }),
         );

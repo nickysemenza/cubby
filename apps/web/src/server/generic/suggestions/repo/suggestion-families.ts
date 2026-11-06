@@ -1,9 +1,5 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import {
-  suggestionFamily,
-  type suggestionReviewInput,
-} from "@cubby/schemas/suggestion";
-import {
   type DataCheck,
   dataCheckKind,
   dataCheckPresentation,
@@ -22,6 +18,10 @@ import type {
   StatementTransactionAction,
   StatementTransactionApplication,
 } from "@cubby/schemas/statement-suggestion";
+import {
+  suggestionFamily,
+  type suggestionReviewInput,
+} from "@cubby/schemas/suggestion";
 import {
   fieldSuggestionRow,
   recommendationSuggestionRow,

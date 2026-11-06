@@ -1,5 +1,4 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { suggestionFamily } from "@cubby/schemas/suggestion";
 import type { FinancialSpendingPlan } from "@cubby/schemas/financial-booking";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -9,6 +8,7 @@ import {
   statementTransactionJudgment,
   type StatementSuggestionOut,
 } from "@cubby/schemas/statement-suggestion";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { sql, type SQL } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -27,11 +27,11 @@ import {
   chargeStateOf,
   LIVE_REFS,
 } from "~/server/domains/transaction-import/repo/statement-charge";
+import { reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/review-families";
 import {
   automaticApplicationRule,
   matchedRulesOf,
 } from "~/server/generic/suggestions/repo/suggestion";
-import { reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/review-families";
 
 import { isClean } from "./statement-suggestions";
 

@@ -12,12 +12,12 @@ import type { SimilarEntitiesOut } from "@cubby/schemas/search";
 import type { Database } from "~/server/db";
 import { getProductsSharingTags } from "~/server/domains/product/repo/analytics";
 import { productScaffold } from "~/server/domains/product/repo/crud";
+import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   getActiveSuggestionSuppressionKeys,
   suggestionCandidateKey,
 } from "~/server/generic/suggestions/repo/suggestion-state";
-import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 
 import { buildProductRelatednessLedger } from "./relatedness-ledger";

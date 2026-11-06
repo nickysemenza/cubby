@@ -1,5 +1,5 @@
-import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { shortcodeEntities } from "@cubby/schemas/entity-roster";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { suggestionListFamily } from "@cubby/schemas/suggestion-list";
 import {
   suggestionFilterDeclaration,

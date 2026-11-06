@@ -1,12 +1,4 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import {
-  suggestionFamily,
-  suggestionJudgments,
-  suggestionProducer,
-  type SuggestionProducer,
-  feedbackEvent,
-  feedbackVerdict,
-} from "@cubby/schemas/suggestion";
 import { financialAccountSourceAliases } from "@cubby/schemas/financial-account";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import {
@@ -35,6 +27,14 @@ import {
   type StatementLabelCheckpoint,
   statementApplicationOrder,
 } from "@cubby/schemas/statement-suggestion";
+import {
+  suggestionFamily,
+  suggestionJudgments,
+  suggestionProducer,
+  type SuggestionProducer,
+  feedbackEvent,
+  feedbackVerdict,
+} from "@cubby/schemas/suggestion";
 import { cents } from "@cubby/shared";
 import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -94,17 +94,17 @@ import {
 } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  publishSuggestion as publishStoredSuggestion,
-  publishSuggestions,
-  matchedRulesOf,
-} from "~/server/generic/suggestions/repo/suggestion";
-import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
+import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import {
   automaticRuleStamp,
   importOnlyStatementRuleStamps,
   matchStatementRules,
 } from "~/server/generic/suggestions/repo/automatic-rules";
+import {
+  publishSuggestion as publishStoredSuggestion,
+  publishSuggestions,
+  matchedRulesOf,
+} from "~/server/generic/suggestions/repo/suggestion";
 import {
   countSuggestionLabelBacklog,
   inSuggestionBatches,
@@ -117,7 +117,7 @@ import {
   type SuggestionRow,
   unchangedSuggestions,
 } from "~/server/generic/suggestions/repo/suggestion-publication";
-import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
+import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   assertWorkflowEffect,

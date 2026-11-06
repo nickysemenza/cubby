@@ -40,7 +40,6 @@ import {
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import * as selectedRead from "~/server/entity-kernel/selected-read";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
@@ -48,6 +47,7 @@ import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocument,
 } from "~/server/generic/search/repo/search-document";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {

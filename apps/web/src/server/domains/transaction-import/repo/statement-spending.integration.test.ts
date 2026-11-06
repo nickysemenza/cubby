@@ -22,15 +22,15 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
-import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import * as changes from "~/server/generic/changes/repo/change";
 import {
   lockJobs,
   replaceJobGeneration,
 } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 import {

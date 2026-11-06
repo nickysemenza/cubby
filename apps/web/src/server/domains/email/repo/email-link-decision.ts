@@ -1,6 +1,6 @@
-import type { SuggestionProducer } from "@cubby/schemas/suggestion";
 import type { EmailLinkProposer } from "@cubby/schemas/email-fields";
 import { parseEntityId, type PurchaseId } from "@cubby/schemas/identifiers";
+import type { SuggestionProducer } from "@cubby/schemas/suggestion";
 import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";

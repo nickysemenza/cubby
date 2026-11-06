@@ -1,11 +1,11 @@
 import { productShortcode } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
+import { getProductTagPropagation } from "~/server/generic/relatedness/service/relatedness.service";
 import {
   prepareTagSuggestionPublication,
   tagSourceRevision,
 } from "~/server/generic/suggestions/repo/tag-suggestions";
-import { getProductTagPropagation } from "~/server/generic/relatedness/service/relatedness.service";
 
 /** A Sweep publishes candidates; passive review reads never discover them. */
 export async function prepareTagSuggestions(db: Database, sourceId: string) {

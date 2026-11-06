@@ -1,12 +1,12 @@
-import {
-  mailImportOutcome,
-  type SuggestionProducer,
-} from "@cubby/schemas/suggestion";
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
   mailOutcomeSnapshot,
   type MailOutcomeSnapshot,
 } from "@cubby/schemas/mail-import-outcome";
+import {
+  mailImportOutcome,
+  type SuggestionProducer,
+} from "@cubby/schemas/suggestion";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";

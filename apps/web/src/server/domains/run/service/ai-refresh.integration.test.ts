@@ -60,13 +60,13 @@ import {
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
   acceptSuggestion,
   canAutomaticallyFillField,
 } from "~/server/generic/suggestions/repo/suggestion-review";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   drainDerivedRefreshFrontier,
   withJobFixtureExecution,

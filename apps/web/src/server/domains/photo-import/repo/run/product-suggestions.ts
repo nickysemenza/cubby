@@ -1,9 +1,9 @@
+import { runEntityId } from "@cubby/schemas/identifiers";
+import type { PhotoGroupReview } from "@cubby/schemas/photo-import-run";
 import {
   suggestionSubjects,
   suggestionJudgments,
 } from "@cubby/schemas/suggestion";
-import { runEntityId } from "@cubby/schemas/identifiers";
-import type { PhotoGroupReview } from "@cubby/schemas/photo-import-run";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -12,9 +12,9 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { product, suggestionTable } from "~/server/db/schema";
 import { loadImageAnalysisEvidence } from "~/server/domains/image/repo/image-analysis-summary";
-import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
-import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
+import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 async function photoReviewEvidence(db: Database, imageIds: string[]) {

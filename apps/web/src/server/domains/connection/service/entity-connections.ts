@@ -47,14 +47,14 @@ import { jsonValue } from "~/server/domains/run/repo/suggestion-sweep-state";
 import { makeSweepSuggestion } from "~/server/domains/run/service/suggestion-sweep";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
-import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
-import { prepareTagSuggestions } from "~/server/generic/suggestions/service/tag-suggestions";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import {
   lookupShortcodes,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
+import { prepareTagSuggestions } from "~/server/generic/suggestions/service/tag-suggestions";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { discoverAcquisitionCandidateScan } from "./acquisition-discovery";

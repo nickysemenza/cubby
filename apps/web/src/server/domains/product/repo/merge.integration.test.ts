@@ -36,8 +36,8 @@ import {
 } from "~/server/domains/product/repo/product-components";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
   createPlantFixture,
   createProductFixture,

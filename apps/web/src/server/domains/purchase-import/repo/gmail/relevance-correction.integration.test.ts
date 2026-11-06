@@ -1,6 +1,5 @@
 /** Member correction must retain only the exact reviewed original, preserve prediction
  * history and disposition, refuse authority/content races, and clean only new cache keys. */
-import { emailReviewFrontierReceipt } from "@cubby/schemas/email-observations";
 import { emailId } from "@cubby/schemas/identifiers";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { MAIL_ATTACHMENT_MAX_BYTES } from "@cubby/schemas/mailbox-research";
@@ -33,8 +32,8 @@ import {
 import { readEmailProtectingIntent } from "~/server/domains/purchase-import/repo/email-review-intent";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 
 import { withEmailEvidenceWrite } from "../email-evidence-write-scope";
 import { productionOrderMailAttachmentStorage } from "./attachment-storage";
@@ -396,20 +395,6 @@ describe("member-only exact original relevance correction", () => {
           event.operationId === `command-application:${f.review.operationId}`,
       ),
     ).toBeUndefined();
-    const command = events.find(
-      (event) => event.operationId === f.review.operationId,
-    );
-    const frontier = events.find(
-      (event) => event.operationId === `email-review-frontier:${command?.id}`,
-    );
-    expect(emailReviewFrontierReceipt.parse(frontier?.receipt)).toMatchObject({
-      commandFeedbackId: command?.id,
-      frontier: {
-        status: "captured",
-        emailId: f.email.id,
-        feedbackIds: expect.arrayContaining([command?.id]),
-      },
-    });
     expect(
       (
         await getDb(ctx.db)

@@ -12,10 +12,6 @@ import {
   SETTLED_SUGGESTION_QUESTION_MAX,
   suggestionReviewRowSchema,
 } from "@cubby/schemas/ai";
-import type {
-  SuggestionReviewBatchOut,
-  SuggestionReviewOut,
-} from "@cubby/schemas/suggestion";
 import type { BatchOut } from "@cubby/schemas/batch";
 import {
   classificationFieldRefusal,
@@ -33,6 +29,10 @@ import {
   fieldSuggestionResolutionContext,
 } from "@cubby/schemas/field-suggestion";
 import { productCategorySummary } from "@cubby/schemas/product-category-fields";
+import type {
+  SuggestionReviewBatchOut,
+  SuggestionReviewOut,
+} from "@cubby/schemas/suggestion";
 import {
   SUGGESTION_LIST_PAGE_MAX,
   SUGGESTION_RECORD_IDS_MAX,

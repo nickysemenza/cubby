@@ -14,8 +14,8 @@ import {
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,

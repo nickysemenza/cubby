@@ -6,12 +6,12 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { suggestionTable, image } from "~/server/db/schema";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   suggestionRecordId,
   transitionSuggestionState,
   transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
-import { recordChange } from "~/server/generic/changes/repo/change";
 
 /** Caller holds content, record-intent, Image and target projection locks in that order. */
 export async function writeImageDescriptionConfirmation(

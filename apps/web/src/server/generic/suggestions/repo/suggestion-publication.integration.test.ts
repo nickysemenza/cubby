@@ -1,5 +1,5 @@
-import type { SuggestionProducer } from "@cubby/schemas/suggestion";
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
+import type { SuggestionProducer } from "@cubby/schemas/suggestion";
 import { asc, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";

@@ -13,8 +13,8 @@ import { project as projectTable, task as taskTable } from "~/server/db/schema";
 import { productCategoryScaffold } from "~/server/domains/product-category/repo/product-category";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { taskScaffold } from "~/server/domains/task/repo/lookup";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { loadFieldResolutionEvidence } from "~/server/generic/field-explanation/repo/field-resolution-evidence";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createInventoryFixture,
   createLocationFixture,

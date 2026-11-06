@@ -1,8 +1,3 @@
-import {
-  suggestionSubjects,
-  suggestionFamily,
-  suggestionProducer,
-} from "@cubby/schemas/suggestion";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import {
@@ -15,6 +10,11 @@ import {
   type StatementSuggestionOut,
   type StatementTransactionApplication,
 } from "@cubby/schemas/statement-suggestion";
+import {
+  suggestionSubjects,
+  suggestionFamily,
+  suggestionProducer,
+} from "@cubby/schemas/suggestion";
 import { workQueueInput } from "@cubby/schemas/work-queue";
 import { DECISION_MODEL } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -60,22 +60,22 @@ import {
   readWorkQueue,
   readRecordWorkQueue,
 } from "~/server/domains/work/service/work-queue-read";
-import * as suggestionRepo from "~/server/generic/suggestions/repo/suggestion";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
-import * as suggestionStateRepo from "~/server/generic/suggestions/repo/suggestion-state";
-import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-rule-runtime";
-import { setAutomaticRule } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
-import { ruleBase } from "~/server/generic/suggestions/repo/automatic-rules";
-import {
-  acceptCleanSuggestions,
-  listSuggestionPage,
-} from "~/server/generic/suggestions/repo/suggestion-list";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { renewJob } from "~/server/generic/jobs/jobs.fixtures";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-rule-runtime";
+import { setAutomaticRule } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
+import { ruleBase } from "~/server/generic/suggestions/repo/automatic-rules";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import * as suggestionRepo from "~/server/generic/suggestions/repo/suggestion";
+import {
+  acceptCleanSuggestions,
+  listSuggestionPage,
+} from "~/server/generic/suggestions/repo/suggestion-list";
+import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
+import * as suggestionStateRepo from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   captureBackgroundQueue,

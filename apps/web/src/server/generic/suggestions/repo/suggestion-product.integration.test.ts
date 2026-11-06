@@ -64,11 +64,11 @@ import {
   recordId,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { mergeReviewedProductPair } from "~/server/generic/suggestions/repo/suggestion-product";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import { findDuplicateProductIdentities } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
+import { mergeReviewedProductPair } from "~/server/generic/suggestions/repo/suggestion-product";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 

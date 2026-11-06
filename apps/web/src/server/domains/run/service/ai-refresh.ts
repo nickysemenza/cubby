@@ -87,13 +87,6 @@ import { scheduleAutomaticEvaluations } from "~/server/domains/run/repo/ai-refre
 import { readAutomaticAiStop } from "~/server/domains/run/repo/automatic-ai-stop";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
-import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
-import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
-import {
-  fieldInputFingerprint,
-  fenceFieldInputsAtCommit,
-  fieldInputFingerprintIfLive,
-} from "~/server/generic/suggestions/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
 import {
@@ -107,6 +100,13 @@ import {
   lookupShortcodes,
   resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
+import {
+  fieldInputFingerprint,
+  fenceFieldInputsAtCommit,
+  fieldInputFingerprintIfLive,
+} from "~/server/generic/suggestions/repo/field-input-fence";
+import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";

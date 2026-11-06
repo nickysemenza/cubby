@@ -65,10 +65,10 @@ import {
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { makeCookbookExtraction } from "~/server/testing/repo.fixtures";
 import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 

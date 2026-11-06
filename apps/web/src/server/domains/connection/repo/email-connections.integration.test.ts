@@ -19,8 +19,8 @@ import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/
 import { connectionSourceFingerprint } from "~/server/domains/run/repo/connection-refresh";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 // Failure modes: discovery grants operational link authority; inverse discovery
 // misses retained events; subject similarity invents identity; a changed checksum
 // or superseded event applies; foreign members/agents bypass purchase_import.mail_resolve;

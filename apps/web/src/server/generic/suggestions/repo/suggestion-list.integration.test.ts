@@ -1,10 +1,10 @@
-import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import {
   recordSourceTransactionRecordsInput,
   type TransactionImportInput,
   type SourceTransactionRecordInput,
 } from "@cubby/schemas/source-transaction-record";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { suggestionListFilters } from "@cubby/schemas/suggestion-list";
 import { eq, sql } from "drizzle-orm";
@@ -37,12 +37,12 @@ import { generateStatementSuggestionPage } from "~/server/domains/transaction-im
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { pendingSuggestionsWorkSource } from "~/server/domains/work/repo/work-suggestions";
 import { executeEntity } from "~/server/entity-kernel";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   readSuggestionRecordRefs,
   touchingSuggestionIds,
 } from "~/server/generic/suggestions/repo/review-families";
 import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-families";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   readWorkQueueWith,
   readRecordWorkQueueWith,
@@ -52,13 +52,13 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
+import { listAutomaticDecisions } from "./automatic-decisions";
+import { reviewSuggestion } from "./review";
 import {
   automaticApplicationRule,
   publishFieldSuggestion,
   recordFeedback,
 } from "./suggestion";
-import { reviewSuggestion } from "./review";
-import { listAutomaticDecisions } from "./automatic-decisions";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,

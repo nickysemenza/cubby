@@ -1,15 +1,15 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import {
-  suggestionChildHandle,
-  suggestionProducer,
-  type SuggestionProducer,
-} from "@cubby/schemas/suggestion";
 import { dateTime } from "@cubby/schemas/codec";
 import {
   parseEntityId,
   productId,
   type ProductId,
 } from "@cubby/schemas/identifiers";
+import {
+  suggestionChildHandle,
+  suggestionProducer,
+  type SuggestionProducer,
+} from "@cubby/schemas/suggestion";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,

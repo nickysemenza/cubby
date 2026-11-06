@@ -1,7 +1,7 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { productShortcode } from "@cubby/schemas/identifiers";
 import { tagPropagationRecommendationOut } from "@cubby/schemas/recommendations";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { recommendationSuggestionRow } from "@cubby/schemas/suggestion-list";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -13,12 +13,12 @@ import { suggestionTable, product } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { executeEntity } from "~/server/entity-kernel/execute";
-import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
-import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";
 import {
   pendingRecommendationEligibility,
   reviewFamilyDeclarations,
 } from "~/server/generic/suggestions/repo/review-families";
+import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
+import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";
 
 import {
   keyBase,

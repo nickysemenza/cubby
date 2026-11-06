@@ -12,6 +12,7 @@ import {
   suggestionStatus,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntityAs } from "~/server/entity-kernel";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   fieldInputFingerprintIfLive,
   fieldInputFingerprintsIfLive,
@@ -21,7 +22,6 @@ import {
   acceptSuggestion,
   readFieldSuggestions,
 } from "~/server/generic/suggestions/repo/suggestion-review";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   createLocationFixture,
   makeLocationInput,

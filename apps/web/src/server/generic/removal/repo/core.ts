@@ -65,10 +65,10 @@ import { dataExceptionRecord } from "~/server/db/schema";
 import { retireEmailDecisionTargetsTx } from "~/server/domains/email/repo/email-link-decision";
 import { retireRunFindingTargetsTx } from "~/server/domains/purchase-import/repo/run-finding";
 import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
-import { retireSuggestionTargetsTx } from "~/server/generic/suggestions/repo/suggestion-state";
 import type { AuditEntryInput } from "~/server/generic/audit-log/repo/audit-log";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
+import { retireSuggestionTargetsTx } from "~/server/generic/suggestions/repo/suggestion-state";
 
 import { assertNoOrdinaryReferences } from "./ordinary-reference-guard";
 

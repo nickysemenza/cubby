@@ -1,36 +1,27 @@
 import {
-  suggestionFamily,
-  suggestionProducer,
-  suggestionSubjects,
-} from "@cubby/schemas/suggestion";
-import {
   emailProtectingIntentFrontier,
-  emailReviewFrontierReceipt,
   type EmailProtectingIntentFrontier,
 } from "@cubby/schemas/email-observations";
 import { connectionCandidate } from "@cubby/schemas/entity-connections";
 import { emailId } from "@cubby/schemas/identifiers";
+import {
+  suggestionFamily,
+  suggestionProducer,
+  suggestionSubjects,
+} from "@cubby/schemas/suggestion";
 import { correctionAuthorityReceiptKinds } from "@cubby/schemas/suggestion-correction";
 import { and, asc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import {
-  repositoryQueries as getDb,
-  repositoryTransactionDatabase as withTransactionDatabase,
-} from "~/server/db/repository-access.boundary";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { email, emailReview } from "~/server/db/retained-tables";
-import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
 import {
   assertEmailEvidenceScope,
   withEmailEvidenceWrite,
   type EmailEvidenceWriteScope,
 } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
-import {
-  recordFeedback,
-  type recordFeedbackWithInsertion,
-} from "~/server/generic/suggestions/repo/suggestion";
 
 type ReviewSubject = {
   family: z.infer<typeof suggestionFamily>;
@@ -176,53 +167,6 @@ export async function readEmailProtectingIntent(
   });
 }
 
-async function reviewFrontier(
-  db: Database,
-  input: ReviewSubject,
-): Promise<EmailProtectingIntentFrontier> {
-  if (input.family === "email_relevance") {
-    const subject = suggestionSubjects.email_relevance.safeParse(input.subject);
-    if (subject.success)
-      return readEmailProtectingIntent(
-        db,
-        emailId.parse(subject.data.recordId),
-      );
-  } else if (input.family === "recommendation") {
-    const subject = suggestionSubjects.recommendation.safeParse(input.subject);
-    if (subject.success)
-      return readEmailProtectingIntent(
-        db,
-        emailId.parse(subject.data.recordId),
-      );
-  } else if (input.family === "email_link") {
-    const subject = suggestionSubjects.email_link.safeParse(input.subject);
-    if (subject.success) {
-      if (subject.data.recordId)
-        return readEmailProtectingIntent(
-          db,
-          emailId.parse(subject.data.recordId),
-        );
-      const matches = await getDb(db)
-        .select({ id: email.id })
-        .from(email)
-        .where(
-          and(
-            eq(email.orderMailId, subject.data.originalId),
-            notDeleted(email),
-          ),
-        )
-        .limit(2);
-      if (matches.length === 1 && matches[0])
-        return readEmailProtectingIntent(db, emailId.parse(matches[0].id));
-    }
-  }
-  return {
-    status: "held",
-    emailId: null,
-    reason: "Retained review does not prove one current Email identity",
-  };
-}
-
 /** Select only Email review writes; other families retain their own transaction owner. */
 export async function withEmailReviewBoundary<T>(
   db: Database,
@@ -239,78 +183,4 @@ export async function withEmailReviewBoundary<T>(
     return action(db, scope);
   }
   return withEmailEvidenceWrite(db, action);
-}
-
-/** Atomic command/frontier association only; complete effect ownership and outer fences remain required. */
-export async function withEmailReviewFrontier(
-  db: Database,
-  input: ReviewSubject,
-  action: (
-    transactionDb: Database,
-  ) => ReturnType<typeof recordFeedbackWithInsertion>,
-  scope?: EmailEvidenceWriteScope,
-) {
-  if (!relevantReview(input)) return action(db);
-  return withEmailReviewBoundary(
-    db,
-    input,
-    (scopedDb) =>
-      withTransactionDatabase(scopedDb, async (transactionDb) => {
-        const publication = await action(transactionDb);
-        const command = publication.event;
-        // Historical retries cannot reconstruct the baseline of the original command.
-        if (!publication.inserted || command.authority !== "member")
-          return publication;
-        const capture = emailReviewFrontierReceipt.parse({
-          version: "email-review-frontier-v1",
-          commandFeedbackId: command.id,
-          frontier: await reviewFrontier(transactionDb, input),
-        });
-        await recordFeedback(transactionDb, {
-          suggestionId: command.suggestionId,
-          operationId: `email-review-frontier:${command.id}`,
-          verdict: "ungraded",
-          authority: "system",
-          actorUserId: null,
-          intent: "history",
-          receipt: capture,
-          metadata: {
-            kind: "email_review_frontier",
-            commandFeedbackId: command.id,
-          },
-        });
-        return publication;
-      }),
-    scope,
-  );
-}
-
-/** The frontier of a mail decision command, retained beside its review. */
-export async function appendEmailReviewFrontier(
-  db: Database,
-  input: ReviewSubject & { subjectId: string },
-  commandId: string,
-) {
-  await appendEmailReview(db, {
-    family: input.family,
-    subjectId: input.subjectId,
-    emailId: null,
-    originalId: null,
-    checksum: null,
-    operationId: `email-review-frontier:${commandId}`,
-    verdict: "ungraded",
-    authority: "system",
-    actorUserId: null,
-    intent: "history",
-    subject: z.json().parse(input.subject),
-    receipt: emailReviewFrontierReceipt.parse({
-      version: "email-review-frontier-v1",
-      commandFeedbackId: commandId,
-      frontier: await reviewFrontier(db, input),
-    }),
-    metadata: {
-      kind: "email_review_frontier",
-      commandFeedbackId: commandId,
-    },
-  });
 }

@@ -15,9 +15,6 @@ import { productPairFingerprint } from "~/server/domains/product/repo/match/prod
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { getActiveSuggestionSuppressionKeys } from "~/server/generic/suggestions/repo/suggestion-state";
-import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import { getStoredEmbeddingHashes } from "~/server/generic/embedding/repo/entity-embedding-refresh";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
@@ -32,6 +29,9 @@ import {
   refreshSearchDocument,
   selectUnembeddedSearchDocumentRefs,
 } from "~/server/generic/search/repo/search-document";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
+import { getActiveSuggestionSuppressionKeys } from "~/server/generic/suggestions/repo/suggestion-state";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductFixture as createProduct,

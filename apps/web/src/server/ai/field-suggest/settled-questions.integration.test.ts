@@ -24,8 +24,8 @@ import {
   productFixture,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 
 import {
   fieldQuestionKey,

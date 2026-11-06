@@ -1,12 +1,4 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import {
-  suggestionFamily,
-  suggestionJudgments,
-  mailDecisionFamily,
-  type SuggestionFamily,
-  type MailDecisionFamily,
-} from "@cubby/schemas/suggestion";
-import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
@@ -15,7 +7,15 @@ import {
   statementTransactionAction,
   statementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
+import {
+  suggestionFamily,
+  suggestionJudgments,
+  mailDecisionFamily,
+  type SuggestionFamily,
+  type MailDecisionFamily,
+} from "@cubby/schemas/suggestion";
 import { suggestionRecordRef } from "@cubby/schemas/suggestion-list";
+import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { parseShortcode } from "@cubby/shared";
 import {
   and,
@@ -38,11 +38,11 @@ import { outer, type RelatedColumns } from "~/server/db/helpers/related";
 import { suggestionTable, run } from "~/server/db/schema";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
+import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   recommendationScopes,
   type SuggestionRecordSelection,
 } from "~/server/generic/suggestions/repo/pending-admission";
-import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 export { pendingRecommendationEligibility } from "~/server/generic/suggestions/repo/pending-admission";
 
 const reviewSuggestion = alias(suggestionTable, "s");

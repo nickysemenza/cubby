@@ -44,11 +44,11 @@ import {
 import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
   publishSuggestion,
   recordFeedback,
 } from "~/server/generic/suggestions/repo/suggestion";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { transitionSuggestionState } from "~/server/generic/suggestions/repo/suggestion-state";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {

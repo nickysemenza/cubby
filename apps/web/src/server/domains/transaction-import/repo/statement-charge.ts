@@ -1,7 +1,7 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { type SQL, sql } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";

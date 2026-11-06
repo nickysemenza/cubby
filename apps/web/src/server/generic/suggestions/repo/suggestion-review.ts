@@ -7,7 +7,6 @@ import {
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
 import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
-import { suggestionChildHandle } from "@cubby/schemas/suggestion";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
@@ -16,6 +15,7 @@ import { basisValueOf } from "@cubby/schemas/field-suggestion";
 import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
+import { suggestionChildHandle } from "@cubby/schemas/suggestion";
 import { suggestionFieldCount } from "@cubby/schemas/suggestion-list";
 import { type SQL, and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -45,6 +45,18 @@ import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
+import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import {
+  lookupShortcodes,
+  resolveLiveShortcodes,
+} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  fieldInputFingerprint,
+  fieldInputFingerprintIfLive,
+  readFieldInputs,
+  fenceFieldInputsAtCommit,
+} from "~/server/generic/suggestions/repo/field-input-fence";
 import {
   automaticApplicationRule,
   matchedRulesOf,
@@ -56,18 +68,6 @@ import {
   suggestionRecordId,
   transitionSuggestionState,
 } from "~/server/generic/suggestions/repo/suggestion-state";
-import {
-  fieldInputFingerprint,
-  fieldInputFingerprintIfLive,
-  readFieldInputs,
-  fenceFieldInputsAtCommit,
-} from "~/server/generic/suggestions/repo/field-input-fence";
-import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
-import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import {
-  lookupShortcodes,
-  resolveLiveShortcodes,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 /** Shared executions publish one suggestion history; every live requester can inspect it. */

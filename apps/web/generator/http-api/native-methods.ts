@@ -55,7 +55,7 @@ export const CLIENT_PASSTHROUGH_METHODS = {
     method: "approveDetectedInventoryItem",
     doc: null,
   },
-  "ai.suggestFieldsReview": { method: "suggestFieldsReview", doc: null },
+  "ai.suggestFields": { method: "suggestFields", doc: null },
   "ai.applyFinanceCategorySuggestion": {
     method: "applyFinanceCategorySuggestion",
     doc: null,

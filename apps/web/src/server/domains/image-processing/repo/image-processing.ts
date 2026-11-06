@@ -86,11 +86,11 @@ import {
   imageRepresentationsFromRows,
 } from "~/server/domains/image-processing/repo/image-representations";
 import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/domains/mail/repo/mail-attachment-uploads";
-import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
-import { readConfirmedDescription } from "~/server/generic/suggestions/repo/suggestion-image";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { JobSupersededError } from "~/server/generic/jobs/errors";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import { readConfirmedDescription } from "~/server/generic/suggestions/repo/suggestion-image";
 
 import {
   imageJobClaimable,

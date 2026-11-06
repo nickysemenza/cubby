@@ -1,5 +1,5 @@
-import { suggestionCorrection } from "@cubby/schemas/suggestion";
 import type { MailboxClassification } from "@cubby/schemas/mailbox-research";
+import { suggestionCorrection } from "@cubby/schemas/suggestion";
 import { and, eq } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";

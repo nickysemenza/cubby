@@ -1,14 +1,14 @@
 import {
+  automaticDecisionListInput,
+  automaticDecisionListOut,
+  automaticDecisionRow,
+} from "@cubby/schemas/automatic-decision";
+import {
   suggestionFamily,
   feedbackVerdict,
   feedbackAuthority,
   mailDecisionFamily,
 } from "@cubby/schemas/suggestion";
-import {
-  automaticDecisionListInput,
-  automaticDecisionListOut,
-  automaticDecisionRow,
-} from "@cubby/schemas/automatic-decision";
 import { correctionAuthorityReceiptKinds } from "@cubby/schemas/suggestion-correction";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
@@ -19,8 +19,8 @@ import {
   mailAutomaticDecisionBranches,
   mailDecisionPresentation,
 } from "~/server/domains/purchase-import/repo/mail-automatic-decisions";
-import { automaticApplicationRule } from "~/server/generic/suggestions/repo/suggestion";
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { automaticApplicationRule } from "~/server/generic/suggestions/repo/suggestion";
 
 import {
   automaticSuggestionEligibility,

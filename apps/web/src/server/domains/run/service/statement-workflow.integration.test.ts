@@ -1,6 +1,6 @@
-import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";

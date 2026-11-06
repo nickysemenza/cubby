@@ -1,7 +1,7 @@
 import { confidence } from "@cubby/schemas/ai";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
-import { suggestionProducer } from "@cubby/schemas/suggestion";
 import { productId } from "@cubby/schemas/identifiers";
+import { suggestionProducer } from "@cubby/schemas/suggestion";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 

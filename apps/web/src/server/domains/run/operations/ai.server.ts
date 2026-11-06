@@ -86,16 +86,16 @@ import {
   resumeSuggestionSweep,
   startSuggestionSweep,
 } from "~/server/domains/run/service/suggestion-sweep";
-import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
-import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
-import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
-import { latestSuggestionSweepStatus } from "~/server/generic/suggestions/repo/suggestion-review";
 import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import {
   resolveAllOrThrow,
   resolveLiveShortcodes,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
+import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
+import { latestSuggestionSweepStatus } from "~/server/generic/suggestions/repo/suggestion-review";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
@@ -744,19 +744,6 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   suggestFields: (context, input) => inferFieldSuggestions(context, input),
   suggestFieldsBatch: (context, input) =>
     inferFieldSuggestionsBatch(context, input),
-  suggestFieldsReview: async (context, input) => {
-    const { suggestions, ...contextual } = await inferFieldSuggestions(
-      context,
-      input,
-    );
-    return {
-      ...contextual,
-      suggestions: Object.entries(suggestions).map(([field, suggestion]) => ({
-        field,
-        suggestion,
-      })),
-    };
-  },
   suggestExternalIdKind: async (context, input) =>
     suggestExternalIdKind(input, {
       db: context.db,

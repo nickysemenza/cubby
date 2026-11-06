@@ -1,3 +1,6 @@
+import { correctEmailRelevanceInput } from "@cubby/schemas/email-actions";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { mailboxClassification } from "@cubby/schemas/mailbox-research";
 import {
   suggestionJudgments,
   suggestionReviewInput,
@@ -5,9 +8,6 @@ import {
   suggestionSubjects,
   type MailDecisionFamily,
 } from "@cubby/schemas/suggestion";
-import { correctEmailRelevanceInput } from "@cubby/schemas/email-actions";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { mailboxClassification } from "@cubby/schemas/mailbox-research";
 import { and, eq, like, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -33,10 +33,7 @@ import {
   appendEmailReviewWithInsertion,
 } from "~/server/domains/email/repo/email-review-store";
 import type { EmailEvidenceWriteScope } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
-import {
-  appendEmailReviewFrontier,
-  withEmailReviewBoundary,
-} from "~/server/domains/purchase-import/repo/email-review-intent";
+import { withEmailReviewBoundary } from "~/server/domains/purchase-import/repo/email-review-intent";
 import type { PreparedEmailRelevanceCorrection } from "~/server/domains/purchase-import/repo/gmail/relevance-correction";
 import {
   mailOutcomeByHandleSql,
@@ -495,17 +492,6 @@ export async function settleMailDecisionReview(
     (scopedDb) =>
       withTransactionDatabase(scopedDb, async (transactionDb) => {
         const publication = await writeReview(transactionDb);
-        // Historical retries cannot reconstruct the baseline of the original command.
-        if (publication.inserted && handle.family !== "mail_import_outcome")
-          await appendEmailReviewFrontier(
-            transactionDb,
-            {
-              family: handle.family,
-              subject: handle.subject,
-              subjectId: handle.id,
-            },
-            publication.event.id,
-          );
         return publication;
       }),
     emailScope,

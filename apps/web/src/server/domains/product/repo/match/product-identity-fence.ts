@@ -1,6 +1,6 @@
-import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { entitySchema } from "@cubby/schemas/entity";
 import type { ProductId } from "@cubby/schemas/identifiers";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 

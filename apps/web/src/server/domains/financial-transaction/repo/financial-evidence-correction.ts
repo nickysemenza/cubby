@@ -39,9 +39,9 @@ import {
   sourceObservationFrom,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { isBlockedRefusal } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { assertAutomaticRuleOn } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
 import { ruleBase } from "~/server/generic/suggestions/repo/automatic-rules";
-import { recordChange } from "~/server/generic/changes/repo/change";
 
 import {
   bookingGraph,

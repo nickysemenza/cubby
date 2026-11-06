@@ -1,7 +1,3 @@
-import {
-  suggestionFamily,
-  type SuggestionFamily,
-} from "@cubby/schemas/suggestion";
 import type { JobWaitReason } from "@cubby/schemas/job";
 import {
   runStepDeclaration,
@@ -16,6 +12,10 @@ import {
   runWorkEstimate,
   formatRunWorkEstimate,
 } from "@cubby/schemas/run-work-progress";
+import {
+  suggestionFamily,
+  type SuggestionFamily,
+} from "@cubby/schemas/suggestion";
 import { z } from "zod";
 
 import type { JobFacts, JobListOut } from "~/contracts/job.contract";

@@ -30,8 +30,8 @@ import {
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { providerIdentityClaims } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import { createAppError } from "~/server/errors/app-error";
-import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { auditEvidenceRows } from "./intake-audit";

@@ -1,4 +1,3 @@
-import { suggestionFamily, feedbackAuthority } from "@cubby/schemas/suggestion";
 import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 /**
  * Mail import admission: classified Emails become one Pi Run's targets. The
@@ -29,6 +28,7 @@ import {
   runTrigger,
   mailResearchRunInput,
 } from "@cubby/schemas/run-fields";
+import { suggestionFamily, feedbackAuthority } from "@cubby/schemas/suggestion";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,

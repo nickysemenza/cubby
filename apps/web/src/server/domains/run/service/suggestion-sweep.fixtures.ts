@@ -28,13 +28,13 @@ import {
   suggestionTable,
 } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
-import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
-import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import {
   lookupShortcodes,
   resolveLiveShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
+import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import {
   createProductFixture,
   makeProductInput,

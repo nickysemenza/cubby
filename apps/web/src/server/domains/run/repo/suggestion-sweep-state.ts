@@ -12,18 +12,18 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { run as runTable, suggestionTable } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
-import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
-import {
-  suggestionStateColumns,
-  transitionSuggestionStates,
-} from "~/server/generic/suggestions/repo/suggestion-state";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { JobTargetError } from "~/server/generic/jobs/errors";
 import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
 } from "~/server/generic/suggestions/repo/field-input-fence";
-import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import { JobTargetError } from "~/server/generic/jobs/errors";
+import { publishFieldSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import {
+  suggestionStateColumns,
+  transitionSuggestionStates,
+} from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 export type SuggestionValue =

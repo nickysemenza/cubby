@@ -24,9 +24,9 @@ import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { productionMailTriage } from "~/server/domains/purchase-import/service/gmail/triage-model";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
 import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { ingestGmailMessages } from "../../service/gmail/ingest";

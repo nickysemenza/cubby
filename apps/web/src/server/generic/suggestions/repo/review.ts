@@ -1,5 +1,10 @@
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import {
+  AUTOMATIC_RULE_FAMILIES,
+  type AutomaticRuleKey,
+} from "@cubby/schemas/automatic-rule";
+import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
+import {
   suggestionReviewInput,
   suggestionFamily,
   suggestionReviewBatchInput,
@@ -10,11 +15,6 @@ import {
   mailDecisionFamily,
   type SuggestionFamily,
 } from "@cubby/schemas/suggestion";
-import {
-  AUTOMATIC_RULE_FAMILIES,
-  type AutomaticRuleKey,
-} from "@cubby/schemas/automatic-rule";
-import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import { getErrorMessage } from "@cubby/shared";
 import { and, eq, or, sql } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
@@ -34,10 +34,7 @@ import {
 } from "~/server/domains/image/repo/image-correction-lock";
 import { writeImageDescriptionConfirmation } from "~/server/domains/image/repo/image-description-confirmation";
 import type { EmailEvidenceWriteScope } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
-import {
-  withEmailReviewFrontier,
-  withEmailReviewBoundary,
-} from "~/server/domains/purchase-import/repo/email-review-intent";
+import { withEmailReviewBoundary } from "~/server/domains/purchase-import/repo/email-review-intent";
 import {
   resolveMailDecisionHandle,
   settleMailDecisionReview,
@@ -45,13 +42,20 @@ import {
 import { statementSuggestionSourceHeld } from "~/server/domains/transaction-import/repo/source-observation-state";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import {
   assertApplicationReceipt,
   publishSuggestion,
   recordFeedback,
   recordFeedbackWithInsertion,
 } from "~/server/generic/suggestions/repo/suggestion";
+import { decisionForOperation } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import { acknowledgeSavedField } from "~/server/generic/suggestions/repo/suggestion-field-receipt";
+import {
+  acceptSuggestion,
+  applyFieldCorrection,
+} from "~/server/generic/suggestions/repo/suggestion-review";
 import {
   type SuggestionStateRow,
   suggestionStateColumns,
@@ -59,13 +63,6 @@ import {
   transitionSuggestionState,
   transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
-import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
-import { decisionForOperation } from "~/server/generic/suggestions/repo/suggestion-decisions";
-import {
-  acceptSuggestion,
-  applyFieldCorrection,
-} from "~/server/generic/suggestions/repo/suggestion-review";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { isReviewFamily, type ReviewFamily } from "./review-families";
 
@@ -615,7 +612,7 @@ async function settleReview(
     });
   const publication = imageSubject
     ? await withImageCorrectionIntent(db, imageSubject, writeReview)
-    : await withEmailReviewFrontier(db, prediction, writeReview, emailScope);
+    : await withEmailReviewBoundary(db, prediction, writeReview, emailScope);
   const event = publication.event;
   if (input.intent === "draft") {
     return {

@@ -1,11 +1,11 @@
-import {
-  suggestionReviewBatchOut,
-  type SuggestionReviewOut,
-} from "@cubby/schemas/suggestion";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
 import type { StatementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import type { StatementTransactionApplication } from "@cubby/schemas/statement-suggestion";
+import {
+  suggestionReviewBatchOut,
+  type SuggestionReviewOut,
+} from "@cubby/schemas/suggestion";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { getErrorMessage } from "@cubby/shared";
 import { chunk } from "es-toolkit";
@@ -19,8 +19,8 @@ import {
   type ReactNode,
 } from "react";
 
-import { suggestionContract } from "~/contracts/suggestion.contract";
 import { operationCommandRequest } from "~/contracts/define";
+import { suggestionContract } from "~/contracts/suggestion.contract";
 import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 
 import type {

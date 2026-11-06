@@ -33,9 +33,9 @@ import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { paidRunPreflight } from "~/server/domains/run/service/execution-transport";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { createMcpServer } from "~/server/mcp/server";
 import {
   callMcpTool,
@@ -862,7 +862,7 @@ describe("mail research admission", () => {
       ),
     ).rejects.toMatchObject({ code: "NOT_FOUND", reason: "EMAIL_NOT_FOUND" });
     const { reviewSuggestion } =
-      await import("~/server/generic/suggestions/repo/suggestion-review");
+      await import("~/server/generic/suggestions/repo/review");
     const { kernelCtx } =
       await import("~/server/domains/run/service/suggestion-sweep.fixtures");
     await reviewSuggestion(ctx.db, kernelCtx(ctx), {

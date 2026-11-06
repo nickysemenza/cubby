@@ -4,9 +4,9 @@ import { entityIdentityDropTriggerSql } from "~/server/db/entity-identity-ddl";
 import { entityLinkDropLivenessTriggerSql } from "~/server/db/entity-link-schema";
 import { shipmentIdentityDdl } from "~/server/db/shipment-identity-ddl";
 
-import { suggestionHistoryDdl, statementSuggestionDdl } from "./suggestion-ddl";
 import { productBrandDdl } from "./product-brand-ddl";
 import { searchPrefixDdl } from "./search-prefix-ddl";
+import { suggestionHistoryDdl, statementSuggestionDdl } from "./suggestion-ddl";
 
 /**
  * One CHECK per field of an enforced same-record classification policy:

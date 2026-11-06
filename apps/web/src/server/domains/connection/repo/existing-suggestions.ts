@@ -1,11 +1,4 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import {
-  type SuggestionProducer,
-  type EntityPairSuggestionFamily,
-  entityPairSuggestionFamilies,
-  suggestionFamily,
-  isEntityPairSuggestionFamily,
-} from "@cubby/schemas/suggestion";
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
   connectionProposal,
@@ -15,6 +8,13 @@ import {
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
 import { PRODUCT_PAIR_NOT_ACTIONABLE } from "@cubby/schemas/recommendations";
+import {
+  type SuggestionProducer,
+  type EntityPairSuggestionFamily,
+  entityPairSuggestionFamilies,
+  suggestionFamily,
+  isEntityPairSuggestionFamily,
+} from "@cubby/schemas/suggestion";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";

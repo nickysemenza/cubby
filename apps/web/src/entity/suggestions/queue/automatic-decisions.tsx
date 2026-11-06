@@ -1,6 +1,6 @@
-import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { automaticDecisionFamily } from "@cubby/schemas/automatic-decision";
 import type { AutomaticDecisionRow } from "@cubby/schemas/automatic-decision";
+import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { humanize } from "@cubby/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";

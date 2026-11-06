@@ -1,7 +1,7 @@
-import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import { sweepRunInput } from "@cubby/schemas/run-fields";
 import { runStepErrors, runStepState } from "@cubby/schemas/run-step";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { z } from "zod";
 
 import { defineContract, query } from "~/contracts/define";

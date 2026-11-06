@@ -1,5 +1,5 @@
-import { suggestionReviewReference } from "@cubby/schemas/suggestion";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { suggestionReviewReference } from "@cubby/schemas/suggestion";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -7,9 +7,9 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { suggestionCandidateKey } from "~/server/generic/suggestions/repo/suggestion-state";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 /** Preferences preserve the exact declared candidate key, independently of grades. */

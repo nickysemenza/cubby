@@ -80,11 +80,6 @@ export const emailProtectingIntentFrontier = z.discriminatedUnion("status", [
     reason: z.string().min(1),
   }),
 ]);
-export const emailReviewFrontierReceipt = z.object({
-  version: z.literal("email-review-frontier-v1"),
-  commandFeedbackId: suggestionChildHandle,
-  frontier: emailProtectingIntentFrontier,
-});
 export type EmailProtectingIntentFrontier = z.infer<
   typeof emailProtectingIntentFrontier
 >;

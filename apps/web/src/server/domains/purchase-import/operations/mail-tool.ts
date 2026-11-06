@@ -1,4 +1,3 @@
-import { mailImportOutcome } from "@cubby/schemas/suggestion";
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 /**
  * The public `mail` tool: read a member's retained Email and record what it
@@ -30,6 +29,7 @@ import {
   type MailSearchInput,
 } from "@cubby/schemas/mailbox-research";
 import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
+import { mailImportOutcome } from "@cubby/schemas/suggestion";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { z } from "zod";

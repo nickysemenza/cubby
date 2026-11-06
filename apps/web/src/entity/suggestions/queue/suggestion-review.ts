@@ -1,4 +1,3 @@
-import type { suggestionReviewInput } from "@cubby/schemas/suggestion";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
 import type {
@@ -7,6 +6,7 @@ import type {
   StatementTransactionApplication,
   statementTransactionField,
 } from "@cubby/schemas/statement-suggestion";
+import type { suggestionReviewInput } from "@cubby/schemas/suggestion";
 import type {
   SuggestionActionVerb,
   SuggestionListRow,

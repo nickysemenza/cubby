@@ -1,5 +1,5 @@
-import type { SuggestionFamily } from "@cubby/schemas/suggestion";
 import { sweepRunInput } from "@cubby/schemas/run-fields";
+import type { SuggestionFamily } from "@cubby/schemas/suggestion";
 import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 

@@ -12,15 +12,15 @@ import {
   recordId,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
   publishSuggestion,
   recordFeedback,
 } from "~/server/generic/suggestions/repo/suggestion";
 import { readConfirmedDescription } from "~/server/generic/suggestions/repo/suggestion-image";
 import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 // Failure modes: retry publication mutates historical evidence; corrected null

@@ -1,4 +1,3 @@
-import { suggestionSubjects } from "@cubby/schemas/suggestion";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
@@ -9,6 +8,7 @@ import {
   type StatementLabelCheckpoint,
   STATEMENT_LABEL_REVISION,
 } from "@cubby/schemas/statement-suggestion";
+import { suggestionSubjects } from "@cubby/schemas/suggestion";
 import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { createLogger } from "@cubby/worker-tracing";
 
@@ -74,13 +74,13 @@ import {
   repairStatementApplicationReceipts,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
+import { withJobPhase } from "~/server/generic/jobs/context";
+import type { PageWork } from "~/server/generic/jobs/page-work";
 import { applyAutomaticRulesForCharge } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
 import {
   importOnlyStatementRuleStamps,
   matchStatementRules,
 } from "~/server/generic/suggestions/repo/automatic-rules";
-import { withJobPhase } from "~/server/generic/jobs/context";
-import type { PageWork } from "~/server/generic/jobs/page-work";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";

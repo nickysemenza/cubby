@@ -21,14 +21,14 @@ import {
   executeEntity,
   executeEntityAs,
 } from "~/server/entity-kernel";
+import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   assertApplicationReceipt,
   recordFeedback,
 } from "~/server/generic/suggestions/repo/suggestion";
-import { suggestionStateColumns } from "~/server/generic/suggestions/repo/suggestion-state";
 import { decisionForOperation } from "~/server/generic/suggestions/repo/suggestion-decisions";
-import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { suggestionStateColumns } from "~/server/generic/suggestions/repo/suggestion-state";
 
 export async function mergeReviewedProductPair(
   context: EntityKernelContext,

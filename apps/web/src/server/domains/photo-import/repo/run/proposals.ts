@@ -109,9 +109,9 @@ import {
 } from "~/server/domains/photo-import/repo/run/product-suggestions";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { currentMemberLedgerParty } from "~/server/http/member-login";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";

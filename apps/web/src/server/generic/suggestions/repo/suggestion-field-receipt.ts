@@ -1,12 +1,12 @@
 import { fieldSuggestionsInput } from "@cubby/schemas/ai";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
+import { entityFieldByKey } from "@cubby/schemas/entity-fields";
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
   suggestionJudgments,
   suggestionSubjects,
   type SuggestionCorrection,
 } from "@cubby/schemas/suggestion";
-import { entityFieldByKey } from "@cubby/schemas/entity-fields";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -15,17 +15,17 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   assertApplicationReceipt,
   recordFeedback,
 } from "~/server/generic/suggestions/repo/suggestion";
-import { transitionSuggestionState } from "~/server/generic/suggestions/repo/suggestion-state";
 import {
   decisionForOperation,
   type StoredDecision,
 } from "~/server/generic/suggestions/repo/suggestion-decisions";
-import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { transitionSuggestionState } from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 /** Saving a draft is a separate fact. Verify stored value; never rewrite a later edit. */

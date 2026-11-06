@@ -1,4 +1,3 @@
-import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entityRoster } from "@cubby/schemas/entity-roster";
 import type { StatementSuggestionOut } from "@cubby/schemas/statement-suggestion";
@@ -10,6 +9,7 @@ import type {
   SuggestionRecordRef,
   SuggestionStrength,
 } from "@cubby/schemas/suggestion-list";
+import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import type { TransferPairJudgment } from "@cubby/schemas/transfer-pair-suggestion";
 import { humanize, mapRecord } from "@cubby/shared";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";

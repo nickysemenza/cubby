@@ -4470,6 +4470,10 @@ The review implementation and wire use Suggestion names (`suggestionId`,
 `generic/field-explanation`. Immutable publication keys and receipt kinds keep
 their original spelling so retries and existing decisions retain their identity.
 Apple writes require version 2.71.0 after this wire cutover.
+The native editor shares `ai.suggestFields` with web. Email review retains its
+transaction and protecting-intent checks without writing a frontier receipt.
+Transfer movement labels run only when weak movement is the sole blocker;
+structural conflicts remain for review without a model call.
 
 The `/suggestions` page lists actionable proposals from fields,
 statement transactions, connections and recommendations (including tag additions

@@ -1,4 +1,3 @@
-import { suggestionSubjects } from "@cubby/schemas/suggestion";
 import type { FinancialTransactionUpdateData } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -6,6 +5,7 @@ import {
   type StatementTransactionApplication,
   type StatementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
+import { suggestionSubjects } from "@cubby/schemas/suggestion";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 

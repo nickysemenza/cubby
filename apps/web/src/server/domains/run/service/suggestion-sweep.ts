@@ -48,11 +48,11 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
-import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
-import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { JobTargetError } from "~/server/generic/jobs/errors";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
+import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 

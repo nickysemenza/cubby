@@ -1,9 +1,9 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { suggestionFamily } from "@cubby/schemas/suggestion";
 import type { AutomaticRuleKey } from "@cubby/schemas/automatic-rule";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -50,8 +50,7 @@ import {
 import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import * as suggestionReviewRepo from "~/server/generic/suggestions/repo/review";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
 import { loadCurrentFieldOwnership } from "~/server/generic/suggestions/repo/automatic-fields";
 import {
@@ -61,12 +60,13 @@ import {
 } from "~/server/generic/suggestions/repo/automatic-rule-runtime";
 import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-rule-runtime";
 import { ruleBase } from "~/server/generic/suggestions/repo/automatic-rules";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import * as suggestionReviewRepo from "~/server/generic/suggestions/repo/review";
 import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import {
   canAutomaticallyFillField,
   acceptSuggestion,
 } from "~/server/generic/suggestions/repo/suggestion-review";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type Ctx = ReturnType<typeof withTestDb>;
 

@@ -30,16 +30,16 @@ struct FieldSuggestionReviewModelTests {
             original: .object(original))
     }
 
-    private func response(finance: Bool = true) throws -> FieldSuggestionsReviewOut {
+    private func response(finance: Bool = true) throws -> FieldSuggestionsOut {
         let fingerprint = String(repeating: "a", count: 64)
         let review =
             finance
             ? #", "financeReview":{"entity":"expense","entityId":"EXP-4K7M","fingerprint":"\#(fingerprint)"}"#
             : ""
         return try JSONDecoder().decode(
-            FieldSuggestionsReviewOut.self,
+            FieldSuggestionsOut.self,
             from: Data(
-                #"{"suggestions":[{"field":"spendingCategoryId","suggestion":{"suggestionId":"00000000-0000-4000-8000-000000000003","value":"SPC-4K7M","label":"Fixture clothing","detail":null,"confidence":"high","probability":0.96,"reasoning":"Saved linked shirt","alternatives":[],"operation":"set","removals":[]\#(review)}},{"field":"itemizationExpectation","suggestion":{"suggestionId":"00000000-0000-4000-8000-000000000004","value":"not_expected","label":"Not expected","detail":null,"confidence":"high","probability":0.96,"reasoning":"Fixture restaurant","alternatives":[],"operation":"set","removals":[]}},{"field":"productExpectation","suggestion":null}]}"#
+                #"{"suggestions":{"spendingCategoryId":{"suggestionId":"00000000-0000-4000-8000-000000000003","value":"SPC-4K7M","label":"Fixture clothing","detail":null,"confidence":"high","probability":0.96,"reasoning":"Saved linked shirt","alternatives":[],"operation":"set","removals":[]\#(review)},"itemizationExpectation":{"suggestionId":"00000000-0000-4000-8000-000000000004","value":"not_expected","label":"Not expected","detail":null,"confidence":"high","probability":0.96,"reasoning":"Fixture restaurant","alternatives":[],"operation":"set","removals":[]},"productExpectation":null}}"#
                     .utf8))
     }
 

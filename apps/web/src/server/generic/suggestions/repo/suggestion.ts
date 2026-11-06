@@ -1,3 +1,4 @@
+import { connectionCandidate } from "@cubby/schemas/entity-connections";
 import {
   suggestionChildHandle,
   suggestionPublication,
@@ -8,7 +9,6 @@ import {
   feedbackEvent,
   suggestionDecision,
 } from "@cubby/schemas/suggestion";
-import { connectionCandidate } from "@cubby/schemas/entity-connections";
 import {
   CORRECTION_OUTCOME_RECEIPT_KIND,
   correctionAuthorityReceiptKinds,

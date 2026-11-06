@@ -13,8 +13,8 @@ import { getDb } from "~/server/db/helpers";
 import { purchase as purchaseTable } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { projectCreateFromTasksWorkflow } from "~/server/domains/project/operations.server";
-import { listSuggestions } from "~/server/generic/suggestions/repo/suggestion-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { listSuggestions } from "~/server/generic/suggestions/repo/suggestion-review";
 import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 

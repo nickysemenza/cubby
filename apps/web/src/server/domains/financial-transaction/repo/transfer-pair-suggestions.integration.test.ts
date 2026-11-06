@@ -1,5 +1,4 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { suggestionFamily } from "@cubby/schemas/suggestion";
 import type { FinancialAccountIdentity } from "@cubby/schemas/financial-account-fields";
 import {
   parseShortcodeFor,
@@ -7,6 +6,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import {
   transferPairJudgment,
   type TransferPairJudgment,
@@ -52,10 +52,10 @@ import { recordSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { previewStatementSuggestion } from "~/server/domains/transaction-import/repo/statement-suggestion-preview";
 import { readStatementSuggestions } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import {
   drainStoredDerived,
   withJobFixtureExecution,
@@ -1204,7 +1204,7 @@ describe("transfer-pair suggestions", () => {
     expect(real!.judgment.clean).toBe(true);
   });
 
-  it("keeps a confidently labelled cross-owner pair out of clean and applies it only on review", async () => {
+  it("leaves a cross-owner pair unlabelled and applies it only on review", async () => {
     const payer = await owner("Synthetic member A");
     const payee = await owner("Synthetic member B");
     await account("Synthetic checking", payer);
@@ -1230,11 +1230,11 @@ describe("transfer-pair suggestions", () => {
     expect(pair!.judgment).toMatchObject({
       move: "between_owners",
       clean: false,
-      outflow: { movement: "explicit" },
-      inflow: { movement: "explicit" },
+      outflow: { movement: "weak" },
+      inflow: { movement: "weak" },
       apply: { available: true },
     });
-    expect(pair!.judgment.blockers).toEqual(["owners_differ"]);
+    expect(pair!.judgment.blockers).toEqual(["owners_differ", "weak_movement"]);
     await expect(apply(pair!)).rejects.toThrow(/review/i);
     expect(await liveTransactions()).toEqual([]);
 

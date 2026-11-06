@@ -11,12 +11,12 @@ import {
   productFixture,
   recordId,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
   publishSuggestion,
   publishSuggestions,
   recordFeedback,
 } from "~/server/generic/suggestions/repo/suggestion";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import {

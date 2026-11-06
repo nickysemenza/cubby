@@ -61,7 +61,7 @@ import {
 import { readAutomaticAiStop } from "./automatic-ai-stop";
 import { ensureRun } from "./ensure-run";
 
-export type SuggestionStateRow = SuggestionStateRow;
+export type { SuggestionStateRow };
 export type FieldRefreshCursor = Pick<
   SuggestionStateRow,
   "entity" | "field"

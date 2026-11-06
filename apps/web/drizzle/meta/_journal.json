@@ -764,6 +764,13 @@
       "when": 1793945362433,
       "tag": "0108_shipment_capture_text_index",
       "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1793984276745,
+      "tag": "0109_adr25-l2-suggestions",
+      "breakpoints": true
     }
   ]
 }

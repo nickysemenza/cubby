@@ -37,6 +37,8 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import { compileDeclaredFilters } from "~/server/generic/list/repo/declared-filters";
+import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { reviewSuggestionBatch } from "~/server/generic/suggestions/repo/review";
 import {
   type SuggestionFactQuery,
@@ -45,8 +47,6 @@ import {
   emptyPendingCounts,
   suggestionFamilies,
 } from "~/server/generic/suggestions/repo/suggestion-families";
-import { compileDeclaredFilters } from "~/server/generic/list/repo/declared-filters";
-import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
   readSuggestionRecordRefs,

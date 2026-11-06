@@ -20,8 +20,8 @@ import {
 import { suggestionTable } from "~/server/db/schema";
 import { saveSweepSuggestions } from "~/server/domains/run/repo/suggestion-sweep-state";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
+import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 import {

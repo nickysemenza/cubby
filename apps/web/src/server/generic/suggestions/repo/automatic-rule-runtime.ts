@@ -1,5 +1,4 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { suggestionFamily } from "@cubby/schemas/suggestion";
 import {
   AUTOMATIC_RULE_KEYS,
   automaticRuleOut,
@@ -11,6 +10,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { statementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { createLogger } from "@cubby/worker-tracing";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -27,8 +27,6 @@ import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
-import { matchedRulesOf } from "~/server/generic/suggestions/repo/suggestion";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
   AUTOMATIC_RULES,
   type AutomaticRuleMatch,
@@ -36,6 +34,8 @@ import {
   matchStatementRules,
   ruleBase,
 } from "~/server/generic/suggestions/repo/automatic-rules";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { matchedRulesOf } from "~/server/generic/suggestions/repo/suggestion";
 import { canAutomaticallyFillField } from "~/server/generic/suggestions/repo/suggestion-review";
 
 const log = createLogger("automatic-rules");

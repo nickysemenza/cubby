@@ -16,9 +16,9 @@ import {
 } from "~/server/db/helpers";
 import { suggestionTable, product } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
 
 import {
   photoProductCandidates,

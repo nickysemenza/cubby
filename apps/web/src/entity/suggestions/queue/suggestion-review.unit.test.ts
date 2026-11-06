@@ -1,9 +1,9 @@
-import { suggestionReviewInput } from "@cubby/schemas/suggestion";
 import { shortcode } from "@cubby/schemas/identifiers";
 import {
   statementSuggestionOut,
   type StatementSuggestionOut,
 } from "@cubby/schemas/statement-suggestion";
+import { suggestionReviewInput } from "@cubby/schemas/suggestion";
 import { describe, expect, it } from "vitest";
 
 import {
