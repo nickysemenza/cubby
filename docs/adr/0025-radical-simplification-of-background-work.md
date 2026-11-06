@@ -67,10 +67,12 @@ evidence and photo-group decisions.
    Amended 2026-11-06: the owner removed the AI smoke-test tab, automatic-rule
    switches (book spending and field additions always apply; attach is
    review-only), the duplicate transaction-transfer connection, "Compare with
-   current inputs", reset previews for specialist fields, tag-propagation
-   suggestions, the entity explorer and schema inspector, the graph explorer and
-   path search, the related-products rail, MCP entity preview cards, the Run-types
-   page, the feature-routing harness and readable server-function URLs. The
+   current inputs", tag-propagation suggestions, MCP entity preview cards, the
+   Run-types page, the feature-routing harness and readable server-function URLs.
+   The entity explorer, schema inspector, graph explorer and path search stay.
+   Related records and reset previews stay as generic declarations: any entity
+   that declares relatedness signals gets the related-records rail, and every
+   resettable field previews its reset through the inheritance declarations. The
    native app keeps its other features; its wire follows the Suggestion rename
    (`assessmentId` becomes `suggestionId`) under a raised minimum write version,
    and unused generated Swift goes.
