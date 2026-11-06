@@ -310,7 +310,9 @@ credit refusal also requires its exact failed receipt with no token usage
 before its reservation is released. A funding fallback can wait up to five seconds
 for that queued receipt; expiry stops the evaluation and retains the reservation.
 The replay checks a stopped allowance while observing the Run, and finalization
-closes physical admission before reading the last receipts. Unknown failures
+closes physical admission before reading the last receipts, allowing the same
+bounded wait for final queued usage. Outstanding cost is derived from retained
+reservations, so subtraction residue cannot block the next case. Unknown failures
 remain reserved with their physical IDs. The ledger spans
 fresh databases, peer isolates and launcher invocations. A stale lock or
 outstanding reservation requires reconciliation before another launch.

@@ -93,7 +93,7 @@ async function guardedPeer() {
   );
   vi.stubEnv("MAIL_REPLAY_BUDGET_FILE", ledger);
   vi.stubEnv("MAIL_REPLAY_PRICING_FILE", catalog);
-  const book = await liveReplayBudget();
+  const book = await liveReplayBudget({ receiptWaitMs: 20 });
   books.push({ book, directory });
   let rows: Receipt[] = [];
   let afterRead: (() => void) | undefined;
@@ -172,7 +172,7 @@ it("shares reservations across peers and cases and releases only matched stored 
   peer.record(first);
   const second = await peer.send();
   expect(second.status).toBe(200);
-  peer.record(second);
+  peer.recordOnNextRead(second, "succeeded");
   await peer.book.finish();
   expect(await peer.ledger()).toMatchObject({
     accountedUsd: 0.02,

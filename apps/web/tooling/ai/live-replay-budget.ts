@@ -55,7 +55,9 @@ type Usage = {
 class PendingReceipts extends Error {}
 
 /** One host-owned allowance for all physical calls, peers, cases and launches. */
-export async function liveReplayBudget() {
+export async function liveReplayBudget({
+  receiptWaitMs = 5_000,
+}: { receiptWaitMs?: number } = {}) {
   const ledgerPath = process.env.MAIL_REPLAY_BUDGET_FILE;
   const catalogPath = process.env.MAIL_REPLAY_PRICING_FILE;
   if (
@@ -104,6 +106,10 @@ export async function liveReplayBudget() {
         id,
         ...receipt,
       }));
+      ledger.outstandingUsd = ledger.reservations.reduce(
+        (sum, receipt) => sum + receipt.maxCostUsd,
+        0,
+      );
       writeFileSync(
         `${ledgerPath}.tmp`,
         `${JSON.stringify(ledger, null, 2)}\n`,
@@ -252,9 +258,9 @@ export async function liveReplayBudget() {
           if (!fits() && refusedPending()) {
             // Refusal telemetry is queued. Let that exact no-usage SQL receipt
             // arrive before deciding whether the next funding step can fit.
-            const deadline = Date.now() + 5_000;
+            const deadline = Date.now() + receiptWaitMs;
             while (!fits() && refusedPending() && Date.now() < deadline) {
-              await delay(100);
+              await delay(Math.min(100, receiptWaitMs));
               await reconcile();
             }
             if (!fits() && refusedPending())
@@ -329,6 +335,11 @@ export async function liveReplayBudget() {
         accepting = false;
         await serial(async () => {
           await reconcile();
+          const deadline = Date.now() + receiptWaitMs;
+          while (pending.size && !ledger.stopped && Date.now() < deadline) {
+            await delay(Math.min(100, receiptWaitMs));
+            await reconcile();
+          }
           if (pending.size)
             stop(
               "Missing physical-call receipts; replay allowance stopped with reservations retained",
