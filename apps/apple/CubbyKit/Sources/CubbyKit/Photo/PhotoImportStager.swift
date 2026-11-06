@@ -194,42 +194,42 @@ public actor PhotoImportTransaction {
         }
         try Task.checkCancellation()
         progress?(.committing)
-        let images = try items.map { item -> PhotoImportCommitImage in
+        let images = try items.map { item -> PhotoImportCommitInputImagesItem in
             guard let staged = stagedByClientID[item.clientID] else {
                 throw Failure.invalidStageResponse(item.clientID)
             }
-            let source: PhotoImportSourcePayload?
+            let source: PhotoImportCommitInputImagesItemSource?
             if let sourceEntity = item.sourceEntity, let sourceID = item.sourceID {
                 guard
-                    let payloadEntity = PhotoImportSourceEntity.allCases.first(where: {
+                    let payloadEntity = PhotoImportCommitInputImagesItemSourceEntity.allCases.first(where: {
                         $0.rawValue == sourceEntity.rawValue
                     })
                 else {
                     throw Failure.invalidStageResponse("unsupported source:\(sourceEntity.rawValue)")
                 }
-                source = PhotoImportSourcePayload(entity: payloadEntity, id: sourceID)
+                source = PhotoImportCommitInputImagesItemSource(entity: payloadEntity, id: sourceID)
             } else {
                 // `createSelf`: no source record exists to name.
                 source = nil
             }
-            let destination: PhotoImportCommitDestination
+            let destination: PhotoImportCommitInputImagesItemDestination
             if let candidateID = item.candidateID {
-                destination = PhotoImportCommitDestination.existing(
-                    PhotoImportExistingDestination(
+                destination = PhotoImportCommitInputImagesItemDestination.existing(
+                    PhotoImportCommitInputImagesItemDestinationVariant1(
                         kind: .existing, candidateId: candidateID))
             } else if let draftID = item.createDraftID {
-                destination = PhotoImportCommitDestination.create(
-                    PhotoImportCreateDestination(kind: .create, draftId: draftID))
+                destination = PhotoImportCommitInputImagesItemDestination.create(
+                    PhotoImportCommitInputImagesItemDestinationVariant2(kind: .create, draftId: draftID))
             } else {
                 throw Failure.invalidStageResponse("missing destination:\(item.clientID)")
             }
-            let duplicateDecision: PhotoImportDuplicateDecisionPayload =
+            let duplicateDecision: PhotoImportCommitInputImagesItemDuplicateDecision =
                 switch item.duplicateChoice {
                 case .reuse: .reuse
                 case .keepBoth: .keepBoth
                 case .automatic: staged.reusedExisting ? .reuse : .keepBoth
                 }
-            return PhotoImportCommitImage(
+            return PhotoImportCommitInputImagesItem(
                 clientId: item.clientID,
                 imageId: staged.imageID,
                 routeId: item.routeID,
@@ -243,7 +243,7 @@ public actor PhotoImportTransaction {
                         for: $0, installationID: deviceID ?? "unknown")
                 })
         }
-        var drafts: [PhotoImportCreatePayload] = []
+        var drafts: [PhotoImportCommitInputCreatesItem] = []
         var seenDrafts = Set<String>()
         for item in items {
             guard let draftID = item.createDraftID, seenDrafts.insert(draftID).inserted else { continue }
@@ -251,7 +251,7 @@ public actor PhotoImportTransaction {
                 throw Failure.invalidStageResponse("missing draft:\(draftID)")
             }
             drafts.append(
-                PhotoImportCreatePayload(
+                PhotoImportCommitInputCreatesItem(
                     draftId: draftID,
                     routeId: routeID,
                     capturedAt: item.createCapturedAt,
@@ -420,11 +420,11 @@ public actor PhotoImportTransaction {
         let input = try PhotoImportStageInput(
             items: items.map { item in
                 guard
-                    let contentType = PhotoImportContentType.allCases.first(where: {
+                    let contentType = PhotoImportStageInputItemsItemContentType.allCases.first(where: {
                         $0.rawValue == item.file.contentType
                     })
                 else { throw Failure.unsupportedContentType(item.file.contentType) }
-                return PhotoImportStageItem(
+                return PhotoImportStageInputItemsItem(
                     clientId: item.clientID,
                     filename: item.file.filename,
                     contentType: contentType,
@@ -514,8 +514,8 @@ public actor PhotoImportTransaction {
         }
     }
 
-    private func payload(_ analysis: PhotoLocalAnalysis) -> PhotoImportAnalysisPayload {
-        PhotoImportAnalysisPayload(
+    private func payload(_ analysis: PhotoLocalAnalysis) -> PhotoImportCommitInputImagesItemAnalysis {
+        PhotoImportCommitInputImagesItemAnalysis(
             analysisVersion: analysis.analysisVersion,
             analyzedAt: analysis.analyzedAt,
             sha256: analysis.sha256,
@@ -524,15 +524,17 @@ public actor PhotoImportTransaction {
             width: analysis.width,
             height: analysis.height,
             classifications: analysis.classifications.map {
-                PhotoImportClassificationPayload(identifier: $0.identifier, confidence: $0.confidence)
+                PhotoImportCommitInputImagesItemAnalysisClassificationsItem(
+                    identifier: $0.identifier, confidence: $0.confidence)
             },
             recognizedText: analysis.recognizedText.map {
-                PhotoImportRecognizedTextPayload(text: $0.text, confidence: $0.confidence)
+                PhotoImportCommitInputImagesItemAnalysisRecognizedTextItem(
+                    text: $0.text, confidence: $0.confidence)
             },
-            featurePrint: PhotoImportFeaturePrintPayload(
+            featurePrint: PhotoImportCommitInputImagesItemAnalysisFeaturePrint(
                 revision: analysis.featurePrint.revision,
                 data: analysis.featurePrint.data.base64EncodedString()),
-            provenance: PhotoImportProvenancePayload(
+            provenance: PhotoImportCommitInputImagesItemAnalysisProvenance(
                 source: .init(rawValue: analysis.provenance.source.rawValue),
                 localIdentifier: analysis.provenance.localIdentifier,
                 filename: analysis.provenance.filename))

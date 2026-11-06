@@ -28,18 +28,11 @@ them `axiom:axiom-*`), plus the relevant platform skill.
 - Store the `set-auth-token` response header verbatim in Keychain. If a _later_ `/api/auth/*`
   response carries a different `set-auth-token`, overwrite the stored value — do not keep the
   first one.
-- Hand-written Swift names generated types only through the aliases in
-  `CubbyKit/Sources/CubbyKit/Generated/APITypes.swift` (`Product`, `ProductListItem`,
-  `PlantingOut`, `ScanAtLocationOut`, …), never as `Components.Schemas.*`, and never an
-  anonymous structural name — structural names can
-  change when a schema changes (reach an anonymous value by property and let
-  inference carry the type). The generator's output is its own SPM
-  target, `CubbyAPI` (`CubbyKit/Sources/CubbyAPI/`), so editing hand-written CubbyKit code
-  does not recompile the generated client; `import CubbyAPI` appears only inside CubbyKit
-  (`API/*.swift`, `Generated/*.swift`, and the model files that extend a generated type), never
-  in the App or the CLI. Entity screens use manifest rows and shared reports. Consumers that
-  need typed domain logic read generated types; their derived values (`stableKey`,
-  `manufacturerOrNil`, `MacroSummary`, …) live in `API/GeneratedTypeExtensions.swift`.
+- Hand-written Swift uses generated `CubbyAPI` names directly. CubbyKit re-exports
+  CubbyAPI and CubbyAPISupport, so App and CLI callers import only CubbyKit.
+  Prefer property inference for anonymous structural values. Generated models
+  live in their own SPM target; derived conveniences live in
+  `API/GeneratedTypeExtensions.swift`.
   An erased response uses one consumer adapter for its required fields, retaining raw JSON
   and diagnostics. [Generic paths](../../docs/agents/generic-paths.md) owns report composition:
   adapters validate and format server figures, never derive domain figures or disabled reasons.
@@ -139,7 +132,7 @@ None is committed; edit the generator or its inputs, never the output. A missing
 | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | `CubbyKit/Sources/CubbyKit/Generated/native-coverage.json`                                                               | `packages/schemas/src/native-coverage.ts`                                                                    |
 | `Generated/{entity-manifest.json,EntityDescriptors,EntityVocabulary}.swift`, `CubbyAPISupport/Generated/EntityKey.swift` | `apps/web/generator/entities/render/swift-catalog.ts`                                                        |
-| Generated/{OperationCatalog,NativeOperations,APITypes}.swift                                                             | apps/web/generator/http-api/native-artifacts.ts, native-operations.ts                                        |
+| Generated/{OperationCatalog,NativeOperations}.swift                                                                      | apps/web/generator/http-api/native-artifacts.ts, native-operations.ts                                        |
 | `Generated/entity-kernel.json`                                                                                           | `apps/web/generator/http-api/entity-kernel.ts`                                                               |
 | `Generated/SharedConstants.swift`                                                                                        | `packages/shared/src/client-constants.ts`, `apps/web/cloudflare.config.ts`, `WAYFINDING_DOMAIN_PRESENTATION` |
 | `CubbyAPI/Models/*.gen.swift`                                                                                            | `apps/web/generator/http-api/native-contract.ts`, `swift-models.ts`                                          |

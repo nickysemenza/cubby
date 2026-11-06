@@ -518,13 +518,14 @@ public actor PhotoImportRunUploader {
             }
         }
         uploadFailures.formUnion(failed)
-        let items = try photos.filter { hashes[$0.id] != nil }.map { photo -> PhotoImportStageItem in
+        let items = try photos.filter { hashes[$0.id] != nil }.map {
+            photo -> PhotoImportStageInputItemsItem in
             guard
-                let contentType = PhotoImportContentType.allCases.first(where: {
+                let contentType = PhotoImportStageInputItemsItemContentType.allCases.first(where: {
                     $0.rawValue == photo.file.contentType
                 })
             else { throw Failure.unsupportedContentType(photo.file.contentType) }
-            return PhotoImportStageItem(
+            return PhotoImportStageInputItemsItem(
                 clientId: photo.id, filename: photo.file.filename, contentType: contentType,
                 size: photo.file.size, width: photo.file.width, height: photo.file.height,
                 sha256: hashes[photo.id] ?? "")

@@ -13,7 +13,9 @@ its wire stay on the server.
 `apps/web/generator/http-api/native-contract.ts` collects the projected contracts;
 `swift-models.ts` emits plain Codable, Hashable, Sendable Swift models under
 `Models/`. Generated files are ignored and restored by the generation task.
-Handwritten callers name models through CubbyKit's generated `APITypes.swift`.
+Handwritten callers use generated names directly through CubbyKit's re-export of
+CubbyAPI. No parallel alias catalog is emitted. Field envelope subtrees decode as
+JSONValue for the shared dynamic editor, avoiding per-field structural models.
 Branded identifiers, dates and JSON codecs live in `CubbyAPISupport`.
 Anonymous discriminator members retain their full path from the nearest named
 schema, so a nested value arm cannot claim its containing object's model name.
@@ -37,9 +39,8 @@ JSON directly. Their server declarations remain authoritative for validation;
 client form validation still provides immediate feedback. A declaration can
 select a JSON representation with `nativeModels` without weakening its server
 schema. Specialized native experiences retain their typed models. Retained record roots
-enter the same wire projection once as operation outputs. Their CubbyKit aliases
-refer to the registered model even when another exported name owns that schema;
-generation must not clone a second wire model to preserve an alias. Inventory
+enter the same wire projection once as operation outputs. Callers use the registered model name even when another exported name owns
+that schema; generation must not clone a second wire model. Inventory
 recounts consume the canonical `InventoryDetail` amount outcome.
 
 Models distinguish required nullable keys from omitted keys. Optional nullable
