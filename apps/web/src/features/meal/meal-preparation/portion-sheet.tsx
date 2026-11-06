@@ -483,10 +483,10 @@ function PortionDraftRow({
           thumb,
           name:
             meal.mealKind === null
-              ? `${mealLabel(meal)} · Updating…`
+              ? `${mealLabel(meal)} · ${meal.mealKindEmptyLabel}`
               : mealLabel(meal),
           ...(meal.mealKind === null
-            ? { disabledReason: "Updating meal kind…" }
+            ? { disabledReason: `Meal kind: ${meal.mealKindEmptyLabel}` }
             : {}),
         };
       }),

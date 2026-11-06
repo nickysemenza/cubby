@@ -1,4 +1,5 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { fieldEmptyLabel } from "@cubby/schemas/field-envelope-presentation";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
 import type {
   LocationTreeNode,
@@ -352,7 +353,7 @@ const LocationOverview = memo(function LocationOverview({
                 size={64}
               />
             ) : (
-              <span key={image.id}>Updating…</span>
+              <span key={image.id}>{fieldEmptyLabel(image.fields.url)}</span>
             );
           })}
         </div>

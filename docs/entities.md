@@ -196,7 +196,10 @@ end that ownership immediately.
 
 `packages/schemas/src/field-envelope-presentation.ts` and CubbyKit's
 `FieldEnvelopePresentation.swift` are the client twin owners of empty and missing
-labels and assignment-action rules.
+labels and assignment-action rules. Surfaces showing an envelope's absent value
+ask them for its words rather than writing Updating… or Unavailable; a native read
+that carried no envelope reads Unavailable through the same owner. Query loading,
+mutation progress and list totals keep their own wording.
 
 Current page facts merge selected projections with physical assignment columns
 before normalizing declared reference identities in one set lookup. Physical

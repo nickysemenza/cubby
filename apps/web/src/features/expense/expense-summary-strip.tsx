@@ -25,11 +25,11 @@ export function ExpenseSummaryStrip({
   const money = (value: number | undefined) =>
     value === undefined ? "Unavailable" : formatCurrency(value);
   const metrics = [
-    [label("Actual"), money(summary?.actual)],
-    [label("Committed"), money(summary?.committed)],
-    [label("Credits"), money(summary?.credits)],
-    [label("Net"), money(summary?.net)],
-    ["Count", summary?.count ?? "Unavailable"],
+    [label("Actual"), money(summary?.actual), true],
+    [label("Committed"), money(summary?.committed), true],
+    [label("Credits"), money(summary?.credits), true],
+    [label("Net"), money(summary?.net), true],
+    ["Count", summary?.count ?? "Unavailable", false],
   ] as const;
 
   return (
@@ -40,10 +40,10 @@ export function ExpenseSummaryStrip({
       items={
         loading
           ? []
-          : metrics.map(([label, value]) => ({
+          : metrics.map(([label, value, isMoney]) => ({
               label,
               value,
-              money: typeof value === "string" && value !== "Unavailable",
+              money: isMoney && summary !== undefined,
             }))
       }
       className={className}

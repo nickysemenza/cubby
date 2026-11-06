@@ -169,7 +169,7 @@ extension FieldEnvelope {
     }
 
     public static func missingLabel(failure: String?) -> String {
-        failure == nil ? "Updating…" : "Unavailable"
+        failure == nil ? "Updating…" : FieldEnvelopePresentation.unavailableLabel
     }
 
     public static func noneLabel(field: FieldDescriptor) -> String {
@@ -203,6 +203,14 @@ extension FieldEnvelope {
 
 /// Read helpers shared by detail, list and editor surfaces.
 public enum FieldEnvelopePresentation {
+    public static let unavailableLabel = "Unavailable"
+
+    /// What a surface shows for an absent value. A read that carried no envelope for the field
+    /// is unavailable, never empty.
+    public static func emptyLabel(_ envelope: FieldEnvelope?, field: FieldDescriptor) -> String {
+        envelope?.emptyLabel(field: field) ?? unavailableLabel
+    }
+
     /// A declared display projection wins when present; otherwise the canonical record value.
     public static func readValue(in raw: JSONValue, field: FieldDescriptor, surface: String) -> JSONValue? {
         if let envelope = FieldEnvelope.of(raw, field: field) { return envelope.readableValue }

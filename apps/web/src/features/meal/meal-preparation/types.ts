@@ -12,6 +12,8 @@ export type MealPreparation = GetMealPreparationsOut["preparations"][number];
 export type MealPreparationsView = GetMealPreparationsOut;
 export type PreparationTargetOption = MealPreparationPortion["targetMeal"] & {
   mealKind: MealKind | null;
+  /** The field-state words while `mealKind` has no value. */
+  mealKindEmptyLabel: string | null;
 };
 
 export type PreparationEaterOption = MealPreparationPortion["eater"];

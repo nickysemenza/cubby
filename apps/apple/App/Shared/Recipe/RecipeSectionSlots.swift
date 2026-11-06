@@ -91,7 +91,7 @@ struct CookbookContentsSlot: View {
             } else {
                 OpenDetailGroup(title: "Extraction report") {
                     if let field = EntityCatalog[.cookbook].field("needsReextract") {
-                        Text(extraction?.emptyLabel(field: field) ?? "Unavailable")
+                        Text(FieldEnvelopePresentation.emptyLabel(extraction, field: field))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if let failure = extraction?.failure {
@@ -187,7 +187,8 @@ struct CookbookImportProgressSlot: View {
                         HStack {
                             if value == nil || value == .null {
                                 LabeledContent(
-                                    field.label, value: envelope?.emptyLabel(field: field) ?? "Unavailable"
+                                    field.label,
+                                    value: FieldEnvelopePresentation.emptyLabel(envelope, field: field)
                                 )
                                 .font(.caption).foregroundStyle(.secondary)
                             }

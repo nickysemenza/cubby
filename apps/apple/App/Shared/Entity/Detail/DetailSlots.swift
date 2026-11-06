@@ -235,6 +235,13 @@ private struct ProductJourneySummaryView: View {
 
     private var onHandUnits: Double? { quantityEnvelope?.effectiveValue?.doubleValue }
 
+    private var quantityEmptyLabel: String {
+        guard let field = EntityCatalog[.product].field("onHandUnits") else {
+            return FieldEnvelopePresentation.unavailableLabel
+        }
+        return FieldEnvelopePresentation.emptyLabel(quantityEnvelope, field: field)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             Text(
@@ -262,12 +269,8 @@ private struct ProductJourneySummaryView: View {
                         systemImage: onHandUnits <= 0 ? "circle.dotted" : "checkmark.circle.fill"
                     )
                 } else {
-                    Text(
-                        quantityEnvelope?.failure
-                            ?? (quantityEnvelope?.isUpdating == true
-                                ? "Inventory quantity updating…" : "Inventory quantity unavailable")
-                    )
-                    .foregroundStyle(.secondary)
+                    Text(quantityEnvelope?.failure ?? "Inventory quantity: \(quantityEmptyLabel)")
+                        .foregroundStyle(.secondary)
                 }
             }
             if isService || product.ownershipEvidence.state != .exited {

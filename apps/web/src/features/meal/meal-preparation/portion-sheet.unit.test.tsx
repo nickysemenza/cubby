@@ -100,7 +100,11 @@ const view = getMealPreparationsOut.parse({
 
 const source = view.preparations[0]!;
 const targetMeals: PreparationTargetOption[] = [
-  { ...source.portions[0]!.targetMeal, mealKind: "cooked" },
+  {
+    ...source.portions[0]!.targetMeal,
+    mealKind: "cooked",
+    mealKindEmptyLabel: null,
+  },
 ];
 const eaters = [source.portions[0]!.eater];
 
