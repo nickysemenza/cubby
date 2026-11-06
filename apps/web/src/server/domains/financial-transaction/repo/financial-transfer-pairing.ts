@@ -256,7 +256,7 @@ export async function suggestFinancialTransferPairs(
         or(
           ...requestedAmounts.map(
             (amount) =>
-              sql`${transferPoolAmountSql(sql`${sql`(${financialTransaction.amount}::numeric / 100)`}::numeric`)} = ${amount}`,
+              sql`${transferPoolAmountSql(sql`${financialTransaction.amount}::numeric / 100`)} = ${amount}`,
           ),
         ),
       ),

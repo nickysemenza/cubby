@@ -134,8 +134,16 @@ describe("financialTransactionScaffold.where", () => {
   });
 
   it.each([
-    { name: "amountMin", filters: { amountMin: 0 }, contains: '"amount" >=' },
-    { name: "amountMax", filters: { amountMax: 0 }, contains: '"amount" <=' },
+    {
+      name: "amountMin",
+      filters: { amountMin: 0 },
+      contains: '"amountMinor"::numeric / 100) >=',
+    },
+    {
+      name: "amountMax",
+      filters: { amountMax: 0 },
+      contains: '"amountMinor"::numeric / 100) <=',
+    },
     {
       name: "transactionDateFrom",
       filters: { transactionDateFrom: "2026-01-01" },
