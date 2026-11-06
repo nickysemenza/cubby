@@ -1,3 +1,4 @@
+import { entityActionStates } from "@cubby/schemas/action-availability";
 import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import {
   listChildCountSchema,
@@ -53,7 +54,11 @@ function buildEntityReadContracts<const D extends Definition>(definition: D) {
           ids: z.array(z.string()).max(500).optional(),
         });
   const listItem = listItemFor(definition);
-  const detailOutput: D["envelopes"]["detail"] = envelopes.detail;
+  // `entity.detail` and `entity.list` rows carry the server's action availability.
+  // SAFETY: `extend` adds exactly `actions` to the definition's detail envelope.
+  const detailOutput = envelopes.detail.extend({
+    actions: entityActionStates,
+  }) as WithActions<D["envelopes"]["detail"]>;
   const listInputBase = z.object({
     entity: z.literal(entity),
     filters,
@@ -62,11 +67,16 @@ function buildEntityReadContracts<const D extends Definition>(definition: D) {
   const listInput = tree
     ? listInputBase.extend({ nesting: listNestingSchema.optional() })
     : listInputBase;
+  const listOutput: z.ZodObject = z.object({
+    items: z.array(listItem.extend({ actions: entityActionStates })),
+    meta: paginatedMetaSchema,
+  });
   const selectedListOutput: z.ZodType = z.object({
     items: z.array(
       listItem.partial().extend({
         id: listItem.shape.id,
         fields: listItem.shape.fields.partial(),
+        actions: entityActionStates,
       }),
     ),
     meta: paginatedMetaSchema,
@@ -80,17 +90,25 @@ function buildEntityReadContracts<const D extends Definition>(definition: D) {
     detailOutput: detailOutput,
     listInput,
     listItem,
-    listOutput: z.object({
-      items: z.array(listItem),
-      meta: paginatedMetaSchema,
-    }),
+    // SAFETY: rows also carry `actions` (read through `serverActionState`);
+    // the type keeps the entity's own row so the read unions stay comparable.
+    listOutput: listOutput as z.ZodObject<{
+      items: z.ZodArray<typeof listItem>;
+      meta: typeof paginatedMetaSchema;
+    }>,
     // SAFETY: the schema preserves id and partial envelope fields.
     selectedListOutput: selectedListOutput as z.ZodType<SelectedListOutput<D>>,
     listRead: compileListReadSchema(listItem),
   };
 }
 
+type WithActions<S extends z.ZodObject> = z.ZodObject<
+  S["shape"] & { actions: typeof entityActionStates }
+>;
+
 type SelectedListOutput<D extends Definition> = {
+  // Rows also carry `actions` (read through `serverActionState`); the type
+  // leaves it out so the selected and full list unions stay comparable.
   items: SelectedListItem<z.output<D["envelopes"]["list"]>>[];
   meta: z.output<typeof paginatedMetaSchema>;
   selectedFields: string[];

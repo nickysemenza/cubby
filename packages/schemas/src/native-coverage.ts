@@ -28,6 +28,7 @@ import {
 import type { CollectionActionId } from "./entity-definitions/collection-actions";
 import type { SectionActionId } from "./entity-section-actions";
 import { TRADE_LABELS, tradeValues } from "./task-fields";
+import { actionAvailabilityRules } from "./action-availability";
 import type { Entity } from "./entity-core";
 import type {
   ControlRendererId,
@@ -722,10 +723,7 @@ export const nativeHeroActionPlans = {
     operation: "vendor.fetchLogo",
     entities: ["vendor"],
     confirmation: "none",
-    requires: {
-      path: "website",
-      reason: "Add a website in Edit to fetch a logo.",
-    },
+    requires: actionAvailabilityRules.fetchLogo.requires,
     fields: [],
     body: { id: "$row.id" },
   },

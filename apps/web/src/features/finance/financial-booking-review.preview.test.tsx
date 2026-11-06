@@ -132,19 +132,23 @@ it("reviews a reimbursement against the chosen Purchase and commits its exact ap
             },
           }),
         };
+      const listed = mock(getEntityListOutputSchema("purchase"), {
+        overrides: {
+          items: [purchase],
+          meta: {
+            hasNextPage: false,
+            totalCount: 1,
+            pageIndex: 0,
+            pageSize: 20,
+          },
+        },
+      });
       return {
         ok: true,
-        data: mock(getEntityListOutputSchema("purchase"), {
-          overrides: {
-            items: [purchase],
-            meta: {
-              hasNextPage: false,
-              totalCount: 1,
-              pageIndex: 0,
-              pageSize: 20,
-            },
-          },
-        }),
+        data: {
+          ...listed,
+          items: listed.items.map((item) => ({ ...item, actions: [] })),
+        },
       };
     }
     if (operation === "financialTransaction.previewBooking") {

@@ -44,6 +44,7 @@
     "./cookbook-fields": "./src/cookbook-fields.ts",
     "./product-category-relations": "./src/product-category-relations.ts",
     "./display-images": "./src/display-images.ts",
+    "./action-availability": "./src/action-availability.ts",
     "./entity-definitions/collection-actions": "./src/entity-definitions/collection-actions.ts",
     "./workflow-command": "./src/workflow-command.ts",
     "./entity-report": "./src/entity-report.ts",

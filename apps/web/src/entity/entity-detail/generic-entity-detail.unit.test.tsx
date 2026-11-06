@@ -442,7 +442,7 @@ describe("GenericEntityDetail", () => {
       async ({ input: { entity } }) => {
         const items = entity === "inventory" ? rows : [];
         return {
-          items,
+          items: items.map((row) => ({ ...row, actions: [] })),
           meta: {
             hasNextPage: false,
             pageIndex: 0,
