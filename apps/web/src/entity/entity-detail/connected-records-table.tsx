@@ -1,7 +1,9 @@
 import type { ConnectedRecordsOutput } from "@cubby/schemas/connected-records";
 import type { Entity } from "@cubby/schemas/entity";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
+import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import {
   ConnectionPaths,
@@ -10,6 +12,7 @@ import {
   ambiguousConnectionLabels,
 } from "~/entity/relationships/connection-paths";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
+import { Button } from "~/ui/primitives/button";
 import {
   RecordFold,
   RecordGroup,
@@ -23,10 +26,44 @@ import {
   useSectionCount,
   useSectionEmpty,
 } from "../../ui/data-table/detail-section-state";
-import { RelationshipMovementBadges } from "./relationship-movement";
+import {
+  relationshipMovementSource,
+  RelationshipMovementBadges,
+  RelationshipMovementProvider,
+} from "./relationship-movement";
 
+const PAGE_SIZE = 20;
 const PREVIEW_SIZE = 3;
 type ConnectedItem = ConnectedRecordsOutput["items"][number];
+
+function ConnectionPager({
+  page,
+  totalCount,
+  setPage,
+}: {
+  page: number;
+  totalCount: number;
+  setPage: (value: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <span className="tabular-nums">
+        {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} of{" "}
+        {totalCount}
+      </span>
+      {page > 0 ? (
+        <Button variant="ghost" size="sm" onClick={() => setPage(page - 1)}>
+          Previous
+        </Button>
+      ) : null}
+      {(page + 1) * PAGE_SIZE < totalCount ? (
+        <Button variant="ghost" size="sm" onClick={() => setPage(page + 1)}>
+          Next
+        </Button>
+      ) : null}
+    </div>
+  );
+}
 
 /** One connected record with its shared identity and witnessed explanations. */
 function ConnectedRow({
@@ -63,6 +100,9 @@ function ConnectedRow({
   );
 }
 
+const pluralLabel = (target: Entity) =>
+  isBrowserRoutedEntity(target) ? entities[target].pluralLabel : "Records";
+
 const listState = (
   query: {
     isPending: boolean;
@@ -84,6 +124,73 @@ const listState = (
       : { status: "success" };
 
 /** Every row of one connected view, paged; the `/connections` page. */
+export function ConnectedRecordsTable({
+  source,
+  sourceId,
+  viewKey,
+  target,
+}: {
+  source: Entity;
+  sourceId: string;
+  viewKey: string;
+  target: Entity;
+}) {
+  const movementSource = relationshipMovementSource(
+    source,
+    target,
+    viewKey.startsWith("relation:") ? viewKey.slice("relation:".length) : "",
+  );
+  const [page, setPage] = useState(0);
+  const query = useQuery(
+    entityGraph.connectedRecords.queryOptions({
+      source: { entityKind: source, entityId: sourceId },
+      viewKey,
+      offset: page * PAGE_SIZE,
+      limit: PAGE_SIZE,
+    }),
+  );
+  const items = query.data?.items ?? [];
+  const totalCount = query.data?.totalCount ?? 0;
+  const ambiguous = ambiguousConnectionLabels(items.map((item) => item.target));
+  return (
+    <RelationshipMovementProvider
+      source={movementSource}
+      recordId={sourceId}
+      targetIds={items.map((item) => item.target.entityId)}
+      operations={{}}
+    >
+      <EntityDisplayImagesProvider
+        refs={[...items.map((item) => item.target), ...connectionRefs(items)]}
+      >
+        <RecordList
+          // Named like the mobile card lists so record rows read the same.
+          aria-label={`${pluralLabel(target)} list`}
+          columns={[{ id: "via", label: "Via" }]}
+          state={listState(query, 6)}
+          empty="No connected records."
+          footer={
+            totalCount > PAGE_SIZE ? (
+              <ConnectionPager
+                page={page}
+                totalCount={totalCount}
+                setPage={setPage}
+              />
+            ) : null
+          }
+        >
+          {items.map((item) => (
+            <ConnectedRow
+              key={item.target.entityId}
+              item={item}
+              movement={movementSource !== null}
+              disambiguate={ambiguous.has(item.target.label)}
+            />
+          ))}
+        </RecordList>
+      </EntityDisplayImagesProvider>
+    </RelationshipMovementProvider>
+  );
+}
 
 /**
  * The detail page's one Connected records section: each declared target group with
@@ -133,9 +240,13 @@ export function ConnectedRecordsSection({
                 <RecordMore
                   label={`${view.totalCount - view.items.length} more`}
                   link={{
-                    to: "/$shortcode",
-                    params: { shortcode: sourceId },
-                    hash: "relationships",
+                    to: "/connections",
+                    search: {
+                      source,
+                      id: sourceId,
+                      view: view.viewKey,
+                      mode: "records",
+                    },
                   }}
                 />
               ) : null

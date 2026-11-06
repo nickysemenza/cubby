@@ -4906,9 +4906,10 @@ the replacement target; stopping admission alone does not prove coverage.
 
 ## Retired entity tools (ADR 0025)
 
-The entity explorer, schema spreadsheet and inspector, integrity catalog, graph
-explorer and path search, and similar-products rail are retired. Ordinary record
-relations retain `connectedRecords`, `connectedRecordsPreview` and `connections`.
+The schema spreadsheet and inspector, integrity catalog, and similar-products rail
+are retired. The entity explorer provides records, recipe and work dependency graphs,
+and cross-record exploration; graph path search finds connections across records.
+Ordinary record relations retain `connectedRecords`, `connectedRecordsPreview` and `connections`.
 Connection discovery still proposes inventory placement and expense/project links.
 Product-match review commands belong to the `productMatch` contract.
 

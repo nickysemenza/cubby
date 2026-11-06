@@ -297,9 +297,13 @@ export function CompactSummaryReport({
                 {block.connection &&
                 (block.totalCount ?? block.rows.length) > 2 ? (
                   <Link
-                    to="/$shortcode"
-                    params={{ shortcode: block.connection.source.entityId }}
-                    hash="relationships"
+                    to="/connections"
+                    search={{
+                      source: block.connection.source.entityKind,
+                      id: block.connection.source.entityId,
+                      view: block.connection.viewKey,
+                      mode: "records",
+                    }}
                     className="mt-1 inline-block text-link hover:underline"
                   >
                     Related records
@@ -751,9 +755,13 @@ function SummaryRecords({
         </Link>
       ) : (
         <Link
-          to="/$shortcode"
-          params={{ shortcode: id }}
-          hash="relationships"
+          to="/connections"
+          search={{
+            source: entity,
+            id,
+            view: slot.viewKey,
+            mode: "records",
+          }}
           className="mt-2 inline-block text-link hover:underline"
         >
           View all {query.data.totalCount}

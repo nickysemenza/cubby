@@ -23,6 +23,7 @@ import {
 } from "~/server/generic/entity-detail/repo/detail-data";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getEntityGraphExplore } from "~/server/generic/entity-graph/repo/entity-graph-explore";
+import { getEntityGraphPaths } from "~/server/generic/entity-graph/repo/entity-graph-paths";
 import { withGraphPreviews } from "~/server/generic/entity-graph/service/graph-preview";
 import {
   getConnectedRecords,
@@ -97,6 +98,8 @@ export const entityGraphHandlers = implementOperationDomain(
       ),
     graph: async (context, input) =>
       withGraphPreviews(context, await getEntityGraph(context.db, input)),
+    graphPaths: async (context, input) =>
+      withGraphPreviews(context, await getEntityGraphPaths(context.db, input)),
     connections: (context, input) =>
       getEntityConnections(context.db, input, kernelScaffold),
     relation: async (context, input) => {

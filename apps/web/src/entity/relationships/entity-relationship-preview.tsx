@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { Row } from "~/ui/layout";
@@ -72,6 +73,13 @@ export function EntityRelationshipPreview({
         <Button size="sm" variant="ghost" onClick={onViewAll}>
           View all
         </Button>
+        <Link
+          to="/entities"
+          search={{ tab: "explore", entity, root: sourceId, view: "graph" }}
+          className="text-sm text-primary hover:underline"
+        >
+          Explore graph
+        </Link>
       </Row>
     </nav>
   );
