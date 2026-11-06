@@ -271,13 +271,7 @@ export const suggestionPublication = z
     "Suggestion family must match subject",
   );
 /** `system` records capture receipts only; it never grades or suppresses. */
-export const feedbackAuthority = z.enum([
-  "member",
-  "evaluation",
-  "automatic",
-  "unknown",
-  "system",
-]);
+export const feedbackAuthority = z.enum(["member", "automatic", "system"]);
 const reviewIntent = z.enum(["history", "draft", "apply"]);
 export const feedbackEvent = z.object({
   suggestionId: suggestionChildHandle,
@@ -294,7 +288,7 @@ export const feedbackEvent = z.object({
   metadata: z.json().nullable().default(null),
 });
 /**
- * One retained decision on a Suggestion: a member's verdict, an evaluation grade
+ * One retained decision on a Suggestion: a member's verdict, a system receipt
  * or an automatic application receipt. Corrected null stays distinct from no
  * correction, and an event is identified by its operation within its Suggestion.
  */

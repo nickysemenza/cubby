@@ -284,13 +284,6 @@ export async function recordFeedbackWithInsertion(
       .where(eq(suggestionTable.id, suggestionId))
       .for("update");
     if (!prediction) throw new Error("Suggestion not found");
-    if (
-      input.authority === "evaluation" &&
-      (input.intent !== "history" || input.suppression)
-    )
-      throw new Error(
-        "Evaluation Feedback cannot apply or suppress operational results",
-      );
     const existing = decisionForOperation(
       suggestionId,
       prediction.decisions,

@@ -4513,6 +4513,19 @@ transaction and protecting-intent checks without writing a frontier receipt.
 Transfer movement labels run only when weak movement is the sole blocker;
 structural conflicts remain for review without a model call.
 
+Correction serialization uses the affected domain rows. Suggestion review locks
+its Suggestion row; Image review locks its Image before the Suggestion. Email
+evidence writers retain serializable retries and their existing Email, Original
+and Purchase locks, without a household-wide CorrectionLock key. Sender address
+reservation still protects a new address that has no owning Vendor row yet.
+
+Suggestion decisions accept member, automatic and system authorities. Migration
+0112 refuses any live Suggestion retaining evaluation or unknown authority,
+without rewriting its history. The uncertain member verdict remains written by
+Apple connection review; ungraded remains an internal review receipt. Draft
+intent remains supported. Statement and transfer-pair Suggestions share charge
+identity and metadata parsing.
+
 The `/suggestions` page lists actionable proposals from fields,
 statement transactions, connections and recommendations (including tag additions
 and placement moves), Product pairs, image descriptions and transfer pairs on one server-filtered table
@@ -4928,9 +4941,3 @@ connection reads remain; internal batch hydration remains private to that reader
 Field publication builds an entry for `publishSuggestions`, whose immutable-key
 replay check also owns the field Sweep write. Field review tests hydrate through
 the same key and row readers used by the live queue.
-
-Correction serialization uses the affected domain rows. Suggestion review locks
-its Suggestion row; Image review locks its Image before the Suggestion. Email
-evidence writers retain serializable retries and their existing Email, Original
-and Purchase locks, without a household-wide CorrectionLock key. Sender address
-reservation still protects a new address that has no owning Vendor row yet.

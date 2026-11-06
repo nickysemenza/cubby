@@ -85,6 +85,10 @@ import {
   suggestionRefKey,
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
+  chargeId,
+  type ChargeRef,
+} from "~/server/domains/transaction-import/repo/statement-input";
+import {
   statementLabelInputs,
   statementLabelSubject,
   statementCandidateSubject,
@@ -143,6 +147,7 @@ import {
   statementReferenceMatch,
   declareAffectedRecords,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
+import { suggestionStateData as stateData } from "~/server/generic/suggestions/repo/suggestion-state";
 import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
@@ -167,7 +172,6 @@ import {
 const STATE = "Suggestion";
 const log = createLogger("statement-suggestions");
 const pendingStatementState = sql`${suggestionTable.family} = ${suggestionFamily.enum.statement_transaction} AND ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}`;
-const stateData = z.record(z.string(), z.json());
 
 /** Matching revision and Automatic attach rule revision; clean-only changes use the policy below. */
 export const STATEMENT_SUGGESTION_REVISION = "2026-10-21.1";
@@ -192,10 +196,6 @@ const HISTORY_MIN_TRANSACTIONS = 2;
  * share are capped at 12, so a Sweep keeps most of them free.
  */
 export const STATEMENT_PUBLISH_CONCURRENCY = 4;
-
-export type ChargeRef = { source: string; chargeKey: string };
-export const chargeId = (charge: ChargeRef) =>
-  `${charge.source}:${charge.chargeKey}`;
 
 export function statementChargeFromWorkRef(ref: string): ChargeRef | null {
   const match = /^charge:([^:]+):(.+)$/.exec(ref);
@@ -3754,3 +3754,8 @@ export async function countSuggestionsNeedingLabels(
     labelIdentityScope(scope),
   );
 }
+
+export {
+  chargeId,
+  type ChargeRef,
+} from "~/server/domains/transaction-import/repo/statement-input";

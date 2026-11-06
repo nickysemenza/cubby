@@ -83,6 +83,10 @@ import {
   chargeStateOf,
   hasStatementOccurrence,
 } from "~/server/domains/transaction-import/repo/statement-charge";
+import {
+  chargeId,
+  type ChargeRef,
+} from "~/server/domains/transaction-import/repo/statement-input";
 import { statementTransactionKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { type EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -110,6 +114,7 @@ import {
   leg,
   declareAffectedRecords,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
+import { suggestionStateData as stateData } from "~/server/generic/suggestions/repo/suggestion-state";
 import {
   type SuggestionStateRow,
   transitionSuggestionState,
@@ -124,7 +129,7 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** Rule revision stamped on every published pair; bump with any policy change. */
 const TRANSFER_PAIR_REVISION = "2026-10-29.1";
-const stateData = z.record(z.string(), z.json());
+
 /** Candidates: the opposite leg posted within this many days. */
 const CANDIDATE_WINDOW_DAYS = 5;
 /** A clean pair's legs are at most this many days apart. */
@@ -168,9 +173,6 @@ const foldCategory = (category: string) =>
 
 const refused = (message: string) =>
   createAppError("CONSTRAINT_VIOLATION", message);
-
-type ChargeRef = { source: string; chargeKey: string };
-const chargeId = (charge: ChargeRef) => `${charge.source}:${charge.chargeKey}`;
 
 type Account = {
   id: string;
