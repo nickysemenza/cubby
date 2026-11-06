@@ -157,7 +157,10 @@ struct NativeCodecTests {
     }
 
     @Test func optionalNullableRoundTripPreservesAllThreeStates() throws {
-        let base: JSONValue = ["operationId": "synthetic-operation", "verdict": "accept"]
+        let base: JSONValue = [
+            "operationId": "synthetic-operation", "verdict": "correct",
+            "suggestionId": "SUG-1001/field/name",
+        ]
         let absent: SuggestionReviewInput = try base.decoded()
         #expect(absent.reason == .absent)
         #expect(try JSONValue(encoding: absent)["reason"] == nil)
