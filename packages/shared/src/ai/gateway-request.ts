@@ -540,10 +540,16 @@ export function isInferenceStreamFundingRefusal(
   message: string,
   funding: InferenceFunding,
 ): boolean {
-  if (funding === "subscription")
-    return /^(?:Error Code )?(?:usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded):/u.test(
-      message,
+  if (funding === "subscription") {
+    // pi-ai exposes only the provider message for a named SSE error frame.
+    return (
+      /^(?:Error Code )?(?:usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded):/u.test(
+        message,
+      ) ||
+      message ===
+        "The ChatGPT user has reached their Subscription Sharing usage limit. Ask the user to try again after their usage limit resets or use an API key instead."
     );
+  }
   if (funding === "openai_credit")
     return /^(?:Error Code )?(?:credit_balance_exhausted|insufficient_quota):/u.test(
       message,

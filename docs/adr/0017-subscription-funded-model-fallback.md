@@ -150,6 +150,12 @@ signal stays inside the budget:
    an hour after the latest Run failed on its own, because a failed Run releases
    its Emails and admitting again at once would spin.
 
+The buffered funding ladder recognizes the plan's named SSE quota error when
+pi-ai returns its fixed usage-limit message without the code, including an
+HTTP 200 stream. Failed-attempt events stay buffered and are discarded before
+choosing the next permitted rung. This does not broaden raw HTTP stream replay
+admission or authorize another funding route.
+
 The isolate shares concurrent reads of a Run's immutable lineage origin and
 retains only found roots. Missing roots and failed reads remain retryable.
 Funding windows, quota status, paid grants and budget admission are still read
