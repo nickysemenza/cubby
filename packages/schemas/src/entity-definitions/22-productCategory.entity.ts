@@ -117,7 +117,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
       ],
       views: ["table", { kind: "slot", id: "hierarchy", label: "Mappings" }],
-      tree: {},
+      tree: { toggle: true, defaultNested: true },
     },
   },
   model: {
@@ -138,7 +138,10 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "identifier",
         nullable: true,
         reference: { entity: "spendingCategory" },
-        display: { columnGroup: "Spending policy", columnLabel: "Spending" },
+        display: {
+          columnGroup: "Spending policy",
+          columnLabel: "Spending category",
+        },
         explanation: {
           ruleId: "productCategory.effective-spending-category",
           evidence: { kind: "scalar", inheritField: "spendingCategoryId" },
@@ -219,6 +222,7 @@ export const { definition, readSchemas } = defineEntityModel({
         display: {
           columnGroup: "Spending policy",
           columnLabel: "Spending mode",
+          list: false,
           optionRole: "category",
           optionColor: "neutral-status",
         },
@@ -237,6 +241,7 @@ export const { definition, readSchemas } = defineEntityModel({
         display: {
           columnGroup: "Spending policy",
           labelPath: "spendingCategoryName",
+          list: false,
         },
         // `blocked` keeps the category unresolved: an explicit None.
         resolution: {

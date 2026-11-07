@@ -10,6 +10,7 @@ import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
+import { listOperations } from "~/server/entity-kernel/list-operations";
 
 /**
  * The server owns tree nesting: `roots` and `children` are judged against the
@@ -209,6 +210,14 @@ describe("list nesting scope", () => {
     });
     if (listed.action !== "list") throw new Error("Wrong list action");
     expect(outline(listed.items)).toEqual([[pantry.id, 1]]);
+    // Normal browser tables request selected fields; the structural count
+    // must survive that projection before a child can be expanded.
+    const selected = await listOperations("productCategory").listFields(
+      context,
+      { filters: { search: "Nesting" }, nesting: { scope: "roots" } },
+      ["id", "name"],
+    );
+    expect(outline(selected.items)).toEqual([[pantry.id, 1]]);
     // A search match whose parent does not match stays reachable as a root.
     const orphan = await executeEntityAs(context, "list", {
       entity: "productCategory",

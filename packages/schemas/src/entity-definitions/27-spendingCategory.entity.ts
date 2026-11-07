@@ -101,7 +101,7 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
-      tree: {},
+      tree: { toggle: true, defaultNested: true },
     },
   },
   model: {
