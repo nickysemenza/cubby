@@ -1,6 +1,7 @@
+import { displayImagesField } from "@cubby/schemas/display-images";
 import { vendorOut } from "@cubby/schemas/entities/vendor";
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
-import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { type LedgerPartyShortcode } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
@@ -430,7 +431,18 @@ describe("complete list composition", () => {
           selectedFieldEnvelopeSchema(
             entityFieldEnvelopeSchemas[entity].list,
             fields,
-          ).parse(row),
+          ).parse({
+            ...row,
+            displayCover: (() => {
+              const envelope = fieldEnvelopeFor(row, "displayImages");
+              const images = envelope
+                ? (displayImagesField
+                    .nullable()
+                    .parse(fieldValueOf(envelope)) ?? [])
+                : [];
+              return { image: images[0] ?? null, count: images.length };
+            })(),
+          }),
         ),
       );
     }

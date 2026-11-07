@@ -87,6 +87,7 @@ import {
   loadDisplayImageSources,
   resolveEntityDisplayImageChain,
   resolveEntityDisplayMedia,
+  resolveEntityDisplayCovers,
   resolvePublicEntityDisplayImages,
   resolveEntityDisplayImages,
   resolveEntityAttachments,
@@ -1741,10 +1742,13 @@ describe("entity display image resolver", () => {
         },
         fields,
       );
-      const envelope = fieldEnvelopeFor(selected.items[0], "displayImages");
-      expect(envelope).toBeDefined();
-      if (!envelope) throw new Error("Missing selected planting cover");
-      expect(fieldValueOf(envelope)).toEqual(rows[0]?.displayImages);
+      expect(selected.items[0]).toHaveProperty("displayCover", {
+        image: rows[0]?.displayImages[0] ?? null,
+        count: rows[0]?.displayImages.length ?? 0,
+      });
+      expect(
+        fieldEnvelopeFor(selected.items[0], "displayImages"),
+      ).toBeUndefined();
     });
 
     it("falls back to the seed product's photo when there are no journal entries", async () => {
@@ -2089,6 +2093,48 @@ describe("entity display image resolver", () => {
         imageId: gardenImg.id,
         sortOrder: 0,
       });
+
+      const extraPhoto = await makeImage();
+      const labelPhoto = await makeImage();
+      await insertEntityAttachments(ctx.db, [
+        { entityId: product.entityId, imageId: extraPhoto.id, sortOrder: 1 },
+        {
+          entityId: product.entityId,
+          imageId: labelPhoto.id,
+          purpose: "label",
+          sortOrder: 2,
+        },
+      ]);
+      const refs: Parameters<typeof resolveEntityDisplayMedia>[1] = [
+        { entityKind: "product", entityId: product.entityId },
+        { entityKind: "location", entityId: location.entityId },
+        { entityKind: "cookbook", entityId: cookbook.entityId },
+        { entityKind: "ingredient", entityId: ingredient.entityId },
+        { entityKind: "wish", entityId: wish.entityId },
+        { entityKind: "inventory", entityId: inventoryEntry.entityId },
+        { entityKind: "expense", entityId: expense.entityId },
+        { entityKind: "gardenEntry", entityId: gardenEntryRow.id },
+        { entityKind: "location", entityId: gardenLocation.entityId },
+      ];
+      const fullMedia = await resolveEntityDisplayMedia(ctx.db, refs);
+      const coverMedia = await resolveEntityDisplayCovers(ctx.db, refs);
+      for (const ref of refs) {
+        const key = entityRefKey(ref.entityKind, ref.entityId);
+        const images = fullMedia.displayImages.get(key) ?? [];
+        expect(coverMedia.displayCovers.get(key)).toEqual({
+          image: images[0] ?? null,
+          count: images.length,
+        });
+      }
+      expect(
+        coverMedia.displayCovers.get(entityRefKey("product", product.entityId))
+          ?.count,
+      ).toBe(2);
+      expect(
+        coverMedia.displayCovers.get(
+          entityRefKey("location", gardenLocation.entityId),
+        ),
+      ).toEqual({ image: null, count: 0 });
 
       const result = await resolveEntityDisplayImages(ctx.db, [
         { entityKind: "product", entityId: product.entityId },

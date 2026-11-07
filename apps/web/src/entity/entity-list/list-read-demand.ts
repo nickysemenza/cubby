@@ -62,7 +62,7 @@ export const declaredListReadProjection: ListReadProjection = (
   const wanted = new Set<string>([
     "id",
     metadata.summary.titleField,
-    "displayImages",
+    "displayCover",
   ]);
   const readable = new Set<string>([
     ...metadata.fields.output,
@@ -108,7 +108,7 @@ export const declaredListReadProjection: ListReadProjection = (
             if (label && readable.has(label)) wanted.add(label);
         }
       }
-    // Standard thumbnails use displayImages or their renderer's explicit
+    // Standard thumbnails use displayCover or their renderer's explicit
     // dependencies; the synthetic column id is not a canonical read key.
     if (field.display.standard === "image") continue;
     const read =

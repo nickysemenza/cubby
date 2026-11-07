@@ -1,3 +1,4 @@
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import {
   listGroupByDimensionsSchema,
   listResultMembership,
@@ -9,6 +10,7 @@ import { z } from "zod";
 import type { ListEntity } from "~/entity/model/list-contracts";
 import { listReadRowSchema } from "~/entity/model/list-read-fields";
 import { withListEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
+import { withRecordEmoji } from "~/server/entity-kernel/repo/entity-emoji";
 import {
   publicFieldEnvelopeRows,
   selectedFieldEnvelopeSchema,
@@ -132,7 +134,11 @@ export function defineListOperations<
                 result.data,
               ),
             )
-        : result.data;
+        : projection.includes(
+              entityInspectorMetadata[binding.entity].recordEmojiField ?? "",
+            )
+          ? await withRecordEmoji(context.db, binding.entity, result.data)
+          : result.data;
       const selected = validateListReadRows(binding.entity, rows, fields);
       const enveloped = await publicFieldEnvelopeRows({
         db: context.db,

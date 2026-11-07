@@ -40,9 +40,11 @@ export function mergeReadSchemas(list: z.ZodObject, detail: z.ZodObject) {
 export function compileListReadSchema(schema: z.ZodObject) {
   return {
     schema,
+    // Optional on complete rows, but an explicitly requested cover must be loaded.
     omittable: new Set(
       Object.keys(schema.shape).filter(
-        (key) => schema.shape[key] instanceof z.ZodOptional,
+        (key) =>
+          key !== "displayCover" && schema.shape[key] instanceof z.ZodOptional,
       ),
     ),
   };

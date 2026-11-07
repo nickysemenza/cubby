@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { displayImagesField } from "./display-images";
+import { displayCoverField, displayImagesField } from "./display-images";
 import { entityAttachmentRoleValues } from "./entity-attachment";
 import { detailBreadcrumbSchema } from "./entity-detail-summary";
 
@@ -16,7 +16,10 @@ export function createEntityReadMedia<ImageFields extends z.ZodRawShape>(
   });
   const entityAttachmentList = z.array(entityAttachmentRead);
 
-  const listMediaFields = z.object({ displayImages: displayImagesField });
+  const listMediaFields = z.object({
+    displayImages: displayImagesField,
+    displayCover: displayCoverField.optional(),
+  });
   const detailMediaFields = z.object({
     displayImages: displayImagesField,
     attachments: entityAttachmentList,

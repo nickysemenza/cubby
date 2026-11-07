@@ -13,6 +13,7 @@ import { ImageWithPreview } from "~/ui/media/image-with-preview";
 import { TileOverlay } from "~/ui/media/tile-overlay";
 
 interface EntityCoverProps {
+  imageCount?: number;
   images: readonly ImageUrlSummary[];
   entity?: Entity;
   alt?: string;
@@ -34,6 +35,7 @@ interface EntityCoverProps {
  */
 export function EntityCover({
   images,
+  imageCount,
   entity,
   alt = "",
   size,
@@ -110,7 +112,7 @@ export function EntityCover({
           )}
         />
       )}
-      <TileOverlay count={images.length - 1} />
+      <TileOverlay count={(imageCount ?? images.length) - 1} />
     </div>
   );
 }

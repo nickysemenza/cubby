@@ -1,6 +1,4 @@
-import { displayImagesField } from "@cubby/schemas/display-images";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useQueryClient } from "@tanstack/react-query";
 import type { CellData } from "@tanstack/react-table";
@@ -237,13 +235,7 @@ export function useStandardColumns<TData extends BaseListRow>({
         explanation: imageField?.explanation
           ? { entity, field: imageField.key, label: imageField.label }
           : undefined,
-        getImages: (row) => {
-          const envelope = fieldEnvelopeFor(row, "displayImages");
-          return envelope
-            ? (displayImagesField.nullable().parse(fieldValueOf(envelope)) ??
-                [])
-            : [];
-        },
+
         provenance: imageField?.provenance ?? null,
       }),
       identity: createNameColumn(columnHelper, entity, undefined, {

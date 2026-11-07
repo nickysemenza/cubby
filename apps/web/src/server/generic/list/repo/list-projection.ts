@@ -24,8 +24,11 @@ import type { ListEntity } from "~/entity/model/list-contracts";
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inheritedFieldOfColumn } from "~/server/db/computed/effective-field";
+import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import {
   resolveEntityDisplayMedia,
+  resolveEntityDisplayCovers,
+  type EntityDisplayCovers,
   type EntityDisplayMedia,
   withDisplayImages,
 } from "~/server/entity-kernel/repo/entity-display-image";
@@ -74,7 +77,7 @@ type ListIdPage = {
 export type ListPagePrefetch = {
   page: ListIdPage;
   qualities?: ReturnType<typeof loadDataQualities>;
-  media?: Promise<EntityDisplayMedia>;
+  media?: Promise<EntityDisplayMedia | EntityDisplayCovers>;
 };
 
 export type ListReadValueContext = {
@@ -138,11 +141,6 @@ type BindListFields<Row> = {
 };
 export type ListReadOptions<Row> = {
   media?: boolean;
-  /** A page's media may belong to a polymorphic subject rather than its row. */
-  displayImages?: (
-    db: Database | DrizzleTransaction,
-    ids: readonly string[],
-  ) => Promise<Map<string, DisplayImageSummary[]>>;
   references?: Record<
     string,
     | { kind: "public" }
@@ -289,7 +287,12 @@ export function listReadPlan<Row>(
     ...binding,
     schema: binding.schema.strict(),
   }));
-  const written = new Set<string>(["id", "dataQuality", "displayImages"]);
+  const written = new Set<string>([
+    "id",
+    "dataQuality",
+    "displayImages",
+    "displayCover",
+  ]);
   // A key may have one page writer and one detail-scoped writer: the record
   // read takes the richer detail value, a page keeps its own.
   const overridden = new Set<string>();
@@ -429,12 +432,14 @@ export function listReadPlan<Row>(
               overridden.has(key),
             ),
         );
+  // Covers are an explicit list demand; complete reads retain only full media.
   // Verification bundles must not run as part of ordinary reads or write-response hydration.
-  const explicitOnly = new Set(
-    bindings.flatMap((binding) =>
+  const explicitOnly = new Set([
+    "displayCover",
+    ...bindings.flatMap((binding) =>
       binding.scope === "explicit" ? Object.keys(binding.schema.shape) : [],
     ),
-  );
+  ]);
   const defaultFields = Object.keys(schema.shape).filter(
     (key) => !explicitOnly.has(key),
   );
@@ -471,6 +476,23 @@ export function listReadPlan<Row>(
     result.displayImages = schema.shape.displayImages.parse(
       images.get(entityRefKey(entity, id)) ?? [],
     );
+  };
+  const attachDisplayCover = (
+    result: ListReadRow,
+    media: EntityDisplayMedia | EntityDisplayCovers | undefined,
+    id: string,
+    projection: ListProjection,
+  ) => {
+    if (!wanted(projection, "displayCover")) return;
+    const key = entityRefKey(entity, id);
+    const full =
+      media && "displayImages" in media
+        ? (media.displayImages.get(key) ?? [])
+        : [];
+    result.displayCover =
+      media && "displayCovers" in media
+        ? (media.displayCovers.get(key) ?? { image: null, count: 0 })
+        : { image: full[0] ?? null, count: full.length };
   };
   const storedKeys = (
     projection: ListProjection,
@@ -535,26 +557,28 @@ export function listReadPlan<Row>(
       media:
         resolvesDisplayImages(projection) && ids.length
           ? settled(
-              options.displayImages
-                ? options.displayImages(db, ids).then((displayImages) => ({
-                    displayImages,
-                    representations: new Map(),
-                  }))
-                : resolveEntityDisplayMedia(
-                    db,
-                    ids.map((id) => ({ entityKind: entity, entityId: id })),
-                    {
-                      attachments:
-                        entityManifest[entity].imageStorage !== false &&
-                        ["images", "labelImages"].some(
-                          (key) =>
-                            Object.hasOwn(schema.shape, key) &&
-                            wanted(projection, key),
-                        ),
-                    },
-                  ),
+              resolveEntityDisplayMedia(
+                db,
+                ids.map((id) => ({ entityKind: entity, entityId: id })),
+                {
+                  attachments:
+                    entityManifest[entity].imageStorage !== false &&
+                    ["images", "labelImages"].some(
+                      (key) =>
+                        Object.hasOwn(schema.shape, key) &&
+                        wanted(projection, key),
+                    ),
+                },
+              ),
             )
-          : undefined,
+          : wanted(projection, "displayCover") && ids.length
+            ? settled(
+                resolveEntityDisplayCovers(
+                  db,
+                  ids.map((id) => ({ entityKind: entity, entityId: id })),
+                ),
+              )
+            : undefined,
     };
   };
   /**
@@ -721,7 +745,8 @@ export function listReadPlan<Row>(
           concurrency: 2,
         }),
       ]);
-      const images = media?.displayImages;
+      const images =
+        media && "displayImages" in media ? media.displayImages : undefined;
       const dateRanges = (model?.fields ?? []).flatMap((field) =>
         "dateRange" in field &&
         field.dateRange &&
@@ -812,6 +837,7 @@ export function listReadPlan<Row>(
                 result[key] = schema.shape[key].parse(field);
           }
           attachDisplayImages(result, images, identity.id, projection);
+          attachDisplayCover(result, media, identity.id, projection);
           // Required requested outputs must exist before any schema defaults run.
           for (const key of projection)
             if (
@@ -824,9 +850,22 @@ export function listReadPlan<Row>(
         },
         { concurrency: 2 },
       );
-      const completed = media
-        ? await withDisplayImages(db, entity, mapped, (row) => row.value, media)
-        : mapped.map((row) => row.value);
+      const completed =
+        media && "displayImages" in media
+          ? await withDisplayImages(
+              db,
+              entity,
+              mapped,
+              (row) => row.value,
+              media,
+            )
+          : media
+            ? await hydrateImageReadProjection(
+                db,
+                mapped.map((row) => row.value),
+                media.representations,
+              )
+            : mapped.map((row) => row.value);
       return projectListRows(entity, completed, projection);
     },
   };

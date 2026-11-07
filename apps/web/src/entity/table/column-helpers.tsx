@@ -1,5 +1,4 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { displayImagesField } from "@cubby/schemas/display-images";
 import {
   type Entity,
   type EntityRef,
@@ -43,6 +42,7 @@ import {
 import { readRecordField } from "~/entity/entity-references";
 import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { multiSelectFilterFn } from "~/entity/filters";
+import { rowDisplayCover } from "~/entity/model/row-display-cover";
 import { readPathValue } from "~/entity/read-path";
 import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-suggestion";
 import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
@@ -474,7 +474,7 @@ interface CreateImageColumnOptions<T> {
   rowEntity?: (row: T) => Entity | undefined;
   /** Field-key id when an entity declares an images column. */
   id?: string;
-  /** Defaults to the canonical `displayImages` envelope: the server selects
+  /** Defaults to the canonical selected cover or full `displayImages` envelope: the server selects
    *  the row's own or borrowed cover. Supply `getImages` for non-entity display
    *  snapshots or an explicit media projection, not a retired entity slot. */
   getImages?: (row: T) => Array<{ id: string; url: string; filename?: string }>;
@@ -489,18 +489,6 @@ interface CreateImageColumnOptions<T> {
   /** Origin of a projected thumbnail; null marks an ordinary local image. */
   provenance?: EntityFieldProvenance | null;
 }
-
-/** A row carrying the server-resolved `displayImages` list contract — the
- *  default `getImages` source. */
-const displayImagesRow = z.object({
-  fields: z.object({
-    displayImages: fieldEnvelope(z.unknown(), displayImagesField),
-  }),
-});
-type DisplayImagesRow = z.output<typeof displayImagesRow>;
-export const hasDisplayImages = <T extends object>(
-  row: T,
-): row is T & DisplayImagesRow => displayImagesRow.safeParse(row).success;
 
 type ImageColumnDef<T extends object> = CubbyColumnDef<
   T,
@@ -539,15 +527,11 @@ export function createImageColumn<T extends object>(
 ) {
   const { entity } = options;
   const rowEntity = (row: T) => options.rowEntity?.(row) ?? entity;
-  // Only the first overload (`T extends DisplayImagesRow`) omits `getImages`,
-  // so every row reaching the default actually carries `displayImages` — the
-  // implementation signature just can't say so, hence the runtime predicate.
   const getImages =
     options.getImages ??
     ((row: T) => {
-      return hasDisplayImages(row)
-        ? (fieldValueOf(row.fields.displayImages) ?? [])
-        : [];
+      const { image } = rowDisplayCover(row);
+      return image ? [image] : [];
     });
 
   return columnHelper.accessor((row) => getImages(row), {
@@ -592,6 +576,11 @@ export function createImageColumn<T extends object>(
       ) : (
         <ImageThumbnail
           images={getImages(info.row.original)}
+          imageCount={
+            options.getImages
+              ? undefined
+              : rowDisplayCover(info.row.original).count
+          }
           alt="Image"
           preview={false}
           lazyPreview={true}

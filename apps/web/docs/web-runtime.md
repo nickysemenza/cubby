@@ -402,6 +402,11 @@ replace this fresh decision read or the receiving command's current-stock checks
 
 ## List loading and enrichment
 
+Generic browser rosters request `displayCover` for thumbnails and retain its full
+count in table and shelf badges. Image-chain popovers still load every image.
+The list-only root and its shared resolver contract are owned by
+[entity list reads](../../../docs/entities.md#list-reads).
+
 The inspector overview and detail relation headings request graph branch counts
 with a zero item budget.
 It does not hydrate graph nodes, previews or images; the Relations tab owns its
