@@ -246,6 +246,7 @@ export function EmbeddedEntityList({
   savedViewId,
   pageSize,
   columns: visibleColumns,
+  initialColumnVisibility,
   sort,
   allLink = false,
   detail,
@@ -258,6 +259,7 @@ export function EmbeddedEntityList({
   savedViewId?: string;
   pageSize: number;
   columns?: readonly string[];
+  initialColumnVisibility?: Record<string, boolean>;
   sort?: { id: string; desc: boolean }[];
   allLink?: boolean;
   detail?: {
@@ -349,6 +351,7 @@ export function EmbeddedEntityList({
     queryOptions: operations?.list ?? entityListFor(entity).listQueryPlan,
     columns,
     scopeFilters: filters,
+    initialColumnVisibility,
     tableStateOptions,
     preview: {},
     selectable: Boolean(actions),
