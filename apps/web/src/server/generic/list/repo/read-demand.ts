@@ -7,8 +7,8 @@ import {
   entityFieldModels,
 } from "@cubby/schemas/entity-fields";
 
-import type { ListProjection } from "~/entity/model/list-read-fields";
 import { storedDerived } from "~/server/db/derived-declarations";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 
 /** One request's field dependencies, independent of database execution. */
 export type ReadDemand = Readonly<{
@@ -88,7 +88,9 @@ export function compileReadDemand(
   }
   return {
     projection: [...projection],
-    envelope: [...keys],
+    envelope: [...keys].map(
+      (key) => model.fields.find((field) => field.key === key)?.readKey ?? key,
+    ),
     facts: {
       stored: [...stored],
       ownership: [...ownership],

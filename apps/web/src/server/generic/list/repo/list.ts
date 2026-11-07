@@ -1341,7 +1341,7 @@ export function listScaffold<
       const projection = compileReadDemand(
         entity,
         request.projection ?? plan.fields.list,
-        plan.fields.detail,
+        plan.fields.list,
       ).projection;
       plan.validate(projection);
       const scoped = { ...request, projection };
@@ -1406,11 +1406,8 @@ export function listScaffold<
     ): Promise<{ data: ListReadRow[]; fieldReads?: PageFieldReadContexts }> {
       if (codes.length === 0) return { data: [] };
       const plan = readPlan();
-      projection = compileReadDemand(
-        entity,
-        projection,
-        plan.fields.detail,
-      ).projection;
+      const demand = compileReadDemand(entity, projection, plan.fields.detail);
+      projection = demand.projection;
       plan.validate(projection);
       const context = (
         await scaffold.context(db, {
@@ -1428,7 +1425,6 @@ export function listScaffold<
             projection,
           );
       if (rows.length === 0) return { data: [] };
-      const demand = compileReadDemand(entity, projection);
       const ids = rows.map((row) => listRowIdSchema.parse(row).id);
       const stored =
         includeFieldReads && demand.facts

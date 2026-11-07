@@ -72,8 +72,6 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
   readProjection?: ListReadProjection | null;
 }) {
   if (options.active === false) return;
-  // Pivot is viewport-dependent; the mounted renderer owns its summary demand.
-  if (options.search.view === PIVOT_VIEW_ID) return;
   await ensureEntityMetadata(options.queryClient, options.entity);
   const defaultSort =
     options.defaultSort ??
@@ -87,11 +85,13 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
     options.entity,
     options.search,
   );
-  const view = resolveListView(
+  const { view, requestedView } = resolveListView(
     options.queryClient,
     options.entity,
     openingSearch,
-  ).view;
+  );
+  // Pivot is viewport-dependent; the mounted renderer owns its summary demand.
+  if (requestedView === PIVOT_VIEW_ID) return;
   const fields = projection?.(
     options.queryClient,
     options.entity,

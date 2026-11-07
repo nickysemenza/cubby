@@ -635,7 +635,7 @@ function LiveEntityRelationTable({
       targetIds: visibleIds,
       limit: 50,
     }),
-    enabled: !plan.derived,
+    enabled: !plan.derived && visibleIds.length > 0,
   });
   const evidence = new Map(
     evidenceQuery.data?.items.map((item) => [item.target.entityId, item]),

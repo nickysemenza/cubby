@@ -441,11 +441,11 @@ export function GenericEntityList({
 }: GenericEntityListProps) {
   const { search, navigate } = useListSearch();
   const queryClient = useQueryClient();
-  const { view } = resolveListView(queryClient, entity, search);
+  const { view, requestedView } = resolveListView(queryClient, entity, search);
   const isMobile = useIsMobile();
   // Pivot is desktop and tablet only; a phone keeps the grouped list.
   const pivot =
-    search.view === PIVOT_VIEW_ID &&
+    requestedView === PIVOT_VIEW_ID &&
     !isMobile &&
     isListEntity(entity) &&
     pivotAvailable(entityMetadata(queryClient, entity).listFields.grouping);

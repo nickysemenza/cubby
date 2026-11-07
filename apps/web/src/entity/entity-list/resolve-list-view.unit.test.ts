@@ -33,7 +33,7 @@ describe("resolveListView", () => {
 
   it("keeps the old Projects gallery URL pointed at the shared Cards view", () => {
     expect(
-      resolveListView(queryClient, "project", { view: "gallery" }).view,
-    ).toBe("shelf");
+      resolveListView(queryClient, "project", { view: "gallery" }),
+    ).toMatchObject({ view: "shelf", requestedView: "shelf" });
   });
 });
