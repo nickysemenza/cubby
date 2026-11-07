@@ -1,4 +1,3 @@
-import { NEEDS_YOU_FILTERS } from "@cubby/schemas/work-queue";
 import type { WorkStatus, WorkStuckItem } from "@cubby/schemas/work-status";
 import { getErrorMessage } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -16,7 +15,7 @@ import { readWorkQueue } from "./work-queue-read";
 
 const log = createLogger("work-status");
 
-type NeedsYouRead = Omit<Parameters<typeof readWorkQueue>[1], "input">;
+type NeedsYouRead = Parameters<typeof readWorkQueue>[1];
 
 /** A failed count must not read as "background work is unknown". The page's own queue shows the error. */
 async function readNeedsYou(
@@ -24,10 +23,7 @@ async function readNeedsYou(
   read: NeedsYouRead,
 ): Promise<WorkStatus["needsYou"]> {
   try {
-    const { meta } = await readWorkQueue(db, {
-      ...read,
-      input: { ...NEEDS_YOU_FILTERS, pageSize: 1 },
-    });
+    const { meta } = await readWorkQueue(db, read);
     return {
       count: meta.totalCount,
       complete: !(
