@@ -94,6 +94,7 @@ export const sourceObservationHistoricalLinks = sql`(
   FROM history GROUP BY "observationId"
 )`;
 
+/** The fragments share CTE scope and must be emitted in one statement. */
 interface SourcePageHistory {
   readonly relations: SQL;
   readonly unresolved: SQL;
