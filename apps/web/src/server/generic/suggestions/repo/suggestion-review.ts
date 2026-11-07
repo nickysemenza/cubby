@@ -38,9 +38,10 @@ import {
   connectionReadEvidence,
 } from "~/server/domains/connection/repo/connection-evidence";
 import { applyFinanceCategorySuggestion } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
-import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
+import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
@@ -461,13 +462,13 @@ async function automaticFieldFillRefusal(
     .where(eq(sql`${table.id}`, row.recordId))
     .limit(1);
   if (!record) return "Automatic fill subject no longer exists";
-  const result = await executeEntityAs({ ...context, db }, "get", {
+  const [live] = await readSelectedEntityRecords({
+    context: { ...context, db },
     entity,
-    id: record.shortcode,
-    missing: "null",
+    ids: [record.shortcode],
+    fields: [row.field, ...policy.basis],
   });
-  if (!result.item) return "Automatic fill subject no longer exists";
-  const live = z.record(z.string(), z.unknown()).parse(result.item);
+  if (!live) return "Automatic fill subject no longer exists";
   const governed = (key: string) =>
     Object.hasOwn(entityFieldEnvelopeFields[entity], key);
   const envelope = fieldEnvelopeFor(live, row.field);

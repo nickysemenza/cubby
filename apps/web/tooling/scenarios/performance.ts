@@ -219,7 +219,8 @@ export async function seedPerformanceCorpus(
       ...identity("shipment"),
       name: `${label} parcel`,
       purchaseId: orderId,
-      trackingNumber: `SYNTHETIC-TRACK-${bundle + 1}`,
+      // Undated evidence has no bounded period for a tracking identity.
+      trackingNumber: bundle % 3 === 2 ? null : `SYNTHETIC-TRACK-${bundle + 1}`,
       purpose: "incoming" satisfies NonNullable<
         (typeof shipment.$inferInsert)["purpose"]
       >,

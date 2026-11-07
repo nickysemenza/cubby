@@ -1491,6 +1491,19 @@ async function settleImageProcessingFailure(
       lastError: input.reason,
     })
     .where(eq(imageProcessingJob.id, job.id));
+  // A terminal Job must not leave its cutout pending or overwrite a usable output.
+  if (!input.retryable && job.derivativeId)
+    await tx
+      .update(imageDerivative)
+      .set({ status: "failed", failureReason: input.reason })
+      .where(
+        and(
+          eq(imageDerivative.id, job.derivativeId),
+          eq(imageDerivative.sourceContentHash, job.sourceContentHash),
+          eq(imageDerivative.processorRevision, job.processorRevision),
+          ne(imageDerivative.status, "ready"),
+        ),
+      );
 }
 
 async function adoptFailedCompletion(

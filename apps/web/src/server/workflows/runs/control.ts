@@ -1,4 +1,7 @@
-import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
+import {
+  aiEvaluationState,
+  MEMBER_CANCELLED_AI_WORK,
+} from "@cubby/schemas/ai-evaluation";
 import type { ActorContext } from "@cubby/schemas/context";
 import { runShortcode, type RunId } from "@cubby/schemas/identifiers";
 import {
@@ -6,7 +9,7 @@ import {
   type RunControlAction,
 } from "@cubby/schemas/run-fields";
 import { runStepState } from "@cubby/schemas/run-step";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import {
   dropAiEvaluationWork,
@@ -17,6 +20,7 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { ledgerParty, runStep, run as runTable } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
+import { reopenRunStep } from "~/server/domains/run/repo/run-step";
 import { createAppError } from "~/server/errors/app-error";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { cancelRunJobs, pauseJob } from "~/server/generic/jobs/repo/operator";
@@ -133,12 +137,52 @@ export async function controlWorkflowRun(
           "This legacy Run retains historical receipts; historical recovery creates a linked continuation rather than retrying its empty roster.",
         );
     }
-    if (ownsAiWork(purpose) || requestsAiWork(purpose))
-      await readmitFailedAiWork(db, row.id, {
+    const stoppedSteps =
+      row.failureCode === "user_cancelled"
+        ? await database
+            .select({ key: runStep.key })
+            .from(runStep)
+            .where(
+              and(
+                eq(runStep.runId, row.id),
+                eq(runStep.state, runStepState.enum.failed),
+                eq(runStep.pausedReason, MEMBER_CANCELLED_AI_WORK),
+              ),
+            )
+        : [];
+    if (ownsAiWork(purpose) || requestsAiWork(purpose)) {
+      const admitted = await readmitFailedAiWork(db, row.id, {
         owned: ownsAiWork(purpose),
         requested: requestsAiWork(purpose),
         attempt: row.attempt,
+        reviveCancelled: row.failureCode === "user_cancelled",
       });
+      if (row.failureCode === "user_cancelled" && admitted === 0) {
+        const [failedStep] = await database
+          .select({ id: runStep.id })
+          .from(runStep)
+          .where(
+            and(
+              eq(runStep.runId, row.id),
+              or(
+                sql`${runStep.failed} > 0`,
+                eq(runStep.state, runStepState.enum.queued),
+              ),
+            ),
+          )
+          .limit(1);
+        if (!failedStep && stoppedSteps.length === 0)
+          throw createAppError(
+            "RUN_CONTROL_REFUSED",
+            "This cancelled Run has no re-admissible work; start a new Run to evaluate that scope again.",
+          );
+      }
+    }
+    if (row.failureCode === "user_cancelled") {
+      // Re-admitted items still need their interrupted evaluate step to wait for them.
+      for (const step of stoppedSteps)
+        await reopenRunStep(db, row.id, step.key);
+    }
     await launchWorkflowRun(db, { runId: row.id, purpose });
     return;
   }
@@ -163,7 +207,7 @@ export async function controlWorkflowRun(
         status: "failed",
         endedAt: new Date(),
         failureCode: "user_cancelled",
-        dispatchError: "Cancelled by a member",
+        dispatchError: MEMBER_CANCELLED_AI_WORK,
         progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || '{"phase":"failed"}'::jsonb`,
       })
       .where(
@@ -185,7 +229,7 @@ export async function controlWorkflowRun(
       .set({
         state: runStepState.enum.failed,
         endedAt: new Date(),
-        pausedReason: "Cancelled by a member",
+        pausedReason: MEMBER_CANCELLED_AI_WORK,
         pausedUntil: null,
       })
       .where(
@@ -194,12 +238,12 @@ export async function controlWorkflowRun(
           eq(runStep.state, runStepState.enum.running),
         ),
       );
-    return cancelRunAiWork(tx, row.id, "Cancelled by a member", {
+    return cancelRunAiWork(tx, row.id, MEMBER_CANCELLED_AI_WORK, {
       owned: ownsAiWork(purpose),
       requested: requestsAiWork(purpose),
     });
   });
-  await recordRunProgress(db, row.id, "cancelled", "Cancelled by a member", {
+  await recordRunProgress(db, row.id, "cancelled", MEMBER_CANCELLED_AI_WORK, {
     attempt: row.attempt,
     sequence: Number.MAX_SAFE_INTEGER,
   });
@@ -252,7 +296,8 @@ export async function cancelRunAiWork(
 }
 
 /**
- * Re-admits a Run's failed or cancelled AI work as linked replacements:
+ * Re-admits failed AI work as linked replacements. Only an explicit retry of a
+ * member-cancelled Run revokes that member stop; superseded work stays stopped:
  * owned evaluations copy into the Run, requested ones re-request shared work.
  */
 export async function readmitFailedAiWork(
@@ -262,23 +307,41 @@ export async function readmitFailedAiWork(
     owned,
     requested,
     attempt,
-  }: { owned: boolean; requested: boolean; attempt: number },
-) {
+    reviveCancelled = false,
+  }: {
+    owned: boolean;
+    requested: boolean;
+    attempt: number;
+    reviveCancelled?: boolean;
+  },
+): Promise<number> {
   const database = getDb(db);
+  let admitted = 0;
   if (owned) {
-    const { aiEvaluation } = await import("~/server/db/schema");
+    const { aiEvaluation, aiEvaluationRequest } =
+      await import("~/server/db/schema");
     const failed = await database
       .select()
       .from(aiEvaluation)
       .where(
         and(
           eq(aiEvaluation.runId, runId),
-          inArray(aiEvaluation.state, ["failed", "cancelled"]),
+          or(
+            eq(aiEvaluation.state, "failed"),
+            reviveCancelled
+              ? and(
+                  eq(aiEvaluation.state, "cancelled"),
+                  eq(aiEvaluation.error, MEMBER_CANCELLED_AI_WORK),
+                )
+              : undefined,
+          ),
           sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
         ),
       );
-    await withTransactionDatabase(db, async (tx) => {
+    admitted += await withTransactionDatabase(db, async (tx) => {
       const database = getDb(tx);
+      let created = 0;
+      const replacements = new Map<string, string>();
       for (const item of failed) {
         const retryId = crypto.randomUUID();
         const [replacement] = await database
@@ -286,6 +349,8 @@ export async function readmitFailedAiWork(
           .values({
             id: retryId,
             runId: item.runId,
+            executionKind: item.executionKind,
+            shareKey: item.shareKey,
             workKey: `${item.workKey}:operator-retry:${attempt + 1}`,
             feature: item.feature,
             target: item.target,
@@ -297,6 +362,8 @@ export async function readmitFailedAiWork(
           .onConflictDoNothing()
           .returning({ id: aiEvaluation.id });
         if (replacement) {
+          created += 1;
+          replacements.set(item.id, replacement.id);
           await markAiEvaluationWork(tx, [replacement.id]);
           await database
             .update(aiEvaluation)
@@ -304,23 +371,57 @@ export async function readmitFailedAiWork(
             .where(eq(aiEvaluation.id, item.id));
         }
       }
+      if (replacements.size) {
+        // Sweep steps tally requests, even when the same Run also owns the evaluation.
+        const requests = await database
+          .select()
+          .from(aiEvaluationRequest)
+          .where(
+            and(
+              eq(aiEvaluationRequest.runId, runId),
+              inArray(aiEvaluationRequest.evaluationId, [
+                ...replacements.keys(),
+              ]),
+              reviveCancelled
+                ? undefined
+                : sql`${aiEvaluationRequest.cancelledAt} IS NULL`,
+            ),
+          );
+        if (requests.length)
+          await database
+            .insert(aiEvaluationRequest)
+            .values(
+              requests.map((request) => ({
+                runId,
+                evaluationId: replacements.get(request.evaluationId)!,
+                sequence: request.sequence,
+              })),
+            )
+            .onConflictDoNothing();
+      }
+      return created;
     });
   }
-  if (!requested) return;
+  if (!requested) return admitted;
   const { aiEvaluationRequest } = await import("~/server/db/schema");
   const { enqueueAiEvaluation, requestedAiEvaluations } =
     await import("~/server/ai/evaluation/repo/ai-evaluation-requests");
   for (const item of await requestedAiEvaluations(db, runId, {
     currentOnly: true,
   })) {
-    if (!["failed", "cancelled"].includes(item.state)) continue;
+    if (
+      item.state !== "failed" &&
+      !(
+        reviveCancelled &&
+        item.state === "cancelled" &&
+        item.error === MEMBER_CANCELLED_AI_WORK
+      )
+    )
+      continue;
     const replacement = await enqueueAiEvaluation(db, {
       runId,
       executionKind: item.executionKind,
-      shareKey:
-        item.state === "cancelled"
-          ? `${item.workKey}:member-retry:${attempt + 1}`
-          : (item.shareKey ?? item.workKey),
+      shareKey: item.shareKey ?? item.workKey,
       feature: item.feature,
       target: item.target,
       provenance: item.provenance,
@@ -328,6 +429,20 @@ export async function readmitFailedAiWork(
       result: item.result,
       state: item.result ? "result_ready" : "queued",
     });
+    admitted += 1;
+    if (replacement.id === item.id) {
+      // Another requester kept this slot live: restore demand on its existing row.
+      await database
+        .update(aiEvaluationRequest)
+        .set({ cancelledAt: null })
+        .where(
+          and(
+            eq(aiEvaluationRequest.runId, runId),
+            eq(aiEvaluationRequest.evaluationId, item.id),
+          ),
+        );
+      continue;
+    }
     await database
       .update(aiEvaluationRequest)
       .set({
@@ -343,4 +458,5 @@ export async function readmitFailedAiWork(
         ),
       );
   }
+  return admitted;
 }

@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -6,6 +7,8 @@ import {
   derivedRebuild,
 } from "~/server/db/derived-rebuild-schema";
 import { getDb } from "~/server/db/helpers";
+import { aiEvaluation, aiEvaluationRequest } from "~/server/db/schema";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 
 import { readBackgroundWorkStatus } from "./observation";
@@ -106,5 +109,83 @@ describe("background work status", () => {
       },
     );
     expect((await readBackgroundWorkStatus(ctx.db, now)).stuck).toEqual([]);
+  });
+
+  it("keeps retry history out of stuck work while preserving another requester's failure", async () => {
+    const now = new Date();
+    const retryReceipt = { retryEvaluationId: crypto.randomUUID() };
+    const rows = await getDb(ctx.db)
+      .insert(aiEvaluation)
+      .values(
+        [retryReceipt, null, null, { retryEvaluationId: "invalid" }].map(
+          (receipt) => ({
+            executionKind: "ai_refresh" as const,
+            feature: "field-suggestion",
+            workKey: crypto.randomUUID(),
+            target: {
+              kind: "field" as const,
+              entity: "product",
+              recordId: crypto.randomUUID(),
+              field: "name",
+              suggestionIds: [],
+            },
+            provenance: {
+              dependencies: [],
+              inputFingerprint: "synthetic",
+              optionFingerprint: "synthetic",
+              model: null,
+            },
+            snapshot: {},
+            state: "failed" as const,
+            receipt,
+            error: "Synthetic retained failure",
+          }),
+        ),
+      )
+      .returning({ id: aiEvaluation.id });
+    const firstRun = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "maintenance",
+      trigger: "manual",
+      status: "completed",
+      execution: false,
+    });
+    const secondRun = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "maintenance",
+      trigger: "manual",
+      status: "completed",
+      execution: false,
+    });
+    await getDb(ctx.db)
+      .insert(aiEvaluationRequest)
+      .values([
+        { runId: firstRun, evaluationId: rows[1]!.id, receipt: retryReceipt },
+        { runId: firstRun, evaluationId: rows[2]!.id, receipt: retryReceipt },
+        { runId: secondRun, evaluationId: rows[2]!.id },
+      ]);
+    const failures = async () =>
+      (await readBackgroundWorkStatus(ctx.db, now)).stuck.filter(
+        (item) => item.key === "ai.evaluation:field-suggestion:failing",
+      );
+    expect(await failures()).toEqual([
+      expect.objectContaining({
+        body: "2 work items need attention after failures.",
+      }),
+    ]);
+    await getDb(ctx.db)
+      .update(aiEvaluationRequest)
+      .set({ receipt: retryReceipt })
+      .where(eq(aiEvaluationRequest.runId, secondRun));
+    expect(await failures()).toEqual([
+      expect.objectContaining({
+        body: "1 work item needs attention after failures.",
+      }),
+    ]);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ state: aiEvaluation.state })
+          .from(aiEvaluation)
+      ).every((row) => row.state === "failed"),
+    ).toBe(true);
   });
 });

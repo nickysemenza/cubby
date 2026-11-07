@@ -1,4 +1,7 @@
-import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
+import {
+  aiEvaluationState,
+  MEMBER_CANCELLED_AI_WORK,
+} from "@cubby/schemas/ai-evaluation";
 import { eq, sql } from "drizzle-orm";
 
 import type { RunEvaluationsOut } from "~/contracts/run-detail.contract";
@@ -37,7 +40,7 @@ async function readRunEvaluations(
       CASE WHEN request."cancelledAt" IS NOT NULL THEN ${S.cancelled} ELSE e.state END AS state,
       CASE WHEN request."cancelledAt" IS NOT NULL AND request.receipt IS NULL THEN NULL
         ELSE coalesce(request.receipt, e.receipt) END AS receipt,
-      CASE WHEN request."cancelledAt" IS NOT NULL THEN 'Cancelled by a member'::text ELSE e.error END AS error
+      CASE WHEN request."cancelledAt" IS NOT NULL THEN ${MEMBER_CANCELLED_AI_WORK}::text ELSE e.error END AS error
     FROM "AiEvaluationRequest" request JOIN "AiEvaluation" e ON e.id = request."evaluationId"
     WHERE request."runId" = ${input.runId}::uuid
   )`;

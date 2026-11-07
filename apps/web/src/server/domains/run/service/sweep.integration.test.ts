@@ -942,5 +942,51 @@ describe("Sweeps", () => {
         (item) => item.state === "cancelled" && !item.item,
       ),
     ).toBe(true);
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: shortcode, action: "retry" },
+      "sweep",
+    );
+    expect(await drive(runId)).toBe("wait");
+    const [retainedRoster, restartedEvaluate] = await readRunSteps(
+      ctx.db,
+      runId,
+    );
+    expect(retainedRoster).toMatchObject({
+      key: "field_roster",
+      state: "done",
+      done: 1,
+    });
+    expect(restartedEvaluate).toMatchObject({
+      key: "field_evaluate",
+      state: "running",
+    });
+    expect(
+      (await evaluationsOf(runId)).some(
+        (item) => item.state === "queued" && item.item,
+      ),
+    ).toBe(true);
+    // Completion can arrive during the wait before the member cancels the Run.
+    await getDb(ctx.db)
+      .execute(sql`UPDATE "AiEvaluation" SET state = ${aiEvaluationState.enum.completed}
+      WHERE "runId" = ${runId}::uuid AND state = ${aiEvaluationState.enum.queued}`);
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: shortcode, action: "cancel" },
+      "sweep",
+    );
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: shortcode, action: "retry" },
+      "sweep",
+    );
+    expect(await drive(runId)).toBe("finished");
+    expect((await readRunSteps(ctx.db, runId))[1]).toMatchObject({
+      key: "field_evaluate",
+      state: "done",
+    });
   });
 });

@@ -1,3 +1,4 @@
+import { MEMBER_CANCELLED_AI_WORK } from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { JobWaitReason } from "@cubby/schemas/job";
 import {
@@ -445,7 +446,7 @@ async function lostAfterPage(
   const now = await readStepRunOwner(db, owner.id);
   if (now?.status === "failed" && now.failureCode === "user_cancelled") {
     const { cancelRunAiWork } = await import("~/server/workflows/runs/control");
-    await cancelRunAiWork(db, owner.id, "Cancelled by a member");
+    await cancelRunAiWork(db, owner.id, MEMBER_CANCELLED_AI_WORK);
   }
   return { kind: "lost" };
 }
@@ -543,6 +544,15 @@ export async function retryRunStep(db: Database, runId: RunId, key: string) {
     throw new Error(
       "This Run is still running; retry its failures once it stops.",
     );
+  if (owner.purpose === "sweep" && owner.failureCode === "user_cancelled") {
+    const step = (await listRunSteps(db, runId)).find(
+      (item) => item.key === key,
+    );
+    if (step && step.failed === 0)
+      throw new Error(
+        "Cancelled AI work stays stopped; use Retry run to explicitly restart member-cancelled work.",
+      );
+  }
   // One maintenance pass at a time (Run_one_active_maintenance).
   const active =
     owner.purpose === "maintenance"

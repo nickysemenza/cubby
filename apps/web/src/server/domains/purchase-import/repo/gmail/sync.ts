@@ -126,8 +126,22 @@ export function rebaseMailboxPage({
     if (
       JSON.stringify(next.history) !==
       JSON.stringify(page.startCoverage.history)
-    )
+    ) {
+      const frozenThrough =
+        page.nextCoverage.history.targetHistoryId ??
+        page.nextCoverage.history.historyId;
+      // A completed history cursor covers every event through this numeric ID.
+      // An opaque in-flight page token alone cannot prove the retained range settled.
+      if (
+        !restoreScopedQuery &&
+        [next.history.historyId, frozenThrough].every((id) =>
+          /^\d+$/.test(id),
+        ) &&
+        BigInt(next.history.historyId) >= BigInt(frozenThrough)
+      )
+        return { ...page, startCoverage: coverage, nextCoverage: coverage };
       return null;
+    }
     next.history = page.nextCoverage.history;
   }
   next.nextLane = page.nextCoverage.nextLane;

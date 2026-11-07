@@ -11,14 +11,14 @@ import {
 } from "tooling/product-category-fixtures";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   dependencyStamps,
   fieldDependencyKeys,
 } from "~/server/ai/policy/refresh-manifest";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { suggestionTable, expense, spendingCategory } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -43,6 +43,7 @@ import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automa
 import { loadCurrentFieldOwnership } from "~/server/generic/suggestions/repo/automatic-fields";
 import { ruleBase } from "~/server/generic/suggestions/repo/automatic-policy";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import * as suggestionReview from "~/server/generic/suggestions/repo/suggestion-review";
 import {
   canAutomaticallyFillField,
   acceptSuggestion,
@@ -308,6 +309,44 @@ describe("automatic field assignments", () => {
       );
     },
   );
+  it("propagates a serialization abort from automatic preflight", async () => {
+    const untouched = await productFixture(ctx, "Synthetic preflight recovery");
+    const pending = await seedPending(ctx, {
+      entity: "product",
+      recordId: await resolveOrThrow(ctx.db, "product", untouched.id),
+      field: "categoryId",
+      kind: "addition",
+      currentValue: null,
+      suggestedValue: taxonomyShortcode("food"),
+    });
+    await getDb(ctx.db)
+      .update(suggestionTable)
+      .set({ confidence: 0.9 })
+      .where(eq(suggestionTable.id, pending.id));
+    const preflight = vi
+      .spyOn(suggestionReview, "canAutomaticallyFillField")
+      .mockImplementationOnce(async (db) => {
+        // A real SQL abort before review's savepoint must reach the owner.
+        await getDb(db).execute(
+          sql`DO $$ BEGIN RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'Synthetic automatic preflight serialization'; END $$`,
+        );
+        return true;
+      });
+    try {
+      await expect(
+        withTransactionDatabase(ctx.db, (tx) =>
+          applyAutomaticRules(tx, [pending.id], {
+            context: { ...kernelCtx(ctx), db: tx },
+          }),
+        ),
+      ).rejects.toMatchObject({ cause: { code: "40001" } });
+      expect(preflight).toHaveBeenCalledTimes(1);
+    } finally {
+      preflight.mockRestore();
+    }
+    expect((await stateOf(ctx, pending.id)).status).toBe("pending");
+    expect(await productCategoryId(ctx.db, untouched.id)).toBeNull();
+  });
   // Failure: receipt-backed provenance survives a member edit, ABA edit, or confirmation.
   it.each(["edit", "restore", "confirm"] as const)(
     "clears list auto provenance after member %s",

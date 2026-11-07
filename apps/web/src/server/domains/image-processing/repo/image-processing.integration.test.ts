@@ -1212,6 +1212,14 @@ describe("durable image representations", () => {
           },
         },
       });
+      expect(
+        (
+          await getImageProcessingReadProjection(
+            ctx.db,
+            parseEntityId("image", failed.id),
+          )
+        ).status.cutout,
+      ).toBe("failed");
       const retired = await getDb(ctx.db)
         .select()
         .from(imageProcessingOrphan)

@@ -104,11 +104,26 @@ so a lapsed lease reads "Lease on … expired; waiting to be reclaimed", never
 Reconciliation copies a stopped execution's failure to its Run and records an
 end time for failed or cancelled execution; a member pause stays open-ended.
 Running Sweeps and mail reclassification support member pause/resume through
-the Run lifecycle, preserving their steps, scope and committed progress.
+the Run lifecycle, preserving their steps, scope and committed progress. Failed-work
+recovery leaves cancelled evaluations and withdrawn shared requests stopped,
+including their original receipts and superseded historical work. An explicit
+Retry run on a member-cancelled Run revokes that member stop: its interrupted
+steps reopen, member-cancelled owned evaluations get linked replacements, and
+withdrawn requests rejoin any still-live shared evaluation without a retry link
+to themselves. The stored member-cancellation marker has one schema owner.
+A cancelled Run may also resume an interrupted or queued step after all of its
+evaluations settled; that step still needs to publish its final tally. Other
+cancellations remain stopped. Retry failed on a cancelled Sweep step with
+no failed items directs the member to Retry run. Actual failures remain
+retryable without reviving the cancelled remainder.
 Mailbox discovery acquires at most five messages from its frozen provider page
 per Job claim. Its durable message offset resumes the remaining messages without
 replaying the completed prefix; absent offsets on retained pages mean zero.
-Mailbox coverage advances only after every batch and history event is handled.
+Mailbox coverage advances only after every batch and history event is handled. A retained
+automatic history page can then settle against a newer completed history cursor
+under the same baseline when its numeric ID covers the entire frozen range.
+It preserves all newer coverage; an in-flight token alone or a controlled scan
+cannot authorize this recovery.
 Import admission commits child dispatch intent atomically. An already-failed
 child remains visible for its own retry and does not fail discovery or rewind
 the mailbox page.
@@ -369,8 +384,10 @@ state derives from the Job (`image-job-state.ts`): `leased` for a live lease,
 `waiting_for_device` for parked device work, `pending`, and `failed` ("Needs
 attention") once a job failed `JOB_NEEDS_ATTENTION_ATTEMPTS` times in a row
 or its execution stopped; transient failures keep retrying. An executor's `retryable: false`
-stops automatic dispatch for these source/processor inputs. Storage verification
-failures retry; a verified content mismatch stops. Superseded failed jobs retire
+stops automatic dispatch for these source/processor inputs. The matching cutout
+projection fails in that same transaction while a ready
+output stays intact; transient failures leave the cutout pending.
+Storage verification failures retry; a verified content mismatch stops. Superseded failed jobs retire
 as skipped while retaining their diagnostics and results. A missing
 subject-lift derivative is rebuilt. Explicit image retry reopens a negative cutout
 without discarding its evidence or allowing maintenance to immediately settle it again.
@@ -381,7 +398,17 @@ and an explicit response budget of at most 512 tokens, reserved from the runtime
 model context size. A context overflow retries once with 512 pixels and half the
 response budget. Persistent failures retain the reported context/token counts and
 remain visibly failed until explicit retry or changed source/processor inputs;
-no cloud fallback or fabricated description is used.
+no cloud fallback or fabricated description is used. Structured parsing failures are
+terminal and preserve the original raw diagnostic in the existing server reason.
+Before releasing the failed session, native code appends fixed metadata: attempted
+image dimensions and response budget, session output usage, latest-response
+structure availability, completion and root shape, presence and shapes of the
+three expected properties, underlying error type, and raw diagnostic equality
+flags. Missing response metadata stays unknown; older responses are not used.
+Output usage of zero does not establish that no tokens were generated. The
+snapshot excludes generated values and arbitrary keys and precedes the raw
+diagnostic so it survives the existing 1,000-character failure-reason limit.
+The full raw reason can still contain private content.
 
 Recurring image-execution repair also settles retained negative cutout failures in
 bounded batches. This negative-outcome pass requires the current source/revision and the matching settled
@@ -507,6 +534,12 @@ is a function of the cron tick. The table stays named `Job` because `Task` is th
 entity's table.
 There is no per-kind queue health or alerting: with a few dozen coarse Jobs,
 Activity's counts and a stalled Run show a stuck queue directly.
+Work excludes a retained failed evaluation after its owned retry receipt hands
+off to a replacement, or after all remaining live requesters have handed off.
+A shared failure remains visible while any uncancelled requester still needs
+that original evaluation. Retry history and diagnostics remain stored.
+Runs explicitly cancelled or aborted by a member remain in history and leave
+the recovery attention roster through the same predicate used by Work sources. Source Problems and pending reviews retain their own lifecycle.
 
 ## Producers
 
@@ -644,6 +677,13 @@ publication. A serialization conflict replays the DB-only callback, lease and
 authority checks, settlement receipt and activation fence in a fresh transaction;
 inference and retained paid-result storage stay outside that boundary. A
 caller-owned transaction still owns its recovery and is not replayed locally.
+Automatic application propagates serialization failures to that owner, including
+preflight failures before review's savepoint. An aborted serialization attempt is
+never converted to an ordinary policy refusal and then used for more publication.
+Field publication re-reads the declaration's read path, including mutation aliases
+such as `ingredientId` exposed as `ingredient.id`. A loaded nullable relation is
+empty; an absent root or missing governed result remains unavailable and cannot
+authorize a proposal.
 
 Failures map at the drain seam: invalidated evidence settles the evaluation
 `obsolete` as a publication outcome; AI budget, provider capacity and AI

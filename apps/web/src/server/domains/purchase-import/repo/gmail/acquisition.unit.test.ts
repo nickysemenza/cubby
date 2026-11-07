@@ -185,6 +185,32 @@ describe("durable Gmail page acquisition", () => {
       pageToken: null,
       targetHistoryId: null,
     });
+    const recovered = rebaseMailboxPage({
+      page,
+      coverage: completed.nextCoverage,
+      restoreScopedQuery: false,
+    });
+    expect(recovered).not.toBeNull();
+    if (!recovered)
+      throw new Error("Completed history must settle its retained page");
+    expect(creditScopedPage(recovered, 0, new Date())).toEqual(
+      completed.nextCoverage,
+    );
+    // An opaque page token alone does not prove the whole frozen range completed.
+    expect(
+      rebaseMailboxPage({
+        page,
+        coverage: page.nextCoverage,
+        restoreScopedQuery: false,
+      }),
+    ).toBeNull();
+    expect(
+      rebaseMailboxPage({
+        page,
+        coverage: completed.nextCoverage,
+        restoreScopedQuery: true,
+      }),
+    ).toBeNull();
   });
 
   it("an expired history cursor preserves scoped positions and requires separately authorized enumeration", async () => {

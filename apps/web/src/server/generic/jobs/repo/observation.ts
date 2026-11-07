@@ -17,6 +17,7 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { hasEvaluationRetryReceipt as retried } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db/database";
 import { derivedRebuild } from "~/server/db/derived-rebuild-schema";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -419,10 +420,16 @@ async function readFailedWork(db: Database, now: Date) {
       WHERE (state = ${jobState.enum.failed} AND "updatedAt" > ${since}::timestamp
         AND NOT EXISTS (SELECT 1 FROM "Job" done WHERE done.kind = j.kind AND done.state = ${jobState.enum.completed} AND done."updatedAt" > j."updatedAt"))
         OR (state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}) AND attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS})
-      UNION ALL SELECT 'ai.evaluation:' || feature, "updatedAt", error FROM "AiEvaluation"
-        WHERE (state = ${aiEvaluationState.enum.failed} AND "updatedAt" > ${since}::timestamp)
+      UNION ALL SELECT 'ai.evaluation:' || feature, "updatedAt", error FROM "AiEvaluation" evaluation
+        WHERE ((state = ${aiEvaluationState.enum.failed} AND "updatedAt" > ${since}::timestamp)
           OR (state IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.result_ready})
-            AND "runAt" IS NOT NULL AND attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS})
+            AND "runAt" IS NOT NULL AND attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}))
+          AND NOT ${retried(sql`evaluation.receipt`)}
+          AND (NOT EXISTS (SELECT 1 FROM "AiEvaluationRequest" request
+              WHERE request."evaluationId" = evaluation.id AND ${retried(sql`request.receipt`)})
+            OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" request
+              WHERE request."evaluationId" = evaluation.id AND request."cancelledAt" IS NULL
+                AND NOT ${retried(sql`request.receipt`)}))
       UNION ALL SELECT 'image.' || lane, "updatedAt", "lastError" FROM "ImageProcessingJob" image_job
         WHERE (state = ${imageProcessingJobState.enum.failed}
           OR (state = ${imageProcessingJobState.enum.pending} AND failures >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}))

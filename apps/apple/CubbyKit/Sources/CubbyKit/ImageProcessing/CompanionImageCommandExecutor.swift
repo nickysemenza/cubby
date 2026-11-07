@@ -252,10 +252,11 @@ public struct CompanionImageCommandExecutor: Sendable {
     private func failed(
         _ kind: ImageProcessingJobKind, retryable: Bool, reason: String
     ) -> ImageProcessingResultOutcome {
+        // The server's JSON string limit counts UTF-16 code units, not Swift Characters.
         .failed(
             .init(
                 kind: kind, status: .failed, retryable: retryable,
-                reason: String(reason.prefix(240))))
+                reason: String(decoding: reason.utf16.prefix(1_000), as: UTF16.self)))
     }
 
     private func reason(_ error: CompanionImageProcessor.Failure) -> String {

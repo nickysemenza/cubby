@@ -2191,6 +2191,8 @@ reason arms only filter that base, with a shared lateral reason relation where
 routing is identical. Reason declarations still own actions and ordering;
 possible matches with missing publications contribute completeness warnings and
 never actionable rows. Preparation is shared only inside that request.
+The base admits records matching at least one certain or possible Problem before
+selecting labels and routing, so non-candidates do not pay those per-record costs.
 
 Each repository supplies `listScaffold` as its read port to
 `defineRepository`. Its `read` declaration supplies columns and bindings;
@@ -4772,6 +4774,10 @@ to members (85% or above), with a clear winner and current-evidence/member-inten
 checks. Only declared fill fields qualify; review-required fields and populated
 member values remain protected. Preview and persisted application share that
 threshold. This field policy does not change financial acceptance rules.
+Automatic field eligibility reads only the target and its declared policy basis,
+with their canonical assignment and result envelopes. Unrelated detail sections
+do not join the publication transaction's read set; acceptance repeats the same
+checks under its write fence.
 Actionable reads batch current Automatic rule receipts, Assessment state, saved
 values and field audit history. Only receipt-bound current assignments carry
 `ownership: { kind: "automatic", receiptId, confidence }`. A member edit, including

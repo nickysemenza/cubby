@@ -118,7 +118,9 @@ struct CompanionImageProcessorTests {
         "Reports a deterministic model failure verbatim and does not retry it",
         arguments: [
             "context_size_exceeded: Content contains 8193 tokens",
-            "structured_output_invalid: Synthetic missing required cutoutEligibility property",
+            "structured_output_invalid: snapshot=imageWidth=512; "
+                + String(repeating: "Synthetic diagnostic. ", count: 20)
+                + "rawContent=Synthetic missing required cutoutEligibility property",
         ])
     func reportsDeterministicModelFailure(reason: String) async throws {
         let bytes = try Self.syntheticAVIF()

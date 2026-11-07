@@ -1045,6 +1045,7 @@ describe("scheduled Gmail discovery", () => {
     });
     const seam = ports(provider);
     const sizes: number[] = [];
+    let expectedHistoryId = "100";
     seam.research = async (_db, input) => {
       sizes.push(input.messageIds.length);
       if (input.messageIds.length > 50)
@@ -1052,7 +1053,7 @@ describe("scheduled Gmail discovery", () => {
       expect(
         (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.history
           .historyId,
-      ).toBe("100");
+      ).toBe(expectedHistoryId);
       return [];
     };
     await listMailDiscovery(ctx.db, state.params, seam);
@@ -1070,15 +1071,25 @@ describe("scheduled Gmail discovery", () => {
     expect(await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam)).toEqual(
       { kind: "more" },
     );
+    const [cursor] = await getDb(ctx.db).select().from(mailboxCursor);
+    if (!cursor?.coverage) throw new Error("Synthetic history cursor missing");
+    const advanced = {
+      ...cursor.coverage,
+      history: { historyId: "160", pageToken: null, targetHistoryId: null },
+    };
+    await getDb(ctx.db)
+      .update(mailboxCursor)
+      .set({ coverage: advanced })
+      .where(eq(mailboxCursor.id, cursor.id));
+    expectedHistoryId = "160";
     expect(await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam)).toEqual(
       { kind: "done" },
     );
     expect(sizes).toEqual([5, 5, 1]);
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(11);
     expect(
-      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage?.history
-        .historyId,
-    ).toBe("120");
+      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage,
+    ).toEqual(advanced);
     expect((await readRun(state.params.runId)).progress).toMatchObject({
       pagesDone: 1,
       saved: 11,
