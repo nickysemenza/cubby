@@ -118,7 +118,7 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
             } catch let failure as StructuredOutputFailure {
                 throw CompanionImageDescriptionFailure.model(
                     reason:
-                        "structured_output_invalid: \(String(reflecting: failure.original)); rawContent=\(failure.original.rawContent); snapshot=\(failure.metadata)",
+                        "structured_output_invalid: snapshot=\(failure.metadata); \(String(reflecting: failure.original)); rawContent=\(failure.original.rawContent)",
                     retryable: false)
             } catch let error as GeneratedContent.ParsingError {
                 // Structured decoding errors are separate from LanguageModelError. Replaying

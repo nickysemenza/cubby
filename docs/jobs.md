@@ -389,8 +389,9 @@ structure availability, completion and root shape, presence and shapes of the
 three expected properties, underlying error type, and raw diagnostic equality
 flags. Missing response metadata stays unknown; older responses are not used.
 Output usage of zero does not establish that no tokens were generated. The
-snapshot excludes generated values and arbitrary keys; the full raw reason can
-still contain private content.
+snapshot excludes generated values and arbitrary keys and precedes the raw
+diagnostic so it survives the existing 1,000-character failure-reason limit.
+The full raw reason can still contain private content.
 
 Recurring image-execution repair also settles retained negative cutout failures in
 bounded batches. This negative-outcome pass requires the current source/revision and the matching settled
