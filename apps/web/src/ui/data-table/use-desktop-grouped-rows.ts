@@ -14,6 +14,7 @@ type DesktopGroupItem =
       kind: "header";
       key: string;
       title: string;
+      labelContent?: ReactNode;
       count: number;
       depth: number;
       collapsed: boolean;
@@ -60,6 +61,7 @@ export function useDesktopGroupedRows<TItem extends RowData>(
             kind: "header",
             key: section.key,
             title: section.label,
+            labelContent: section.labelContent,
             count: section.count,
             depth: section.depth,
             collapsed: section.collapsed,

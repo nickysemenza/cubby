@@ -40,6 +40,7 @@ export function EntityIdentityMark({
   id,
   name,
   className,
+  preview,
 }: {
   entity: Entity;
   id?: string;
@@ -49,6 +50,7 @@ export function EntityIdentityMark({
   size?: EntityIdentityMarkSize;
   fallback?: ReactNode;
   className?: string;
+  preview?: boolean;
 }) {
   const pixels = MARK_SIZE[size];
   // A pill's mark follows the pill's own slot (14px in an 18px desktop pill,
@@ -103,6 +105,7 @@ export function EntityIdentityMark({
         },
       ]}
       entity={entity}
+      preview={preview}
       alt=""
       size={fluid ? undefined : pixels}
       fit={containedEntities.has(entity) ? "contain" : "cover"}

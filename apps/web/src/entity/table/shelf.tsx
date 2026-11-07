@@ -363,6 +363,7 @@ export function ShelfGrid<T>({
               >
                 <SectionHeader
                   title={section.label}
+                  labelContent={section.labelContent}
                   count={section.count}
                   depth={section.depth}
                   collapsed={section.collapsed}

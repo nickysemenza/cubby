@@ -27,6 +27,7 @@ type GroupedItem =
       kind: "header";
       key: string;
       title: string;
+      labelContent?: ReactNode;
       count: number;
       depth?: number;
       collapsed?: boolean;
@@ -64,6 +65,7 @@ type ResolvedVirtualIndex =
       kind: "header";
       key: string;
       title: string;
+      labelContent?: ReactNode;
       count: number;
       depth?: number;
       collapsed?: boolean;

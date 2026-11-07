@@ -70,6 +70,7 @@ import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import { EntityShelf } from "./entity-shelf";
+import { GroupLabelsProvider } from "./group-value-label";
 import {
   listGroupBy,
   PIVOT_VIEW_ID,
@@ -806,13 +807,17 @@ function ServerListBody({
     body
   );
   return (
-    <>
+    <GroupLabelsProvider
+      grouping={entityMetadata(queryClient, entity).listFields.grouping}
+      groupBy={list.groupSummary?.groupBy}
+      groups={list.groupSummary?.groups ?? []}
+    >
       {parts.wrap
         ? parts.wrap(provided, {
             data: list.data,
           })
         : provided}
-    </>
+    </GroupLabelsProvider>
   );
 }
 

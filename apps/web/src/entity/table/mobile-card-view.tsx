@@ -892,6 +892,7 @@ export function MobileCardView<TItem extends RowData>({
           >
             <SectionHeader
               title={gItem.section.label}
+              labelContent={gItem.section.labelContent}
               count={gItem.section.count}
               depth={gItem.section.depth}
               collapsed={gItem.section.collapsed}
