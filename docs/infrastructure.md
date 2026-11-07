@@ -379,9 +379,10 @@ startup tail; ordinal-1 connects were slow too. Keep measuring connect startup,
 origin admission and SQL execution separately. This change adds no PostgreSQL
 role or `statement_timeout` and preserves Neon's compute bounds.
 
-Each HTTP invocation lazily opens at most three strong and one cached database
-sockets. Background invocations use the same bounded client leasing policy on
-the background binding, close their pools at scope completion and preserve
+Each HTTP invocation lazily opens at most two strong and two cached database
+sockets, so ordinary browser reads can overlap page enrichment. Background
+invocations retain three strong and one cached socket on the background binding,
+close their pools at scope completion and preserve
 independent concurrent transactions. Four database sockets leave two of the
 Worker's six outbound connection slots for provider/DO/storage/telemetry calls.
 One Worker continues to serve all events.

@@ -19,47 +19,51 @@ const databaseRuntime = (): DatabaseRuntime => {
 };
 
 describe("DatabaseRuntimeResolver", () => {
-  it("lazily creates and caches independent strong and stale Worker runtimes", () => {
-    const scope: RequestDatabaseRuntimeScope = {
-      connections: {
-        strong: "postgresql://strong.example/cubby",
-        boundedStale: "postgresql://stale.example/cubby",
-      },
-      runtimes: {},
-    };
-    const calls: Array<{
-      connectionString: string;
-      maxConnections: number;
-      role: RequestDbRole;
-    }> = [];
-    const resolver = new DatabaseRuntimeResolver({
-      requestScope: () => scope,
-      moduleRuntime: () => undefined,
-      createRuntime: (connectionString, maxConnections, role) => {
-        calls.push({ connectionString, maxConnections, role });
-        return databaseRuntime();
-      },
-    });
+  it.each(["http", "background"] as const)(
+    "lazily creates and caches independent strong and stale %s runtimes",
+    (kind) => {
+      const scope: RequestDatabaseRuntimeScope = {
+        kind,
+        connections: {
+          strong: "postgresql://strong.example/cubby",
+          boundedStale: "postgresql://stale.example/cubby",
+        },
+        runtimes: {},
+      };
+      const calls: Array<{
+        connectionString: string;
+        maxConnections: number;
+        role: RequestDbRole;
+      }> = [];
+      const resolver = new DatabaseRuntimeResolver({
+        requestScope: () => scope,
+        moduleRuntime: () => undefined,
+        createRuntime: (connectionString, maxConnections, role) => {
+          calls.push({ connectionString, maxConnections, role });
+          return databaseRuntime();
+        },
+      });
 
-    expect(calls).toEqual([]);
-    const strong = resolver.resolve("strong");
-    expect(resolver.resolve("strong")).toBe(strong);
-    const stale = resolver.resolve("bounded-stale");
-    expect(resolver.resolve("bounded-stale")).toBe(stale);
-    expect(stale).not.toBe(strong);
-    expect(calls).toEqual([
-      {
-        connectionString: "postgresql://strong.example/cubby",
-        maxConnections: 3,
-        role: "strong",
-      },
-      {
-        connectionString: "postgresql://stale.example/cubby",
-        maxConnections: 1,
-        role: "bounded-stale",
-      },
-    ]);
-  });
+      expect(calls).toEqual([]);
+      const strong = resolver.resolve("strong");
+      expect(resolver.resolve("strong")).toBe(strong);
+      const stale = resolver.resolve("bounded-stale");
+      expect(resolver.resolve("bounded-stale")).toBe(stale);
+      expect(stale).not.toBe(strong);
+      expect(calls).toEqual([
+        {
+          connectionString: "postgresql://strong.example/cubby",
+          maxConnections: kind === "http" ? 2 : 3,
+          role: "strong",
+        },
+        {
+          connectionString: "postgresql://stale.example/cubby",
+          maxConnections: kind === "http" ? 2 : 1,
+          role: "bounded-stale",
+        },
+      ]);
+    },
+  );
 
   it("uses the shared module runtime outside a Worker request", () => {
     const moduleRuntime = databaseRuntime();
