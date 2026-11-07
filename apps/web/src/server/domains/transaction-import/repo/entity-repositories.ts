@@ -17,6 +17,7 @@ import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import { sourceTransactionRecordSearch } from "~/server/domains/transaction-import/repo/search-read-source-transaction-record";
 import {
   sourceObservations,
+  sourceObservationsForPage,
   sourceObservationField,
   sourceObservationColumns,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
@@ -84,12 +85,8 @@ const sourceRead = {
           historicalTransactionIds:
             sourceObservationColumns.historicalTransactionIds,
         })
-        .from(sql`${sourceObservations} "SourceTransactionRecord"`)
-        .where(
-          inArray(
-            sourceObservationColumns.id,
-            rows.map((row) => row.id),
-          ),
+        .from(
+          sql`${sourceObservationsForPage(rows.map((row) => row.id))} "SourceTransactionRecord"`,
         );
       return new Map(result.map((row) => [row.id, row]));
     });

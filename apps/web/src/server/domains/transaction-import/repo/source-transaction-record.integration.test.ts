@@ -1,3 +1,4 @@
+import type { sourceTransactionRecordRawOut } from "@cubby/schemas/entity-contracts/sourceTransactionRecord";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   sourceOccurrenceReviewState,
@@ -16,6 +17,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import type { z } from "zod";
 
 import {
   sourceHistoricalTransactionRows,
@@ -517,24 +519,51 @@ describe("statement row ledger", () => {
         "objects",
       );
       expect(rows).toEqual([{ differences: 0 }]);
-      const page = await sourceTransactionRecordScaffold.read(ctx.db, {
-        filters: {},
-        sorts: [],
-        pagination: { pageIndex: 0, pageSize: 100 },
-        projection: selectedListProjection("sourceTransactionRecord", [
-          "id",
-          "matchState",
-        ]),
-      });
-      const expected = await getDb(ctx.db).execute<{
-        shortcode: string;
-        matchState: string;
-      }>(
-        sql`SELECT shortcode, "matchState" FROM ${sourceObservations} observed WHERE observed."deletedAt" IS NULL`,
+      const expected = await getDb(ctx.db).execute<
+        Pick<
+          z.infer<typeof sourceTransactionRecordRawOut>,
+          "id" | "matchState" | "transactionId" | "historicalTransactionIds"
+        >
+      >(
+        sql`SELECT shortcode AS id, "matchState", "transactionShortcode" AS "transactionId", "historicalTransactionIds"
+          FROM ${sourceObservations} observed WHERE observed."deletedAt" IS NULL`,
       );
-      expect(page.data.map((row) => [row.id, row.matchState]).sort()).toEqual(
-        expected.rows.map((row) => [row.shortcode, row.matchState]).sort(),
-      );
+      // Small pages must retain history supplied by observations outside their scope.
+      for (
+        let pageIndex = 0;
+        pageIndex * 2 < expected.rows.length;
+        pageIndex++
+      ) {
+        const page = await sourceTransactionRecordScaffold.read(ctx.db, {
+          filters: {},
+          sorts: [],
+          pagination: { pageIndex, pageSize: 2 },
+          projection: selectedListProjection("sourceTransactionRecord", [
+            "id",
+            "matchState",
+            "transactionId",
+            "historicalTransactionIds",
+          ]),
+        });
+        expect(page.data).toHaveLength(
+          Math.min(2, expected.rows.length - pageIndex * 2),
+        );
+        const pageIds = new Set(page.data.map((row) => row.id));
+        expect(
+          page.data
+            .map((row) => ({
+              id: row.id,
+              matchState: row.matchState,
+              transactionId: row.transactionId,
+              historicalTransactionIds: row.historicalTransactionIds,
+            }))
+            .sort((a, b) => a.id.localeCompare(b.id)),
+        ).toEqual(
+          expected.rows
+            .filter((row) => pageIds.has(row.id))
+            .sort((a, b) => a.id.localeCompare(b.id)),
+        );
+      }
     };
     const [historicalBinding] = await getDb(ctx.db)
       .insert(financialEvidenceAlias)
