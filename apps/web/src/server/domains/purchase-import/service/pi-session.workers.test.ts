@@ -33,8 +33,13 @@ const context = BACKGROUND_CONTEXT;
 
 class TestPiHarness extends PiHarness {
   // Exercise the real cache while isolating its Cloudflare lifecycle seam.
+  // agents ≥0.32 wake errors emit on lifecycle.events; keep a no-op bus.
   override get lifecycle(): LifecycleServices {
-    return fromPartial({ ready: async () => {}, storage: {} });
+    return fromPartial({
+      ready: async () => {},
+      storage: {},
+      events: { emit: () => {} },
+    });
   }
 }
 
