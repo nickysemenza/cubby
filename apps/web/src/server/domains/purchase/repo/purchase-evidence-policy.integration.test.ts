@@ -153,6 +153,23 @@ describe("purchase evidence policy", () => {
     await line({ productId: product.id, productQuantity: 1 });
     await line({ name: "Fixture tax", lineKind: "tax" });
     await line({ name: "Fixture install labor", costType: "services" });
+    const other = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: purchase.vendorId,
+      date: "2026-09-02",
+    });
+    await line({
+      name: "Synthetic other order's unclassified line",
+      purchaseId: other.id,
+      lineKind: "unclassified",
+    });
+    const deleted = await line({
+      name: "Synthetic deleted unclassified line",
+      lineKind: "unclassified",
+    });
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Expense" SET "deletedAt" = now() WHERE id = ${deleted.id}`,
+    );
+    await line({ name: "Synthetic planned goods", future: true });
     expect(await state()).toMatchObject({
       coverage: { itemization: "present", document: "not_expected" },
     });

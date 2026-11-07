@@ -232,9 +232,7 @@ export const purchaseListsItemsSql = (alias: string): SQL => sql`(
   ${purchaseHasItemLinesSql(alias)} OR ${purchaseHasLinkedGoodsSql(alias)} OR ${purchaseHasForeignItemsSql(column(alias, "id"))}
 )`;
 
-/** Each itemization line fact, stated once over an Expense line alias: the
- * record-level read probes it with EXISTS, the bulk read folds it per
- * Purchase with `bool_or`. */
+/** Each itemization fact reads the same Purchase-scoped Expense rows. */
 const itemizationLineFacts = {
   hasUnclassified: (line: string): SQL =>
     sql`${column(line, "lineKind")} = ${expenseLineKindSchema.enum.unclassified}`,
@@ -247,16 +245,23 @@ type ItemizationLineFact = keyof typeof itemizationLineFacts;
  * Product policy. Totals belong to reconciliation, not this axis. */
 export const purchaseHasItemizationSql = (alias: string): SQL => {
   const fact = (name: ItemizationLineFact) =>
-    sql`EXISTS (SELECT 1 FROM "Expense" ep_fact_line
-    WHERE ep_fact_line."purchaseId" = ${column(alias, "id")}
-      AND ${notDeleted("ep_fact_line")}
-      AND ${itemizationLineFacts[name]("ep_fact_line")})`;
+    sql`EXISTS (SELECT 1 FROM ep_itemization_lines ep_fact_line
+      WHERE ${itemizationLineFacts[name]("ep_fact_line")})`;
 
+  // Restrict rows before policy filters: a global null-Product bitmap was
+  // rebuilt for every Purchase. Each fact still decides future/line eligibility.
   return sql`(
-    (${purchaseHasForeignItemsSql(column(alias, "id"))} AND NOT ${fact("hasUnclassified")}) OR (${purchaseListsItemsSql(alias)}
-  AND NOT ${fact("hasUnclassified")}
-    AND NOT ${fact("hasUnlinkedRequired")})
-)`;
+    WITH ep_itemization_lines AS MATERIALIZED (
+      SELECT * FROM "Expense" ep_itemization_input
+      WHERE ep_itemization_input."purchaseId" = ${column(alias, "id")}
+        AND ${notDeleted("ep_itemization_input")}
+    )
+    SELECT (
+      (${purchaseHasForeignItemsSql(column(alias, "id"))} AND NOT ${fact("hasUnclassified")}) OR (${purchaseListsItemsSql(alias)}
+        AND NOT ${fact("hasUnclassified")}
+        AND NOT ${fact("hasUnlinkedRequired")})
+    )
+  )`;
 };
 
 // Services are labor and carry no Product by design, whatever their category;

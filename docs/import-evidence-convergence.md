@@ -519,6 +519,13 @@ rule-change migration marks their Expense quality and Purchase quality.
 Totals stay with paperwork and settlement reconciliation. Itemization, Product resolution,
 and Expense booking have separate coverage; a charge is itemized only when
 every Purchase it settles is.
+
+Itemization reads first materialize only the requested Purchase's live Expense
+rows, then apply each line fact's eligibility policy. Future and unclassified
+rows remain available to the facts that inspect them. This avoids rebuilding a
+whole-corpus null-Product bitmap for each Purchase without changing policy or
+leaving the statement's snapshot.
+
 Gift and previously-owned Product provenance needs no purchase proof.
 
 Free rewards and coupons reduce the incurred price: record a signed negative
