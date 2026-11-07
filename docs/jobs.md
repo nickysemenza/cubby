@@ -111,7 +111,11 @@ superseded historical work.
 Mailbox discovery acquires at most five messages from its frozen provider page
 per Job claim. Its durable message offset resumes the remaining messages without
 replaying the completed prefix; absent offsets on retained pages mean zero.
-Mailbox coverage advances only after every batch and history event is handled.
+Mailbox coverage advances only after every batch and history event is handled. A retained
+automatic history page can then settle against a newer completed history cursor
+under the same baseline when its numeric ID covers the entire frozen range.
+It preserves all newer coverage; an in-flight token alone or a controlled scan
+cannot authorize this recovery.
 Import admission commits child dispatch intent atomically. An already-failed
 child remains visible for its own retry and does not fail discovery or rewind
 the mailbox page.
