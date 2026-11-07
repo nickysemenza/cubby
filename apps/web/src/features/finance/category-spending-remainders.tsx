@@ -30,6 +30,7 @@ export function CategorySpendingRemainders({
     ) ?? [];
   return (
     <Section
+      id="category-spending-coverage"
       title="Spending coverage"
       headingAs="h3"
       caption="All history, including planned. This household-wide coverage is unchanged by the category display filters."

@@ -21,7 +21,9 @@ import { ingredientListReadProjection } from "~/features/ingredient/list-read";
 import { inventoryListReadProjection } from "~/features/inventory/list-read";
 import { locationListReadProjection } from "~/features/location/list-read";
 import { mealListReadProjection } from "~/features/meal/list-read";
+import { productCategoryListReadProjection } from "~/features/product-category/list-read";
 import { productListReadProjection } from "~/features/product/list-read";
+import { spendingCategoryListReadProjection } from "~/features/spending-category/list-read";
 import { wishListReadProjection } from "~/features/wish/list-read";
 import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 import { loadEntityMetadata } from "~/server/entity-kernel/metadata/loader.server";
@@ -146,6 +148,32 @@ describe("ensureEntityListSsr", () => {
     expect(ensure.mock.calls[1]?.[0].queryKey).toEqual(
       infiniteOperationQueryKey(filteredPlan.queryKey),
     );
+    for (const [entity, readProjection] of [
+      ["productCategory", productCategoryListReadProjection],
+      ["spendingCategory", spendingCategoryListReadProjection],
+    ] as const) {
+      await ensureEntityListSsr({
+        queryClient,
+        entity,
+        search: {},
+        nested: true,
+        readProjection,
+      });
+      const mounted = entityListFor(entity).selectedListQueryPlan(
+        compileEntityListInput(
+          queryClient,
+          entity,
+          {},
+          {
+            defaultSort: entityListDefaultSort(queryClient, entity),
+            fields: readProjection(queryClient, entity),
+          },
+        ),
+      );
+      expect(ensure.mock.lastCall?.[0].queryKey).toEqual(
+        infiniteOperationQueryKey(mounted.queryKey),
+      );
+    }
   });
 
   it("uses declared sort defaults for secondary lists without route options", () => {

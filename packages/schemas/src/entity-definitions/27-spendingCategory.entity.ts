@@ -149,6 +149,7 @@ export const { definition, readSchemas } = defineEntityModel({
           ],
         },
         display: {
+          listHidden: true,
           mobile: { slot: "meta", priority: 20 },
           columnGroup: "Catalog",
           width: "lg",
@@ -255,6 +256,7 @@ export const { definition, readSchemas } = defineEntityModel({
           ],
         },
         display: {
+          listHidden: true,
           mobile: { slot: "meta", priority: 30 },
           columnGroup: "Policy",
           columnLabel: "Evidence",
@@ -314,6 +316,7 @@ export const { definition, readSchemas } = defineEntityModel({
           ],
         },
         display: {
+          listHidden: true,
           columnGroup: "Policy",
           columnLabel: "Products",
           optionRole: "status",

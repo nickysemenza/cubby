@@ -31,6 +31,12 @@ export function CategoryWorkspaceArrangement({
       <span className="text-sm text-muted-foreground">
         Select a row to inspect mappings and spending.
       </span>
+      <a
+        href="#category-spending-coverage"
+        className="text-sm underline underline-offset-4"
+      >
+        Spending coverage
+      </a>
     </div>
   );
 }

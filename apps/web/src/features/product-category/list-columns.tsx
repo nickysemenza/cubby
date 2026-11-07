@@ -130,10 +130,11 @@ export const productCategoryListOverride = defineListOverride<
     const list = useMemo(
       () => ({
         preview: PREVIEW,
-        initialColumnVisibility: { feature: false, dataQuality: false },
         nameSuffix: (row: CategoryTreeRow) =>
           row.categoryContext ? (
-            <span className="text-xs text-muted-foreground">Ancestor</span>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              Ancestor
+            </span>
           ) : null,
       }),
       [],

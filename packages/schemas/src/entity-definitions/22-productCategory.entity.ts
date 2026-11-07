@@ -487,6 +487,7 @@ Rules:
           },
         },
         display: {
+          listHidden: true,
           columnGroup: "Classification",
           width: "md",
           mobile: { slot: "meta", priority: 10 },

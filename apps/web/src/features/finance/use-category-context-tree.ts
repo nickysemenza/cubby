@@ -31,7 +31,7 @@ export function useCategoryContextTree<
         const nodes = new Map<string, CategoryContextRow<T>>();
         // Server order owns matching siblings. A context ancestor follows its
         // first matching descendant, rather than a second unfiltered sort.
-        const rank = new Map<string, number>();
+        const rank = new Map(matches.map((row, index) => [row.id, index]));
         for (const [index, match] of matches.entries()) {
           const visited = new Set<string>();
           let row: T | undefined = match;

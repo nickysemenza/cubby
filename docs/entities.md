@@ -1652,7 +1652,11 @@ root is a row whose parent is null or does not itself match the filters (judged
 over the whole filtered set, so a matching child of a filtered-out or deleted
 parent stays reachable); `roots`/`children` rows carry `childCount`, their
 directly nested children that match the filters, and `totalCount` counts the
-requested scope. Selected-field public reads retain `childCount` as structural
+requested scope. A specialist client tree declares `nesting: "flat"` on its shared list-read
+projection, so the eager loader and mounted table consume the same matching
+roster. Promoting a declared filter column to primary search retains its URL
+codec and maps to its wire parameter for native clients.
+Selected-field public reads retain `childCount` as structural
 metadata even when it is not a requested record field, so expansion is available
 before children load. The shared list scaffold (`server/generic/list/repo/list.ts`) owns it, so a
 scaffold-built tree repository needs no code. The web table pages the roots and

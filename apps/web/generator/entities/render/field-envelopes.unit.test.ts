@@ -1,3 +1,4 @@
+import { renderSwiftEntityCatalog } from "./swift-catalog.ts";
 import { renderSchemaWrapperArtifacts } from "./schema-wrappers.ts";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -215,6 +216,27 @@ describe("recursive field projections", () => {
   it("publishes canonical wrappers while declaration inputs remain raw", async () => {
     const entities = await loadEntityDeclarations();
     const wrappers = renderSchemaWrapperArtifacts(entities);
+    const nativeCatalog = renderSwiftEntityCatalog(entities).find((artifact) =>
+      artifact.relativePath.endsWith("/entity-manifest.json"),
+    );
+    const nativeCategories = z
+      .array(
+        z.object({
+          key: z.string(),
+          primarySearch: z.object({ key: z.string() }).nullable(),
+        }),
+      )
+      .parse(JSON.parse(nativeCatalog?.source ?? "null"))
+      .filter(
+        (entry) =>
+          entry.key === "productCategory" || entry.key === "spendingCategory",
+      );
+    // Native sends the wire parameter, never the promoted browser column id.
+    expect(nativeCategories.map((entry) => entry.primarySearch?.key)).toEqual([
+      "search",
+      "search",
+    ]);
+
     expect(
       entities.find((entity) => entity.key === "recipe")?.contract?.list,
     ).toMatchObject({

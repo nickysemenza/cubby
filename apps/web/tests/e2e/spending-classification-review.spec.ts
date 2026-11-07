@@ -201,19 +201,15 @@ test("reviews historical item classification and preserves explicit purpose", as
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
-    page
-      .getByRole("dialog")
-      .filter({
-        has: page.getByRole("heading", { name: childName, exact: true }),
-      }),
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: childName, exact: true }),
+    }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Close panel", exact: true }).click();
   await expect(
-    page
-      .getByRole("dialog")
-      .filter({
-        has: page.getByRole("heading", { name: childName, exact: true }),
-      }),
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: childName, exact: true }),
+    }),
   ).toHaveCount(0);
   const mobileChild = page
     .getByRole("list", { name: "Product Categories list", exact: true })
@@ -227,11 +223,9 @@ test("reviews historical item classification and preserves explicit purpose", as
   });
   await mobileChild.press("Enter");
   await expect(
-    page
-      .getByRole("dialog")
-      .filter({
-        has: page.getByRole("heading", { name: childName, exact: true }),
-      }),
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: childName, exact: true }),
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Close panel", exact: true }),
@@ -394,6 +388,8 @@ test("reviews historical item classification and preserves explicit purpose", as
     name: "Spending Categories table",
     exact: true,
   });
+  const roots = await spendingTree.getByRole("link").allTextContents();
+  expect(roots.indexOf(giftsName)).toBeLessThan(roots.indexOf(purposeRootName));
   await page
     .getByRole("textbox", { name: /Search/ })
     .fill("classification clothing");
@@ -450,11 +446,9 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(giftContributions).toContainText("$7.00");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
-    page
-      .getByRole("dialog")
-      .filter({
-        has: page.getByRole("heading", { name: giftsName, exact: true }),
-      }),
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: giftsName, exact: true }),
+    }),
   ).toBeVisible();
   const spendingPhonePath = ".impeccable/review/spending-category-mobile.png";
   await page.screenshot({ path: spendingPhonePath, fullPage: true });

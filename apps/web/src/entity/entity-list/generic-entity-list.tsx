@@ -502,6 +502,8 @@ function ServerListBody({
   const { navigate } = context;
   const nestToggle = useMemo(
     () =>
+      readProjection.nesting === "flat" ||
+      parts.tree ||
       !entityMetadata(queryClient, entity).summary.list.tree?.toggle
         ? undefined
         : {
@@ -512,7 +514,7 @@ function ServerListBody({
                 { replace: true },
               ),
           },
-    [entity, navigate, queryClient, context.search],
+    [entity, navigate, queryClient, context.search, readProjection, parts.tree],
   );
   const onGroupByChange = useCallback(
     (key: string | null) => navigate({ groupBy: key ? [{ key }] : undefined }),

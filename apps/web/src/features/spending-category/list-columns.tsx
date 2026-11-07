@@ -82,7 +82,7 @@ function SpendingCategoryInspector({
                       name={mapping.name}
                     />{" "}
                     <span className="text-muted-foreground">
-                      {mapping.inherited ? "Inherited" : "Set here"}
+                      {!mapping.inherited && "Set here"}
                     </span>
                   </li>
                 ))}
@@ -118,12 +118,6 @@ const PREVIEW = {
   mobileBehavior: "sheet",
   renderInspector: SpendingCategoryInspector,
 } as const;
-const VISIBILITY = {
-  dataQuality: false,
-  productCategories: false,
-  itemizationExpectation: false,
-  productExpectation: false,
-};
 
 export const spendingCategoryListOverride = defineListOverride<
   CategoryTreeRow,
@@ -179,10 +173,11 @@ export const spendingCategoryListOverride = defineListOverride<
     const list = useMemo(
       () => ({
         preview: PREVIEW,
-        initialColumnVisibility: VISIBILITY,
         nameSuffix: (row: CategoryTreeRow) =>
           row.categoryContext ? (
-            <span className="text-xs text-muted-foreground">Ancestor</span>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              Ancestor
+            </span>
           ) : null,
       }),
       [],

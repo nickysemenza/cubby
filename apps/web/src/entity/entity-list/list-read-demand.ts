@@ -34,11 +34,15 @@ export const listReadNeedsCount = (
   filterIds: readonly string[],
 ): boolean => filterIds.some((id) => id !== primarySearchKey);
 
-export type ListReadProjection = (
-  queryClient: QueryClient,
-  entity: Entity,
-  visibility?: Readonly<Record<string, boolean>>,
-) => string[];
+export type ListReadProjection = {
+  (
+    queryClient: QueryClient,
+    entity: Entity,
+    visibility?: Readonly<Record<string, boolean>>,
+  ): string[];
+  /** A client tree needs the matching flat roster, including during preload. */
+  nesting?: "flat";
+};
 
 /** Shared by the eager loader and mounted roster; visibility never changes membership. */
 export const declaredListReadProjection: ListReadProjection = (
@@ -128,15 +132,21 @@ export const declaredListReadProjection: ListReadProjection = (
 /** Specialist row consumers share the same projection in loaders and mounted lists. */
 export function specialistListReadProjection({
   always = [],
+  nesting,
   whenShown = {},
   whenRevealed = {},
 }: {
   always?: readonly string[];
+  nesting?: "flat";
   /** Composed columns shown by default; declared columns use display.readFields. */
   whenShown?: Readonly<Record<string, readonly string[]>>;
   whenRevealed?: Readonly<Record<string, readonly string[]>>;
 }): ListReadProjection {
-  return (queryClient, entity, visibility = DEFAULT_LIST_COLUMN_VISIBILITY) => {
+  const projection: ListReadProjection = (
+    queryClient,
+    entity,
+    visibility = DEFAULT_LIST_COLUMN_VISIBILITY,
+  ) => {
     const fields = declaredListReadProjection(queryClient, entity, visibility);
     return [
       ...new Set([
@@ -151,4 +161,6 @@ export function specialistListReadProjection({
       ]),
     ].sort();
   };
+  projection.nesting = nesting;
+  return projection;
 }
