@@ -938,6 +938,9 @@ is, and one Needs you queue. `workQueue.status` is the single read behind the pa
 and the sidebar, and agents can read it too. It adds no alert engine, stored lanes
 or retry policy; old `tab=` links redirect to `/history`, `/suggestions` and
 Settings, and a `refresh=` locator to the value's record.
+The status read resolves the current-member filter before counting its internal
+queue, through the same filter boundary as the queue page. Its Needs you count
+therefore uses the same member population, including shared work.
 
 Stuck is decided on the server from completions over a window, never from a
 snapshot of what is running, which reads as stopped between a drain's bursts:
