@@ -245,7 +245,8 @@ export function CrossTabTable<R, C>({
             <tr
               key={row.key}
               className={cn(
-                rowHover && "group/row hover:bg-muted/20",
+                rowHover &&
+                  "group/row focus-within:bg-muted/20 hover:bg-muted/20",
                 bodyRule,
                 rowClassName?.(row),
               )}
@@ -258,7 +259,8 @@ export function CrossTabTable<R, C>({
                   sticky,
                   "px-2 text-left font-medium",
                   density === "compact" ? "py-1 text-xs" : "py-2 text-sm",
-                  rowHover && "group-hover/row:bg-muted",
+                  rowHover &&
+                    "group-focus-within/row:bg-muted group-hover/row:bg-muted",
                 )}
               >
                 {renderRowHeader(row)}
@@ -295,7 +297,9 @@ export function CrossTabTable<R, C>({
                     // would leave the trailing button un-clickable at its edges.
                     bareCells ? "p-0" : cn(valueCell, p.className),
                     p.stickyRight && ["sticky z-10", p.stickyRight, surfaceBg],
-                    p.stickyRight && rowHover && "group-hover/row:bg-muted",
+                    p.stickyRight &&
+                      rowHover &&
+                      "group-focus-within/row:bg-muted group-hover/row:bg-muted",
                   )}
                 >
                   {renderPinnedCell?.(row, p)}

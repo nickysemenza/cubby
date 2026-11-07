@@ -1,10 +1,12 @@
 import { buildEntity } from "#web/tooling/factories/build.ts";
 import { ingredientShortcode } from "@cubby/schemas/identifiers";
+import { workQueueOutSchema } from "@cubby/schemas/work-queue";
 import { z } from "zod";
 
 import { entityApi } from "./support/entity-api";
 import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
+import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
 
 const createdIdentity = z.object({ item: z.object({ id: z.string() }) });
 
@@ -60,6 +62,74 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
     path: testInfo.outputPath("work-desktop.png"),
     fullPage: true,
   });
+
+  // Overview counts open the same full population in Records, then the
+  // shared pivot narrows it by Type without dropping the Reason predicate.
+  await more.getByRole("link", { name: "All work", exact: true }).click();
+  const summary = page.getByRole("table", { name: "Work items by reason" });
+  await expect(summary).toBeVisible();
+  const count = summary.getByRole("button").first();
+  const expectedCount = Number((await count.innerText()).replaceAll(",", ""));
+  const drilled = page.waitForResponse((response) =>
+    dispatchesOperation(
+      response.request(),
+      "workQueue.queue",
+      ({ input }) =>
+        z.object({ pageSize: z.number() }).parse(input).pageSize > 0,
+    ),
+  );
+  await count.click();
+  expect(
+    (
+      await operationResult(
+        await drilled,
+        "workQueue.queue",
+        workQueueOutSchema,
+      )
+    ).meta.totalCount,
+  ).toBe(expectedCount);
+  await expect(page).toHaveURL(/layout=table/);
+  const reason = new URL(page.url()).searchParams.get("reason");
+  expect(reason).toBeTruthy();
+  await page.getByRole("button", { name: "Summary", exact: true }).click();
+  await expect(summary).toBeVisible();
+  await page.getByRole("button", { name: "Pivot", exact: true }).click();
+  const cell = page
+    .locator("[data-pivot-cell]:not([aria-disabled=true])")
+    .first();
+  await expect(cell).toBeVisible();
+  await cell.focus();
+  await page.keyboard.press("ArrowRight");
+  await cell.focus();
+  const expectedCellCount = Number(
+    (await cell.innerText()).replaceAll(",", ""),
+  );
+  const pivotDrilled = page.waitForResponse((response) =>
+    dispatchesOperation(
+      response.request(),
+      "workQueue.queue",
+      ({ input }) =>
+        z.object({ pageSize: z.number() }).parse(input).pageSize > 0,
+    ),
+  );
+  await cell.click();
+  expect(
+    (
+      await operationResult(
+        await pivotDrilled,
+        "workQueue.queue",
+        workQueueOutSchema,
+      )
+    ).meta.totalCount,
+  ).toBe(expectedCellCount);
+  await expect(page).toHaveURL(/layout=table/);
+  expect(new URL(page.url()).searchParams.get("reason")).toBe(reason);
+  expect(new URL(page.url()).searchParams.get("entity")).toBeTruthy();
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Records", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await gotoAuthenticatedPage(page, "/activity");
 
   // Automatic AI work has no Run to stop, so a member stops and resumes it here.
   await more.getByRole("button", { name: "Stop automatic AI work" }).click();

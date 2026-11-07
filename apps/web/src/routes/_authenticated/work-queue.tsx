@@ -1,4 +1,4 @@
-import { workQueueList } from "@cubby/schemas/work-queue";
+import { workQueueLayout, workQueueList } from "@cubby/schemas/work-queue";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { RoutePending } from "~/entity/navigation/route-pending";
@@ -8,7 +8,9 @@ import { relationListSearch } from "~/ui/data-table/relation-list-search";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
 
 export const Route = createFileRoute("/_authenticated/work-queue")({
-  validateSearch: relationListSearch(workQueueList),
+  validateSearch: relationListSearch(workQueueList).extend({
+    layout: workQueueLayout.optional().catch(undefined),
+  }),
   component: WorkQueuePage,
   pendingComponent: RoutePending,
   errorComponent: RouteErrorComponent,

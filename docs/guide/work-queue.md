@@ -2,7 +2,7 @@
 
 Work is the household's operational entry point at `/activity`: one screen with
 an always-present background health line, a Stuck section only when something is
-stuck, and one Needs you queue grouped by reason. Needs you holds decisions,
+stuck, and one Needs you queue summarized by reason. Needs you holds decisions,
 required proposals and concrete Problems that are mine or shared; the sidebar
 count and Home's preview read the same `NEEDS_YOU_FILTERS` population. Waiting
 never implies failure.
@@ -41,6 +41,17 @@ them explicitly and owns filtering, search, sorting, Group by, saved views,
 counts and paging. Its All, Automatic, Agent, Review, Waiting and Problems views
 share that one server read with record work sections, including Runs. GitHub
 Issues owns delivery and remaining domain coverage.
+
+Summary is the default layout on both Work and the full queue. It ranks reasons
+by work-item count and shows each reason's share of all matching known work.
+Pivot compares Reason × Type using the shared count/percentage matrix; Records
+keeps the existing grouped table and its actions. Selecting a summary count or
+pivot cell opens Records with its reason and type filters, preserving the
+current member scope and other filters. The full queue keeps layout in the URL.
+One record can have several work items, and one work item can carry several
+reasons. Reason counts overlap; grand totals and Type margins count each work
+item once. Neither layout derives counts from the loaded record page. Coverage
+warnings remain visible in every layout.
 
 ## Review a Run
 

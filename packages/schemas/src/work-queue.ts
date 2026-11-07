@@ -267,7 +267,19 @@ export const workQueueList = defineRelationList({
   pageSize: { default: 25, max: 100 },
 });
 
-export const workQueueInput = workQueueList.input;
+export const workQueueInput = workQueueList.input.extend({
+  /** Zero requests full-population Reason × Type counts without record hydration. */
+  pageSize: z
+    .number()
+    .int()
+    .min(0)
+    .max(workQueueList.pageSize.max)
+    .default(workQueueList.pageSize.default)
+    .describe(
+      "Items per page; 0 returns full-filter Reason × Type counts without record rows.",
+    ),
+});
+export const workQueueLayout = z.enum(["summary", "pivot", "table"]);
 /**
  * Work that needs a member, mine plus shared: the sidebar count, the Work page
  * and Home's preview all read this one population. Optional proposals are
@@ -296,11 +308,26 @@ export const workQueueGroupSummarySchema = z
 
 const count = z.number().int().nonnegative();
 
+/** Each work item counts once per reason; Type margins count it only once. */
+const workQueueSummarySchema = z.object({
+  cells: z.array(
+    z.object({
+      reason: z.string().min(1),
+      entity: z.enum(shortcodeEntities).nullable(),
+      count,
+    }),
+  ),
+  types: z.array(
+    z.object({ entity: z.enum(shortcodeEntities).nullable(), count }),
+  ),
+});
+
 export const workQueueOutSchema = z.object({
   items: z.array(workQueueRowSchema),
   meta: z.object({
     pageIndex: count,
-    pageSize: z.number().int().positive(),
+    pageSize: count,
+    summary: workQueueSummarySchema.optional(),
     /** Counts cover known candidates while Project inputs are incomplete. */
     incompleteProjectIds: z.array(projectShortcode).optional(),
     /** Missing/stale diagnostic publications; totals cover known work only. */

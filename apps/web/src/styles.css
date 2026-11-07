@@ -311,42 +311,22 @@
   --ingredient-name: var(--brand-foreground);
   --ingredient-modifier: var(--brand-shelf);
 
-  /* Charts use the interaction accent and a categorical palette. */
-  --chart-1: var(--brand-ultramarine); /* accent / primary series */
-  --chart-2: var(--category-1);
-  --chart-3: var(--category-2);
-  --chart-4: var(--category-3);
-  --chart-5: var(--category-4);
-  --chart-6: var(--category-5);
-  --chart-7: var(--brand-graphite-secondary);
-  --chart-8: color-mix(
-    in oklab,
-    var(--brand-graphite-secondary) 58%,
-    var(--brand-surface)
-  );
+  /* Data colors stay independent of the deliberately neutral interaction ink. */
+  --chart-1: var(--category-1);
+  --chart-2: var(--category-2);
+  --chart-3: var(--category-3);
+  --chart-4: var(--category-4);
+  --chart-5: var(--category-5);
+  --chart-6: var(--category-6);
+  --chart-7: var(--category-7);
+  --chart-8: var(--category-8);
 
-  /* Sequential ramp for heatmaps: paper -> ultramarine */
-  --chart-seq-1: color-mix(
-    in oklab,
-    var(--brand-ultramarine) 8%,
-    var(--brand-paper)
-  );
-  --chart-seq-2: color-mix(
-    in oklab,
-    var(--brand-ultramarine) 28%,
-    var(--brand-paper)
-  );
-  --chart-seq-3: color-mix(
-    in oklab,
-    var(--brand-ultramarine) 50%,
-    var(--brand-paper)
-  );
-  --chart-seq-4: color-mix(
-    in oklab,
-    var(--brand-ultramarine) 74%,
-    var(--brand-paper)
-  );
-  --chart-seq-5: var(--brand-ultramarine);
+  /* Sequential ramp for heatmaps: paper to the blue data series. */
+  --chart-seq-1: color-mix(in oklab, var(--chart-1) 8%, var(--brand-paper));
+  --chart-seq-2: color-mix(in oklab, var(--chart-1) 28%, var(--brand-paper));
+  --chart-seq-3: color-mix(in oklab, var(--chart-1) 42%, var(--brand-paper));
+  --chart-seq-4: color-mix(in oklab, var(--chart-1) 96%, var(--brand-paper));
+  --chart-seq-5: var(--chart-1);
 
   /* Semantic chart tones (ratings stay off the blue axis) */
   --chart-positive: var(--positive);

@@ -3734,6 +3734,16 @@ exact filter because a member's filter also matches shared work. Saved views
 those filters (ADR 0022); view counts are computed in the same pass before the
 active view applies.
 
+A zero-page-size queue read returns no record rows and supplies full-filter
+Reason × Type cells plus distinct Type margins in `meta.summary`. Reasons use
+all memberships, matching the ordinary any-of Reason filter; duplicate keys in
+one item's reason array count once. The grand total and Type margins count
+each work item once even when reasons overlap. Summary and Pivot reuse the
+same eligibility, routing, member fence, deferrals and completeness metadata as
+Records, without page quality/image hydration.
+An active any-of Reason filter limits the summarized reason keys too, so a
+drill-down cannot widen the original population through another membership.
+
 The engine prunes sources a reason filter or record scope cannot admit. Source
 union and owner routing can inline so common filters reach their inputs; the
 filtered population materializes once for the selected view, exact totals and

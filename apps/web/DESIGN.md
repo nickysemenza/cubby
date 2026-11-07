@@ -390,7 +390,17 @@ results and supported corrections/retries; completion is never a success claim
 for every item.
 
 The dedicated Work queue is a workbench table across record types. Its
-workbench band carries line tabs (All, Review, Research, Waiting, Automatic)
+default Summary layout ranks reasons by full-population work-item count and
+shows share of the filtered total. Pivot uses the shared `EntityPivot` renderer
+for Reason × Type; Records retains the workbench table and group actions.
+The compact Summary / Pivot / Records picker is shared by the embedded Needs
+you queue and the full page, where layout is URL state. Summary counts and
+pivot cells drill into Records without dropping scope or other filters. One
+record may have several work items; an item may have several reasons. Reason
+counts can overlap while totals and Type margins count each work item once.
+Incomplete-coverage notices stay above all three layouts. The Summary's reason
+labels wrap, numbers align right, and the count cells use the shared heat ramp.
+Its workbench band carries line tabs (All, Review, Research, Waiting, Automatic)
 with each view's server total in mono; a tab presets the View filter, beside
 the Type, Waiting for, Kind, Source, Reason and Vendor any-of filters. Each
 offers is and is not through the shared filter editor, including Filter… in
@@ -484,6 +494,14 @@ Headers carry their label, with relation entity glyphs only, and drag sideways t
 Tables expose a Group control only for declared grouping choices. Declared problem views tint their counts from the existing problem classification. Active-filter chips are 18px with 4px corners and 11px text; toolbar search and buttons are 26px. Headers, the Filters button and active chips open the same focused filter editor. All filters returns to its searchable field list. Record choices show the canonical identity pill with useful secondary facts below and counts separately; enums remain compact, while dates and numbers use typed bounds. Edits apply immediately through the existing shared draft and URL state. Filter sections use sentence-case labels, typed rows, inline boolean choices and a live count. Whole-table empty states use `EmptyState` page geometry. Initial desktop loading draws ten row-height skeletons under the actual columns. Group headers stick while their rows scroll, with totals under their money columns (the sum, then a muted mean) and the grouped column hidden. On desktop and tablet, a list with two groupable choices offers Pivot in Layout: the first Group by field makes rows, the second columns and a third collapsible sub-rows, drawn with `CrossTabTable` and the matrix chrome. Cells show the count with a Count / Row % / Col % / All % segmented choice, shaded on the shared heat scale against the chosen row, column or grid total (Count shades against the largest cell). Total column and row count each record once and a quiet note explains overlapping values. Columns order by total; beyond 12, a single-valued column field folds the rest into a "+N more" column that expands on click. No value sorts last as its own row or column. Headers sort the pivot only. Each cell is a button on one roving tab stop moved by arrow keys; an eligible cell opens the table filtered to it, and an ineligible one stays focusable with its reason. Phones keep the grouped list. A footer appears when a visible money column has numeric loaded values; it uses the server aggregate when present, otherwise labels loaded-row totals explicitly. The floating selection bar rises 8px in 180ms, keeps query controls visible, totals each visible loaded money column separately, and renders only the list's existing bulk actions, with its count, three primaries, a More overflow and Clear.
 
 ### Data visualization
+
+Data colors are independent of neutral interaction ink. The eight categorical
+chart tokens use the existing blue, plum, teal, ochre, violet, terracotta, olive
+and slate palette on the web's light surface. The shared sequential heat scale
+runs from paper to blue, switching to paper ink on its deepest two fills. Spend-strip
+bars, comparison glyphs and the cash-flow net line use these same data roles;
+negative spend retains its semantic negative tone. Labels, axes and grid lines
+remain neutral, with counts and text preserving meaning without color.
 
 Location browsing keeps a compact navigation outline beside a continuous,
 scrollable gallery of the full filtered hierarchy. Sidebar names jump to mounted

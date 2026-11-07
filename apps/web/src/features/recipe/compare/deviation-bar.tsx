@@ -31,7 +31,7 @@ const Axis: React.FC = () => (
  * One recipe's value as a dot on the row's shared `[0, max]` axis: a crisp mean
  * rule and a thin whisker from the mean to the dot show both the absolute amount
  * and the direction/size of the deviation. The row's largest deviation takes the
- * brick `--primary` accent; the rest are crisp neutral.
+ * plum data accent; the rest use the blue series.
  */
 export const StripPlotCell: React.FC<{
   value: number;
@@ -45,7 +45,7 @@ export const StripPlotCell: React.FC<{
   const pct = (v: number) => clamp((v / max) * 100, 0, 100);
   const xMean = pct(mean);
   const xVal = pct(value);
-  const color = isMax ? "var(--primary)" : "var(--foreground)";
+  const color = isMax ? "var(--chart-2)" : "var(--chart-1)";
 
   return (
     <div className="relative mt-2 h-2.5 w-full">
@@ -117,7 +117,7 @@ export const DistributionGlyph: React.FC<{
       />
       <div
         className="absolute top-0 bottom-0 w-0.5 -translate-x-1/2"
-        style={{ left: `${pct(mean)}%`, background: "var(--primary)" }}
+        style={{ left: `${pct(mean)}%`, background: "var(--chart-2)" }}
       />
     </div>
   );

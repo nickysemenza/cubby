@@ -162,7 +162,14 @@ export function MonthlySpendChart({
               {month && month.cents !== 0 ? (
                 <div
                   aria-hidden
-                  className={`absolute left-1/2 w-3/5 -translate-x-1/2 ${month.month === last?.month ? "bg-foreground-strong" : "bg-muted-foreground/25"}`}
+                  className={cn(
+                    "absolute left-1/2 w-3/5 -translate-x-1/2",
+                    month.cents < 0
+                      ? "bg-chart-negative"
+                      : month.month === last?.month
+                        ? "bg-chart-1"
+                        : "bg-chart-seq-3",
+                  )}
                   style={{
                     bottom: month.cents > 0 ? `${100 - zero}%` : undefined,
                     top: month.cents < 0 ? `${zero}%` : undefined,

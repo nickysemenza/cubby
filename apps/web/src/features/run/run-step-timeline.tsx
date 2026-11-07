@@ -122,7 +122,7 @@ export function ReasonBreakdown({
                     <span
                       className={cn(
                         "absolute inset-y-0 left-0 min-w-px",
-                        row.candidate ? "bg-info" : "bg-foreground/40",
+                        row.candidate ? "bg-info" : "bg-chart-1",
                       )}
                       style={{
                         width: `${Math.min(100, (row.count / base) * 100)}%`,
@@ -257,7 +257,7 @@ function PageWork({ page }: { page: RunStepView["page"] }) {
           </span>
           <span aria-hidden className="relative h-1.5 bg-muted">
             <span
-              className="absolute inset-y-0 left-0 min-w-px bg-foreground/40"
+              className="absolute inset-y-0 left-0 min-w-px bg-chart-1"
               style={{ width: `${Math.min(100, phase.share * 100)}%` }}
             />
           </span>

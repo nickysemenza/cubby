@@ -178,7 +178,7 @@ describe("composed Work queue engine", () => {
       [
         {
           key: "Alpha",
-          reasons: ["a", "b"],
+          reasons: ["a", "b", "b", "c"],
           executor: "agent",
           amount: -5,
           date: "2026-09-01",
@@ -202,6 +202,24 @@ describe("composed Work queue engine", () => {
       deferrals,
     );
     expect(page.items.map((row) => row.key)).toEqual(["Beta"]);
+    // Summary-only counts cover the same population before paging. A row
+    // carrying two reasons belongs in both cells, but only once in margins.
+    const summary = await read(
+      [source],
+      { reason: ["a", "b"], pageSize: 0 },
+      deferrals,
+    );
+    expect(summary.items).toEqual([]);
+    expect(summary.meta).toMatchObject({
+      totalCount: 2,
+      summary: {
+        cells: [
+          { reason: "a", entity: null, count: 1 },
+          { reason: "b", entity: null, count: 2 },
+        ],
+        types: [{ entity: null, count: 2 }],
+      },
+    });
     expect(page.meta).toMatchObject({
       totalCount: 2,
       viewCounts: { all: 2, agent: 1, human: 1, external: 0, automatic: 0 },
@@ -224,8 +242,28 @@ describe("composed Work queue engine", () => {
       deferrals,
     );
     expect(excluded.items.map((row) => row.key)).toEqual(["Beta"]);
+    expect(
+      (
+        await read(
+          [source],
+          { reason: "b", reasonExclude: "a", pageSize: 0 },
+          deferrals,
+        )
+      ).meta.summary?.cells,
+    ).toEqual([{ reason: "b", entity: null, count: 1 }]);
     const view = await read([source], { view: "agent" }, deferrals);
     expect(view.items.map((row) => row.key)).toEqual(["Alpha"]);
+    expect(
+      (await read([source], { view: "agent", pageSize: 0 }, deferrals)).meta
+        .summary,
+    ).toEqual({
+      cells: [
+        { reason: "a", entity: null, count: 1 },
+        { reason: "b", entity: null, count: 1 },
+        { reason: "c", entity: null, count: 1 },
+      ],
+      types: [{ entity: null, count: 1 }],
+    });
     expect(view.meta.viewCounts).toMatchObject({
       all: 3,
       agent: 1,
@@ -333,6 +371,19 @@ describe("composed Work queue engine", () => {
     });
     expect(own.items.map((row) => row.key)).toEqual(["both", "mine", "shared"]);
     expect(own.meta.incompleteSources?.[0]?.count).toBe(3);
+    const ownSummary = await readWorkQueueWith(ctx.db, composition, {
+      input: { ...input, pageSize: 0 },
+      memberPartyId: first.id,
+      memberOnly: false,
+    });
+    expect(ownSummary.meta).toMatchObject({
+      totalCount: 3,
+      summary: {
+        cells: [{ reason: "a", entity: null, count: 3 }],
+        types: [{ entity: null, count: 3 }],
+      },
+      incompleteSources: own.meta.incompleteSources,
+    });
     const noValue = await read([source], {
       owner: first.shortcode,
       ownerPresence: "none",
@@ -370,6 +421,19 @@ describe("composed Work queue engine", () => {
     });
     expect(fenced.items.map((row) => row.key)).toEqual(["mine", "shared"]);
     expect(fenced.meta.incompleteSources?.[0]?.count).toBe(2);
+    const fencedSummary = await readWorkQueueWith(ctx.db, composition, {
+      input: { pageSize: 0 },
+      memberPartyId: first.id,
+      memberOnly: true,
+    });
+    expect(fencedSummary.meta).toMatchObject({
+      totalCount: 2,
+      summary: {
+        cells: [{ reason: "a", entity: null, count: 2 }],
+        types: [{ entity: null, count: 2 }],
+      },
+      incompleteSources: fenced.meta.incompleteSources,
+    });
     const unlinked = await readWorkQueueWith(ctx.db, composition, {
       input: {},
       memberPartyId: null,

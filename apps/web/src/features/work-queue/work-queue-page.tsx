@@ -5,6 +5,7 @@ import {
   workExecutorOptions,
   workFamilyOptions,
   workQueueInput,
+  workQueueLayout,
   workQueueList,
   type WorkQueueOut,
   type WorkQueueRow,
@@ -22,6 +23,7 @@ import type { z } from "zod";
 import { verbBulkAction } from "~/entity/actions/action-verb-ui";
 import { createDataQualityColumn } from "~/entity/display/list-field-renderers";
 import { isBrowserRoutedEntity } from "~/entity/entities";
+import { withGroupFilters } from "~/entity/entity-list/group-drill-down";
 import {
   buildFiltersFromManifest,
   type FilterSpecCore,
@@ -40,7 +42,7 @@ import {
   createPlainDateColumn,
   createSelectColumn,
 } from "~/entity/table/column-helpers";
-import { GroupMenu } from "~/entity/table/data-table-toolbar";
+import { DataTableToolbar, GroupMenu } from "~/entity/table/data-table-toolbar";
 import { ViewTabs } from "~/entity/table/data-table-views";
 import RTable from "~/entity/table/table";
 import {
@@ -66,6 +68,7 @@ import {
   deferredRosterControls,
   type RuntimeFilterOptionSource,
 } from "~/ui/combobox/filter-option-types";
+import { Picker } from "~/ui/combobox/picker";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
 import { BulkActionBar } from "~/ui/data-table/bulk/bulk-action-bar";
 import { tableMoneyTotals } from "~/ui/data-table/bulk/table-money";
@@ -89,6 +92,7 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Button } from "~/ui/primitives/button";
 
+import { WorkQueueSummary } from "./work-queue-summary";
 import {
   suggestionsSearch,
   workRowHref,
@@ -113,9 +117,12 @@ type QueueTablePage = Omit<WorkQueueOut, "items" | "meta"> & {
       WorkQueueOut["meta"],
       | "viewCounts"
       | "reasons"
+      | "summary"
+      | "incompleteSources"
       | "incompleteProjectIds"
       | "incompleteDiagnosticSources"
     > & {
+      totalCount: number;
       /** Each section's declared group actions, by its raw key. */
       groupActions: Readonly<Record<string, readonly WorkAction[]>>;
     };
@@ -186,8 +193,9 @@ const queueQueryPlan: ListQueryOptionsFn<
         meta: {
           ...result.meta,
           hasNextPage:
+            result.meta.pageSize > 0 &&
             (result.meta.pageIndex + 1) * result.meta.pageSize <
-            result.meta.totalCount,
+              result.meta.totalCount,
           groups: undefined,
           ...grouping,
           groupActions: Object.fromEntries(
@@ -455,6 +463,7 @@ function WorkQueueRoute() {
   const search = route.useSearch();
   return (
     <WorkQueue
+      layout={search.layout}
       groupBy={
         search.group ?? (search.view === PROBLEMS_VIEW ? "reason" : undefined)
       }
@@ -468,17 +477,34 @@ export type WorkQueueMeta = WorkInputMeta & { totalCount?: number };
 export function WorkQueue({
   scope: fixedScope,
   groupBy,
+  layout: routeLayout,
   label = "Work queue",
   onMeta,
 }: {
   scope?: QueueFilters;
   groupBy?: string;
+  layout?: z.infer<typeof workQueueLayout>;
   label?: string;
   /** Reports the unfiltered population, for a caller that frames this queue. */
   onMeta?: (meta: WorkQueueMeta) => void;
 }) {
   const navigate = useNavigate();
   const embedded = fixedScope !== undefined;
+  const [embeddedLayout, setEmbeddedLayout] =
+    useState<z.infer<typeof workQueueLayout>>("summary");
+  const layout = embedded ? embeddedLayout : (routeLayout ?? "summary");
+  const setLayout = useCallback(
+    (next: z.infer<typeof workQueueLayout>) => {
+      if (embedded) setEmbeddedLayout(next);
+      else
+        void navigate({
+          to: ".",
+          search: (prev) => ({ ...prev, layout: next }),
+          replace: true,
+        });
+    },
+    [embedded, navigate],
+  );
   const [embeddedGroup, setEmbeddedGroup] = useState<string | undefined>(
     groupBy,
   );
@@ -509,6 +535,7 @@ export function WorkQueue({
     queryOptions: queueQueryPlan,
     buildFilters: queueFilters,
     tableState,
+    summaryOnly: layout !== "table",
   });
   const firstPage = list.pages?.[0];
   const reasons = firstPage?.meta.reasons ?? NO_REASONS;
@@ -689,7 +716,7 @@ export function WorkQueue({
   const keyState = useRef({ rows, currentRowId, currentHref });
   keyState.current = { rows, currentRowId, currentHref };
   useEffect(() => {
-    if (isInspectorOpen || embedded) return;
+    if (isInspectorOpen || embedded || layout !== "table") return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (
         event.defaultPrevented ||
@@ -725,7 +752,7 @@ export function WorkQueue({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isInspectorOpen, navigate, embedded]);
+  }, [isInspectorOpen, navigate, embedded, layout]);
 
   const isLoading = useHydratedLoading(list.isLoading);
   const isTransitioning = list.infiniteScroll.isTransitioning;
@@ -743,6 +770,38 @@ export function WorkQueue({
     ]);
   const tabsTarget = usePageWorkbenchTarget("tabs", !embedded);
   const PreviewSheet = inspection.PreviewSheet;
+  const layoutPicker = (
+    <Picker
+      mode="segmented"
+      label="Work queue layout"
+      compact
+      options={[
+        { value: "summary", label: "Summary" },
+        { value: "pivot", label: "Pivot" },
+        { value: "table", label: "Records" },
+      ]}
+      value={layout}
+      onValueChange={(value) => {
+        const next = workQueueLayout.safeParse(value).data;
+        if (next) setLayout(next);
+      }}
+    />
+  );
+  const drill = useCallback(
+    (path: readonly string[]) => {
+      setColumnFilters((previous) =>
+        withGroupFilters(
+          previous,
+          path.map((key, depth) => ({
+            id: depth === 0 ? "reason" : "entity",
+            value: [key],
+          })),
+        ),
+      );
+      setLayout("table");
+    },
+    [setColumnFilters, setLayout],
+  );
 
   return (
     <>
@@ -770,72 +829,100 @@ export function WorkQueue({
           />,
           tabsTarget,
         )}
-      <RTable
-        table={table}
-        ariaLabel={label}
-        isLoading={isLoading}
-        error={list.error}
-        infiniteScroll={list.infiniteScroll}
-        refreshControls={list.refreshControls}
-        groupConfig={groupConfig}
-        actions={<GroupMenu table={table} />}
-        inspectorToggle={isInspectorOpen ? null : inspection.inspectorToggle}
-        desktopInspector={inspection.dockedInspector}
-        currentRowId={currentRowId}
-        onRowClick={selectRow}
-        onRowHover={(row) =>
-          canPreview(row) && inspection.onRowHover(previewRow(row))
-        }
-        onRowHoverEnd={(row) =>
-          canPreview(row) && inspection.onRowHoverEnd(previewRow(row))
-        }
-        getMobileDetailsHref={(row) => workRowHref(rowSource(row))}
-        bulkActionBar={
-          <BulkActionBar
-            selectedCount={selectedRows.length}
-            selectedRows={selectedRows}
-            moneyTotals={tableMoneyTotals(
-              table.getVisibleLeafColumns(),
-              selectedRows,
-            )}
-            actions={selection.getAvailableActions(selectedRows)}
-            onExecute={selection.executeAction}
-            onClearSelection={clearSelection}
-            isExecuting={selection.isExecuting}
-            currentAction={selection.currentAction}
-            disabled={isTransitioning}
-            selectAllMatching={{
-              totalCount: list.totalCount,
-              loadedCount: list.data.length,
-              onSelectAll: selectAllMatching,
-              isSelectingAll,
-            }}
+      {layout !== "table" ? (
+        <>
+          <DataTableToolbar
+            table={table}
+            showViewOptions={false}
+            actions={layoutPicker}
+            isTransitioning={isTransitioning}
+            portalWorkbenchUtilities={!embedded}
           />
-        }
-        emptyState={
-          <EmptyState
-            size="page"
-            icon={TrayIcon}
-            className="py-10"
-            action={
-              hasFilters ? (
-                <Button
-                  variant="outline"
-                  onClick={() => table.resetColumnFilters()}
-                >
-                  Clear filters
-                </Button>
-              ) : undefined
-            }
-          >
-            {hasIncompleteWorkInputs(firstPage?.meta)
-              ? "No known work while inputs are incomplete."
-              : hasFilters
-                ? "No work matches these filters."
-                : "Nothing here."}
-          </EmptyState>
-        }
-      />
+          <WorkQueueSummary
+            meta={meta}
+            pivot={layout === "pivot"}
+            isLoading={isLoading}
+            isTransitioning={isTransitioning}
+            error={list.error}
+            onRetry={() => {
+              void list.refreshControls.onRefresh();
+            }}
+            onDrill={drill}
+          />
+        </>
+      ) : (
+        <RTable
+          table={table}
+          ariaLabel={label}
+          isLoading={isLoading}
+          error={list.error}
+          infiniteScroll={list.infiniteScroll}
+          refreshControls={list.refreshControls}
+          groupConfig={groupConfig}
+          actions={
+            <>
+              {layoutPicker}
+              <GroupMenu table={table} />
+            </>
+          }
+          inspectorToggle={isInspectorOpen ? null : inspection.inspectorToggle}
+          desktopInspector={inspection.dockedInspector}
+          currentRowId={currentRowId}
+          onRowClick={selectRow}
+          onRowHover={(row) =>
+            canPreview(row) && inspection.onRowHover(previewRow(row))
+          }
+          onRowHoverEnd={(row) =>
+            canPreview(row) && inspection.onRowHoverEnd(previewRow(row))
+          }
+          getMobileDetailsHref={(row) => workRowHref(rowSource(row))}
+          bulkActionBar={
+            <BulkActionBar
+              selectedCount={selectedRows.length}
+              selectedRows={selectedRows}
+              moneyTotals={tableMoneyTotals(
+                table.getVisibleLeafColumns(),
+                selectedRows,
+              )}
+              actions={selection.getAvailableActions(selectedRows)}
+              onExecute={selection.executeAction}
+              onClearSelection={clearSelection}
+              isExecuting={selection.isExecuting}
+              currentAction={selection.currentAction}
+              disabled={isTransitioning}
+              selectAllMatching={{
+                totalCount: list.totalCount,
+                loadedCount: list.data.length,
+                onSelectAll: selectAllMatching,
+                isSelectingAll,
+              }}
+            />
+          }
+          emptyState={
+            <EmptyState
+              size="page"
+              icon={TrayIcon}
+              className="py-10"
+              action={
+                hasFilters ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => table.resetColumnFilters()}
+                  >
+                    Clear filters
+                  </Button>
+                ) : undefined
+              }
+            >
+              {hasIncompleteWorkInputs(firstPage?.meta)
+                ? "No known work while inputs are incomplete."
+                : hasFilters
+                  ? "No work matches these filters."
+                  : "Nothing here."}
+            </EmptyState>
+          }
+        />
+      )}
       <PreviewSheet />
     </>
   );
