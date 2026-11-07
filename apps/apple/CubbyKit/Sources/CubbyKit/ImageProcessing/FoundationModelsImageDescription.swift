@@ -115,6 +115,11 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
             let prepared = try ImageEncoding.downscaled(image, maxPixelSize: edge)
             do {
                 return try await generate(prepared, max(32, responseBudget / (index + 1)))
+            } catch let failure as StructuredOutputFailure {
+                throw CompanionImageDescriptionFailure.model(
+                    reason:
+                        "structured_output_invalid: \(String(reflecting: failure.original)); rawContent=\(failure.original.rawContent); snapshot=\(failure.metadata)",
+                    retryable: false)
             } catch let error as GeneratedContent.ParsingError {
                 // Structured decoding errors are separate from LanguageModelError. Replaying
                 // the same greedy request cannot supply missing required properties.
@@ -144,12 +149,20 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
                 is eligible only when the image has one clear tangible foreground object.
                 """)
         let response: LanguageModelSession.Response<GeneratedCompanionImageDescription>
-        response = try await session.respond(
-            generating: GeneratedCompanionImageDescription.self,
-            options: GenerationOptions(samplingMode: .greedy, maximumResponseTokens: maximumResponseTokens)
-        ) {
-            "Evaluate this image for Cubby's catalog."
-            Attachment(image).label("source image")
+        do {
+            response = try await session.respond(
+                generating: GeneratedCompanionImageDescription.self,
+                options: GenerationOptions(
+                    samplingMode: .greedy, maximumResponseTokens: maximumResponseTokens)
+            ) {
+                "Evaluate this image for Cubby's catalog."
+                Attachment(image).label("source image")
+            }
+        } catch let error as GeneratedContent.ParsingError {
+            throw StructuredOutputFailure(
+                original: error,
+                metadata: parsingMetadata(
+                    error, image: image, maximumResponseTokens: maximumResponseTokens, session: session))
         }
         let generated = response.content
         let eligibility: CompanionCutoutEligibility =
@@ -161,6 +174,63 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
         return CompanionImageDescription(
             description: generated.description, cutoutEligibility: eligibility,
             claims: generated.claims.map { CompanionImageClaim(text: $0) })
+    }
+
+    private struct StructuredOutputFailure: Error {
+        let original: GeneratedContent.ParsingError
+        let metadata: String
+    }
+
+    // Capture before the failed session leaves scope. Only fixed shapes and literal keys are
+    // inspected; generated values and arbitrary property names must never enter this snapshot.
+    private static func parsingMetadata(
+        _ error: GeneratedContent.ParsingError, image: CGImage,
+        maximumResponseTokens: Int?, session: LanguageModelSession
+    ) -> String {
+        var fields = [
+            "imageWidth=\(image.width)", "imageHeight=\(image.height)",
+            "maximumResponseTokens=\(maximumResponseTokens.map(String.init) ?? "unknown")",
+            "sessionOutputTokens=\(session.usage.output.totalTokenCount)",
+            "underlyingErrorType=\(error.underlyingError.map { String(reflecting: type(of: $0)) } ?? "absent")",
+            "rawEqualsDebug=\(error.rawContent == error.debugDescription)",
+            "rawEqualsMissingProperty=\(error.rawContent == "GeneratedContent does not contain a property cutoutEligibility")",
+        ]
+        // Stop at the latest response even when it contains no structured segment.
+        for entry in session.transcript.reversed() {
+            guard case .response(let response) = entry else { continue }
+            let content = response.segments.reversed().compactMap { segment -> GeneratedContent? in
+                guard case .structure(let structure) = segment else { return nil }
+                return structure.content
+            }.first
+            fields.append("responseStructureAvailable=\(content != nil)")
+            if let content {
+                fields.append("responseComplete=\(content.isComplete)")
+                fields.append("rootShape=\(shape(content))")
+                if case .structure(let properties, _) = content.kind {
+                    for key in ["description", "cutoutEligibility", "claims"] {
+                        fields.append("\(key)Present=\(properties[key] != nil)")
+                        if let value = properties[key] {
+                            fields.append("\(key)Shape=\(shape(value))")
+                        }
+                    }
+                }
+            }
+            return fields.joined(separator: ", ")
+        }
+        fields.append("responseStructureAvailable=unknown")
+        return fields.joined(separator: ", ")
+    }
+
+    private static func shape(_ content: GeneratedContent) -> String {
+        switch content.kind {
+        case .null: "null"
+        case .bool: "bool"
+        case .number: "number"
+        case .string: "string"
+        case .array: "array"
+        case .structure: "structure"
+        @unknown default: "unknown"
+        }
     }
 
     /// After the bounded context recovery, leave further attempts to durable server backoff.

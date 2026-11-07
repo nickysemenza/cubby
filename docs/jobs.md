@@ -381,7 +381,16 @@ and an explicit response budget of at most 512 tokens, reserved from the runtime
 model context size. A context overflow retries once with 512 pixels and half the
 response budget. Persistent failures retain the reported context/token counts and
 remain visibly failed until explicit retry or changed source/processor inputs;
-no cloud fallback or fabricated description is used.
+no cloud fallback or fabricated description is used. Structured parsing failures are
+terminal and preserve the original raw diagnostic in the existing server reason.
+Before releasing the failed session, native code appends fixed metadata: attempted
+image dimensions and response budget, session output usage, latest-response
+structure availability, completion and root shape, presence and shapes of the
+three expected properties, underlying error type, and raw diagnostic equality
+flags. Missing response metadata stays unknown; older responses are not used.
+Output usage of zero does not establish that no tokens were generated. The
+snapshot excludes generated values and arbitrary keys; the full raw reason can
+still contain private content.
 
 Recurring image-execution repair also settles retained negative cutout failures in
 bounded batches. This negative-outcome pass requires the current source/revision and the matching settled
