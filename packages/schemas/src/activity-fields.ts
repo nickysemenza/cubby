@@ -56,7 +56,11 @@ export type RunKindDeclaration = {
   trigger: "member" | "scheduled" | "agent" | "system";
   /** Scheduler passes that exist only when a pass wrote; hidden from the default Runs list. */
   routine?: true;
-  /** No current code creates it; retained rows stay readable. */
+  /**
+   * No current code creates it; retained rows stay readable.
+   * Ended scheduled routine step kinds without an executor leave recovery
+   * attention only when no retained obligations remain.
+   */
   historical?: true;
   /**
    * What the universal `run.execute` Job runs: the RunStep ledger, the Run's
