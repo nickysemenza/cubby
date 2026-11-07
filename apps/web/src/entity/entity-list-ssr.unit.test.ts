@@ -155,7 +155,7 @@ describe("ensureEntityListSsr", () => {
     ).toEqual([{ orderBy: "name", direction: "asc" }]);
   });
 
-  it("compiles a route renderer's explicit opening sort", () => {
+  it("includes synthesized and renderer inputs while preserving opening sort", () => {
     expect(declaredListReadProjection(metadataClient, "project")).toEqual(
       expect.arrayContaining(["taskProgress", "rollup", "dataQuality"]),
     );
@@ -172,6 +172,13 @@ describe("ensureEntityListSsr", () => {
       expect.arrayContaining(["url", "status", "filename"]),
     );
     expect(imageFields).not.toContain("images");
+    expect(
+      declaredListReadProjection(metadataClient, "purchase", {
+        expenseTotal: false,
+      }),
+    ).toEqual(
+      expect.arrayContaining(["vendorLogo", "orderUrl", "expenseTotal"]),
+    );
     expect(
       productListReadProjection(metadataClient, "product", { tags: true }),
     ).toEqual(
