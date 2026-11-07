@@ -32,6 +32,7 @@ import {
 import {
   sourceOccurrence,
   financialAccount,
+  financialTransaction,
   sourceObservationAnnotation,
   sourceTransactionRecord,
   transactionImportRecord,
@@ -40,6 +41,7 @@ import {
 } from "~/server/db/schema";
 import {
   sourceObservations,
+  sourceObservationsForPage,
   sourceObservationField,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
@@ -519,6 +521,29 @@ describe("statement row ledger", () => {
         "objects",
       );
       expect(rows).toEqual([{ differences: 0 }]);
+      const roots = await getDb(ctx.db)
+        .select({ id: sourceTransactionRecord.id })
+        .from(sourceTransactionRecord);
+      for (const root of roots) {
+        const parity = await getDb(ctx.db).execute(
+          sql`
+          WITH page AS MATERIALIZED (
+            SELECT id, "reviewState", "matchState", "historicalTransactionIds"
+            FROM ${sourceObservationsForPage([root.id])} scoped
+          ), canonical AS MATERIALIZED (
+            SELECT id, "reviewState", "matchState", "historicalTransactionIds"
+            FROM ${sourceObservations} whole WHERE id=${root.id}
+          )
+          SELECT (SELECT count(*)::int FROM page) AS rows,
+            count(*) FILTER (WHERE page."reviewState" IS DISTINCT FROM canonical."reviewState"
+              OR page."matchState" IS DISTINCT FROM canonical."matchState"
+              OR page."historicalTransactionIds" IS DISTINCT FROM canonical."historicalTransactionIds")::int AS differences
+          FROM page FULL JOIN canonical USING (id)
+        `,
+          "objects",
+        );
+        expect(parity).toEqual([{ rows: 1, differences: 0 }]);
+      }
       const expected = await getDb(ctx.db).execute<
         Pick<
           z.infer<typeof sourceTransactionRecordRawOut>,
@@ -667,6 +692,162 @@ describe("statement row ledger", () => {
         "objects",
       ),
     ).toEqual([{ count: 0 }]);
+
+    const priorIds = new Set(
+      (
+        await getDb(ctx.db)
+          .select({ id: sourceTransactionRecord.id })
+          .from(sourceTransactionRecord)
+      ).map((row) => row.id),
+    );
+    await record(
+      Array.from({ length: 5 }, (_, index) =>
+        rowInput({
+          merchant: `Synthetic frontier ${index}`,
+          rawDescription: `SYNTHETIC FRONTIER ${index}`,
+          providerAmount: -(index + 1),
+        }),
+      ),
+      { fingerprint: "synthetic-frontier-world" },
+    );
+    const fresh = (
+      await getDb(ctx.db).select().from(sourceTransactionRecord)
+    ).filter((row) => !priorIds.has(row.id));
+    const [a, b, d, occurrenceOnly, fenceOnly] = fresh;
+    if (!a || !b || !d || !occurrenceOnly || !fenceOnly)
+      throw new Error("Synthetic frontier roots missing");
+    await record(
+      [
+        rowInput({
+          merchant: "Synthetic other-source frontier",
+          providerAmount: -19,
+        }),
+      ],
+      {
+        source: "synthetic-frontier-other",
+        fingerprint: "synthetic-other-source-frontier",
+      },
+    );
+    let sequence = 0;
+    const alias = (
+      value: string,
+      owner: typeof a | null,
+      extra: Partial<typeof financialEvidenceAlias.$inferInsert> = {},
+    ) => ({
+      source: unresolved.source,
+      kind: "retained_frontier",
+      value,
+      observationId: owner?.id ?? null,
+      occurrenceId: owner?.occurrenceId ?? null,
+      provenanceKey: `synthetic-frontier-${sequence++}`,
+      provenance: { kind: "retained_legacy_binding" },
+      scopeEvidence: {},
+      ...extra,
+    });
+    // A sees B's direct K2 history through K, but cannot recurse through D.
+    // Occurrence-only aliases root reads without acting as observation siblings.
+    await getDb(ctx.db)
+      .insert(financialEvidenceAlias)
+      .values([
+        alias("frontier-k", a, { occurrenceId: null }),
+        alias("frontier-k", b, { deletedAt: new Date() }),
+        alias("frontier-k2", b),
+        alias("frontier-k2", d),
+        alias("frontier-k3", d),
+        alias("frontier-k2", null, {
+          kind: "transaction_ref",
+          historicalTransactionId: target.entityId,
+        }),
+        alias("frontier-k2", null, {
+          historicalTransactionId: target.entityId,
+        }),
+        alias("frontier-k2", null, {
+          historicalTransactionId: competing.entityId,
+          deletedAt: new Date(),
+        }),
+        alias("frontier-k2", null, {
+          source: "synthetic-frontier-other",
+          historicalTransactionId: competing.entityId,
+        }),
+        alias("frontier-k3", null, {
+          historicalTransactionId: competing.entityId,
+        }),
+        alias("frontier-k", null, {
+          occurrenceId: occurrenceOnly.occurrenceId,
+        }),
+        alias("frontier-occurrence-evidence", occurrenceOnly),
+        alias("frontier-occurrence-evidence", null, {
+          historicalTransactionId: competing.entityId,
+        }),
+        alias("frontier-fence-only", null, {
+          occurrenceId: fenceOnly.occurrenceId,
+          historicalTransactionId: competing.entityId,
+        }),
+      ]);
+    await getDb(ctx.db)
+      .update(financialEvidenceAlias)
+      .set({ occurrenceId: null })
+      .where(eq(financialEvidenceAlias.observationId, fenceOnly.id));
+    await getDb(ctx.db)
+      .update(sourceOccurrence)
+      .set({ reviewState: "ready" })
+      .where(eq(sourceOccurrence.id, fenceOnly.occurrenceId));
+    const readFrontier = (id: typeof a.id) =>
+      getDb(ctx.db).execute(
+        sql`
+      SELECT "reviewState", "historicalTransactionIds" FROM ${sourceObservationsForPage([id])} scoped
+    `,
+        "objects",
+      );
+    expect(await readFrontier(a.id)).toEqual([
+      { reviewState: "ready", historicalTransactionIds: [target.output.id] },
+    ]);
+    expect(await readFrontier(b.id)).toEqual([
+      {
+        reviewState: "ownership_conflict",
+        historicalTransactionIds: [
+          target.output.id,
+          competing.output.id,
+        ].sort(),
+      },
+    ]);
+    expect(await readFrontier(occurrenceOnly.id)).toEqual([
+      {
+        reviewState: "ownership_conflict",
+        historicalTransactionIds: [
+          target.output.id,
+          competing.output.id,
+        ].sort(),
+      },
+    ]);
+    expect(await readFrontier(fenceOnly.id)).toEqual([
+      { reviewState: "ownership_conflict", historicalTransactionIds: [] },
+    ]);
+    await assertReadProjection();
+    await getDb(ctx.db)
+      .update(sourceOccurrence)
+      .set({
+        identityProof: sql`coalesce(${sourceOccurrence.identityProof}, '{}'::jsonb) || jsonb_build_object('resolvedHistoricalTransactionIds', jsonb_build_array(${target.entityId}::text))`,
+      })
+      .where(eq(sourceOccurrence.id, b.occurrenceId));
+    expect(await readFrontier(b.id)).toEqual([
+      {
+        reviewState: "ready",
+        historicalTransactionIds: [
+          target.output.id,
+          competing.output.id,
+        ].sort(),
+      },
+    ]);
+    await assertReadProjection();
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ deletedAt: new Date() })
+      .where(eq(financialTransaction.id, competing.entityId));
+    expect(await readFrontier(fenceOnly.id)).toEqual([
+      { reviewState: "ready", historicalTransactionIds: [] },
+    ]);
+    await assertReadProjection();
   });
 
   it("keeps null scope and different attested provider accounts independent", async () => {

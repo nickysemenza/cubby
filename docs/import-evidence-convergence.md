@@ -678,10 +678,13 @@ expansion. Work retains the narrower account-owned statement reach.
 
 Whole-list projections materialize retained historical closure before applying
 root predicates. List filters use the generic whole-list value set; state sorts
-use uncorrelated membership sets. Page bindings restrict final observation-key
-roots before materializing historical transaction pairs, and return only those
-requested observations. Sibling evidence and unresolved ownership fences retain
-their complete inputs. States and historical links load in one batch rather than
+use uncorrelated membership sets. Page bindings first collect requested roots'
+alias keys, then all matching observation siblings and their observation/occurrence
+evidence. They follow exactly one sibling hop, including siblings outside the
+page and retained alias tombstones. One statement-local relation supplies live
+historical bindings; the occurrence ownership fence reads its direct aliases
+separately, so a fence-only occurrence cannot disappear with the presentation
+frontier. States and historical links load in one batch rather than
 a scalar subquery per observation. They preserve the point acceptance
 check's live-binding/transaction rules and retained alias provenance. Historical
 links remain presentation and negative ownership fences, never accepted ownership.

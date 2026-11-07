@@ -42,20 +42,23 @@ const directHistoricalEvidence = sql`
   JOIN "FinancialEvidenceAlias" binding ON binding.source=evidence.source AND binding.value=evidence.value AND ${notDeleted("binding")}
   JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}`;
 
-/** Same negative ownership fence as the point check, evaluated once for a read. */
-export const sourceOccurrencesWithUnresolvedHistory = sql`(
+/** Global and page reads apply the same negative ownership predicate. */
+const unresolvedFrom = (evidence: SQL): SQL => sql`(
   SELECT DISTINCT owner.id
-  FROM (${directHistoricalEvidence}) evidence
+  FROM (${evidence}) evidence
   JOIN "SourceOccurrence" owner ON owner.id=evidence."occurrenceId"
   WHERE owner."reviewState"=${sourceOccurrenceReviewState.enum.ready}
     AND evidence."historicalTransactionId" IS DISTINCT FROM owner."acceptedTransactionId"
     AND NOT COALESCE(owner."identityProof"->'resolvedHistoricalTransactionIds' ? evidence."historicalTransactionId"::text,false)
 )`;
 
-/** Page scope limits final roots, never the sibling evidence or ownership fence. */
-export const sourceObservationHistoricalLinks = (
-  observationIds?: readonly SourceTransactionRecordId[],
-) => sql`(
+/** Same negative ownership fence as the point check, evaluated once for a read. */
+export const sourceOccurrencesWithUnresolvedHistory = unresolvedFrom(
+  directHistoricalEvidence,
+);
+
+/** Whole-list history retains all roots and all sibling evidence. */
+export const sourceObservationHistoricalLinks = sql`(
   WITH evidence_history AS MATERIALIZED (${directHistoricalEvidence}),
   key_history AS MATERIALIZED (
     SELECT sibling.source, sibling.value, evidence."historicalTransactionId", evidence.code
@@ -77,13 +80,11 @@ export const sourceObservationHistoricalLinks = (
     FROM "FinancialEvidenceAlias" observed
     JOIN history_keys keys ON keys.source=observed.source AND keys.value=observed.value
     WHERE observed."observationId" IS NOT NULL
-      ${observationIds === undefined ? sql`` : sql`AND observed."observationId"=ANY(${uuidArrayParam(observationIds)})`}
     UNION
     SELECT record.id, observed.source, observed.value
     FROM "SourceTransactionRecord" record
     JOIN "FinancialEvidenceAlias" observed ON observed."occurrenceId"=record."occurrenceId"
     JOIN history_keys keys ON keys.source=observed.source AND keys.value=observed.value
-    ${observationIds === undefined ? sql`` : sql`WHERE record.id=ANY(${uuidArrayParam(observationIds)})`}
   ),
   history AS MATERIALIZED (
     SELECT DISTINCT observed."observationId", history."historicalTransactionId", history.code
@@ -92,3 +93,73 @@ export const sourceObservationHistoricalLinks = (
   SELECT "observationId", array_agg(code ORDER BY code) AS codes
   FROM history GROUP BY "observationId"
 )`;
+
+interface SourcePageHistory {
+  readonly relations: SQL;
+  readonly unresolved: SQL;
+  readonly links: SQL;
+}
+
+/** Reach one sibling hop from the page; the occurrence fence stays direct.
+ * Unlike settlement media, these reads must exclude tombstoned bindings. */
+export const sourcePageHistory = (
+  observationIds: readonly SourceTransactionRecordId[],
+): SourcePageHistory => ({
+  relations: sql`WITH source_page AS MATERIALIZED (
+    -- includes-deleted: requested roots and alias bridges preserve retained historical evidence.
+    SELECT id, "occurrenceId" FROM "SourceTransactionRecord"
+    WHERE id=ANY(${uuidArrayParam(observationIds)})
+  ), source_live_bindings AS MATERIALIZED (
+    SELECT DISTINCT binding.source, binding.value, binding."historicalTransactionId", historical.shortcode AS code
+    FROM "FinancialEvidenceAlias" binding
+    JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}
+    WHERE ${notDeleted("binding")} AND binding."historicalTransactionId" IS NOT NULL
+  ), source_page_keys AS MATERIALIZED (
+    SELECT page.id AS root, observed.source, observed.value
+    FROM source_page page JOIN "FinancialEvidenceAlias" observed ON observed."observationId"=page.id
+    UNION
+    SELECT page.id, observed.source, observed.value
+    FROM source_page page JOIN "FinancialEvidenceAlias" observed ON observed."occurrenceId"=page."occurrenceId"
+  ), source_siblings AS MATERIALIZED (
+    SELECT DISTINCT sibling.source, sibling.value, sibling."observationId", sibling."occurrenceId"
+    FROM "FinancialEvidenceAlias" sibling
+    JOIN (SELECT DISTINCT source, value FROM source_page_keys) keys ON keys.source=sibling.source AND keys.value=sibling.value
+    WHERE sibling."observationId" IS NOT NULL
+  ), source_evidence AS MATERIALIZED (
+    SELECT evidence.source, evidence.value, evidence."observationId", evidence."occurrenceId"
+    FROM "FinancialEvidenceAlias" evidence
+    JOIN (SELECT DISTINCT "observationId" FROM source_siblings) sibling ON evidence."observationId"=sibling."observationId"
+    UNION
+    SELECT evidence.source, evidence.value, evidence."observationId", evidence."occurrenceId"
+    FROM "FinancialEvidenceAlias" evidence
+    JOIN (SELECT DISTINCT "occurrenceId" FROM source_siblings WHERE "occurrenceId" IS NOT NULL) sibling ON evidence."occurrenceId"=sibling."occurrenceId"
+  ), source_evidence_history AS MATERIALIZED (
+    SELECT DISTINCT evidence."observationId", evidence."occurrenceId", binding."historicalTransactionId", binding.code
+    FROM source_evidence evidence JOIN source_live_bindings binding ON binding.source=evidence.source AND binding.value=evidence.value
+  ), source_key_history AS MATERIALIZED (
+    -- includes-deleted: retained alias tombstones remain presentation bridges.
+    -- Keep owner-index access here; a materialized sibling map loses it for hub keys.
+    SELECT sibling.source, sibling.value, evidence."historicalTransactionId", evidence.code
+    FROM "FinancialEvidenceAlias" sibling JOIN source_evidence_history evidence ON evidence."observationId"=sibling."observationId"
+    WHERE sibling."observationId" IS NOT NULL AND (sibling.source, sibling.value) IN (SELECT source, value FROM source_page_keys)
+    UNION
+    SELECT sibling.source, sibling.value, evidence."historicalTransactionId", evidence.code
+    FROM "FinancialEvidenceAlias" sibling JOIN source_evidence_history evidence ON evidence."occurrenceId"=sibling."occurrenceId"
+    WHERE sibling."observationId" IS NOT NULL AND sibling."occurrenceId" IS NOT NULL
+      AND (sibling.source, sibling.value) IN (SELECT source, value FROM source_page_keys)
+  )`,
+  // A fence-only occurrence need not have an observation sibling on its key.
+  unresolved: unresolvedFrom(sql`
+    SELECT DISTINCT evidence."occurrenceId", binding."historicalTransactionId"
+    FROM "FinancialEvidenceAlias" evidence
+    JOIN source_live_bindings binding ON binding.source=evidence.source AND binding.value=evidence.value
+    WHERE evidence."occurrenceId" IN (SELECT "occurrenceId" FROM source_page)
+  `),
+  links: sql`(
+    SELECT history.root AS "observationId", array_agg(history.code ORDER BY history.code) AS codes
+    FROM (
+      SELECT DISTINCT keys.root, history."historicalTransactionId", history.code
+      FROM source_page_keys keys JOIN source_key_history history ON history.source=keys.source AND history.value=keys.value
+    ) history GROUP BY history.root
+  )`,
+});
