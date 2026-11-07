@@ -95,6 +95,12 @@ type DisplayBranch = Readonly<{
   branch: SQL;
   expenseProjectRefs: SQL | null;
   inheritedRelations: readonly InheritedRelation[];
+  sharedProject?: Readonly<{
+    key: string;
+    anchors: SQL;
+    candidates: SQL;
+    read: SQL;
+  }>;
 }>;
 
 /** One statement-local relation per inherited field a borrowed path follows. */
@@ -237,6 +243,28 @@ const displayGroupOrder = (alias: string): SQL =>
     sql`, `,
   );
 
+const displayCandidateColumns = (alias: string): SQL =>
+  sql.join(
+    [
+      "key",
+      "shortcode",
+      "priority",
+      ...Array.from({ length: DISPLAY_GROUP_COUNT }, (_, index) => [
+        `group${index}CreatedAt`,
+        `group${index}Id`,
+      ]),
+      "sortOrder",
+      "createdAt",
+      "imageId",
+    ]
+      .flat()
+      .map((key) => sql`${sql.identifier(alias)}.${sql.identifier(key)}`),
+    sql`, `,
+  );
+
+const projectMediaRelation = (key: string, kind: "anchors" | "media") =>
+  sql.identifier(`display_${sourceAlias(key)}_project_${kind}`);
+
 const sourceAlias = (value: string) => value.replaceAll(/[^A-Za-z0-9]/g, "_");
 
 const rootLiveCondition = (entity: Entity, alias: string): SQL =>
@@ -300,7 +328,7 @@ const displaySourceBranch = (
   index: number,
 ): Pick<
   DisplayBranch,
-  "branch" | "expenseProjectRefs" | "inheritedRelations"
+  "branch" | "expenseProjectRefs" | "inheritedRelations" | "sharedProject"
 > => {
   const traversal = compileTraversal(
     source.entity,
@@ -343,7 +371,52 @@ const displaySourceBranch = (
     (hop) => hop.relation === EXPENSE_PROJECT_RELATION,
   );
   const expenseHop = traversal.hops[expenseHopIndex];
+  const projection = sql`i.key, i.shortcode, ${source.priority}::integer AS priority,
+    ${displayGroupColumns(groups)}, ${sortOrder} AS "sortOrder",
+    ${createdAt} AS "createdAt", i.id AS "imageId"`;
+  const visible = sql`${displayAttachmentCondition(source.target, attachmentHop?.alias ?? "")}
+    AND ${displayableImageSql("i")}`;
+  const firstHop = traversal.hops[0];
+  const firstStep = source.path[0];
+  const anchorKey = String(
+    DISPLAY_SOURCES.findIndex(
+      (candidate) =>
+        candidate.entity === source.entity &&
+        candidate.path[0]?.edge === firstStep?.edge &&
+        candidate.path[0]?.direction === firstStep?.direction &&
+        candidate.groups[0]?.ordering === source.groups[0]?.ordering,
+    ),
+  );
+  // These branches depend only on the reached Project, including their first
+  // ordering group. Enumerate its borrowed images once across repeated roots.
+  const sharedProject =
+    firstHop?.table === "Project" &&
+    firstStep !== undefined &&
+    source.groups[0]?.hopIndex === 0
+      ? {
+          key: anchorKey,
+          anchors: sql`SELECT ${aliasColumn(firstHop.alias, "id")} AS id
+          FROM ${sql.raw(`"${traversal.rootTable}"`)} s
+          ${renderJoins({ hops: [firstHop] })}
+          WHERE refs."entityKind" = ${source.entity} AND s.id = refs."entityId"
+            AND ${rootLiveCondition(source.entity, "s")}`,
+          candidates: sql`SELECT ${aliasColumn(firstHop.alias, "id")} AS "anchorId", ${projection}
+          FROM ${sql.identifier(firstHop.table)} ${sql.raw(firstHop.alias)}
+          JOIN ${projectMediaRelation(anchorKey, "anchors")} anchors
+            ON anchors.id = ${aliasColumn(firstHop.alias, "id")}
+          ${renderJoins({ hops: traversal.hops.slice(1) })}
+          WHERE ${rootLiveCondition("project", firstHop.alias)} AND ${visible}`,
+          read: sql`SELECT ${displayCandidateColumns("media")}
+          FROM ${sql.raw(`"${traversal.rootTable}"`)} s
+          ${renderJoins({ hops: [firstHop] })}
+          JOIN ${projectMediaRelation(anchorKey, "media")} media
+            ON media."anchorId" = ${aliasColumn(firstHop.alias, "id")}
+          WHERE refs."entityKind" = ${source.entity} AND s.id = refs."entityId"
+            AND ${rootLiveCondition(source.entity, "s")}`,
+        }
+      : undefined;
   return {
+    sharedProject,
     // The same path prefix admits Project dependencies even when only Tasks are requested.
     expenseProjectRefs:
       expenseHop === undefined
@@ -356,16 +429,13 @@ const displaySourceBranch = (
         AND s.id = refs."entityId" AND ${rootLiveCondition(source.entity, "s")}`,
     inheritedRelations: traversal.inheritedRelations,
     branch: sql`
-        SELECT i.key, i.shortcode, ${source.priority}::integer AS priority,
-               ${displayGroupColumns(groups)},
-               ${sortOrder} AS "sortOrder", ${createdAt} AS "createdAt", i.id AS "imageId"
+        SELECT ${projection}
         FROM ${sql.raw(`"${traversal.rootTable}"`)} s
         ${traversal.joins}
         WHERE refs."entityKind" = ${source.entity}
           AND s.id = refs."entityId"
           AND ${rootLiveCondition(source.entity, "s")}
-          AND ${displayAttachmentCondition(source.target, attachmentHop?.alias ?? "")}
-          AND ${displayableImageSql("i")}`,
+          AND ${visible}`,
   };
 };
 
@@ -419,6 +489,7 @@ function compileDisplayBranches(): readonly DisplayBranch[] {
       .map((transactionBranch): DisplayBranch => ({
         ...transactionBranch,
         entity: "sourceTransactionRecord",
+        sharedProject: undefined,
         branch: acceptedTransactionBranch(transactionBranch.branch),
         expenseProjectRefs:
           transactionBranch.expenseProjectRefs === null
@@ -450,6 +521,44 @@ function compileDisplayBranches(): readonly DisplayBranch[] {
     },
   ];
 }
+
+/** Per-Project minima preserve the final per-record minimum and image count. */
+const sharedProjectMediaSql = (selected: readonly DisplayBranch[]) => {
+  const groups = new Map<
+    string,
+    NonNullable<DisplayBranch["sharedProject"]>[]
+  >();
+  for (const branch of selected) {
+    if (!branch.sharedProject) continue;
+    const group = groups.get(branch.sharedProject.key) ?? [];
+    group.push(branch.sharedProject);
+    groups.set(branch.sharedProject.key, group);
+  }
+  const ctes: SQL[] = [];
+  const branches = selected
+    .filter((branch) => !branch.sharedProject)
+    .map(({ branch }) => branch);
+  for (const [key, group] of groups) {
+    const first = group[0];
+    if (!first) continue;
+    ctes.push(sql`${projectMediaRelation(key, "anchors")} AS MATERIALIZED (
+      SELECT DISTINCT anchor.id FROM refs JOIN LATERAL (${first.anchors}) anchor ON true
+    ), ${projectMediaRelation(key, "media")} AS MATERIALIZED (
+      SELECT DISTINCT ON (shared."anchorId", shared."imageId") shared.*
+      FROM (${sql.join(
+        group.map(({ candidates }) => candidates),
+        sql` UNION ALL `,
+      )}) shared
+      ORDER BY shared."anchorId", shared."imageId", shared.priority,
+        ${displayGroupOrder("shared")}, shared."sortOrder", shared."createdAt"
+    )`);
+    branches.push(first.read);
+  }
+  return {
+    ctes: ctes.length ? sql`, ${sql.join(ctes, sql`, `)}` : sql``,
+    branches,
+  };
+};
 
 /** Reuse one page-scoped transaction reach across every source image branch. */
 const sourceDisplaySettlementsSql = (enabled: boolean): SQL =>
@@ -615,7 +724,8 @@ async function resolveRankedDisplayMedia(
   const selectedBranches = displayBranches().filter(({ entity }) =>
     sourceTypes.has(entity),
   );
-  const branchSql = selectedBranches.map(({ branch }) => branch);
+  const sharedProjectMedia = sharedProjectMediaSql(selectedBranches);
+  const branchSql = sharedProjectMedia.branches;
   // Explicit and purchase assignments identify page candidates through their
   // indexes. The effective-project expression still decides precedence; food
   // fallback requires the wider set only when the household project is in refs.
@@ -711,6 +821,7 @@ async function resolveRankedDisplayMedia(
     ${inheritedRelationsSql(selectedBranches)}
     ${expenseProjectRelation}
     ${sourceMerchantImagesSql(sourceTypes.has("sourceTransactionRecord"))}
+    ${sharedProjectMedia.ctes}
     SELECT refs."entityKind", refs."entityId"::text AS "entityId", refs."refKey",
     ${selectedMedia} ${
       includeAttachments
