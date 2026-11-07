@@ -60,9 +60,13 @@ struct NativeCoverageViewPathTests {
         ])
         let missing = expense(["kind": "missing"])
 
-        #expect(DetailSlotRegistry.supplement(for: .expense, row: linked) != nil)
-        #expect(DetailSlotRegistry.supplement(for: .expense, row: empty) == nil)
-        #expect(DetailSlotRegistry.supplement(for: .expense, row: missing) == nil)
+        // The declared `receive` flow is offered only for the resolved Product, not a stale raw id.
+        func receive(_ row: EntityRow) -> PlacedAction? {
+            ActionPlacement(entity: EntityCatalog[.expense], row: row).actionBar.first { $0.id == "receive" }
+        }
+        #expect(receive(linked)?.enabled == true)
+        #expect(receive(empty)?.enabled == false)
+        #expect(receive(missing)?.enabled == false)
     }
 
     /// A handoff slot draws its row only where web's slot predicate would draw the slot.

@@ -228,7 +228,8 @@ public struct HeroActionPlan: Decodable, Sendable, Hashable {
         case "flow":
             kind = .flow(
                 try container.decode(NativeFlowID.self, forKey: .flow),
-                requires: try container.decodeIfPresent(HeroOperationPlan.Requirement.self, forKey: .requires))
+                requires: try container.decodeIfPresent(HeroOperationPlan.Requirement.self, forKey: .requires)
+            )
         case "handoff":
             let web = try container.nestedContainer(keyedBy: WebKeys.self, forKey: .web)
             kind = .handoff(

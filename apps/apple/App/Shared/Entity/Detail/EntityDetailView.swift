@@ -15,17 +15,13 @@ struct EntityDetailView: View {
     @State private var model: GenericEntityDetailModel?
     @State private var relationSections: [RelationSectionModel] = []
     @State private var connectedRecords: ConnectedRecordsPreviewModel?
+    @State private var suggestions: DetailSuggestionsModel?
     @State private var photoCapture: PhotoCaptureModel?
     @State private var editing = false
     @State private var creatingRelation: RelationSectionModel?
-    @State private var heroAction: HeroActionModel?
-    @State private var heroEditor: HeroEditorRequest?
-    @State private var heroNotice: String?
-    @State private var heroBusy = false
+    @State private var actions: RecordActionPresenter?
+    @State private var quickField: InlineEditSession?
     @State private var showingRunEvidence = false
-    /// Set when a delete finished: the record is gone, so leave its screen once the sheet that
-    /// ran the delete has actually dismissed (dismissing both at once only closes the sheet).
-    @State private var leaveAfterHeroSheet = false
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
@@ -43,7 +39,9 @@ struct EntityDetailView: View {
                 .navigationTitle(model?.row?.title ?? descriptor.singular)
                 .navigationSubtitle(model?.row == nil ? "" : descriptor.singular)
                 .copyable(
-                    model?.row.map { [RecordCopyText.text(key: key, id: $0.id, title: $0.title)] } ?? [])
+                    model?.row.map { [RecordCopyText.text(key: key, id: $0.id, title: $0.title)] } ?? []
+                )
+                .focusedSceneValue(\.recordCommands, model?.row.map(recordCommands))
             #endif
             .toolbar { detailToolbar }
         sheets(on: lifecycle(on: titled, model: model))
@@ -89,27 +87,12 @@ struct EntityDetailView: View {
                 }
                 .environment(appModel)
             }
-            .sheet(
-                item: $heroAction,
-                onDismiss: {
-                    if leaveAfterHeroSheet {
-                        leaveAfterHeroSheet = false
-                        dismiss()
-                    }
-                }
-            ) { action in
-                HeroActionSheet(model: action) { outcome in finishHeroAction(action.plan, outcome) }
-                    .environment(appModel)
+            .sheet(item: $quickField) { session in
+                InlineFieldEditorSheet(session: session).environment(appModel)
             }
-            .sheet(item: $heroEditor) { request in
-                EntityEditorSheet(
-                    key: request.entity, mode: .create(prefill: request.prefill), context: request.context
-                ) { _ in
-                    Task { await refresh() }
-                }
-                .environment(appModel)
-            }
-            .alert(heroNotice ?? "", isPresented: heroNoticeBinding) { Button("OK") {} }
+            .recordActionPresentation(
+                actions, onFinished: finishAction, onEditorSaved: { Task { await refresh() } }
+            )
             .sheet(isPresented: $showingRunEvidence) {
                 NavigationStack { RunEvidenceView(runID: model?.row?.id ?? id) }
             }
@@ -148,69 +131,78 @@ struct EntityDetailView: View {
             #endif
             ToolbarItem {
                 Menu {
-                    webMenuItems(row: row)
-                    #if os(macOS)
-                        // The Mac toolbar keeps Edit and More; Share joins Copy link here.
-                        ShareLink(item: appModel.webHandoff.url(.record(key: key, id: row.id))) {
-                            Label("Share", systemImage: "square.and.arrow.up")
-                        }
-                    #endif
-                    Button {
-                        Clipboard.copy(appModel.webHandoff.url(.record(key: key, id: row.id)).absoluteString)
-                    } label: {
-                        Label("Copy link", systemImage: "link")
-                    }
+                    moreMenu(row: row)
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle")
+                }
+                .accessibilityIdentifier("detail.\(key.rawValue).more")
+            }
+        }
+    }
+
+    /// More renders `ActionPlacement.more` in its groups: declared verbs (unavailable ones dimmed
+    /// with the server's reason), flows and Add photo with Create related, Copy and Share, Open on
+    /// web with every handoff, then Delete and other destructive verbs last.
+    @ViewBuilder private func moreMenu(row: EntityRow) -> some View {
+        let groups = ActionPlacement(entity: descriptor, row: row).more
+        let createGroup = groups.firstIndex { group in
+            group.contains { action in
+                switch action.kind {
+                case .addPhoto: true
+                case .plan(let plan): if case .flow = plan.kind { true } else { false }
+                default: false
+                }
+            }
+        }
+        ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
+            let isShare = group.contains { $0.kind == .copyLink }
+            if isShare, createGroup == nil {
+                Section { createItems(row: row) }
+            }
+            Section {
+                ForEach(group) { action in moreItem(action, row: row) }
+                if index == createGroup { createItems(row: row) }
+                if isShare {
                     Button {
                         Clipboard.copy(row.id)
                     } label: {
                         Label("Copy shortcode", systemImage: "number")
                     }
-                    recordMenuButtons(row: row)
-                    relationCreationMenuItems
-                    ConnectionsWorkspaceLink(entity: key.rawValue, recordID: row.id)
-                    heroActionButtons
-                } label: {
-                    Label("More", systemImage: "ellipsis.circle")
+                }
+                if group.contains(where: { $0.kind == .openOnWeb }) {
+                    ForEach(NativePresentationCoverage.recordHandoffs(descriptor, row: row), id: \.label) {
+                        handoff in
+                        OpenOnWebButton(target: handoff.target(key: key, id: row.id), label: handoff.label)
+                    }
                 }
             }
         }
     }
 
-    /// The record on web, then each surface this record hands off to web, named after it.
-    @ViewBuilder private func webMenuItems(row: EntityRow) -> some View {
-        Section {
-            OpenOnWebButton(target: .record(key: key, id: row.id), label: "Open on web")
-            ForEach(NativePresentationCoverage.recordHandoffs(descriptor, row: row), id: \.label) { handoff in
-                OpenOnWebButton(target: handoff.target(key: key, id: row.id), label: handoff.label)
+    @ViewBuilder private func moreItem(_ action: PlacedAction, row: EntityRow) -> some View {
+        switch action.kind {
+        case .share:
+            ShareLink(item: appModel.webHandoff.url(.record(key: key, id: row.id))) {
+                Label(action.label, systemImage: action.symbol)
             }
+        case .openOnWeb:
+            OpenOnWebButton(target: .record(key: key, id: row.id), label: action.label)
+        default:
+            PlacedActionMenuItem(entity: key, action: action, perform: perform)
         }
     }
 
-    @ViewBuilder private func recordMenuButtons(row: EntityRow) -> some View {
-        // Any entity whose update takes pendingImageIds can take a photo; the cover
-        // choice inside the sheet is product-only.
-        if descriptor.acceptsImages || key == .run {
-            Section {
-                if descriptor.acceptsImages {
-                    Button {
-                        photoCapture = PhotoCaptureModel(
-                            client: appModel.client, entity: key, entityID: row.id,
-                            entityTitle: row.title,
-                            featurePrints: appModel.featurePrints
-                        )
-                    } label: {
-                        Label("Add photo", systemImage: "camera.badge.ellipsis")
-                    }
-                }
-                if key == .run {
-                    // The evidence sheet is presented from this view: a sheet owned by a menu
-                    // item is torn down with the menu.
-                    Button("Transcript, logs and AI usage", systemImage: "doc.text.magnifyingglass") {
-                        showingRunEvidence = true
-                    }
-                }
+    /// Create related records, the Run's evidence, and Connections: beside Add photo in More.
+    @ViewBuilder private func createItems(row: EntityRow) -> some View {
+        relationCreationMenuItems
+        if key == .run {
+            // The evidence sheet is presented from this view: a sheet owned by a menu item is
+            // torn down with the menu.
+            Button("Transcript, logs and AI usage", systemImage: "doc.text.magnifyingglass") {
+                showingRunEvidence = true
             }
         }
+        ConnectionsWorkspaceLink(entity: key.rawValue, recordID: row.id)
     }
 
     @ViewBuilder private var relationCreationMenuItems: some View {
@@ -219,22 +211,18 @@ struct EntityDetailView: View {
                 && section.target.key.nativeActions.contains(.create)
                 && section.spec.plan.seed != nil
         }
-        if !declared.isEmpty {
-            Section("Create") {
-                ForEach(Self.relationCreationGroups(declared), id: \.first!.target.key) { group in
-                    if let first = group.first {
-                        if group.count == 1 {
-                            Button(
-                                first.id == journalRelationID ? "Log entry" : "New \(first.target.singular)",
-                                systemImage: "plus"
-                            ) { creatingRelation = first }
-                        } else {
-                            Menu("New \(first.target.singular)", systemImage: "plus") {
-                                ForEach(group) { section in
-                                    Button(section.section.title ?? section.target.plural) {
-                                        creatingRelation = section
-                                    }
-                                }
+        ForEach(Self.relationCreationGroups(declared), id: \.first!.target.key) { group in
+            if let first = group.first {
+                if group.count == 1 {
+                    Button(
+                        first.id == journalRelationID ? "Log entry" : "New \(first.target.singular)",
+                        systemImage: "plus"
+                    ) { creatingRelation = first }
+                } else {
+                    Menu("New \(first.target.singular)", systemImage: "plus") {
+                        ForEach(group) { section in
+                            Button(section.section.title ?? section.target.plural) {
+                                creatingRelation = section
                             }
                         }
                     }
@@ -282,9 +270,10 @@ struct EntityDetailView: View {
                     relationSections: relationSections,
                     connectedRecords: connectedRecords,
                     onChanged: { Task { await refresh() } },
-                    onQuickAction: startHeroAction,
-                    quickActionsBusy: heroBusy
+                    onAction: perform,
+                    actionsBusy: actions?.isBusy ?? false
                 )
+                .environment(\.detailSuggestions, suggestions)
             }
         } else if let model {
             switch model.phase {
@@ -328,6 +317,7 @@ struct EntityDetailView: View {
 
     private func setup() async {
         if model == nil { model = GenericEntityDetailModel(descriptor: descriptor, client: appModel.client) }
+        if actions == nil { actions = RecordActionPresenter(entity: key) }
         guard let model else { return }
         await model.loadInitial(id: id)
         guard let row = model.row else { return }
@@ -340,7 +330,13 @@ struct EntityDetailView: View {
             connectedRecords = ConnectedRecordsPreviewModel(
                 source: EntityRef(entity: key, id: survivorID), client: appModel.client)
         }
+        if suggestions == nil, DetailSuggestionsModel.applies(to: descriptor) {
+            suggestions = DetailSuggestionsModel(
+                entity: key, recordID: survivorID, client: appModel.client,
+                onChanged: { [appModel, key] in appModel.recordEntityMutation(keys: [key]) })
+        }
         await connectedRecords?.loadInitial()
+        await suggestions?.load()
     }
 
     private func refresh() async {
@@ -352,95 +348,63 @@ struct EntityDetailView: View {
             await section.loadConnectionEvidence()
         }
         await connectedRecords?.refresh()
+        await suggestions?.load()
     }
 
-    /// The manifest's hero actions this entity declares and native implements, from the one
-    /// generic runner (`edit` stays the toolbar's Edit; `bulkEdit` is a list verb). Quick actions
-    /// are the buttons under the hero, not More items.
-    @ViewBuilder private var heroActionButtons: some View {
-        let quick = descriptor.presentation.detailQuickActionIDs
-        let plans = descriptor.presentation.heroActions.filter { !quick.contains($0) }.compactMap { verb in
-            HeroActionRunner.plan(for: verb, on: key).map { (verb, $0) }
-        }
-        let routine = plans.filter { $0.1.confirmation != .destructive }
-        let destructive = plans.filter { $0.1.confirmation == .destructive }
-        if !routine.isEmpty {
-            Section {
-                ForEach(routine, id: \.0) { verb, plan in heroActionButton(verb, plan) }
-            }
-        }
-        if !destructive.isEmpty {
-            Section {
-                ForEach(destructive, id: \.0) { verb, plan in heroActionButton(verb, plan) }
-            }
-        }
-    }
-
-    private func heroActionButton(_ verb: EntityHeroActionID, _ plan: HeroActionPlan) -> some View {
-        Button(
-            plan.label, systemImage: plan.symbol,
-            role: plan.confirmation == .destructive ? .destructive : nil
-        ) {
-            startHeroAction(plan)
-        }
-        .accessibilityIdentifier("detail.\(key.rawValue).hero.\(verb.rawValue)")
-    }
-
-    private var heroNoticeBinding: Binding<Bool> {
-        Binding(get: { heroNotice != nil }, set: { if !$0 { heroNotice = nil } })
-    }
-
-    private func startHeroAction(_ plan: HeroActionPlan) {
+    /// Runs one placed action from the action bar, More or a menu command.
+    private func perform(_ action: PlacedAction) {
         guard let row = model?.row else { return }
-        let runner = HeroActionRunner(client: appModel.client)
-        switch plan.kind {
-        case .toggleField, .create, .setField(_, _?):
-            // No input and nothing destructive: one explicit tap runs it. The flag flips before
-            // the task is scheduled so a second tap cannot start a second write.
-            guard !heroBusy else { return }
-            heroBusy = true
-            Task {
-                defer { heroBusy = false }
-                do {
-                    finishHeroAction(
-                        plan, try await runner.perform(plan, on: key, row: row, values: [:], confirmed: false)
-                    )
-                } catch {
-                    Diagnostics.report(error, context: "detail.heroAction")
-                    appModel.handle(error)
-                }
+        switch action.kind {
+        case .plan(let plan):
+            actions?.start(plan, row: row, appModel: appModel, onFinished: finishAction)
+        case .edit:
+            editing = true
+        case .quickField(let fieldKey):
+            // A field native cannot edit in place still opens the whole-record editor.
+            guard let field = descriptor.field(fieldKey), field.editsInline(on: key),
+                field.applicabilityRefusal(in: row.raw) == nil
+            else {
+                editing = key.nativeActions.contains(.update)
+                return
             }
-        case .delete, .operation, .setField, .editField:
-            heroAction = HeroActionModel(plan: plan, entity: key, row: row, runner: runner)
-        case .flow, .handoff:
-            // TODO(native-redesign detail lane): route declared native flows and web handoffs.
-            return
-        }
-    }
-
-    private func finishHeroAction(_ plan: HeroActionPlan, _ outcome: HeroActionOutcome) {
-        switch outcome {
-        case .completed(let message, let changed):
-            appModel.recordEntityMutation(keys: changed)
-            if case .delete = plan.kind {
-                leaveAfterHeroSheet = true
-                if heroAction == nil {
-                    leaveAfterHeroSheet = false
-                    dismiss()
-                }
-            } else {
-                heroNotice = message
-                Task { await refresh() }
-            }
-        case .editor(let entity, let prefill, let context):
-            heroEditor = HeroEditorRequest(entity: entity, prefill: prefill, context: context)
-        case .editRecord, .review:
-            // Only a report `records` verb stages an edit or an AI review (`RecordsBlockView`
-            // opens them); no hero verb has such a plan.
+            quickField = InlineEditSession(
+                field: field, row: row, descriptor: descriptor, client: appModel.client)
+        case .copyLink:
+            Clipboard.copy(appModel.webHandoff.url(.record(key: key, id: row.id)).absoluteString)
+        case .openOnWeb, .share:
+            RecordActionPresenter.open(appModel.webHandoff.url(.record(key: key, id: row.id)))
+        case .addPhoto:
+            photoCapture = PhotoCaptureModel(
+                client: appModel.client, entity: key, entityID: row.id, entityTitle: row.title,
+                featurePrints: appModel.featurePrints)
+        case .select, .bulkEdit, .merge, .more:
+            // List and selection actions; detail never places them.
             break
         }
     }
 
+    /// A deleted record leaves its screen; anything else re-reads it.
+    private func finishAction(_ plan: HeroActionPlan, _ outcome: HeroActionOutcome) {
+        if case .completed = outcome, plan.kind == .delete {
+            dismiss()
+        } else if case .completed = outcome {
+            Task { await refresh() }
+        }
+    }
+
+    /// The menu bar's view of this record: Edit, confirmed Delete, and the Actions menu.
+    private func recordCommands(_ row: EntityRow) -> RecordCommandActions {
+        let placed = ActionPlacement(entity: descriptor, row: row).more.joined()
+        return RecordCommandActions(
+            title: row.title,
+            edit: key.nativeActions.contains(.update) ? { editing = true } : nil,
+            delete: placed.first { $0.id == "delete" },
+            actions: placed.filter { action in
+                guard action.id != "delete", case .plan = action.kind else { return false }
+                return true
+            },
+            perform: perform)
+    }
 }
 
 /// Plain-data detail rendering, shared by the real screen and `#Preview`s so neither needs a
@@ -451,12 +415,13 @@ struct EntityDetailContent: View {
     var relationSections: [RelationSectionModel] = []
     var connectedRecords: ConnectedRecordsPreviewModel? = nil
     var onChanged: () -> Void = {}
-    /// Runs a declared quick action; nil (previews) draws none.
-    var onQuickAction: ((HeroActionPlan) -> Void)? = nil
-    var quickActionsBusy = false
+    /// Runs a placed action (action bar, section handoff); nil (previews) draws no action bar.
+    var onAction: ((PlacedAction) -> Void)? = nil
+    var actionsBusy = false
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.developerOverlays) private var developerOverlays
+    @Environment(\.detailSuggestions) private var suggestions
     @State private var timeline: EntityTimelineOut?
     @State private var timelineError: String?
     @State private var activityEvents: [DetailActivityEvent] = []
@@ -501,24 +466,60 @@ struct EntityDetailContent: View {
         #endif
     }
 
-    /// The declared quick actions (at most two) as the record's only filled buttons; every other
-    /// verb stays in More.
-    @ViewBuilder private var quickActionButtons: some View {
-        let actions = HeroActionRunner.quickActions(
-            presentation.detailQuickActionIDs, on: descriptor.key, row: row)
-        if let onQuickAction, !actions.isEmpty {
-            HStack(spacing: FieldGuideTokens.Space.sm) {
-                ForEach(actions, id: \.0) { verb, plan in
-                    Button {
-                        onQuickAction(plan)
-                    } label: {
-                        Label(plan.label, systemImage: plan.symbol)
-                            .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(quickActionsBusy)
-                    .accessibilityIdentifier("detail.\(descriptor.key.rawValue).quick.\(verb.rawValue)")
+    private var placement: ActionPlacement { ActionPlacement(entity: descriptor, row: row) }
+
+    /// The action bar under the hero (`ActionPlacement.actionBar`, at most four tiles).
+    @ViewBuilder private var actionBar: some View {
+        if let onAction {
+            DetailActionBar(
+                entity: descriptor.key, actions: placement.actionBar, busy: actionsBusy, perform: onAction)
+        }
+    }
+
+    /// "N suggestions" near the glance when there are several, or when the one pending Suggestion
+    /// has no field row to carry its marker.
+    private var groupedSuggestions: DetailSuggestionsModel? {
+        guard let suggestions, !suggestions.items.isEmpty else { return nil }
+        let several = suggestions.items.count > 1 || suggestions.error != nil
+        return several || !suggestions.items.allSatisfy({ visibleFieldKeys.contains($0.field) })
+            ? suggestions : nil
+    }
+
+    /// Fields drawn as rows in a declared fields section (summary cells carry no marker).
+    private var visibleFieldKeys: Set<String> {
+        var keys = Set<String>()
+        for section in presentation.detailSections {
+            if case .fields(let sectionKeys) = section.kind {
+                for field in FieldsSectionView(descriptor: descriptor, row: row, keys: sectionKeys)
+                    .visibleFields
+                {
+                    keys.insert(field.key)
+                    if let readKey = field.readKey { keys.insert(readKey) }
                 }
+            }
+        }
+        return keys
+    }
+
+    /// A record handoff declared for `section`: one inline web row in that section.
+    @ViewBuilder private func sectionHandoffs(_ section: DetailSection) -> some View {
+        if let onAction {
+            ForEach(placement.sectionHandoffs[section.id] ?? []) { action in
+                Button {
+                    onAction(action)
+                } label: {
+                    HStack {
+                        Label(action.label, systemImage: action.symbol)
+                        Spacer(minLength: FieldGuideTokens.Space.sm)
+                        Image(systemName: "arrow.up.right").foregroundStyle(.secondary).accessibilityHidden(
+                            true)
+                    }
+                    .frame(minHeight: FieldGuideTokens.touchTarget)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens in your browser")
+                .accessibilityIdentifier("detail.handoff.\(action.id)")
             }
         }
     }
@@ -527,26 +528,15 @@ struct EntityDetailContent: View {
         private var macBody: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                    EntityHeroView(descriptor: descriptor, row: row) {
-                        if let supplement = DetailSlotRegistry.supplement(for: descriptor.key, row: row) {
-                            supplement
-                        }
+                    EntityHeroView(descriptor: descriptor, row: row) { EmptyView() }
+                    actionBar.frame(maxWidth: 560, alignment: .leading)
+                    if let groupedSuggestions {
+                        DetailSuggestionsRow(descriptor: descriptor, model: groupedSuggestions)
+                            .frame(maxWidth: 560, alignment: .leading)
                     }
-                    quickActionButtons
                     DetailSummaryGrid(descriptor: descriptor, row: row)
                     HStack(alignment: .top, spacing: FieldGuideTokens.Space.lg) {
                         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                            if descriptor.key == .location {
-                                macDisclosure("Fieldwork", id: "fieldwork") {
-                                    NavigationLink(
-                                        value: Route.locationPhotoPass(scope: LocationCode(row.id))
-                                    ) {
-                                        Label(
-                                            "Photo pass from this location",
-                                            systemImage: "camera.on.rectangle")
-                                    }
-                                }
-                            }
                             if let journal = journalSection,
                                 !(journal.list.phase == .loaded && journal.list.rows.isEmpty)
                             {
@@ -609,6 +599,7 @@ struct EntityDetailContent: View {
                 await loadActivity()
             }
             .modifier(DetailContentsNavigation(entries: contentsEntries))
+            .environment(\.detailInlineEdit, true)
             .environment(\.reportBatchStore, reportBatches)
             .task { reportBatches.onRecordStale = onChanged }
         }
@@ -621,6 +612,7 @@ struct EntityDetailContent: View {
                 if fields.hasVisibleRows {
                     DisclosureGroup(isExpanded: macSectionBinding(section.id)) {
                         fields
+                        sectionHandoffs(section)
                     } label: {
                         Text(section.title ?? "Details").font(.headline)
                     }
@@ -691,23 +683,15 @@ struct EntityDetailContent: View {
     private var phoneBody: some View {
         List {
             Section {
-                EntityHeroView(descriptor: descriptor, row: row) {
-                    if let supplement = DetailSlotRegistry.supplement(for: descriptor.key, row: row) {
-                        supplement
-                    }
-                }
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                quickActionButtons
+                EntityHeroView(descriptor: descriptor, row: row) { EmptyView() }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                actionBar
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
-            if descriptor.key == .location {
-                Section("Fieldwork") {
-                    NavigationLink(value: Route.locationPhotoPass(scope: LocationCode(row.id))) {
-                        Label("Photo pass from this location", systemImage: "camera.on.rectangle")
-                    }
-                }
+            if let groupedSuggestions {
+                Section { DetailSuggestionsRow(descriptor: descriptor, model: groupedSuggestions) }
             }
             if !presentation.summarySlots.isEmpty {
                 Section {
@@ -768,6 +752,7 @@ struct EntityDetailContent: View {
             await loadActivity()
         }
         .modifier(DetailContentsNavigation(entries: contentsEntries))
+        .environment(\.detailInlineEdit, true)
         .environment(\.reportBatchStore, reportBatches)
         .task { reportBatches.onRecordStale = onChanged }
     }
@@ -796,7 +781,10 @@ struct EntityDetailContent: View {
         case .fields(let keys):
             let fields = FieldsSectionView(descriptor: descriptor, row: row, keys: keys)
             if fields.hasVisibleRows {
-                ContinuousDetailSection(title: section.title ?? "") { fields }
+                ContinuousDetailSection(title: section.title ?? "") {
+                    fields
+                    sectionHandoffs(section)
+                }
             }
         case .relation:
             if let model = relationSections.first(where: { $0.id == section.id }) {
@@ -945,14 +933,6 @@ private struct EntityDetailDiagnostics: Encodable {
         formatter.maximumUnitCount = 1
         return formatter
     }()
-}
-
-/// A create editor the hero action opens, seeded from its plan.
-private struct HeroEditorRequest: Identifiable {
-    let id = UUID()
-    let entity: EntityKey
-    let prefill: [String: JSONValue]
-    let context: HeroEditorContext?
 }
 
 #Preview {

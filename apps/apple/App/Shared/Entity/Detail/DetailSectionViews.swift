@@ -12,6 +12,7 @@ struct EntityHeroView<Actions: View>: View {
     let row: EntityRow
     @ViewBuilder let actions: Actions
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showingPhoto = false
     @State private var showingImageChain = false
 
@@ -29,18 +30,24 @@ struct EntityHeroView<Actions: View>: View {
         self.actions = actions()
     }
 
-    /// iPhone leads with the photo across the full width; iPad and Mac keep it beside the title.
-    private var photoLeads: Bool {
+    /// iPhone puts a 92-point tile beside the title, or the full-width banner a record declares
+    /// (`detail.heroMedia: "banner"`); iPad and Mac keep the 56-point image beside the title.
+    private enum Media { case banner, tile, side }
+
+    private var media: Media {
         #if os(iOS)
-            UIDevice.current.userInterfaceIdiom == .phone
+            guard UIDevice.current.userInterfaceIdiom == .phone else { return .side }
+            return presentation.detailHeroMedia == "banner" ? .banner : .tile
         #else
-            false
+            return .side
         #endif
     }
 
+    private var imageSize: CGFloat { media == .tile ? 92 : 56 }
+
     var body: some View {
         Group {
-            if let photo = heroPhoto, photoLeads {
+            if let photo = heroPhoto, media == .banner {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
                     photoButton(photo, fullWidth: true)
                         .modifier(ImageChainEntry(enabled: explainsImage, isPresented: $showingImageChain))
@@ -48,14 +55,19 @@ struct EntityHeroView<Actions: View>: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                HStack(alignment: .center, spacing: FieldGuideTokens.Space.md) {
+                // At accessibility sizes the tile sits above the title rather than squeezing it.
+                let layout =
+                    dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: FieldGuideTokens.Space.md))
+                    : AnyLayout(HStackLayout(alignment: .center, spacing: FieldGuideTokens.Space.md))
+                layout {
                     if let photo = heroPhoto {
                         photoButton(photo, fullWidth: false)
                             .modifier(
                                 ImageChainEntry(enabled: explainsImage, isPresented: $showingImageChain))
-                    } else {
+                    } else if showsPlaceholder {
                         Thumb(
-                            url: row.imageURL, size: 56, symbol: descriptor.recordSymbol(in: row),
+                            url: row.imageURL, size: imageSize, symbol: descriptor.recordSymbol(in: row),
                             emoji: descriptor.recordEmoji(in: row)
                         )
                         .accessibilityHidden(!explainsImage)
@@ -80,6 +92,12 @@ struct EntityHeroView<Actions: View>: View {
         }
     }
 
+    /// Without a photo, the iPhone title leads unless the record has an image or emoji of its
+    /// own; iPad and Mac keep the entity glyph beside the title.
+    private var showsPlaceholder: Bool {
+        media == .side || row.imageURL != nil || descriptor.recordEmoji(in: row) != nil
+    }
+
     private func photoButton(_ photo: PhotoAttachment, fullWidth: Bool) -> some View {
         Button {
             showingPhoto = true
@@ -91,8 +109,8 @@ struct EntityHeroView<Actions: View>: View {
                         .frame(maxWidth: .infinity)
                         .containerRelativeFrame(.vertical) { length, _ in min(320, length / 3) }
                 } else {
-                    PhotoAttachmentImage(photo: photo, renderedWidth: 56)
-                        .frame(width: 56, height: 56)
+                    PhotoAttachmentImage(photo: photo, renderedWidth: imageSize)
+                        .frame(width: imageSize, height: imageSize)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
@@ -105,8 +123,9 @@ struct EntityHeroView<Actions: View>: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Preview \(photo.filename)")
+        .accessibilityHint(gallery.count > 1 ? "Opens \(gallery.count) photos" : "")
         .photoPreviewPresentation(isPresented: $showingPhoto) {
-            PhotoPreview(photos: [photo], selectedID: photo.id)
+            PhotoPreview(photos: gallery, selectedID: photo.id)
         }
     }
 
@@ -114,7 +133,7 @@ struct EntityHeroView<Actions: View>: View {
         VStack(alignment: .leading, spacing: 3) {
             if showsTitle {
                 Text(row.title)
-                    .font(.headline)
+                    .font(media == .tile ? .title3.weight(.semibold) : .headline)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
@@ -142,6 +161,22 @@ struct EntityHeroView<Actions: View>: View {
         return PhotoAttachment(
             id: row.id, filename: row.title, source: .remote(url),
             imageID: descriptor.key == .image ? nil : row.raw["coverImageId"]?.stringValue)
+    }
+
+    /// The full-screen gallery: the cover, then the record's other uploaded photos.
+    private var gallery: [PhotoAttachment] {
+        guard let cover = heroPhoto else { return [] }
+        let others = (row.raw["attachments"]?.arrayValue ?? []).compactMap { attachment -> PhotoAttachment? in
+            guard attachment["status"]?.stringValue?.uppercased() == "UPLOADED",
+                let id = attachment["id"]?.stringValue, id != cover.imageID,
+                let url = attachment.recordValue("url")?.stringValue.flatMap(URL.init(string:)),
+                url != row.imageURL
+            else { return nil }
+            return PhotoAttachment(
+                id: id, filename: attachment["filename"]?.stringValue ?? row.title, source: .remote(url),
+                imageID: id)
+        }
+        return [cover] + others
     }
 
 }
@@ -224,9 +259,14 @@ struct FieldsSectionView: View {
     var macGrid = false
     var summary = false
     @Environment(AppModel.self) private var appModel
+    @Environment(\.detailInlineEdit) private var inlineEditEnabled
+    @Environment(\.detailSuggestions) private var suggestions
     @State private var resolutionReview: ResolutionActionRequest?
+    @State private var inlineSession: InlineEditSession?
 
     var hasVisibleRows: Bool { !rows.isEmpty }
+    /// The fields this section draws as rows.
+    var visibleFields: [FieldDescriptor] { rows }
 
     var body: some View {
         let rows = rows
@@ -246,13 +286,21 @@ struct FieldsSectionView: View {
                                 .multilineTextAlignment(.trailing)
                                 .frame(width: 118, alignment: .trailing)
                                 .frame(minHeight: 20)
-                                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                                    HStack(spacing: FieldGuideTokens.Space.xs) {
-                                        macGridValue(field)
-                                        FieldValueStatus(raw: row.raw, field: field)
+                                if let session = inlineSession, session.field.key == field.key {
+                                    InlineFieldEditor(session: session) { inlineSession = nil }
+                                        .labelsHidden()
+                                } else {
+                                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                                        HStack(spacing: FieldGuideTokens.Space.xs) {
+                                            macGridValue(field)
+                                            FieldValueStatus(raw: row.raw, field: field)
+                                        }
+                                        FieldProvenanceCaption(raw: row.raw, field: field)
+                                        suggestionMarker(field)
                                     }
-                                    FieldProvenanceCaption(raw: row.raw, field: field)
-                                }.frame(minHeight: 20)
+                                    .frame(minHeight: 20)
+                                    .modifier(inlineEntry(field))
+                                }
                             }
                         }
                     }
@@ -304,19 +352,64 @@ struct FieldsSectionView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    @ViewBuilder
     private func fieldRowWithResolutionActions(_ field: FieldDescriptor) -> some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            HStack(spacing: FieldGuideTokens.Space.xs) {
-                fieldRow(field)
-                FieldValueStatus(raw: row.raw, field: field)
+        if let session = inlineSession, session.field.key == field.key {
+            InlineFieldEditor(session: session) { inlineSession = nil }
+        } else {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                HStack(spacing: FieldGuideTokens.Space.xs) {
+                    fieldRow(field)
+                    FieldValueStatus(raw: row.raw, field: field)
+                }
+                FieldProvenanceCaption(raw: row.raw, field: field)
+                suggestionMarker(field)
             }
-            FieldProvenanceCaption(raw: row.raw, field: field)
+            .frame(minHeight: isInteractive(field) ? FieldGuideTokens.touchTarget : listRowMinimumHeight)
+            .modifier(inlineEntry(field))
+            .modifier(
+                FieldExplanationPresenter(
+                    field: field, subject: EntityRef(entity: descriptor.key, id: row.id),
+                    menuActions: AnyView(resolutionActions(field))))
         }
-        .frame(minHeight: isInteractive(field) ? FieldGuideTokens.touchTarget : listRowMinimumHeight)
-        .modifier(
-            FieldExplanationPresenter(
-                field: field, subject: EntityRef(entity: descriptor.key, id: row.id),
-                menuActions: AnyView(resolutionActions(field))))
+    }
+
+    // MARK: Inline edit and suggestions
+
+    /// A simple field edits in place on a record detail; summary cells and other hosts stay
+    /// read-only, as does a field the record refuses or only web edits.
+    private func editsInline(_ field: FieldDescriptor) -> Bool {
+        inlineEditEnabled && !summary && field.editsInline(on: descriptor.key)
+            && field.applicabilityRefusal(in: row.raw) == nil
+            && NativePresentationCoverage.detailHandoff(field) == nil
+    }
+
+    /// A value that is itself a link (a reference, an external URL) keeps the tap for the link and
+    /// edits from the row's menu.
+    private func valueIsLink(_ field: FieldDescriptor) -> Bool {
+        EntityFieldValue.reference(in: row.raw, field: field) != nil || externalLinkValue(field)
+    }
+
+    private func externalLinkValue(_ field: FieldDescriptor) -> Bool {
+        displayText(field).flatMap { externalURL(field, value: $0) } != nil
+    }
+
+    private func inlineEntry(_ field: FieldDescriptor) -> InlineEditEntry {
+        InlineEditEntry(
+            enabled: editsInline(field), tapEdits: !valueIsLink(field), label: field.label
+        ) { beginEditing(field) }
+    }
+
+    private func beginEditing(_ field: FieldDescriptor) {
+        inlineSession = InlineEditSession(
+            field: field, row: row, descriptor: descriptor, client: appModel.client)
+    }
+
+    @ViewBuilder
+    private func suggestionMarker(_ field: FieldDescriptor) -> some View {
+        if !summary, let suggestions, let pending = suggestions.pending(for: field) {
+            FieldSuggestionMarker(suggestion: pending, field: field, model: suggestions)
+        }
     }
 
     private var listRowMinimumHeight: CGFloat {
@@ -329,6 +422,10 @@ struct FieldsSectionView: View {
 
     @ViewBuilder
     private func resolutionActions(_ field: FieldDescriptor) -> some View {
+        if editsInline(field) {
+            Button("Edit \(field.label)", systemImage: "pencil") { beginEditing(field) }
+                .accessibilityIdentifier("detail.\(descriptor.key.rawValue).\(field.key).edit")
+        }
         if field.applicabilityRefusal(in: row.raw) == nil,
             let envelope = FieldEnvelope.of(row.raw, field: field),
             descriptor.key.nativeActions.contains(.update)
@@ -346,7 +443,7 @@ struct FieldsSectionView: View {
 
     private func isInteractive(_ field: FieldDescriptor) -> Bool {
         guard field.displayApplicabilityRefusal(in: row.raw) == nil else { return false }
-        return field.reference != nil || field.detailRenderer == .recipeSource
+        return editsInline(field) || field.reference != nil || field.detailRenderer == .recipeSource
             || field.format == "external-link"
             || FieldEnvelope.of(row.raw, field: field)?.isInherited == true
     }
@@ -620,6 +717,36 @@ struct FieldsSectionView: View {
     }
 }
 
+/// Tap (Mac: double-click) a simple field's row to edit it in place; VoiceOver gets an Edit action.
+/// A row whose value is a link offers Edit from its menu instead.
+struct InlineEditEntry: ViewModifier {
+    let enabled: Bool
+    let tapEdits: Bool
+    let label: String
+    let begin: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            if tapEdits {
+                content
+                    .contentShape(Rectangle())
+                    #if os(macOS)
+                        .onTapGesture(count: 2, perform: begin)
+                    #else
+                        .onTapGesture(perform: begin)
+                    #endif
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint("Edits \(label)")
+                    .accessibilityAction(named: Text("Edit \(label)"), begin)
+            } else {
+                content.accessibilityAction(named: Text("Edit \(label)"), begin)
+            }
+        } else {
+            content
+        }
+    }
+}
+
 /// A manifest-owned explanation affordance shared by every generated detail field. The popover
 /// presents product language from the descriptor and keeps resolver/read-path internals out of UI.
 struct FieldExplanationLabel: View {
@@ -873,10 +1000,16 @@ struct RelationSectionView: View {
             }
             ForEach(list.rows) { row in
                 VStack(alignment: .leading, spacing: 5) {
-                    NavigationLink(value: Route.entityDetail(model.target.key, id: row.id)) {
-                        EntityRowView(key: model.target.key, row: row, columns: model.spec.columns)
+                    // The related record's row command (a subtask's Done) sits outside its link.
+                    HStack(spacing: FieldGuideTokens.Space.xs) {
+                        RelationRowCommand(entity: model.target.key, row: row) {
+                            Task { await list.refresh() }
+                        }
+                        NavigationLink(value: Route.entityDetail(model.target.key, id: row.id)) {
+                            EntityRowView(key: model.target.key, row: row, columns: model.spec.columns)
+                        }
+                        .accessibilityIdentifier("relation.row.\(model.target.key.rawValue).\(row.id)")
                     }
-                    .accessibilityIdentifier("relation.row.\(model.target.key.rawValue).\(row.id)")
                     if let evidence = context[row.id] { financialBadges(evidence, rowID: row.id) }
                     if let evidence = model.connectionEvidence[row.id] {
                         RecordPathView(paths: evidence.paths)
