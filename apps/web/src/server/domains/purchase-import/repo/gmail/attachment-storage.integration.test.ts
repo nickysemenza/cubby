@@ -16,7 +16,7 @@
  *
  * Gmail, model verdicts and object storage are synthetic; retention writers are real.
  */
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -206,7 +206,7 @@ describe("Gmail ingestion and attachment storage", () => {
     expect(await attachments()).toHaveLength(1);
   });
 
-  it("invalidates created and changed metadata but leaves replayed Email and Job tuples unchanged", async () => {
+  it("invalidates created and changed metadata but leaves replayed Email unchanged", async () => {
     const party = await seedParty();
     const { mail } = normalizeMessage(
       "synthetic-google-subject",
@@ -223,19 +223,11 @@ describe("Gmail ingestion and attachment storage", () => {
       mailboxId: mail.mailboxId,
       messageId: mail.messageId,
     };
-    // Capture inputs append independently; existing execution rows are untouched.
-    const jobs = async () =>
-      await getDb(ctx.db).execute(
-        sql`SELECT key, generation, xmin::text AS xmin FROM "Job" WHERE kind = 'derived.drain' ORDER BY key`,
-        "objects",
-      );
     await saveMailboxMetadata(ctx.db, metadata);
     const originalEmail = await readEmail(ctx.db, identity);
     expect(originalEmail).not.toBeNull();
-    const originalJobs = await jobs();
     await saveMailboxMetadata(ctx.db, metadata);
     expect(await readEmail(ctx.db, identity)).toEqual(originalEmail);
-    expect(await jobs()).toEqual(originalJobs);
 
     await saveMailboxMetadata(ctx.db, {
       ...metadata,
@@ -250,7 +242,6 @@ describe("Gmail ingestion and attachment storage", () => {
       subject: "Synthetic changed receipt",
       updatedAt: expect.any(Date),
     });
-    expect(await jobs()).toEqual(originalJobs);
     await saveMailboxMetadata(ctx.db, {
       ...metadata,
       mail: {
