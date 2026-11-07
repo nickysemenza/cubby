@@ -51,6 +51,7 @@ export function PhotoViewer<TImage extends PhotoGridImage>({
         </DialogHeader>
         <div className="relative flex min-h-0 flex-1 items-center justify-center bg-muted/30 p-3 sm:p-5">
           <Image
+            preview={false}
             key={image.id}
             src={imageUrl(image)}
             alt={image.filename}

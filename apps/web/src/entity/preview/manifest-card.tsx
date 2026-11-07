@@ -204,6 +204,7 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
   return match(block)
     .with({ kind: "thumb" }, (b) => (
       <Image
+        preview={false}
         src={b.url}
         alt=""
         displayWidth={300}

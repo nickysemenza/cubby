@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { Image } from "./image";
@@ -48,7 +48,7 @@ describe("Image", () => {
 
   const BUCKET_SRC = `${__R2_PUBLIC_URL__}/cubby/images/a.jpg`;
 
-  it("requests the snapped CF transform (no srcSet) when displayWidth is set on a bucket URL", () => {
+  it("previews a small image lazily using the shared transformed popup", async () => {
     render(<Image src={BUCKET_SRC} alt="p" displayWidth={40} />);
     const img = screen.getByRole("img", { name: "p" });
     // 40px rendered → 2× = 80 → snaps up to the 128 rung.
@@ -56,6 +56,17 @@ describe("Image", () => {
       `${__R2_PUBLIC_URL__}/cdn-cgi/image/width=128,quality=80,format=auto,fit=scale-down/cubby/images/a.jpg`,
     );
     expect(img.getAttribute("srcset")).toBeNull();
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.mouseEnter(img);
+    fireEvent.mouseMove(img);
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-slot="tooltip-content"] img'),
+      ).toHaveAttribute(
+        "src",
+        `${__R2_PUBLIC_URL__}/cdn-cgi/image/width=640,quality=80,format=auto,fit=scale-down/cubby/images/a.jpg`,
+      ),
+    );
   });
 
   it("uses the original src (no srcSet) when displayWidth is omitted", () => {

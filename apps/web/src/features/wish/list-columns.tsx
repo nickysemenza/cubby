@@ -82,7 +82,6 @@ function WishRowCover({ row }: { row: WishRow }) {
       images={cover?.image ? [cover.image] : []}
       imageCount={cover?.count}
       alt="Candidate product image"
-      lazyPreview
       entity="product"
     />
   ) : (
@@ -97,12 +96,7 @@ function CandidateCover({ productId }: { productId: string }) {
   });
   const images = image ? [image] : [];
   return (
-    <ImageThumbnail
-      images={images}
-      alt="Product image"
-      lazyPreview
-      entity="product"
-    />
+    <ImageThumbnail images={images} alt="Product image" entity="product" />
   );
 }
 

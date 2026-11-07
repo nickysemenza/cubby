@@ -582,8 +582,6 @@ export function createImageColumn<T extends object>(
               : rowDisplayCover(info.row.original).count
           }
           alt="Image"
-          preview={false}
-          lazyPreview={true}
           entity={rowEntity(info.row.original)}
         />
       );
@@ -617,8 +615,6 @@ function RefImageThumbnail({ imageRef }: { imageRef: EntityRef }) {
           : []
       }
       alt="Image"
-      preview={false}
-      lazyPreview={true}
       entity={imageRef.entityKind}
     />
   );

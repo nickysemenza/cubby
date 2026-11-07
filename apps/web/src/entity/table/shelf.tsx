@@ -209,15 +209,8 @@ export function ShelfCard({
               src={image ?? ""}
               alt={title}
               displayWidth={compact ? 128 : SHELF_CARD_DISPLAY_WIDTH}
-              className="absolute inset-0 h-full w-full object-cover"
+              className="absolute inset-0 h-full w-full"
               fallback={
-                <ShelfIdentityFallback
-                  entity={entity}
-                  compact={compact}
-                  record={record}
-                />
-              }
-              loadingFallback={
                 <ShelfIdentityFallback
                   entity={entity}
                   compact={compact}

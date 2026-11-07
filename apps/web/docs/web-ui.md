@@ -88,7 +88,13 @@ web editor sentinels.
 Every `<Image>` declares `displayWidth` as the box's true maximum rendered CSS
 width (widest breakpoint), never a guess or a rung: the helper fetches 2× and
 snaps up to 128/640/2048, so declaring 400 for a ~225px card fetches the 2048
-rung. Prefer image wrappers.
+rung. Prefer image wrappers. Shared identity thumbnails and image-view tiles
+contain the whole image in their frame rather than cropping it. `Image` owns
+lazy hover previews for non-decorative images below 256px declared display width; use
+`preview={false}` for decorative images, existing preview content, or a custom
+trigger that already owns the popup. Missing and failed images never preview. Table thumbnails
+and image-view tiles reuse the drawer’s lazy enlarged hover preview; clicking a
+table thumbnail still opens its display-image source chain.
 
 Use the guarded spacing scale and `Row`, `Stack`, `Grid`, `Section` when the
 layout repeats or encodes a real decision. `gap` is for flex/grid siblings;

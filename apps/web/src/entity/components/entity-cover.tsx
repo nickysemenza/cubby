@@ -9,7 +9,6 @@ import type { ReactNode } from "react";
 
 import { EntityIcon } from "~/entity/entities";
 import { Image } from "~/ui/media/image";
-import { ImageWithPreview } from "~/ui/media/image-with-preview";
 import { TileOverlay } from "~/ui/media/tile-overlay";
 
 interface EntityCoverProps {
@@ -21,7 +20,6 @@ interface EntityCoverProps {
   className?: string;
   fit?: "cover" | "contain";
   preview?: boolean;
-  lazyPreview?: boolean;
   placeholder?: "entity" | "none";
   fallback?: ReactNode;
   to?: string;
@@ -40,9 +38,8 @@ export function EntityCover({
   alt = "",
   size,
   className,
-  fit = entity === "product" ? "contain" : "cover",
-  preview = false,
-  lazyPreview = false,
+  fit = "contain",
+  preview = (size ?? 64) < 256,
   placeholder = "entity",
   fallback,
   to,
@@ -87,31 +84,18 @@ export function EntityCover({
 
   return (
     <div className={shellClassName} style={style}>
-      {preview ? (
-        <ImageWithPreview
-          src={preferredImageUrl(image)}
-          alt={alt}
-          to={to}
-          params={params}
-          lazyPreview={lazyPreview}
-          fallback={mediaFallback}
-          displayWidth={size ?? 64}
-          fit={fit}
-          className="absolute inset-0 h-full w-full rounded-none border-0"
-        />
-      ) : (
-        <Image
-          src={preferredImageUrl(image)}
-          alt={alt}
-          fallback={mediaFallback}
-          loadingFallback={mediaFallback}
-          displayWidth={size ?? 64}
-          className={cn(
-            "absolute inset-0 h-full w-full",
-            fit === "contain" ? "bg-card object-contain" : "object-cover",
-          )}
-        />
-      )}
+      <Image
+        src={preferredImageUrl(image)}
+        alt={alt}
+        to={to}
+        params={params}
+        preview={preview}
+        fallback={mediaFallback}
+        loadingFallback={mediaFallback}
+        displayWidth={size ?? 64}
+        fit={fit}
+        className="absolute inset-0 h-full w-full bg-card"
+      />
       <TileOverlay count={(imageCount ?? images.length) - 1} />
     </div>
   );

@@ -4,8 +4,7 @@ import { cn } from "cn";
 import type React from "react";
 import type { ReactNode } from "react";
 
-import { Image } from "~/ui/media/image";
-import { ImagePreviewPopup } from "~/ui/media/image-with-preview";
+import { Image, ImagePreviewPopup } from "~/ui/media/image";
 import { Tooltip, TooltipTrigger } from "~/ui/primitives/tooltip";
 
 interface ArrangeThumbProps {
@@ -36,12 +35,8 @@ interface ArrangeThumbProps {
  * navigates (a card click drills, the chevron zooms), so the tile is the
  * arrange surface's "open this".
  *
- * Rendering the bare `Image` primitive rather than one of its wrappers is
- * deliberate: `EntityCover` with `placeholder="none"` renders nothing when
- * empty (which would break name alignment down a column), and
- * `ImageThumbnail` is a table cell. `ImageWithPreview` doesn't fit either — it owns its trigger
- * element, and this tile's three drag-safety attributes below are exactly what
- * a generic trigger would drop. Only its popup (`ImagePreviewPopup`) is shared.
+ * This tile owns its Link trigger so drag-safety attributes remain on the
+ * navigation target. The shared Image preview is disabled inside that trigger.
  *
  * The hover preview is drag-safe by construction, which is what a tile inside a
  * native-drag source needs:
@@ -113,6 +108,7 @@ export function ArrangeThumb({
     <Tooltip lazy>
       <TooltipTrigger render={<Link {...linkProps} />}>
         <Image
+          preview={false}
           src={cover.url}
           alt={alt}
           displayWidth={size}

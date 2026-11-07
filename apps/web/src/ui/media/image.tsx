@@ -1,4 +1,5 @@
 import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken";
+import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import {
   type ComponentProps,
@@ -8,6 +9,11 @@ import {
 } from "react";
 
 import { transformedImageUrl } from "~/lib/image-url";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 export type ImageProps = Omit<
   ComponentProps<"img">,
@@ -22,6 +28,15 @@ export type ImageProps = Omit<
      * Should fill its box (h-full w-full). Defaults to a quiet muted icon tile.
      */
     fallback?: ReactNode;
+    /** Small content images preview by default; opt out for decorative or nested media. */
+    preview?: boolean;
+    previewSide?: "top" | "right" | "bottom" | "left";
+    previewPositionerClassName?: string;
+    /** Optional square thumbnail geometry and navigation. */
+    size?: number;
+    to?: string;
+    params?: Record<string, string>;
+    fit?: "cover" | "contain";
     /**
      * Optional content shown in the reserved image box until decoding finishes.
      * The default remains the quiet paper tint; identity marks supply their
@@ -58,8 +73,22 @@ export function Image({
   loadingFallback,
   displayWidth,
   unoptimized: _unoptimized,
+  preview,
+  previewSide = "right",
+  previewPositionerClassName,
+  size,
+  to,
+  params,
+  fit = "contain",
   ...props
 }: ImageProps) {
+  displayWidth ??= size;
+  style = size == null ? style : { ...style, width: size, height: size };
+  className = cn(
+    fit === "contain" ? "object-contain" : "object-cover",
+    size != null && "absolute inset-0",
+    className,
+  );
   const hasSrc = typeof src === "string" && src.length > 0;
   const srcUrl = hasSrc ? src : undefined;
 
@@ -131,44 +160,112 @@ export function Image({
     );
   }
 
+  const image = (
+    <img
+      ref={handleRef}
+      src={effectiveSrc}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+      onLoad={markLoaded}
+      onError={() => {
+        if (useTransform) {
+          setTriedOriginalFor(srcUrl ?? null);
+          return;
+        }
+        setErroredFor(srcUrl ?? null);
+        setIsLoading(false);
+      }}
+      className={cn(
+        className,
+        "transition-opacity duration-(--brand-motion-fast) ease-cozy",
+        isLoading ? "opacity-0" : "opacity-100",
+      )}
+      style={style}
+      {...props}
+    />
+  );
+  const loading = isLoading ? (
+    <div
+      className={cn("flex items-center justify-center bg-muted/25", className)}
+      style={style}
+      aria-hidden
+    >
+      {loadingFallback}
+    </div>
+  ) : null;
+  const squareStyle = size == null ? undefined : { width: size, height: size };
+  const trigger = to ? (
+    <Link
+      to={to}
+      params={params}
+      className="relative inline-flex shrink-0"
+      style={squareStyle}
+    >
+      {loading}
+      {image}
+    </Link>
+  ) : size != null ? (
+    <span className="relative inline-flex shrink-0" style={squareStyle}>
+      {loading}
+      {image}
+    </span>
+  ) : (
+    image
+  );
+  // The popup is already 256px; larger images gain nothing from a smaller copy.
+  const showPreview =
+    preview ?? (alt !== "" && displayWidth != null && displayWidth < 256);
   return (
     <>
-      {isLoading && (
-        <div
-          className={cn(
-            "flex items-center justify-center bg-muted/25",
-            className,
-          )}
-          style={style}
-          aria-hidden
-        >
-          {loadingFallback}
-        </div>
+      {!to && size == null ? loading : null}
+      {showPreview ? (
+        <Tooltip lazy>
+          <TooltipTrigger render={trigger} />
+          <ImagePreviewPopup
+            src={srcUrl ?? ""}
+            alt={alt ?? ""}
+            side={previewSide}
+            positionerClassName={previewPositionerClassName}
+          />
+        </Tooltip>
+      ) : (
+        trigger
       )}
-      <img
-        ref={handleRef}
-        src={effectiveSrc}
-        alt={alt}
-        loading="lazy"
-        decoding="async"
-        onLoad={markLoaded}
-        onError={() => {
-          // First failure of a transformed URL → fall back to the original.
-          if (useTransform) {
-            setTriedOriginalFor(srcUrl ?? null);
-            return;
-          }
-          setErroredFor(srcUrl ?? null);
-          setIsLoading(false);
-        }}
-        className={cn(
-          className,
-          "transition-opacity duration-(--brand-motion-fast) ease-cozy",
-          isLoading ? "opacity-0" : "opacity-100",
-        )}
-        style={style}
-        {...props}
-      />
     </>
+  );
+}
+
+export function ImagePreviewPopup({
+  src,
+  alt,
+  side = "right",
+  positionerClassName,
+}: {
+  src: string;
+  alt: string;
+  side?: "top" | "right" | "bottom" | "left";
+  positionerClassName?: string;
+}) {
+  return (
+    <TooltipContent
+      side={side}
+      positionerClassName={positionerClassName}
+      // pointer-events-none: the popup is purely a look at the image, and it
+      // is portalled over whatever surface the thumbnail sits in — on the
+      // arrange board that surface is a drag-and-drop hit-test area, and on a
+      // combobox it is the option list.
+      className="pointer-events-none max-w-none overflow-hidden rounded-none border border-[var(--border)] bg-popover p-0"
+    >
+      <div className="relative" style={{ width: 256, height: 256 }}>
+        <Image
+          preview={false}
+          src={src}
+          alt={alt}
+          displayWidth={256}
+          className="absolute inset-0 h-full w-full bg-card object-contain"
+        />
+      </div>
+    </TooltipContent>
   );
 }

@@ -8,7 +8,6 @@ interface ImageThumbnailProps {
   imageCount?: number;
   images: Array<ImageUrlSummary & { id?: string; filename?: string }>;
   alt?: string;
-  lazyPreview?: boolean;
   preview?: boolean;
   /** When provided, shows a colored entity icon instead of a generic image icon */
   entity?: Entity;
@@ -19,7 +18,6 @@ export const ImageThumbnail = ({
   images,
   imageCount,
   alt = "Image",
-  lazyPreview = false,
   preview = true,
   entity,
 }: ImageThumbnailProps) => {
@@ -31,7 +29,6 @@ export const ImageThumbnail = ({
         alt={alt}
         entity={entity}
         preview={preview}
-        lazyPreview={lazyPreview}
         size={ROW_DENSITY.rowHeight}
         className="thumbnail-ring"
       />

@@ -147,7 +147,6 @@ function targetImage(
     <ImageThumbnail
       images={target?.image ? [target.image] : []}
       alt={target ? `${target.label} image` : "No linked image"}
-      lazyPreview
       entity={target?.entity ?? fallbackEntity}
     />
   );
