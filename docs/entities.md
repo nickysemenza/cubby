@@ -1826,7 +1826,7 @@ complete sortable-column list.
 `defaultOverride` replaces `createdAt` (or the first sort field), and
 `directionOverride` replaces the field-kind-based direction.
 Every `fields` entry is a `model.fields` key, a `model.derived` key, or a
-`related:<view>` count. A sort whose value is not its stored column (a
+`related:<view>` preview. A sort whose value is not its stored column (a
 vendor's live purchase count, a product's expected-quantity variance, a
 reference ordered by its effective record's name) is a `model.derived` key,
 so no repository resolves a sort by hand. `defineRepository` derives the kernel's
@@ -1844,8 +1844,8 @@ The list-field compiler also owns `listFields.presentation`: semantic labels,
 descriptions, entity targets, value types, cardinality and admitted sort, group
 and filter keys with unavailable reasons. Shared web columns and menus consume
 these facts rather than guessing semantics from storage shape. Relationship
-previews contain records even when their declared sort orders by related count;
-that sort carries its own explanation. Sort controls offer supported hidden
+previews contain records; their existing sort follows the first chip in the
+view's declared order and carries that explanation separately. Sort controls offer supported hidden
 columns independently of column visibility.
 
 `display.value` declares a cell's semantic kind when it differs from its stored

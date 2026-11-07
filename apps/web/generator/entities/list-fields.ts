@@ -1537,7 +1537,7 @@ const compileFieldPresentation = (
           key === `related:${entity.key}.${relation.key}` ||
           (value?.shape === "via" && relation.key === value.path),
       );
-      const relatedCountSort = key.startsWith("related:");
+      const relatedViewSort = key.startsWith("related:");
       const target = presentationTarget({ field, value, relation, filter });
       if (target !== null && !byKey.has(target))
         throw new EntityDeclarationError(
@@ -1575,7 +1575,9 @@ const compileFieldPresentation = (
         sort: operation(
           sorts.includes(key) ? key : undefined,
           value?.sort ?? "Sorting is unavailable for this field.",
-          relatedCountSort ? "Sorts by the number of related records." : null,
+          relatedViewSort
+            ? "Sorts by the first related record shown in the cell."
+            : null,
         ),
         group: operation(
           group?.reason === null ? group.key : undefined,
