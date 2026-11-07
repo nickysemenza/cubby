@@ -561,7 +561,17 @@ A shared failure remains visible while any uncancelled requester still needs
 that original evaluation. Retry history and diagnostics remain stored.
 Runs explicitly cancelled or aborted by a member, and permanently retired
 coordinators, remain in history without advertising execution recovery. Work and
-Runs attention share the stopped-state policy. A failed `ai_refresh` Run with
+the Run `needsAttention` value share these stopped-state guards. Ended scheduled
+historical routine step kinds without an executor also leave recovery attention
+only when they have no live Job, owned or requested evaluation roster,
+unresolved image job, active finding or proposed photo group. Manual Runs,
+funding stops and current executors remain visible. The manifest declares this
+history; no Run, step or transcript is retired or rewritten by the read.
+The Runs attention saved view and stuck rollup additionally use
+`ATTENTION_RUN_PURPOSES`, which omits routine kinds; Work retains actionable
+routine failures such as connection discovery. These are three distinct history
+guards: member stops and retired coordinators, settled AI recovery, and ended
+historical routine execution without obligations. A failed `ai_refresh` Run with
 `ai_work_failed` also stops advertising recovery when it has a durable owned
 roster, all current owned and requested evaluations are terminal (including
 blocked), and no live Job or unresolved image job remains. Effective request

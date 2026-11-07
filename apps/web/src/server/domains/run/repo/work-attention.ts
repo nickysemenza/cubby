@@ -1,5 +1,12 @@
 import { imageProcessingJobState } from "@cubby/schemas/image-processing";
-import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
+import { photoGroupProposalState } from "@cubby/schemas/photo-import-run";
+import {
+  RUN_KINDS,
+  runPurpose,
+  runStatus,
+  runTrigger,
+  type RunKindDeclaration,
+} from "@cubby/schemas/run-fields";
 import { sql, type SQL } from "drizzle-orm";
 
 import {
@@ -8,9 +15,26 @@ import {
 } from "~/server/ai/evaluation/repo/evaluation-tally";
 import { related } from "~/server/db/helpers/related";
 import { imageProcessingJob } from "~/server/db/retained-tables";
+import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
 import { runHasLiveJobs } from "~/server/generic/jobs/repo/job-reads";
 
 const RUN = runStatus.enum;
+const historicalRoutineStepPurposes = Object.entries(RUN_KINDS).flatMap(
+  ([purpose, declaration]) => {
+    const kind: RunKindDeclaration = declaration;
+    return kind.historical && kind.routine && kind.steps && !kind.execution
+      ? [purpose]
+      : [];
+  },
+);
+
+const unresolvedImageWorkExists = (id: SQL) =>
+  related(imageProcessingJob, (item) => sql`${item.runId} = ${id}`)
+    .where(
+      (item) =>
+        sql`${item.state} NOT IN (${imageProcessingJobState.enum.ready}, ${imageProcessingJobState.enum.skipped})`,
+    )
+    .exists();
 
 /** Run states the work queue treats as needing a person. */
 export const attentionStatePredicate = (state: SQL): SQL =>
@@ -23,6 +47,33 @@ export const retiredRunPredicate = (retiredAt: SQL): SQL<boolean> =>
 /** Explicit member stops remain in history without requesting recovery. */
 export const memberStoppedRunPredicate = (failureCode: SQL): SQL<boolean> =>
   sql<boolean>`(${failureCode} IS NOT DISTINCT FROM ${"user_cancelled"} OR ${failureCode} IS NOT DISTINCT FROM ${"dispatch_aborted"})`;
+
+/** A historical scheduled executor is history only when no retained obligation remains. */
+export function historicalRoutineRunPredicate(input: {
+  id: SQL;
+  purpose: SQL;
+  status: SQL;
+  trigger: SQL;
+  endedAt: SQL;
+  failureCode: SQL;
+}): SQL<boolean> {
+  if (!historicalRoutineStepPurposes.length) return sql<boolean>`false`;
+  // CASE keeps obligation probes off unrelated Run kinds on every Work poll.
+  return sql<boolean>`CASE WHEN ${input.purpose} IN (${sql.join(
+    historicalRoutineStepPurposes.map((purpose) => sql`${purpose}`),
+    sql`, `,
+  )})
+    AND ${input.trigger} = ${runTrigger.enum.scheduled} AND ${input.endedAt} IS NOT NULL
+    AND ${input.status} IN (${RUN.failed}, ${RUN.dispatch_failed}, ${RUN.needs_review})
+    AND ${input.failureCode} IS DISTINCT FROM 'execution_limit'
+  THEN NOT ${runHasLiveJobs(input.id)}
+    AND NOT ${evaluationRosterExists({ runId: input.id, source: "owned" })}
+    AND NOT ${evaluationRosterExists({ runId: input.id, source: "requested" })}
+    AND NOT ${unresolvedImageWorkExists(input.id)}
+    AND NOT EXISTS (SELECT 1 FROM "RunFinding" historical_finding WHERE historical_finding."runId" = ${input.id} AND ${activeFindingSql("historical_finding")})
+    AND NOT EXISTS (SELECT 1 FROM "PhotoGroupProposal" historical_proposal WHERE historical_proposal."runId" = ${input.id} AND historical_proposal.state = ${photoGroupProposalState.enum.proposed})
+  ELSE false END`;
+}
 
 /** Settled AI history closes recovery only; it never rewrites the failed Run. */
 export function settledAiRunPredicate(input: {
@@ -40,13 +91,5 @@ export function settledAiRunPredicate(input: {
     AND NOT ${evaluationRecoveryExists(owned)}
     AND NOT ${evaluationRecoveryExists(requested)}
     AND NOT ${runHasLiveJobs(input.id)}
-    AND NOT ${related(
-      imageProcessingJob,
-      (item) => sql`${item.runId} = ${input.id}`,
-    )
-      .where(
-        (item) =>
-          sql`${item.state} NOT IN (${imageProcessingJobState.enum.ready}, ${imageProcessingJobState.enum.skipped})`,
-      )
-      .exists()})`;
+    AND NOT ${unresolvedImageWorkExists(input.id)})`;
 }

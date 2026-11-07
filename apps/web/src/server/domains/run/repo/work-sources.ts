@@ -14,6 +14,7 @@ import {
   settledAiRunPredicate,
   memberStoppedRunPredicate,
   retiredRunPredicate,
+  historicalRoutineRunPredicate,
 } from "~/server/domains/run/repo/work-attention";
 import { workRunReviewRead } from "~/server/domains/run/repo/work-owners";
 import { recordScope } from "~/server/generic/work-queue/repo/work-declarations";
@@ -96,7 +97,7 @@ const account: WorkSource = {
       .where(
         and(
           sql`${notDeleted(alias(run, "Run"))} AND NOT ${memberStoppedRunPredicate(sql`"Run"."failureCode"`)} AND (
-        (NOT ${retiredRunPredicate(sql`"Run"."retiredAt"`)} AND NOT ${settledAiRunPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), failureCode: outer(run.failureCode) })} AND ${attentionStatePredicate(sql`"Run".status`)} AND NOT ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IS NOT DISTINCT FROM 'execution_limit')
+        (NOT ${retiredRunPredicate(sql`"Run"."retiredAt"`)} AND NOT ${historicalRoutineRunPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), trigger: outer(run.trigger), endedAt: outer(run.endedAt), failureCode: outer(run.failureCode) })} AND NOT ${settledAiRunPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), failureCode: outer(run.failureCode) })} AND ${attentionStatePredicate(sql`"Run".status`)} AND NOT ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IS NOT DISTINCT FROM 'execution_limit')
           AND NOT EXISTS (SELECT 1 FROM "RunFinding" finding WHERE finding."runId" = "Run".id AND ${activeFindingSql("finding")}))
         OR ("Run".purpose = ${runPurpose.enum.photo_inventory} AND EXISTS (
           SELECT 1 FROM "PhotoGroupProposal" proposal WHERE proposal."runId" = "Run".id AND proposal.state = ${photoGroupProposalState.enum.proposed}
