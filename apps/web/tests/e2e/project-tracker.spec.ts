@@ -140,7 +140,11 @@ test("maintenance keeps explicit completion history across spending years", asyn
     status: "done",
     completedOn: "2031-02-01",
   });
+  const vendor = await createEntityFixture(page, "vendor", {
+    name: `Synthetic maintenance supplier ${suffix}`,
+  });
   const purchase = await createEntityFixture(page, "purchase", {
+    vendorId: vendor.id,
     orderId: `SYNTHETIC-MAINTENANCE-${suffix}`,
   });
   const expenseName = `Synthetic maintenance supply ${suffix}`;
@@ -154,11 +158,9 @@ test("maintenance keeps explicit completion history across spending years", asyn
     trade: "other",
   });
   await gotoAuthenticatedPage(page, "/tasks?view=maintenance");
-  const cadence = page
-    .locator("section")
-    .filter({
-      has: page.getByRole("heading", { name: "Observed cadence", exact: true }),
-    });
+  const cadence = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Observed cadence", exact: true }),
+  });
   const row = cadence
     .getByRole("row")
     .filter({ has: page.getByText(name, { exact: true }) });
@@ -168,14 +170,12 @@ test("maintenance keeps explicit completion history across spending years", asyn
   await expect(row).toContainText("2030-01-01, 2030-04-01, 2031-01-01");
   await page.getByLabel("Spending year").fill("2030");
   await expect(row).toContainText("3 dated completions");
-  const spending = page
-    .locator("section")
-    .filter({
-      has: page.getByRole("heading", {
-        name: "Purchase spending",
-        exact: true,
-      }),
-    });
+  const spending = page.locator("section").filter({
+    has: page.getByRole("heading", {
+      name: "Purchase spending",
+      exact: true,
+    }),
+  });
   await expect(spending.getByText(expenseName, { exact: true })).toBeVisible();
   await page.getByLabel("Spending year").fill("2031");
   await expect(spending.getByText(expenseName, { exact: true })).toHaveCount(0);
