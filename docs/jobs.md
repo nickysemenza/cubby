@@ -507,6 +507,10 @@ is a function of the cron tick. The table stays named `Job` because `Task` is th
 entity's table.
 There is no per-kind queue health or alerting: with a few dozen coarse Jobs,
 Activity's counts and a stalled Run show a stuck queue directly.
+Work excludes a retained failed evaluation after its owned retry receipt hands
+off to a replacement, or after all remaining live requesters have handed off.
+A shared failure remains visible while any uncancelled requester still needs
+that original evaluation. Retry history and diagnostics remain stored.
 
 ## Producers
 
