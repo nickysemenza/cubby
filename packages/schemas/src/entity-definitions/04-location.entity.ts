@@ -33,6 +33,10 @@ export const { definition, readSchemas } = defineEntityModel(
         module: "~/features/location/list-columns",
         export: "locationListOverride",
       },
+      listReadProjection: {
+        module: "~/features/location/list-read",
+        export: "locationListReadProjection",
+      },
       basePath: "locations",
     },
     table: "Location",

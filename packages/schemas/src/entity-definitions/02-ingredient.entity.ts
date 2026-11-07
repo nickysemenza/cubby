@@ -19,6 +19,10 @@ export const { definition, readSchemas } = defineEntityModel(
         module: "~/features/ingredient/list-columns",
         export: "ingredientListOverride",
       },
+      listReadProjection: {
+        module: "~/features/ingredient/list-read",
+        export: "ingredientListReadProjection",
+      },
       basePath: "ingredients",
     },
     table: "Ingredient",

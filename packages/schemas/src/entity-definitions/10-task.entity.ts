@@ -36,6 +36,10 @@ export const { definition, readSchemas } = defineEntityModel({
       module: "~/features/task/list-columns",
       export: "taskListOverride",
     },
+    listReadProjection: {
+      module: "~/entity/entity-list/list-read-demand",
+      export: "declaredListReadProjection",
+    },
     basePath: "tasks",
   },
   table: "Task",
@@ -278,7 +282,10 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "name",
         kind: "text",
         control: { kind: "text", placeholder: "What needs doing?" },
-        display: { standard: "name" },
+        display: {
+          standard: "name",
+          readFields: ["subtaskCount", "doneSubtaskCount"],
+        },
         validation: {
           read: z.string().min(1),
           create: z.string().min(1),
