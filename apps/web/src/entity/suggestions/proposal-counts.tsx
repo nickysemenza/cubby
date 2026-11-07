@@ -165,7 +165,9 @@ function EligibleProposalCount({
     ? "Couldn't refresh suggestion counts. Showing known results."
     : null;
   return (
-    <span className="inline-flex min-w-0 items-center gap-1">
+    // Constrain the identity wrapper so trailing context and proposal controls
+    // stay inside a narrow name cell instead of being clipped by its ancestor.
+    <span className="inline-flex max-w-full min-w-0 items-center gap-1">
       <span className="min-w-0">{children}</span>
       {error ? (
         <ErrorDisplay
