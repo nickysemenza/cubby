@@ -627,7 +627,10 @@ Rules:
         },
         provenance: {
           kind: "derived",
-          sources: [{ entity: "product", relation: "products" }],
+          sources: [
+            { entity: "product", relation: "products" },
+            { label: "Descendant Product Categories" },
+          ],
         },
         explanation: {
           ruleId: "productCategory.product-count",

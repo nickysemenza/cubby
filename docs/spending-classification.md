@@ -128,7 +128,8 @@ matching rows' ancestors as context; context rows are excluded from
 selection. Only rows with children have expand controls.
 
 Product Categories show one effective Spending Category, its source/state,
-subtree Product counts and allocation-based subtree net spending. Spending
+subtree Product counts and allocation-based subtree net spending. The inspector's
+Product count opens that same branch, including descendants, in Products. Spending
 Categories show allocation-based subtree net and incoming mapping counts for
 each category itself. Spending is labelled **All history, including planned**;
 display filters change visible categories, not this spending or historical

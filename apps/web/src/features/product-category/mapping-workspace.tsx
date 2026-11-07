@@ -82,7 +82,12 @@ export function ProductCategoryConnections({ id }: { id: CategoryRow["id"] }) {
             <div>
               <dt className="text-muted-foreground">Products in this branch</dt>
               <dd className="tabular-nums">
-                {fieldValueOf(record.data.fields.productCount)}
+                <Link
+                  to="/products"
+                  search={{ category: id, includeSubProductCategories: "true" }}
+                >
+                  {fieldValueOf(record.data.fields.productCount)}
+                </Link>
               </dd>
             </div>
           </dl>
