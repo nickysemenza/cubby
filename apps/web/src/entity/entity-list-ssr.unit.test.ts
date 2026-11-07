@@ -157,8 +157,16 @@ describe("ensureEntityListSsr", () => {
 
   it("compiles a route renderer's explicit opening sort", () => {
     expect(declaredListReadProjection(metadataClient, "project")).toEqual(
-      expect.arrayContaining(["taskProgress", "rollup"]),
+      expect.arrayContaining(["taskProgress", "rollup", "dataQuality"]),
     );
+    expect(declaredListReadProjection(metadataClient, "expense")).toContain(
+      "dataQuality",
+    );
+    expect(
+      declaredListReadProjection(metadataClient, "expense", {
+        dataQuality: false,
+      }),
+    ).not.toContain("dataQuality");
     const imageFields = declaredListReadProjection(metadataClient, "image");
     expect(imageFields).toEqual(
       expect.arrayContaining(["url", "status", "filename"]),
