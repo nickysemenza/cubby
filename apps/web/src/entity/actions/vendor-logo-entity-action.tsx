@@ -12,8 +12,8 @@ import { DropdownMenuItem } from "~/ui/primitives/dropdown-menu";
 import { VerbMenuItem } from "./action-verb-ui";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
+import { serverActionState } from "./server-action-state";
 
-const missingLogoWebsiteReason = "Add a website in Edit to fetch a logo.";
 export const productionLogoOperations = {
   fetchLogo: vendor.fetchLogo.mutationOptions,
 };
@@ -68,7 +68,7 @@ export function useFetchVendorLogo(
   };
 }
 
-const logoTarget = vendorOut.pick({ id: true, website: true, logo: true });
+const logoTarget = vendorOut.pick({ id: true, logo: true });
 
 function useVendorLogoAction(refresh: boolean): EntityActionHandles {
   const logo = useFetchVendorLogo();
@@ -83,10 +83,20 @@ function useVendorLogoAction(refresh: boolean): EntityActionHandles {
           } as const);
     if (Boolean(target.data.logo) !== refresh)
       return { status: "hidden" } as const;
-    if (!target.data.website)
+    // The server owns the website requirement (`actionAvailabilityRules`).
+    const server = serverActionState(
+      row,
+      refresh ? "refreshLogo" : "fetchLogo",
+    );
+    if (!server)
       return {
         status: "disabled",
-        reason: missingLogoWebsiteReason,
+        reason: "Loading vendor logo details…",
+      } as const;
+    if (!server.enabled)
+      return {
+        status: "disabled",
+        reason: server.reason ?? "Unavailable for this vendor.",
         recovery: (
           <Link
             className="text-link hover:underline"
@@ -156,7 +166,7 @@ export const vendorLogoEntityActionDefinitions = [false, true].map((refresh) =>
     surfaces: ["row", "detail", "inspector"],
     group: "organize",
     priority: 100,
-    readFields: ["website", "logo"],
+    readFields: ["logo"],
     use: () => useVendorLogoAction(refresh),
   }),
 );

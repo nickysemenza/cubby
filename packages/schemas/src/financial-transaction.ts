@@ -4,7 +4,10 @@ import {
   financialTransactionPublicReadFields,
 } from "./generated/entity-field-envelope-fields.financialTransaction.gen";
 import { rawFinancialTransactionOut } from "./financial-transaction-raw-read";
-import { postedRequiresDate } from "./financial-transaction-fields";
+import {
+  postedRequiresDate,
+  purchaseSettlementKinds,
+} from "./financial-transaction-fields";
 import { cents, moneyToMinor } from "@cubby/shared";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
@@ -69,29 +72,7 @@ export {
 /** The same bounded candidate set reaches retrieval and declared ranking. */
 export const SETTLEMENT_CANDIDATE_LIMIT = 20;
 
-/**
- * Kinds that may carry a `purchaseId`, i.e. that can act as settlement evidence
- * for a Purchase.
- *
- * `income` is here for sale proceeds. A disposal is modelled as a Purchase whose
- * Expenses are negative, and the marketplace payout that settles it is an
- * inflow — not a `refund` (which means "the vendor gave money back for goods I
- * returned", and is separately needed on sale Purchases for real refunds to
- * buyers) and not a `purchase` (which is validated positive).
- *
- * The DB CHECK `FinancialTransaction_purchase_settlement_check` in
- * apps/web/src/server/db/schema.ts is generated from this constant and the sign
- * table below, via `purchaseSettlementCheckExpression` — nothing about the rule
- * is written twice.
- */
-export const purchaseSettlementKinds = [
-  "purchase",
-  "refund",
-  "adjustment",
-  "fee",
-  "interest",
-  "income",
-] as const satisfies readonly FinancialTransactionKind[];
+export { purchaseSettlementKinds };
 
 export type PurchaseSettlementKind = (typeof purchaseSettlementKinds)[number];
 

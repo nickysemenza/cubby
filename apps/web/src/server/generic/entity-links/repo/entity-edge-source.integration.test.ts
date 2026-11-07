@@ -16,6 +16,7 @@ import { updateSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
+import { previewEntityMerge } from "~/server/generic/merge/repo/merge-preview";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
@@ -122,6 +123,72 @@ describe("entity edge source", () => {
       (group) => group.edgeKey === "InventoryEntry.productId",
     );
     expect(stock?.disposition).toMatchObject({ effect: expect.any(String) });
+  });
+
+  it("suggests the merge survivor with the most connections and lists disagreeing values", async () => {
+    const { item } = await seedStockedProduct("Edge kettle");
+    const spare = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Edge kettle spare" }),
+      TEST_ACTOR,
+    );
+    const names = new Map<string, string>([
+      [item.id, "Edge kettle"],
+      [spare.id, "Edge kettle spare"],
+    ]);
+    const preview = await previewEntityMerge(
+      ctx.db,
+      { entity: "product", ids: [spare.id, item.id] },
+      {
+        readRecord: async (_entity, code) => ({
+          name: names.get(code),
+          notes: "Same",
+        }),
+        connections: (code) =>
+          getEntityConnections(
+            ctx.db,
+            { id: code, operation: "merge", limitPerGroup: 5 },
+            kernelScaffold,
+          ),
+        mergeBlockers: async (_entity, plan) => [
+          `merge rule for ${plan.mergeIds.join(", ")}`,
+        ],
+      },
+    );
+    expect(preview.suggestedKeepId).toBe(item.id);
+    expect(preview.keepId).toBe(item.id);
+    // The stocked survivor's own stock carries the merge disposition web's
+    // impact preview shows; the merged-away spare has nothing incoming.
+    expect(preview.candidates[1]?.connections).toContainEqual(
+      expect.objectContaining({
+        edgeKey: "InventoryEntry.productId",
+        disposition: expect.objectContaining({ effect: expect.any(String) }),
+      }),
+    );
+    expect(preview.candidates[0]?.connections).toEqual([]);
+    expect(preview.blockers).toEqual([`merge rule for ${spare.id}`]);
+    expect(preview.candidates).toEqual([
+      expect.objectContaining({ id: spare.id, connectionCount: 0 }),
+      expect.objectContaining({
+        id: item.id,
+        connectionCount: expect.any(Number),
+      }),
+    ]);
+    expect(preview.candidates[1]?.connectionCount).toBeGreaterThan(0);
+    expect(preview.conflicts).toEqual([
+      {
+        field: "name",
+        label: "Name",
+        values: [
+          {
+            id: spare.id,
+            value: "Edge kettle spare",
+            display: "Edge kettle spare",
+          },
+          { id: item.id, value: "Edge kettle", display: "Edge kettle" },
+        ],
+      },
+    ]);
   });
 
   it("connects retained source versions through their explicit accepted occurrence with exact counts and bounded samples", async () => {

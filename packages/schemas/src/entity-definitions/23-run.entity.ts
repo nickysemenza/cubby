@@ -1,5 +1,6 @@
 import { attachedImageInputs } from "./image-description-inputs";
 import { timestampField, readOnly } from "./field-policy";
+import { withQuiet } from "./select-control-options.js";
 import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { runChildren } from "../child-tables/run.js";
 import { z } from "zod";
@@ -369,6 +370,7 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
+      rail: [{ field: "startedAt" }, { field: "chargedCost" }],
       // Display images borrow from the vendor; they load as list media.
       tree: { toggle: true, defaultNested: false },
       savedViews: [
@@ -491,7 +493,7 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "enum",
         control: {
           kind: "select",
-          options: RUN_STATUS_OPTIONS,
+          options: withQuiet(RUN_STATUS_OPTIONS, "completed"),
         },
         display: {
           columnGroup: "Execution",
@@ -524,7 +526,7 @@ export const { definition, readSchemas } = defineEntityModel({
         control: {
           kind: "select",
           options: [
-            ...RUN_STATUS_OPTIONS,
+            ...withQuiet(RUN_STATUS_OPTIONS, "completed"),
             { value: "retried", label: "Retried", color: "neutral-status" },
             {
               value: "waiting_for_funding",
@@ -553,7 +555,10 @@ export const { definition, readSchemas } = defineEntityModel({
           description:
             "The Run's live Jobs counted by what each waits on (due, waiting for an Apple device, waiting for AI funding, in progress, backing off, blocked, paused).",
         },
-        display: { columnGroup: "Execution" },
+        display: {
+          mobile: { slot: "meta", priority: 30 },
+          columnGroup: "Execution",
+        },
         validation: readOnly(z.string().nullable().default(null)),
       },
       {
@@ -590,6 +595,7 @@ export const { definition, readSchemas } = defineEntityModel({
           })),
         },
         display: {
+          mobile: { slot: "subtitle", priority: 10 },
           columnGroup: "Execution",
           width: "sm",
           optionRole: "category",
@@ -675,7 +681,11 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "identifier",
         nullable: true,
         reference: { entity: "vendor" },
-        display: { columnGroup: "Scope", labelPath: "vendorName" },
+        display: {
+          mobile: { slot: "meta", priority: 20 },
+          columnGroup: "Scope",
+          labelPath: "vendorName",
+        },
         validation: readOnly(vendorShortcode.nullable()),
       },
       {

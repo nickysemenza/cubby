@@ -77,6 +77,8 @@ public struct NativeCoverageManifest: Decodable, Sendable {
     public let collectionActionPlan: [String: HeroActionPlan]
     /// Whether each collection verb acts on the record (`section`) or on one row (`row`).
     public let collectionActionScope: [String: CollectionActionScope]
+    /// Native record actions (a flow or a web handoff) keyed by id, gated by each plan's entities.
+    public let recordActionPlan: [String: HeroActionPlan]
 
     /// Decoded on first use; a missing or undecodable file is a build defect
     /// (`NativeCoverageTests` fails CI).

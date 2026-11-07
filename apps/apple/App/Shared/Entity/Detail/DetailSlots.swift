@@ -1,9 +1,8 @@
 import CubbyKit
 import SwiftUI
 
-/// Which declared detail slots native fills, and which entity-specific supplements appear.
-/// A `handoff` slot draws its `OpenOnWebButton` row in the section. The slot ids are
-/// entity-qualified, so no `(entity, slot)` pairing is needed.
+/// Which declared detail slots native fills. A `handoff` slot draws its `OpenOnWebButton` row in
+/// the section. The slot ids are entity-qualified, so no `(entity, slot)` pairing is needed.
 enum DetailSlotRegistry {
     /// One case per slot `packages/schemas/src/native-coverage.ts` marks `implemented`, so a
     /// declaration without a view, or a view for a slot that is not implemented, fails to compile.
@@ -166,11 +165,6 @@ enum DetailSlotRegistry {
             .accessibilityIdentifier("detail.handoff.\(id)"))
     }
 
-    /// Transaction kinds web can book into the Expense ledger (`financialTransaction.previewBooking`).
-    private static let bookableKinds: Set<String> = [
-        "purchase", "refund", "adjustment", "fee", "interest", "income",
-    ]
-
     /// The web handoff a `handoff` slot draws for `row`; nil when the slot is native or, like web's
     /// slot predicate, does not apply to the row.
     static func handoff(slot: String, row: EntityRow) -> NativeWebHandoff? {
@@ -188,28 +182,6 @@ enum DetailSlotRegistry {
             return row.raw["purpose"]?.stringValue == "photo_inventory" ? handoff : nil
         default:
             return handoff
-        }
-    }
-
-    /// Record-specific affordances beside the generic sections; none is a manifest hero action.
-    @MainActor
-    static func supplement(for key: EntityKey, row: EntityRow) -> AnyView? {
-        switch key {
-        case .expense:
-            guard let productID = row.raw.recordValue("productId")?.stringValue else { return nil }
-            return AnyView(ReceiveExpenseButton(expenseID: row.id, productID: productID))
-        // Booking a charge into the Expense ledger, and correcting a recorded booking, are web's:
-        // both sit with the allocations in the transaction's Record section.
-        case .financialTransaction:
-            guard row.raw["status"]?.stringValue != "void",
-                bookableKinds.contains(row.raw["kind"]?.stringValue ?? "")
-            else { return nil }
-            return handoffRow(
-                "Review booking on web",
-                target: .record(key: .financialTransaction, id: row.id, section: "overview"),
-                id: "financialTransaction.booking")
-        default:
-            return nil
         }
     }
 }

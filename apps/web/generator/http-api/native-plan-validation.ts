@@ -120,6 +120,8 @@ export const checkHeroActionPlans = (context: PlanContext) => {
   const problems = Object.entries(plans).flatMap(([verb, plan]) => {
     if (plan.kind === "operation")
       return checkOperationPlan(context, verb, plan);
+    // A flow is a native screen over operations it already calls; it has no body to check.
+    if (plan.kind === "flow") return [];
     if (plan.kind !== "delete") return checkFieldPlan(verb, plan);
     // Delete previews connections, then runs through the kernel mutation;
     // every entity whose hero declares delete needs the kernel delete action.

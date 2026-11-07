@@ -38,6 +38,7 @@ import {
 } from "~/server/domains/product/repo/product-components";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
@@ -317,6 +318,23 @@ describe("mergeProducts", () => {
         TEST_ACTOR,
       ),
     ).rejects.toThrow(/different ISBN editions/);
+
+    // A chosen survivor value rides in the merge's transaction, so the
+    // refusal leaves the survivor as it was.
+    await expect(
+      executeEntity(kernelCtx(ctx), {
+        action: "merge",
+        entity: "product",
+        data: { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+        survivorValues: { name: "Edition Two" },
+      }),
+    ).rejects.toThrow(/different ISBN editions/);
+    const survivor = await executeEntityAs(kernelCtx(ctx), "get", {
+      entity: "product",
+      id: keeper.shortcode,
+      missing: "error",
+    });
+    expect(survivor.item).toMatchObject({ name: "Edition One" });
   });
 
   it("surfaces plantings that retain a merged source-product tombstone", async () => {

@@ -106,6 +106,121 @@ struct ClientQueryTests {
         #expect(body["data"] == .object(["parentId": .null]))
     }
 
+    /// Bulk edit offers every accepted field: a multi-reference adds and removes with web's
+    /// `{op, key}` patch items, and a keyed structured collection hands off to web.
+    @MainActor @Test func bulkEditPatchesListsAndHandsOffStructuredCollections() async throws {
+        let products = EntityBulkEditModel(
+            descriptor: EntityCatalog[.product], ids: ["PRD-2345"], client: try makeClient())
+        let unitMappings = try #require(products.fields.first { $0.key == "unitMappings" })
+        #expect(EntityBulkEditModel.assignment(for: unitMappings) == .web)
+        #expect(products.fields.contains { $0.key == "tags" })
+
+        defer { QueryStub.handler.withLock { $0 = nil } }
+        let sent = Mutex<JSONValue>(.null)
+        QueryStub.handler.withLock { handler in
+            handler = { request in
+                let envelope =
+                    (try? Self.requestBody(request)).flatMap {
+                        try? JSONDecoder().decode(JSONValue.self, from: $0)
+                    }
+                    ?? .null
+                sent.withLock { $0 = envelope }
+                return (
+                    200,
+                    Data(
+                        #"{"action":"bulkUpdate","entity":"task","updatedReferences":[{"entity":"task","id":"TSK-2345"}],"sideEffects":{}}"#
+                            .utf8)
+                )
+            }
+        }
+        let model = EntityBulkEditModel(
+            descriptor: EntityCatalog[.task], ids: ["TSK-2345"], client: try makeClient())
+        model.fieldKey = "blockedByIds"
+        #expect(model.assignment == .addRemove)
+        #expect(!model.canClear)
+        model.draft.draft["blockedByIds"] = .array([.string("TSK-3456")])
+        model.removeDraft.draft["blockedByIds"] = .array([.string("TSK-4567")])
+        #expect(await model.save() == 1)
+        let envelope = sent.withLock { $0 }
+        #expect(envelope["operation"]?.stringValue == "entity.mutate")
+        #expect(
+            envelope["input"]?["data"]
+                == .object([
+                    "blockedByIds": .array([
+                        .object(["op": .string("remove"), "key": .string("TSK-4567")]),
+                        .object(["op": .string("add"), "key": .string("TSK-3456")]),
+                    ])
+                ]))
+    }
+
+    /// Merge is irreversible: a value kept from a merged-away record rides in the one kernel merge,
+    /// so a refusal cannot leave the survivor half-changed, and a server blocker for the chosen
+    /// survivor keeps Merge off.
+    @MainActor @Test func mergeSendsChosenValuesInsideKernelMerge() async throws {
+        defer { QueryStub.handler.withLock { $0 = nil } }
+        let inputs = Mutex<[JSONValue]>([])
+        QueryStub.handler.withLock { handler in
+            handler = { request in
+                let envelope =
+                    (try? Self.requestBody(request)).flatMap {
+                        try? JSONDecoder().decode(JSONValue.self, from: $0)
+                    }
+                    ?? .null
+                let input = envelope["input"] ?? .null
+                inputs.withLock { $0.append(input) }
+                guard envelope["operation"]?.stringValue == "entity.mergePreview" else {
+                    return (
+                        200, Data(#"{"action":"merge","entity":"product","item":{"id":"PRD-3456"}}"#.utf8)
+                    )
+                }
+                let keep = input["keepId"]?.stringValue ?? "PRD-3456"
+                let blockers = keep == "PRD-2345" ? #"["distinct ISBN editions"]"# : "[]"
+                return (
+                    200,
+                    Data(
+                        #"""
+                        {"entity":"product","suggestedKeepId":"PRD-3456","keepId":"\#(keep)",
+                         "candidates":[
+                           {"id":"PRD-2345","name":"Lantern","connectionCount":1,"createdAt":"2026-09-01T00:00:00.000Z",
+                            "connections":[{"direction":"incoming","edgeKey":"Planting.sourceProductId","label":"plantings",
+                              "role":"history","otherKind":"planting","count":1,"items":[],
+                              "disposition":{"code":"preserve-garden-source","effect":"preserve","description":"Kept."}}]},
+                           {"id":"PRD-3456","name":"Lantern","connectionCount":4,"createdAt":"2026-08-01T00:00:00.000Z",
+                            "connections":[]}],
+                         "conflicts":[{"field":"model","label":"Model","values":[
+                           {"id":"PRD-2345","value":"L-200","display":"L-200"},
+                           {"id":"PRD-3456","value":"L-100","display":"L-100"}]}],
+                         "blockers":\#(blockers)}
+                        """#.utf8)
+                )
+            }
+        }
+        let model = EntityMergeModel(
+            descriptor: EntityCatalog[.product], ids: ["PRD-2345", "PRD-3456"], client: try makeClient())
+        await model.load()
+        #expect(model.keepID == "PRD-3456")
+        #expect(model.mergedAway.first?.connections.first?.disposition?.effect == .preserve)
+
+        model.keepID = "PRD-2345"
+        #expect(!model.canMerge)
+        await model.refreshPlan()
+        #expect(model.blockers == ["distinct ISBN editions"])
+        #expect(!(await model.merge()))
+
+        model.keepID = "PRD-3456"
+        await model.refreshPlan()
+        model.choices["model"] = "PRD-2345"
+        #expect(await model.merge())
+        let sent = inputs.withLock { $0 }
+        #expect(sent.count == 4)
+        #expect(sent[1]["keepId"]?.stringValue == "PRD-2345")
+        #expect(sent[3]["action"]?.stringValue == "merge")
+        #expect(
+            sent[3]["data"]
+                == .object(["keepId": .string("PRD-3456"), "mergeIds": .array([.string("PRD-2345")])]))
+        #expect(sent[3]["survivorValues"] == .object(["model": .string("L-200")]))
+    }
+
     @Test func relationRowsSendsTargetedPagination() async throws {
         let (request, body) = try await captureBody(
             returning: Data(

@@ -12,13 +12,15 @@
 //   pnpm apple sim           build Cubby-iOS, install + launch on a simulator
 //   pnpm apple gen           build-rust.sh → pnpm generate → xcodegen
 //   pnpm apple test          swift test for CubbyKit
+//   pnpm apple previews      render the native screen preview catalog to PNG
 //   pnpm apple check [host|app|lint]  native checks (all by default)
 //   pnpm apple clean [--apply]  preview/remove this checkout's build artifacts
 //
 // Options: --device <name> (ios; default: the first paired iPhone),
 // --sim <name> (sim; default: the booted simulator, else the first iPhone),
 // --verbose (full xcodebuild log instead of -quiet),
-// --timing (mac/ios/sim; include the Xcode build timing summary).
+// --timing (mac/ios/sim; include the Xcode build timing summary),
+// --out <dir> and --only <screen,…> (previews; default artifacts/native-previews, every screen).
 //
 // Not a debugging tool: when breakpoints are needed, open the Xcode project and
 // use the regular `Cubby-*` schemes with ~/.lldbinit-Xcode (apps/apple/AGENTS.md
@@ -63,13 +65,15 @@ const BUNDLE_ID = APPLE_APP_IDENTITIES.production.bundleIdentifier;
 const PRODUCT = `${APPLE_APP_IDENTITIES.production.productName}.app`;
 const MAC_IDENTITY = APPLE_APP_IDENTITIES.development;
 
-const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check|clean> [--device <name>] [--sim <name>] [--server <local origin>] [--verbose] [--timing] [--apply (clean)] [-- <cli args>]`;
+const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|previews|check|clean> [--device <name>] [--sim <name>] [--server <local origin>] [--out <dir>] [--only <screen,…>] [--verbose] [--timing] [--apply (clean)] [-- <cli args>]`;
 
 type Options = {
   command: string;
   device?: string;
   sim?: string;
   server?: string;
+  out?: string;
+  only?: string;
   verbose: boolean;
   timing: boolean;
   apply: boolean;
@@ -111,6 +115,17 @@ const parseArguments = (argv: readonly string[]): Options => {
         if (!value) throw new Error(`${argument} requires a value\n${usage}`);
         if (argument === "--device") options.device = value;
         else options.sim = value;
+        index += 1;
+        break;
+      }
+      case "--out":
+      case "--only": {
+        if (command !== "previews")
+          throw new Error(`${argument} requires previews\n${usage}`);
+        const value = tail[index + 1];
+        if (!value) throw new Error(`${argument} requires a value\n${usage}`);
+        if (argument === "--out") options.out = resolve(value);
+        else options.only = value;
         index += 1;
         break;
       }
@@ -526,6 +541,43 @@ const test = () => {
   ]);
 };
 
+// The opt-in PreviewRenderTests suite hosts each `EntityScreenPreview` from
+// App/Shared/Previews in a simulator window and writes
+// `<out>/<screen>-<appearance>.png`. xcodebuild passes TEST_RUNNER_* variables to
+// the hosted test process without the prefix.
+const previews = (options: Options) => {
+  const simulator = pickSimulator(options.sim);
+  if (simulator.state !== "Booted") {
+    run("xcrun", ["simctl", "boot", simulator.udid]);
+  }
+  gen();
+  const out = options.out ?? join(ROOT, "artifacts/native-previews");
+  const results = mkdtempSync(join(tmpdir(), "cubby-previews-"));
+  process.env.TEST_RUNNER_CUBBY_PREVIEW_RENDER_DIR = out;
+  if (options.only)
+    process.env.TEST_RUNNER_CUBBY_PREVIEW_RENDER_ONLY = options.only;
+  run("xcodebuild", [
+    "-project",
+    PROJECT,
+    "-scheme",
+    "Cubby-iOS",
+    "-configuration",
+    "Debug",
+    "-destination",
+    `platform=iOS Simulator,id=${simulator.udid}`,
+    ...appleBuildArguments(APPLE, DERIVED),
+    "-resultBundlePath",
+    join(results, "previews.xcresult"),
+    "-only-testing:Cubby-iOS-Tests/PreviewRenderTests",
+    ...(options.verbose ? [] : ["-quiet"]),
+    "CODE_SIGNING_ALLOWED=NO",
+    "test",
+  ]);
+  process.stdout.write(
+    `Rendered previews into ${out} (result bundle ${results})\n`,
+  );
+};
+
 // ---------------------------------------------------------------------------
 
 const main = () => {
@@ -549,6 +601,8 @@ const main = () => {
       return gen();
     case "test":
       return test();
+    case "previews":
+      return previews(options);
     case "check":
       if (options.rest.length > 1)
         throw new Error("usage: pnpm apple check [host|app|lint]");

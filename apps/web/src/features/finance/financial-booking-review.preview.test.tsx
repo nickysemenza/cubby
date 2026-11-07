@@ -132,11 +132,14 @@ it("reviews a reimbursement against the chosen Purchase and commits its exact ap
             },
           }),
         };
+      // List rows carry the server's action availability, which the list
+      // output type leaves out, so the row is built before the override.
+      const purchaseRow = { ...purchase, actions: [] };
       return {
         ok: true,
         data: mock(getEntityListOutputSchema("purchase"), {
           overrides: {
-            items: [purchase],
+            items: [purchaseRow],
             meta: {
               hasNextPage: false,
               totalCount: 1,

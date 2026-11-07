@@ -29,6 +29,7 @@ import type {
   EntityActionResolutionContext,
   EntityActionRow,
 } from "./entity-actions";
+import { serverActionState } from "./server-action-state";
 
 /**
  * The verbs the entity declarations name in `detail.hero.actions` /
@@ -185,21 +186,17 @@ function useMarkWishPurchasedAction(): EntityActionHandles {
   };
 }
 
-const openTaskRow = z.object({
-  id: z.string(),
-  status: z.string().nullish(),
-});
-
-/** A task's "Complete" sets status to done; a done task offers nothing. */
+/**
+ * A task's "Complete" sets status to done; the server marks it unavailable
+ * on a done task, which then offers nothing.
+ */
 function useCompleteTaskAction(): EntityActionHandles {
   const update = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("task", "update"),
     entity: "task",
   });
-  const open = (row: EntityActionRow) => {
-    const parsed = openTaskRow.safeParse(row);
-    return parsed.success && parsed.data.status !== "done";
-  };
+  const open = (row: EntityActionRow) =>
+    serverActionState(row, "complete")?.enabled === true;
   const complete = async (row: EntityActionRow) => {
     if (!open(row)) return false;
     await update.mutateAsync({ id: row.id, data: { status: "done" } });

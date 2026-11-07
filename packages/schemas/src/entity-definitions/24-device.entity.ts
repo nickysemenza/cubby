@@ -21,7 +21,9 @@ export const { definition, readSchemas } = defineEntityModel({
   table: "Device",
   identifiers: { brand: "DeviceId", shortcode: "DEV-" },
   presentation: {
-    list: {},
+    list: {
+      rail: [{ field: "lastSeenAt" }],
+    },
     titleField: "name",
     domain: null,
     description: "One install of the native companion app.",
@@ -150,6 +152,7 @@ export const { definition, readSchemas } = defineEntityModel({
           ],
         },
         display: {
+          mobile: { slot: "subtitle", priority: 10 },
           columnGroup: "Device",
           optionRole: "category",
           optionColor: "neutral-status",
@@ -263,7 +266,11 @@ export const { definition, readSchemas } = defineEntityModel({
         nullable: true,
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { columnGroup: "Device", labelPath: "ledgerPartyName" },
+        display: {
+          mobile: { slot: "meta", priority: 20 },
+          columnGroup: "Device",
+          labelPath: "ledgerPartyName",
+        },
         validation: {
           read: ledgerPartyShortcode.nullable(),
           create: ledgerPartyShortcode.nullable().optional(),

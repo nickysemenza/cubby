@@ -83,7 +83,11 @@ extension EntityDescriptor {
                     }
                 } else {
                     value = field.surfaceValue(in: object, surface: "list")?.stringValue.map { code in
-                        (field.controlOptions ?? field.valueOptions)?.first { $0.value == code }?.label
+                        // A date subtitle reads as its calendar day, never the raw ISO value.
+                        if field.kind == .date || field.kind == .timestamp {
+                            return DatePresentation.absolute(of: code, compact: true) ?? code
+                        }
+                        return (field.controlOptions ?? field.valueOptions)?.first { $0.value == code }?.label
                             ?? code
                     }
                 }

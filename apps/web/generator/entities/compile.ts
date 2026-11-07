@@ -522,6 +522,12 @@ const validateEnumField = (
   field: EntityFieldModelMetadata["fields"][number],
   fieldContext: string,
 ): void => {
+  for (const options of [field.control?.options, field.display.valueOptions]) {
+    if ((options?.filter((option) => option.quiet).length ?? 0) > 1)
+      throw new EntityDeclarationError(
+        `${fieldContext}: at most one option can be quiet.`,
+      );
+  }
   if (
     field.kind === "enum" &&
     (field.validation.read !== null ||
@@ -1621,6 +1627,10 @@ const validateDeclarationCapabilities = (
       `${context}.capabilities.operationOwners.merge must match merge capability.`,
     );
   }
+  if (capabilities.mergeFlow === "specialized" && !mergeCapability)
+    throw new EntityDeclarationError(
+      `${context}.capabilities.mergeFlow is specialized without a merge capability.`,
+    );
   for (const [index, name] of (capabilities.mcp ?? []).entries()) {
     if (!SUPPORTED_MCP_ACTIONS.has(name))
       throw new EntityDeclarationError(
@@ -2703,6 +2713,7 @@ export const compileEntity = (
     inspector,
     timeline: declaration.capabilities.timeline,
     suggestionFamilies: declaration.capabilities.suggestions,
+    mergeFlow: declaration.capabilities.mergeFlow,
     contract,
     descriptor,
     route,

@@ -159,7 +159,7 @@ function transactionResponse({
         createdAt: new Date("2026-08-16T00:00:00.000Z"),
         updatedAt: new Date("2026-08-16T00:00:00.000Z"),
       }),
-    ],
+    ].map((row) => ({ ...row, actions: [] })),
     meta: { pageIndex: 0, pageSize: 100, hasNextPage: false, totalCount: 1 },
   });
 }

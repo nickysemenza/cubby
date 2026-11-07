@@ -54,6 +54,7 @@ export const { definition, readSchemas } = defineEntityModel(
         emoji: "🍽️",
       },
       detail: {
+        quickFields: ["mealType"],
         summary: [
           {
             kind: "fields",
@@ -145,6 +146,7 @@ export const { definition, readSchemas } = defineEntityModel(
         ],
       },
       list: {
+        rail: [{ field: "costTotal" }],
         savedViews: [
           {
             id: "empty-cooked",

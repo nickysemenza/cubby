@@ -9,6 +9,7 @@ booted and the relevant build artifacts warm while working on one feature.
 | An ad hoc native API or local-file question                            | `pnpm apple cli <command>`                                                                         | A small `CubbyKit` executable, without building or launching the app. Use `pnpm apple cli --help` to see commands.        |
 | Native API/auth/search/edit behavior                                   | `pnpm test:e2e:sim -- --headless`                                                                  | The `cubby` CLI against workerd and a disposable seeded database. It does not run `AppModel`, navigation, or SwiftUI.     |
 | One SwiftUI screen or state                                            | Render that file's `#Preview` with Xcode MCP `RenderPreview`                                       | The view with synthetic, in-memory `PreviewFixtures`; no server or login. Inspect the returned PNG in Codex.              |
+| Product/Expense/Task List or Detail screen across appearances          | `pnpm apple previews [--only product-list,task-detail] [--out <dir>]`                              | The real screens from the shared preview catalog, light/dark/AX3, as PNGs in `artifacts/native-previews/`; no Xcode MCP.  |
 | App model or navigation logic                                          | Xcode MCP `RunSomeTests` for a focused app test                                                    | App-target code that the `CubbyKit` package tests and headless CLI do not compile or execute.                             |
 | Simulator UI behavior against real API data                            | `pnpm test:e2e:sim`                                                                                | Debug iOS app, real auth, workerd, synthetic seed, and visible search/detail identity.                                    |
 | Taps, navigation, sheets, keyboard, or accessibility                   | Use Xcode MCP device interaction or `agent-device` on an already installed simulator app           | The running app and its UI tree. Use `pnpm apple sim` to rebuild and install after code changes.                          |
@@ -169,6 +170,18 @@ stubs that inspect operation inputs must handle both that stream and `httpBody`.
    block network reads. Add focused states such as empty, loading, error, dark,
    and large text when they expose the change. The generated fixture JSON comes
    from `pnpm generate`.
+   For List and Detail work, `App/Shared/Previews/EntityScreenPreviews.swift` is the
+   catalog: Product, Expense and Task list and detail screens, each in light, dark
+   and accessibility3 `#Preview`s (`EntityScreenPreviewHost`). They render the real
+   `EntityListView` and `EntityDetailContent` from generated `entity.list` /
+   `entity.detail` fixtures (`EntityScreenFixture`) loaded through injected page
+   sources; the detail's reports, summary records and timeline come from
+   `<entity>DetailReads.json` through `PreviewOperationResponses`, and images are
+   inline `data:` PNGs. Detail renders omit the screen toolbar (`EntityDetailView`
+   owns it). `pnpm apple previews` hosts every catalog screen in a simulator window
+   through the opt-in `PreviewRenderTests` suite and writes
+   `<out>/<screen>-<light|dark|accessibility>.png` (detail images are 2400pt tall);
+   compare them against mockups or an earlier run's directory.
 3. When the change needs real interactions, run the affected
    `pnpm test:e2e:sim` journey after batching related edits. Xcode and Swift use their standard incremental caches across runs.
 4. Run the scripted simulator flow for a cross-layer journey. Add `--video` when

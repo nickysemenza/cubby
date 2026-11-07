@@ -39,6 +39,8 @@ interface EntityKernelCapabilities {
   read: "kernel" | "usdaFood" | "unavailable";
   imageAttach: boolean;
   imageOrder: boolean;
+  /** Fields the atomic bulk update accepts (`bulkUpdate` input keys), in declaration order. */
+  bulkFields: readonly string[];
   /** List and timeline filter names (empty when the entity has no list). */
   parameters: Readonly<Record<string, KernelParameter>>;
 }
@@ -206,6 +208,9 @@ const entityKernelCapabilities = (
                 : "unavailable",
             imageAttach: update.has("pendingImageIds"),
             imageOrder: update.has("imageOrder"),
+            bulkFields: verbs.includes("bulkUpdate")
+              ? [...updateInputKeys(binding?.bulkUpdateInput ?? null)]
+              : [],
             parameters:
               listed && isBound(entity)
                 ? parametersFor(entity, verbs.includes("timeline"))
@@ -304,7 +309,7 @@ export const renderEntityKernelArtifacts = (
  * this entity, and the slots and fields it hands off to web.
  */
 export interface NativeCoverage {
-  httpActions: readonly ("list" | "timeline" | "get" | "create" | "update" | "bulkUpdate" | "delete")[];
+  httpActions: readonly ("list" | "timeline" | "get" | "create" | "update" | "bulkUpdate" | "delete" | "merge")[];
   rpcIds: readonly string[];
   handoffs: readonly string[];
 }

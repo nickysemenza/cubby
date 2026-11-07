@@ -262,6 +262,7 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     icons: { phosphor: "Hammer", sfSymbol: "hammer", emoji: "🛠️" },
     detail: {
+      quickFields: ["status", "assigneeId"],
       summary: [
         {
           kind: "fields",
@@ -424,6 +425,8 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
+      rail: [{ field: "spent" }, { field: "costEstimate" }],
+      quickActions: ["setStatus"],
       savedViews: [
         {
           id: "active",

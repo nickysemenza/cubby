@@ -35,6 +35,7 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     icons: { phosphor: "Receipt", sfSymbol: "doc.text", emoji: "🧾" },
     list: {
+      rail: [{ field: "amount", sub: "statementDate" }],
       savedViews: [
         {
           id: "unmatched",
@@ -405,7 +406,10 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "merchant",
         kind: "text",
         nullable: true,
-        display: { columnGroup: "Source" },
+        display: {
+          mobile: { slot: "subtitle", priority: 10 },
+          columnGroup: "Source",
+        },
         validation: readOnly(z.string().nullable()),
       },
       {
@@ -460,7 +464,11 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "identifier",
         nullable: true,
         reference: { entity: "financialAccount" },
-        display: { columnGroup: "Reconciliation", labelPath: "accountName" },
+        display: {
+          mobile: { slot: "meta", priority: 20 },
+          columnGroup: "Reconciliation",
+          labelPath: "accountName",
+        },
         validation: {
           read: shortcodeSchema("financialAccount").nullable(),
           create: null,
@@ -654,6 +662,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         kind: "enum",
         display: {
+          mobile: { slot: "meta", priority: 30 },
           columnGroup: "Reconciliation",
           optionRole: "status",
           optionColor: "neutral-status",
@@ -666,6 +675,7 @@ export const { definition, readSchemas } = defineEntityModel({
             label: capitalize(value.replaceAll("_", " ")),
             color: "neutral-status",
             glyph: { phosphor: "Info", sfSymbol: "info.circle" },
+            ...(value === "matched" ? { quiet: true as const } : {}),
           })),
         },
         validation: readOnly(sourceTransactionRecordMatchState),

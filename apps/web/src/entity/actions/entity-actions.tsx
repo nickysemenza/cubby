@@ -336,6 +336,7 @@ const buildEntityActions = (): readonly EntityActionDefinition[] => {
     ...declaredEntityActionDefinitions,
     deleteEntityActionDefinition,
     features.markExpensePurchased,
+    features.receiveExpense,
     defineEntityAction({
       verb: "bulkEdit",
       entities: bulkEditEntities,

@@ -226,6 +226,7 @@ const sourceKindSql = (spec: EntityEdgeSpec): SQL =>
 
 type EdgeFilter =
   | { side: "target"; id: string }
+  | { side: "targets"; ids: readonly string[] }
   | { side: "source"; id: string }
   | null;
 
@@ -241,6 +242,13 @@ const branchSql = (spec: EntityEdgeSpec, filter: EdgeFilter): SQL => {
     conditions.push(sql`s.${ident(spec.scope.column)} = ${spec.scope.value}`);
   if (filter?.side === "target")
     conditions.push(sql`s.${ident(spec.column)} = ${filter.id}::uuid`);
+  if (filter?.side === "targets")
+    conditions.push(
+      sql`s.${ident(spec.column)} IN (${sql.join(
+        filter.ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})`,
+    );
   if (filter?.side === "source")
     conditions.push(sql`${sourceId} = ${filter.id}::uuid`);
   const joins: SQL[] = [];
@@ -536,6 +544,82 @@ export async function getEntityConnections(
           a.label.localeCompare(b.label),
       ),
   };
+}
+
+/**
+ * Live merge candidates of one kind, in `codes` order, each with its
+ * incoming physical connection count (the edges a merge repoints): one
+ * identity read and one edge read for the whole selection. A missing or
+ * merged-away code is refused as `entity.connections` refuses it.
+ */
+export async function readMergeCandidates(
+  db: Database | DrizzleTransaction,
+  kind: ShortcodeEntity,
+  codes: readonly string[],
+): Promise<
+  { id: string; code: string; createdAt: string; connectionCount: number }[]
+> {
+  const identityResult = await unwrapDb(db).execute(
+    sql`
+    SELECT e."id", e."shortcode", e."createdAt" FROM "Entity" e
+    WHERE e."kind" = ${kind} AND ${notDeleted("e")}
+      AND e."shortcode" IN (${sql.join(
+        codes.map((code) => sql`${code}`),
+        sql`, `,
+      )})`,
+    "objects",
+  );
+  const identities = z
+    .array(
+      z.object({
+        id: z.string(),
+        shortcode: z.string(),
+        createdAt: z.coerce.date(),
+      }),
+    )
+    .parse(identityResult);
+  const byCode = new Map(
+    identities.map((identity) => [identity.shortcode, identity]),
+  );
+  const ordered = [];
+  for (const code of codes) {
+    const identity = byCode.get(code);
+    if (identity) {
+      ordered.push({ ...identity, code });
+      continue;
+    }
+    const subject = await liveSubject(db, code);
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `${code} is a ${ENTITY_LABEL[subject.kind].toLowerCase()}, not a ${ENTITY_LABEL[kind].toLowerCase()}.`,
+    );
+  }
+  const specs = ENTITY_EDGE_SPECS.filter((spec) => spec.targetKind === kind);
+  const countResult =
+    specs.length === 0
+      ? undefined
+      : await unwrapDb(db).execute(
+          sql`
+          SELECT edge."targetId", count(*)::integer AS "count"
+          FROM (${entityEdgeSourceSql(specs, {
+            side: "targets",
+            ids: identities.map((identity) => identity.id),
+          })}) edge
+          GROUP BY edge."targetId"`,
+          "objects",
+        );
+  const counts = new Map(
+    z
+      .array(z.object({ targetId: z.string(), count: z.number().int() }))
+      .parse(countResult ?? [])
+      .map((row) => [row.targetId, row.count]),
+  );
+  return ordered.map((identity) => ({
+    id: identity.id,
+    code: identity.code,
+    createdAt: identity.createdAt.toISOString(),
+    connectionCount: counts.get(identity.id) ?? 0,
+  }));
 }
 
 /**

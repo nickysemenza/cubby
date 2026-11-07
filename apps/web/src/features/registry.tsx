@@ -40,6 +40,7 @@ import {
 } from "~/entity/presentation-coverage";
 import type { WorkActionTable } from "~/entity/work-queue/work-actions";
 import { expenseDetailFields } from "~/features/expense/detail-field-renderers";
+import { receiveExpenseActionDefinition } from "~/features/expense/receive-expense-action";
 import { financialTransactionDetailFields } from "~/features/finance/detail-field-renderers";
 import {
   SourceAliasesField,
@@ -742,6 +743,7 @@ export function installFeatures(): void {
       recipe: recipeEntityActionDefinitions,
       inventoryLocation: inventoryLocationEntityActionDefinitions,
       markExpensePurchased: markExpensePurchasedActionDefinition,
+      receiveExpense: receiveExpenseActionDefinition,
       createProjectFromTasks: createProjectFromTasksActionDefinition,
     },
     components: {

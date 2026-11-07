@@ -41,6 +41,16 @@ public final class GenericEntityDetailModel {
         self.client = client
     }
 
+    /// Starts loaded with `row`, as if it had just been read; the screen's first `loadInitial`
+    /// for the same id keeps it. Previews render the real detail screen from a fixture this way.
+    public convenience init(descriptor: EntityDescriptor, client: CubbyClient, loaded row: EntityRow) {
+        self.init(descriptor: descriptor, client: client)
+        self.row = row
+        loadedID = row.id
+        phase = .loaded
+        fetchedAt = Date()
+    }
+
     public func loadInitial(id: String) async {
         guard loadedID != id else { return }
         guard activity != .loadingInitial || activeID != id else { return }

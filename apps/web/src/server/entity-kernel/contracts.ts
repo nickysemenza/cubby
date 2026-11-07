@@ -229,10 +229,14 @@ export const entityBrowserMutationCommandSchema = z.union([
   entityBulkUpdateCommandSchema,
   generatedBrowserEntityRelationCommandSchema,
   // `data` is the entity's own merge input, parsed by its merge port.
+  // `survivorValues` names, per field `entity.mergePreview` reports as a
+  // conflict, the candidate value the survivor keeps; it is applied in the
+  // merge's transaction, so a refused merge leaves the survivor unchanged.
   z.object({
     action: z.literal("merge"),
     entity: mergeableEntitySchema,
     data: z.record(z.string(), z.unknown()),
+    survivorValues: z.record(z.string(), z.json()).optional(),
   }),
 ]);
 

@@ -54,6 +54,7 @@ export const { definition, readSchemas } = defineEntityModel(
         emoji: "📍",
       },
       detail: {
+        quickFields: ["type"],
         summary: [
           {
             kind: "records",
