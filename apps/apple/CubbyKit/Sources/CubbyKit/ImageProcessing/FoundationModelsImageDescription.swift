@@ -115,6 +115,13 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
             let prepared = try ImageEncoding.downscaled(image, maxPixelSize: edge)
             do {
                 return try await generate(prepared, max(32, responseBudget / (index + 1)))
+            } catch let error as GeneratedContent.ParsingError {
+                // Structured decoding errors are separate from LanguageModelError. Replaying
+                // the same greedy request cannot supply missing required properties.
+                throw CompanionImageDescriptionFailure.model(
+                    reason:
+                        "structured_output_invalid: \(String(reflecting: error)); rawContent=\(error.rawContent)",
+                    retryable: false)
             } catch let error as LanguageModelError {
                 // A fresh session alone repeats a deterministic greedy failure. Reduce
                 // both image and output budgets once; never invent a partial description.
