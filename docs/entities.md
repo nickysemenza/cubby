@@ -1884,6 +1884,11 @@ existing scalar sum key with contributor coverage, preserving that key and its
 column placement. The compiled owner validates identities, numeric/boolean
 columns, compatible formats and group reference targets. One row-set source is
 shared across its metrics in the statement.
+Repository relationship memberships join the filtered owners in one pass. Metric
+coordinates cover each distinct root and requested scope, then join the shared
+evidence rather than rescanning it per group. Canonical binding projections are
+materialized once per contributor so identity subqueries cannot expand into
+repeated coordinate lookups.
 Narrow internal `raw` readers omit ungrouped metric evidence; a relation's id-only
 page does not acquire the parent list's spending computation.
 
@@ -2315,7 +2320,10 @@ facts must load even though it has no ordinary manifest field declaration.
 
 A request for direct physical fields with no admitted bindings or field facts
 selects only those fields plus its internal id and public shortcode. These closed reads
-also omit unrelated helper expressions. Requests that need bindings or field
+also omit unrelated row helper expressions. Published selected-field pages retain
+the list's declared full-filter summaries independently of the row projection and
+`includeCount`; omitting counts does not omit monetary coverage. Internal raw
+readers omit ungrouped contributor summaries. Requests that need bindings or field
 facts keep their existing row inputs.
 
 Selected reads compile envelope demand from the manifest, including projector and

@@ -45,6 +45,14 @@ export async function readGroupedQuery(input: {
   offset: number;
 }) {
   const { db, groups, metrics } = input;
+  const marginSets = marginDimensions(groups.length);
+  const evidence = input.evidence?.([
+    [],
+    ...groups.map((_, index) =>
+      Array.from({ length: index + 1 }, (_, dimension) => dimension),
+    ),
+    ...marginSets,
+  ]);
   const selection = {
     id: input.id,
     code: input.code,
@@ -87,8 +95,10 @@ export async function readGroupedQuery(input: {
   for (const [index, group] of groups.entries()) {
     if (group.members)
       query = query.leftJoin(
-        sql`LATERAL (${group.members}) ${sql.identifier(`list_group_${index}`)}`,
-        sql`true`,
+        sql`${group.memberScope === "owners" ? sql`` : sql`LATERAL `}(${group.members}) ${sql.identifier(`list_group_${index}`)}`,
+        group.memberScope === "owners"
+          ? sql`${sql.identifier(`list_group_${index}`)}."owner" = ${input.id}`
+          : sql`true`,
       );
   }
   const expanded = query.where(input.where);
@@ -124,7 +134,6 @@ export async function readGroupedQuery(input: {
     : sql`SELECT id, path, labels, false AS subtree, ordinal${extraColumns} FROM memberships WHERE false`;
   // Distinct roots per combination, like prefixes: a record holding several
   // values in another dimension still counts once in its column total.
-  const marginSets = marginDimensions(groups.length);
   const margins = marginSets.length
     ? sql.join(
         marginSets.map((dimensions) => {
@@ -132,11 +141,11 @@ export async function readGroupedQuery(input: {
             (dimension) => sql`path[${sql.raw(String(dimension + 1))}]`,
           );
           const key = sql`ARRAY[${sql.join(parts, sql`, `)}]::text[]`;
-          const evidence =
-            input.evidence?.object(dimensions, sql`margin_roots.path`) ??
+          const marginEvidence =
+            evidence?.object(dimensions, sql`margin_roots.path`) ??
             sql`'{}'::jsonb`;
           return sql`SELECT ${sql.raw(`'${JSON.stringify(dimensions)}'`)}::jsonb AS dimensions, margin_roots.path, count(*)::int AS count,
-            ${metricObject} || ${evidence} AS metrics
+            ${metricObject} || ${marginEvidence} AS metrics
             FROM (SELECT DISTINCT id, ${key} AS path${extraColumns} FROM memberships) margin_roots GROUP BY margin_roots.path`;
         }),
         sql` UNION ALL `,
@@ -153,17 +162,17 @@ export async function readGroupedQuery(input: {
         sql`, `,
       )}]::boolean[] AS subtrees, min(ordinal) AS ordinal${extraColumns}
       FROM expanded GROUP BY id, code, path, labels${extraColumns}
-    )${input.evidence?.ctes ?? sql``},
+    )${evidence?.ctes ?? sql``},
     prefixes AS (${prefixes}),
     summaries AS (
       SELECT path, labels[cardinality(path)] AS label, count(*)::int AS count,
         bool_or(subtree) AS subtree, min(ordinal) AS ordinal,
-        ${metricObject} || ${input.evidence?.object("prefix", sql`prefixes.path`) ?? sql`'{}'::jsonb`} AS metrics
+        ${metricObject} || ${evidence?.object("prefix", sql`prefixes.path`) ?? sql`'{}'::jsonb`} AS metrics
       FROM prefixes GROUP BY path, labels[cardinality(path)]
     ),
     margins AS (${margins}),
     population AS (SELECT count(DISTINCT id)::int AS count, count(*)::int AS membership_count FROM memberships),
-    global_metrics AS (SELECT count(*) AS roots, ${metricObject} || ${input.evidence?.object([], sql`ARRAY[]::text[]`) ?? sql`'{}'::jsonb`} AS metrics FROM (SELECT DISTINCT id${extraColumns} FROM memberships) global_roots),
+    global_metrics AS (SELECT count(*) AS roots, ${metricObject} || ${evidence?.object([], sql`ARRAY[]::text[]`) ?? sql`'{}'::jsonb`} AS metrics FROM (SELECT DISTINCT id${extraColumns} FROM memberships) global_roots),
     page AS (SELECT * FROM memberships ORDER BY ordinal LIMIT ${input.limit} OFFSET ${input.offset})
     SELECT jsonb_build_object(
       'ids', coalesce((SELECT jsonb_agg(id ORDER BY ordinal) FROM (SELECT id, min(ordinal) ordinal FROM page GROUP BY id) ids), '[]'::jsonb),

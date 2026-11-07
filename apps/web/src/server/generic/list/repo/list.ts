@@ -1958,7 +1958,10 @@ export function listScaffold<
               : null;
           const result = groupedPage
             ? {
-                count: groupedPage.count,
+                count:
+                  includeCount || group.length > 0
+                    ? groupedPage.count
+                    : undefined,
                 // A zero page size reads only the summaries; it has no next page.
                 hasNextPage:
                   take > 0 && skip + take < groupedPage.membershipCount,

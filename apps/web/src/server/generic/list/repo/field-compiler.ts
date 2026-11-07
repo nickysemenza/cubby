@@ -42,7 +42,7 @@ import { createAppError } from "~/server/errors/app-error";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import {
-  relatedRecordIdsSql,
+  relatedRecordMembershipsSql,
   relatedSortExpression,
 } from "~/server/generic/entity-links/repo/related-view";
 import {
@@ -788,6 +788,21 @@ export type RowsSqlArg<E extends Entity> = {
 
 export type AnyRowsSql = Readonly<Record<string, RowsSql>>;
 
+/** The shared repository relation, before a caller chooses an owner scope. */
+export const repositoryRowSetSql = (
+  entity: Entity,
+  key: string,
+  rows: AnyRowsSql,
+  context: ListContext,
+): SQL => {
+  const entry = rows[key];
+  if (entry === undefined)
+    throw new Error(
+      `${entity}.model.rows.${key} has no SQL; pass it in listScaffold's rows argument`,
+    );
+  return entry instanceof SQL ? entry : entry.render(context);
+};
+
 /** The prepare a repository row set's relation needs, if any. */
 export const rowsPrepare = (
   rows: AnyRowsSql,
@@ -821,12 +836,7 @@ export const rowSetSql = (
     // Rendered only when a filter reads the set, so its prepare need not run
     // otherwise.
     const relation = () => {
-      const entry = rows[key];
-      if (entry === undefined)
-        throw new Error(
-          `${entity}.model.rows.${key} has no SQL; pass it in listScaffold's rows argument`,
-        );
-      return entry instanceof SQL ? entry : entry.render(context);
+      return repositoryRowSetSql(entity, key, rows, context);
     };
     // Uncorrelated, so the relation is computed once for the whole list.
     return {
@@ -985,9 +995,49 @@ export interface ListGroupSql {
   readonly label: SQL | null;
   readonly order: readonly (SQL | "key" | "label")[];
   readonly subtree: SQL | null;
-  /** Correlated SQL expansion; the caller LEFT JOINs it once per dimension. */
+  /** Expansion joined once per dimension; owner-keyed relations need no lateral evaluation. */
   readonly members?: SQL;
+  /** Population members select `owner` beside key, label and subtree. */
+  readonly memberScope?: "owners";
 }
+
+/** Resolve membership identities and whether their source already names owners. */
+const recordMemberships = (
+  entity: Entity,
+  value: Extract<
+    NonNullable<GeneratedGroupChoice["value"]>,
+    { kind: "rowRecord" | "relatedRecord" }
+  >,
+  outerTable: string,
+  rows: AnyRowsSql,
+  context: ListContext,
+) => {
+  const owner = sql`list_row_member.owner`;
+  if (value.kind === "relatedRecord")
+    return {
+      ids: relatedRecordMembershipsSql(entity, value.relationKey),
+      owner,
+    };
+  const set = rowSetSql(entity, value.rows, outerTable, rows, context);
+  const referenced = set.column({
+    path: value.path,
+    terminal: {
+      kind: "record",
+      target: value.target,
+      titleColumn: value.titleColumn,
+      column: value.column,
+    },
+  });
+  const storage = Object.entries(generatedEntityListFields[entity].rows).find(
+    ([key]) => key === value.rows,
+  )?.[1].storage;
+  return storage?.kind === "repository"
+    ? {
+        ids: sql`SELECT row_set.owner, ${referenced} AS "id" FROM (${repositoryRowSetSql(entity, value.rows, rows, context)}) row_set`,
+        owner,
+      }
+    : { ids: set.select(sql`${referenced} AS "id"`), owner: null };
+};
 
 const optionOrder = (
   value: SQL,
@@ -1059,32 +1109,13 @@ export const groupSql = (
         return sql`(SELECT ${title} FROM ${sql.identifier(targetTable)} "__list_record" WHERE "__list_record"."id" = ${id})`;
       };
       if (value.kind !== "record") {
-        const memberIds =
-          value.kind === "relatedRecord"
-            ? relatedRecordIdsSql(
-                entity,
-                value.relationKey,
-                sql`${sql.identifier(getTableName(table))}."id"`,
-              )
-            : (() => {
-                const set = rowSetSql(
-                  entity,
-                  value.rows,
-                  getTableName(table),
-                  rows,
-                  context,
-                );
-                const referenced = set.column({
-                  path: value.path,
-                  terminal: {
-                    kind: "record",
-                    target: value.target,
-                    titleColumn: value.titleColumn,
-                    column: value.column,
-                  },
-                });
-                return set.select(sql`${referenced} AS "id"`);
-              })();
+        const { ids: memberIds, owner } = recordMemberships(
+          entity,
+          value,
+          getTableName(table),
+          rows,
+          context,
+        );
         const target = entityManifest[value.target];
         const targetTable = target.dbTable;
         if (targetTable === null)
@@ -1104,7 +1135,8 @@ export const groupSql = (
           label: sql`null::text`,
           order: ["label", "key"],
           subtree: null,
-          members: sql`SELECT DISTINCT ${at("shortcode")}::text AS "key", ${recordLabel(id, at)}::text AS "label", ${level === undefined ? sql`false` : sql`${hierarchyLevelSql(value.target, leafId)} > ${level}::int`} AS "subtree"
+          memberScope: owner === null ? undefined : "owners",
+          members: sql`SELECT DISTINCT ${owner === null ? sql`` : sql`${owner}, `}${at("shortcode")}::text AS "key", ${recordLabel(id, at)}::text AS "label", ${level === undefined ? sql`false` : sql`${hierarchyLevelSql(value.target, leafId)} > ${level}::int`} AS "subtree"
             FROM (${memberIds}) list_row_member
             LEFT JOIN ${sql.identifier(targetTable)} list_row_record ON list_row_record."id" = list_row_member."id"${target.softDelete ? sql` AND ${notDeleted("list_row_record")}` : sql``}`,
         };

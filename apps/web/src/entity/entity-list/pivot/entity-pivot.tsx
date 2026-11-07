@@ -147,8 +147,10 @@ export function EntityPivot({
             sort,
             metricValue: selectedMetric
               ? (dimensions, path) =>
-                  metricValues.get(JSON.stringify([dimensions, path]))?.sum ??
-                  null
+                  metricValues.has(JSON.stringify([dimensions, path]))
+                    ? (metricValues.get(JSON.stringify([dimensions, path]))
+                        ?.sum ?? null)
+                    : 0
               : undefined,
           })
         : undefined,
@@ -288,7 +290,7 @@ export function EntityPivot({
         : null;
     const metricLabel = !selectedMetric
       ? ""
-      : `; ${selectedMetric.label}: ${metric === undefined ? "unavailable" : metric.sum === null ? "unknown" : selectedMetric.format === "currency" || selectedMetric.format === "signedCurrency" ? formatCurrency(metric.sum) : formatCount(metric.sum)}${metric && metric.presentCount < metric.totalCount ? "; partial, some contributions have no amount" : ""}`;
+      : `; ${selectedMetric.label}: ${count === 0 ? "no contributions" : metric === undefined ? "unavailable" : metric.sum === null ? "unknown" : selectedMetric.format === "currency" || selectedMetric.format === "signedCurrency" ? formatCurrency(metric.sum) : formatCount(metric.sum)}${metric && metric.presentCount < metric.totalCount ? "; partial, some contributions have no amount" : ""}`;
     const label = `${row.label}${parent ? ` (${parent.label})` : ""}, ${column.data.label}: ${records(count)}${percent ? `, ${percent}` : ""}${metricLabel}`;
     const content =
       count === 0 ? (
@@ -405,7 +407,7 @@ export function EntityPivot({
       {selectedMetric && (
         <p className="text-xs text-muted-foreground">
           {selectedMetric.description} Amounts retain their sign; partial means
-          some contributions have no amount.
+          some contributions have no amount. Unknown values sort last.
         </p>
       )}
       <Visualization

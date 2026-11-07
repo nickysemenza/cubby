@@ -515,10 +515,9 @@ export async function loadRelatedBranch(
 }
 
 /** The same complete live identities the related-view filter can match. */
-export const relatedRecordIdsSql = (
+export const relatedRecordMembershipsSql = (
   entity: Entity,
   relationKey: string,
-  rootId: SQL,
 ): SQL => {
   const parsed = relatedViewKeySchema.safeParse(relationKey);
   const definition = parsed.success
@@ -535,10 +534,10 @@ export const relatedRecordIdsSql = (
       "CONSTRAINT_VIOLATION",
       `${relationKey} has no stored source`,
     );
-  return sql`SELECT DISTINCT t."id"
+  return sql`SELECT DISTINCT s."id" AS owner, t."id"
     FROM ${sql.identifier(view.sourceTable)} s
     ${compiledRelatedJoins(parsed.data, "filter")}
-    WHERE s."id" = ${rootId} AND ${notDeleted("s")} AND t."id" IS NOT NULL ${viewWhere(view)}`;
+    WHERE ${notDeleted("s")} AND t."id" IS NOT NULL ${viewWhere(view)}`;
 };
 
 /**
