@@ -502,7 +502,7 @@ function ServerListBody({
   const { navigate } = context;
   const nestToggle = useMemo(
     () =>
-      readProjection.nesting === "flat" ||
+      readProjection?.nesting === "flat" ||
       parts.tree ||
       !entityMetadata(queryClient, entity).summary.list.tree?.toggle
         ? undefined
