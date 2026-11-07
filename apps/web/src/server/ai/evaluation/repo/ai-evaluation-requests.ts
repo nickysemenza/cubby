@@ -1,5 +1,6 @@
 import {
   aiEvaluationState,
+  MEMBER_CANCELLED_AI_WORK,
   aiExecutionKind,
   aiProvenance,
 } from "@cubby/schemas/ai-evaluation";
@@ -233,7 +234,7 @@ export async function requestedAiEvaluations(
           ? null
           : (request.receipt ?? item.receipt),
       state: request.cancelledAt ? "cancelled" : item.state,
-      error: request.cancelledAt ? "Cancelled by a member" : item.error,
+      error: request.cancelledAt ? MEMBER_CANCELLED_AI_WORK : item.error,
     }))
     .filter(
       (item) =>
@@ -295,7 +296,7 @@ export async function cancelAiEvaluationRequests(db: Database, runId: RunId) {
     .update(aiEvaluation)
     .set({
       state: "cancelled",
-      error: "Cancelled by a member",
+      error: MEMBER_CANCELLED_AI_WORK,
     })
     .where(
       and(

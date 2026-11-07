@@ -1,3 +1,4 @@
+import { MEMBER_CANCELLED_AI_WORK } from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { JobWaitReason } from "@cubby/schemas/job";
 import {
@@ -445,7 +446,7 @@ async function lostAfterPage(
   const now = await readStepRunOwner(db, owner.id);
   if (now?.status === "failed" && now.failureCode === "user_cancelled") {
     const { cancelRunAiWork } = await import("~/server/workflows/runs/control");
-    await cancelRunAiWork(db, owner.id, "Cancelled by a member");
+    await cancelRunAiWork(db, owner.id, MEMBER_CANCELLED_AI_WORK);
   }
   return { kind: "lost" };
 }

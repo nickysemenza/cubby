@@ -10,6 +10,7 @@
 import {
   aiEvaluationState,
   aiEvaluationTargetKind,
+  MEMBER_CANCELLED_AI_WORK,
 } from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { RUN_STEP_ERROR_SAMPLE } from "@cubby/schemas/run-step";
@@ -61,7 +62,7 @@ function reads(scope: EvaluationScope) {
     : sql<
         string | null
       >`(CASE WHEN ${aiEvaluationRequest.cancelledAt} IS NOT NULL
-        THEN ${"Cancelled by a member"} ELSE ${aiEvaluation.error} END)`;
+        THEN ${MEMBER_CANCELLED_AI_WORK} ELSE ${aiEvaluation.error} END)`;
   return {
     state,
     receipt,

@@ -1,5 +1,6 @@
+import { MEMBER_CANCELLED_AI_WORK } from "@cubby/schemas/ai-evaluation";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -109,7 +110,7 @@ describe("Run AI work cancel", () => {
     ]);
     await getDb(ctx.db)
       .update(runStep)
-      .set({ state: "failed" })
+      .set({ state: "failed", pausedReason: MEMBER_CANCELLED_AI_WORK })
       .where(eq(runStep.runId, runId));
     await expect(retryRunStep(ctx.db, runId, "field_evaluate")).rejects.toThrow(
       "Cancelled AI work stays stopped",
@@ -154,6 +155,14 @@ describe("Run AI work cancel", () => {
           .where(eq(run.id, runId))
       )[0]?.status,
     ).toBe("running");
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(runStep)
+          .where(eq(runStep.runId, runId))
+      )[0]?.state,
+    ).toBe("queued");
   });
 
   it("keeps work another live requester still wants", async () => {
@@ -227,6 +236,35 @@ describe("Run AI work cancel", () => {
     expect(await aiEvaluationItem(ctx.db, evaluation.id)).toMatchObject({
       feature: "mailbox-relevance",
     });
+    expect(
+      await readmitFailedAiWork(ctx.db, first!, {
+        owned: false,
+        requested: true,
+        attempt: 1,
+        reviveCancelled: true,
+      }),
+    ).toBe(1);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluationRequest)
+          .where(
+            and(
+              eq(aiEvaluationRequest.runId, first!),
+              eq(aiEvaluationRequest.evaluationId, evaluation.id),
+            ),
+          )
+      )[0],
+    ).toMatchObject({ cancelledAt: null, receipt: null });
+    await cancelRunAiWork(ctx.db, first!, "Cancelled by a member", {
+      owned: false,
+      requested: true,
+    });
+    const withdrawnAgain = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluationRequest)
+      .where(eq(aiEvaluationRequest.runId, first!));
     const paidResult = { decision: "synthetic-retained-result" };
     await getDb(ctx.db)
       .update(aiEvaluation)
@@ -260,6 +298,6 @@ describe("Run AI work cancel", () => {
         .select()
         .from(aiEvaluationRequest)
         .where(eq(aiEvaluationRequest.runId, first!)),
-    ).toEqual(stoppedRequests);
+    ).toEqual(withdrawnAgain);
   });
 });

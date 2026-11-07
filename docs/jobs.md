@@ -106,12 +106,14 @@ end time for failed or cancelled execution; a member pause stays open-ended.
 Running Sweeps and mail reclassification support member pause/resume through
 the Run lifecycle, preserving their steps, scope and committed progress. Failed-work
 recovery leaves cancelled evaluations and withdrawn shared requests stopped,
-including their original receipts and superseded historical work. An explicit Retry run on a member-cancelled Run
-revokes that member stop and creates linked replacements only for its
-member-cancelled evaluations; superseded rows remain stopped. Retry failed on a
-cancelled Sweep step with no failed items refuses with a diagnostic directing
-the member to Retry run. Actual failures remain retryable without reviving the
-cancelled remainder.
+including their original receipts and superseded historical work. An explicit
+Retry run on a member-cancelled Run revokes that member stop: its interrupted
+steps reopen, member-cancelled owned evaluations get linked replacements, and
+withdrawn requests rejoin any still-live shared evaluation without a retry link
+to themselves. The stored member-cancellation marker has one schema owner.
+Other cancellations remain stopped. Retry failed on a cancelled Sweep step with
+no failed items directs the member to Retry run. Actual failures remain
+retryable without reviving the cancelled remainder.
 Mailbox discovery acquires at most five messages from its frozen provider page
 per Job claim. Its durable message offset resumes the remaining messages without
 replaying the completed prefix; absent offsets on retained pages mean zero.

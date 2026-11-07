@@ -2,6 +2,9 @@ import { entityIdSchema } from "./identifier-fields";
 import { suggestionChildHandle } from "./suggestion-reference";
 import { z } from "zod";
 
+/** Stored marker distinguishing a member stop from other retained cancellations. */
+export const MEMBER_CANCELLED_AI_WORK = "Cancelled by a member";
+
 /** Public confidence labels and eligible empty-field filling share one boundary. */
 export const HIGH_CONFIDENCE_PROBABILITY = 0.85;
 
