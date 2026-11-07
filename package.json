@@ -59,7 +59,7 @@
   },
   "devDependencies": {
     "@cubby/shared": "workspace:*",
-    "@oxlint/plugins": "1.88.0",
+    "@oxlint/plugins": "1.90.0",
     "@tanstack/router-generator": "1.167.45",
     "@types/node": "^26.6.5",
     "@types/proper-lockfile": "^4.1.4",
@@ -68,9 +68,9 @@
     "knip": "^6.41.0",
     "lint-staged": "^17.6.0",
     "nx": "23.3.0",
-    "oxc-parser": "0.154.0",
-    "oxfmt": "0.73.0",
-    "oxlint": "1.88.0",
+    "oxc-parser": "0.156.0",
+    "oxfmt": "0.75.0",
+    "oxlint": "1.90.0",
     "proper-lockfile": "^4.1.2",
     "tsrs": "0.16.0-ts7.1.0-dev.20260929",
     "tsx": "^4.23.15",
@@ -78,7 +78,7 @@
     "vitest": "^5.0.5",
     "zod": "^4.6.7"
   },
-  "packageManager": "pnpm@12.14.0",
+  "packageManager": "pnpm@12.17.0",
   "nx": {
     "includedScripts": []
   }
