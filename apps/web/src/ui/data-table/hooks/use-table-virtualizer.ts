@@ -277,7 +277,7 @@ export function useTableVirtualizer({
   const baseCount = groupedItems ? groupedItems.length : rowCount;
   const virtualizerCount = baseCount + (trailingSentinel ? 1 : 0);
   // The pane's measured height drives overscan; before the first measurement
-  // assume an embedded table's 60vh cap.
+  // use the initial 60vh cap shared by page and embedded panes.
   const [paneHeight, setPaneHeight] = useState(
     () => (globalThis.window?.innerHeight ?? 800) * 0.6,
   );
