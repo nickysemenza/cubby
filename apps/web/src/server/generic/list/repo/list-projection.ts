@@ -30,7 +30,10 @@ import {
   withDisplayImages,
 } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { loadStoredFieldProjections } from "~/server/generic/derived/repo/read";
+import {
+  loadStoredDerived,
+  loadStoredFieldProjections,
+} from "~/server/generic/derived/repo/read";
 import type { PageStoredMeta } from "~/server/generic/derived/repo/read-context";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -63,7 +66,7 @@ type ListIdPage = {
   projection: ListProjection;
   /** The request's context: its reader (actor, clients) and prepares. */
   context: ListContext;
-  stored?: Promise<PageStoredMeta>;
+  stored: Promise<PageStoredMeta>;
 };
 
 /** Id-only page loads started before the rows arrive; see `prefetch`. */
@@ -89,6 +92,7 @@ type ListReadPage<Row> = {
 type ListReadBinding<Row> = {
   schema: z.ZodObject;
   scope?: "detail" | "explicit";
+  storedKeys?: readonly string[];
   prefetch?: (page: ListIdPage) => Promise<void>;
   prepare?: (page: ListReadPage<Row>) => Promise<void>;
   value: (
@@ -110,7 +114,11 @@ type ListBatch<Row, Page, Loaded> = {
   ) => ListReadBinding<Row>;
 };
 /** Detail fields default only on record reads; explicit fields require a named projection everywhere. */
-type BindingOptions = { scope?: "detail" | "explicit" };
+type BindingOptions = {
+  scope?: "detail" | "explicit";
+  /** Stored inputs needed by this binding, loaded in the page's shared statement. */
+  storedKeys?: readonly string[];
+};
 type BindListFields<Row> = {
   <Fields extends z.ZodRawShape>(
     schema: z.ZodObject<Fields>,
@@ -202,6 +210,7 @@ export function listReadPlan<Row>(
       fields: (picked, value, bindingOptions) => ({
         schema: picked,
         scope: bindingOptions?.scope,
+        storedKeys: bindingOptions?.storedKeys,
         prefetch: prefetchPage
           ? async (page) => {
               await get(prefetchPage(page));
@@ -226,6 +235,7 @@ export function listReadPlan<Row>(
     ): ListReadBinding<Row> => ({
       schema: picked,
       scope: bindingOptions?.scope,
+      storedKeys: bindingOptions?.storedKeys,
       value: (row, _page, context) => value(row, context),
     }),
     {
@@ -253,34 +263,27 @@ export function listReadPlan<Row>(
       ) &&
       Object.hasOwn(schema.shape, field.readKey ?? field.key),
   );
-  const resultBindings = projections.length
-    ? [
-        bind
-          .batch(({ db, idPage }) =>
-            loadStoredFieldProjections(db, entity, idPage.ids, idPage.stored),
-          )
-          .fields(
-            z.object(
-              Object.fromEntries(
-                projections.map((field) => [
-                  field.readKey ?? field.key,
-                  schema.shape[field.readKey ?? field.key],
-                ]),
-              ),
-            ),
-            (row, loaded) =>
-              Object.fromEntries(
-                projections.map((field) => {
-                  const key = field.readKey ?? field.key;
-                  return [
-                    key,
-                    loaded.get(sourceIdentity.parse(row).id)?.[key] ?? null,
-                  ];
-                }),
-              ),
-          ),
-      ]
-    : [];
+  const storedProjections = bind.ids((page) =>
+    loadStoredFieldProjections(
+      page.db,
+      entity,
+      page.ids,
+      page.stored,
+      projections
+        .map((field) => field.readKey ?? field.key)
+        .filter((key) => wanted(page.projection, key)),
+    ),
+  );
+  const resultBindings = projections.map((field) => {
+    const key = field.readKey ?? field.key;
+    return storedProjections.fields(
+      z.object({ [key]: schema.shape[key] }),
+      (row, loaded) => ({
+        [key]: loaded.get(sourceIdentity.parse(row).id)?.[key] ?? null,
+      }),
+      { storedKeys: field.storedKey ? [field.storedKey] : [] },
+    );
+  });
   const bindings = [...resultBindings, ...declaredBindings];
   const written = new Set<string>(["id", "dataQuality", "displayImages"]);
   // A key may have one page writer and one detail-scoped writer: the record
@@ -465,6 +468,18 @@ export function listReadPlan<Row>(
       images.get(entityRefKey(entity, id)) ?? [],
     );
   };
+  const storedKeys = (
+    projection: ListProjection,
+    scope: "list" | "detail" = "list",
+  ) => [
+    ...new Set(
+      scoped(scope).flatMap((binding) =>
+        Object.keys(binding.schema.shape).some((key) => wanted(projection, key))
+          ? (binding.storedKeys ?? [])
+          : [],
+      ),
+    ),
+  ];
   const prefetch = (
     db: Database | DrizzleTransaction,
     ids: readonly string[],
@@ -474,7 +489,15 @@ export function listReadPlan<Row>(
     context = ListContext.empty,
     stored?: Promise<PageStoredMeta>,
   ): ListPagePrefetch => {
-    const page = { db, ids, projection, context, stored };
+    const page = {
+      db,
+      ids,
+      projection,
+      context,
+      stored:
+        stored ??
+        loadStoredDerived(db, entity, ids, storedKeys(projection, scope)),
+    };
     const settled = <V>(promise: Promise<V>) => {
       promise.catch(() => {
         // SILENT: `read` awaits and surfaces this rejection; only a page
@@ -482,6 +505,7 @@ export function listReadPlan<Row>(
       });
       return promise;
     };
+    settled(page.stored);
     if (ids.length)
       for (const binding of scoped(scope))
         if (
@@ -556,6 +580,7 @@ export function listReadPlan<Row>(
   return {
     fields,
     unloaded,
+    storedKeys,
     validate,
     /** A binding receives the repository row and may read unprojected columns. */
     hasBindings: (projection: ListProjection): boolean =>

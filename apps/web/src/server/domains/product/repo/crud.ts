@@ -160,7 +160,6 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import {
   ensureExternalSources,
@@ -534,21 +533,22 @@ export const productScaffold = listScaffold<
           ]),
         );
       });
-      const stored = bind.ids(
-        (page) =>
-          page.stored ??
-          loadStoredDerived(page.db, "product", page.ids, [
-            "price",
-            "cost",
-            "readFacts",
-            "food",
-          ]),
-      );
+      const stored = bind.ids((page) => page.stored);
+      const storedRead = (
+        published: Awaited<ReturnType<typeof stored.load>>,
+        id: string,
+        key: string,
+      ) => {
+        const read = published.get(id)?.get(key);
+        if (!read)
+          throw new Error(`Product stored input was not loaded: ${key}`);
+        return read;
+      };
       const facts = bind.ids(async (page) => {
         const published = await stored.load(page);
         return new Map(
           page.ids.map((id) => {
-            const read = published.get(id)?.get("readFacts");
+            const read = storedRead(published, id, "readFacts");
             return [
               id,
               read?.resultExists ? productReadFacts.parse(read.value) : null,
@@ -563,6 +563,7 @@ export const productScaffold = listScaffold<
           page.rows.map((row) => {
             const saved =
               snapshots.get(row.id)?.pricing ?? resolveProductPricing(null);
+            storedRead(published, row.id, "price");
             const effectivePrice = storedEffectivePrice(published, {
               ...row,
               category: row.categorySummary,
@@ -614,7 +615,7 @@ export const productScaffold = listScaffold<
           const id = parseShortcodeFor("product", row.shortcode);
           const price = prices.get(row.id);
           if (!price) throw new Error("Product food binding requires pricing");
-          const read = published.get(row.id)?.get("food");
+          const read = storedRead(published, row.id, "food");
           const food = read?.resultExists
             ? foodSummary.nullable().parse(read.value)
             : null;
@@ -919,6 +920,7 @@ export const productScaffold = listScaffold<
               ),
             };
           },
+          { storedKeys: ["readFacts", "price"] },
         ),
         food.fields(
           rawProductList.pick({
@@ -936,6 +938,7 @@ export const productScaffold = listScaffold<
               unitPriceLabel: unitPriceLabel(value.unitPrice),
             };
           },
+          { storedKeys: ["readFacts", "price", "food"] },
         ),
         food.fields(
           rawProductDetail.pick({
@@ -952,7 +955,7 @@ export const productScaffold = listScaffold<
               }),
             };
           },
-          { scope: "detail" },
+          { scope: "detail", storedKeys: ["readFacts", "price", "food"] },
         ),
         facts.fields(
           rawProductDetail.pick({ ownershipEvidence: true }),
@@ -968,7 +971,7 @@ export const productScaffold = listScaffold<
                 }),
             };
           },
-          { scope: "detail" },
+          { scope: "detail", storedKeys: ["readFacts"] },
         ),
         covers.fields(
           rawProductDetail.pick({ coverImageUrl: true }),
