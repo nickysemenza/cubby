@@ -6,6 +6,8 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import {
   useCallback,
+  lazy,
+  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -24,10 +26,17 @@ import {
   prefetchEntityPreview,
 } from "~/entity/entity-query";
 import { readRecordField } from "~/entity/entity-references";
+import { SidePanel } from "~/ui/overlays/side-panel";
 import { Button } from "~/ui/primitives/button";
 import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
 
-import { EntityWorkbenchInspector } from "../entity-detail/entity-workbench-inspector";
+const loadInspector = () =>
+  import("../entity-detail/entity-workbench-inspector");
+const EntityWorkbenchInspector = lazy(() =>
+  loadInspector().then((module) => ({
+    default: module.EntityWorkbenchInspector,
+  })),
+);
 
 export interface PreviewState {
   entityKind: Entity;
@@ -169,15 +178,37 @@ function renderDefaultInspector({
   preview,
   onClose,
 }: EntityPreviewRendererProps) {
+  const label = entityLabel(preview.entityKind);
   return (
-    // Keyed so stepping to another record never shows the previous name.
-    <EntityWorkbenchInspector
-      key={`${preview.entityKind}:${preview.id}`}
-      entity={preview.entityKind}
-      id={preview.id}
-      onClose={onClose}
-      seedName={preview.name}
-    />
+    <Suspense
+      fallback={
+        <SidePanel
+          label={`${label} inspector`}
+          eyebrow={label}
+          title={
+            preview.name ?? (
+              <span className="font-normal text-muted-foreground">
+                Loading {label.toLowerCase()}…
+              </span>
+            )
+          }
+          code={preview.id}
+          onClose={onClose}
+          closeLabel="Close inspector"
+        >
+          <output>Loading inspector…</output>
+        </SidePanel>
+      }
+    >
+      {/* Keyed so stepping to another record never shows the previous name. */}
+      <EntityWorkbenchInspector
+        key={`${preview.entityKind}:${preview.id}`}
+        entity={preview.entityKind}
+        id={preview.id}
+        onClose={onClose}
+        seedName={preview.name}
+      />
+    </Suspense>
   );
 }
 
@@ -228,11 +259,42 @@ export function useEntityPreview(
   const browserOperations =
     options?.browserOperations ?? productionBrowserOperations;
   const intentRef = useRef<PreviewIntent | null>(null);
+  const openPreviewRef = useRef<PreviewState | null>(null);
+  openPreviewRef.current = isInspectorOpen ? preview : null;
+
+  // Hover warms every preview's data; clicks call this only for the default inspector.
+  const prefetchPreview = useCallback(
+    (target: PreviewState) => {
+      if (
+        renderInspector === renderDefaultInspector &&
+        (!responsiveInspector ||
+          presentation !== "mobile" ||
+          mobileBehavior === "sheet")
+      ) {
+        void loadInspector().catch(() => {
+          // SILENT: speculative preload; opening owns the import error surface.
+        });
+      }
+      void browserOperations.prefetchDetail(target.entityKind, target.id);
+    },
+    [
+      browserOperations,
+      mobileBehavior,
+      presentation,
+      renderInspector,
+      responsiveInspector,
+    ],
+  );
 
   const stopIntent = useCallback(
     (intent: PreviewIntent, cancelStarted: boolean) => {
       if (intent.timer) clearTimeout(intent.timer);
-      if (cancelStarted && intent.started) {
+      const open = openPreviewRef.current;
+      // A lazy inspector owns its read before its query observer has mounted.
+      const opened =
+        open?.entityKind === intent.preview.entityKind &&
+        open.id === intent.preview.id;
+      if (cancelStarted && intent.started && !opened) {
         void browserOperations.cancelPrefetch(intent.queryKey);
       }
       if (intentRef.current === intent) intentRef.current = null;
@@ -301,10 +363,12 @@ export function useEntityPreview(
       ) {
         stopIntent(intent, false);
       }
+      // Start the record beside its lazy code, rather than after it mounts.
+      if (renderInspector === renderDefaultInspector) prefetchPreview(resolved);
       setPreview(resolved);
       setInspectorOpen(true);
     },
-    [resolveRow, stopIntent],
+    [prefetchPreview, renderInspector, resolveRow, stopIntent],
   );
 
   /**
@@ -331,6 +395,7 @@ export function useEntityPreview(
         return;
       }
 
+      if (renderInspector === renderDefaultInspector) prefetchPreview(resolved);
       setPreview(resolved);
       setInspectorOpen(true);
     },
@@ -338,6 +403,8 @@ export function useEntityPreview(
       browserOperations,
       mobileBehavior,
       presentation,
+      prefetchPreview,
+      renderInspector,
       resolveRow,
       responsiveInspector,
     ],
@@ -372,11 +439,11 @@ export function useEntityPreview(
       intent.timer = setTimeout(() => {
         intent.timer = null;
         intent.started = true;
-        void browserOperations.prefetchDetail(resolved.entityKind, resolved.id);
+        prefetchPreview(resolved);
       }, PREVIEW_INTENT_DELAY_MS);
       intentRef.current = intent;
     },
-    [browserOperations, resolveRow, stopIntent],
+    [prefetchPreview, resolveRow, stopIntent],
   );
 
   const onRowHoverEnd = useCallback(

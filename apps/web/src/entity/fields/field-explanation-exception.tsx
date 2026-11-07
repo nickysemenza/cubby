@@ -4,15 +4,20 @@ import {
   setDataExceptionInput,
 } from "@cubby/schemas/data-quality";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
-import { useId, useMemo, useState } from "react";
+import { lazy, Suspense, useId, useMemo, useState } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { MarkdownText } from "~/entity/prose/markdown";
 import { dataQuality } from "~/integrations/tanstack-query/generated/domains/dataQuality.gen";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+
+const MarkdownText = lazy(() =>
+  import("~/entity/prose/markdown").then((module) => ({
+    default: module.MarkdownText,
+  })),
+);
 
 type ExplainedCheck = NonNullable<
   FieldExplanationOutput["qualityBreakdown"]
@@ -70,9 +75,11 @@ export function ExceptionControls({
             ? "Evidence changed since this exception was recorded: "
             : "Recorded as "}
           {dataExceptionReasonLabel[check.exception.reason]}
-          <MarkdownText className="text-xs">
-            {check.exception.note}
-          </MarkdownText>
+          <Suspense fallback={check.exception.note}>
+            <MarkdownText className="text-xs">
+              {check.exception.note}
+            </MarkdownText>
+          </Suspense>
         </div>
         <Button
           size="xs"
