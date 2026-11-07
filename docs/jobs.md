@@ -626,7 +626,10 @@ attempt in flight cannot publish. Completed current input is not queued again
 for `ai_refresh`. Member-initiated sweep, reclassification and retry requests
 get a fresh evaluation; pending slots can be shared only within the same
 execution kind. Discovery audit receipts never reuse reclassification work, even
-when both describe the same Email and feature. Reverting after
+when both describe the same Email and feature. A completed discovery with a
+request pointing to another execution kind or a missing receipt reports incomplete
+audit coverage; current Email state cannot reconstruct the lost handling receipt.
+Reverting after
 another input was evaluated creates a new row and reuses the AI response cache.
 Declined input (`blocked`, `obsolete`, or cancelled as superseded) receives at
 most three automatic attempts; member-cancelled Runs veto automatic

@@ -145,14 +145,22 @@ export async function readDiscoveryEmailAudit(
       )
   ) AS audit`;
   const [counted, selected] = await Promise.all([
-    getDb(db).execute(sql`SELECT count(*)::int AS count FROM ${evidence}`),
+    getDb(db).execute(sql`SELECT count(*)::int AS count, NOT EXISTS (
+      SELECT 1 FROM "AiEvaluationRequest" AS request
+      JOIN "AiEvaluation" AS item ON item.id = request."evaluationId"
+      WHERE request."runId" = ${owner.id}
+        AND (item."executionKind" <> ${aiExecutionKind.enum.mail_discovery} OR item.receipt IS NULL)
+    ) AS intact FROM ${evidence}`),
     getDb(db).execute(
       sql`SELECT evidence FROM ${evidence} ORDER BY evidence->>'handledAt', key LIMIT ${page.limit} OFFSET ${page.cursor}`,
     ),
   ]);
-  const count =
-    z.object({ rows: z.array(z.object({ count: z.number() })) }).parse(counted)
-      .rows[0]?.count ?? 0;
+  const summary = z
+    .object({
+      rows: z.array(z.object({ count: z.number(), intact: z.boolean() })),
+    })
+    .parse(counted).rows[0];
+  const count = summary?.count ?? 0;
   const receipts = z
     .object({ rows: z.array(z.object({ evidence: discoveryEmailReceipt })) })
     .parse(selected)
@@ -169,7 +177,8 @@ export async function readDiscoveryEmailAudit(
         )
     : [];
   return discoveryEmailAuditPage.parse({
-    coverage: complete ? "complete" : "incomplete",
+    // A pre-partition admission could lose its receipt into another execution frame.
+    coverage: complete && summary?.intact ? "complete" : "incomplete",
     total: count,
     nextCursor:
       page.cursor + receipts.length < count

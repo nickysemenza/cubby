@@ -224,6 +224,37 @@ it("retains reused discovery decisions without consuming queued reclassification
     expect(JSON.stringify(items)).not.toContain(selected.id);
     expect(JSON.stringify(items)).not.toContain(frozen.id);
   }
+  const historicalId = await ensureRun(ctx.db, ctx.actor, {
+    purpose: "mail_discovery",
+    trigger: "manual",
+    execution: false,
+    input: mailboxDiscoveryInput.parse({
+      mailboxId,
+      scopedQueries: [],
+      executionPolicy: "classification_only",
+      emailAuditVersion: 1,
+    }),
+  });
+  await getDb(ctx.db)
+    .update(run)
+    .set({ status: "completed" })
+    .where(eq(run.id, historicalId));
+  // The pre-partition enroller attached discovery demand to a manual execution frame.
+  await getDb(ctx.db)
+    .insert(aiEvaluationRequest)
+    .values({ runId: historicalId, evaluationId: queuedBefore.id });
+  const [historical] = await getDb(ctx.db)
+    .select()
+    .from(run)
+    .where(eq(run.id, historicalId));
+  expect(
+    (
+      await loadMailDiscoveryRead(ctx.db, historical!.shortcode, {
+        userId: ctx.actor.userId,
+        ledgerPartyId: party.id,
+      })
+    )?.emails,
+  ).toMatchObject({ coverage: "incomplete", total: 0, items: [] });
   await expect(
     loadMailDiscoveryRead(ctx.db, owners[0]!.shortcode, {
       userId: userId.parse("synthetic-foreign"),
