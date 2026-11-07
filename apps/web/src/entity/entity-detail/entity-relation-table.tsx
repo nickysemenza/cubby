@@ -16,6 +16,7 @@ import {
   useState,
 } from "react";
 
+import { entityRowActionReadFields } from "~/entity/actions/entity-actions";
 import { createEntityDisplayColumns } from "~/entity/display/entity-display";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import type {
@@ -105,11 +106,14 @@ const relationReadProjection =
           ];
         }),
     );
-    return declaredListReadProjection(queryClient, entity, {
+    const fields = declaredListReadProjection(queryClient, entity, {
       ...DEFAULT_LIST_COLUMN_VISIBILITY,
       ...sectionVisibility,
       ...visibility,
     });
+    return fields === undefined
+      ? undefined
+      : [...new Set([...fields, ...entityRowActionReadFields(entity)])].sort();
   };
 
 export function planRelationSection(

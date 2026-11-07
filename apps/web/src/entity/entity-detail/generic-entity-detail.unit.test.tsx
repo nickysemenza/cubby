@@ -90,7 +90,8 @@ const operations = {
   displayImages: entityMedia.displayImages.withTransport(async () => ({}))
     .queryOptions,
   list: {
-    list: entityList.list.withTransport(async () => ({
+    list: entityList.list.withTransport(async ({ input }) => ({
+      selectedFields: input.fields,
       items: [],
       meta: {
         hasNextPage: false,
@@ -439,9 +440,10 @@ describe("GenericEntityDetail", () => {
       mock(inventoryListItem, { seed: 3 }),
     ];
     const list = entityList.list.withTransport(
-      async ({ input: { entity } }) => {
+      async ({ input: { entity, fields } }) => {
         const items = entity === "inventory" ? rows : [];
         return {
+          selectedFields: fields,
           items: items.map((row) => ({ ...row, actions: [] })),
           meta: {
             hasNextPage: false,
