@@ -250,7 +250,7 @@ describe("Run lineage and waiting-on reads", () => {
 describe("Run attention entity view", () => {
   const ctx = withTestDb();
   // Recovery must preserve paid answers and uncertain history while settled work leaves Needs you.
-  it("projects historical AI recovery from effective owned and requested work without changing history", async () => {
+  it("projects historical recovery from declared execution and retained obligations without changing history", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "ai_refresh",
       trigger: "scheduled",
@@ -485,6 +485,106 @@ describe("Run attention entity view", () => {
           .where(eq(aiEvaluation.id, item.id))
       )[0]?.result,
     ).toEqual(item.result);
+
+    const historicalId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "derived_refresh",
+      trigger: "scheduled",
+      execution: false,
+    });
+    const [historical] = await getDb(ctx.db)
+      .update(runTable)
+      .set({
+        status: "failed",
+        failureCode: "retired_execution",
+        endedAt: new Date(),
+      })
+      .where(eq(runTable.id, historicalId))
+      .returning();
+    if (!historical) throw new Error("Missing synthetic historical Run");
+    const historicalVisible = async (wanted: boolean) => {
+      const before = (
+        await getDb(ctx.db)
+          .select()
+          .from(runTable)
+          .where(eq(runTable.id, historicalId))
+      )[0];
+      if (!before) throw new Error("Missing synthetic historical Run");
+      // Explicit purpose scope includes history omitted by the default population.
+      const page = await runScaffold.read(ctx.db, {
+        filters: { purpose: [before.purpose], needsAttention: true },
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 10 },
+      });
+      expect(page.data.some((row) => row.id === historical.shortcode)).toBe(
+        wanted,
+      );
+      const work = await readRecordWorkQueue(ctx.db, {
+        id: historical.shortcode,
+        memberPartyId: null,
+        memberOnly: false,
+      });
+      expect(work.items.some((row) => row.family === "account")).toBe(wanted);
+      expect(
+        (
+          await getDb(ctx.db)
+            .select()
+            .from(runTable)
+            .where(eq(runTable.id, historicalId))
+        )[0],
+      ).toEqual(before);
+    };
+    await historicalVisible(false);
+    for (const state of [
+      { trigger: "manual" as const },
+      { trigger: "scheduled" as const, failureCode: "execution_limit" },
+      { failureCode: "retired_execution", endedAt: null },
+      { status: "paused" as const },
+      { purpose: "maintenance" as const },
+    ]) {
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({ ...historical, ...state })
+        .where(eq(runTable.id, historicalId));
+      await historicalVisible(true);
+    }
+    await getDb(ctx.db)
+      .update(runTable)
+      .set(historical)
+      .where(eq(runTable.id, historicalId));
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ runId: historicalId })
+      .where(eq(aiEvaluation.id, item.id));
+    await historicalVisible(true); // Even terminal paid evidence fails closed.
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ runId })
+      .where(eq(aiEvaluation.id, item.id));
+    await historicalVisible(false);
+    await getDb(ctx.db)
+      .insert(aiEvaluationRequest)
+      .values({ runId: historicalId, evaluationId: item.id });
+    await historicalVisible(true);
+    await getDb(ctx.db)
+      .delete(aiEvaluationRequest)
+      .where(eq(aiEvaluationRequest.runId, historicalId));
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({ runId: historicalId, state: "failed" })
+      .where(eq(imageProcessingJob.id, imageJobId));
+    await historicalVisible(true);
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({ state: "ready" })
+      .where(eq(imageProcessingJob.id, imageJobId));
+    await historicalVisible(false);
+    await enqueueJob(ctx.db, {
+      key: "synthetic:historical-routine-live",
+      kind: "synthetic.demand",
+      runId: historicalId,
+      input: {},
+    });
+    await historicalVisible(true);
   });
 
   it("filters and sorts stalled Runs ahead of newer stopped Runs", async () => {

@@ -471,6 +471,7 @@ export const RUN_KINDS = {
       "A routine pass that rebuilt derived data (search, totals, embeddings).",
     trigger: "scheduled",
     routine: true,
+    historical: true,
     progress: "steps",
     steps: [
       {
