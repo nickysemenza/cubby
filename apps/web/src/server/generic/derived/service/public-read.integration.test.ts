@@ -150,6 +150,37 @@ describe("nested field envelope reads", () => {
           .fields.price,
       ),
     ).toBe(13);
+
+    const compactSchema = z.object({ id: z.string(), name: z.string().trim() });
+    const compact = await publicFieldEnvelopeBatch({
+      db: ctx.db,
+      reads: [
+        {
+          entity: "product",
+          schema: compactSchema,
+          row: {
+            id: product.id,
+            name: " Synthetic compact stock ",
+            internalNote: "Synthetic private input",
+          },
+        },
+      ],
+    });
+    expect(compact).toEqual([
+      { id: product.id, name: "Synthetic compact stock" },
+    ]);
+    await expect(
+      publicFieldEnvelopeBatch({
+        db: ctx.db,
+        reads: [
+          {
+            entity: "product",
+            schema: compactSchema,
+            row: { id: product.id, name: 42 },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/name/);
   });
 
   it("projects repeated identities while preserving each nested snapshot", async () => {

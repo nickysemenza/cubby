@@ -39,9 +39,9 @@ const embeddedBindings = (
   )?.[1] ?? [];
 
 /** A projection tree retains duplicate snapshots; only its fact reads deduplicate. */
-type ReadNode = {
+type ReadNode<S extends z.ZodObject = z.ZodObject> = {
   entity: ShortcodeEntity;
-  schema: z.ZodObject;
+  schema: S;
   row: ReadRow;
   children: { path: readonly (string | number)[]; node: ReadNode }[];
 };
@@ -118,11 +118,11 @@ function nestedReadSchema(
   return value.shape.value;
 }
 
-function prepareReadNode(
+function prepareReadNode<S extends z.ZodObject>(
   entity: ShortcodeEntity,
-  schema: z.ZodObject,
+  schema: S,
   value: unknown,
-): ReadNode {
+): ReadNode<S> {
   const row = rowRecord.parse(value);
   const children: ReadNode["children"] = [];
   const visit = (
@@ -328,21 +328,19 @@ export function selectedFieldEnvelopeSchema(
 }
 
 /** One response may contain several selected projections of the same entity. */
-export async function publicFieldEnvelopeBatch({
+export async function publicFieldEnvelopeBatch<
+  R extends Pick<ReadNode, "entity" | "schema" | "row">,
+>({
   db,
   reads,
   contexts,
 }: {
   db: RepositoryQueryInput;
-  reads: readonly {
-    entity: ShortcodeEntity;
-    schema: z.ZodObject;
-    row: ReadRow;
-  }[];
+  reads: readonly R[];
   contexts?: ReadonlyMap<ShortcodeEntity, PageFieldReadContexts>;
-}): Promise<ReadRow[]> {
+}): Promise<Array<z.output<R["schema"]>>> {
   const roots = reads.map(({ entity, schema, row }) =>
-    prepareReadNode(entity, schema, row),
+    prepareReadNode<R["schema"]>(entity, schema, row),
   );
   const requested = new Map<ShortcodeEntity, Set<string>>();
   const requestedFields = new Map<ShortcodeEntity, Set<string>>();
@@ -405,7 +403,7 @@ export async function publicFieldEnvelopeBatch({
     }
     facts.set(kind, new Map([...existing, ...(loaded ?? [])]));
   }
-  const serialize = (node: ReadNode): ReadRow => {
+  const serialize = <N extends z.ZodObject>(node: ReadNode<N>): z.output<N> => {
     let row = node.row;
     for (const child of node.children)
       row = rowRecord.parse(
@@ -417,15 +415,12 @@ export async function publicFieldEnvelopeBatch({
     const fields = node.schema.shape.fields;
     // An explicitly compact identity projection has no governed values or action facts.
     // Validate that leaf as declared rather than inventing an empty field envelope.
-    if (!(fields instanceof z.ZodObject))
-      return rowRecord.parse(node.schema.parse(row));
+    if (!(fields instanceof z.ZodObject)) return node.schema.parse(row);
     if (needsFacts.has(node) && !current)
       throw new Error(
         `Current field facts unavailable for ${node.entity} projection`,
       );
-    return rowRecord.parse(
-      publicFieldEnvelopeRow(node.schema, node.entity, row, current),
-    );
+    return publicFieldEnvelopeRow(node.schema, node.entity, row, current);
   };
   return roots.map(serialize);
 }
@@ -450,5 +445,6 @@ export async function publicFieldEnvelopeRows<S extends z.ZodType>({
     reads: rows.map((row) => ({ entity, schema, row: rowRecord.parse(row) })),
     contexts: contexts ? new Map([[entity, contexts]]) : undefined,
   });
-  return serialized.map((row) => schema.parse(row));
+  // The batch validates each root with this schema after its envelope projector.
+  return serialized;
 }
