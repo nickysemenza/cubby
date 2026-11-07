@@ -113,6 +113,12 @@ struct CubbyCommands: Commands {
                 .keyboardShortcut("e", modifiers: .command)
                 .disabled(record?.edit == nil)
             Button("Delete Record…") {
+                // Menu key equivalents run before the text system, so ⌘⌫ inside a field must
+                // keep deleting to the line start instead of asking to delete the record.
+                if NSApp.keyWindow?.firstResponder is NSText {
+                    NSApp.sendAction(#selector(NSResponder.deleteToBeginningOfLine(_:)), to: nil, from: nil)
+                    return
+                }
                 if let record, let delete = record.delete { record.perform(delete) }
             }
             .keyboardShortcut(.delete, modifiers: .command)
