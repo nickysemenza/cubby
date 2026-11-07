@@ -471,11 +471,14 @@ export function useEntityPreview(
     [],
   );
 
-  const inspector = useMemo(
-    () =>
-      preview ? renderInspector({ preview, onClose: closePreview }) : null,
-    [preview, renderInspector, closePreview],
-  );
+  const inspector = useMemo(() => {
+    // Hook-bearing inspectors must mount as components; calling them here
+    // would conditionally append their hooks to the preview owner's memo.
+    const Inspector = renderInspector;
+    return preview ? (
+      <Inspector preview={preview} onClose={closePreview} />
+    ) : null;
+  }, [preview, renderInspector, closePreview]);
 
   // Stable identity as long as preview/closePreview haven't changed, so a
   // host re-render for unrelated reasons (e.g. list background refetch)
