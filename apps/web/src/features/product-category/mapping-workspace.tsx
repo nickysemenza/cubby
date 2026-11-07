@@ -85,18 +85,38 @@ function SelectedCategory({ id }: { id: CategoryRow["id"] }) {
             <div>
               <dt className="text-muted-foreground">Effective spending</dt>
               <dd>
-                {mapping?.category?.name ??
-                  (mapping?.state === "blocked" ? "Blocked" : "Missing")}
+                {mapping?.category ? (
+                  <EntityRefLink
+                    entity="spendingCategory"
+                    id={mapping.category.id}
+                    name={mapping.category.name}
+                  />
+                ) : mapping?.state === "blocked" ? (
+                  "Blocked"
+                ) : (
+                  "Missing"
+                )}
               </dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Mapping source</dt>
               <dd>
-                {mapping?.state === "direct"
-                  ? "Set here"
-                  : mapping?.source
-                    ? `${mapping.state === "blocked" ? "Blocked at" : "Inherited from"} ${mapping.source.name}`
-                    : "No mapping in this branch"}
+                {mapping?.state === "direct" ? (
+                  "Set here"
+                ) : mapping?.source ? (
+                  <>
+                    {mapping.state === "blocked"
+                      ? "Blocked at"
+                      : "Inherited from"}{" "}
+                    <EntityRefLink
+                      entity="productCategory"
+                      id={mapping.source.id}
+                      name={mapping.source.name}
+                    />
+                  </>
+                ) : (
+                  "No mapping in this branch"
+                )}
               </dd>
             </div>
             <div>
