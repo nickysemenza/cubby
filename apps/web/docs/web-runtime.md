@@ -117,8 +117,6 @@ bounded entry-aware schema grouping read an undefined `schema.shape` during
 Product startup in a paired probe. A successful bundle build does not
 establish client initialization; verify real authenticated navigation when
 changing chunk boundaries.
-Authentication reads the shared decision deadline from a pure policy module; a
-transport budget must not initialize the AI runner before an ordinary read.
 Deployment preload recovery schedules a bounded reload while leaving Vite's
 preload error uncancelled. Preventing that event makes the import promise fulfill
 with `undefined`, turning an asset-fetch failure into a second lazy-module error.

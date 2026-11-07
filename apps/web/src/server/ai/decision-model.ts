@@ -43,7 +43,6 @@ import {
 } from "~/server/ai/run-feature";
 
 import { aiWorkDeferral, withCooperativeAiWork } from "./cooperative-work";
-import { DECISION_DEADLINE_MS } from "./decision-deadline";
 import {
   DECISION_CONTEXT_BYTE_LIMIT,
   type BatchedChoiceResponse,
@@ -58,6 +57,7 @@ import {
   gatewayProviderStop,
   isGatewayAdmissionWait,
 } from "./gateway-egress-client";
+import { DECISION_DEADLINE_MS } from "./policy/decision-deadline";
 
 const DECISION_MAX_CHOICES = 255;
 /** One slot is reserved for `none`. */
