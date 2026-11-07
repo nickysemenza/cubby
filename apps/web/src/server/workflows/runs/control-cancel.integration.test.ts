@@ -9,14 +9,14 @@ import {
   owedAiEvaluations,
 } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { getDb } from "~/server/db/helpers";
-import { aiEvaluation } from "~/server/db/schema";
+import { aiEvaluation, aiEvaluationRequest } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { cancelRunAiWork } from "./control";
+import { cancelRunAiWork, readmitFailedAiWork } from "./control";
 
 // Production finding: Run cancel called cancelJob once per evaluation inside
 // one transaction under the global AI admission lock and timed out for large
@@ -61,6 +61,12 @@ describe("Run AI work cancel", () => {
         result: null,
       });
     await cancelRunAiWork(ctx.db, runId, "Cancelled by a member");
+    // Retrying failures must not re-admit the work the member stopped.
+    await readmitFailedAiWork(ctx.db, runId, {
+      owned: true,
+      requested: true,
+      attempt: 1,
+    });
     const evaluations = await getDb(ctx.db)
       .select({ state: aiEvaluation.state })
       .from(aiEvaluation)
@@ -115,6 +121,24 @@ describe("Run AI work cancel", () => {
         requested: true,
       }),
     ).toBe(true);
+    const stoppedRequests = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluationRequest)
+      .where(eq(aiEvaluationRequest.runId, first!));
+    await readmitFailedAiWork(ctx.db, first!, {
+      owned: false,
+      requested: true,
+      attempt: 1,
+    });
+    expect(
+      await getDb(ctx.db).select({ id: aiEvaluation.id }).from(aiEvaluation),
+    ).toHaveLength(1);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(aiEvaluationRequest)
+        .where(eq(aiEvaluationRequest.runId, first!)),
+    ).toEqual(stoppedRequests);
     const [row] = await getDb(ctx.db)
       .select({ state: aiEvaluation.state })
       .from(aiEvaluation)

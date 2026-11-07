@@ -252,7 +252,7 @@ export async function cancelRunAiWork(
 }
 
 /**
- * Re-admits a Run's failed or cancelled AI work as linked replacements:
+ * Re-admits a Run's failed AI work as linked replacements; cancellations stay stopped:
  * owned evaluations copy into the Run, requested ones re-request shared work.
  */
 export async function readmitFailedAiWork(
@@ -273,7 +273,7 @@ export async function readmitFailedAiWork(
       .where(
         and(
           eq(aiEvaluation.runId, runId),
-          inArray(aiEvaluation.state, ["failed", "cancelled"]),
+          eq(aiEvaluation.state, "failed"),
           sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
         ),
       );
@@ -313,14 +313,11 @@ export async function readmitFailedAiWork(
   for (const item of await requestedAiEvaluations(db, runId, {
     currentOnly: true,
   })) {
-    if (!["failed", "cancelled"].includes(item.state)) continue;
+    if (item.state !== "failed") continue;
     const replacement = await enqueueAiEvaluation(db, {
       runId,
       executionKind: item.executionKind,
-      shareKey:
-        item.state === "cancelled"
-          ? `${item.workKey}:member-retry:${attempt + 1}`
-          : (item.shareKey ?? item.workKey),
+      shareKey: item.shareKey ?? item.workKey,
       feature: item.feature,
       target: item.target,
       provenance: item.provenance,

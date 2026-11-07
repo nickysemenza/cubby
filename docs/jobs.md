@@ -104,7 +104,10 @@ so a lapsed lease reads "Lease on … expired; waiting to be reclaimed", never
 Reconciliation copies a stopped execution's failure to its Run and records an
 end time for failed or cancelled execution; a member pause stays open-ended.
 Running Sweeps and mail reclassification support member pause/resume through
-the Run lifecycle, preserving their steps, scope and committed progress.
+the Run lifecycle, preserving their steps, scope and committed progress. Retrying
+failed Run or step work re-admits failures only: cancelled evaluations and
+withdrawn shared requests retain their original stop and receipts, including
+superseded historical work.
 Mailbox discovery acquires at most five messages from its frozen provider page
 per Job claim. Its durable message offset resumes the remaining messages without
 replaying the completed prefix; absent offsets on retained pages mean zero.
