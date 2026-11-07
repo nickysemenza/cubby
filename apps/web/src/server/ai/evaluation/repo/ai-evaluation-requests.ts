@@ -62,8 +62,16 @@ const inputIdentity = (
 
 type EvaluationEnrollment = Omit<
   typeof aiEvaluation.$inferInsert,
-  "id" | "workKey"
-> & { workKey?: string; shareKey: string | null };
+  "id" | "workKey" | "executionKind"
+> & {
+  executionKind: typeof aiEvaluation.$inferSelect.executionKind;
+  workKey?: string;
+  shareKey: string | null;
+};
+
+const enrollmentKey = (
+  input: Pick<EvaluationEnrollment, "executionKind" | "feature" | "target">,
+) => JSON.stringify([input.executionKind, evaluationSlotKey(input)]);
 
 /** A request retains its own demand and receipt; only pending execution is shared. */
 export async function enqueueAiEvaluation(
@@ -83,9 +91,12 @@ export async function enqueueAiEvaluations(
 ) {
   if (!inputs.length) return [];
   const unique = new Map(
-    inputs.map(({ input }) => [evaluationSlotKey(input), input]),
+    inputs.map(({ input }) => [enrollmentKey(input), input]),
   );
-  const keys = [...unique.keys()].sort();
+  // Target locks also serialize admissions from Workers deployed before kind partitioning.
+  const keys = [
+    ...new Set(inputs.map(({ input }) => evaluationSlotKey(input))),
+  ].sort();
   return withTransactionDatabase(db, async (tx) => {
     await getDb(tx).execute(
       sql`SELECT pg_advisory_xact_lock(hashtextextended(key, 0)) FROM unnest(ARRAY[${sql.join(
@@ -112,7 +123,11 @@ export async function enqueueAiEvaluations(
     }[] = [];
     const fresh: (typeof aiEvaluation.$inferInsert)[] = [];
     for (const [key, input] of unique) {
-      const rows = history.filter((row) => row.slotKey === key);
+      const slotKey = evaluationSlotKey(input);
+      const slotHistory = history.filter((row) => row.slotKey === slotKey);
+      const rows = slotHistory.filter(
+        (row) => row.executionKind === input.executionKind,
+      );
       const latest = rows[0];
       // Unchanged input joins in-flight work. Automatic refresh also reuses
       // a completed result, so unchanged targets are never re-checked; a
@@ -126,12 +141,18 @@ export async function enqueueAiEvaluations(
             input.executionKind === aiExecutionKind.enum.ai_refresh))
           ? latest
           : undefined;
-      const open = rows.find((row) => row.state === "queued");
+      // A retained answer or terminal receipt cannot be discarded into queued work.
+      const open =
+        (input.state ?? "queued") === "queued"
+          ? rows.find((row) => row.state === "queued")
+          : undefined;
       const existing = reusable ?? open;
       const id = existing?.id ?? crypto.randomUUID();
       const base = input.workKey ?? `${input.executionKind}:${id}`;
       const held = new Set(
-        rows.filter((row) => row.id !== existing?.id).map((row) => row.workKey),
+        slotHistory
+          .filter((row) => row.id !== existing?.id)
+          .map((row) => row.workKey),
       );
       let workKey = base;
       for (let attempt = 1; held.has(workKey); attempt++)
@@ -172,19 +193,19 @@ export async function enqueueAiEvaluations(
         )
         .where(sql`${aiEvaluation.id}=page.id`)
         .returning(getTableColumns(aiEvaluation));
-      for (const row of changed) result.set(row.slotKey, row);
+      for (const row of changed) result.set(enrollmentKey(row), row);
     }
     const created = fresh.length
       ? await getDb(tx).insert(aiEvaluation).values(fresh).returning()
       : [];
-    for (const row of created) result.set(row.slotKey, row);
+    for (const row of created) result.set(enrollmentKey(row), row);
     // A request is a session's demand; automatic work has no session to wake.
     const requests = inputs.flatMap(({ input, sequence }, index) =>
       input.runId
         ? [
             {
               runId: input.runId,
-              evaluationId: result.get(evaluationSlotKey(input))!.id,
+              evaluationId: result.get(enrollmentKey(input))!.id,
               sequence: sequence ?? index,
             },
           ]
@@ -208,7 +229,7 @@ export async function enqueueAiEvaluations(
       [...result.values()].map((row) => row.id).filter((id) => !marked.has(id)),
       { revive: true },
     );
-    return inputs.map(({ input }) => result.get(evaluationSlotKey(input))!);
+    return inputs.map(({ input }) => result.get(enrollmentKey(input))!);
   });
 }
 

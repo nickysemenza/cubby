@@ -946,7 +946,7 @@ export const runChildren = [
       {
         name: "AiEvaluation_open_slot_key",
         unique: true,
-        on: ["slotKey"],
+        on: ["slotKey", "executionKind"],
         where: "{state} = 'queued'",
       },
       {
