@@ -384,11 +384,13 @@ const displaySourceBranch = (
         candidate.entity === source.entity &&
         candidate.path[0]?.edge === firstStep?.edge &&
         candidate.path[0]?.direction === firstStep?.direction &&
+        candidate.groups[0]?.hopIndex === 0 &&
         candidate.groups[0]?.ordering === source.groups[0]?.ordering,
     ),
   );
-  // These branches depend only on the reached Project, including their first
-  // ordering group. Enumerate its borrowed images once across repeated roots.
+  // Only admitted first-hop prefixes share a scope key. These branches depend
+  // only on the reached Project, including their first ordering group.
+  // Enumerate its borrowed images once across repeated roots.
   const sharedProject =
     firstHop?.table === "Project" &&
     firstStep !== undefined &&
@@ -405,7 +407,7 @@ const displaySourceBranch = (
           JOIN ${projectMediaRelation(anchorKey, "anchors")} anchors
             ON anchors.id = ${aliasColumn(firstHop.alias, "id")}
           ${renderJoins({ hops: traversal.hops.slice(1) })}
-          WHERE ${rootLiveCondition("project", firstHop.alias)} AND ${visible}`,
+          WHERE ${firstHop.softDelete ? rootLiveCondition("project", firstHop.alias) : sql`TRUE`} AND ${visible}`,
           read: sql`SELECT ${displayCandidateColumns("media")}
           FROM ${sql.raw(`"${traversal.rootTable}"`)} s
           ${renderJoins({ hops: [firstHop] })}
