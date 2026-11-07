@@ -22,10 +22,13 @@ export async function hydrateImageReadProjection<T>(
       input.forEach(collect);
       return;
     }
+    // Scalars cannot contain images; avoid allocating schema failures per leaf.
+    if (input === null || typeof input !== "object") return;
     const object = record.safeParse(input);
     if (!object.success) return;
-    const reference = imageReference.safeParse(input);
-    if (reference.success) codes.add(reference.data.id);
+    const reference =
+      "id" in input && "url" in input ? imageReference.safeParse(input) : null;
+    if (reference?.success) codes.add(reference.data.id);
     Object.values(object.data).forEach(collect);
   }
   function visit<Node>(
@@ -36,9 +39,11 @@ export async function hydrateImageReadProjection<T>(
       // SAFETY: recursive hydration preserves every element and its original shape.
       return input.map((item) => visit(item, representations)) as Node;
     }
+    if (input === null || typeof input !== "object") return input;
     const object = record.safeParse(input);
-    if (!object.success) return input; // Date and scalar wire values retain their identity.
-    const reference = imageReference.safeParse(input);
+    if (!object.success) return input; // Date and other non-record values retain their identity.
+    const reference =
+      "id" in input && "url" in input ? imageReference.safeParse(input) : null;
     const hydrated = Object.fromEntries(
       Object.entries(object.data).map(([key, child]) => [
         key,
@@ -47,7 +52,7 @@ export async function hydrateImageReadProjection<T>(
     );
     // SAFETY: all fields survive; only the optional declared Image representation is added.
     return (
-      reference.success && representations.has(reference.data.id)
+      reference?.success && representations.has(reference.data.id)
         ? {
             ...hydrated,
             representations: representations.get(reference.data.id),

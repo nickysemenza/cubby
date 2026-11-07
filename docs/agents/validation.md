@@ -448,6 +448,11 @@ Recompile or resolve those bindings against the comparison database and pass the
 same current bindings to both variants; scalar parameter types do not prove
 that values are dataset-independent. A query timing
 does not establish page latency, and HTTP success does not establish RPC success.
+Deployed Workers advance `performance.now()` and `Date.now()` only after I/O.
+These clocks do not measure CPU or include synchronous work after the last I/O.
+Subtracting a `Server-Timing` handler duration from browser TTFB does not attribute the
+remainder to platform or network work. Use CPU profiles for that distinction
+([Workers timers](https://developers.cloudflare.com/workers/runtime-apis/performance/)).
 Attribute repeated plan work by its relation or alias and owning SQL producer;
 a shared CTE name alone does not establish an identical computation.
 

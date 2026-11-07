@@ -446,6 +446,8 @@ describe("entity display image resolver", () => {
       {
         images: complete,
         nested: [rawPhoto, { photo: rawPhoto }, rawDeleted],
+        scalars: [null, false, 13, "synthetic"],
+        unrelated: { id: "PRD-2222", url: "synthetic", photo: rawPhoto },
         observedAt,
       },
       preloaded,
@@ -457,6 +459,12 @@ describe("entity display image resolver", () => {
         { photo: expectedDisplayImage(missingPhoto) },
         rawDeleted,
       ],
+      scalars: [null, false, 13, "synthetic"],
+      unrelated: {
+        id: "PRD-2222",
+        url: "synthetic",
+        photo: expectedDisplayImage(missingPhoto),
+      },
       observedAt,
     });
     expect(hydrated.observedAt).toBe(observedAt);
