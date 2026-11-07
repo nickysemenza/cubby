@@ -384,8 +384,10 @@ state derives from the Job (`image-job-state.ts`): `leased` for a live lease,
 `waiting_for_device` for parked device work, `pending`, and `failed` ("Needs
 attention") once a job failed `JOB_NEEDS_ATTENTION_ATTEMPTS` times in a row
 or its execution stopped; transient failures keep retrying. An executor's `retryable: false`
-stops automatic dispatch for these source/processor inputs. Storage verification
-failures retry; a verified content mismatch stops. Superseded failed jobs retire
+stops automatic dispatch for these source/processor inputs. The matching cutout
+projection fails in that same transaction while a ready
+output stays intact; transient failures leave the cutout pending.
+Storage verification failures retry; a verified content mismatch stops. Superseded failed jobs retire
 as skipped while retaining their diagnostics and results. A missing
 subject-lift derivative is rebuilt. Explicit image retry reopens a negative cutout
 without discarding its evidence or allowing maintenance to immediately settle it again.
