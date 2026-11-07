@@ -607,9 +607,8 @@ describe("scheduled Gmail discovery", () => {
       })
       .where(eq(mailboxCursor.id, mailbox.id));
     await listMailDiscovery(ctx.db, successor, seam);
-    const frozen = mailboxDiscoveryProgress.parse(
-      (await readRun(successor.runId)).progress,
-    ).page;
+    const frozenRun = await readRun(successor.runId);
+    const frozen = mailboxDiscoveryProgress.parse(frozenRun.progress).page;
     if (!frozen?.scopedKey) throw new Error("Synthetic targeted page missing");
     const intervening = {
       ...frozen.startCoverage,
@@ -636,7 +635,7 @@ describe("scheduled Gmail discovery", () => {
       status: "completed",
       progress: { pagesDone: 1 },
     });
-    expect(completed.input).toEqual((await readRun(state.params.runId)).input);
+    expect(completed.input).toEqual(frozenRun.input);
     expect(completed.progressHistory).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ phase: "page_saved" }),
