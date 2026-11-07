@@ -9,8 +9,11 @@ import {
   entityActionStates,
 } from "./entity-action-states";
 
-const stateOf = (entity: "vendor" | "task", record: unknown, id: string) =>
-  entityActionStates(entity, record).find((action) => action.id === id);
+const stateOf = (
+  entity: "vendor" | "task" | "expense",
+  record: unknown,
+  id: string,
+) => entityActionStates(entity, record).find((action) => action.id === id);
 
 describe("entityActionStates", () => {
   it("covers declared and kernel verbs, refusing an unmet requirement with its reason", () => {
@@ -34,6 +37,58 @@ describe("entityActionStates", () => {
       reason: "Already done.",
     });
     expect(stateOf("task", { status: "todo" }, "complete")?.enabled).toBe(true);
+  });
+
+  it("refuses Receive unless the Product envelope resolves, ignoring a stale raw id", () => {
+    const expense = (result: unknown) => ({
+      id: "EXP-4K7M",
+      productId: "PRD-OLD2",
+      fields: {
+        productId: {
+          current: {
+            assignment: null,
+            controls: { kind: "readonly", reason: "computed" },
+          },
+          work: { kind: "idle" },
+          result,
+        },
+      },
+    });
+    const refused = {
+      id: "receive",
+      enabled: false,
+      reason: actionAvailabilityRules.receive.requires.reason,
+    };
+    expect(stateOf("expense", { productId: null }, "receive")).toEqual(refused);
+    expect(stateOf("expense", expense({ kind: "missing" }), "receive")).toEqual(
+      refused,
+    );
+    expect(
+      stateOf(
+        "expense",
+        expense({
+          kind: "live",
+          decision: {
+            outcome: { kind: "empty", reason: "unset" },
+            provenance: null,
+          },
+        }),
+        "receive",
+      ),
+    ).toEqual(refused);
+    expect(
+      stateOf(
+        "expense",
+        expense({
+          kind: "live",
+          decision: {
+            outcome: { kind: "value", value: "PRD-4K7M" },
+            provenance: { kind: "computed" },
+          },
+        }),
+        "receive",
+      )?.enabled,
+    ).toBe(true);
   });
 
   it("reads each rule's field on every list that offers the verb", () => {

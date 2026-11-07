@@ -42,31 +42,45 @@ struct NativeCoverageViewPathTests {
                 == ["Review reconciliation on web"])
     }
 
-    @Test func receivingUsesTheCanonicalExpenseProductDecision() {
-        func expense(_ result: JSONValue) -> EntityRow {
-            EntityRow(
+    @Test func receivingUsesTheCanonicalExpenseProductDecision() throws {
+        let reason = try #require(
+            HeroActionRunner.plan(for: .receive, on: .expense)?.requirement?.reason)
+        // `actions` as `entity-action-states.ts` evaluates the shared `receive` rule; nil is an
+        // older read without them, where the plan's requirement decides.
+        func expense(_ result: JSONValue, server enabled: Bool?) -> EntityRow {
+            var raw: [String: JSONValue] = [
+                "id": "EXP-4K7M", "productId": "PRD-OLD2",
+                "fields": ["productId": ["result": result]],
+            ]
+            if let enabled {
+                let refusal: JSONValue = enabled ? .null : .string(reason)
+                raw["actions"] = [["id": "receive", "enabled": .bool(enabled), "reason": refusal]]
+            }
+            return EntityRow(
                 id: "EXP-4K7M", title: "Synthetic purchase line", subtitle: nil, imageURL: nil,
-                raw: [
-                    "id": "EXP-4K7M", "productId": "PRD-OLD2",
-                    "fields": ["productId": ["result": result]],
-                ])
+                raw: .object(raw))
         }
-        let linked = expense([
+        let linked: JSONValue = [
             "kind": "live",
             "decision": ["outcome": ["kind": "value", "value": "PRD-4K7M"]],
-        ])
-        let empty = expense([
+        ]
+        let empty: JSONValue = [
             "kind": "live", "decision": ["outcome": ["kind": "empty", "reason": "unset"]],
-        ])
-        let missing = expense(["kind": "missing"])
+        ]
+        let missing: JSONValue = ["kind": "missing"]
 
         // The declared `receive` flow is offered only for the resolved Product, not a stale raw id.
         func receive(_ row: EntityRow) -> PlacedAction? {
             ActionPlacement(entity: EntityCatalog[.expense], row: row).actionBar.first { $0.id == "receive" }
         }
-        #expect(receive(linked)?.enabled == true)
-        #expect(receive(empty)?.enabled == false)
-        #expect(receive(missing)?.enabled == false)
+        for server in [nil, false] as [Bool?] {
+            for unlinked in [empty, missing] {
+                let tile = receive(expense(unlinked, server: server))
+                #expect(tile?.enabled == false && tile?.reason == reason)
+            }
+        }
+        #expect(receive(expense(linked, server: nil))?.enabled == true)
+        #expect(receive(expense(linked, server: true))?.enabled == true)
     }
 
     /// A handoff slot draws its row only where web's slot predicate would draw the slot.

@@ -102,7 +102,6 @@ struct InlineFieldEditor: View {
         .accessibilityIdentifier(accessibilityID)
         // A detail read is only the first presentation; the edit baseline is a fresh read.
         .task(id: session.id) { await model.load() }
-        .onDisappear { saveTask?.cancel() }
     }
 
     private var saveButton: some View {
@@ -116,16 +115,15 @@ struct InlineFieldEditor: View {
         .accessibilityIdentifier("\(accessibilityID).save")
     }
 
-    private func cancel() {
-        saveTask?.cancel()
-        onFinished()
-    }
+    private func cancel() { onFinished() }
 
+    /// A dispatched write is never cancelled: Cancel and dismissal wait for it, and a row that
+    /// leaves the screen still announces a committed mutation so other screens refresh.
     private func save() {
         guard saveTask == nil, model.canSave else { return }
         saveTask = Task {
             defer { saveTask = nil }
-            guard await model.save(), !Task.isCancelled else { return }
+            guard await model.save() else { return }
             var keys: Set<EntityKey> = [model.descriptor.key]
             for relation in model.descriptor.relations { keys.insert(relation.target) }
             appModel.recordEntityMutation(keys: keys)
@@ -151,6 +149,8 @@ struct InlineFieldEditorSheet: View {
             #endif
         }
         .presentationDetents([.medium, .large])
+        // A refused write keeps the draft and its error on screen.
+        .interactiveDismissDisabled(session.model.isSaving)
     }
 }
 

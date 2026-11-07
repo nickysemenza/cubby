@@ -1,3 +1,4 @@
+import { actionAvailabilityRules } from "@cubby/schemas/action-availability";
 import { expenseFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/expense";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { expenseShortcode } from "@cubby/schemas/identifiers";
@@ -14,8 +15,7 @@ import type {
 
 import { ReceiveExpenseDialog } from "./receive-expense-dialog";
 
-/** Native's `receive` plan states the same requirement (`native-coverage.ts`). */
-const NO_PRODUCT = "Link a Product to receive this line into inventory.";
+const NO_PRODUCT = actionAvailabilityRules.receive.requires.reason;
 
 const receivableRow = z.object({
   id: expenseShortcode,

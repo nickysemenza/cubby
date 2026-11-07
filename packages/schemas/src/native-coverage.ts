@@ -863,10 +863,7 @@ export const nativeHeroActionPlans = {
     // already-counted stock is shown before any units are added.
     flow: "receiveExpense",
     entities: ["expense"],
-    requires: {
-      path: "productId",
-      reason: "Link a Product to receive this line into inventory.",
-    },
+    requires: actionAvailabilityRules.receive.requires,
   },
   moveTo: {
     label: "Move to",
