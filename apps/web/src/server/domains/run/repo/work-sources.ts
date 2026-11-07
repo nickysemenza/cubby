@@ -12,6 +12,7 @@ import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-
 import {
   attentionStatePredicate,
   memberStoppedRunPredicate,
+  retiredRunPredicate,
 } from "~/server/domains/run/repo/work-attention";
 import { workRunReviewRead } from "~/server/domains/run/repo/work-owners";
 import { recordScope } from "~/server/generic/work-queue/repo/work-declarations";
@@ -52,7 +53,7 @@ const execution: WorkSource = {
       .from(workRunReviewRead().table)
       .where(
         and(
-          sql`${notDeleted(alias(run, "Run"))} AND (("Run".status = ${runStatus.enum.running} AND ("Run".purpose IN (${sql.join(
+          sql`${notDeleted(alias(run, "Run"))} AND NOT ${retiredRunPredicate(sql`"Run"."retiredAt"`)} AND (("Run".status = ${runStatus.enum.running} AND ("Run".purpose IN (${sql.join(
             // A running maintenance pass or Sweep is not member work; its failed
             // or stalled outcomes still surface through the failure paths.
             EXECUTED_RUN_PURPOSES.filter(
@@ -94,7 +95,7 @@ const account: WorkSource = {
       .where(
         and(
           sql`${notDeleted(alias(run, "Run"))} AND NOT ${memberStoppedRunPredicate(sql`"Run"."failureCode"`)} AND (
-        (${attentionStatePredicate(sql`"Run".status`)} AND NOT ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IS NOT DISTINCT FROM 'execution_limit')
+        (NOT ${retiredRunPredicate(sql`"Run"."retiredAt"`)} AND ${attentionStatePredicate(sql`"Run".status`)} AND NOT ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IS NOT DISTINCT FROM 'execution_limit')
           AND NOT EXISTS (SELECT 1 FROM "RunFinding" finding WHERE finding."runId" = "Run".id AND ${activeFindingSql("finding")}))
         OR ("Run".purpose = ${runPurpose.enum.photo_inventory} AND EXISTS (
           SELECT 1 FROM "PhotoGroupProposal" proposal WHERE proposal."runId" = "Run".id AND proposal.state = ${photoGroupProposalState.enum.proposed}

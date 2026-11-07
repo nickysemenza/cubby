@@ -545,8 +545,12 @@ Work excludes a retained failed evaluation after its owned retry receipt hands
 off to a replacement, or after all remaining live requesters have handed off.
 A shared failure remains visible while any uncancelled requester still needs
 that original evaluation. Retry history and diagnostics remain stored.
-Runs explicitly cancelled or aborted by a member remain in history and leave
-the recovery attention roster through the same predicate used by Work sources. Source Problems and pending reviews retain their own lifecycle.
+Runs explicitly cancelled or aborted by a member, and permanently retired
+coordinators, remain in history without advertising execution recovery. The
+Runs attention view and Work sources share their member-stop and retirement
+predicates. Source Problems, findings and pending photo proposals retain their
+independent review paths. These projections do not retire coordinators or
+delete conversations.
 
 ## Producers
 
