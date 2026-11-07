@@ -157,7 +157,11 @@ test("maintenance keeps explicit completion history across spending years", asyn
     costType: "materials",
     trade: "other",
   });
-  await gotoAuthenticatedPage(page, "/tasks?view=maintenance");
+  await gotoAuthenticatedPage(
+    page,
+    "/tasks?view=maintenance",
+    page.getByRole("heading", { name: "Observed cadence", exact: true }),
+  );
   const cadence = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Observed cadence", exact: true }),
   });
