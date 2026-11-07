@@ -512,6 +512,11 @@ recorded charged usage. Apple Activity hands the household queue off to
 `/work-queue` ([native Activity](../apps/apple/README.md#activity)).
 The web audit-log changes feed follows the queue.
 
+The household Work queue omits permanently retired coordinators from Run
+recovery attention. Their stored status and history remain unchanged; source
+findings and pending photo proposals retain their independent review paths.
+This projection does not retire coordinators or delete conversations.
+
 The hourly cron calls `maintainJobs` directly: one bounded image-repair page and
 one retention page per tick. No maintenance Job or result timestamp is enrolled.
 Completed Jobs retain eight days, cancelled fourteen and failed thirty, under

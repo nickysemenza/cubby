@@ -1,14 +1,15 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { generateShortcode } from "@cubby/shared";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { run } from "~/server/db/schema";
+import { run, runFinding } from "~/server/db/schema";
+import { publishRunFinding } from "~/server/domains/purchase-import/repo/run-finding";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
@@ -156,6 +157,52 @@ describe("Run review authority query work", () => {
       memberOnly: true,
     });
     expect(fenced.items.filter((row) => row.family === "account")).toEqual([]);
+
+    const sourceRun = retained[0]!;
+    const finding = await publishRunFinding(ctx.db, {
+      runId: sourceRun.id,
+      ledgerPartyId: member.id,
+      entityKind: "run",
+      entityId: sourceRun.id,
+      kind: "other",
+      summary: "Synthetic source evidence still needs review",
+      evidenceFingerprint: "synthetic-retained-source-finding",
+      proposedFix: null,
+    });
+    const before = await getDb(ctx.db)
+      .select()
+      .from(runFinding)
+      .where(eq(runFinding.id, finding.id));
+    const retiredAt = new Date();
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "needs_review", retiredAt })
+      .where(sql`${run.id} IN (${first.id}::uuid, ${sourceRun.id}::uuid)`);
+    const history = await readRecordWorkQueue(ctx.db, {
+      id: first.shortcode,
+      memberPartyId: member.id,
+      memberOnly: true,
+    });
+    expect(history.items.filter((row) => row.family === "account")).toEqual([]);
+    const sourceReview = await readRecordWorkQueue(ctx.db, {
+      id: sourceRun.shortcode,
+      memberPartyId: member.id,
+      memberOnly: true,
+    });
+    expect(
+      sourceReview.items.filter((row) => row.family === "finding"),
+    ).toMatchObject([
+      { key: `finding:${finding.id}`, id: sourceRun.shortcode },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(runFinding)
+        .where(eq(runFinding.id, finding.id)),
+    ).toEqual(before);
+    expect(
+      (await getDb(ctx.db).select().from(run).where(eq(run.id, first.id)))[0],
+    ).toMatchObject({ status: "needs_review", retiredAt });
   });
 
   it("reads each retained Run at most once while resolving review authority", async () => {
