@@ -314,7 +314,7 @@ it("discards a partial tool call before falling through both included funding ro
   expect(piTokenUsage(result).costEvidence?.billingReason).toBe("standard");
 });
 
-it.each(["error", "response.failed"])(
+it.each(["error", "response.failed", "named_error"])(
   "restarts on a late subscription %s quota refusal",
   async (type) => {
     const attempts: string[] = [];
@@ -333,6 +333,17 @@ it.each(["error", "response.failed"])(
             { status: 400 },
           );
         if (funding === "subscription") {
+          if (type === "named_error")
+            return new Response(
+              `event: error\ndata: ${JSON.stringify({
+                message:
+                  "The ChatGPT user has reached their Subscription Sharing usage limit. Ask the user to try again after their usage limit resets or use an API key instead.",
+                type: "invalid_request_error",
+                param: null,
+                code: "subscription_sharing_usage_limit_exceeded",
+              })}\n\n`,
+              { headers: { "content-type": "text/event-stream" } },
+            );
           const error = {
             code: "usage_limit_reached",
             message: "Synthetic quota",
