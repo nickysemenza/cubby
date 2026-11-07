@@ -1,7 +1,7 @@
 import type { AgentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import {
   fromManifest,
-  parseSkillMarkdown,
+  parseSkill,
   type SkillManifestEntry,
 } from "agents/skills";
 import photoWorkflow from "cubby/agent-skills/photo-inventory-import/references/run-workflow.md?raw";
@@ -18,10 +18,20 @@ function skillEntry(
   raw: string,
   files: Record<string, string>,
 ): SkillManifestEntry {
-  const parsed = parseSkillMarkdown(raw);
-  if (!parsed) throw new Error("Bundled skill has no frontmatter");
+  const parsed = parseSkill(raw);
+  if (!parsed.ok) {
+    throw new Error(`Bundled skill failed to parse: ${parsed.error.message}`);
+  }
+  const skill = parsed.value;
   return {
-    ...parsed,
+    name: skill.name,
+    description: skill.description,
+    body: skill.body,
+    license: skill.license,
+    compatibility: skill.compatibility,
+    metadata: skill.metadata,
+    allowedTools:
+      skill.allowedTools.length > 0 ? skill.allowedTools.join(" ") : undefined,
     resources: Object.entries(files).map(([file, content]) => ({
       path: `references/${file.slice(file.lastIndexOf("/") + 1)}`,
       kind: "reference",
